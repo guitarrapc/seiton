@@ -528,6 +528,8 @@ public static class WorkflowParser
 
     private static void ParseOnEventOptions(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string eventName, Marker eventMark)
     {
+        _ = OnEventSpecs.TryGet(eventName, out var spec);
+
         var hasBranches = false;
         var hasBranchesIgnore = false;
         var hasTags = false;
@@ -554,6 +556,16 @@ public static class WorkflowParser
             var keyMark = reader.CurrentMark;
             reader.Read();
 
+            if (OnEventSpecs.TryGet(eventName, out var knownSpec) && !knownSpec.IsOptionAllowed(key))
+            {
+                AddError(diagnostics, $"on.{eventName} does not support option: {key}", keyMark);
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
             if (reader.End)
             {
                 break;
@@ -562,7 +574,19 @@ public static class WorkflowParser
             switch (key)
             {
                 case "types":
-                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.types must be scalar or sequence of scalar");
+                    ParseScalarOrScalarSequence(
+                        ref reader,
+                        diagnostics,
+                        $"on.{eventName}.types must be scalar or sequence of scalar",
+                        scalarValidator: value =>
+                        {
+                            if (OnEventSpecs.TryGet(eventName, out var typeSpec) && !typeSpec.IsTypeAllowed(value))
+                            {
+                                return $"on.{eventName}.types contains unsupported activity type: {value}";
+                            }
+
+                            return null;
+                        });
                     break;
                 case "branches":
                     hasBranches = true;
@@ -628,10 +652,23 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseScalarOrScalarSequence(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string error)
+    private static void ParseScalarOrScalarSequence(
+        ref VYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        string error,
+        Func<string, string?>? scalarValidator = null)
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
+            if (scalarValidator is not null)
+            {
+                var value = reader.GetScalarString() ?? string.Empty;
+                var validationError = scalarValidator(value);
+                if (validationError is not null)
+                {
+                    AddError(diagnostics, validationError, reader.CurrentMark);
+                }
+            }
             reader.Read();
             return;
         }
@@ -651,6 +688,16 @@ public static class WorkflowParser
                 AddError(diagnostics, error, reader.CurrentMark);
                 reader.SkipCurrentNode();
                 continue;
+            }
+
+            if (scalarValidator is not null)
+            {
+                var value = reader.GetScalarString() ?? string.Empty;
+                var validationError = scalarValidator(value);
+                if (validationError is not null)
+                {
+                    AddError(diagnostics, validationError, reader.CurrentMark);
+                }
             }
 
             reader.Read();
