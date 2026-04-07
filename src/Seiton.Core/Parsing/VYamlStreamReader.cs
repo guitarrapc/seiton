@@ -1,6 +1,6 @@
-using VYaml.Parser;
+﻿using VYaml.Parser;
 
-namespace Seiton.Cli.Parsing;
+namespace Seiton.Core.Parsing;
 
 internal ref struct VYamlStreamReader
 {
@@ -24,6 +24,8 @@ internal ref struct VYamlStreamReader
     public void SkipCurrentNode() => _parser.SkipCurrentNode();
 
     public ReadOnlySpan<byte> GetScalarUtf8() => _parser.GetScalarAsUtf8();
+
+    public string? GetScalarString() => _parser.GetScalarAsString();
 
     public Utf8Slice GetScalarSlice()
     {

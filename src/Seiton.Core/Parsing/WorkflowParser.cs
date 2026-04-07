@@ -1,7 +1,6 @@
-using System.Text;
-using VYaml.Parser;
+﻿using VYaml.Parser;
 
-namespace Seiton.Cli.Parsing;
+namespace Seiton.Core.Parsing;
 
 public static class WorkflowParser
 {
@@ -40,49 +39,56 @@ public static class WorkflowParser
                 continue;
             }
 
-            var keySlice = reader.GetScalarSlice();
             var keyMark = reader.CurrentMark;
-            var keySpan = reader.GetScalarUtf8();
+            var keyText = reader.GetScalarString() ?? string.Empty;
             reader.Read(); // consume key
 
-            if (IsAscii(keySpan, "name"))
+            if (string.Equals(keyText, "name", StringComparison.Ordinal))
             {
                 hasName = true;
                 name = ReadScalarOrSkip(ref reader, diagnostics, "name must be scalar");
                 continue;
             }
 
-            if (IsAscii(keySpan, "run-name"))
+            if (string.Equals(keyText, "run-name", StringComparison.Ordinal))
             {
                 hasRunName = true;
                 runName = ReadScalarOrSkip(ref reader, diagnostics, "run-name must be scalar");
                 continue;
             }
 
-            if (IsAscii(keySpan, "on"))
+            if (string.Equals(keyText, "on", StringComparison.Ordinal))
             {
                 hasOn = true;
                 if (!reader.End)
                 {
+                    if (reader.CurrentEventType is not ParseEventType.Scalar and not ParseEventType.MappingStart and not ParseEventType.SequenceStart)
+                    {
+                        AddError(diagnostics, "on must be scalar, mapping, or sequence", reader.CurrentMark);
+                    }
                     reader.SkipCurrentNode();
                 }
                 continue;
             }
 
-            if (IsAscii(keySpan, "jobs"))
+            if (string.Equals(keyText, "jobs", StringComparison.Ordinal))
             {
                 hasJobs = true;
                 if (!reader.End)
                 {
+                    if (reader.CurrentEventType != ParseEventType.MappingStart)
+                    {
+                        AddError(diagnostics, "jobs must be mapping", reader.CurrentMark);
+                    }
                     reader.SkipCurrentNode();
                 }
                 continue;
             }
 
-            if (IsAscii(keySpan, "permissions") ||
-                IsAscii(keySpan, "env") ||
-                IsAscii(keySpan, "defaults") ||
-                IsAscii(keySpan, "concurrency"))
+            if (string.Equals(keyText, "permissions", StringComparison.Ordinal) ||
+                string.Equals(keyText, "env", StringComparison.Ordinal) ||
+                string.Equals(keyText, "defaults", StringComparison.Ordinal) ||
+                string.Equals(keyText, "concurrency", StringComparison.Ordinal))
             {
                 if (!reader.End)
                 {
@@ -91,7 +97,6 @@ public static class WorkflowParser
                 continue;
             }
 
-            var keyText = Encoding.UTF8.GetString(keySlice.AsSpan(utf8Yaml));
             AddError(diagnostics, $"unexpected workflow key: {keyText}", keyMark);
             if (!reader.End)
             {
@@ -142,24 +147,6 @@ public static class WorkflowParser
         var slice = reader.GetScalarSlice();
         reader.Read();
         return slice;
-    }
-
-    private static bool IsAscii(ReadOnlySpan<byte> span, string key)
-    {
-        if (span.Length != key.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < key.Length; i++)
-        {
-            if (span[i] != (byte)key[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, Marker mark)

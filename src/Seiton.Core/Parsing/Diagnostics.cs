@@ -1,4 +1,4 @@
-namespace Seiton.Cli.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 public enum DiagnosticSeverity
 {

@@ -1,4 +1,4 @@
-namespace Seiton.Cli.Parsing;
+namespace Seiton.Core.Parsing;
 
 public readonly record struct Utf8Slice(int Offset, int Length)
 {

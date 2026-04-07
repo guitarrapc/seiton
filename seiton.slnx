@@ -4,9 +4,10 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Seiton.Cli/Seiton.Cli.csproj" />
+    <Project Path="src/Seiton.Benchmark/Seiton.Benchmark.csproj" />
+    <Project Path="src/Seiton.Core/Seiton.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Seiton.Cli.Tests/Seiton.Cli.Tests.csproj" />
+    <Project Path="tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj" />
   </Folder>
 </Solution>
