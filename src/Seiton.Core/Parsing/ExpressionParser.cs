@@ -274,6 +274,12 @@ public static class ExpressionParser
                 SkipWhiteSpace();
                 if (Match("."))
                 {
+                    if (Match("*"))
+                    {
+                        expr = new WildcardAccessSyntax(expr);
+                        continue;
+                    }
+
                     if (!TryParseIdentifier(out var member))
                     {
                         AddError("member name is missing after '.'");
@@ -316,10 +322,67 @@ public static class ExpressionParser
                     continue;
                 }
 
+                if (Match("["))
+                {
+                    SkipWhiteSpace();
+                    if (Match("*"))
+                    {
+                        if (!Match("]"))
+                        {
+                            AddError("missing closing ']' after wildcard index");
+                        }
+
+                        expr = new WildcardAccessSyntax(expr);
+                        continue;
+                    }
+
+                    var index = ParseIndexExpression();
+                    if (!Match("]"))
+                    {
+                        AddError("missing closing ']' in index access");
+                    }
+
+                    if (index is not null)
+                    {
+                        expr = new IndexAccessSyntax(expr, index);
+                    }
+
+                    continue;
+                }
+
                 break;
             }
 
             return expr;
+        }
+
+        private ExpressionSyntax? ParseIndexExpression()
+        {
+            SkipWhiteSpace();
+            if (End)
+            {
+                AddError("index expression is missing");
+                return null;
+            }
+
+            if (Peek() == '\'' || Peek() == '"')
+            {
+                return ParseStringLiteral();
+            }
+
+            if (char.IsDigit(Peek()))
+            {
+                return ParseNumberLiteral();
+            }
+
+            if (TryParseIdentifier(out var ident))
+            {
+                return ParseKeywordOrIdentifier(ident);
+            }
+
+            AddError($"unsupported index token '{Peek()}'");
+            _pos++;
+            return null;
         }
 
         private ExpressionSyntax ParseKeywordOrIdentifier(string ident)

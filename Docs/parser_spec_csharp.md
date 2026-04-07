@@ -613,6 +613,7 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 2. 論理演算・比較演算・四則演算・単項演算の最小再帰下降パーサー
 3. 識別子、member access、関数呼び出し、文字列/数値/bool/null のノード
 4. 抽出 + パースを一体で走らせる API
+5. wildcard access（`.*`, `[*]`）と index access（`['key']`, `[0]`）
 
 補足:
 

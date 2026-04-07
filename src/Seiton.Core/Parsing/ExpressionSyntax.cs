@@ -8,6 +8,8 @@ public enum ExpressionSyntaxKind
     BooleanLiteral,
     NullLiteral,
     MemberAccess,
+    IndexAccess,
+    WildcardAccess,
     FunctionCall,
     Unary,
     Binary,
@@ -32,6 +34,12 @@ public sealed record NullLiteralSyntax()
 
 public sealed record MemberAccessSyntax(ExpressionSyntax Target, string Member)
     : ExpressionSyntax(ExpressionSyntaxKind.MemberAccess);
+
+public sealed record IndexAccessSyntax(ExpressionSyntax Target, ExpressionSyntax Index)
+    : ExpressionSyntax(ExpressionSyntaxKind.IndexAccess);
+
+public sealed record WildcardAccessSyntax(ExpressionSyntax Target)
+    : ExpressionSyntax(ExpressionSyntaxKind.WildcardAccess);
 
 public sealed record FunctionCallSyntax(ExpressionSyntax Callee, IReadOnlyList<ExpressionSyntax> Arguments)
     : ExpressionSyntax(ExpressionSyntaxKind.FunctionCall);

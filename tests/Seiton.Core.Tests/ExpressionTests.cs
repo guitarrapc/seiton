@@ -38,6 +38,25 @@ public sealed class ExpressionTests
     }
 
     [Test]
+    public async Task Parse_WildcardAndIndexAccess_Succeeds()
+    {
+        var result = ExpressionParser.Parse("github.event.pull_request.labels[*].name");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Root).IsNotNull();
+        await Assert.That(result.Root!.Kind).IsEqualTo(ExpressionSyntaxKind.MemberAccess);
+    }
+
+    [Test]
+    public async Task Parse_StringIndexAccess_Succeeds()
+    {
+        var result = ExpressionParser.Parse("github.event['pull_request'].title");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Root).IsNotNull();
+    }
+
+    [Test]
     public async Task ExtractAndParse_InvalidEmbeddedExpression_ReportsDiagnostics()
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: ${{ github. }}\n    steps:\n      - run: echo ok\n";
