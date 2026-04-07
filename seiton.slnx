@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/.props/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Seiton.Cli/Seiton.Cli.csproj" />
+  </Folder>
+</Solution>
