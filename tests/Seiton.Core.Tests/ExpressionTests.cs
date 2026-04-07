@@ -14,8 +14,8 @@ public sealed class ExpressionTests
         var expressions = ExpressionExtractor.Extract(bytes);
 
         await Assert.That(expressions.Length).IsEqualTo(2);
-        await Assert.That(expressions.Any(x => x.Utf8.AsSpan().SequenceEqual("github.ref == 'refs/heads/main'"u8))).IsTrue();
-        await Assert.That(expressions.Any(x => x.Utf8.AsSpan().SequenceEqual("matrix.os"u8))).IsTrue();
+        await Assert.That(expressions.Any(x => x.Slice.AsSpan(bytes).SequenceEqual("github.ref == 'refs/heads/main'"u8))).IsTrue();
+        await Assert.That(expressions.Any(x => x.Slice.AsSpan(bytes).SequenceEqual("matrix.os"u8))).IsTrue();
     }
 
     [Test]

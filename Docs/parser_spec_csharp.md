@@ -620,7 +620,7 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 1. これは最小 AST であり、actionlint の expression semantics 相当の型検証や context availability は未実装
 2. 後段で availability table と関数シグネチャ検証を接続する前提
 3. AST は class ではなく `struct` ノード配列で保持する
-4. extractor は `string` ではなく UTF-8 `byte[]` を occurrence に保持し、パーサーへ直接渡す
+4. extractor は `string` を生成せず、元 YAML 上の `Utf8Slice` を occurrence に保持してパーサーへ直接渡す
 
 ### actionlint testdata の期待診断ベース比較
 

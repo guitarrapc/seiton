@@ -1,31 +1,49 @@
-﻿using VYaml.Parser;
-
-namespace Seiton.Core.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 public readonly record struct ExpressionOccurrence(
-    byte[] Utf8,
+    Utf8Slice Slice,
     TextRange Location);
 
 public static class ExpressionExtractor
 {
     public static ExpressionOccurrence[] Extract(byte[] utf8Yaml)
     {
-        var reader = new VYamlStreamReader(utf8Yaml.AsMemory());
         var expressions = new List<ExpressionOccurrence>();
+        var lineStarts = BuildLineStarts(utf8Yaml);
 
-        reader.SkipHeader();
-        while (!reader.End)
+        var searchStart = 0;
+        while (searchStart < utf8Yaml.Length - 3)
         {
-            if (reader.CurrentEventType == ParseEventType.Scalar)
+            var start = IndexOf(utf8Yaml, searchStart, "${{"u8);
+            if (start < 0)
             {
-                var scalarUtf8 = reader.GetScalarUtf8();
-                if (!scalarUtf8.IsEmpty)
-                {
-                    ExtractFromScalar(scalarUtf8, reader.CurrentMark, expressions);
-                }
+                break;
             }
 
-            reader.Read();
+            var bodyStart = start + 3;
+            var end = IndexOf(utf8Yaml, bodyStart, "}}"u8);
+            if (end < 0)
+            {
+                break;
+            }
+
+            var trimmed = TrimAsciiWhiteSpace(utf8Yaml, bodyStart, end - bodyStart);
+            if (trimmed.Length > 0)
+            {
+                var startPos = OffsetToLineColumn(lineStarts, trimmed.Offset);
+                var endPos = OffsetToLineColumn(lineStarts, trimmed.Offset + trimmed.Length - 1);
+                var location = new TextRange(
+                    Start: trimmed.Offset,
+                    Length: trimmed.Length,
+                    StartLine: startPos.Line,
+                    StartColumn: startPos.Column,
+                    EndLine: endPos.Line,
+                    EndColumn: endPos.Column);
+
+                expressions.Add(new ExpressionOccurrence(trimmed, location));
+            }
+
+            searchStart = end + 2;
         }
 
         return expressions.ToArray();
@@ -38,7 +56,7 @@ public static class ExpressionExtractor
 
         foreach (var occurrence in occurrences)
         {
-            var expression = occurrence.Utf8.AsSpan();
+            var expression = occurrence.Slice.AsSpan(utf8Yaml);
             var result = ExpressionParser.Parse(expression);
             for (var i = 0; i < result.Diagnostics.Length; i++)
             {
@@ -52,49 +70,7 @@ public static class ExpressionExtractor
         return (occurrences, diagnostics.ToArray());
     }
 
-    private static void ExtractFromScalar(ReadOnlySpan<byte> scalarUtf8, Marker mark, List<ExpressionOccurrence> expressions)
-    {
-        var searchStart = 0;
-        while (searchStart < scalarUtf8.Length)
-        {
-            var start = scalarUtf8[searchStart..].IndexOf("${{"u8);
-            if (start < 0)
-            {
-                break;
-            }
-
-            start += searchStart;
-
-            var bodyStart = start + 3;
-            var end = scalarUtf8[bodyStart..].IndexOf("}}"u8);
-            if (end < 0)
-            {
-                break;
-            }
-
-            end += bodyStart;
-
-            var bodyTrimmed = TrimAsciiWhiteSpace(scalarUtf8, bodyStart, end - bodyStart);
-            if (bodyTrimmed.Length > 0)
-            {
-                var location = new TextRange(
-                    Start: mark.Position,
-                    Length: bodyTrimmed.Length,
-                    StartLine: mark.Line,
-                    StartColumn: mark.Col,
-                    EndLine: mark.Line,
-                    EndColumn: mark.Col + bodyTrimmed.Length - 1);
-                var utf8 = scalarUtf8.Slice(bodyTrimmed.Offset, bodyTrimmed.Length).ToArray();
-                expressions.Add(new ExpressionOccurrence(
-                    utf8,
-                    location));
-            }
-
-            searchStart = end + 2;
-        }
-    }
-
-    private static Utf8Slice TrimAsciiWhiteSpace(ReadOnlySpan<byte> source, int offset, int length)
+    private static Utf8Slice TrimAsciiWhiteSpace(byte[] source, int offset, int length)
     {
         var start = offset;
         var end = offset + length - 1;
@@ -115,6 +91,59 @@ public static class ExpressionExtractor
         }
 
         return new Utf8Slice(start, end - start + 1);
+    }
+
+    private static int[] BuildLineStarts(byte[] source)
+    {
+        var starts = new List<int>(64) { 0 };
+        for (var i = 0; i < source.Length; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                var next = i + 1;
+                if (next < source.Length)
+                {
+                    starts.Add(next);
+                }
+            }
+        }
+
+        return starts.ToArray();
+    }
+
+    private static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)
+    {
+        var idx = Array.BinarySearch(lineStarts, offset);
+        if (idx >= 0)
+        {
+            return (idx + 1, 1);
+        }
+
+        idx = ~idx - 1;
+        if (idx < 0)
+        {
+            return (1, offset + 1);
+        }
+
+        return (idx + 1, offset - lineStarts[idx] + 1);
+    }
+
+    private static int IndexOf(byte[] source, int start, ReadOnlySpan<byte> pattern)
+    {
+        if (pattern.IsEmpty || start >= source.Length)
+        {
+            return -1;
+        }
+
+        for (var i = start; i <= source.Length - pattern.Length; i++)
+        {
+            if (source.AsSpan(i, pattern.Length).SequenceEqual(pattern))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
