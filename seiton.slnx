@@ -6,4 +6,7 @@
   <Folder Name="/src/">
     <Project Path="src/Seiton.Cli/Seiton.Cli.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Seiton.Cli.Tests/Seiton.Cli.Tests.csproj" />
+  </Folder>
 </Solution>
