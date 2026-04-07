@@ -84,6 +84,165 @@ public sealed class ParserTests
 		await Assert.That(failures).IsEmpty();
 	}
 
+	[Test]
+	public async Task Parse_CorpusSmoke_ActionlintTestdata_DoesNotThrow()
+	{
+		var root = FindRepoRoot();
+		var actionlintTestdata = Path.Combine(root, ".references", "actionlint-main", "testdata");
+		if (!Directory.Exists(actionlintTestdata))
+		{
+			// Optional corpus in local checkout.
+			return;
+		}
+
+		var allFiles = Directory.EnumerateFiles(actionlintTestdata, "*.yml", SearchOption.AllDirectories)
+			.Concat(Directory.EnumerateFiles(actionlintTestdata, "*.yaml", SearchOption.AllDirectories))
+			.ToArray();
+
+		var files = allFiles.Where(static f =>
+		{
+			var n = f.Replace('\\', '/');
+			return !n.Contains("/testdata/err/", StringComparison.OrdinalIgnoreCase)
+				&& !n.Contains("/broken/", StringComparison.OrdinalIgnoreCase)
+				&& !n.Contains("broken_yaml", StringComparison.OrdinalIgnoreCase)
+				&& !n.Contains("dangling_alias", StringComparison.OrdinalIgnoreCase);
+		}).ToArray();
+
+		await Assert.That(files.Length).IsGreaterThan(0);
+
+		var failures = new List<string>();
+		foreach (var file in files)
+		{
+			try
+			{
+				var bytes = File.ReadAllBytes(file);
+				_ = WorkflowParser.Parse(bytes, file);
+			}
+			catch (Exception ex)
+			{
+				failures.Add($"{file}: {ex.GetType().Name}: {ex.Message}");
+			}
+		}
+
+		await Assert.That(failures).IsEmpty();
+	}
+
+	[Test]
+	public async Task Parse_CorpusSmoke_ActionlintBrokenFixtures_ContainParseFailures()
+	{
+		var root = FindRepoRoot();
+		var actionlintTestdata = Path.Combine(root, ".references", "actionlint-main", "testdata");
+		if (!Directory.Exists(actionlintTestdata))
+		{
+			return;
+		}
+
+		var files = Directory.EnumerateFiles(actionlintTestdata, "*.yml", SearchOption.AllDirectories)
+			.Concat(Directory.EnumerateFiles(actionlintTestdata, "*.yaml", SearchOption.AllDirectories))
+			.Where(static f =>
+			{
+				var n = f.Replace('\\', '/');
+				return n.Contains("/testdata/err/", StringComparison.OrdinalIgnoreCase)
+					|| n.Contains("/broken/", StringComparison.OrdinalIgnoreCase)
+					|| n.Contains("broken_yaml", StringComparison.OrdinalIgnoreCase)
+					|| n.Contains("dangling_alias", StringComparison.OrdinalIgnoreCase);
+			})
+			.ToArray();
+
+		await Assert.That(files.Length).IsGreaterThan(0);
+
+		var failedCount = 0;
+		foreach (var file in files)
+		{
+			try
+			{
+				_ = WorkflowParser.Parse(File.ReadAllBytes(file), file);
+			}
+			catch
+			{
+				failedCount++;
+			}
+		}
+
+		await Assert.That(failedCount).IsGreaterThan(0);
+	}
+
+	[Test]
+	public async Task Schema_Corpus_JsonFilesAreValid()
+	{
+		var root = FindRepoRoot();
+		var candidates = new[]
+		{
+			Path.Combine(root, ".references", "ghalint-main", "json-schema", "ghalint.json"),
+			Path.Combine(root, ".references", "zizmor-main", "crates", "zizmor", "src", "data", "github-workflow.json"),
+			Path.Combine(root, ".references", "zizmor-main", "crates", "zizmor", "src", "data", "github-action.json"),
+			Path.Combine(root, ".references", "zizmor-main", "crates", "zizmor", "src", "data", "dependabot-2.0.json"),
+		};
+
+		var existing = candidates.Where(File.Exists).ToArray();
+		await Assert.That(existing.Length).IsGreaterThan(0);
+
+		var invalid = new List<string>();
+		foreach (var path in existing)
+		{
+			try
+			{
+				using var _ = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(path));
+			}
+			catch (Exception ex)
+			{
+				invalid.Add($"{path}: {ex.Message}");
+			}
+		}
+
+		await Assert.That(invalid).IsEmpty();
+	}
+
+	[Test]
+	public async Task Parse_JobMissingRunsOn_ReportsError()
+	{
+		var yaml = "on: push\njobs:\n  build:\n    steps:\n      - run: echo hello\n";
+
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_JobWithUsesAndSteps_ReportsError()
+	{
+		var yaml = "on: push\njobs:\n  reuse:\n    uses: owner/repo/.github/workflows/reuse.yml@main\n    steps:\n      - run: echo hello\n";
+
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_StepWithoutRunOrUses_ReportsError()
+	{
+		var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: only-name\n";
+
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-missing-run-uses.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires run or uses", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_StepWithRunAndUses_ReportsError()
+	{
+		var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        uses: actions/checkout@v4\n";
+
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-uses.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both run and uses", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_JobMustBeMapping_ReportsError()
+	{
+		var yaml = "on: push\njobs:\n  build: []\n";
+
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-mapping.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("must be mapping", StringComparison.Ordinal))).IsTrue();
+	}
+
 	private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
 	{
 		var refsRoot = Path.Combine(repoRoot, ".references");
