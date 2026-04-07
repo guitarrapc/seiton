@@ -437,6 +437,9 @@ public static class WorkflowParser
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
+            var eventMark = reader.CurrentMark;
+            var eventName = reader.GetScalarString() ?? string.Empty;
+            ValidateKnownOnEvent(eventName, eventMark, diagnostics);
             reader.Read();
             return;
         }
@@ -469,6 +472,9 @@ public static class WorkflowParser
                 continue;
             }
 
+            var eventMark = reader.CurrentMark;
+            var eventName = reader.GetScalarString() ?? string.Empty;
+            ValidateKnownOnEvent(eventName, eventMark, diagnostics);
             reader.Read();
         }
 
@@ -496,6 +502,7 @@ public static class WorkflowParser
 
             var eventName = reader.GetScalarString() ?? string.Empty;
             var eventMark = reader.CurrentMark;
+            ValidateKnownOnEvent(eventName, eventMark, diagnostics);
             reader.Read(); // consume event key
 
             if (reader.End)
@@ -729,5 +736,13 @@ public static class WorkflowParser
             EndColumn: mark.Col);
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+    }
+
+    private static void ValidateKnownOnEvent(string eventName, Marker eventMark, List<Diagnostic> diagnostics)
+    {
+        if (!OnEventSpecs.TryGet(eventName, out _))
+        {
+            AddError(diagnostics, $"unknown event in on: {eventName}", eventMark);
+        }
     }
 }

@@ -43,12 +43,12 @@ public sealed class ParserTests
         var yaml = "on: true\njobs: {}\n";
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-type.yml");
-        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: true", StringComparison.Ordinal))).IsTrue();
 
         var yaml2 = "on: &a ref\njobs: {}\n";
 
         var result2 = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml2), "on-type2.yml");
-        await Assert.That(result2.Diagnostics).IsEmpty();
+        await Assert.That(result2.Diagnostics.Any(x => x.Message.Contains("unknown event in on: ref", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -81,6 +81,38 @@ public sealed class ParserTests
         var yaml = "on:\n  pull_request:\n    paths: [src/**]\n    paths-ignore: [docs/**]\njobs: {}\n";
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-pr-paths-exclusive.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both paths and paths-ignore", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnMergeGroupBranchesAndIgnore_ReportsError()
+    {
+        var yaml = "on:\n  merge_group:\n    branches: [main]\n    branches-ignore: [release/*]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-merge-group-branches-exclusive.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both branches and branches-ignore", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnMergeGroupValidTypes_NoError()
+    {
+        var yaml = "on:\n  merge_group:\n    types: [checks_requested]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-merge-group-types.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEventScalar_ReportsError()
+    {
+        var yaml = "on: unknown_event\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-scalar.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: unknown_event", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEventInSequence_ReportsError()
+    {
+        var yaml = "on:\n  - push\n  - unknown_event\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-sequence.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: unknown_event", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

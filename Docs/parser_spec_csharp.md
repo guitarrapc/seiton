@@ -547,3 +547,42 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 5. **generated metadata の後段利用**
 
 この構成なら、Go/actionlint の設計資産を活かしつつ、YAML 解析フェーズのアロケーションをより小さく抑える方向で C# 実装を組み立てられる。
+
+---
+
+## 実装反映メモ
+
+### `on` の詳細パースは、actionlint の RuleEvents に寄せて次を実装済み。
+
+1. event ごとの `types` を 3 モードで管理
+2. filter の排他組み合わせ検証
+3. unknown event 名の診断
+
+#### 1 `types` の 3 モード
+
+`types` は event ごとに次の 3 モードで扱う。
+
+1. NotSupported: `types` 指定を禁止
+2. Any: 任意文字列を許可（例: `repository_dispatch`）
+3. Restricted: 許可済み activity type のみ許可
+
+これにより、`push` のような `types` 非対応 event での誤設定と、`repository_dispatch` のカスタム type 許容を両立できる。
+
+#### 2 filter 排他の検証
+
+次の排他制約を parser で検証する。
+
+1. `branches` と `branches-ignore`
+2. `tags` と `tags-ignore`
+3. `paths` と `paths-ignore`
+
+`merge_group` を含む event ごとの filter 対応可否は event spec テーブルで管理する。
+
+#### 3 unknown event 診断
+
+`on` が scalar / sequence / mapping のどの表現でも、未定義 event 名は診断として報告する。
+
+実装上の教訓:
+
+1. `types` は汎用 option 検証より先に専用分岐へ流す必要がある
+2. そうしないと「非対応 event での `types`」が「未知 option」に吸収され、誤った診断文言になる
