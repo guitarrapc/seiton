@@ -393,6 +393,19 @@ internal static class OnEventSpecs
             return false;
         }
 
+        public bool IsOptionAllowed(ReadOnlySpan<byte> optionUtf8)
+        {
+            for (var i = 0; i < AllowedOptions.Length; i++)
+            {
+                if (Utf8EqualsAscii(optionUtf8, AllowedOptions[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public bool IsTypeAllowed(string value)
         {
             if (TypesMode is ActivityTypesMode.Any)
@@ -414,6 +427,47 @@ internal static class OnEventSpecs
             }
 
             return false;
+        }
+
+        public bool IsTypeAllowed(ReadOnlySpan<byte> valueUtf8)
+        {
+            if (TypesMode is ActivityTypesMode.Any)
+            {
+                return true;
+            }
+
+            if (TypesMode is ActivityTypesMode.NotSupported || AllowedTypes is null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < AllowedTypes.Length; i++)
+            {
+                if (Utf8EqualsAscii(valueUtf8, AllowedTypes[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool Utf8EqualsAscii(ReadOnlySpan<byte> utf8, string ascii)
+        {
+            if (utf8.Length != ascii.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < ascii.Length; i++)
+            {
+                if (utf8[i] != (byte)ascii[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }
