@@ -1,10 +1,18 @@
-﻿namespace Seiton.Core.Parsing;
+﻿using System.Text;
+
+namespace Seiton.Core.Parsing;
 
 public static class ExpressionParser
 {
     public static ExpressionParseResult Parse(string expression)
     {
-        var parser = new Parser(expression);
+        var bytes = Encoding.UTF8.GetBytes(expression);
+        return Parse(bytes);
+    }
+
+    public static ExpressionParseResult Parse(ReadOnlySpan<byte> expressionUtf8)
+    {
+        var parser = new Parser(expressionUtf8);
         var root = parser.ParseExpression();
         parser.SkipWhiteSpace();
         if (!parser.End)
@@ -12,91 +20,79 @@ public static class ExpressionParser
             parser.AddError($"unexpected token at position {parser.Position}");
         }
 
-        return new ExpressionParseResult(root, parser.Diagnostics.ToArray());
+        return new ExpressionParseResult(
+            RootNode: root,
+            Nodes: parser.Nodes.ToArray(),
+            Arguments: parser.Arguments.ToArray(),
+            Diagnostics: parser.Diagnostics.ToArray());
     }
 
-    private sealed class Parser
+    private ref struct Parser
     {
-        private readonly string _text;
+        private readonly ReadOnlySpan<byte> _text;
         private int _pos;
 
-        public Parser(string text)
+        public Parser(ReadOnlySpan<byte> text)
         {
             _text = text;
+            _pos = 0;
+            Nodes = new List<ExpressionNode>(16);
+            Arguments = new List<int>(16);
+            Diagnostics = new List<Diagnostic>(4);
         }
-
-        public bool End => _pos >= _text.Length;
 
         public int Position => _pos;
 
-        public List<Diagnostic> Diagnostics { get; } = new();
+        public bool End => _pos >= _text.Length;
 
-        public ExpressionSyntax? ParseExpression() => ParseOr();
+        public List<ExpressionNode> Nodes { get; }
 
-        private ExpressionSyntax? ParseOr()
+        public List<int> Arguments { get; }
+
+        public List<Diagnostic> Diagnostics { get; }
+
+        public int ParseExpression() => ParseOr();
+
+        private int ParseOr()
         {
             var left = ParseAnd();
-            while (Match("||"))
+            while (Match("||"u8))
             {
                 var right = ParseAnd();
-                if (left is null || right is null)
-                {
-                    AddError("operator '||' requires both operands");
-                    return left ?? right;
-                }
-
-                left = new BinarySyntax(left, "||", right);
+                left = AddBinary(left, right, ExpressionOperator.Or);
             }
 
             return left;
         }
 
-        private ExpressionSyntax? ParseAnd()
+        private int ParseAnd()
         {
             var left = ParseEquality();
-            while (Match("&&"))
+            while (Match("&&"u8))
             {
                 var right = ParseEquality();
-                if (left is null || right is null)
-                {
-                    AddError("operator '&&' requires both operands");
-                    return left ?? right;
-                }
-
-                left = new BinarySyntax(left, "&&", right);
+                left = AddBinary(left, right, ExpressionOperator.And);
             }
 
             return left;
         }
 
-        private ExpressionSyntax? ParseEquality()
+        private int ParseEquality()
         {
             var left = ParseRelational();
             while (true)
             {
-                if (Match("=="))
+                if (Match("=="u8))
                 {
                     var right = ParseRelational();
-                    if (left is null || right is null)
-                    {
-                        AddError("operator '==' requires both operands");
-                        return left ?? right;
-                    }
-
-                    left = new BinarySyntax(left, "==", right);
+                    left = AddBinary(left, right, ExpressionOperator.Equal);
                     continue;
                 }
 
-                if (Match("!="))
+                if (Match("!="u8))
                 {
                     var right = ParseRelational();
-                    if (left is null || right is null)
-                    {
-                        AddError("operator '!=' requires both operands");
-                        return left ?? right;
-                    }
-
-                    left = new BinarySyntax(left, "!=", right);
+                    left = AddBinary(left, right, ExpressionOperator.NotEqual);
                     continue;
                 }
 
@@ -106,36 +102,36 @@ public static class ExpressionParser
             return left;
         }
 
-        private ExpressionSyntax? ParseRelational()
+        private int ParseRelational()
         {
             var left = ParseAdditive();
             while (true)
             {
-                if (Match("<="))
+                if (Match("<="u8))
                 {
                     var right = ParseAdditive();
-                    left = CombineBinary(left, "<=", right);
+                    left = AddBinary(left, right, ExpressionOperator.LessOrEqual);
                     continue;
                 }
 
-                if (Match(">="))
+                if (Match(">="u8))
                 {
                     var right = ParseAdditive();
-                    left = CombineBinary(left, ">=", right);
+                    left = AddBinary(left, right, ExpressionOperator.GreaterOrEqual);
                     continue;
                 }
 
-                if (Match("<"))
+                if (Match("<"u8))
                 {
                     var right = ParseAdditive();
-                    left = CombineBinary(left, "<", right);
+                    left = AddBinary(left, right, ExpressionOperator.Less);
                     continue;
                 }
 
-                if (Match(">"))
+                if (Match(">"u8))
                 {
                     var right = ParseAdditive();
-                    left = CombineBinary(left, ">", right);
+                    left = AddBinary(left, right, ExpressionOperator.Greater);
                     continue;
                 }
 
@@ -145,22 +141,22 @@ public static class ExpressionParser
             return left;
         }
 
-        private ExpressionSyntax? ParseAdditive()
+        private int ParseAdditive()
         {
             var left = ParseMultiplicative();
             while (true)
             {
-                if (Match("+"))
+                if (Match("+"u8))
                 {
                     var right = ParseMultiplicative();
-                    left = CombineBinary(left, "+", right);
+                    left = AddBinary(left, right, ExpressionOperator.Add);
                     continue;
                 }
 
-                if (Match("-"))
+                if (Match("-"u8))
                 {
                     var right = ParseMultiplicative();
-                    left = CombineBinary(left, "-", right);
+                    left = AddBinary(left, right, ExpressionOperator.Subtract);
                     continue;
                 }
 
@@ -170,29 +166,29 @@ public static class ExpressionParser
             return left;
         }
 
-        private ExpressionSyntax? ParseMultiplicative()
+        private int ParseMultiplicative()
         {
             var left = ParseUnary();
             while (true)
             {
-                if (Match("*"))
+                if (Match("*"u8))
                 {
                     var right = ParseUnary();
-                    left = CombineBinary(left, "*", right);
+                    left = AddBinary(left, right, ExpressionOperator.Multiply);
                     continue;
                 }
 
-                if (Match("/"))
+                if (Match("/"u8))
                 {
                     var right = ParseUnary();
-                    left = CombineBinary(left, "/", right);
+                    left = AddBinary(left, right, ExpressionOperator.Divide);
                     continue;
                 }
 
-                if (Match("%"))
+                if (Match("%"u8))
                 {
                     var right = ParseUnary();
-                    left = CombineBinary(left, "%", right);
+                    left = AddBinary(left, right, ExpressionOperator.Modulo);
                     continue;
                 }
 
@@ -202,115 +198,145 @@ public static class ExpressionParser
             return left;
         }
 
-        private ExpressionSyntax? ParseUnary()
+        private int ParseUnary()
         {
-            if (Match("!"))
+            if (Match("!"u8))
             {
                 var operand = ParseUnary();
-                if (operand is null)
+                if (operand < 0)
                 {
                     AddError("operator '!' requires an operand");
-                    return null;
+                    return -1;
                 }
 
-                return new UnarySyntax("!", operand);
+                return AddNode(new ExpressionNode(ExpressionNodeKind.Unary, operand, -1, 0, 0, default, ExpressionOperator.Not));
             }
 
-            if (Match("-"))
+            if (Match("-"u8))
             {
                 var operand = ParseUnary();
-                if (operand is null)
+                if (operand < 0)
                 {
                     AddError("unary '-' requires an operand");
-                    return null;
+                    return -1;
                 }
 
-                return new UnarySyntax("-", operand);
+                return AddNode(new ExpressionNode(ExpressionNodeKind.Unary, operand, -1, 0, 0, default, ExpressionOperator.Negate));
             }
 
             return ParsePrimary();
         }
 
-        private ExpressionSyntax? ParsePrimary()
+        private int ParsePrimary()
         {
             SkipWhiteSpace();
             if (End)
             {
                 AddError("unexpected end of expression");
-                return null;
+                return -1;
             }
 
-            if (Match("("))
+            if (Match("("u8))
             {
                 var inner = ParseExpression();
-                if (!Match(")"))
+                if (!Match(")"u8))
                 {
                     AddError("missing closing ')' ");
                 }
+
                 return inner;
             }
 
+            int expr;
             if (Peek() == '\'' || Peek() == '"')
             {
-                return ParseStringLiteral();
+                expr = ParseStringLiteral();
             }
-
-            if (char.IsDigit(Peek()))
+            else if (IsDigit(Peek()))
             {
-                return ParseNumberLiteral();
+                expr = ParseNumberLiteral();
             }
-
-            if (!TryParseIdentifier(out var ident))
+            else if (TryParseIdentifier(out var identifierSlice))
             {
-                AddError($"unexpected token '{Peek()}' at position {_pos}");
+                expr = ParseKeywordOrIdentifier(identifierSlice);
+            }
+            else
+            {
+                AddError($"unexpected token '{(char)Peek()}' at position {_pos}");
                 _pos++;
-                return null;
+                return -1;
             }
-
-            ExpressionSyntax expr = ParseKeywordOrIdentifier(ident);
 
             while (true)
             {
                 SkipWhiteSpace();
-                if (Match("."))
+                if (Match("."u8))
                 {
-                    if (Match("*"))
+                    if (Match("*"u8))
                     {
-                        expr = new WildcardAccessSyntax(expr);
+                        expr = AddNode(new ExpressionNode(ExpressionNodeKind.WildcardAccess, expr, -1, 0, 0, default, ExpressionOperator.None));
                         continue;
                     }
 
-                    if (!TryParseIdentifier(out var member))
+                    if (!TryParseIdentifier(out var memberSlice))
                     {
                         AddError("member name is missing after '.'");
                         return expr;
                     }
 
-                    expr = new MemberAccessSyntax(expr, member);
+                    expr = AddNode(new ExpressionNode(ExpressionNodeKind.MemberAccess, expr, -1, 0, 0, memberSlice, ExpressionOperator.None));
                     continue;
                 }
 
-                if (Match("("))
+                if (Match("["u8))
                 {
-                    var args = new List<ExpressionSyntax>();
                     SkipWhiteSpace();
-                    if (!Match(")"))
+                    if (Match("*"u8))
+                    {
+                        if (!Match("]"u8))
+                        {
+                            AddError("missing closing ']' after wildcard index");
+                        }
+
+                        expr = AddNode(new ExpressionNode(ExpressionNodeKind.WildcardAccess, expr, -1, 0, 0, default, ExpressionOperator.None));
+                        continue;
+                    }
+
+                    var index = ParseIndexExpression();
+                    if (!Match("]"u8))
+                    {
+                        AddError("missing closing ']' in index access");
+                    }
+
+                    if (index >= 0)
+                    {
+                        expr = AddNode(new ExpressionNode(ExpressionNodeKind.IndexAccess, expr, index, 0, 0, default, ExpressionOperator.None));
+                    }
+
+                    continue;
+                }
+
+                if (Match("("u8))
+                {
+                    var argStart = Arguments.Count;
+                    SkipWhiteSpace();
+                    if (!Match(")"u8))
                     {
                         while (true)
                         {
                             var arg = ParseExpression();
-                            if (arg is not null)
+                            if (arg >= 0)
                             {
-                                args.Add(arg);
+                                Arguments.Add(arg);
                             }
 
                             SkipWhiteSpace();
-                            if (Match(")"))
+                            if (Match(")"u8))
                             {
                                 break;
                             }
 
-                            if (!Match(","))
+                            if (!Match(","u8))
                             {
                                 AddError("expected ',' or ')' in function call");
                                 break;
@@ -318,35 +344,14 @@ public static class ExpressionParser
                         }
                     }
 
-                    expr = new FunctionCallSyntax(expr, args);
-                    continue;
-                }
-
-                if (Match("["))
-                {
-                    SkipWhiteSpace();
-                    if (Match("*"))
-                    {
-                        if (!Match("]"))
-                        {
-                            AddError("missing closing ']' after wildcard index");
-                        }
-
-                        expr = new WildcardAccessSyntax(expr);
-                        continue;
-                    }
-
-                    var index = ParseIndexExpression();
-                    if (!Match("]"))
-                    {
-                        AddError("missing closing ']' in index access");
-                    }
-
-                    if (index is not null)
-                    {
-                        expr = new IndexAccessSyntax(expr, index);
-                    }
-
+                    expr = AddNode(new ExpressionNode(
+                        ExpressionNodeKind.FunctionCall,
+                        expr,
+                        -1,
+                        argStart,
+                        Arguments.Count - argStart,
+                        default,
+                        ExpressionOperator.None));
                     continue;
                 }
 
@@ -356,13 +361,13 @@ public static class ExpressionParser
             return expr;
         }
 
-        private ExpressionSyntax? ParseIndexExpression()
+        private int ParseIndexExpression()
         {
             SkipWhiteSpace();
             if (End)
             {
                 AddError("index expression is missing");
-                return null;
+                return -1;
             }
 
             if (Peek() == '\'' || Peek() == '"')
@@ -370,46 +375,46 @@ public static class ExpressionParser
                 return ParseStringLiteral();
             }
 
-            if (char.IsDigit(Peek()))
+            if (IsDigit(Peek()))
             {
                 return ParseNumberLiteral();
             }
 
-            if (TryParseIdentifier(out var ident))
+            if (TryParseIdentifier(out var identifierSlice))
             {
-                return ParseKeywordOrIdentifier(ident);
+                return ParseKeywordOrIdentifier(identifierSlice);
             }
 
-            AddError($"unsupported index token '{Peek()}'");
+            AddError($"unsupported index token '{(char)Peek()}'");
             _pos++;
-            return null;
+            return -1;
         }
 
-        private ExpressionSyntax ParseKeywordOrIdentifier(string ident)
+        private int ParseKeywordOrIdentifier(Utf8Slice identifierSlice)
         {
-            if (string.Equals(ident, "true", StringComparison.Ordinal))
+            var ident = identifierSlice.AsSpan(_text);
+            if (ident.SequenceEqual("true"u8))
             {
-                return new BooleanLiteralSyntax(true);
+                return AddNode(new ExpressionNode(ExpressionNodeKind.BooleanLiteral, -1, -1, 0, 0, identifierSlice, ExpressionOperator.None));
             }
 
-            if (string.Equals(ident, "false", StringComparison.Ordinal))
+            if (ident.SequenceEqual("false"u8))
             {
-                return new BooleanLiteralSyntax(false);
+                return AddNode(new ExpressionNode(ExpressionNodeKind.BooleanLiteral, -1, -1, 0, 0, identifierSlice, ExpressionOperator.None));
             }
 
-            if (string.Equals(ident, "null", StringComparison.Ordinal))
+            if (ident.SequenceEqual("null"u8))
             {
-                return new NullLiteralSyntax();
+                return AddNode(new ExpressionNode(ExpressionNodeKind.NullLiteral, -1, -1, 0, 0, identifierSlice, ExpressionOperator.None));
             }
 
-            return new IdentifierSyntax(ident);
+            return AddNode(new ExpressionNode(ExpressionNodeKind.Identifier, -1, -1, 0, 0, identifierSlice, ExpressionOperator.None));
         }
 
-        private ExpressionSyntax ParseStringLiteral()
+        private int ParseStringLiteral()
         {
             var quote = Peek();
             _pos++;
-
             var start = _pos;
             while (!End && Peek() != quote)
             {
@@ -418,10 +423,11 @@ public static class ExpressionParser
                     _pos += 2;
                     continue;
                 }
+
                 _pos++;
             }
 
-            var value = _text.Substring(start, _pos - start);
+            var token = new Utf8Slice(start, _pos - start);
             if (!End)
             {
                 _pos++;
@@ -431,31 +437,32 @@ public static class ExpressionParser
                 AddError("unterminated string literal");
             }
 
-            return new StringLiteralSyntax(value);
+            return AddNode(new ExpressionNode(ExpressionNodeKind.StringLiteral, -1, -1, 0, 0, token, ExpressionOperator.None));
         }
 
-        private ExpressionSyntax ParseNumberLiteral()
+        private int ParseNumberLiteral()
         {
             var start = _pos;
-            while (!End && (char.IsDigit(Peek()) || Peek() == '.'))
+            while (!End && (IsDigit(Peek()) || Peek() == '.'))
             {
                 _pos++;
             }
 
-            return new NumberLiteralSyntax(_text.Substring(start, _pos - start));
+            var token = new Utf8Slice(start, _pos - start);
+            return AddNode(new ExpressionNode(ExpressionNodeKind.NumberLiteral, -1, -1, 0, 0, token, ExpressionOperator.None));
         }
 
-        private bool TryParseIdentifier(out string identifier)
+        private bool TryParseIdentifier(out Utf8Slice identifierSlice)
         {
             SkipWhiteSpace();
-            identifier = string.Empty;
+            identifierSlice = default;
             if (End)
             {
                 return false;
             }
 
             var ch = Peek();
-            if (!(char.IsLetter(ch) || ch == '_'))
+            if (!(IsLetter(ch) || ch == '_'))
             {
                 return false;
             }
@@ -465,7 +472,7 @@ public static class ExpressionParser
             while (!End)
             {
                 ch = Peek();
-                if (!(char.IsLetterOrDigit(ch) || ch == '_' || ch == '-'))
+                if (!(IsLetter(ch) || IsDigit(ch) || ch == '_' || ch == '-'))
                 {
                     break;
                 }
@@ -473,22 +480,29 @@ public static class ExpressionParser
                 _pos++;
             }
 
-            identifier = _text.Substring(start, _pos - start);
+            identifierSlice = new Utf8Slice(start, _pos - start);
             return true;
         }
 
-        private ExpressionSyntax? CombineBinary(ExpressionSyntax? left, string op, ExpressionSyntax? right)
+        private int AddBinary(int left, int right, ExpressionOperator op)
         {
-            if (left is null || right is null)
+            if (left < 0 || right < 0)
             {
                 AddError($"operator '{op}' requires both operands");
-                return left ?? right;
+                return left >= 0 ? left : right;
             }
 
-            return new BinarySyntax(left, op, right);
+            return AddNode(new ExpressionNode(ExpressionNodeKind.Binary, left, right, 0, 0, default, op));
         }
 
-        private bool Match(string token)
+        private int AddNode(ExpressionNode node)
+        {
+            var id = Nodes.Count;
+            Nodes.Add(node);
+            return id;
+        }
+
+        private bool Match(ReadOnlySpan<byte> token)
         {
             SkipWhiteSpace();
             if (_pos + token.Length > _text.Length)
@@ -496,7 +510,7 @@ public static class ExpressionParser
                 return false;
             }
 
-            if (string.Compare(_text, _pos, token, 0, token.Length, StringComparison.Ordinal) != 0)
+            if (!_text.Slice(_pos, token.Length).SequenceEqual(token))
             {
                 return false;
             }
@@ -507,13 +521,11 @@ public static class ExpressionParser
 
         public void SkipWhiteSpace()
         {
-            while (!End && char.IsWhiteSpace(Peek()))
+            while (!End && IsWhiteSpace(Peek()))
             {
                 _pos++;
             }
         }
-
-        private char Peek() => _text[_pos];
 
         public void AddError(string message)
         {
@@ -526,5 +538,14 @@ public static class ExpressionParser
                 EndColumn: _pos + 1);
             Diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
         }
+
+        private byte Peek() => _text[_pos];
+
+        private static bool IsDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';
+
+        private static bool IsLetter(byte b) =>
+            (b is >= (byte)'a' and <= (byte)'z') || (b is >= (byte)'A' and <= (byte)'Z');
+
+        private static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
     }
 }

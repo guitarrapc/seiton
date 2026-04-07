@@ -9,12 +9,13 @@ public sealed class ExpressionTests
     public async Task Extract_FromWorkflowScalar_FindsExpressions()
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: ${{ github.ref == 'refs/heads/main' }}\n    steps:\n      - run: echo ${{ matrix.os }}\n";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
 
-        var expressions = ExpressionExtractor.Extract(Encoding.UTF8.GetBytes(yaml));
+        var expressions = ExpressionExtractor.Extract(bytes);
 
         await Assert.That(expressions.Length).IsEqualTo(2);
-        await Assert.That(expressions.Any(x => x.Expression.Contains("github.ref", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(expressions.Any(x => x.Expression.Contains("matrix.os", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(expressions.Any(x => x.Utf8.AsSpan().SequenceEqual("github.ref == 'refs/heads/main'"u8))).IsTrue();
+        await Assert.That(expressions.Any(x => x.Utf8.AsSpan().SequenceEqual("matrix.os"u8))).IsTrue();
     }
 
     [Test]
@@ -25,8 +26,8 @@ public sealed class ExpressionTests
         var result = ExpressionParser.Parse(expression);
 
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Root).IsNotNull();
-        await Assert.That(result.Root!.Kind).IsEqualTo(ExpressionSyntaxKind.Binary);
+        await Assert.That(result.HasRoot).IsTrue();
+        await Assert.That(result.Nodes[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.Binary);
     }
 
     [Test]
@@ -43,8 +44,8 @@ public sealed class ExpressionTests
         var result = ExpressionParser.Parse("github.event.pull_request.labels[*].name");
 
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Root).IsNotNull();
-        await Assert.That(result.Root!.Kind).IsEqualTo(ExpressionSyntaxKind.MemberAccess);
+        await Assert.That(result.HasRoot).IsTrue();
+        await Assert.That(result.Nodes[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.MemberAccess);
     }
 
     [Test]
@@ -53,7 +54,7 @@ public sealed class ExpressionTests
         var result = ExpressionParser.Parse("github.event['pull_request'].title");
 
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Root).IsNotNull();
+        await Assert.That(result.HasRoot).IsTrue();
     }
 
     [Test]

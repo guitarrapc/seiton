@@ -3,7 +3,7 @@
 namespace Seiton.Core.Parsing;
 
 public readonly record struct ExpressionOccurrence(
-    string Expression,
+    byte[] Utf8,
     TextRange Location);
 
 public static class ExpressionExtractor
@@ -18,10 +18,10 @@ public static class ExpressionExtractor
         {
             if (reader.CurrentEventType == ParseEventType.Scalar)
             {
-                var scalar = reader.GetScalarString();
-                if (!string.IsNullOrEmpty(scalar))
+                var scalarUtf8 = reader.GetScalarUtf8();
+                if (!scalarUtf8.IsEmpty)
                 {
-                    ExtractFromScalar(scalar, reader.CurrentMark, expressions);
+                    ExtractFromScalar(scalarUtf8, reader.CurrentMark, expressions);
                 }
             }
 
@@ -38,7 +38,8 @@ public static class ExpressionExtractor
 
         foreach (var occurrence in occurrences)
         {
-            var result = ExpressionParser.Parse(occurrence.Expression);
+            var expression = occurrence.Utf8.AsSpan();
+            var result = ExpressionParser.Parse(expression);
             for (var i = 0; i < result.Diagnostics.Length; i++)
             {
                 diagnostics.Add(new Diagnostic(
@@ -51,38 +52,70 @@ public static class ExpressionExtractor
         return (occurrences, diagnostics.ToArray());
     }
 
-    private static void ExtractFromScalar(string scalar, Marker mark, List<ExpressionOccurrence> expressions)
+    private static void ExtractFromScalar(ReadOnlySpan<byte> scalarUtf8, Marker mark, List<ExpressionOccurrence> expressions)
     {
         var searchStart = 0;
-        while (searchStart < scalar.Length)
+        while (searchStart < scalarUtf8.Length)
         {
-            var start = scalar.IndexOf("${{", searchStart, StringComparison.Ordinal);
+            var start = scalarUtf8[searchStart..].IndexOf("${{"u8);
             if (start < 0)
             {
                 break;
             }
 
+            start += searchStart;
+
             var bodyStart = start + 3;
-            var end = scalar.IndexOf("}}", bodyStart, StringComparison.Ordinal);
+            var end = scalarUtf8[bodyStart..].IndexOf("}}"u8);
             if (end < 0)
             {
                 break;
             }
 
-            var body = scalar.Substring(bodyStart, end - bodyStart).Trim();
-            if (body.Length > 0)
+            end += bodyStart;
+
+            var bodyTrimmed = TrimAsciiWhiteSpace(scalarUtf8, bodyStart, end - bodyStart);
+            if (bodyTrimmed.Length > 0)
             {
                 var location = new TextRange(
-                    Start: mark.Position + start,
-                    Length: end + 2 - start,
+                    Start: mark.Position,
+                    Length: bodyTrimmed.Length,
                     StartLine: mark.Line,
-                    StartColumn: mark.Col + start,
+                    StartColumn: mark.Col,
                     EndLine: mark.Line,
-                    EndColumn: mark.Col + end + 1);
-                expressions.Add(new ExpressionOccurrence(body, location));
+                    EndColumn: mark.Col + bodyTrimmed.Length - 1);
+                var utf8 = scalarUtf8.Slice(bodyTrimmed.Offset, bodyTrimmed.Length).ToArray();
+                expressions.Add(new ExpressionOccurrence(
+                    utf8,
+                    location));
             }
 
             searchStart = end + 2;
         }
     }
+
+    private static Utf8Slice TrimAsciiWhiteSpace(ReadOnlySpan<byte> source, int offset, int length)
+    {
+        var start = offset;
+        var end = offset + length - 1;
+
+        while (start <= end && IsWhiteSpace(source[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && IsWhiteSpace(source[end]))
+        {
+            end--;
+        }
+
+        if (end < start)
+        {
+            return new Utf8Slice(offset, 0);
+        }
+
+        return new Utf8Slice(start, end - start + 1);
+    }
+
+    private static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 }
