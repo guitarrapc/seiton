@@ -640,6 +640,7 @@ smoke test からの昇格として、`testdata/err` の一部 fixture で期待
 2. `GetScalarString()` は未知キー診断など表示用途に限定
 3. 今後も parser 本体に `string.Equals` ベース分岐を増やさない
 4. `on.<event>.types` の妥当性判定も UTF-8 span 比較で行い、unsupported 値の診断時のみ文字列化する
+5. `strategy/matrix` および `container/services/credentials/secrets` の key 判定も UTF-8 span 比較を優先する
 
 補足:
 

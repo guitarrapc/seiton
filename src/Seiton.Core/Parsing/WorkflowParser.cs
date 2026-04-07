@@ -895,28 +895,37 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             var keyMark = reader.CurrentMark;
-            reader.Read();
+            var keyUtf8 = reader.GetScalarUtf8();
 
-            if (reader.End)
+            if (keyUtf8.SequenceEqual("matrix"u8))
             {
-                break;
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                ParseMatrix(ref reader, diagnostics, jobId);
+                continue;
             }
 
-            switch (key)
+            if (keyUtf8.SequenceEqual("fail-fast"u8) || keyUtf8.SequenceEqual("max-parallel"u8))
             {
-                case "matrix":
-                    ParseMatrix(ref reader, diagnostics, jobId);
-                    break;
-                case "fail-fast":
-                case "max-parallel":
+                reader.Read();
+                if (!reader.End)
+                {
                     reader.SkipCurrentNode();
-                    break;
-                default:
-                    AddError(diagnostics, $"unexpected strategy key '{key}' in job '{jobId}'", keyMark);
-                    reader.SkipCurrentNode();
-                    break;
+                }
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            reader.Read();
+            AddError(diagnostics, $"unexpected strategy key '{key}' in job '{jobId}'", keyMark);
+            if (!reader.End)
+            {
+                reader.SkipCurrentNode();
             }
         }
 
@@ -955,18 +964,21 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
+            var keyUtf8 = reader.GetScalarUtf8();
+            var isInclude = keyUtf8.SequenceEqual("include"u8);
+            var isExclude = keyUtf8.SequenceEqual("exclude"u8);
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            if (string.Equals(key, "include", StringComparison.Ordinal) || string.Equals(key, "exclude", StringComparison.Ordinal))
+            if (isInclude || isExclude)
             {
                 if (reader.CurrentEventType is not ParseEventType.SequenceStart and not ParseEventType.Scalar)
                 {
-                    AddError(diagnostics, $"job '{jobId}' strategy.matrix.{key} must be sequence or scalar", reader.CurrentMark);
+                    var keyTextForDiagnostic = isInclude ? "include" : "exclude";
+                    AddError(diagnostics, $"job '{jobId}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentMark);
                 }
                 reader.SkipCurrentNode();
                 continue;
@@ -974,7 +986,8 @@ public static class WorkflowParser
 
             if (reader.CurrentEventType is not ParseEventType.SequenceStart and not ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"job '{jobId}' strategy.matrix.{key} must be sequence or scalar", reader.CurrentMark);
+                var keyTextForDiagnostic = Encoding.UTF8.GetString(keyUtf8);
+                AddError(diagnostics, $"job '{jobId}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentMark);
             }
             reader.SkipCurrentNode();
         }
@@ -1055,50 +1068,92 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             var keyMark = reader.CurrentMark;
+            var keyUtf8 = reader.GetScalarUtf8();
+
+            if (keyUtf8.SequenceEqual("image"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                hasImage = true;
+                if (reader.CurrentEventType != ParseEventType.Scalar)
+                {
+                    AddError(diagnostics, $"{sectionName}.image must be scalar", reader.CurrentMark);
+                }
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("credentials"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                ParseCredentials(ref reader, diagnostics, sectionName);
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("env"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                if (reader.CurrentEventType != ParseEventType.MappingStart)
+                {
+                    AddError(diagnostics, $"{sectionName}.env must be mapping", reader.CurrentMark);
+                }
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("ports"u8) || keyUtf8.SequenceEqual("volumes"u8))
+            {
+                var optionKey = reader.GetScalarString() ?? string.Empty;
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"{sectionName}.{optionKey} must be scalar or sequence of scalar");
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("options"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                if (reader.CurrentEventType != ParseEventType.Scalar)
+                {
+                    AddError(diagnostics, $"{sectionName}.options must be scalar", reader.CurrentMark);
+                }
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            switch (key)
-            {
-                case "image":
-                    hasImage = true;
-                    if (reader.CurrentEventType != ParseEventType.Scalar)
-                    {
-                        AddError(diagnostics, $"{sectionName}.image must be scalar", reader.CurrentMark);
-                    }
-                    reader.SkipCurrentNode();
-                    break;
-                case "credentials":
-                    ParseCredentials(ref reader, diagnostics, sectionName);
-                    break;
-                case "env":
-                    if (reader.CurrentEventType != ParseEventType.MappingStart)
-                    {
-                        AddError(diagnostics, $"{sectionName}.env must be mapping", reader.CurrentMark);
-                    }
-                    reader.SkipCurrentNode();
-                    break;
-                case "ports":
-                case "volumes":
-                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"{sectionName}.{key} must be scalar or sequence of scalar");
-                    break;
-                case "options":
-                    if (reader.CurrentEventType != ParseEventType.Scalar)
-                    {
-                        AddError(diagnostics, $"{sectionName}.options must be scalar", reader.CurrentMark);
-                    }
-                    reader.SkipCurrentNode();
-                    break;
-                default:
-                    AddError(diagnostics, $"unexpected {sectionName} key: {key}", keyMark);
-                    reader.SkipCurrentNode();
-                    break;
-            }
+            AddError(diagnostics, $"unexpected {sectionName} key: {key}", keyMark);
+            reader.SkipCurrentNode();
         }
 
         if (reader.CurrentEventType == ParseEventType.MappingEnd)
@@ -1137,30 +1192,32 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             var keyMark = reader.CurrentMark;
+            var keyUtf8 = reader.GetScalarUtf8();
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            if (string.Equals(key, "username", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("username"u8))
             {
                 hasUsername = true;
             }
-            else if (string.Equals(key, "password", StringComparison.Ordinal))
+            else if (keyUtf8.SequenceEqual("password"u8))
             {
                 hasPassword = true;
             }
             else
             {
-                AddError(diagnostics, $"unexpected {sectionName}.credentials key: {key}", keyMark);
+                var unexpectedKey = reader.GetScalarString() ?? string.Empty;
+                AddError(diagnostics, $"unexpected {sectionName}.credentials key: {unexpectedKey}", keyMark);
             }
 
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"{sectionName}.credentials.{key} must be scalar", reader.CurrentMark);
+                var fieldName = reader.GetScalarString() ?? string.Empty;
+                AddError(diagnostics, $"{sectionName}.credentials.{fieldName} must be scalar", reader.CurrentMark);
             }
             reader.SkipCurrentNode();
         }
@@ -1222,9 +1279,10 @@ public static class WorkflowParser
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
-            var value = reader.GetScalarString() ?? string.Empty;
-            if (!string.Equals(value, "inherit", StringComparison.Ordinal))
+            var valueUtf8 = reader.GetScalarUtf8();
+            if (!valueUtf8.SequenceEqual("inherit"u8))
             {
+                var value = reader.GetScalarString() ?? string.Empty;
                 AddError(diagnostics, $"job '{jobId}' secrets scalar must be 'inherit'", reader.CurrentMark);
             }
             reader.Read();
