@@ -9,6 +9,7 @@ public static class WorkflowParser
     {
         var diagnostics = new List<Diagnostic>(16);
         var reader = new VYamlStreamReader(utf8Yaml.AsMemory());
+        ReadOnlySpan<byte> source = utf8Yaml;
 
         reader.SkipHeader();
 
@@ -91,7 +92,7 @@ public static class WorkflowParser
                     }
                     else
                     {
-                        ParseJobsMapping(ref reader, diagnostics);
+                        ParseJobsMapping(ref reader, diagnostics, source);
                     }
                 }
                 continue;
@@ -146,7 +147,7 @@ public static class WorkflowParser
         return new ParseResult(document, diagnostics.ToArray(), HasFatalError: false);
     }
 
-    private static void ParseJobsMapping(ref VYamlStreamReader reader, List<Diagnostic> diagnostics)
+    private static void ParseJobsMapping(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
     {
         // current is MappingStart
         reader.Read();
@@ -165,7 +166,7 @@ public static class WorkflowParser
             }
 
             var jobIdMark = reader.CurrentMark;
-            var jobId = reader.GetScalarString() ?? string.Empty;
+            var jobId = reader.GetScalarSlice();
             reader.Read(); // consume job id
 
             if (reader.End)
@@ -173,7 +174,7 @@ public static class WorkflowParser
                 break;
             }
 
-            ParseJobNode(ref reader, diagnostics, jobId, jobIdMark);
+            ParseJobNode(ref reader, diagnostics, source, jobId, jobIdMark);
         }
 
         if (reader.CurrentEventType == ParseEventType.MappingEnd)
@@ -182,11 +183,11 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseJobNode(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId, Marker jobIdMark)
+    private static void ParseJobNode(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Marker jobIdMark)
     {
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
-            AddError(diagnostics, $"job '{jobId}' must be mapping", reader.CurrentMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' must be mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -204,7 +205,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"job '{jobId}' key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -224,7 +225,7 @@ public static class WorkflowParser
                 {
                     if (reader.CurrentEventType is not ParseEventType.Scalar and not ParseEventType.SequenceStart and not ParseEventType.MappingStart)
                     {
-                        AddError(diagnostics, $"job '{jobId}' runs-on has invalid type", reader.CurrentMark);
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' runs-on has invalid type", reader.CurrentMark);
                     }
                     reader.SkipCurrentNode();
                 }
@@ -249,7 +250,7 @@ public static class WorkflowParser
                     }
                     else
                     {
-                        ParseSteps(ref reader, diagnostics, jobId);
+                        ParseSteps(ref reader, diagnostics, source, jobId);
                     }
                 }
                 continue;
@@ -263,7 +264,7 @@ public static class WorkflowParser
                 {
                     if (reader.CurrentEventType != ParseEventType.Scalar)
                     {
-                        AddError(diagnostics, $"job '{jobId}' uses must be scalar", reader.CurrentMark);
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar", reader.CurrentMark);
                     }
                     reader.SkipCurrentNode();
                 }
@@ -277,12 +278,12 @@ public static class WorkflowParser
                 {
                     if (reader.CurrentEventType != ParseEventType.MappingStart)
                     {
-                        AddError(diagnostics, $"job '{jobId}' strategy must be mapping", reader.CurrentMark);
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy must be mapping", reader.CurrentMark);
                         reader.SkipCurrentNode();
                     }
                     else
                     {
-                        ParseStrategy(ref reader, diagnostics, jobId);
+                        ParseStrategy(ref reader, diagnostics, source, jobId);
                     }
                 }
                 continue;
@@ -299,7 +300,7 @@ public static class WorkflowParser
 
                 if (!reader.End)
                 {
-                    ParseContainerLike(ref reader, diagnostics, $"job '{jobId}' container", requireImage: true);
+                    ParseContainerLike(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' container", requireImage: true);
                 }
                 continue;
             }
@@ -315,7 +316,7 @@ public static class WorkflowParser
 
                 if (!reader.End)
                 {
-                    ParseServices(ref reader, diagnostics, jobId);
+                    ParseServices(ref reader, diagnostics, source, jobId);
                 }
                 continue;
             }
@@ -326,7 +327,7 @@ public static class WorkflowParser
                 hasWith = true;
                 if (!reader.End)
                 {
-                    ParseStringMapping(ref reader, diagnostics, $"job '{jobId}' with must be mapping");
+                    ParseStringMapping(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' with must be mapping");
                 }
                 continue;
             }
@@ -337,7 +338,7 @@ public static class WorkflowParser
                 hasSecrets = true;
                 if (!reader.End)
                 {
-                    ParseJobSecrets(ref reader, diagnostics, jobId);
+                    ParseJobSecrets(ref reader, diagnostics, source, jobId);
                 }
                 continue;
             }
@@ -360,7 +361,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"unexpected job key '{key}' in job '{jobId}'", keyMark);
+            AddError(diagnostics, $"unexpected job key '{key}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -374,44 +375,44 @@ public static class WorkflowParser
 
         if (hasUses && hasSteps)
         {
-            AddError(diagnostics, $"job '{jobId}' cannot have both uses and steps", jobIdMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' cannot have both uses and steps", jobIdMark);
         }
 
         if (hasUses && hasRunsOn)
         {
-            AddError(diagnostics, $"job '{jobId}' cannot have both uses and runs-on", jobIdMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' cannot have both uses and runs-on", jobIdMark);
         }
 
         if (hasUses && stepsOnlyKeyInReusable is not null)
         {
             AddError(
                 diagnostics,
-                $"when job '{jobId}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
+                $"when job '{DecodeUtf8(source, jobId)}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
                 stepsOnlyKeyInReusableMark);
         }
 
         if (!hasUses && !hasRunsOn)
         {
-            AddError(diagnostics, $"job '{jobId}' requires runs-on (or uses)", jobIdMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' requires runs-on (or uses)", jobIdMark);
         }
 
         if (!hasUses && !hasSteps)
         {
-            AddError(diagnostics, $"job '{jobId}' requires steps (or uses)", jobIdMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' requires steps (or uses)", jobIdMark);
         }
 
         if (!hasUses && hasWith)
         {
-            AddError(diagnostics, $"job '{jobId}' key 'with' requires uses", jobIdMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' key 'with' requires uses", jobIdMark);
         }
 
         if (!hasUses && hasSecrets)
         {
-            AddError(diagnostics, $"job '{jobId}' key 'secrets' requires uses", jobIdMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' key 'secrets' requires uses", jobIdMark);
         }
     }
 
-    private static void ParseSteps(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    private static void ParseSteps(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         // current is SequenceStart
         reader.Read();
@@ -420,7 +421,7 @@ public static class WorkflowParser
         while (!reader.End && reader.CurrentEventType != ParseEventType.SequenceEnd)
         {
             stepIndex++;
-            ParseStep(ref reader, diagnostics, jobId, stepIndex);
+            ParseStep(ref reader, diagnostics, source, jobId, stepIndex);
         }
 
         if (reader.CurrentEventType == ParseEventType.SequenceEnd)
@@ -429,11 +430,11 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseStep(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId, int stepIndex)
+    private static void ParseStep(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
     {
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
-            AddError(diagnostics, $"job '{jobId}' step[{stepIndex}] must be mapping", reader.CurrentMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] must be mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -446,7 +447,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"job '{jobId}' step[{stepIndex}] key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -466,7 +467,7 @@ public static class WorkflowParser
                 {
                     if (reader.CurrentEventType != ParseEventType.Scalar)
                     {
-                        AddError(diagnostics, $"job '{jobId}' step[{stepIndex}] run must be scalar", reader.CurrentMark);
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar", reader.CurrentMark);
                     }
                     reader.SkipCurrentNode();
                 }
@@ -481,7 +482,7 @@ public static class WorkflowParser
                 {
                     if (reader.CurrentEventType != ParseEventType.Scalar)
                     {
-                        AddError(diagnostics, $"job '{jobId}' step[{stepIndex}] uses must be scalar", reader.CurrentMark);
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar", reader.CurrentMark);
                     }
                     reader.SkipCurrentNode();
                 }
@@ -500,7 +501,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"unexpected step key '{key}' in job '{jobId}' step[{stepIndex}]", keyMark);
+            AddError(diagnostics, $"unexpected step key '{key}' in job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -514,12 +515,12 @@ public static class WorkflowParser
 
         if (hasRun && hasUses)
         {
-            AddError(diagnostics, $"job '{jobId}' step[{stepIndex}] cannot have both run and uses", reader.CurrentMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] cannot have both run and uses", reader.CurrentMark);
         }
 
         if (!hasRun && !hasUses)
         {
-            AddError(diagnostics, $"job '{jobId}' step[{stepIndex}] requires run or uses", reader.CurrentMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] requires run or uses", reader.CurrentMark);
         }
     }
 
@@ -878,7 +879,7 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseStrategy(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    private static void ParseStrategy(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         reader.Read(); // consume MappingStart
 
@@ -886,7 +887,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"job '{jobId}' strategy key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -906,7 +907,7 @@ public static class WorkflowParser
                     break;
                 }
 
-                ParseMatrix(ref reader, diagnostics, jobId);
+                ParseMatrix(ref reader, diagnostics, source, jobId);
                 continue;
             }
 
@@ -922,7 +923,7 @@ public static class WorkflowParser
 
             var key = reader.GetScalarString() ?? string.Empty;
             reader.Read();
-            AddError(diagnostics, $"unexpected strategy key '{key}' in job '{jobId}'", keyMark);
+            AddError(diagnostics, $"unexpected strategy key '{key}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -935,7 +936,7 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseMatrix(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    private static void ParseMatrix(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
@@ -945,7 +946,7 @@ public static class WorkflowParser
 
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
-            AddError(diagnostics, $"job '{jobId}' strategy.matrix must be scalar or mapping", reader.CurrentMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be scalar or mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -955,7 +956,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"job '{jobId}' strategy.matrix key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -978,7 +979,7 @@ public static class WorkflowParser
                 if (reader.CurrentEventType is not ParseEventType.SequenceStart and not ParseEventType.Scalar)
                 {
                     var keyTextForDiagnostic = isInclude ? "include" : "exclude";
-                    AddError(diagnostics, $"job '{jobId}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentMark);
+                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentMark);
                 }
                 reader.SkipCurrentNode();
                 continue;
@@ -987,7 +988,7 @@ public static class WorkflowParser
             if (reader.CurrentEventType is not ParseEventType.SequenceStart and not ParseEventType.Scalar)
             {
                 var keyTextForDiagnostic = Encoding.UTF8.GetString(keyUtf8);
-                AddError(diagnostics, $"job '{jobId}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentMark);
             }
             reader.SkipCurrentNode();
         }
@@ -998,11 +999,11 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseServices(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    private static void ParseServices(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
-            AddError(diagnostics, $"job '{jobId}' services must be mapping", reader.CurrentMark);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -1012,7 +1013,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"job '{jobId}' services key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -1028,7 +1029,7 @@ public static class WorkflowParser
                 break;
             }
 
-            ParseContainerLike(ref reader, diagnostics, $"job '{jobId}' service '{serviceName}'", requireImage: true);
+            ParseContainerLike(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' service '{serviceName}'", requireImage: true);
         }
 
         if (reader.CurrentEventType == ParseEventType.MappingEnd)
@@ -1275,21 +1276,25 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseJobSecrets(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    private static void ParseJobSecrets(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
             var valueUtf8 = reader.GetScalarUtf8();
             if (!valueUtf8.SequenceEqual("inherit"u8))
             {
-                var value = reader.GetScalarString() ?? string.Empty;
-                AddError(diagnostics, $"job '{jobId}' secrets scalar must be 'inherit'", reader.CurrentMark);
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets scalar must be 'inherit'", reader.CurrentMark);
             }
             reader.Read();
             return;
         }
 
-        ParseStringMapping(ref reader, diagnostics, $"job '{jobId}' secrets must be mapping or scalar 'inherit'");
+        ParseStringMapping(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets must be mapping or scalar 'inherit'");
+    }
+
+    private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)
+    {
+        return Encoding.UTF8.GetString(slice.AsSpan(source));
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, Marker mark)
