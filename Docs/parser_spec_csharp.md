@@ -644,6 +644,7 @@ smoke test からの昇格として、`testdata/err` の一部 fixture で期待
 6. job id などの動的識別子も通常経路では `Utf8Slice` で持ち回し、診断時のみ UTF-8 から文字列化する
 7. `container` / `service` 文脈名のような組み立て文字列も通常経路では作らず、診断時のみ遅延構築する
 8. event spec lookup は `Dictionary<string, ...>` ではなく、固定 spec テーブルへの direct lookup を使う
+9. event option/type 判定も `string[]` テーブル探索ではなく、event ごとの固定 switch ロジックで処理する
 
 補足:
 

@@ -9,352 +9,78 @@ internal static class OnEventSpecs
         Restricted,
     }
 
-    private static readonly EventSpec BranchProtectionRule = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "edited", "deleted"]);
-
-    private static readonly EventSpec CheckRun = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "rerequested", "completed", "requested_action"]);
-
-    private static readonly EventSpec CheckSuite = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["completed"]);
-
-    private static readonly EventSpec Create = new([], ActivityTypesMode.NotSupported, null);
-    private static readonly EventSpec Delete = new([], ActivityTypesMode.NotSupported, null);
-    private static readonly EventSpec Deployment = new([], ActivityTypesMode.NotSupported, null);
-    private static readonly EventSpec DeploymentStatus = new([], ActivityTypesMode.NotSupported, null);
-
-    private static readonly EventSpec Discussion = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes:
-        [
-            "created", "edited", "deleted", "transferred", "pinned", "unpinned", "labeled",
-            "unlabeled", "locked", "unlocked", "category_changed", "answered", "unanswered"
-        ]);
-
-    private static readonly EventSpec DiscussionComment = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "edited", "deleted"]);
-
-    private static readonly EventSpec Fork = new([], ActivityTypesMode.NotSupported, null);
-    private static readonly EventSpec Gollum = new([], ActivityTypesMode.NotSupported, null);
-    private static readonly EventSpec ImageVersion = new([], ActivityTypesMode.NotSupported, null);
-
-    private static readonly EventSpec Push = new(
-        AllowedOptions: ["branches", "branches-ignore", "tags", "tags-ignore", "paths", "paths-ignore"],
-        TypesMode: ActivityTypesMode.NotSupported,
-        AllowedTypes: null);
-
-    private static readonly EventSpec Label = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "edited", "deleted"]);
-
-    private static readonly EventSpec MergeGroup = new(
-        AllowedOptions: ["types", "branches", "branches-ignore"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["checks_requested"]);
-
-    private static readonly EventSpec Milestone = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "closed", "opened", "edited", "deleted"]);
-
-    private static readonly EventSpec PageBuild = new([], ActivityTypesMode.NotSupported, null);
-    private static readonly EventSpec Public = new([], ActivityTypesMode.NotSupported, null);
-
-    private static readonly EventSpec PullRequest = new(
-        AllowedOptions: ["types", "branches", "branches-ignore", "paths", "paths-ignore"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes:
-        [
-            "assigned", "unassigned", "labeled", "unlabeled", "opened", "edited", "closed",
-            "reopened", "synchronize", "converted_to_draft", "locked", "unlocked", "enqueued", "dequeued",
-            "milestoned", "demilestoned", "ready_for_review", "review_requested", "review_request_removed",
-            "auto_merge_enabled", "auto_merge_disabled"
-        ]);
-
-    private static readonly EventSpec PullRequestReview = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["submitted", "edited", "dismissed"]);
-
-    private static readonly EventSpec PullRequestReviewComment = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "edited", "deleted"]);
-
-    private static readonly EventSpec PullRequestTarget = new(
-        AllowedOptions: ["types", "branches", "branches-ignore", "paths", "paths-ignore"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes:
-        [
-            "assigned", "unassigned", "labeled", "unlabeled", "opened", "edited", "closed",
-            "reopened", "synchronize", "converted_to_draft", "locked", "unlocked", "enqueued", "dequeued",
-            "milestoned", "demilestoned", "ready_for_review", "review_requested", "review_request_removed",
-            "auto_merge_enabled", "auto_merge_disabled"
-        ]);
-
-    private static readonly EventSpec WorkflowDispatch = new(
-        AllowedOptions: ["inputs"],
-        TypesMode: ActivityTypesMode.NotSupported,
-        AllowedTypes: null);
-
-    private static readonly EventSpec WorkflowCall = new(
-        AllowedOptions: ["inputs", "secrets", "outputs"],
-        TypesMode: ActivityTypesMode.NotSupported,
-        AllowedTypes: null);
-
-    private static readonly EventSpec WorkflowRun = new(
-        AllowedOptions: ["workflows", "types", "branches", "branches-ignore"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["requested", "completed", "in_progress"]);
-
-    private static readonly EventSpec Release = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["published", "unpublished", "created", "edited", "deleted", "prereleased", "released"]);
-
-    private static readonly EventSpec RegistryPackage = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["published", "updated"]);
-
-    private static readonly EventSpec Issues = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes:
-        [
-            "opened", "edited", "deleted", "transferred", "pinned", "unpinned", "closed", "reopened",
-            "assigned", "unassigned", "labeled", "unlabeled", "locked", "unlocked", "milestoned", "demilestoned",
-            "typed", "untyped"
-        ]);
-
-    private static readonly EventSpec IssueComment = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["created", "edited", "deleted"]);
-
-    private static readonly EventSpec Schedule = new([], ActivityTypesMode.NotSupported, null);
-
-    private static readonly EventSpec RepositoryDispatch = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Any,
-        AllowedTypes: null);
-
-    private static readonly EventSpec Status = new([], ActivityTypesMode.NotSupported, null);
-
-    private static readonly EventSpec Watch = new(
-        AllowedOptions: ["types"],
-        TypesMode: ActivityTypesMode.Restricted,
-        AllowedTypes: ["started"]);
+    internal enum EventId
+    {
+        BranchProtectionRule,
+        CheckRun,
+        CheckSuite,
+        Create,
+        Delete,
+        Deployment,
+        DeploymentStatus,
+        Discussion,
+        DiscussionComment,
+        Fork,
+        Gollum,
+        ImageVersion,
+        Push,
+        Label,
+        MergeGroup,
+        Milestone,
+        PageBuild,
+        Public,
+        PullRequest,
+        PullRequestReview,
+        PullRequestReviewComment,
+        PullRequestTarget,
+        WorkflowDispatch,
+        WorkflowCall,
+        WorkflowRun,
+        Release,
+        RegistryPackage,
+        Issues,
+        IssueComment,
+        Schedule,
+        RepositoryDispatch,
+        Status,
+        Watch,
+    }
 
     public static bool TryGet(string eventName, out EventSpec spec)
     {
-        if (eventName == "branch_protection_rule")
-        {
-            spec = BranchProtectionRule;
-            return true;
-        }
-
-        if (eventName == "check_run")
-        {
-            spec = CheckRun;
-            return true;
-        }
-
-        if (eventName == "check_suite")
-        {
-            spec = CheckSuite;
-            return true;
-        }
-
-        if (eventName == "create")
-        {
-            spec = Create;
-            return true;
-        }
-
-        if (eventName == "delete")
-        {
-            spec = Delete;
-            return true;
-        }
-
-        if (eventName == "deployment")
-        {
-            spec = Deployment;
-            return true;
-        }
-
-        if (eventName == "deployment_status")
-        {
-            spec = DeploymentStatus;
-            return true;
-        }
-
-        if (eventName == "discussion")
-        {
-            spec = Discussion;
-            return true;
-        }
-
-        if (eventName == "discussion_comment")
-        {
-            spec = DiscussionComment;
-            return true;
-        }
-
-        if (eventName == "fork")
-        {
-            spec = Fork;
-            return true;
-        }
-
-        if (eventName == "gollum")
-        {
-            spec = Gollum;
-            return true;
-        }
-
-        if (eventName == "image_version")
-        {
-            spec = ImageVersion;
-            return true;
-        }
-
-        if (eventName == "push")
-        {
-            spec = Push;
-            return true;
-        }
-
-        if (eventName == "label")
-        {
-            spec = Label;
-            return true;
-        }
-
-        if (eventName == "merge_group")
-        {
-            spec = MergeGroup;
-            return true;
-        }
-
-        if (eventName == "milestone")
-        {
-            spec = Milestone;
-            return true;
-        }
-
-        if (eventName == "page_build")
-        {
-            spec = PageBuild;
-            return true;
-        }
-
-        if (eventName == "public")
-        {
-            spec = Public;
-            return true;
-        }
-
-        if (eventName == "pull_request")
-        {
-            spec = PullRequest;
-            return true;
-        }
-
-        if (eventName == "pull_request_review")
-        {
-            spec = PullRequestReview;
-            return true;
-        }
-
-        if (eventName == "pull_request_review_comment")
-        {
-            spec = PullRequestReviewComment;
-            return true;
-        }
-
-        if (eventName == "pull_request_target")
-        {
-            spec = PullRequestTarget;
-            return true;
-        }
-
-        if (eventName == "workflow_dispatch")
-        {
-            spec = WorkflowDispatch;
-            return true;
-        }
-
-        if (eventName == "workflow_call")
-        {
-            spec = WorkflowCall;
-            return true;
-        }
-
-        if (eventName == "workflow_run")
-        {
-            spec = WorkflowRun;
-            return true;
-        }
-
-        if (eventName == "release")
-        {
-            spec = Release;
-            return true;
-        }
-
-        if (eventName == "registry_package")
-        {
-            spec = RegistryPackage;
-            return true;
-        }
-
-        if (eventName == "issues")
-        {
-            spec = Issues;
-            return true;
-        }
-
-        if (eventName == "issue_comment")
-        {
-            spec = IssueComment;
-            return true;
-        }
-
-        if (eventName == "schedule")
-        {
-            spec = Schedule;
-            return true;
-        }
-
-        if (eventName == "repository_dispatch")
-        {
-            spec = RepositoryDispatch;
-            return true;
-        }
-
-        if (eventName == "status")
-        {
-            spec = Status;
-            return true;
-        }
-
-        if (eventName == "watch")
-        {
-            spec = Watch;
-            return true;
-        }
+        if (eventName == "branch_protection_rule") { spec = new(EventId.BranchProtectionRule); return true; }
+        if (eventName == "check_run") { spec = new(EventId.CheckRun); return true; }
+        if (eventName == "check_suite") { spec = new(EventId.CheckSuite); return true; }
+        if (eventName == "create") { spec = new(EventId.Create); return true; }
+        if (eventName == "delete") { spec = new(EventId.Delete); return true; }
+        if (eventName == "deployment") { spec = new(EventId.Deployment); return true; }
+        if (eventName == "deployment_status") { spec = new(EventId.DeploymentStatus); return true; }
+        if (eventName == "discussion") { spec = new(EventId.Discussion); return true; }
+        if (eventName == "discussion_comment") { spec = new(EventId.DiscussionComment); return true; }
+        if (eventName == "fork") { spec = new(EventId.Fork); return true; }
+        if (eventName == "gollum") { spec = new(EventId.Gollum); return true; }
+        if (eventName == "image_version") { spec = new(EventId.ImageVersion); return true; }
+        if (eventName == "push") { spec = new(EventId.Push); return true; }
+        if (eventName == "label") { spec = new(EventId.Label); return true; }
+        if (eventName == "merge_group") { spec = new(EventId.MergeGroup); return true; }
+        if (eventName == "milestone") { spec = new(EventId.Milestone); return true; }
+        if (eventName == "page_build") { spec = new(EventId.PageBuild); return true; }
+        if (eventName == "public") { spec = new(EventId.Public); return true; }
+        if (eventName == "pull_request") { spec = new(EventId.PullRequest); return true; }
+        if (eventName == "pull_request_review") { spec = new(EventId.PullRequestReview); return true; }
+        if (eventName == "pull_request_review_comment") { spec = new(EventId.PullRequestReviewComment); return true; }
+        if (eventName == "pull_request_target") { spec = new(EventId.PullRequestTarget); return true; }
+        if (eventName == "workflow_dispatch") { spec = new(EventId.WorkflowDispatch); return true; }
+        if (eventName == "workflow_call") { spec = new(EventId.WorkflowCall); return true; }
+        if (eventName == "workflow_run") { spec = new(EventId.WorkflowRun); return true; }
+        if (eventName == "release") { spec = new(EventId.Release); return true; }
+        if (eventName == "registry_package") { spec = new(EventId.RegistryPackage); return true; }
+        if (eventName == "issues") { spec = new(EventId.Issues); return true; }
+        if (eventName == "issue_comment") { spec = new(EventId.IssueComment); return true; }
+        if (eventName == "schedule") { spec = new(EventId.Schedule); return true; }
+        if (eventName == "repository_dispatch") { spec = new(EventId.RepositoryDispatch); return true; }
+        if (eventName == "status") { spec = new(EventId.Status); return true; }
+        if (eventName == "watch") { spec = new(EventId.Watch); return true; }
 
         spec = default;
         return false;
@@ -362,337 +88,135 @@ internal static class OnEventSpecs
 
     public static bool TryGet(ReadOnlySpan<byte> eventNameUtf8, out string eventName, out EventSpec spec)
     {
-        if (eventNameUtf8.SequenceEqual("branch_protection_rule"u8))
-        {
-            eventName = "branch_protection_rule";
-            spec = BranchProtectionRule;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("check_run"u8))
-        {
-            eventName = "check_run";
-            spec = CheckRun;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("check_suite"u8))
-        {
-            eventName = "check_suite";
-            spec = CheckSuite;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("create"u8))
-        {
-            eventName = "create";
-            spec = Create;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("delete"u8))
-        {
-            eventName = "delete";
-            spec = Delete;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("deployment"u8))
-        {
-            eventName = "deployment";
-            spec = Deployment;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("deployment_status"u8))
-        {
-            eventName = "deployment_status";
-            spec = DeploymentStatus;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("discussion"u8))
-        {
-            eventName = "discussion";
-            spec = Discussion;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("discussion_comment"u8))
-        {
-            eventName = "discussion_comment";
-            spec = DiscussionComment;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("fork"u8))
-        {
-            eventName = "fork";
-            spec = Fork;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("gollum"u8))
-        {
-            eventName = "gollum";
-            spec = Gollum;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("image_version"u8))
-        {
-            eventName = "image_version";
-            spec = ImageVersion;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("push"u8))
-        {
-            eventName = "push";
-            spec = Push;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("label"u8))
-        {
-            eventName = "label";
-            spec = Label;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("merge_group"u8))
-        {
-            eventName = "merge_group";
-            spec = MergeGroup;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("milestone"u8))
-        {
-            eventName = "milestone";
-            spec = Milestone;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("page_build"u8))
-        {
-            eventName = "page_build";
-            spec = PageBuild;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("public"u8))
-        {
-            eventName = "public";
-            spec = Public;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("pull_request"u8))
-        {
-            eventName = "pull_request";
-            spec = PullRequest;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("pull_request_review"u8))
-        {
-            eventName = "pull_request_review";
-            spec = PullRequestReview;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("pull_request_review_comment"u8))
-        {
-            eventName = "pull_request_review_comment";
-            spec = PullRequestReviewComment;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("pull_request_target"u8))
-        {
-            eventName = "pull_request_target";
-            spec = PullRequestTarget;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("workflow_dispatch"u8))
-        {
-            eventName = "workflow_dispatch";
-            spec = WorkflowDispatch;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("workflow_call"u8))
-        {
-            eventName = "workflow_call";
-            spec = WorkflowCall;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("workflow_run"u8))
-        {
-            eventName = "workflow_run";
-            spec = WorkflowRun;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("release"u8))
-        {
-            eventName = "release";
-            spec = Release;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("registry_package"u8))
-        {
-            eventName = "registry_package";
-            spec = RegistryPackage;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("issues"u8))
-        {
-            eventName = "issues";
-            spec = Issues;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("issue_comment"u8))
-        {
-            eventName = "issue_comment";
-            spec = IssueComment;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("schedule"u8))
-        {
-            eventName = "schedule";
-            spec = Schedule;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("repository_dispatch"u8))
-        {
-            eventName = "repository_dispatch";
-            spec = RepositoryDispatch;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("status"u8))
-        {
-            eventName = "status";
-            spec = Status;
-            return true;
-        }
-
-        if (eventNameUtf8.SequenceEqual("watch"u8))
-        {
-            eventName = "watch";
-            spec = Watch;
-            return true;
-        }
+        if (eventNameUtf8.SequenceEqual("branch_protection_rule"u8)) { eventName = "branch_protection_rule"; spec = new(EventId.BranchProtectionRule); return true; }
+        if (eventNameUtf8.SequenceEqual("check_run"u8)) { eventName = "check_run"; spec = new(EventId.CheckRun); return true; }
+        if (eventNameUtf8.SequenceEqual("check_suite"u8)) { eventName = "check_suite"; spec = new(EventId.CheckSuite); return true; }
+        if (eventNameUtf8.SequenceEqual("create"u8)) { eventName = "create"; spec = new(EventId.Create); return true; }
+        if (eventNameUtf8.SequenceEqual("delete"u8)) { eventName = "delete"; spec = new(EventId.Delete); return true; }
+        if (eventNameUtf8.SequenceEqual("deployment"u8)) { eventName = "deployment"; spec = new(EventId.Deployment); return true; }
+        if (eventNameUtf8.SequenceEqual("deployment_status"u8)) { eventName = "deployment_status"; spec = new(EventId.DeploymentStatus); return true; }
+        if (eventNameUtf8.SequenceEqual("discussion"u8)) { eventName = "discussion"; spec = new(EventId.Discussion); return true; }
+        if (eventNameUtf8.SequenceEqual("discussion_comment"u8)) { eventName = "discussion_comment"; spec = new(EventId.DiscussionComment); return true; }
+        if (eventNameUtf8.SequenceEqual("fork"u8)) { eventName = "fork"; spec = new(EventId.Fork); return true; }
+        if (eventNameUtf8.SequenceEqual("gollum"u8)) { eventName = "gollum"; spec = new(EventId.Gollum); return true; }
+        if (eventNameUtf8.SequenceEqual("image_version"u8)) { eventName = "image_version"; spec = new(EventId.ImageVersion); return true; }
+        if (eventNameUtf8.SequenceEqual("push"u8)) { eventName = "push"; spec = new(EventId.Push); return true; }
+        if (eventNameUtf8.SequenceEqual("label"u8)) { eventName = "label"; spec = new(EventId.Label); return true; }
+        if (eventNameUtf8.SequenceEqual("merge_group"u8)) { eventName = "merge_group"; spec = new(EventId.MergeGroup); return true; }
+        if (eventNameUtf8.SequenceEqual("milestone"u8)) { eventName = "milestone"; spec = new(EventId.Milestone); return true; }
+        if (eventNameUtf8.SequenceEqual("page_build"u8)) { eventName = "page_build"; spec = new(EventId.PageBuild); return true; }
+        if (eventNameUtf8.SequenceEqual("public"u8)) { eventName = "public"; spec = new(EventId.Public); return true; }
+        if (eventNameUtf8.SequenceEqual("pull_request"u8)) { eventName = "pull_request"; spec = new(EventId.PullRequest); return true; }
+        if (eventNameUtf8.SequenceEqual("pull_request_review"u8)) { eventName = "pull_request_review"; spec = new(EventId.PullRequestReview); return true; }
+        if (eventNameUtf8.SequenceEqual("pull_request_review_comment"u8)) { eventName = "pull_request_review_comment"; spec = new(EventId.PullRequestReviewComment); return true; }
+        if (eventNameUtf8.SequenceEqual("pull_request_target"u8)) { eventName = "pull_request_target"; spec = new(EventId.PullRequestTarget); return true; }
+        if (eventNameUtf8.SequenceEqual("workflow_dispatch"u8)) { eventName = "workflow_dispatch"; spec = new(EventId.WorkflowDispatch); return true; }
+        if (eventNameUtf8.SequenceEqual("workflow_call"u8)) { eventName = "workflow_call"; spec = new(EventId.WorkflowCall); return true; }
+        if (eventNameUtf8.SequenceEqual("workflow_run"u8)) { eventName = "workflow_run"; spec = new(EventId.WorkflowRun); return true; }
+        if (eventNameUtf8.SequenceEqual("release"u8)) { eventName = "release"; spec = new(EventId.Release); return true; }
+        if (eventNameUtf8.SequenceEqual("registry_package"u8)) { eventName = "registry_package"; spec = new(EventId.RegistryPackage); return true; }
+        if (eventNameUtf8.SequenceEqual("issues"u8)) { eventName = "issues"; spec = new(EventId.Issues); return true; }
+        if (eventNameUtf8.SequenceEqual("issue_comment"u8)) { eventName = "issue_comment"; spec = new(EventId.IssueComment); return true; }
+        if (eventNameUtf8.SequenceEqual("schedule"u8)) { eventName = "schedule"; spec = new(EventId.Schedule); return true; }
+        if (eventNameUtf8.SequenceEqual("repository_dispatch"u8)) { eventName = "repository_dispatch"; spec = new(EventId.RepositoryDispatch); return true; }
+        if (eventNameUtf8.SequenceEqual("status"u8)) { eventName = "status"; spec = new(EventId.Status); return true; }
+        if (eventNameUtf8.SequenceEqual("watch"u8)) { eventName = "watch"; spec = new(EventId.Watch); return true; }
 
         eventName = string.Empty;
         spec = default;
         return false;
     }
 
-    internal readonly record struct EventSpec(
-        string[] AllowedOptions,
-        ActivityTypesMode TypesMode,
-        string[]? AllowedTypes)
+    internal readonly struct EventSpec
     {
-        public bool IsTypeOptionSupported() => TypesMode is not ActivityTypesMode.NotSupported;
+        private EventId Id { get; }
 
-        public bool IsOptionAllowed(string option)
+        public EventSpec(EventId id)
         {
-            for (var i = 0; i < AllowedOptions.Length; i++)
-            {
-                if (string.Equals(AllowedOptions[i], option, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            Id = id;
         }
+
+        public bool IsTypeOptionSupported() => GetTypesMode() is not ActivityTypesMode.NotSupported;
 
         public bool IsOptionAllowed(ReadOnlySpan<byte> optionUtf8)
         {
-            for (var i = 0; i < AllowedOptions.Length; i++)
+            return Id switch
             {
-                if (Utf8EqualsAscii(optionUtf8, AllowedOptions[i]))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        public bool IsTypeAllowed(string value)
-        {
-            if (TypesMode is ActivityTypesMode.Any)
-            {
-                return true;
-            }
-
-            if (TypesMode is ActivityTypesMode.NotSupported || AllowedTypes is null)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < AllowedTypes.Length; i++)
-            {
-                if (string.Equals(AllowedTypes[i], value, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+                EventId.BranchProtectionRule => optionUtf8.SequenceEqual("types"u8),
+                EventId.CheckRun => optionUtf8.SequenceEqual("types"u8),
+                EventId.CheckSuite => optionUtf8.SequenceEqual("types"u8),
+                EventId.Discussion => optionUtf8.SequenceEqual("types"u8),
+                EventId.DiscussionComment => optionUtf8.SequenceEqual("types"u8),
+                EventId.Push => optionUtf8.SequenceEqual("branches"u8) || optionUtf8.SequenceEqual("branches-ignore"u8) || optionUtf8.SequenceEqual("tags"u8) || optionUtf8.SequenceEqual("tags-ignore"u8) || optionUtf8.SequenceEqual("paths"u8) || optionUtf8.SequenceEqual("paths-ignore"u8),
+                EventId.Label => optionUtf8.SequenceEqual("types"u8),
+                EventId.MergeGroup => optionUtf8.SequenceEqual("types"u8) || optionUtf8.SequenceEqual("branches"u8) || optionUtf8.SequenceEqual("branches-ignore"u8),
+                EventId.Milestone => optionUtf8.SequenceEqual("types"u8),
+                EventId.PullRequest => optionUtf8.SequenceEqual("types"u8) || optionUtf8.SequenceEqual("branches"u8) || optionUtf8.SequenceEqual("branches-ignore"u8) || optionUtf8.SequenceEqual("paths"u8) || optionUtf8.SequenceEqual("paths-ignore"u8),
+                EventId.PullRequestReview => optionUtf8.SequenceEqual("types"u8),
+                EventId.PullRequestReviewComment => optionUtf8.SequenceEqual("types"u8),
+                EventId.PullRequestTarget => optionUtf8.SequenceEqual("types"u8) || optionUtf8.SequenceEqual("branches"u8) || optionUtf8.SequenceEqual("branches-ignore"u8) || optionUtf8.SequenceEqual("paths"u8) || optionUtf8.SequenceEqual("paths-ignore"u8),
+                EventId.WorkflowDispatch => optionUtf8.SequenceEqual("inputs"u8),
+                EventId.WorkflowCall => optionUtf8.SequenceEqual("inputs"u8) || optionUtf8.SequenceEqual("secrets"u8) || optionUtf8.SequenceEqual("outputs"u8),
+                EventId.WorkflowRun => optionUtf8.SequenceEqual("workflows"u8) || optionUtf8.SequenceEqual("types"u8) || optionUtf8.SequenceEqual("branches"u8) || optionUtf8.SequenceEqual("branches-ignore"u8),
+                EventId.Release => optionUtf8.SequenceEqual("types"u8),
+                EventId.RegistryPackage => optionUtf8.SequenceEqual("types"u8),
+                EventId.Issues => optionUtf8.SequenceEqual("types"u8),
+                EventId.IssueComment => optionUtf8.SequenceEqual("types"u8),
+                EventId.RepositoryDispatch => optionUtf8.SequenceEqual("types"u8),
+                EventId.Watch => optionUtf8.SequenceEqual("types"u8),
+                _ => false,
+            };
         }
 
         public bool IsTypeAllowed(ReadOnlySpan<byte> valueUtf8)
         {
-            if (TypesMode is ActivityTypesMode.Any)
+            if (GetTypesMode() is ActivityTypesMode.Any)
             {
                 return true;
             }
 
-            if (TypesMode is ActivityTypesMode.NotSupported || AllowedTypes is null)
+            if (GetTypesMode() is ActivityTypesMode.NotSupported)
             {
                 return false;
             }
 
-            for (var i = 0; i < AllowedTypes.Length; i++)
+            return Id switch
             {
-                if (Utf8EqualsAscii(valueUtf8, AllowedTypes[i]))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+                EventId.BranchProtectionRule => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.CheckRun => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("rerequested"u8) || valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("requested_action"u8),
+                EventId.CheckSuite => valueUtf8.SequenceEqual("completed"u8),
+                EventId.Discussion => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("unpinned"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("category_changed"u8) || valueUtf8.SequenceEqual("answered"u8) || valueUtf8.SequenceEqual("unanswered"u8),
+                EventId.DiscussionComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.Label => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.MergeGroup => valueUtf8.SequenceEqual("checks_requested"u8),
+                EventId.Milestone => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.PullRequest => IsPullRequestType(valueUtf8),
+                EventId.PullRequestReview => valueUtf8.SequenceEqual("submitted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("dismissed"u8),
+                EventId.PullRequestReviewComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.PullRequestTarget => IsPullRequestType(valueUtf8),
+                EventId.WorkflowRun => valueUtf8.SequenceEqual("requested"u8) || valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("in_progress"u8),
+                EventId.Release => valueUtf8.SequenceEqual("published"u8) || valueUtf8.SequenceEqual("unpublished"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("prereleased"u8) || valueUtf8.SequenceEqual("released"u8),
+                EventId.RegistryPackage => valueUtf8.SequenceEqual("published"u8) || valueUtf8.SequenceEqual("updated"u8),
+                EventId.Issues => valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("unpinned"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("reopened"u8) || valueUtf8.SequenceEqual("assigned"u8) || valueUtf8.SequenceEqual("unassigned"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("milestoned"u8) || valueUtf8.SequenceEqual("demilestoned"u8) || valueUtf8.SequenceEqual("typed"u8) || valueUtf8.SequenceEqual("untyped"u8),
+                EventId.IssueComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.Watch => valueUtf8.SequenceEqual("started"u8),
+                _ => false,
+            };
         }
 
-        private static bool Utf8EqualsAscii(ReadOnlySpan<byte> utf8, string ascii)
+        private ActivityTypesMode GetTypesMode()
         {
-            if (utf8.Length != ascii.Length)
+            return Id switch
             {
-                return false;
-            }
+                EventId.RepositoryDispatch => ActivityTypesMode.Any,
+                EventId.BranchProtectionRule or EventId.CheckRun or EventId.CheckSuite or EventId.Discussion or EventId.DiscussionComment or EventId.Label or EventId.MergeGroup or EventId.Milestone or EventId.PullRequest or EventId.PullRequestReview or EventId.PullRequestReviewComment or EventId.PullRequestTarget or EventId.WorkflowRun or EventId.Release or EventId.RegistryPackage or EventId.Issues or EventId.IssueComment or EventId.Watch => ActivityTypesMode.Restricted,
+                _ => ActivityTypesMode.NotSupported,
+            };
+        }
 
-            for (var i = 0; i < ascii.Length; i++)
-            {
-                if (utf8[i] != (byte)ascii[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
+        private static bool IsPullRequestType(ReadOnlySpan<byte> value)
+        {
+            return value.SequenceEqual("assigned"u8) || value.SequenceEqual("unassigned"u8) || value.SequenceEqual("labeled"u8) || value.SequenceEqual("unlabeled"u8) || value.SequenceEqual("opened"u8) || value.SequenceEqual("edited"u8) || value.SequenceEqual("closed"u8) || value.SequenceEqual("reopened"u8) || value.SequenceEqual("synchronize"u8) || value.SequenceEqual("converted_to_draft"u8) || value.SequenceEqual("locked"u8) || value.SequenceEqual("unlocked"u8) || value.SequenceEqual("enqueued"u8) || value.SequenceEqual("dequeued"u8) || value.SequenceEqual("milestoned"u8) || value.SequenceEqual("demilestoned"u8) || value.SequenceEqual("ready_for_review"u8) || value.SequenceEqual("review_requested"u8) || value.SequenceEqual("review_request_removed"u8) || value.SequenceEqual("auto_merge_enabled"u8) || value.SequenceEqual("auto_merge_disabled"u8);
         }
     }
 }
