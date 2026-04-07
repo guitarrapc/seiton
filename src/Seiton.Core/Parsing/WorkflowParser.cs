@@ -186,6 +186,10 @@ public static class WorkflowParser
         var hasRunsOn = false;
         var hasSteps = false;
         var hasUses = false;
+        var hasWith = false;
+        var hasSecrets = false;
+        string? stepsOnlyKeyInReusable = null;
+        Marker stepsOnlyKeyInReusableMark = default;
 
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
@@ -222,6 +226,11 @@ public static class WorkflowParser
             if (string.Equals(key, "steps", StringComparison.Ordinal))
             {
                 hasSteps = true;
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = key;
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
                 if (!reader.End)
                 {
                     if (reader.CurrentEventType != ParseEventType.SequenceStart)
@@ -249,6 +258,79 @@ public static class WorkflowParser
                     reader.SkipCurrentNode();
                 }
                 continue;
+            }
+
+            if (string.Equals(key, "strategy", StringComparison.Ordinal))
+            {
+                if (!reader.End)
+                {
+                    if (reader.CurrentEventType != ParseEventType.MappingStart)
+                    {
+                        AddError(diagnostics, $"job '{jobId}' strategy must be mapping", reader.CurrentMark);
+                        reader.SkipCurrentNode();
+                    }
+                    else
+                    {
+                        ParseStrategy(ref reader, diagnostics, jobId);
+                    }
+                }
+                continue;
+            }
+
+            if (string.Equals(key, "container", StringComparison.Ordinal))
+            {
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = key;
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
+                if (!reader.End)
+                {
+                    ParseContainerLike(ref reader, diagnostics, $"job '{jobId}' container", requireImage: true);
+                }
+                continue;
+            }
+
+            if (string.Equals(key, "services", StringComparison.Ordinal))
+            {
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = key;
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
+                if (!reader.End)
+                {
+                    ParseServices(ref reader, diagnostics, jobId);
+                }
+                continue;
+            }
+
+            if (string.Equals(key, "with", StringComparison.Ordinal))
+            {
+                hasWith = true;
+                if (!reader.End)
+                {
+                    ParseStringMapping(ref reader, diagnostics, $"job '{jobId}' with must be mapping");
+                }
+                continue;
+            }
+
+            if (string.Equals(key, "secrets", StringComparison.Ordinal))
+            {
+                hasSecrets = true;
+                if (!reader.End)
+                {
+                    ParseJobSecrets(ref reader, diagnostics, jobId);
+                }
+                continue;
+            }
+
+            if (IsStepsOnlyJobKey(key) && stepsOnlyKeyInReusable is null)
+            {
+                stepsOnlyKeyInReusable = key;
+                stepsOnlyKeyInReusableMark = keyMark;
             }
 
             if (IsKnownJobKey(key))
@@ -282,6 +364,14 @@ public static class WorkflowParser
             AddError(diagnostics, $"job '{jobId}' cannot have both uses and runs-on", jobIdMark);
         }
 
+        if (hasUses && stepsOnlyKeyInReusable is not null)
+        {
+            AddError(
+                diagnostics,
+                $"when job '{jobId}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
+                stepsOnlyKeyInReusableMark);
+        }
+
         if (!hasUses && !hasRunsOn)
         {
             AddError(diagnostics, $"job '{jobId}' requires runs-on (or uses)", jobIdMark);
@@ -290,6 +380,16 @@ public static class WorkflowParser
         if (!hasUses && !hasSteps)
         {
             AddError(diagnostics, $"job '{jobId}' requires steps (or uses)", jobIdMark);
+        }
+
+        if (!hasUses && hasWith)
+        {
+            AddError(diagnostics, $"job '{jobId}' key 'with' requires uses", jobIdMark);
+        }
+
+        if (!hasUses && hasSecrets)
+        {
+            AddError(diagnostics, $"job '{jobId}' key 'secrets' requires uses", jobIdMark);
         }
     }
 
@@ -406,6 +506,12 @@ public static class WorkflowParser
         return key is "name" or "needs" or "if" or "permissions" or "env" or "defaults" or
             "timeout-minutes" or "strategy" or "concurrency" or "container" or "services" or
             "outputs" or "secrets" or "with";
+    }
+
+    private static bool IsStepsOnlyJobKey(string key)
+    {
+        return key is "runs-on" or "environment" or "outputs" or "env" or "defaults" or
+            "steps" or "timeout-minutes" or "continue-on-error" or "container";
     }
 
     private static bool IsKnownStepKey(string key)
@@ -723,6 +829,362 @@ public static class WorkflowParser
         {
             reader.Read();
         }
+    }
+
+    private static void ParseStrategy(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    {
+        reader.Read(); // consume MappingStart
+
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"job '{jobId}' strategy key must be scalar", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            var keyMark = reader.CurrentMark;
+            reader.Read();
+
+            if (reader.End)
+            {
+                break;
+            }
+
+            switch (key)
+            {
+                case "matrix":
+                    ParseMatrix(ref reader, diagnostics, jobId);
+                    break;
+                case "fail-fast":
+                case "max-parallel":
+                    reader.SkipCurrentNode();
+                    break;
+                default:
+                    AddError(diagnostics, $"unexpected strategy key '{key}' in job '{jobId}'", keyMark);
+                    reader.SkipCurrentNode();
+                    break;
+            }
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+    }
+
+    private static void ParseMatrix(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    {
+        if (reader.CurrentEventType == ParseEventType.Scalar)
+        {
+            reader.Read();
+            return;
+        }
+
+        if (reader.CurrentEventType != ParseEventType.MappingStart)
+        {
+            AddError(diagnostics, $"job '{jobId}' strategy.matrix must be scalar or mapping", reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        reader.Read(); // consume matrix mapping
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"job '{jobId}' strategy.matrix key must be scalar", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (string.Equals(key, "include", StringComparison.Ordinal) || string.Equals(key, "exclude", StringComparison.Ordinal))
+            {
+                if (reader.CurrentEventType is not ParseEventType.SequenceStart and not ParseEventType.Scalar)
+                {
+                    AddError(diagnostics, $"job '{jobId}' strategy.matrix.{key} must be sequence or scalar", reader.CurrentMark);
+                }
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            if (reader.CurrentEventType is not ParseEventType.SequenceStart and not ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"job '{jobId}' strategy.matrix.{key} must be sequence or scalar", reader.CurrentMark);
+            }
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+    }
+
+    private static void ParseServices(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    {
+        if (reader.CurrentEventType != ParseEventType.MappingStart)
+        {
+            AddError(diagnostics, $"job '{jobId}' services must be mapping", reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        reader.Read(); // consume services mapping
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"job '{jobId}' services key must be scalar", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var serviceName = reader.GetScalarString() ?? string.Empty;
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            ParseContainerLike(ref reader, diagnostics, $"job '{jobId}' service '{serviceName}'", requireImage: true);
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+    }
+
+    private static void ParseContainerLike(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string sectionName, bool requireImage)
+    {
+        if (reader.CurrentEventType == ParseEventType.Scalar)
+        {
+            reader.Read();
+            return;
+        }
+
+        if (reader.CurrentEventType != ParseEventType.MappingStart)
+        {
+            AddError(diagnostics, $"{sectionName} must be scalar or mapping", reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        var hasImage = false;
+        reader.Read(); // consume mapping
+
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"{sectionName} key must be scalar", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            var keyMark = reader.CurrentMark;
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            switch (key)
+            {
+                case "image":
+                    hasImage = true;
+                    if (reader.CurrentEventType != ParseEventType.Scalar)
+                    {
+                        AddError(diagnostics, $"{sectionName}.image must be scalar", reader.CurrentMark);
+                    }
+                    reader.SkipCurrentNode();
+                    break;
+                case "credentials":
+                    ParseCredentials(ref reader, diagnostics, sectionName);
+                    break;
+                case "env":
+                    if (reader.CurrentEventType != ParseEventType.MappingStart)
+                    {
+                        AddError(diagnostics, $"{sectionName}.env must be mapping", reader.CurrentMark);
+                    }
+                    reader.SkipCurrentNode();
+                    break;
+                case "ports":
+                case "volumes":
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"{sectionName}.{key} must be scalar or sequence of scalar");
+                    break;
+                case "options":
+                    if (reader.CurrentEventType != ParseEventType.Scalar)
+                    {
+                        AddError(diagnostics, $"{sectionName}.options must be scalar", reader.CurrentMark);
+                    }
+                    reader.SkipCurrentNode();
+                    break;
+                default:
+                    AddError(diagnostics, $"unexpected {sectionName} key: {key}", keyMark);
+                    reader.SkipCurrentNode();
+                    break;
+            }
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        if (requireImage && !hasImage)
+        {
+            AddError(diagnostics, $"{sectionName}.image is required", new Marker(0, 1, 1));
+        }
+    }
+
+    private static void ParseCredentials(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string sectionName)
+    {
+        if (reader.CurrentEventType != ParseEventType.MappingStart)
+        {
+            AddError(diagnostics, $"{sectionName}.credentials must be mapping", reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        var hasUsername = false;
+        var hasPassword = false;
+        reader.Read();
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"{sectionName}.credentials key must be scalar", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            var keyMark = reader.CurrentMark;
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (string.Equals(key, "username", StringComparison.Ordinal))
+            {
+                hasUsername = true;
+            }
+            else if (string.Equals(key, "password", StringComparison.Ordinal))
+            {
+                hasPassword = true;
+            }
+            else
+            {
+                AddError(diagnostics, $"unexpected {sectionName}.credentials key: {key}", keyMark);
+            }
+
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"{sectionName}.credentials.{key} must be scalar", reader.CurrentMark);
+            }
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        if (!hasUsername || !hasPassword)
+        {
+            AddError(diagnostics, $"{sectionName}.credentials requires both username and password", new Marker(0, 1, 1));
+        }
+    }
+
+    private static void ParseStringMapping(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string error)
+    {
+        if (reader.CurrentEventType != ParseEventType.MappingStart)
+        {
+            AddError(diagnostics, error, reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        reader.Read();
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentMark);
+            }
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+    }
+
+    private static void ParseJobSecrets(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string jobId)
+    {
+        if (reader.CurrentEventType == ParseEventType.Scalar)
+        {
+            var value = reader.GetScalarString() ?? string.Empty;
+            if (!string.Equals(value, "inherit", StringComparison.Ordinal))
+            {
+                AddError(diagnostics, $"job '{jobId}' secrets scalar must be 'inherit'", reader.CurrentMark);
+            }
+            reader.Read();
+            return;
+        }
+
+        ParseStringMapping(ref reader, diagnostics, $"job '{jobId}' secrets must be mapping or scalar 'inherit'");
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, Marker mark)

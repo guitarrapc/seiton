@@ -364,6 +364,69 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("must be mapping", StringComparison.Ordinal))).IsTrue();
     }
 
+    [Test]
+    public async Task Parse_JobStrategyMustBeMapping_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    strategy: []\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-strategy-shape.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy must be mapping", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobMatrixIncludeMustBeSequenceOrScalar_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        include: { os: ubuntu-latest }\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-matrix-include-shape.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy.matrix.include must be sequence or scalar", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobContainerMissingImage_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    container:\n      options: --cpus 1\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-container-image.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("container.image is required", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobServicesMustBeMapping_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    services: []\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-services-shape.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("services must be mapping", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ReusableWorkflowWithStepsOnlyKey_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  reuse:\n    uses: owner/repo/.github/workflows/reuse.yml@main\n    container: node:20\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-reuse-steps-only-key.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobWithWithoutUses_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    with:\n      node-version: '20'\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobSecretsScalarMustBeInherit_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  reuse:\n    uses: owner/repo/.github/workflows/reuse.yml@main\n    secrets: not-inherit\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-secrets-scalar.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secrets scalar must be 'inherit'", StringComparison.Ordinal))).IsTrue();
+    }
+
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
     {
         var refsRoot = Path.Combine(repoRoot, ".references");
