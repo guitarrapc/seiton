@@ -65,8 +65,12 @@ public static class WorkflowParser
                     if (reader.CurrentEventType is not ParseEventType.Scalar and not ParseEventType.MappingStart and not ParseEventType.SequenceStart)
                     {
                         AddError(diagnostics, "on must be scalar, mapping, or sequence", reader.CurrentMark);
+                        reader.SkipCurrentNode();
                     }
-                    reader.SkipCurrentNode();
+                    else
+                    {
+                        ParseOn(ref reader, diagnostics);
+                    }
                 }
                 continue;
             }
@@ -427,6 +431,235 @@ public static class WorkflowParser
         var slice = reader.GetScalarSlice();
         reader.Read();
         return slice;
+    }
+
+    private static void ParseOn(ref VYamlStreamReader reader, List<Diagnostic> diagnostics)
+    {
+        if (reader.CurrentEventType == ParseEventType.Scalar)
+        {
+            reader.Read();
+            return;
+        }
+
+        if (reader.CurrentEventType == ParseEventType.SequenceStart)
+        {
+            ParseOnSequence(ref reader, diagnostics);
+            return;
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingStart)
+        {
+            ParseOnMapping(ref reader, diagnostics);
+            return;
+        }
+
+        AddError(diagnostics, "on must be scalar, sequence, or mapping", reader.CurrentMark);
+        reader.SkipCurrentNode();
+    }
+
+    private static void ParseOnSequence(ref VYamlStreamReader reader, List<Diagnostic> diagnostics)
+    {
+        reader.Read(); // consume SequenceStart
+        while (!reader.End && reader.CurrentEventType != ParseEventType.SequenceEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, "on sequence item must be scalar event name", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            reader.Read();
+        }
+
+        if (reader.CurrentEventType == ParseEventType.SequenceEnd)
+        {
+            reader.Read();
+        }
+    }
+
+    private static void ParseOnMapping(ref VYamlStreamReader reader, List<Diagnostic> diagnostics)
+    {
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, "on mapping key must be scalar event name", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var eventName = reader.GetScalarString() ?? string.Empty;
+            var eventMark = reader.CurrentMark;
+            reader.Read(); // consume event key
+
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (reader.CurrentEventType == ParseEventType.MappingStart)
+            {
+                ParseOnEventOptions(ref reader, diagnostics, eventName, eventMark);
+                continue;
+            }
+
+            if (reader.CurrentEventType is ParseEventType.Scalar or ParseEventType.SequenceStart)
+            {
+                // Some events can be represented as scalar/sequence/null-like value; accept shape and skip.
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            AddError(diagnostics, $"on.{eventName} must be scalar, sequence, or mapping", reader.CurrentMark);
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+    }
+
+    private static void ParseOnEventOptions(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string eventName, Marker eventMark)
+    {
+        var hasBranches = false;
+        var hasBranchesIgnore = false;
+        var hasTags = false;
+        var hasTagsIgnore = false;
+        var hasPaths = false;
+        var hasPathsIgnore = false;
+
+        reader.Read(); // consume MappingStart
+
+        while (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, $"on.{eventName} option key must be scalar", reader.CurrentMark);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            var keyMark = reader.CurrentMark;
+            reader.Read();
+
+            if (reader.End)
+            {
+                break;
+            }
+
+            switch (key)
+            {
+                case "types":
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.types must be scalar or sequence of scalar");
+                    break;
+                case "branches":
+                    hasBranches = true;
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.branches must be scalar or sequence of scalar");
+                    break;
+                case "branches-ignore":
+                    hasBranchesIgnore = true;
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.branches-ignore must be scalar or sequence of scalar");
+                    break;
+                case "tags":
+                    hasTags = true;
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.tags must be scalar or sequence of scalar");
+                    break;
+                case "tags-ignore":
+                    hasTagsIgnore = true;
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.tags-ignore must be scalar or sequence of scalar");
+                    break;
+                case "paths":
+                    hasPaths = true;
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.paths must be scalar or sequence of scalar");
+                    break;
+                case "paths-ignore":
+                    hasPathsIgnore = true;
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.paths-ignore must be scalar or sequence of scalar");
+                    break;
+                case "workflows":
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.workflows must be scalar or sequence of scalar");
+                    break;
+                case "inputs":
+                case "secrets":
+                case "outputs":
+                    if (reader.CurrentEventType != ParseEventType.MappingStart)
+                    {
+                        AddError(diagnostics, $"on.{eventName}.{key} must be mapping", reader.CurrentMark);
+                    }
+                    reader.SkipCurrentNode();
+                    break;
+                default:
+                    AddError(diagnostics, $"unexpected on.{eventName} option: {key}", keyMark);
+                    reader.SkipCurrentNode();
+                    break;
+            }
+        }
+
+        if (reader.CurrentEventType == ParseEventType.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        if (hasBranches && hasBranchesIgnore)
+        {
+            AddError(diagnostics, $"on.{eventName} cannot use both branches and branches-ignore", eventMark);
+        }
+
+        if (hasTags && hasTagsIgnore)
+        {
+            AddError(diagnostics, $"on.{eventName} cannot use both tags and tags-ignore", eventMark);
+        }
+
+        if (hasPaths && hasPathsIgnore)
+        {
+            AddError(diagnostics, $"on.{eventName} cannot use both paths and paths-ignore", eventMark);
+        }
+    }
+
+    private static void ParseScalarOrScalarSequence(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string error)
+    {
+        if (reader.CurrentEventType == ParseEventType.Scalar)
+        {
+            reader.Read();
+            return;
+        }
+
+        if (reader.CurrentEventType != ParseEventType.SequenceStart)
+        {
+            AddError(diagnostics, error, reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        reader.Read();
+        while (!reader.End && reader.CurrentEventType != ParseEventType.SequenceEnd)
+        {
+            if (reader.CurrentEventType != ParseEventType.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentMark);
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            reader.Read();
+        }
+
+        if (reader.CurrentEventType == ParseEventType.SequenceEnd)
+        {
+            reader.Read();
+        }
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, Marker mark)

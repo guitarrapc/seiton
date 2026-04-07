@@ -52,6 +52,38 @@ public sealed class ParserTests
 	}
 
 	[Test]
+	public async Task Parse_OnSequenceItemNonScalar_ReportsError()
+	{
+		var yaml = "on:\n  - push\n  - [nested]\njobs: {}\n";
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-seq.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on sequence item must be scalar event name", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_OnEventOptionsMutualExclusive_ReportsError()
+	{
+		var yaml = "on:\n  push:\n    branches: [main]\n    branches-ignore: [dev]\njobs: {}\n";
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-exclusive.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both branches and branches-ignore", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_OnEventOptionsTypeInvalid_ReportsError()
+	{
+		var yaml = "on:\n  pull_request:\n    types: { a: b }\njobs: {}\n";
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-invalid.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.pull_request.types must be scalar or sequence of scalar", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
+	public async Task Parse_OnEventUnknownOption_ReportsError()
+	{
+		var yaml = "on:\n  push:\n    unknown-filter: 1\njobs: {}\n";
+		var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option.yml");
+		await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected on.push option: unknown-filter", StringComparison.Ordinal))).IsTrue();
+	}
+
+	[Test]
 	public async Task Parse_JobsTypeInvalid_ReportsError()
 	{
 		var yaml = "on: push\njobs: []\n";
