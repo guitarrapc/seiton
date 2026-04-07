@@ -289,6 +289,48 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_ActionlintErrFixtures_ExpectedDiagnosticsSubset()
+    {
+        var root = FindRepoRoot();
+        var errRoot = Path.Combine(root, ".references", "actionlint-main", "testdata", "err");
+        if (!Directory.Exists(errRoot))
+        {
+            return;
+        }
+
+        var expectations = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["empty.yaml"] = ["workflow root must be mapping"],
+            ["empty_on.yaml"] = ["unknown event in on"],
+            ["case_sensitive_keys.yaml"] = ["unexpected workflow key", "unexpected job key"],
+        };
+
+        var failures = new List<string>();
+        foreach (var (fileName, expectedMessages) in expectations)
+        {
+            var path = Path.Combine(errRoot, fileName);
+            if (!File.Exists(path))
+            {
+                failures.Add($"missing fixture: {fileName}");
+                continue;
+            }
+
+            var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+            for (var i = 0; i < expectedMessages.Length; i++)
+            {
+                var expected = expectedMessages[i];
+                var found = result.Diagnostics.Any(d => d.Message.Contains(expected, StringComparison.Ordinal));
+                if (!found)
+                {
+                    failures.Add($"{fileName}: expected diagnostic containing '{expected}' was not found");
+                }
+            }
+        }
+
+        await Assert.That(failures).IsEmpty();
+    }
+
+    [Test]
     public async Task Schema_Corpus_JsonFilesAreValid()
     {
         var root = FindRepoRoot();

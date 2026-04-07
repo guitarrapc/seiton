@@ -586,3 +586,45 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 
 1. `types` は汎用 option 検証より先に専用分岐へ流す必要がある
 2. そうしないと「非対応 event での `types`」が「未知 option」に吸収され、誤った診断文言になる
+
+### `jobs` shape 検証の追加実装
+
+以下を parser 側で shape 検証済み。
+
+1. `strategy` は mapping 必須
+2. `strategy.matrix` は scalar または mapping
+3. `matrix.include` / `matrix.exclude` は scalar または sequence
+4. `container` は scalar または mapping（mapping の場合 `image` 必須）
+5. `services` は mapping 必須、各 service の container shape を検証
+
+### reusable workflow (`jobs.<id>.uses`) 制約の追加実装
+
+`uses` job について、actionlint の制約に寄せて次を検証済み。
+
+1. `runs-on`, `steps`, `container` など steps 側キーは `uses` と併用不可
+2. `with`, `secrets` は `uses` がある job でのみ許可
+3. `secrets` は mapping または scalar `inherit` のみ許可
+
+### expression 抽出と最小 AST
+
+初期版として次を実装済み。
+
+1. scalar 文字列から `${{ ... }}` を抽出
+2. 論理演算・比較演算・四則演算・単項演算の最小再帰下降パーサー
+3. 識別子、member access、関数呼び出し、文字列/数値/bool/null のノード
+4. 抽出 + パースを一体で走らせる API
+
+補足:
+
+1. これは最小 AST であり、actionlint の expression semantics 相当の型検証や context availability は未実装
+2. 後段で availability table と関数シグネチャ検証を接続する前提
+
+### actionlint testdata の期待診断ベース比較
+
+smoke test からの昇格として、`testdata/err` の一部 fixture で期待診断文字列を照合するテストを追加済み。
+
+1. `empty.yaml`
+2. `empty_on.yaml`
+3. `case_sensitive_keys.yaml`
+
+この段階では「完全一致」ではなく「期待サブセット一致」を採用し、parser の進化に追随しやすくしている。
