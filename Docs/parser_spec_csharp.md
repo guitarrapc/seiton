@@ -629,3 +629,16 @@ smoke test からの昇格として、`testdata/err` の一部 fixture で期待
 3. `case_sensitive_keys.yaml`
 
 この段階では「完全一致」ではなく「期待サブセット一致」を採用し、parser の進化に追随しやすくしている。
+
+### ゼロアロケーション原則に関する実装メモ
+
+原則は「ホットパスでは string 化しない」で固定する。
+
+1. `WorkflowParser` の top-level key / job key / step key / `on` option key は `ReadOnlySpan<byte>` 比較を優先
+2. `GetScalarString()` は未知キー診断など表示用途に限定
+3. 今後も parser 本体に `string.Equals` ベース分岐を増やさない
+
+補足:
+
+1. expression 最小 AST は現在プロトタイプ段階で、`string` / class を使う実装を含む
+2. ここは semantic 層実装時に arena + slice ベースへ段階移行する

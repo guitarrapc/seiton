@@ -40,25 +40,27 @@ public static class WorkflowParser
             }
 
             var keyMark = reader.CurrentMark;
-            var keyText = reader.GetScalarString() ?? string.Empty;
-            reader.Read(); // consume key
+            var keyUtf8 = reader.GetScalarUtf8();
 
-            if (string.Equals(keyText, "name", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("name"u8))
             {
+                reader.Read(); // consume key
                 hasName = true;
                 name = ReadScalarOrSkip(ref reader, diagnostics, "name must be scalar");
                 continue;
             }
 
-            if (string.Equals(keyText, "run-name", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("run-name"u8))
             {
+                reader.Read(); // consume key
                 hasRunName = true;
                 runName = ReadScalarOrSkip(ref reader, diagnostics, "run-name must be scalar");
                 continue;
             }
 
-            if (string.Equals(keyText, "on", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("on"u8))
             {
+                reader.Read(); // consume key
                 hasOn = true;
                 if (!reader.End)
                 {
@@ -75,8 +77,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(keyText, "jobs", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("jobs"u8))
             {
+                reader.Read(); // consume key
                 hasJobs = true;
                 if (!reader.End)
                 {
@@ -93,17 +96,21 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(keyText, "permissions", StringComparison.Ordinal) ||
-                string.Equals(keyText, "env", StringComparison.Ordinal) ||
-                string.Equals(keyText, "defaults", StringComparison.Ordinal) ||
-                string.Equals(keyText, "concurrency", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("permissions"u8) ||
+                keyUtf8.SequenceEqual("env"u8) ||
+                keyUtf8.SequenceEqual("defaults"u8) ||
+                keyUtf8.SequenceEqual("concurrency"u8))
             {
+                reader.Read(); // consume key
                 if (!reader.End)
                 {
                     reader.SkipCurrentNode();
                 }
                 continue;
             }
+
+            var keyText = reader.GetScalarString() ?? string.Empty;
+            reader.Read(); // consume key
 
             AddError(diagnostics, $"unexpected workflow key: {keyText}", keyMark);
             if (!reader.End)
@@ -206,11 +213,11 @@ public static class WorkflowParser
             }
 
             var keyMark = reader.CurrentMark;
-            var key = reader.GetScalarString() ?? string.Empty;
-            reader.Read(); // consume key
+            var keyUtf8 = reader.GetScalarUtf8();
 
-            if (string.Equals(key, "runs-on", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("runs-on"u8))
             {
+                reader.Read(); // consume key
                 hasRunsOn = true;
                 if (!reader.End)
                 {
@@ -223,12 +230,13 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "steps", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("steps"u8))
             {
+                reader.Read(); // consume key
                 hasSteps = true;
                 if (stepsOnlyKeyInReusable is null)
                 {
-                    stepsOnlyKeyInReusable = key;
+                    stepsOnlyKeyInReusable = "steps";
                     stepsOnlyKeyInReusableMark = keyMark;
                 }
                 if (!reader.End)
@@ -246,8 +254,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "uses", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("uses"u8))
             {
+                reader.Read(); // consume key
                 hasUses = true;
                 if (!reader.End)
                 {
@@ -260,8 +269,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "strategy", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("strategy"u8))
             {
+                reader.Read(); // consume key
                 if (!reader.End)
                 {
                     if (reader.CurrentEventType != ParseEventType.MappingStart)
@@ -277,11 +287,12 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "container", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("container"u8))
             {
+                reader.Read(); // consume key
                 if (stepsOnlyKeyInReusable is null)
                 {
-                    stepsOnlyKeyInReusable = key;
+                    stepsOnlyKeyInReusable = "container";
                     stepsOnlyKeyInReusableMark = keyMark;
                 }
 
@@ -292,11 +303,12 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "services", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("services"u8))
             {
+                reader.Read(); // consume key
                 if (stepsOnlyKeyInReusable is null)
                 {
-                    stepsOnlyKeyInReusable = key;
+                    stepsOnlyKeyInReusable = "services";
                     stepsOnlyKeyInReusableMark = keyMark;
                 }
 
@@ -307,8 +319,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "with", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("with"u8))
             {
+                reader.Read(); // consume key
                 hasWith = true;
                 if (!reader.End)
                 {
@@ -317,8 +330,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "secrets", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("secrets"u8))
             {
+                reader.Read(); // consume key
                 hasSecrets = true;
                 if (!reader.End)
                 {
@@ -326,6 +340,9 @@ public static class WorkflowParser
                 }
                 continue;
             }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            reader.Read(); // consume key
 
             if (IsStepsOnlyJobKey(key) && stepsOnlyKeyInReusable is null)
             {
@@ -437,12 +454,12 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             var keyMark = reader.CurrentMark;
-            reader.Read();
+            var keyUtf8 = reader.GetScalarUtf8();
 
-            if (string.Equals(key, "run", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("run"u8))
             {
+                reader.Read();
                 hasRun = true;
                 if (!reader.End)
                 {
@@ -455,8 +472,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (string.Equals(key, "uses", StringComparison.Ordinal))
+            if (keyUtf8.SequenceEqual("uses"u8))
             {
+                reader.Read();
                 hasUses = true;
                 if (!reader.End)
                 {
@@ -468,6 +486,9 @@ public static class WorkflowParser
                 }
                 continue;
             }
+
+            var key = reader.GetScalarString() ?? string.Empty;
+            reader.Read();
 
             if (IsKnownStepKey(key))
             {
@@ -665,12 +686,44 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             var keyMark = reader.CurrentMark;
+            var keyUtf8 = reader.GetScalarUtf8();
+
+            if (keyUtf8.SequenceEqual("types"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                if (OnEventSpecs.TryGet(eventName, out var typeSpec) && !typeSpec.IsTypeOptionSupported())
+                {
+                    AddError(diagnostics, $"on.{eventName}.types is not supported", keyMark);
+                    reader.SkipCurrentNode();
+                    continue;
+                }
+
+                ParseScalarOrScalarSequence(
+                    ref reader,
+                    diagnostics,
+                    $"on.{eventName}.types must be scalar or sequence of scalar",
+                    scalarValidator: value =>
+                    {
+                        if (OnEventSpecs.TryGet(eventName, out var knownTypeSpec) && !knownTypeSpec.IsTypeAllowed(value))
+                        {
+                            return $"on.{eventName}.types contains unsupported activity type: {value}";
+                        }
+
+                        return null;
+                    });
+                continue;
+            }
+
+            var key = reader.GetScalarString() ?? string.Empty;
             reader.Read();
 
-            if (!string.Equals(key, "types", StringComparison.Ordinal)
-                && OnEventSpecs.TryGet(eventName, out var knownSpec)
+            if (OnEventSpecs.TryGet(eventName, out var knownSpec)
                 && !knownSpec.IsOptionAllowed(key))
             {
                 AddError(diagnostics, $"on.{eventName} does not support option: {key}", keyMark);
@@ -688,28 +741,6 @@ public static class WorkflowParser
 
             switch (key)
             {
-                case "types":
-                    if (OnEventSpecs.TryGet(eventName, out var typeSpec) && !typeSpec.IsTypeOptionSupported())
-                    {
-                        AddError(diagnostics, $"on.{eventName}.types is not supported", keyMark);
-                        reader.SkipCurrentNode();
-                        break;
-                    }
-
-                    ParseScalarOrScalarSequence(
-                        ref reader,
-                        diagnostics,
-                        $"on.{eventName}.types must be scalar or sequence of scalar",
-                        scalarValidator: value =>
-                        {
-                            if (OnEventSpecs.TryGet(eventName, out var knownTypeSpec) && !knownTypeSpec.IsTypeAllowed(value))
-                            {
-                                return $"on.{eventName}.types contains unsupported activity type: {value}";
-                            }
-
-                            return null;
-                        });
-                    break;
                 case "branches":
                     hasBranches = true;
                     ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.branches must be scalar or sequence of scalar");
