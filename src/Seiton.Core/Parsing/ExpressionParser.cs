@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Buffers;
+using System.Text;
 
 namespace Seiton.Core.Parsing;
 
@@ -6,8 +7,17 @@ public static class ExpressionParser
 {
     public static ExpressionParseResult Parse(string expression)
     {
-        var bytes = Encoding.UTF8.GetBytes(expression);
-        return Parse(bytes);
+        var byteCount = Encoding.UTF8.GetByteCount(expression);
+        var rented = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(expression.AsSpan(), rented.AsSpan(0, byteCount));
+            return Parse(rented.AsSpan(0, written));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     public static ExpressionParseResult Parse(ReadOnlySpan<byte> expressionUtf8)

@@ -565,7 +565,7 @@ public static class WorkflowParser
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
             var eventMark = reader.CurrentMark;
-            var eventName = reader.GetScalarString() ?? string.Empty;
+            var eventName = ReadOnEventName(ref reader);
             ValidateKnownOnEvent(eventName, eventMark, diagnostics);
             reader.Read();
             return;
@@ -600,7 +600,7 @@ public static class WorkflowParser
             }
 
             var eventMark = reader.CurrentMark;
-            var eventName = reader.GetScalarString() ?? string.Empty;
+            var eventName = ReadOnEventName(ref reader);
             ValidateKnownOnEvent(eventName, eventMark, diagnostics);
             reader.Read();
         }
@@ -627,7 +627,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            var eventName = reader.GetScalarString() ?? string.Empty;
+            var eventName = ReadOnEventName(ref reader);
             var eventMark = reader.CurrentMark;
             ValidateKnownOnEvent(eventName, eventMark, diagnostics);
             reader.Read(); // consume event key
@@ -1237,5 +1237,23 @@ public static class WorkflowParser
         {
             AddError(diagnostics, $"unknown event in on: {eventName}", eventMark);
         }
+    }
+
+    private static string ReadOnEventName(ref VYamlStreamReader reader)
+    {
+        try
+        {
+            var eventNameUtf8 = reader.GetScalarUtf8();
+            if (OnEventSpecs.TryGet(eventNameUtf8, out var knownEventName, out _))
+            {
+                return knownEventName;
+            }
+        }
+        catch (YamlParserException)
+        {
+            // Fall back to scalar string for odd scalar representations.
+        }
+
+        return reader.GetScalarString() ?? string.Empty;
     }
 }

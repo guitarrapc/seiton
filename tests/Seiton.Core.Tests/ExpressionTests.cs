@@ -21,7 +21,7 @@ public sealed class ExpressionTests
     [Test]
     public async Task Parse_FunctionAndMemberAccess_Succeeds()
     {
-        var expression = "startsWith(github.ref, 'refs/heads/main') && !cancelled()";
+        var expression = "startsWith(github.ref, 'refs/heads/main') && !cancelled()"u8;
 
         var result = ExpressionParser.Parse(expression);
 
@@ -33,7 +33,7 @@ public sealed class ExpressionTests
     [Test]
     public async Task Parse_InvalidExpression_ReportsDiagnostics()
     {
-        var result = ExpressionParser.Parse("github.");
+        var result = ExpressionParser.Parse("github."u8);
 
         await Assert.That(result.Diagnostics.Length).IsGreaterThan(0);
     }
@@ -41,7 +41,7 @@ public sealed class ExpressionTests
     [Test]
     public async Task Parse_WildcardAndIndexAccess_Succeeds()
     {
-        var result = ExpressionParser.Parse("github.event.pull_request.labels[*].name");
+        var result = ExpressionParser.Parse("github.event.pull_request.labels[*].name"u8);
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.HasRoot).IsTrue();
@@ -51,7 +51,7 @@ public sealed class ExpressionTests
     [Test]
     public async Task Parse_StringIndexAccess_Succeeds()
     {
-        var result = ExpressionParser.Parse("github.event['pull_request'].title");
+        var result = ExpressionParser.Parse("github.event['pull_request'].title"u8);
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.HasRoot).IsTrue();
