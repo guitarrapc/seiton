@@ -68,6 +68,22 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnPushTagsAndTagsIgnore_ReportsError()
+    {
+        var yaml = "on:\n  push:\n    tags: [v*]\n    tags-ignore: [v0.*]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-push-tags-exclusive.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both tags and tags-ignore", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnPullRequestPathsAndPathsIgnore_ReportsError()
+    {
+        var yaml = "on:\n  pull_request:\n    paths: [src/**]\n    paths-ignore: [docs/**]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-pr-paths-exclusive.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both paths and paths-ignore", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_OnEventOptionsTypeInvalid_ReportsError()
     {
         var yaml = "on:\n  pull_request:\n    types: { a: b }\njobs: {}\n";
@@ -105,6 +121,23 @@ public sealed class ParserTests
         var yaml = "on:\n  pull_request:\n    types: [opened, reopened]\njobs: {}\n";
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-valid-value.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_OnEventTypesOnUnsupportedEvent_ReportsError()
+    {
+        var yaml = "on:\n  push:\n    types: [created]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-push.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push.types is not supported", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnRepositoryDispatchCustomTypes_NoError()
+    {
+        var yaml = "on:\n  repository_dispatch:\n    types: [my-custom-event, another_event]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-types.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not support option", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]

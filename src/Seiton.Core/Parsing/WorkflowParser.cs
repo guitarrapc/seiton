@@ -556,7 +556,9 @@ public static class WorkflowParser
             var keyMark = reader.CurrentMark;
             reader.Read();
 
-            if (OnEventSpecs.TryGet(eventName, out var knownSpec) && !knownSpec.IsOptionAllowed(key))
+            if (!string.Equals(key, "types", StringComparison.Ordinal)
+                && OnEventSpecs.TryGet(eventName, out var knownSpec)
+                && !knownSpec.IsOptionAllowed(key))
             {
                 AddError(diagnostics, $"on.{eventName} does not support option: {key}", keyMark);
                 if (!reader.End)
@@ -574,13 +576,20 @@ public static class WorkflowParser
             switch (key)
             {
                 case "types":
+                    if (OnEventSpecs.TryGet(eventName, out var typeSpec) && !typeSpec.IsTypeOptionSupported())
+                    {
+                        AddError(diagnostics, $"on.{eventName}.types is not supported", keyMark);
+                        reader.SkipCurrentNode();
+                        break;
+                    }
+
                     ParseScalarOrScalarSequence(
                         ref reader,
                         diagnostics,
                         $"on.{eventName}.types must be scalar or sequence of scalar",
                         scalarValidator: value =>
                         {
-                            if (OnEventSpecs.TryGet(eventName, out var typeSpec) && !typeSpec.IsTypeAllowed(value))
+                            if (OnEventSpecs.TryGet(eventName, out var knownTypeSpec) && !knownTypeSpec.IsTypeAllowed(value))
                             {
                                 return $"on.{eventName}.types contains unsupported activity type: {value}";
                             }
