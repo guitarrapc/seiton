@@ -643,6 +643,7 @@ smoke test からの昇格として、`testdata/err` の一部 fixture で期待
 5. `strategy/matrix` および `container/services/credentials/secrets` の key 判定も UTF-8 span 比較を優先する
 6. job id などの動的識別子も通常経路では `Utf8Slice` で持ち回し、診断時のみ UTF-8 から文字列化する
 7. `container` / `service` 文脈名のような組み立て文字列も通常経路では作らず、診断時のみ遅延構築する
+8. event spec lookup は `Dictionary<string, ...>` ではなく、固定 spec テーブルへの direct lookup を使う
 
 補足:
 
