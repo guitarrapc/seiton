@@ -642,6 +642,7 @@ smoke test からの昇格として、`testdata/err` の一部 fixture で期待
 4. `on.<event>.types` の妥当性判定も UTF-8 span 比較で行い、unsupported 値の診断時のみ文字列化する
 5. `strategy/matrix` および `container/services/credentials/secrets` の key 判定も UTF-8 span 比較を優先する
 6. job id などの動的識別子も通常経路では `Utf8Slice` で持ち回し、診断時のみ UTF-8 から文字列化する
+7. `container` / `service` 文脈名のような組み立て文字列も通常経路では作らず、診断時のみ遅延構築する
 
 補足:
 

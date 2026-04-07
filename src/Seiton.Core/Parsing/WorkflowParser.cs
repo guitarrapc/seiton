@@ -300,7 +300,7 @@ public static class WorkflowParser
 
                 if (!reader.End)
                 {
-                    ParseContainerLike(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' container", requireImage: true);
+                    ParseContainerLike(ref reader, diagnostics, source, jobId, default, isService: false, requireImage: true);
                 }
                 continue;
             }
@@ -1022,14 +1022,14 @@ public static class WorkflowParser
                 continue;
             }
 
-            var serviceName = reader.GetScalarString() ?? string.Empty;
+            var serviceName = reader.GetScalarSlice();
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            ParseContainerLike(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' service '{serviceName}'", requireImage: true);
+            ParseContainerLike(ref reader, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
         }
 
         if (reader.CurrentEventType == ParseEventType.MappingEnd)
@@ -1038,7 +1038,14 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseContainerLike(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string sectionName, bool requireImage)
+    private static void ParseContainerLike(
+        ref VYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId,
+        Utf8Slice serviceName,
+        bool isService,
+        bool requireImage)
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
@@ -1048,7 +1055,7 @@ public static class WorkflowParser
 
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
-            AddError(diagnostics, $"{sectionName} must be scalar or mapping", reader.CurrentMark);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -1060,7 +1067,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"{sectionName} key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -1083,7 +1090,7 @@ public static class WorkflowParser
                 hasImage = true;
                 if (reader.CurrentEventType != ParseEventType.Scalar)
                 {
-                    AddError(diagnostics, $"{sectionName}.image must be scalar", reader.CurrentMark);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentMark);
                 }
                 reader.SkipCurrentNode();
                 continue;
@@ -1097,7 +1104,7 @@ public static class WorkflowParser
                     break;
                 }
 
-                ParseCredentials(ref reader, diagnostics, sectionName);
+                ParseCredentials(ref reader, diagnostics, source, jobId, serviceName, isService);
                 continue;
             }
 
@@ -1111,7 +1118,7 @@ public static class WorkflowParser
 
                 if (reader.CurrentEventType != ParseEventType.MappingStart)
                 {
-                    AddError(diagnostics, $"{sectionName}.env must be mapping", reader.CurrentMark);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping", reader.CurrentMark);
                 }
                 reader.SkipCurrentNode();
                 continue;
@@ -1126,7 +1133,7 @@ public static class WorkflowParser
                     break;
                 }
 
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"{sectionName}.{optionKey} must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar");
                 continue;
             }
 
@@ -1140,7 +1147,7 @@ public static class WorkflowParser
 
                 if (reader.CurrentEventType != ParseEventType.Scalar)
                 {
-                    AddError(diagnostics, $"{sectionName}.options must be scalar", reader.CurrentMark);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentMark);
                 }
                 reader.SkipCurrentNode();
                 continue;
@@ -1153,7 +1160,7 @@ public static class WorkflowParser
                 break;
             }
 
-            AddError(diagnostics, $"unexpected {sectionName} key: {key}", keyMark);
+            AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)} key: {key}", keyMark);
             reader.SkipCurrentNode();
         }
 
@@ -1164,15 +1171,21 @@ public static class WorkflowParser
 
         if (requireImage && !hasImage)
         {
-            AddError(diagnostics, $"{sectionName}.image is required", new Marker(0, 1, 1));
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image is required", new Marker(0, 1, 1));
         }
     }
 
-    private static void ParseCredentials(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string sectionName)
+    private static void ParseCredentials(
+        ref VYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId,
+        Utf8Slice serviceName,
+        bool isService)
     {
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
-            AddError(diagnostics, $"{sectionName}.credentials must be mapping", reader.CurrentMark);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -1184,7 +1197,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"{sectionName}.credentials key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -1212,13 +1225,13 @@ public static class WorkflowParser
             else
             {
                 var unexpectedKey = reader.GetScalarString() ?? string.Empty;
-                AddError(diagnostics, $"unexpected {sectionName}.credentials key: {unexpectedKey}", keyMark);
+                AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key: {unexpectedKey}", keyMark);
             }
 
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
                 var fieldName = reader.GetScalarString() ?? string.Empty;
-                AddError(diagnostics, $"{sectionName}.credentials.{fieldName} must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.{fieldName} must be scalar", reader.CurrentMark);
             }
             reader.SkipCurrentNode();
         }
@@ -1230,7 +1243,7 @@ public static class WorkflowParser
 
         if (!hasUsername || !hasPassword)
         {
-            AddError(diagnostics, $"{sectionName}.credentials requires both username and password", new Marker(0, 1, 1));
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials requires both username and password", new Marker(0, 1, 1));
         }
     }
 
@@ -1295,6 +1308,17 @@ public static class WorkflowParser
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)
     {
         return Encoding.UTF8.GetString(slice.AsSpan(source));
+    }
+
+    private static string FormatContainerSectionName(ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
+    {
+        var jobIdText = DecodeUtf8(source, jobId);
+        if (!isService)
+        {
+            return $"job '{jobIdText}' container";
+        }
+
+        return $"job '{jobIdText}' service '{DecodeUtf8(source, serviceName)}'";
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, Marker mark)
