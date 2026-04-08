@@ -91,6 +91,24 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_WorkflowEnv_WithStepOnlyContext_ReportsSemanticError()
+    {
+        var yaml = "on: push\nenv:\n  BAD: ${{ steps.prep.outputs.ok }}\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-env-step-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in workflow expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_RunName_UnknownFunction_ReportsSemanticError()
+    {
+        var yaml = "run-name: Build ${{ unknownFn(github.ref) }}\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "run-name-unknown-function.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_OnEventOptionsMutualExclusive_ReportsError()
     {
         var yaml = """

@@ -74,7 +74,30 @@ public static class WorkflowParser
             {
                 reader.Read(); // consume key
                 hasRunName = true;
-                runName = ReadScalarOrSkip(ref reader, diagnostics, "run-name must be scalar");
+                if (reader.End)
+                {
+                    runName = default;
+                    continue;
+                }
+
+                if (reader.CurrentEventType != ParseEventType.Scalar)
+                {
+                    AddError(diagnostics, "run-name must be scalar", reader.CurrentMark);
+                    reader.SkipCurrentNode();
+                    runName = default;
+                    continue;
+                }
+
+                var runNameMark = reader.CurrentMark;
+                runName = reader.GetScalarSlice();
+                var runNameUtf8 = reader.GetScalarUtf8();
+                ValidateExpressionText(
+                    runNameUtf8,
+                    BuildScalarLocation(runNameMark, runNameUtf8.Length),
+                    ExpressionValidationContext.Workflow,
+                    diagnostics,
+                    parseWholeValueIfNoEmbedded: false);
+                reader.Read();
                 continue;
             }
 
@@ -116,8 +139,21 @@ public static class WorkflowParser
                 continue;
             }
 
+            if (keyUtf8.SequenceEqual("env"u8))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    ParseStringMapping(
+                        ref reader,
+                        diagnostics,
+                        "workflow env must be mapping",
+                        ExpressionValidationContext.Workflow);
+                }
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("permissions"u8) ||
-                keyUtf8.SequenceEqual("env"u8) ||
                 keyUtf8.SequenceEqual("defaults"u8) ||
                 keyUtf8.SequenceEqual("concurrency"u8))
             {
