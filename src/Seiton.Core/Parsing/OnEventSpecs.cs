@@ -46,46 +46,6 @@ internal static class OnEventSpecs
         Watch,
     }
 
-    public static bool TryGet(string eventName, out EventSpec spec)
-    {
-        if (eventName == "branch_protection_rule") { spec = new(EventId.BranchProtectionRule); return true; }
-        if (eventName == "check_run") { spec = new(EventId.CheckRun); return true; }
-        if (eventName == "check_suite") { spec = new(EventId.CheckSuite); return true; }
-        if (eventName == "create") { spec = new(EventId.Create); return true; }
-        if (eventName == "delete") { spec = new(EventId.Delete); return true; }
-        if (eventName == "deployment") { spec = new(EventId.Deployment); return true; }
-        if (eventName == "deployment_status") { spec = new(EventId.DeploymentStatus); return true; }
-        if (eventName == "discussion") { spec = new(EventId.Discussion); return true; }
-        if (eventName == "discussion_comment") { spec = new(EventId.DiscussionComment); return true; }
-        if (eventName == "fork") { spec = new(EventId.Fork); return true; }
-        if (eventName == "gollum") { spec = new(EventId.Gollum); return true; }
-        if (eventName == "image_version") { spec = new(EventId.ImageVersion); return true; }
-        if (eventName == "push") { spec = new(EventId.Push); return true; }
-        if (eventName == "label") { spec = new(EventId.Label); return true; }
-        if (eventName == "merge_group") { spec = new(EventId.MergeGroup); return true; }
-        if (eventName == "milestone") { spec = new(EventId.Milestone); return true; }
-        if (eventName == "page_build") { spec = new(EventId.PageBuild); return true; }
-        if (eventName == "public") { spec = new(EventId.Public); return true; }
-        if (eventName == "pull_request") { spec = new(EventId.PullRequest); return true; }
-        if (eventName == "pull_request_review") { spec = new(EventId.PullRequestReview); return true; }
-        if (eventName == "pull_request_review_comment") { spec = new(EventId.PullRequestReviewComment); return true; }
-        if (eventName == "pull_request_target") { spec = new(EventId.PullRequestTarget); return true; }
-        if (eventName == "workflow_dispatch") { spec = new(EventId.WorkflowDispatch); return true; }
-        if (eventName == "workflow_call") { spec = new(EventId.WorkflowCall); return true; }
-        if (eventName == "workflow_run") { spec = new(EventId.WorkflowRun); return true; }
-        if (eventName == "release") { spec = new(EventId.Release); return true; }
-        if (eventName == "registry_package") { spec = new(EventId.RegistryPackage); return true; }
-        if (eventName == "issues") { spec = new(EventId.Issues); return true; }
-        if (eventName == "issue_comment") { spec = new(EventId.IssueComment); return true; }
-        if (eventName == "schedule") { spec = new(EventId.Schedule); return true; }
-        if (eventName == "repository_dispatch") { spec = new(EventId.RepositoryDispatch); return true; }
-        if (eventName == "status") { spec = new(EventId.Status); return true; }
-        if (eventName == "watch") { spec = new(EventId.Watch); return true; }
-
-        spec = default;
-        return false;
-    }
-
     public static bool TryGet(ReadOnlySpan<byte> eventNameUtf8, out string eventName, out EventSpec spec)
     {
         if (eventNameUtf8.SequenceEqual("branch_protection_rule"u8)) { eventName = "branch_protection_rule"; spec = new(EventId.BranchProtectionRule); return true; }

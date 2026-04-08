@@ -5,6 +5,24 @@ namespace Seiton.Core.Parsing;
 
 public static class WorkflowParser
 {
+    private delegate string? Utf8ScalarValidator(ReadOnlySpan<byte> valueUtf8);
+
+    private readonly struct OnEventInfo
+    {
+        public OnEventInfo(string name, bool isKnown, OnEventSpecs.EventSpec spec)
+        {
+            Name = name;
+            IsKnown = isKnown;
+            Spec = spec;
+        }
+
+        public string Name { get; }
+
+        public bool IsKnown { get; }
+
+        public OnEventSpecs.EventSpec Spec { get; }
+    }
+
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
         var diagnostics = new List<Diagnostic>(16);
@@ -111,7 +129,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            var keyText = reader.GetScalarString() ?? string.Empty;
+            var keyText = Encoding.UTF8.GetString(keyUtf8);
             reader.Read(); // consume key
 
             AddError(diagnostics, $"unexpected workflow key: {keyText}", keyMark);
@@ -343,16 +361,15 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             reader.Read(); // consume key
 
-            if (IsStepsOnlyJobKey(key) && stepsOnlyKeyInReusable is null)
+            if (stepsOnlyKeyInReusable is null && TryGetStepsOnlyReusableJobKeyName(keyUtf8, out var stepsOnlyKeyName))
             {
-                stepsOnlyKeyInReusable = key;
+                stepsOnlyKeyInReusable = stepsOnlyKeyName;
                 stepsOnlyKeyInReusableMark = keyMark;
             }
 
-            if (IsKnownJobKey(key))
+            if (IsKnownJobKey(keyUtf8))
             {
                 if (!reader.End)
                 {
@@ -360,6 +377,8 @@ public static class WorkflowParser
                 }
                 continue;
             }
+
+            var key = Encoding.UTF8.GetString(keyUtf8);
 
             AddError(diagnostics, $"unexpected job key '{key}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
@@ -489,10 +508,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
             reader.Read();
 
-            if (IsKnownStepKey(key))
+            if (IsKnownStepKey(keyUtf8))
             {
                 if (!reader.End)
                 {
@@ -500,6 +518,8 @@ public static class WorkflowParser
                 }
                 continue;
             }
+
+            var key = Encoding.UTF8.GetString(keyUtf8);
 
             AddError(diagnostics, $"unexpected step key '{key}' in job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]", keyMark);
             if (!reader.End)
@@ -524,23 +544,51 @@ public static class WorkflowParser
         }
     }
 
-    private static bool IsKnownJobKey(string key)
+    private static bool IsKnownJobKey(ReadOnlySpan<byte> keyUtf8)
     {
-        return key is "name" or "needs" or "if" or "permissions" or "env" or "defaults" or
-            "timeout-minutes" or "strategy" or "concurrency" or "container" or "services" or
-            "outputs" or "secrets" or "with";
+        return keyUtf8.SequenceEqual("name"u8)
+            || keyUtf8.SequenceEqual("needs"u8)
+            || keyUtf8.SequenceEqual("if"u8)
+            || keyUtf8.SequenceEqual("permissions"u8)
+            || keyUtf8.SequenceEqual("env"u8)
+            || keyUtf8.SequenceEqual("defaults"u8)
+            || keyUtf8.SequenceEqual("timeout-minutes"u8)
+            || keyUtf8.SequenceEqual("strategy"u8)
+            || keyUtf8.SequenceEqual("concurrency"u8)
+            || keyUtf8.SequenceEqual("container"u8)
+            || keyUtf8.SequenceEqual("services"u8)
+            || keyUtf8.SequenceEqual("outputs"u8)
+            || keyUtf8.SequenceEqual("secrets"u8)
+            || keyUtf8.SequenceEqual("with"u8);
     }
 
-    private static bool IsStepsOnlyJobKey(string key)
+    private static bool TryGetStepsOnlyReusableJobKeyName(ReadOnlySpan<byte> keyUtf8, out string keyName)
     {
-        return key is "runs-on" or "environment" or "outputs" or "env" or "defaults" or
-            "steps" or "timeout-minutes" or "continue-on-error" or "container";
+        if (keyUtf8.SequenceEqual("runs-on"u8)) { keyName = "runs-on"; return true; }
+        if (keyUtf8.SequenceEqual("environment"u8)) { keyName = "environment"; return true; }
+        if (keyUtf8.SequenceEqual("outputs"u8)) { keyName = "outputs"; return true; }
+        if (keyUtf8.SequenceEqual("env"u8)) { keyName = "env"; return true; }
+        if (keyUtf8.SequenceEqual("defaults"u8)) { keyName = "defaults"; return true; }
+        if (keyUtf8.SequenceEqual("steps"u8)) { keyName = "steps"; return true; }
+        if (keyUtf8.SequenceEqual("timeout-minutes"u8)) { keyName = "timeout-minutes"; return true; }
+        if (keyUtf8.SequenceEqual("continue-on-error"u8)) { keyName = "continue-on-error"; return true; }
+        if (keyUtf8.SequenceEqual("container"u8)) { keyName = "container"; return true; }
+
+        keyName = string.Empty;
+        return false;
     }
 
-    private static bool IsKnownStepKey(string key)
+    private static bool IsKnownStepKey(ReadOnlySpan<byte> keyUtf8)
     {
-        return key is "name" or "id" or "if" or "with" or "env" or "shell" or "working-directory" or
-            "timeout-minutes" or "continue-on-error";
+        return keyUtf8.SequenceEqual("name"u8)
+            || keyUtf8.SequenceEqual("id"u8)
+            || keyUtf8.SequenceEqual("if"u8)
+            || keyUtf8.SequenceEqual("with"u8)
+            || keyUtf8.SequenceEqual("env"u8)
+            || keyUtf8.SequenceEqual("shell"u8)
+            || keyUtf8.SequenceEqual("working-directory"u8)
+            || keyUtf8.SequenceEqual("timeout-minutes"u8)
+            || keyUtf8.SequenceEqual("continue-on-error"u8);
     }
 
     private static Utf8Slice ReadScalarOrSkip(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
@@ -567,8 +615,8 @@ public static class WorkflowParser
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
             var eventMark = reader.CurrentMark;
-            var eventName = ReadOnEventName(ref reader);
-            ValidateKnownOnEvent(eventName, eventMark, diagnostics);
+            var eventInfo = ReadOnEventInfo(ref reader);
+            ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
             reader.Read();
             return;
         }
@@ -602,8 +650,8 @@ public static class WorkflowParser
             }
 
             var eventMark = reader.CurrentMark;
-            var eventName = ReadOnEventName(ref reader);
-            ValidateKnownOnEvent(eventName, eventMark, diagnostics);
+            var eventInfo = ReadOnEventInfo(ref reader);
+            ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
             reader.Read();
         }
 
@@ -629,9 +677,9 @@ public static class WorkflowParser
                 continue;
             }
 
-            var eventName = ReadOnEventName(ref reader);
+            var eventInfo = ReadOnEventInfo(ref reader);
             var eventMark = reader.CurrentMark;
-            ValidateKnownOnEvent(eventName, eventMark, diagnostics);
+            ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
             reader.Read(); // consume event key
 
             if (reader.End)
@@ -641,7 +689,7 @@ public static class WorkflowParser
 
             if (reader.CurrentEventType == ParseEventType.MappingStart)
             {
-                ParseOnEventOptions(ref reader, diagnostics, eventName, eventMark);
+                ParseOnEventOptions(ref reader, diagnostics, in eventInfo, eventMark);
                 continue;
             }
 
@@ -652,7 +700,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"on.{eventName} must be scalar, sequence, or mapping", reader.CurrentMark);
+            AddError(diagnostics, $"on.{eventInfo.Name} must be scalar, sequence, or mapping", reader.CurrentMark);
             reader.SkipCurrentNode();
         }
 
@@ -662,10 +710,8 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseOnEventOptions(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string eventName, Marker eventMark)
+    private static void ParseOnEventOptions(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, Marker eventMark)
     {
-        _ = OnEventSpecs.TryGet(eventName, out var spec);
-
         var hasBranches = false;
         var hasBranchesIgnore = false;
         var hasTags = false;
@@ -679,7 +725,7 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"on.{eventName} option key must be scalar", reader.CurrentMark);
+                AddError(diagnostics, $"on.{eventInfo.Name} option key must be scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentEventType != ParseEventType.MappingEnd)
                 {
@@ -699,23 +745,22 @@ public static class WorkflowParser
                     break;
                 }
 
-                if (OnEventSpecs.TryGet(eventName, out var typeSpec) && !typeSpec.IsTypeOptionSupported())
+                if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeOptionSupported())
                 {
-                    AddError(diagnostics, $"on.{eventName}.types is not supported", keyMark);
+                    AddError(diagnostics, $"on.{eventInfo.Name}.types is not supported", keyMark);
                     reader.SkipCurrentNode();
                     continue;
                 }
 
-                ParseOnTypes(ref reader, diagnostics, eventName);
+                ParseOnTypes(ref reader, diagnostics, in eventInfo);
                 continue;
             }
 
-            if (OnEventSpecs.TryGet(eventName, out var knownSpec)
-                && !knownSpec.IsOptionAllowed(keyUtf8))
+            if (eventInfo.IsKnown && !eventInfo.Spec.IsOptionAllowed(keyUtf8))
             {
-                var key = reader.GetScalarString() ?? string.Empty;
+                var key = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                AddError(diagnostics, $"on.{eventName} does not support option: {key}", keyMark);
+                AddError(diagnostics, $"on.{eventInfo.Name} does not support option: {key}", keyMark);
                 if (!reader.End)
                 {
                     reader.SkipCurrentNode();
@@ -727,7 +772,7 @@ public static class WorkflowParser
             {
                 reader.Read();
                 hasBranches = true;
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.branches must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar");
                 continue;
             }
 
@@ -735,7 +780,7 @@ public static class WorkflowParser
             {
                 reader.Read();
                 hasBranchesIgnore = true;
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.branches-ignore must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar");
                 continue;
             }
 
@@ -743,7 +788,7 @@ public static class WorkflowParser
             {
                 reader.Read();
                 hasTags = true;
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.tags must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar");
                 continue;
             }
 
@@ -751,7 +796,7 @@ public static class WorkflowParser
             {
                 reader.Read();
                 hasTagsIgnore = true;
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.tags-ignore must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar");
                 continue;
             }
 
@@ -759,7 +804,7 @@ public static class WorkflowParser
             {
                 reader.Read();
                 hasPaths = true;
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.paths must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar");
                 continue;
             }
 
@@ -767,24 +812,28 @@ public static class WorkflowParser
             {
                 reader.Read();
                 hasPathsIgnore = true;
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.paths-ignore must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar");
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("workflows"u8))
             {
                 reader.Read();
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventName}.workflows must be scalar or sequence of scalar");
+                ParseScalarOrScalarSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar");
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("inputs"u8) || keyUtf8.SequenceEqual("secrets"u8) || keyUtf8.SequenceEqual("outputs"u8))
             {
-                var key = reader.GetScalarString() ?? string.Empty;
+                var key = keyUtf8.SequenceEqual("inputs"u8)
+                    ? "inputs"
+                    : keyUtf8.SequenceEqual("secrets"u8)
+                        ? "secrets"
+                        : "outputs";
                 reader.Read();
                 if (reader.CurrentEventType != ParseEventType.MappingStart)
                 {
-                    AddError(diagnostics, $"on.{eventName}.{key} must be mapping", reader.CurrentMark);
+                    AddError(diagnostics, $"on.{eventInfo.Name}.{key} must be mapping", reader.CurrentMark);
                 }
                 reader.SkipCurrentNode();
                 continue;
@@ -795,9 +844,9 @@ public static class WorkflowParser
                 break;
             }
 
-            var unknownKey = reader.GetScalarString() ?? string.Empty;
+            var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.{eventName} option: {unknownKey}", keyMark);
+            AddError(diagnostics, $"unexpected on.{eventInfo.Name} option: {unknownKey}", keyMark);
             reader.SkipCurrentNode();
         }
 
@@ -808,17 +857,17 @@ public static class WorkflowParser
 
         if (hasBranches && hasBranchesIgnore)
         {
-            AddError(diagnostics, $"on.{eventName} cannot use both branches and branches-ignore", eventMark);
+            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both branches and branches-ignore", eventMark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
-            AddError(diagnostics, $"on.{eventName} cannot use both tags and tags-ignore", eventMark);
+            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both tags and tags-ignore", eventMark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
-            AddError(diagnostics, $"on.{eventName} cannot use both paths and paths-ignore", eventMark);
+            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both paths and paths-ignore", eventMark);
         }
     }
 
@@ -826,14 +875,14 @@ public static class WorkflowParser
         ref VYamlStreamReader reader,
         List<Diagnostic> diagnostics,
         string error,
-        Func<string, string?>? scalarValidator = null)
+        Utf8ScalarValidator? scalarValidator = null)
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
             if (scalarValidator is not null)
             {
-                var value = reader.GetScalarString() ?? string.Empty;
-                var validationError = scalarValidator(value);
+                var valueUtf8 = reader.GetScalarUtf8();
+                var validationError = scalarValidator(valueUtf8);
                 if (validationError is not null)
                 {
                     AddError(diagnostics, validationError, reader.CurrentMark);
@@ -862,8 +911,8 @@ public static class WorkflowParser
 
             if (scalarValidator is not null)
             {
-                var value = reader.GetScalarString() ?? string.Empty;
-                var validationError = scalarValidator(value);
+                var valueUtf8 = reader.GetScalarUtf8();
+                var validationError = scalarValidator(valueUtf8);
                 if (validationError is not null)
                 {
                     AddError(diagnostics, validationError, reader.CurrentMark);
@@ -921,7 +970,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
+            var key = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             AddError(diagnostics, $"unexpected strategy key '{key}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
@@ -1126,7 +1175,7 @@ public static class WorkflowParser
 
             if (keyUtf8.SequenceEqual("ports"u8) || keyUtf8.SequenceEqual("volumes"u8))
             {
-                var optionKey = reader.GetScalarString() ?? string.Empty;
+                var optionKey = keyUtf8.SequenceEqual("ports"u8) ? "ports" : "volumes";
                 reader.Read();
                 if (reader.End)
                 {
@@ -1153,7 +1202,7 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = reader.GetScalarString() ?? string.Empty;
+            var key = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             if (reader.End)
             {
@@ -1224,13 +1273,17 @@ public static class WorkflowParser
             }
             else
             {
-                var unexpectedKey = reader.GetScalarString() ?? string.Empty;
+                var unexpectedKey = Encoding.UTF8.GetString(keyUtf8);
                 AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key: {unexpectedKey}", keyMark);
             }
 
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                var fieldName = reader.GetScalarString() ?? string.Empty;
+                var fieldName = keyUtf8.SequenceEqual("username"u8)
+                    ? "username"
+                    : keyUtf8.SequenceEqual("password"u8)
+                        ? "password"
+                        : Encoding.UTF8.GetString(keyUtf8);
                 AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.{fieldName} must be scalar", reader.CurrentMark);
             }
             reader.SkipCurrentNode();
@@ -1334,40 +1387,42 @@ public static class WorkflowParser
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
     }
 
-    private static void ValidateKnownOnEvent(string eventName, Marker eventMark, List<Diagnostic> diagnostics)
+    private static void ValidateKnownOnEvent(in OnEventInfo eventInfo, Marker eventMark, List<Diagnostic> diagnostics)
     {
-        if (!OnEventSpecs.TryGet(eventName, out _))
+        if (!eventInfo.IsKnown)
         {
-            AddError(diagnostics, $"unknown event in on: {eventName}", eventMark);
+            AddError(diagnostics, $"unknown event in on: {eventInfo.Name}", eventMark);
         }
     }
 
-    private static string ReadOnEventName(ref VYamlStreamReader reader)
+    private static OnEventInfo ReadOnEventInfo(ref VYamlStreamReader reader)
     {
         try
         {
             var eventNameUtf8 = reader.GetScalarUtf8();
-            if (OnEventSpecs.TryGet(eventNameUtf8, out var knownEventName, out _))
+            if (OnEventSpecs.TryGet(eventNameUtf8, out var knownEventName, out var knownSpec))
             {
-                return knownEventName;
+                return new OnEventInfo(knownEventName, isKnown: true, knownSpec);
             }
+
+            return new OnEventInfo(Encoding.UTF8.GetString(eventNameUtf8), isKnown: false, default);
         }
         catch (YamlParserException)
         {
             // Fall back to scalar string for odd scalar representations.
         }
 
-        return reader.GetScalarString() ?? string.Empty;
+        return new OnEventInfo(reader.GetScalarString() ?? string.Empty, isKnown: false, default);
     }
 
-    private static void ParseOnTypes(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string eventName)
+    private static void ParseOnTypes(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
     {
         if (reader.CurrentEventType == ParseEventType.Scalar)
         {
             var valueUtf8 = reader.GetScalarUtf8();
-            if (OnEventSpecs.TryGet(eventName, out var knownTypeSpec) && !knownTypeSpec.IsTypeAllowed(valueUtf8))
+            if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
             {
-                AddError(diagnostics, $"on.{eventName}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentMark);
+                AddError(diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentMark);
             }
 
             reader.Read();
@@ -1376,7 +1431,7 @@ public static class WorkflowParser
 
         if (reader.CurrentEventType != ParseEventType.SequenceStart)
         {
-            AddError(diagnostics, $"on.{eventName}.types must be scalar or sequence of scalar", reader.CurrentMark);
+            AddError(diagnostics, $"on.{eventInfo.Name}.types must be scalar or sequence of scalar", reader.CurrentMark);
             reader.SkipCurrentNode();
             return;
         }
@@ -1386,15 +1441,15 @@ public static class WorkflowParser
         {
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
-                AddError(diagnostics, $"on.{eventName}.types must be scalar or sequence of scalar", reader.CurrentMark);
+                AddError(diagnostics, $"on.{eventInfo.Name}.types must be scalar or sequence of scalar", reader.CurrentMark);
                 reader.SkipCurrentNode();
                 continue;
             }
 
             var valueUtf8 = reader.GetScalarUtf8();
-            if (OnEventSpecs.TryGet(eventName, out var knownTypeSpec) && !knownTypeSpec.IsTypeAllowed(valueUtf8))
+            if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
             {
-                AddError(diagnostics, $"on.{eventName}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentMark);
+                AddError(diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentMark);
             }
 
             reader.Read();

@@ -645,8 +645,16 @@ smoke test からの昇格として、`testdata/err` の一部 fixture で期待
 7. `container` / `service` 文脈名のような組み立て文字列も通常経路では作らず、診断時のみ遅延構築する
 8. event spec lookup は `Dictionary<string, ...>` ではなく、固定 spec テーブルへの direct lookup を使う
 9. event option/type 判定も `string[]` テーブル探索ではなく、event ごとの固定 switch ロジックで処理する
+10. `on` event の既知判定は key 読み取り時に 1 回だけ行い、`OnEventInfo`（名前 + known フラグ + spec）を `ParseOnEventOptions` / `ParseOnTypes` へ引き回して再 lookup を避ける
+11. `OnEventSpecs` は UTF-8 span ベース API を主経路にし、`IsOptionAllowed` / `IsTypeAllowed` / event lookup の string オーバーロードは削減する
+12. `ParseScalarOrScalarSequence` の scalar validator は `Func<string, ...>` ではなく UTF-8 span delegate で受け、通常経路の `GetScalarString()` を避ける
+13. job/step の known key 判定 (`IsKnownJobKey` / `IsKnownStepKey`) は UTF-8 span 比較に寄せ、unknown key 診断時だけ key を string 化する
+14. reusable workflow 制約で使う steps-only key 名は、UTF-8 key から定数文字列へ写像して保持し、汎用経路での string 化を避ける
+15. `WorkflowParser` の key 表示用文字列は原則 `keyUtf8` から遅延 decode し、`GetScalarString()` は unknown event fallback のみ残す
+16. `credentials` 診断は value ではなく key 名（`username` / `password` など）を報告するよう補正し、診断精度を actionlint に近づける
+17. unknown `on` event 名も通常経路では `GetScalarUtf8()` から decode し、`GetScalarString()` は `YamlParserException` 時のフォールバック用途に限定する
 
 補足:
 
-1. expression 最小 AST は現在プロトタイプ段階で、`string` / class を使う実装を含む
-2. ここは semantic 層実装時に arena + slice ベースへ段階移行する
+1. expression 最小 AST は `struct` ノード配列 + UTF-8 span parser へ移行済みで、抽出結果は `Utf8Slice` で保持する
+2. 次段は semantic 層（context availability / function signature）を AST の上に追加する
