@@ -97,3 +97,10 @@ Spec files live under `Docs/`. When reading or writing them, follow these rules:
 
 **After implementing:**
 - Always update any related spec files to reflect what was actually built, especially documenting lessons learned or decisions made during implementation that weren't captured upfront.
+
+**Cross-document consistency:**
+- `Seiton_Parser_spec.md` is the **source of truth** for the parser specification. When it is revised, you **must** review and update the following downstream documents for consistency:
+  - `Seiton_Parser_csharp_spec.md` — C# implementation spec (AST types, adapter layer, etc.)
+  - `Seiton_Parser_go_spec.md` — Go reference implementation spec (AST definitions, parse functions, etc.)
+  - `parser_implementation_csharp_plan.md` — C# implementation plan (phase/step references to spec sections)
+- Conversely, if a downstream doc is updated with new implementation details or lessons learned, check whether the change implies a spec-level update to `Seiton_Parser_spec.md`.

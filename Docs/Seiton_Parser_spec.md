@@ -2,6 +2,8 @@
 
 > Defines the specification for syntactic analysis, AST construction, Visitor traversal, and expression validation of GitHub Actions workflow YAML.
 > This document is a language-agnostic parser specification. For C# implementation details, see `Seiton_Parser_csharp_spec.md`.
+>
+> **Cross-document rule**: This spec is the source of truth. When revised, also review and update `Seiton_Parser_csharp_spec.md`, `Seiton_Parser_go_spec.md`, and `parser_implementation_csharp_plan.md` for consistency.
 
 ---
 
