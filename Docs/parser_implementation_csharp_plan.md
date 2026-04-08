@@ -334,6 +334,8 @@
 
 ### Step 4.2: 既存パース関数の ParseMapping に移行
 
+**状態**: 完了（`TryRegisterMappingKey` を `on` 系 mapping、job/strategy/container/services など主要 mapping 走査へ適用。duplicate key / `<<` merge key 診断を広範囲で有効化）
+
 - `ParseJobsMapping`, `ParseOnMapping`, 各 parse 関数を inline mapping 走査パターンへ統一
 - 重複キー検出が全 mapping で有効になる
 

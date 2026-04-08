@@ -263,6 +263,7 @@ public static class WorkflowParser
         }
 
         var scopes = new Dictionary<Utf8String, PermissionScope>();
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -280,6 +281,23 @@ public static class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "permissions"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var keyNode = new StringNode
             {
                 Value = keySlice,
@@ -345,6 +363,7 @@ public static class WorkflowParser
         }
 
         var vars = new Dictionary<Utf8String, EnvVar>();
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -362,6 +381,23 @@ public static class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                error))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var keyNode = new StringNode
             {
                 Value = keySlice,
@@ -411,6 +447,7 @@ public static class WorkflowParser
 
         StringNode? shellNode = null;
         StringNode? workingDirectoryNode = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume defaults mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -428,6 +465,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "workflow defaults"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var isRun = keyUtf8.SequenceEqual("run"u8);
             reader.Read(); // consume key
             if (reader.End)
@@ -444,6 +498,7 @@ public static class WorkflowParser
                     continue;
                 }
 
+                var runKeys = new HashSet<Utf8String>();
                 reader.Read(); // consume run mapping
                 while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -460,6 +515,23 @@ public static class WorkflowParser
 
                     var runKeyMark = reader.CurrentStart;
                     var runKeyUtf8 = reader.GetScalarUtf8();
+                    if (!TryRegisterMappingKey(
+                        runKeyUtf8,
+                        runKeyMark,
+                        diagnostics,
+                        runKeys,
+                        MappingKeyComparison.AsciiCaseInsensitive,
+                        "workflow defaults.run"))
+                    {
+                        reader.Read();
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                    }
+
                     var isShell = runKeyUtf8.SequenceEqual("shell"u8);
                     var isWorkingDirectory = runKeyUtf8.SequenceEqual("working-directory"u8);
                     reader.Read();
@@ -540,6 +612,7 @@ public static class WorkflowParser
 
         StringNode? groupNode = null;
         BoolNode? cancelInProgressNode = null;
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -556,6 +629,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "concurrency"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var isGroup = keyUtf8.SequenceEqual("group"u8);
             var isCancelInProgress = keyUtf8.SequenceEqual("cancel-in-progress"u8);
             reader.Read();
@@ -752,6 +842,7 @@ public static class WorkflowParser
         var hasSecrets = false;
         string? stepsOnlyKeyInReusable = null;
         TextPosition stepsOnlyKeyInReusableMark = default;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -769,6 +860,22 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                $"job '{DecodeUtf8(source, jobId)}'"))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
 
             if (keyUtf8.SequenceEqual("runs-on"u8))
             {
@@ -2143,6 +2250,7 @@ public static class WorkflowParser
         {
             reader.Read(); // consume MappingStart
             var events = new List<Event>(4);
+            var keys = new HashSet<Utf8String>();
             while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -2154,6 +2262,24 @@ public static class WorkflowParser
                 }
 
                 var eventMark = reader.CurrentStart;
+                var eventKeyUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterMappingKey(
+                    eventKeyUtf8,
+                    eventMark,
+                    diagnostics,
+                    keys,
+                    MappingKeyComparison.AsciiCaseInsensitive,
+                    "on"))
+                {
+                    reader.Read();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
                 var eventInfo = ReadOnEventInfo(ref reader);
                 ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
                 Utf8Slice eventSlice;
@@ -2292,6 +2418,7 @@ public static class WorkflowParser
         TextRange range = default;
         StringNode? cron = null;
         StringNode? timezone = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -2309,6 +2436,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.schedule"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("cron"u8))
             {
                 reader.Read();
@@ -2367,6 +2511,7 @@ public static class WorkflowParser
         }
 
         Dictionary<Utf8String, DispatchInput>? inputs = null;
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -2383,6 +2528,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_dispatch"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("inputs"u8))
             {
                 reader.Read();
@@ -2417,6 +2579,7 @@ public static class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, DispatchInput>();
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -2434,6 +2597,23 @@ public static class WorkflowParser
             var idMark = reader.CurrentStart;
             var idSlice = reader.GetScalarSlice();
             var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                idUtf8,
+                idMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_dispatch.inputs"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var idRange = BuildScalarLocation(idMark, idUtf8.Length);
             var key = Utf8String.FromLowerAscii(idUtf8);
             var nameNode = new StringNode { Value = idSlice, Quoted = reader.IsScalarQuoted(), Range = idRange };
@@ -2461,6 +2641,7 @@ public static class WorkflowParser
         StringNode? defaultValue = null;
         DispatchInputType type = DispatchInputType.None;
         StringNode[]? options = null;
+        var keys = new HashSet<Utf8String>();
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2485,6 +2666,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_dispatch input"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("description"u8))
             {
                 reader.Read();
@@ -2620,6 +2818,7 @@ public static class WorkflowParser
         WorkflowCallEventInput[]? inputs = null;
         Dictionary<Utf8String, WorkflowCallEventSecret>? secrets = null;
         Dictionary<Utf8String, WorkflowCallEventOutput>? outputs = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -2637,6 +2836,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("inputs"u8))
             {
                 reader.Read();
@@ -2692,6 +2908,7 @@ public static class WorkflowParser
         }
 
         var list = new List<WorkflowCallEventInput>(4);
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -2709,6 +2926,23 @@ public static class WorkflowParser
             var idMark = reader.CurrentStart;
             var idSlice = reader.GetScalarSlice();
             var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                idUtf8,
+                idMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call.inputs"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var id = Utf8String.FromLowerAscii(idUtf8);
             var nameNode = new StringNode { Value = idSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(idMark, idUtf8.Length) };
             var idText = Encoding.UTF8.GetString(idUtf8);
@@ -2737,6 +2971,7 @@ public static class WorkflowParser
         StringNode? defaultValue = null;
         var type = WorkflowCallInputType.Invalid;
         var hasType = false;
+        var keys = new HashSet<Utf8String>();
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2761,6 +2996,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call input"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("description"u8))
             {
                 reader.Read();
@@ -2857,6 +3109,7 @@ public static class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, WorkflowCallEventSecret>();
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -2874,6 +3127,23 @@ public static class WorkflowParser
             var idMark = reader.CurrentStart;
             var idSlice = reader.GetScalarSlice();
             var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                idUtf8,
+                idMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call.secrets"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var key = Utf8String.FromLowerAscii(idUtf8);
             var nameNode = new StringNode { Value = idSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(idMark, idUtf8.Length) };
             reader.Read();
@@ -2896,6 +3166,7 @@ public static class WorkflowParser
     {
         StringNode? description = null;
         BoolNode? required = null;
+        var keys = new HashSet<Utf8String>();
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2920,6 +3191,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call secret"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("description"u8))
             {
                 reader.Read();
@@ -2967,6 +3255,7 @@ public static class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, WorkflowCallEventOutput>();
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -2984,6 +3273,23 @@ public static class WorkflowParser
             var idMark = reader.CurrentStart;
             var idSlice = reader.GetScalarSlice();
             var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                idUtf8,
+                idMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call.outputs"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var key = Utf8String.FromLowerAscii(idUtf8);
             var nameNode = new StringNode { Value = idSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(idMark, idUtf8.Length) };
             var idText = Encoding.UTF8.GetString(idUtf8);
@@ -3008,6 +3314,7 @@ public static class WorkflowParser
     {
         StringNode? description = null;
         StringNode? value = null;
+        var keys = new HashSet<Utf8String>();
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -3032,6 +3339,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.workflow_call output"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("description"u8))
             {
                 reader.Read();
@@ -3096,6 +3420,7 @@ public static class WorkflowParser
         }
 
         StringNode[]? types = null;
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -3112,6 +3437,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.repository_dispatch"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("types"u8))
             {
                 reader.Read();
@@ -3158,6 +3500,7 @@ public static class WorkflowParser
         WebhookEventFilter? paths = null;
         WebhookEventFilter? pathsIgnore = null;
         StringNode[]? workflows = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume MappingStart
 
@@ -3174,6 +3517,22 @@ public static class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                $"on.{eventInfo.Name}"))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
 
             // Pre-compute key identity before advancing reader (spans may be invalidated after Read)
             var isTypes = keyUtf8.SequenceEqual("types"u8);
@@ -3587,6 +3946,7 @@ public static class WorkflowParser
         Matrix? matrix = null;
         BoolNode? failFast = null;
         IntNode? maxParallel = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume MappingStart
 
@@ -3605,6 +3965,22 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "strategy"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
 
             if (keyUtf8.SequenceEqual("matrix"u8))
             {
@@ -3684,6 +4060,7 @@ public static class WorkflowParser
         MatrixCombinations[]? include = null;
         MatrixCombinations[]? exclude = null;
         Dictionary<Utf8String, MatrixRow>? rows = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume matrix mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -3702,6 +4079,23 @@ public static class WorkflowParser
             var keyUtf8 = reader.GetScalarUtf8();
             var keySlice = reader.GetScalarSlice();
             var keyMark = reader.CurrentStart;
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "strategy.matrix"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var isInclude = keyUtf8.SequenceEqual("include"u8);
             var isExclude = keyUtf8.SequenceEqual("exclude"u8);
             reader.Read();
@@ -3916,6 +4310,7 @@ public static class WorkflowParser
         Utf8Slice jobId)
     {
         var map = new Dictionary<Utf8String, RawYamlValue>();
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -3930,7 +4325,26 @@ public static class WorkflowParser
                 continue;
             }
 
-            var key = Utf8String.FromLowerAscii(reader.GetScalarUtf8());
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "matrix object"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            var key = Utf8String.FromLowerAscii(keyUtf8);
             reader.Read();
             if (reader.End)
             {
@@ -3958,6 +4372,7 @@ public static class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, Service>();
+        var keys = new HashSet<Utf8String>();
 
         reader.Read(); // consume services mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -3975,6 +4390,24 @@ public static class WorkflowParser
 
             var serviceName = reader.GetScalarSlice();
             var serviceNameUtf8 = reader.GetScalarUtf8();
+            var serviceMark = reader.CurrentStart;
+            if (!TryRegisterMappingKey(
+                serviceNameUtf8,
+                serviceMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "services"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var serviceNameNode = new StringNode
             {
                 Value = serviceName,
@@ -4049,6 +4482,7 @@ public static class WorkflowParser
         StringNode[]? ports = null;
         StringNode[]? volumes = null;
         StringNode? options = null;
+        var keys = new HashSet<Utf8String>();
         reader.Read(); // consume mapping
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -4066,6 +4500,22 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                FormatContainerSectionName(source, jobId, serviceName, isService)))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
 
             if (keyUtf8.SequenceEqual("image"u8))
             {
@@ -4208,6 +4658,7 @@ public static class WorkflowParser
         var hasPassword = false;
         StringNode? username = null;
         StringNode? password = null;
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -4224,6 +4675,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             reader.Read();
             if (reader.End)
             {
@@ -4405,6 +4873,7 @@ public static class WorkflowParser
         StringNode? nameNode = null;
         StringNode? urlNode = null;
         BoolNode? deploymentNode = null;
+        var keys = new HashSet<Utf8String>();
 
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -4422,6 +4891,23 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "environment"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read();
@@ -4491,6 +4977,7 @@ public static class WorkflowParser
         }
 
         var outputs = new Dictionary<Utf8String, StringNode>();
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -4507,6 +4994,24 @@ public static class WorkflowParser
 
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
+            var keyMark = reader.CurrentStart;
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "outputs"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var keyNode = new StringNode { Value = keySlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(reader.CurrentStart, keyUtf8.Length) };
             var key = Utf8String.FromLowerAscii(keyUtf8);
             reader.Read();
@@ -4542,6 +5047,7 @@ public static class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, WorkflowCallInput>();
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -4559,6 +5065,23 @@ public static class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                nameUtf8,
+                nameMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "with"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var key = Utf8String.FromLowerAscii(nameUtf8);
             var nameNode = new StringNode { Value = nameSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(nameMark, nameUtf8.Length) };
             reader.Read();
@@ -4630,6 +5153,7 @@ public static class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, WorkflowCallSecret>();
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -4647,6 +5171,23 @@ public static class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                nameUtf8,
+                nameMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "secrets"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var key = Utf8String.FromLowerAscii(nameUtf8);
             var nameNode = new StringNode { Value = nameSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(nameMark, nameUtf8.Length) };
             reader.Read();
