@@ -827,6 +827,53 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_JobAst_StrategyContainerServices_PopulatesFields()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                strategy:
+                    fail-fast: true
+                    max-parallel: 2
+                    matrix:
+                        os: [ubuntu-latest, windows-latest]
+                container:
+                    image: node:20
+                    options: --cpus 1
+                    ports: [8080]
+                    volumes: [/tmp:/tmp]
+                    credentials:
+                        username: user
+                        password: pass
+                services:
+                    redis:
+                        image: redis:7
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-ast-strategy-container-services.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var key = Utf8String.FromLowerAscii("build"u8);
+        var job = result.Workflow!.Jobs[key];
+        await Assert.That(job.Strategy is not null).IsTrue();
+        await Assert.That(job.Strategy!.FailFast is not null).IsTrue();
+        await Assert.That(job.Strategy.MaxParallel is not null).IsTrue();
+        await Assert.That(job.Strategy.Matrix is not null).IsTrue();
+        await Assert.That(job.Container is not null).IsTrue();
+        await Assert.That(job.Container!.Image.Value.Length).IsGreaterThan(0);
+        await Assert.That(job.Container.Credentials is not null).IsTrue();
+        await Assert.That(job.Services is not null).IsTrue();
+        await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
+        await Assert.That(job.Services.ServiceMap!.Count).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task Parse_StepWithoutRunOrUses_ReportsError()
     {
         var yaml = """

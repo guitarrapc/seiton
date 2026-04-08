@@ -273,7 +273,7 @@
 
 ### Step 3.6: Job パースの AST 化
 
-**状態**: 進行中（`workflow.Jobs` の AST 構築を開始し、`Id` / `name` / `needs` / `runs-on` / `permissions` / `environment` / `concurrency` / `outputs` / `env` / `defaults` / `if` / `timeout-minutes` / `continue-on-error` / `workflow_call` の主要ノードを populate）
+**状態**: 完了（`workflow.Jobs` を `Dictionary<Utf8String, Job>` として構築し、`Id` / `name` / `needs` / `runs-on` / `permissions` / `environment` / `concurrency` / `outputs` / `env` / `defaults` / `if` / `timeout-minutes` / `continue-on-error` / `strategy` / `container` / `services` / `workflow_call` を AST に populate。既存 reusable workflow 制約 diagnostics を維持）
 
 - `ParseJob()` → `Job` node（仕様 §3.10）
 - `ParseRunsOn()` → `Runner` node（仕様 §3.13）

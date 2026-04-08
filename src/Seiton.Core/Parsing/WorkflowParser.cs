@@ -918,8 +918,7 @@ public static class WorkflowParser
                     }
                     else
                     {
-                        ParseStrategy(ref reader, diagnostics, source, jobId);
-                        strategyNode = new Strategy { Range = default };
+                        strategyNode = ParseStrategy(ref reader, diagnostics, source, jobId);
                     }
                 }
                 continue;
@@ -936,8 +935,7 @@ public static class WorkflowParser
 
                 if (!reader.End)
                 {
-                    ParseContainerLike(ref reader, diagnostics, source, jobId, default, isService: false, requireImage: true);
-                    containerNode = null;
+                    containerNode = ParseContainerLike(ref reader, diagnostics, source, jobId, default, isService: false, requireImage: true);
                 }
                 continue;
             }
@@ -953,8 +951,7 @@ public static class WorkflowParser
 
                 if (!reader.End)
                 {
-                    ParseServices(ref reader, diagnostics, source, jobId);
-                    servicesNode = null;
+                    servicesNode = ParseServices(ref reader, diagnostics, source, jobId);
                 }
                 continue;
             }
@@ -1749,6 +1746,39 @@ public static class WorkflowParser
         }
 
         var node = new FloatNode
+        {
+            Value = value,
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+        reader.Read();
+        return node;
+    }
+
+    private static IntNode? ParseInt(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        if (!TryParseInt64(valueUtf8, tag, out var value))
+        {
+            AddError(diagnostics, errorMessage, mark);
+            reader.Read();
+            return null;
+        }
+
+        var node = new IntNode
         {
             Value = value,
             Range = BuildScalarLocation(mark, valueUtf8.Length),
@@ -3294,8 +3324,12 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseStrategy(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Strategy ParseStrategy(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
+        Matrix? matrix = null;
+        BoolNode? failFast = null;
+        IntNode? maxParallel = null;
+
         reader.Read(); // consume MappingStart
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -3322,16 +3356,26 @@ public static class WorkflowParser
                     break;
                 }
 
-                ParseMatrix(ref reader, diagnostics, source, jobId);
+                matrix = ParseMatrix(ref reader, diagnostics, source, jobId);
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("fail-fast"u8) || keyUtf8.SequenceEqual("max-parallel"u8))
+            if (keyUtf8.SequenceEqual("fail-fast"u8))
             {
                 reader.Read();
                 if (!reader.End)
                 {
-                    reader.SkipCurrentNode();
+                    failFast = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("max-parallel"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    maxParallel = ParseInt(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer");
                 }
                 continue;
             }
@@ -3349,22 +3393,39 @@ public static class WorkflowParser
         {
             reader.Read();
         }
+
+        return new Strategy
+        {
+            Matrix = matrix,
+            FailFast = failFast,
+            MaxParallel = maxParallel,
+            Range = default,
+        };
     }
 
-    private static void ParseMatrix(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Matrix? ParseMatrix(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            reader.Read();
-            return;
+            var expression = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Job,
+                $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be scalar or mapping",
+                parseWholeValueIfNoEmbedded: false);
+            return new Matrix { Expression = expression, Range = expression?.Range ?? default };
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be scalar or mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return;
+            return null;
         }
+
+        MatrixCombinations[]? include = null;
+        MatrixCombinations[]? exclude = null;
+        Dictionary<Utf8String, MatrixRow>? rows = null;
 
         reader.Read(); // consume matrix mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -3381,6 +3442,8 @@ public static class WorkflowParser
             }
 
             var keyUtf8 = reader.GetScalarUtf8();
+            var keySlice = reader.GetScalarSlice();
+            var keyMark = reader.CurrentStart;
             var isInclude = keyUtf8.SequenceEqual("include"u8);
             var isExclude = keyUtf8.SequenceEqual("exclude"u8);
             reader.Read();
@@ -3396,7 +3459,15 @@ public static class WorkflowParser
                     var keyTextForDiagnostic = isInclude ? "include" : "exclude";
                     AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentStart);
                 }
-                reader.SkipCurrentNode();
+                var combos = ParseMatrixCombinations(ref reader, diagnostics, source, jobId, isInclude ? "include" : "exclude");
+                if (isInclude)
+                {
+                    include = combos;
+                }
+                else
+                {
+                    exclude = combos;
+                }
                 continue;
             }
 
@@ -3405,23 +3476,230 @@ public static class WorkflowParser
                 var keyTextForDiagnostic = Encoding.UTF8.GetString(keyUtf8);
                 AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentStart);
             }
-            reader.SkipCurrentNode();
+
+            var rowName = new StringNode
+            {
+                Value = keySlice,
+                Quoted = false,
+                Range = BuildScalarLocation(keyMark, keyUtf8.Length),
+            };
+            StringNode? rowExpr = null;
+            IReadOnlyList<RawYamlValue>? rowValues = null;
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var valueNode = ParseStringAndValidateExpression(
+                    ref reader,
+                    diagnostics,
+                    ExpressionValidationContext.Job,
+                    $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(keyUtf8)} must be sequence or scalar",
+                    parseWholeValueIfNoEmbedded: false);
+                rowExpr = valueNode;
+                rowValues = valueNode is null ? [] : [new RawYamlString { Value = valueNode }];
+            }
+            else if (reader.CurrentKind == YamlEventKind.SequenceStart)
+            {
+                rowValues = ParseRawYamlArray(ref reader, diagnostics, source, jobId, keyUtf8);
+            }
+            else
+            {
+                reader.SkipCurrentNode();
+            }
+
+            rows ??= new Dictionary<Utf8String, MatrixRow>();
+            rows[Utf8String.FromLowerAscii(keyUtf8)] = new MatrixRow
+            {
+                Name = rowName,
+                Expression = rowExpr,
+                Values = rowValues,
+            };
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             reader.Read();
         }
+
+        return new Matrix
+        {
+            Include = include,
+            Exclude = exclude,
+            Rows = rows,
+            Range = default,
+        };
     }
 
-    private static void ParseServices(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static MatrixCombinations[] ParseMatrixCombinations(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId,
+        string section)
+    {
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var expr = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Job,
+                $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} must be sequence or scalar",
+                parseWholeValueIfNoEmbedded: false);
+            return
+            [
+                new MatrixCombinations
+                {
+                    Expression = expr,
+                    Entries = null,
+                }
+            ];
+        }
+
+        if (reader.CurrentKind != YamlEventKind.SequenceStart)
+        {
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} must be sequence or scalar", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return [];
+        }
+
+        var entries = new List<IReadOnlyDictionary<Utf8String, RawYamlValue>>();
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.MappingStart)
+            {
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} item must be mapping", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            entries.Add(ParseRawYamlObject(ref reader, diagnostics, source, jobId));
+        }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        {
+            reader.Read();
+        }
+
+        return
+        [
+            new MatrixCombinations
+            {
+                Entries = entries,
+            }
+        ];
+    }
+
+    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId,
+        ReadOnlySpan<byte> rowNameUtf8)
+    {
+        if (reader.CurrentKind != YamlEventKind.SequenceStart)
+        {
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(rowNameUtf8)} must be sequence or scalar", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return [];
+        }
+
+        var values = new List<RawYamlValue>();
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+        {
+            values.Add(ParseRawYamlValue(ref reader, diagnostics, source, jobId));
+        }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        {
+            reader.Read();
+        }
+
+        return values;
+    }
+
+    private static RawYamlValue ParseRawYamlValue(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId)
+    {
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var node = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value must be scalar, mapping, or sequence", allowEmpty: true)
+                ?? new StringNode { Value = default, Quoted = false, Range = default };
+            return new RawYamlString { Value = node };
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingStart)
+        {
+            return new RawYamlObject
+            {
+                Properties = ParseRawYamlObject(ref reader, diagnostics, source, jobId),
+            };
+        }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceStart)
+        {
+            return new RawYamlArray
+            {
+                Items = ParseRawYamlArray(ref reader, diagnostics, source, jobId, "matrix"u8),
+            };
+        }
+
+        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value has unsupported shape", reader.CurrentStart);
+        reader.SkipCurrentNode();
+        return new RawYamlString { Value = new StringNode { Value = default, Quoted = false, Range = default } };
+    }
+
+    private static IReadOnlyDictionary<Utf8String, RawYamlValue> ParseRawYamlObject(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId)
+    {
+        var map = new Dictionary<Utf8String, RawYamlValue>();
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix object key must be scalar", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var key = Utf8String.FromLowerAscii(reader.GetScalarUtf8());
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            map[key] = ParseRawYamlValue(ref reader, diagnostics, source, jobId);
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return map;
+    }
+
+    private static Services? ParseServices(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return;
+            return null;
         }
+
+        var map = new Dictionary<Utf8String, Service>();
 
         reader.Read(); // consume services mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -3438,22 +3716,44 @@ public static class WorkflowParser
             }
 
             var serviceName = reader.GetScalarSlice();
+            var serviceNameUtf8 = reader.GetScalarUtf8();
+            var serviceNameNode = new StringNode
+            {
+                Value = serviceName,
+                Quoted = reader.IsScalarQuoted(),
+                Range = BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length),
+            };
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            ParseContainerLike(ref reader, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
+            var container = ParseContainerLike(ref reader, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
+            if (container is not null)
+            {
+                map[Utf8String.FromLowerAscii(serviceNameUtf8)] = new Service
+                {
+                    Name = serviceNameNode,
+                    Container = container,
+                    Range = serviceNameNode.Range,
+                };
+            }
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             reader.Read();
         }
+
+        return new Services
+        {
+            ServiceMap = map,
+            Range = default,
+        };
     }
 
-    private static void ParseContainerLike(
+    private static Container? ParseContainerLike(
         ref VYamlStreamAdapter reader,
         List<Diagnostic> diagnostics,
         ReadOnlySpan<byte> source,
@@ -3464,18 +3764,33 @@ public static class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            reader.Read();
-            return;
+            var scalarImage = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping");
+            if (scalarImage is null)
+            {
+                return null;
+            }
+
+            return new Container
+            {
+                Image = scalarImage,
+                Range = scalarImage.Range,
+            };
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return;
+            return null;
         }
 
         var hasImage = false;
+        StringNode? image = null;
+        Credentials? credentials = null;
+        Env? env = null;
+        StringNode[]? ports = null;
+        StringNode[]? volumes = null;
+        StringNode? options = null;
         reader.Read(); // consume mapping
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -3507,7 +3822,7 @@ public static class WorkflowParser
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
                 }
-                reader.SkipCurrentNode();
+                image = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar");
                 continue;
             }
 
@@ -3519,7 +3834,7 @@ public static class WorkflowParser
                     break;
                 }
 
-                ParseCredentials(ref reader, diagnostics, source, jobId, serviceName, isService);
+                credentials = ParseCredentials(ref reader, diagnostics, source, jobId, serviceName, isService);
                 continue;
             }
 
@@ -3534,8 +3849,15 @@ public static class WorkflowParser
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    continue;
                 }
-                reader.SkipCurrentNode();
+                env = ParseEnvNode(
+                    ref reader,
+                    diagnostics,
+                    source,
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping",
+                    ExpressionValidationContext.Job);
                 continue;
             }
 
@@ -3548,7 +3870,15 @@ public static class WorkflowParser
                     break;
                 }
 
-                ParseScalarOrScalarSequence(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar");
+                if (optionKey == "ports")
+                {
+                    ports = values;
+                }
+                else
+                {
+                    volumes = values;
+                }
                 continue;
             }
 
@@ -3564,7 +3894,7 @@ public static class WorkflowParser
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
                 }
-                reader.SkipCurrentNode();
+                options = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar");
                 continue;
             }
 
@@ -3588,9 +3918,20 @@ public static class WorkflowParser
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image is required", new TextPosition(0, 1, 1));
         }
+
+        return new Container
+        {
+            Image = image ?? new StringNode { Value = default, Quoted = false, Range = default },
+            Credentials = credentials,
+            Env = env,
+            Ports = ports,
+            Volumes = volumes,
+            Options = options,
+            Range = image?.Range ?? default,
+        };
     }
 
-    private static void ParseCredentials(
+    private static Credentials? ParseCredentials(
         ref VYamlStreamAdapter reader,
         List<Diagnostic> diagnostics,
         ReadOnlySpan<byte> source,
@@ -3602,11 +3943,13 @@ public static class WorkflowParser
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return;
+            return null;
         }
 
         var hasUsername = false;
         var hasPassword = false;
+        StringNode? username = null;
+        StringNode? password = null;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -3632,10 +3975,24 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("username"u8))
             {
                 hasUsername = true;
+                username = ParseStringAndValidateExpression(
+                    ref reader,
+                    diagnostics,
+                    ExpressionValidationContext.Job,
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar",
+                    parseWholeValueIfNoEmbedded: false);
+                continue;
             }
             else if (keyUtf8.SequenceEqual("password"u8))
             {
                 hasPassword = true;
+                password = ParseStringAndValidateExpression(
+                    ref reader,
+                    diagnostics,
+                    ExpressionValidationContext.Job,
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar",
+                    parseWholeValueIfNoEmbedded: false);
+                continue;
             }
             else
             {
@@ -3664,6 +4021,13 @@ public static class WorkflowParser
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials requires both username and password", new TextPosition(0, 1, 1));
         }
+
+        return new Credentials
+        {
+            Username = username,
+            Password = password,
+            Range = username?.Range ?? password?.Range ?? default,
+        };
     }
 
     private static void ParseStringMapping(
