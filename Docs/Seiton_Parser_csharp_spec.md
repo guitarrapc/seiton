@@ -804,63 +804,125 @@ Type inference is performed bottom-up in `ExprSemanticsChecker` while traversing
 
 ---
 
-## Appendix A: actionlint parse.go → C# Function Mapping
+## Appendix A: Seiton Parser Function → C# Mapping
 
-| actionlint Function | C# Counterpart | Status |
+> The "Spec Function" column lists the canonical function names defined in `Seiton_Parser_spec.md` §1–§4.
+> The "C# Signature" column shows the target C# method name regardless of current implementation status.
+> The "Status" column tracks the current implementation state.
+
+### A.1 Entry Point
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `Parse(utf8Yaml, filePath)` | `WorkflowParser.Parse(byte[], string)` | §1.1 | Partially implemented |
+
+### A.2 Workflow-Level Parse Functions
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `ParseWorkflow(utf8Yaml)` | `WorkflowParser.ParseWorkflow(IYamlStreamReader)` | §3.2 | Partially implemented |
+| `ParseEvents(node)` | `WorkflowParser.ParseEvents(IYamlStreamReader)` | §3.4 | Partially implemented (no typed nodes) |
+| `ParsePermissions(node)` | `WorkflowParser.ParsePermissions(IYamlStreamReader)` | §3.5 | **Not implemented** (skip) |
+| `ParseEnv(node)` | `WorkflowParser.ParseEnv(IYamlStreamReader)` | §3.6 | Partially implemented |
+| `ParseDefaults(node)` | `WorkflowParser.ParseDefaults(IYamlStreamReader)` | §3.7 | **Not implemented** (skip) |
+| `ParseConcurrency(node)` | `WorkflowParser.ParseConcurrency(IYamlStreamReader)` | §3.8 | **Not implemented** (skip) |
+| `ParseJobs(node)` | `WorkflowParser.ParseJobs(IYamlStreamReader)` | §3.9 | Partially implemented |
+
+### A.3 Event Parse Functions
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `parseEventWithNoConfig(node)` | `WorkflowParser.ParseEventWithNoConfig(IYamlStreamReader)` | §3.4.1 | Not implemented |
+| `ParseWebhookEvent(name, configNode)` | `WorkflowParser.ParseWebhookEvent(StringNode, IYamlStreamReader)` | §3.4.2 | Partially implemented |
+| `parseWebhookEventFilter(name, node)` | `WorkflowParser.ParseWebhookEventFilter(StringNode, IYamlStreamReader)` | §3.4.2 | Not implemented |
+| `ParseScheduleEvent(pos, node)` | `WorkflowParser.ParseScheduleEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
+| `ParseWorkflowDispatchEvent(pos, node)` | `WorkflowParser.ParseWorkflowDispatchEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
+| `ParseWorkflowCallEvent(pos, node)` | `WorkflowParser.ParseWorkflowCallEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
+| `ParseRepositoryDispatchEvent(pos, node)` | `WorkflowParser.ParseRepositoryDispatchEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
+
+### A.4 Job / Step Parse Functions
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `ParseJob(id, node)` | `WorkflowParser.ParseJob(StringNode, IYamlStreamReader)` | §3.10 | Partially implemented (flags only) |
+| `ParseSteps(node)` | `WorkflowParser.ParseSteps(IYamlStreamReader)` | §3.11 | Partially implemented (flags only) |
+| `ParseStep(node)` | `WorkflowParser.ParseStep(IYamlStreamReader)` | §3.12 | Partially implemented (flags only) |
+| `parseStepExecAction(entries, isDocker)` | `WorkflowParser.ParseStepExecAction(…, bool)` | §3.12.1 | **Not implemented** |
+| `parseStepExecRun(entries)` | `WorkflowParser.ParseStepExecRun(…)` | §3.12.2 | **Not implemented** |
+
+### A.5 Structural Section Parse Functions
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 | **Not implemented** (shape check) |
+| `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironment(IYamlStreamReader)` | §3.14 | **Not implemented** |
+| `ParseOutputs(node)` | `WorkflowParser.ParseOutputs(IYamlStreamReader)` | §3.10 | **Not implemented** (skip) |
+| `ParseStrategy(node)` | `WorkflowParser.ParseStrategy(IYamlStreamReader)` | §3.15 | Shape only |
+| `ParseMatrix(node)` | `WorkflowParser.ParseMatrix(IYamlStreamReader)` | §3.15 | Shape only |
+| `parseMatrixCombinations(sec, node)` | `WorkflowParser.ParseMatrixCombinations(string, IYamlStreamReader)` | §3.15 | **Not implemented** |
+| `parseRawYAMLValue(node)` | `WorkflowParser.ParseRawYamlValue(IYamlStreamReader)` | §3.15 | **Not implemented** |
+| `ParseContainer(section, node)` | `WorkflowParser.ParseContainer(string, IYamlStreamReader)` | §3.16 | Shape only |
+| `ParseServices(node)` | `WorkflowParser.ParseServices(IYamlStreamReader)` | §3.17 | Shape only |
+| `ParseCredentials(node)` | `WorkflowParser.ParseCredentials(IYamlStreamReader)` | §3.18 | Shape only |
+
+### A.6 Generic Mapping / Collection Helpers
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | `WorkflowParser.ParseMapping(string, bool, bool)` | §3.3 | **Not implemented** (inline) |
+| `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence(string, IYamlStreamReader, bool, bool)` | §4.7 | **Not implemented** |
+
+### A.7 Scalar Helpers
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `parseString(node, allowEmpty)` | `WorkflowParser.ParseString(IYamlStreamReader, bool)` | §4.1 | Partial match (`ReadScalarOrSkip`) |
+| `parseBool(node)` | `WorkflowParser.ParseBool(IYamlStreamReader)` | §4.2 | **Not implemented** |
+| `parseInt(node)` | `WorkflowParser.ParseInt(IYamlStreamReader)` | §4.3 | **Not implemented** |
+| `parseFloat(node)` | `WorkflowParser.ParseFloat(IYamlStreamReader)` | §4.4 | **Not implemented** |
+| `parseExpression(node, expecting)` | `WorkflowParser.ParseExpression(IYamlStreamReader, string)` | §4.5 | **Not implemented** |
+| `mayParseExpression(node)` | `WorkflowParser.MayParseExpression(IYamlStreamReader)` | §4.6 | **Not implemented** |
+| `parseTimeoutMinutes(node)` | `WorkflowParser.ParseTimeoutMinutes(IYamlStreamReader)` | §3.10 | **Not implemented** |
+
+### A.8 Visitor / Pass
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | §8.2 | **Not implemented** |
+| `Pass` interface | `IPass` | §8.1 | **Not implemented** |
+| `Rule` interface | `IRule : IPass` | §8.3 | **Not implemented** |
+
+### A.9 Alias Resolution
+
+| Spec Function | C# Signature | Spec § | Status |
+|---|---|---|---|
+| `resolveAliases(root)` | Handled by YAML adapter layer | §1.1 step 1b | **Not implemented** |
+
+## Appendix B: Seiton Expression Parser → C# Mapping
+
+> The "Spec Element" column lists the canonical expression parser components defined in `Seiton_Parser_spec.md` §6–§7.
+> The "C# Counterpart" column shows the target C# type or method name.
+
+| Spec Element | C# Counterpart | Status |
 |---|---|---|
-| `Parse()` | `WorkflowParser.Parse()` | Partially implemented |
-| `parser.parse()` | Workflow mapping traversal within Parse | Partially implemented |
-| `parser.parseEvents()` | `ParseOn()` | Partially implemented (no typed nodes) |
-| `parser.parseScheduleEvent()` | — | **Not implemented** |
-| `parser.parseWorkflowDispatchEvent()` | — | **Not implemented** |
-| `parser.parseWorkflowCallEvent()` | — | **Not implemented** |
-| `parser.parseRepositoryDispatchEvent()` | — | **Not implemented** |
-| `parser.parseWebhookEvent()` | `ParseOnEventOptions()` | Partially implemented |
-| `parser.parsePermissions()` | — (skip) | **Not implemented** |
-| `parser.parseEnv()` | `ParseStringMapping()` | Partially implemented |
-| `parser.parseDefaults()` | — (skip) | **Not implemented** |
-| `parser.parseConcurrency()` | — (skip) | **Not implemented** |
-| `parser.parseJob()` | `ParseJobNode()` | Partially implemented (flags only) |
-| `parser.parseStep()` | `ParseStep()` | Partially implemented (flags only) |
-| `parser.parseRunsOn()` | — (shape check) | **Not implemented** |
-| `parser.parseEnvironment()` | — | **Not implemented** |
-| `parser.parseOutputs()` | — (skip) | **Not implemented** |
-| `parser.parseStrategy()` | `ParseStrategy()` | Shape only |
-| `parser.parseMatrix()` | `ParseMatrix()` | Shape only |
-| `parser.parseContainer()` | `ParseContainerLike()` | Shape only |
-| `parser.parseServices()` | `ParseServices()` | Shape only |
-| `parser.parseCredentials()` | `ParseCredentials()` | Shape only |
-| `parser.parseStepExecAction()` | — | **Not implemented** |
-| `parser.parseStepExecRun()` | — | **Not implemented** |
-| `parser.parseMapping()` | — (inline) | No corresponding generic function |
-| `parser.parseString()` | `ReadScalarOrSkip()` | Partial match |
-| `parser.parseBool()` | — | **Not implemented** |
-| `parser.parseInt()` | — | **Not implemented** |
-| `parser.parseFloat()` | — | **Not implemented** |
-| `parser.mayParseExpression()` | — | **Not implemented** |
-| `parser.resolveAliases()` | — | **Not implemented** |
-| `Visitor.Visit()` | — | **Not implemented** |
-| `Pass` interface | — | **Not implemented** |
-
-## Appendix B: Expression Parser Mapping
-
-| actionlint | C# `ExpressionParser` | Status |
-|---|---|---|
-| `ExprLexer` | Inline lexing within `Parser` | ✓ Implemented |
-| `ExprParser.parseLogicalOr()` | `ParseOr()` | ✓ |
-| `ExprParser.parseLogicalAnd()` | `ParseAnd()` | ✓ |
-| `ExprParser.parseCompare()` | `ParseEquality()` + `ParseRelational()` | ✓ |
-| `ExprParser.parsePrimaryExpr()` | `ParsePrimary()` | ✓ |
-| `ExprParser.parseIdent()` | `ParseKeywordOrIdentifier()` | ✓ |
-| `ExprParser.parsePostfixOp()` | Loop within `ParsePrimary()` | ✓ |
-| `VariableNode` | `Identifier` | ✓ |
-| `ObjectDerefNode` | `MemberAccess` | ✓ |
-| `ArrayDerefNode` | `WildcardAccess` | ✓ |
-| `IndexAccessNode` | `IndexAccess` | ✓ |
-| `FuncCallNode` | `FunctionCall` | ✓ |
-| `NotOpNode` | `Unary (Not)` | ✓ |
-| `CompareOpNode` | `Binary (Equal/NotEqual/Less/...)` | ✓ |
-| `LogicalOpNode` | `Binary (And/Or)` | ✓ |
+| Expression Lexer (§6.3) | Inline lexing within `ExpressionParser` | ✓ Implemented |
+| `parseLogicalOr` (§6.2) | `ExpressionParser.ParseOr()` | ✓ |
+| `parseLogicalAnd` (§6.2) | `ExpressionParser.ParseAnd()` | ✓ |
+| `parseComparison` (§6.2) | `ExpressionParser.ParseEquality()` + `ParseRelational()` | ✓ |
+| `parsePrimary` (§6.2) | `ExpressionParser.ParsePrimary()` | ✓ |
+| `parseIdent` (§6.2) | `ExpressionParser.ParseKeywordOrIdentifier()` | ✓ |
+| `parsePostfix` (§6.2) | Loop within `ExpressionParser.ParsePrimary()` | ✓ |
+| `VariableNode` (§6.4) | `Identifier` | ✓ |
+| `ObjectDerefNode` (§6.4) | `MemberAccess` | ✓ |
+| `ArrayDerefNode` (§6.4) | `WildcardAccess` | ✓ |
+| `IndexAccessNode` (§6.4) | `IndexAccess` | ✓ |
+| `FuncCallNode` (§6.4) | `FunctionCall` | ✓ |
+| `NotOpNode` (§6.4) | `Unary (Not)` | ✓ |
+| `CompareOpNode` (§6.4) | `Binary (Equal/NotEqual/Less/…)` | ✓ |
+| `LogicalOpNode` (§6.4) | `Binary (And/Or)` | ✓ |
 | arithmetic ops | `Binary (Add/Sub/Mul/Div/Mod)` | C# extension (not in GHA spec) |
-| `ExprSemanticsChecker` | `ExpressionSemanticAnalyzer` | Partially implemented |
-| `BuiltinFuncSignatures` | `TryGetFunctionArity()` | Arity only (no types) |
+| Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | **Not implemented** |
+| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Partially implemented |
+| Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` | Arity only (no types) |
+| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` context-root check | Partially implemented |
+| ExprType hierarchy (§7.3) | — | **Not implemented** |

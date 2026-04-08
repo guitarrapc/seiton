@@ -1,13 +1,14 @@
-# Seiton Parser Go Implementation Specification (actionlint Reference)
+# Seiton Parser Go Implementation Specification
 
-> Documents the Go implementation architecture of [actionlint](https://github.com/rhysd/actionlint) in sufficient detail to serve as a reference for reimplementation.
-> This is a companion to `Seiton_Parser_spec.md` (language-agnostic) and `Seiton_Parser_csharp_spec.md` (C# target).
+> Go implementation specification for the parser described in `Seiton_Parser_spec.md`.
+> This is a companion to `Seiton_Parser_csharp_spec.md` (C# target).
+> The design is derived from [actionlint](https://github.com/rhysd/actionlint) as the reference implementation, but all types and signatures described here are Seiton's own specification.
 
 ---
 
 ## 0. Overview
 
-actionlint is a static analysis tool for GitHub Actions workflow YAML files, written in Go. Its architecture consists of:
+The Seiton Parser Go implementation provides:
 
 1. **YAML parsing** via `go.yaml.in/yaml/v4` into a `yaml.Node` tree
 2. **Alias resolution** pre-pass on the `yaml.Node` tree
@@ -20,14 +21,14 @@ actionlint is a static analysis tool for GitHub Actions workflow YAML files, wri
 
 ### 0.1 Package Structure
 
-All code lives in a single Go package `actionlint`. Key source files:
+All code lives in a single Go package `seiton`. Key source files:
 
 | File | Responsibility |
 |---|---|
-| `parse.go` | YAML → AST parser (~1700 lines) |
-| `ast.go` | AST type definitions (~1050 lines) |
-| `pass.go` | Visitor/Pass infrastructure (~200 lines) |
-| `linter.go` | Linter entry point and orchestration (~650 lines) |
+| `parse.go` | YAML → AST parser |
+| `ast.go` | AST type definitions |
+| `pass.go` | Visitor/Pass infrastructure |
+| `linter.go` | Linter entry point and orchestration |
 | `expr_parser.go` | Expression recursive descent parser |
 | `expr_lexer.go` | Expression lexer |
 | `expr_ast.go` | Expression AST nodes |
@@ -45,11 +46,12 @@ All code lives in a single Go package `actionlint`. Key source files:
 
 ### 1.1 Library
 
-actionlint uses `go.yaml.in/yaml/v4` (successor to `gopkg.in/yaml.v3`). It unmarshals the entire YAML document into a `yaml.Node` tree, then performs custom conversion.
+The Go implementation uses `go.yaml.in/yaml/v4`. It unmarshals the entire YAML document into a `yaml.Node` tree, then performs custom conversion to the Seiton AST.
 
 ### 1.2 yaml.Node Model
 
 ```go
+// Provided by the YAML library — not a Seiton type
 type Node struct {
     Kind    Kind     // ScalarNode, MappingNode, SequenceNode, AliasNode, DocumentNode
     Tag     string   // "!!str", "!!bool", "!!int", "!!float", "!!null", "!!seq", "!!map"
@@ -61,25 +63,22 @@ type Node struct {
 }
 ```
 
-### 1.3 Parse Entry Point
+### 1.3 Parse Entry Point (Spec §1.1)
 
 ```go
-func Parse(b []byte) (*Workflow, []*Error) {
-    var n yaml.Node
-    if err := yaml.Unmarshal(b, &n); err != nil {
-        return nil, handleYAMLUnmarshalError(err)
-    }
-    // n is DocumentNode; n.Content[0] is the root mapping
-    p := &parser{}
-    p.resolveAliases(&n)
-    w := p.parse(n.Content[0])
-    return w, p.errors
-}
+func Parse(b []byte) (*Workflow, []*Error)
 ```
 
-`handleYAMLUnmarshalError` converts `yaml.TypeError` and `yaml.ParserError` into actionlint's `[]*Error` format.
+Implementation:
 
-### 1.4 Tag-Based Type Dispatch
+1. `yaml.Unmarshal(b, &n)` — parse into `yaml.Node` tree
+2. `parser.resolveAliases(&n)` — resolve all YAML aliases
+3. `parser.parse(n.Content[0])` — recursive descent into Seiton AST
+4. Return `(workflow, parser.errors)`
+
+On YAML unmarshal failure, `handleYAMLUnmarshalError` converts `yaml.TypeError` and `yaml.ParserError` into `[]*Error`.
+
+### 1.4 Tag-Based Type Dispatch (Spec §4.8)
 
 The parser uses `yaml.Node.Tag` to distinguish scalar types:
 
@@ -91,11 +90,11 @@ The parser uses `yaml.Node.Tag` to distinguish scalar types:
 | `!!float` | Float scalar | `parseFloat` |
 | `!!null` | Null scalar | empty value detection |
 | `!!seq` | Sequence | `checkSequence` |
-| `!!map` | Mapping | `parseMapping` |
+| `!!map` | Mapping | `ParseMapping` |
 
 ---
 
-## 2. Alias Resolution
+## 2. Alias Resolution (Spec §1.1 step 1b)
 
 ### 2.1 Algorithm
 
@@ -108,17 +107,16 @@ Pre-walk of the entire `yaml.Node` tree:
 1. Track all anchors (defined) and aliases (used) with their positions
 2. For each `AliasNode`, replace it with the referenced anchor's `yaml.Node`
 3. Detect and report recursive aliases as errors
-4. Report unused anchors as warnings (not implemented in current version)
 
 ### 2.2 Design Decision
 
-Alias resolution happens **before** the custom parser runs, ensuring the parser never encounters `AliasNode`. This simplifies all downstream parsing logic.
+Alias resolution happens **before** the parser runs, ensuring the parser never encounters `AliasNode`. This simplifies all downstream parsing logic.
 
 ---
 
-## 3. AST Definitions
+## 3. AST Definitions (Spec §2)
 
-### 3.1 Primitive Types
+### 3.1 Primitive Types (Spec §2.6)
 
 ```go
 // Source position (1-based line and column)
@@ -168,7 +166,7 @@ func isExprAssigned(s string) bool              // checks if entire string is ${
 func (s *String) IsExpressionAssigned() bool
 ```
 
-### 3.3 Workflow (Root)
+### 3.3 Workflow (Spec §2.2)
 
 ```go
 type Workflow struct {
@@ -185,7 +183,7 @@ type Workflow struct {
 func (w *Workflow) FindWorkflowCallEvent() (*WorkflowCallEvent, bool)
 ```
 
-### 3.4 Event (Interface)
+### 3.4 Event (Spec §2.3)
 
 ```go
 type Event interface {
@@ -193,7 +191,7 @@ type Event interface {
 }
 ```
 
-#### 3.4.1 WebhookEvent
+#### 3.4.1 WebhookEvent (Spec §2.3.1)
 
 ```go
 type WebhookEvent struct {
@@ -217,7 +215,7 @@ type WebhookEventFilter struct {
 func (f *WebhookEventFilter) IsEmpty() bool
 ```
 
-#### 3.4.2 ScheduledEvent
+#### 3.4.2 ScheduledEvent (Spec §2.3.2)
 
 ```go
 type ScheduledEvent struct {
@@ -231,7 +229,7 @@ type ScheduleEntry struct {
 }
 ```
 
-#### 3.4.3 WorkflowDispatchEvent
+#### 3.4.3 WorkflowDispatchEvent (Spec §2.3.3)
 
 ```go
 type WorkflowDispatchEventInputType uint8
@@ -252,7 +250,7 @@ type WorkflowDispatchEvent struct {
 }
 ```
 
-#### 3.4.4 WorkflowCallEvent
+#### 3.4.4 WorkflowCallEvent (Spec §2.3.4)
 
 ```go
 type WorkflowCallEventInputType uint8
@@ -289,7 +287,7 @@ type WorkflowCallEvent struct {
 func (i *WorkflowCallEventInput) IsRequired() bool
 ```
 
-#### 3.4.5 Other Events
+#### 3.4.5 Other Events (Spec §2.3.5)
 
 ```go
 type RepositoryDispatchEvent struct {
@@ -304,7 +302,7 @@ type ImageVersionEvent struct {
 }
 ```
 
-### 3.5 Job
+### 3.5 Job (Spec §2.4)
 
 ```go
 type Job struct {
@@ -331,7 +329,7 @@ type Job struct {
 }
 ```
 
-### 3.6 Step and Exec
+### 3.6 Step and Exec (Spec §2.5)
 
 ```go
 type ExecKind uint8
@@ -372,10 +370,10 @@ type ExecAction struct {
 }
 ```
 
-### 3.7 Structural Nodes
+### 3.7 Structural Nodes (Spec §2.7–§2.15)
 
 ```go
-// Permissions: scalar ("read-all"/"write-all") or mapping
+// Permissions (Spec §2.7): scalar ("read-all"/"write-all") or mapping
 type PermissionScope struct {
     Name  *String
     Value *String
@@ -387,7 +385,7 @@ type Permissions struct {
     Pos    *Pos
 }
 
-// Env: expression or mapping
+// Env (Spec §2.8): expression or mapping
 type EnvVar struct {
     Name  *String
     Value *String
@@ -398,7 +396,7 @@ type Env struct {
     Expression *String
 }
 
-// Defaults
+// Defaults (Spec §2.9)
 type DefaultsRun struct {
     Shell            *String
     WorkingDirectory *String
@@ -410,14 +408,14 @@ type Defaults struct {
     Pos *Pos
 }
 
-// Concurrency
+// Concurrency (Spec §2.10)
 type Concurrency struct {
     Group            *String
     CancelInProgress *Bool
     Pos              *Pos
 }
 
-// Environment
+// Environment (Spec §2.11)
 type Environment struct {
     Name       *String
     URL        *String
@@ -431,14 +429,14 @@ type Output struct {
     Value *String
 }
 
-// Runner (runs-on)
+// Runner (Spec §2.12)
 type Runner struct {
-    Labels    []*String
+    Labels     []*String
     LabelsExpr *String
-    Group     *String
+    Group      *String
 }
 
-// WorkflowCall (job-level reusable workflow)
+// WorkflowCall (Spec §2.15)
 type WorkflowCallInput struct {
     Name  *String
     Value *String
@@ -464,7 +462,7 @@ type Snapshot struct {
 }
 ```
 
-### 3.8 Strategy / Matrix
+### 3.8 Strategy / Matrix (Spec §2.13)
 
 ```go
 type Strategy struct {
@@ -506,7 +504,7 @@ type MatrixCombinations struct {
 func (cs *MatrixCombinations) ContainsExpression() bool
 ```
 
-### 3.9 RawYAMLValue (Recursive Matrix Values)
+### 3.9 RawYAMLValue (Spec §2.13)
 
 ```go
 type RawYAMLValueKind int
@@ -535,7 +533,7 @@ type RawYAMLString struct {
 }
 ```
 
-### 3.10 Container / Services / Credentials
+### 3.10 Container / Services / Credentials (Spec §2.14)
 
 ```go
 type Credentials struct {
@@ -569,7 +567,7 @@ type Services struct {
 
 ---
 
-## 4. Parser Implementation
+## 4. Parser Implementation (Spec §3)
 
 ### 4.1 Parser State
 
@@ -579,12 +577,12 @@ type parser struct {
 }
 ```
 
-The parser accumulates errors in a slice and never aborts on the first error (multi-error recovery).
+The parser accumulates errors in a slice and never aborts on the first error (multi-error recovery, Spec §5.1).
 
 ### 4.2 Internal Helper Types
 
 ```go
-// Mapping entry yielded by parseMapping iterator
+// Mapping entry yielded by ParseMapping iterator
 type workflowMappingEntry struct {
     id  string     // key string (potentially lower-cased)
     key *String    // positioned key node
@@ -617,44 +615,44 @@ func (p *parser) checkSequence(sec string, n *yaml.Node, allowEmpty bool) bool
 func (p *parser) checkString(n *yaml.Node, allowEmpty bool) bool
 ```
 
-### 4.5 Scalar Parse Functions
+### 4.5 Scalar Parse Functions (Spec §4.1–§4.6)
 
 ```go
-// Parse a string scalar. Returns nil on error.
+// parseString (Spec §4.1): Parse a string scalar. Returns nil on error.
 func (p *parser) parseString(n *yaml.Node, allowEmpty bool) *String
 
-// Parse a boolean. If tag is !!str, treats as expression.
+// parseBool (Spec §4.2): Parse a boolean. If tag is !!str, treats as expression.
 func (p *parser) parseBool(n *yaml.Node) *Bool
 
-// Parse an integer. If tag is !!str, treats as expression.
+// parseInt (Spec §4.3): Parse an integer. If tag is !!str, treats as expression.
 func (p *parser) parseInt(n *yaml.Node) *Int
 
-// Parse a float. If tag is !!str or !!int, handles appropriately.
+// parseFloat (Spec §4.4): Parse a float. If tag is !!str or !!int, handles appropriately.
 func (p *parser) parseFloat(n *yaml.Node) *Float
 
-// Verify value is a ${{ }} expression. Error if not.
+// parseExpression (Spec §4.5): Verify value is a ${{ }} expression. Error if not.
 func (p *parser) parseExpression(n *yaml.Node, expecting string) *String
 
-// If value is a ${{ }} expression, return it. Otherwise return nil (no error).
+// mayParseExpression (Spec §4.6): If value is a ${{ }} expression, return it. Otherwise nil (no error).
 func (p *parser) mayParseExpression(n *yaml.Node) *String
 ```
 
-### 4.6 Collection Parse Functions
+### 4.6 Collection Parse Functions (Spec §4.7)
 
 ```go
-// Parse a string sequence.
+// parseStringSequence: Parse a string sequence.
 func (p *parser) parseStringSequence(sec string, n *yaml.Node, allowEmpty bool, allowElemEmpty bool) []*String
 
-// Parse a scalar or sequence of strings (polymorphic).
+// parseStringOrStringSequence (Spec §4.7): Parse a scalar or sequence of strings (polymorphic).
 func (p *parser) parseStringOrStringSequence(sec string, n *yaml.Node, allowEmpty bool, allowElemEmpty bool) []*String
 ```
 
-### 4.7 Mapping Traversal
+### 4.7 Mapping Traversal (Spec §3.3)
 
 The mapping traversal is the core parsing pattern. It uses Go iterators (`iter.Seq`):
 
 ```go
-// Generic mapping traversal with duplicate detection and optional case-insensitivity.
+// ParseMapping (Spec §3.3): Generic mapping traversal with duplicate detection and optional case-insensitivity.
 func (p *parser) parseMapping(where delayedSprintf, n *yaml.Node, allowEmpty, caseSensitive bool) iter.Seq[workflowMappingEntry]
 
 // Convenience: section name as string, used for most parse functions.
@@ -675,7 +673,7 @@ func (p *parser) parseMappingAt(where string, n *yaml.Node, allowEmpty, caseSens
 7. Yield `workflowMappingEntry` to caller
 8. If not `allowEmpty` and 0 entries, report error
 
-### 4.8 root parse (Workflow)
+### 4.8 ParseWorkflow — Root Parse (Spec §3.2)
 
 ```go
 func (p *parser) parse(n *yaml.Node) *Workflow
@@ -684,17 +682,17 @@ func (p *parser) parse(n *yaml.Node) *Workflow
 Top-level mapping traversal:
 - `"name"` → `parseString`
 - `"run-name"` → `parseString`
-- `"on"` → `parseEvents`
-- `"permissions"` → `parsePermissions`
-- `"env"` → `parseEnv`
-- `"defaults"` → `parseDefaults`
-- `"concurrency"` → `parseConcurrency`
-- `"jobs"` → `parseJobs`
+- `"on"` → `ParseEvents`
+- `"permissions"` → `ParsePermissions`
+- `"env"` → `ParseEnv`
+- `"defaults"` → `ParseDefaults`
+- `"concurrency"` → `ParseConcurrency`
+- `"jobs"` → `ParseJobs`
 - Other → `unexpectedKey`
 
 Post-validation: `on` and `jobs` are required.
 
-### 4.9 Events Parse
+### 4.9 ParseEvents (Spec §3.4)
 
 ```go
 func (p *parser) parseEvents(n *yaml.Node) []Event
@@ -704,90 +702,142 @@ func (p *parser) parseEventWithNoConfig(n *yaml.Node) Event
 Three forms: scalar → single event, sequence → multiple events, mapping → events with config.
 
 For mapping form, dispatches by event name:
-- `"schedule"` → `parseScheduleEvent`
-- `"workflow_dispatch"` → `parseWorkflowDispatchEvent`
-- `"repository_dispatch"` → `parseRepositoryDispatchEvent`
-- `"workflow_call"` → `parseWorkflowCallEvent`
-- `"image_version"` → `parseImageVersionEvent`
-- other → `parseWebhookEvent`
+- `"schedule"` → `ParseScheduleEvent`
+- `"workflow_dispatch"` → `ParseWorkflowDispatchEvent`
+- `"repository_dispatch"` → `ParseRepositoryDispatchEvent`
+- `"workflow_call"` → `ParseWorkflowCallEvent`
+- `"image_version"` → `ParseImageVersionEvent`
+- other → `ParseWebhookEvent`
 
-#### 4.9.1 Specific Event Parse Functions
+#### 4.9.1 Specific Event Parse Functions (Spec §3.4)
 
 ```go
+// ParseScheduleEvent (Spec §2.3.2)
 func (p *parser) parseScheduleEvent(pos *Pos, n *yaml.Node) *ScheduledEvent
+
+// ParseWorkflowDispatchEvent (Spec §2.3.3)
 func (p *parser) parseWorkflowDispatchEvent(pos *Pos, n *yaml.Node) *WorkflowDispatchEvent
 func (p *parser) parseWorkflowDispatchEventInput(name *String, n *yaml.Node) *DispatchInput
+
+// ParseRepositoryDispatchEvent (Spec §2.3.5)
 func (p *parser) parseRepositoryDispatchEvent(pos *Pos, n *yaml.Node) *RepositoryDispatchEvent
+
+// ParseWebhookEvent (Spec §3.4.2)
 func (p *parser) parseWebhookEvent(name *String, n *yaml.Node) *WebhookEvent
 func (p *parser) parseWebhookEventFilter(name *String, n *yaml.Node) *WebhookEventFilter
+
+// ParseWorkflowCallEvent (Spec §2.3.4)
 func (p *parser) parseWorkflowCallEvent(pos *Pos, n *yaml.Node) *WorkflowCallEvent
 func (p *parser) parseWorkflowCallEventInput(id string, name *String, n *yaml.Node) *WorkflowCallEventInput
 func (p *parser) parseWorkflowCallEventSecret(name *String, n *yaml.Node) *WorkflowCallEventSecret
 func (p *parser) parseWorkflowCallEventOutput(name *String, n *yaml.Node) *WorkflowCallEventOutput
+
+// ParseImageVersionEvent
 func (p *parser) parseImageVersionEvent(pos *Pos, n *yaml.Node) *ImageVersionEvent
 ```
 
-### 4.10 Structural Section Parse Functions
+### 4.10 Structural Section Parse Functions (Spec §3.5–§3.8)
 
 ```go
+// ParsePermissions (Spec §3.5)
 func (p *parser) parsePermissions(pos *Pos, n *yaml.Node) *Permissions
+
+// ParseEnv (Spec §3.6)
 func (p *parser) parseEnv(n *yaml.Node) *Env
+
+// ParseDefaults (Spec §3.7)
 func (p *parser) parseDefaults(pos *Pos, n *yaml.Node) *Defaults
+
+// ParseConcurrency (Spec §3.8)
 func (p *parser) parseConcurrency(pos *Pos, n *yaml.Node) *Concurrency
+
+// ParseEnvironment (Spec §3.14)
 func (p *parser) parseEnvironment(pos *Pos, n *yaml.Node) *Environment
+
+// ParseOutputs (Spec §3.10)
 func (p *parser) parseOutputs(n *yaml.Node) map[string]*Output
 ```
 
-### 4.11 Strategy / Matrix Parse Functions
+### 4.11 Strategy / Matrix Parse Functions (Spec §3.15)
 
 ```go
+// ParseStrategy (Spec §3.15)
 func (p *parser) parseStrategy(pos *Pos, n *yaml.Node) *Strategy
+
+// ParseMatrix (Spec §3.15)
 func (p *parser) parseMatrix(pos *Pos, n *yaml.Node) *Matrix
+
+// parseMaxParallel: validates > 0
 func (p *parser) parseMaxParallel(n *yaml.Node) *Int
+
+// parseMatrixCombinations (Spec §3.15)
 func (p *parser) parseMatrixCombinations(sec string, n *yaml.Node) *MatrixCombinations
+
+// parseRawYAMLValue (Spec §3.15)
 func (p *parser) parseRawYAMLValue(n *yaml.Node) RawYAMLValue
 ```
 
-### 4.12 Container / Services Parse Functions
+### 4.12 Container / Services Parse Functions (Spec §3.16–§3.18)
 
 ```go
+// ParseContainer (Spec §3.16)
 func (p *parser) parseContainer(sec string, pos *Pos, n *yaml.Node) *Container
+
+// ParseCredentials (Spec §3.18)
 func (p *parser) parseCredentials(pos *Pos, n *yaml.Node) *Credentials
+
+// ParseServices (Spec §3.17)
 func (p *parser) parseServices(n *yaml.Node) *Services
 ```
 
-### 4.13 Job Parse
+### 4.13 Job Parse (Spec §3.9–§3.10)
 
 ```go
+// ParseJob (Spec §3.10)
 func (p *parser) parseJob(id *String, n *yaml.Node) *Job
+
+// ParseJobs (Spec §3.9)
 func (p *parser) parseJobs(n *yaml.Node) map[string]*Job
+
+// ParseRunsOn (Spec §3.13)
 func (p *parser) parseRunsOn(n *yaml.Node) *Runner
+
+// parseSnapshot
 func (p *parser) parseSnapshot(pos *Pos, n *yaml.Node) *Snapshot
+
+// parseTimeoutMinutes: validates > 0
 func (p *parser) parseTimeoutMinutes(n *yaml.Node) *Float
 ```
 
-Job parsing includes reusable workflow detection and constraint validation:
+Job parsing includes reusable workflow detection and constraint validation (Spec §3.10.1):
 - If `uses` is present → reusable workflow call; certain keys are forbidden
 - If `uses` is absent → normal job; `steps` and `runs-on` are required
 
-### 4.14 Step Parse
+### 4.14 Step Parse (Spec §3.11–§3.12)
 
 ```go
+// ParseStep (Spec §3.12)
 func (p *parser) parseStep(n *yaml.Node) *Step
+
+// ParseSteps (Spec §3.11)
 func (p *parser) parseSteps(n *yaml.Node) []*Step
+
+// parseStepExecAction (Spec §3.12.1)
 func (p *parser) parseStepExecAction(entries []workflowMappingEntry, isDocker bool) *ExecAction
+
+// parseStepExecRun (Spec §3.12.2)
 func (p *parser) parseStepExecRun(entries []workflowMappingEntry) *ExecRun
 ```
 
-Step parsing uses a **2-pass design**:
+Step parsing uses a **2-pass design** (Spec §3.12):
 1. **Pass 1**: Collect all mapping entries, determine step kind (`run` vs `uses`/`docker://`)
 2. **Pass 2**: Build the appropriate `Exec` variant based on determined kind
 
 ---
 
-## 5. Visitor / Pass Pattern
+## 5. Visitor / Pass Pattern (Spec §8)
 
-### 5.1 Pass Interface
+### 5.1 Pass Interface (Spec §8.1)
 
 ```go
 type Pass interface {
@@ -799,7 +849,7 @@ type Pass interface {
 }
 ```
 
-### 5.2 Visitor
+### 5.2 Visitor (Spec §8.2)
 
 ```go
 type Visitor struct {
@@ -813,7 +863,7 @@ func (v *Visitor) EnableDebug(w io.Writer)
 func (v *Visitor) Visit(n *Workflow) error
 ```
 
-### 5.3 Traversal Order
+### 5.3 Traversal Order (Spec §8.2)
 
 ```
 VisitWorkflowPre(workflow)      // all passes
@@ -832,7 +882,7 @@ VisitWorkflowPost(workflow)     // all passes
 
 ---
 
-## 6. Linter Orchestration
+## 6. Linter Orchestration (Spec §1)
 
 ### 6.1 Linter Structure
 
@@ -854,7 +904,7 @@ type Linter struct {
 }
 ```
 
-### 6.2 Lint Flow
+### 6.2 Lint Flow (Spec §1)
 
 ```go
 func (l *Linter) check(path string, content []byte, project *Project,
@@ -870,9 +920,10 @@ func (l *Linter) check(path string, content []byte, project *Project,
 6. Merge parse errors and rule errors
 7. `filterErrors` → sort + deduplicate → return
 
-### 6.3 Concurrent Multi-File Linting
+### 6.3 Public API
 
 ```go
+func NewLinter(out io.Writer, opts *LinterOptions) (*Linter, error)
 func (l *Linter) LintRepository(dir string) ([]*Error, error)
 func (l *Linter) LintDir(dir string, project *Project) ([]*Error, error)
 func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*Error, error)
@@ -883,7 +934,7 @@ func (l *Linter) Lint(path string, content []byte, project *Project) ([]*Error, 
 
 Uses `errgroup` + semaphore for concurrent file processing with per-project caches.
 
-### 6.4 Rule Hook
+### 6.4 Rule Hook (Spec §8.3)
 
 ```go
 type LinterOptions struct {
@@ -894,9 +945,9 @@ type LinterOptions struct {
 
 ---
 
-## 7. Expression Parser
+## 7. Expression Parser (Spec §6)
 
-### 7.1 Lexer
+### 7.1 Lexer (Spec §6.3)
 
 ```go
 type TokenKind int
@@ -934,7 +985,7 @@ func LexExpression(src string) ([]*Token, int, *ExprError)
 - Identifiers: alphanumeric + `_` + `-`
 - Two-character operators: `<=`, `>=`, `==`, `!=`, `&&`, `||`
 
-### 7.2 Parser
+### 7.2 Parser (Spec §6.2)
 
 ```go
 type ExprParser struct {
@@ -977,7 +1028,7 @@ func (p *ExprParser) parseFloat() ExprNode
 func (p *ExprParser) parseString() ExprNode
 ```
 
-### 7.3 Expression AST
+### 7.3 Expression AST (Spec §6.4)
 
 ```go
 type ExprNode interface {
@@ -1039,7 +1090,7 @@ type FuncCallNode struct {
 }
 ```
 
-### 7.4 Expression Visitor
+### 7.4 Expression Visitor (Spec §6.5)
 
 ```go
 type VisitExprNodeFunc func(node, parent ExprNode, entering bool)
@@ -1052,9 +1103,9 @@ Traverses the expression tree with `entering = true` before visiting children, `
 
 ---
 
-## 8. Expression Semantic Checker
+## 8. Expression Semantic Checker (Spec §7)
 
-### 8.1 Function Signatures
+### 8.1 Function Signatures (Spec §7.1)
 
 ```go
 type FuncSignature struct {
@@ -1087,7 +1138,7 @@ func NewExprSemanticsChecker(checkUntrustedInput bool, configVars []string) *Exp
 func (sema *ExprSemanticsChecker) Check(expr ExprNode) (ExprType, []*ExprError)
 ```
 
-### 8.3 Context and Function Updates
+### 8.3 Context and Function Updates (Spec §7.2)
 
 The checker is configured with context type information before checking each expression:
 
@@ -1103,7 +1154,7 @@ func (sema *ExprSemanticsChecker) SetContextAvailability(avail []string)
 func (sema *ExprSemanticsChecker) SetSpecialFunctionAvailability(avail []string)
 ```
 
-### 8.4 Type Checking Functions
+### 8.4 Type Checking Functions (Spec §7.3)
 
 ```go
 func (sema *ExprSemanticsChecker) check(expr ExprNode) ExprType
@@ -1127,29 +1178,29 @@ func (sema *ExprSemanticsChecker) IsConstant(expr ExprNode) bool
 
 1. **Overloaded function resolution**: Functions like `contains` have multiple signatures (string,string) or (array,any). All are checked; first matching signature is used.
 2. **Case-insensitive function lookup**: Function names are compared case-insensitively.
-3. **Context availability**: `SetContextAvailability` is called before each expression check to configure which root identifiers are valid at that location.
-4. **Type narrowing**: Logical expressions (`&&`, `||`) use type narrowing to improve inference accuracy on branches.
+3. **Context availability** (Spec §7.2): `SetContextAvailability` is called before each expression check to configure which root identifiers are valid at that location.
+4. **Type narrowing** (Spec §7.3): Logical expressions (`&&`, `||`) use type narrowing to improve inference accuracy on branches.
 5. **Untrusted input tracking**: A separate checker (`UntrustedInputChecker`) is optionally invoked at enter/leave of each expression node to track taint flow.
 
 ---
 
-## 9. Generated Data
+## 9. Generated Data (Spec §9)
 
-### 9.1 all_webhooks.go
+### 9.1 all_webhooks.go (Spec §9.1)
 
 Static table mapping webhook event names to their allowed activity types and filter options. Used by the event validation rules.
 
-### 9.2 availability.go
+### 9.2 availability.go (Spec §9.1)
 
 Static table defining which expression contexts (`github`, `env`, `steps`, etc.) and special functions (`success()`, `failure()`, etc.) are available at each workflow position. Keyed by position type (workflow-level, job-level, step-level, and finer-grained positions like `if:`, `env:`, `with:`).
 
-### 9.3 popular_actions.go
+### 9.3 popular_actions.go (Spec §9.1)
 
 Static table of well-known GitHub Actions with their expected input names, output names, and types. Used by rules that validate `with:` inputs and step output references.
 
 ---
 
-## 10. Error Model
+## 10. Error Model (Spec §10)
 
 ### 10.1 Error Structure
 
@@ -1174,7 +1225,7 @@ type ExprError struct {
 }
 ```
 
-### 10.3 Error Handling Philosophy
+### 10.3 Error Handling Philosophy (Spec §5)
 
 - **Parser errors**: Accumulated in `parser.errors`, never cause early abort
 - **Rule errors**: Each rule accumulates its own diagnostics; collected after visitor traversal
@@ -1183,18 +1234,18 @@ type ExprError struct {
 
 ---
 
-## 11. Key Design Decisions and Patterns
+## 11. Key Design Decisions
 
 ### 11.1 yaml.Node Tree vs Event Stream
 
-actionlint uses the `yaml.Node` tree model (full DOM), not a streaming parser. This allows:
+The Go implementation uses the `yaml.Node` tree model (full DOM), not a streaming parser. This allows:
 - Random access to any node's children
 - Pre-pass alias resolution over the full tree
 - Position information on every node
 
-Trade-off: Higher memory usage than event-stream parsing.
+Trade-off: Higher memory usage than event-stream parsing. (The C# implementation uses event-stream via the YAML adapter layer for zero-allocation goals.)
 
-### 11.2 Error Recovery Strategy
+### 11.2 Error Recovery Strategy (Spec §5)
 
 The parser never aborts on a single error. Each parse function:
 1. Validates the current node type
@@ -1203,7 +1254,7 @@ The parser never aborts on a single error. Each parse function:
 
 This allows collecting the maximum number of diagnostics in a single pass.
 
-### 11.3 Polymorphic YAML Fields
+### 11.3 Polymorphic YAML Fields (Spec §14)
 
 Many fields accept multiple YAML forms. The pattern is:
 
@@ -1223,14 +1274,14 @@ func (p *parser) parseFoo(n *yaml.Node) *Foo {
 }
 ```
 
-### 11.4 Two-Pass Step Parsing
+### 11.4 Two-Pass Step Parsing (Spec §3.12)
 
 Steps are parsed in two passes because the step kind (run vs uses) determines which keys are valid, but the `run`/`uses` key may appear anywhere in the mapping:
 
 1. **Pass 1**: Collect all entries, find `run` or `uses` key
 2. **Pass 2**: Dispatch to `parseStepExecRun` or `parseStepExecAction`
 
-### 11.5 Case Sensitivity
+### 11.5 Case Sensitivity (Spec §13)
 
 - Mapping keys within a section: case-sensitive (e.g., `name` ≠ `Name`)
 - Identifiers used as dictionary keys: case-insensitive (e.g., job IDs, env var names, matrix row names)
@@ -1238,4 +1289,4 @@ Steps are parsed in two passes because the step kind (run vs uses) determines wh
 
 ### 11.6 Iterator-Based Mapping
 
-actionlint uses Go 1.23 iterators (`iter.Seq`) for `parseMapping`, yielding entries to the caller via a `for range` loop. This avoids materializing an intermediate slice and provides a clean API for the caller to switch on keys.
+The Go implementation uses Go 1.23 iterators (`iter.Seq`) for `parseMapping`, yielding entries to the caller via a `for range` loop. This avoids materializing an intermediate slice and provides a clean API for the caller to switch on keys.
