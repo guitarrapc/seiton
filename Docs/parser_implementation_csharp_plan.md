@@ -213,6 +213,8 @@
 
 ### Step 3.2: Workflow トップレベルパースの AST 化
 
+**状態**: 完了（`ParseResult.Workflow` は `Workflow` を返し、`name` / `run-name` を `StringNode` として保持。`on` / `jobs` はスタブとして空コレクションで初期化）
+
 **目標**: `Parse()` が `Workflow` AST を返すようにする
 
 - まず `name`, `run-name` を `StringNode` で返す

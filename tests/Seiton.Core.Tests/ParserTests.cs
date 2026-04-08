@@ -26,6 +26,25 @@ public sealed class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.Name is not null).IsTrue();
         await Assert.That(result.Workflow.Name!.Value.Length).IsGreaterThan(0);
+        await Assert.That(result.Workflow.RunName).IsNull();
+        await Assert.That(result.Workflow.On.Count).IsEqualTo(0);
+        await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(0);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_TopLevelRunName_PopulatesWorkflowAst()
+    {
+        var yaml = "run-name: Build-${{ github.ref }}\non: push\njobs: {}\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "run-name.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.RunName is not null).IsTrue();
+        await Assert.That(result.Workflow.RunName!.Value.Length).IsGreaterThan(0);
+        await Assert.That(result.Workflow.On.Count).IsEqualTo(0);
+        await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
