@@ -29,11 +29,11 @@
 
 ### Step 1.1: 自前型の定義
 
-**ファイル**: `src/Seiton.Core/Parsing/YamlEventKind.cs`, `ScalarTag.cs`
+**ファイル**: `src/Seiton.Core/Parsing/YamlEventKind.cs`, `ScalarTag.cs`, `TextPosition.cs`
 
 - `YamlEventKind` enum を定義
 - `ScalarTag` enum を定義
-- `TextPosition` は既存の `TextRange` をそのまま使うか、新設するか判断
+- `TextPosition`（Offset/Line/Column）を実装し、adapter 境界で位置情報を正規化
 
 **完了条件**: enum が定義され、ビルドが通る
 
@@ -41,7 +41,8 @@
 
 **ファイル**: `src/Seiton.Core/Parsing/IYamlStreamReader.cs`
 
-- C# 実装仕様 §2.2 の `IYamlStreamReader` を定義
+- C# 実装仕様 §0.3.2 の `IYamlStreamReader` を定義
+- 必須メンバー（`GetScalarUtf8`, `GetScalarSlice`, `GetScalarString`, `GetScalarTag`, `IsScalarQuoted`, `SkipAfter`, `CurrentStart`, `CurrentEnd`）を網羅
 - ただし `ref struct` は interface を実装できないため、設計判断が必要
   - **案A**: `interface IYamlStreamReader` + `class VYamlStreamAdapter` → 仮想呼び出しコスト発生
   - **案B**: `WorkflowParser<TReader> where TReader : IYamlStreamReader` で generic 化 → devirtualization 可能
@@ -83,6 +84,20 @@
 
 **完了条件**: fake reader でパーサーの最小テストが書ける
 
+### Step 1.6: UTF-8 型語彙の基盤実装（`Utf8String` 追加）
+
+**ファイル**: `src/Seiton.Core/Parsing/Utf8String.cs`（新規）, `Utf8Slice.cs`
+
+- C# 実装仕様 §0.2.4 に従い `Utf8String` を実装
+  - `ReadOnlySpan<byte>` からのコピーコンストラクタ
+  - `IEquatable<Utf8String>` 実装
+  - 生バイトベースの `GetHashCode()`
+  - `FromLowerAscii(ReadOnlySpan<byte>)` を追加（キー正規化用）
+- `Utf8Slice` → `Utf8String` 変換ヘルパー（`ToUtf8String`）を用意
+- パーサー success path で `System.String` を使わないガード方針を明文化
+
+**完了条件**: `Utf8String` の単体テスト（等値性/ハッシュ/lower-case 正規化）が通る
+
 ---
 
 ## Phase 2: AST 型定義
@@ -95,6 +110,7 @@
 
 - `StringNode`, `BoolNode`, `IntNode`, `FloatNode`（仕様 §2.6）
 - 既存 `Utf8Slice`, `TextRange` を活用
+- `StringNode.Value` は `Utf8Slice` を維持し、`System.String` を持たせない
 
 **完了条件**: 型が定義され、ビルドが通る
 
@@ -148,10 +164,21 @@
 - `RawYamlValue`, `RawYamlString`, `RawYamlArray`, `RawYamlObject`（仕様 §2.13）
 - `Container`, `Services`, `Service`, `Credentials`（仕様 §2.14）
 - `WorkflowCall`, `WorkflowCallInput`, `WorkflowCallSecret`（仕様 §2.15）
+- Dictionary キー型は `string` ではなく `Utf8String` に統一
 
 **完了条件**: 型が定義され、ビルドが通る
 
-### Step 2.7: ParseResult の更新
+### Step 2.7: AST の UTF-8 型ポリシー確認
+
+**対象**: `src/Seiton.Core/Parsing/Ast/**/*.cs`
+
+- AST ノードの public フィールド/プロパティに `System.String` を導入しない
+- ID/名前系の辞書キーは `Utf8String`、スカラー値は `Utf8Slice` を使用
+- 例外: diagnostics/rule metadata に限り `System.String` を許可
+
+**完了条件**: AST 定義で許可外の `System.String` 利用がない
+
+### Step 2.8: ParseResult の更新
 
 **ファイル**: `src/Seiton.Core/Parsing/Diagnostics.cs`
 
@@ -178,6 +205,7 @@
 - `mayParseExpression()` → `StringNode?`（仕様 §4.6）
 - `parseStringOrStringSequence()` → `StringNode[]`（仕様 §4.7）
 - tag 判定には `IYamlStreamReader.GetScalarTag()` → `ScalarTag` を使用
+- success path で `GetScalarString()` を使わない（診断/フォールバック専用）
 
 **テスト**: 各ヘルパーの単体テスト（FakeYamlStreamReader 使用）
 
@@ -245,6 +273,7 @@
 - `ParseServices()` → `Services` node（仕様 §3.17）
 - `ParseCredentials()` → `Credentials` node（仕様 §3.18）
 - reusable workflow 制約はそのまま維持（仕様 §3.10.1）
+- Job/outputs/env/with/secrets などの map キーを `Utf8String` で保持
 
 **テスト**: 各 Job 下位構造の yaml → AST 変換テスト
 
@@ -273,12 +302,15 @@
 
 ## Phase 4: 汎用 Mapping パーサーと重複キー検出
 
+**注記**: C# 実装仕様 §3.2 に合わせ、`ReadOnlySpan<byte>` キー比較は delegate callback ではなく各 parse 関数内の inline 走査を基本とする。
+
 ### Step 4.1: ParseMapping ヘルパー
 
-- パーサー仕様 §3.3 の汎用 mapping 走査ルーチンを実装
+- パーサー仕様 §3.3 の mapping 走査「共通パターン」を整備
 - case-insensitive / case-sensitive の切り替え可能
 - 重複キー検出（duplicate key → error、先勝ち）
 - `<<` merge key → error
+- 実装形態は delegate ではなく、inline 走査で再利用できる軽量ユーティリティ（重複キー管理・正規化）を提供
 
 **テスト**: 重複キー、merge key の Error が diagnostics に出ること
 
@@ -286,7 +318,7 @@
 
 ### Step 4.2: 既存パース関数の ParseMapping に移行
 
-- `ParseJobsMapping`, `ParseOnMapping`, 各 parse 関数を汎用 mapping ルーチン経由に書き換え
+- `ParseJobsMapping`, `ParseOnMapping`, 各 parse 関数を inline mapping 走査パターンへ統一
 - 重複キー検出が全 mapping で有効になる
 
 **完了条件**: 既存テストがパス。新たに duplicate key テスト追加
@@ -436,4 +468,6 @@ Phase 8 (testing/benchmarks)       ← 各 Phase 完了時に随時実施
 - [ ] `dotnet test` が全パスする
 - [ ] Parsing フォルダ内に新規 `GetScalarString()` が success path に追加されていない（allocation guardrails）
 - [ ] 新規 key 判定が UTF-8 span ベースである
+- [ ] AST / parser の success path に `System.String` を導入していない（診断系を除く）
+- [ ] dictionary キーは `Utf8String`、スカラー値は `Utf8Slice` の方針を満たす
 - [ ] diagnostics が有用なメッセージと正確な位置を持つ
