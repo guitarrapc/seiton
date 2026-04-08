@@ -125,4 +125,19 @@ public sealed class ExpressionTests
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
     }
+
+    [Test]
+    public async Task ParseAndValidate_StepContext_AllowsStepsRoot()
+    {
+        var expression = "steps.build.outputs.value"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("context 'steps' is not available", StringComparison.Ordinal))).IsFalse();
+    }
 }

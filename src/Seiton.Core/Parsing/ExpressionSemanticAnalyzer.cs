@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Generated;
 
 namespace Seiton.Core.Parsing;
 
@@ -437,29 +438,7 @@ public static class ExpressionSemanticAnalyzer
 
     private static bool IsRootAvailableInContext(ReadOnlySpan<byte> rootName, ExpressionValidationContext context)
     {
-        if (rootName.SequenceEqual("github"u8) || rootName.SequenceEqual("inputs"u8) || rootName.SequenceEqual("vars"u8))
-        {
-            return true;
-        }
-
-        if (context is ExpressionValidationContext.Job or ExpressionValidationContext.Step)
-        {
-            if (rootName.SequenceEqual("needs"u8) || rootName.SequenceEqual("strategy"u8) || rootName.SequenceEqual("matrix"u8))
-            {
-                return true;
-            }
-        }
-
-        if (context == ExpressionValidationContext.Step)
-        {
-            return rootName.SequenceEqual("job"u8)
-                || rootName.SequenceEqual("runner"u8)
-                || rootName.SequenceEqual("env"u8)
-                || rootName.SequenceEqual("secrets"u8)
-                || rootName.SequenceEqual("steps"u8);
-        }
-
-        return false;
+        return Availability.IsRootContextAvailable(context, rootName);
     }
 
     private static bool TryGetFunctionArity(ReadOnlySpan<byte> functionName, out int minArgs, out int maxArgs)

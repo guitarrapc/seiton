@@ -388,6 +388,8 @@
 
 ### Step 6.1: Context Availability テーブル
 
+**状態**: 完了（`src/Seiton.Core/Generated/Availability.g.cs` を追加し、`ExpressionSemanticAnalyzer` の context availability 判定を generated テーブル参照へ置換）
+
 **ファイル**: `src/Seiton.Core/Generated/Availability.g.cs`
 
 - パーサー仕様 §7.2 の完全な availability table を生成
