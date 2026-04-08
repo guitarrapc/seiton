@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Buffers.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -67,43 +68,19 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read(); // consume key
-                nameNode = ParseStringNode(ref reader, diagnostics, "name must be scalar");
+                nameNode = ParseString(ref reader, diagnostics, "name must be scalar");
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("run-name"u8))
             {
                 reader.Read(); // consume key
-                if (reader.End)
-                {
-                    continue;
-                }
-
-                if (reader.CurrentKind != YamlEventKind.Scalar)
-                {
-                    AddError(diagnostics, "run-name must be scalar", reader.CurrentStart);
-                    reader.SkipCurrentNode();
-                    continue;
-                }
-
-                var runNameMark = reader.CurrentStart;
-                var runNameSlice = reader.GetScalarSlice();
-                var runNameUtf8 = reader.GetScalarUtf8();
-                ValidateExpressionText(
-                    runNameUtf8,
-                    BuildScalarLocation(runNameMark, runNameUtf8.Length),
-                    ExpressionValidationContext.Workflow,
+                runNameNode = ParseStringAndValidateExpression(
+                    ref reader,
                     diagnostics,
+                    ExpressionValidationContext.Workflow,
+                    "run-name must be scalar",
                     parseWholeValueIfNoEmbedded: false);
-
-                runNameNode = new StringNode
-                {
-                    Value = runNameSlice,
-                    Quoted = reader.IsScalarQuoted(),
-                    Range = BuildScalarLocation(runNameMark, runNameUtf8.Length),
-                };
-
-                reader.Read();
                 continue;
             }
 
@@ -282,13 +259,15 @@ public static class WorkflowParser
             {
                 reader.Read(); // consume key
                 hasRunsOn = true;
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "runs-on";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
-                    if (reader.CurrentKind is not YamlEventKind.Scalar and not YamlEventKind.SequenceStart and not YamlEventKind.MappingStart)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' runs-on has invalid type", reader.CurrentStart);
-                    }
-                    reader.SkipCurrentNode();
+                    ParseScalarOrScalarSequence(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' runs-on must be scalar or sequence of scalar");
                 }
                 continue;
             }
@@ -337,11 +316,7 @@ public static class WorkflowParser
                 hasUses = true;
                 if (!reader.End)
                 {
-                    if (reader.CurrentKind != YamlEventKind.Scalar)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar", reader.CurrentStart);
-                    }
-                    reader.SkipCurrentNode();
+                    _ = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar");
                 }
                 continue;
             }
@@ -555,23 +530,12 @@ public static class WorkflowParser
                 hasRun = true;
                 if (!reader.End)
                 {
-                    if (reader.CurrentKind != YamlEventKind.Scalar)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                    }
-                    else
-                    {
-                        var valueMark = reader.CurrentStart;
-                        var valueUtf8 = reader.GetScalarUtf8();
-                        ValidateExpressionText(
-                            valueUtf8,
-                            BuildScalarLocation(valueMark, valueUtf8.Length),
-                            ExpressionValidationContext.Step,
-                            diagnostics,
-                            parseWholeValueIfNoEmbedded: false);
-                        reader.Read();
-                    }
+                    _ = ParseStringAndValidateExpression(
+                        ref reader,
+                        diagnostics,
+                        ExpressionValidationContext.Step,
+                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar",
+                        parseWholeValueIfNoEmbedded: false);
                 }
                 continue;
             }
@@ -582,11 +546,7 @@ public static class WorkflowParser
                 hasUses = true;
                 if (!reader.End)
                 {
-                    if (reader.CurrentKind != YamlEventKind.Scalar)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar", reader.CurrentStart);
-                    }
-                    reader.SkipCurrentNode();
+                    _ = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar");
                 }
                 continue;
             }
@@ -716,26 +676,11 @@ public static class WorkflowParser
             || keyUtf8.SequenceEqual("continue-on-error"u8);
     }
 
-    private static Utf8Slice ReadScalarOrSkip(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string errorMessage)
-    {
-        if (reader.End)
-        {
-            return default;
-        }
-
-        if (reader.CurrentKind != YamlEventKind.Scalar)
-        {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return default;
-        }
-
-        var slice = reader.GetScalarSlice();
-        reader.Read();
-        return slice;
-    }
-
-    private static StringNode? ParseStringNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static StringNode? ParseString(
+        IYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        string errorMessage,
+        bool allowEmpty = false)
     {
         if (reader.End)
         {
@@ -752,6 +697,11 @@ public static class WorkflowParser
         var mark = reader.CurrentStart;
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
+        if (!allowEmpty && valueUtf8.Length == 0)
+        {
+            AddError(diagnostics, errorMessage, mark);
+        }
+
         var node = new StringNode
         {
             Value = slice,
@@ -761,6 +711,429 @@ public static class WorkflowParser
 
         reader.Read();
         return node;
+    }
+
+    internal static BoolNode? ParseBool(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        if (!TryParseBool(valueUtf8, tag, out var value))
+        {
+            AddError(diagnostics, errorMessage, mark);
+            reader.Read();
+            return null;
+        }
+
+        var node = new BoolNode
+        {
+            Value = value,
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+        reader.Read();
+        return node;
+    }
+
+    internal static IntNode? ParseInt(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        if (!TryParseInt64(valueUtf8, tag, out var value))
+        {
+            AddError(diagnostics, errorMessage, mark);
+            reader.Read();
+            return null;
+        }
+
+        var node = new IntNode
+        {
+            Value = value,
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+        reader.Read();
+        return node;
+    }
+
+    internal static FloatNode? ParseFloat(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        if (!TryParseDouble(valueUtf8, tag, out var value))
+        {
+            AddError(diagnostics, errorMessage, mark);
+            reader.Read();
+            return null;
+        }
+
+        var node = new FloatNode
+        {
+            Value = value,
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+        reader.Read();
+        return node;
+    }
+
+    internal static StringNode? ParseExpression(
+        IYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        ExpressionValidationContext context,
+        string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        ValidateExpressionText(
+            valueUtf8,
+            BuildScalarLocation(mark, valueUtf8.Length),
+            context,
+            diagnostics,
+            parseWholeValueIfNoEmbedded: true);
+
+        var node = new StringNode
+        {
+            Value = slice,
+            Quoted = reader.IsScalarQuoted(),
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+
+        reader.Read();
+        return node;
+    }
+
+    internal static StringNode? MayParseExpression(
+        IYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        ExpressionValidationContext context)
+    {
+        if (reader.End || reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        var hasExpression = valueUtf8.IndexOf("${{"u8) >= 0;
+        var node = new StringNode
+        {
+            Value = slice,
+            Quoted = reader.IsScalarQuoted(),
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+
+        if (hasExpression)
+        {
+            ValidateExpressionText(
+                valueUtf8,
+                BuildScalarLocation(mark, valueUtf8.Length),
+                context,
+                diagnostics,
+                parseWholeValueIfNoEmbedded: false);
+        }
+
+        reader.Read();
+        return hasExpression ? node : null;
+    }
+
+    internal static StringNode[] ParseStringOrStringSequence(
+        IYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        string errorMessage,
+        bool allowEmpty = false,
+        bool allowElemEmpty = false)
+    {
+        if (reader.End)
+        {
+            return [];
+        }
+
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var single = ParseString(reader, diagnostics, errorMessage, allowEmpty);
+            return single is null ? [] : [single];
+        }
+
+        if (reader.CurrentKind != YamlEventKind.SequenceStart)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return [];
+        }
+
+        var list = new List<StringNode>(4);
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+        {
+            var node = ParseString(reader, diagnostics, errorMessage, allowElemEmpty);
+            if (node is not null)
+            {
+                list.Add(node);
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        {
+            reader.Read();
+        }
+
+        return list.ToArray();
+    }
+
+    private static StringNode? ParseString(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        if (!allowEmpty && valueUtf8.Length == 0)
+        {
+            AddError(diagnostics, errorMessage, mark);
+        }
+
+        var node = new StringNode
+        {
+            Value = slice,
+            Quoted = reader.IsScalarQuoted(),
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+
+        reader.Read();
+        return node;
+    }
+
+    private static StringNode? ParseExpression(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ExpressionValidationContext context,
+        string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        ValidateExpressionText(
+            valueUtf8,
+            BuildScalarLocation(mark, valueUtf8.Length),
+            context,
+            diagnostics,
+            parseWholeValueIfNoEmbedded: true);
+
+        var node = new StringNode
+        {
+            Value = slice,
+            Quoted = reader.IsScalarQuoted(),
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+
+        reader.Read();
+        return node;
+    }
+
+    private static StringNode? ParseStringAndValidateExpression(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ExpressionValidationContext context,
+        string errorMessage,
+        bool parseWholeValueIfNoEmbedded)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        var range = BuildScalarLocation(mark, valueUtf8.Length);
+        ValidateExpressionText(
+            valueUtf8,
+            range,
+            context,
+            diagnostics,
+            parseWholeValueIfNoEmbedded);
+
+        var node = new StringNode
+        {
+            Value = slice,
+            Quoted = reader.IsScalarQuoted(),
+            Range = range,
+        };
+
+        reader.Read();
+        return node;
+    }
+
+    private static StringNode[] ParseStringOrStringSequence(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        string errorMessage,
+        bool allowEmpty = false,
+        bool allowElemEmpty = false)
+    {
+        if (reader.End)
+        {
+            return [];
+        }
+
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var single = ParseString(ref reader, diagnostics, errorMessage, allowEmpty);
+            return single is null ? [] : [single];
+        }
+
+        if (reader.CurrentKind != YamlEventKind.SequenceStart)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return [];
+        }
+
+        var list = new List<StringNode>(4);
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+        {
+            var node = ParseString(ref reader, diagnostics, errorMessage, allowElemEmpty);
+            if (node is not null)
+            {
+                list.Add(node);
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        {
+            reader.Read();
+        }
+
+        return list.ToArray();
+    }
+
+    private static bool TryParseBool(ReadOnlySpan<byte> valueUtf8, ScalarTag tag, out bool value)
+    {
+        if (tag == ScalarTag.Bool)
+        {
+            if (valueUtf8.SequenceEqual("true"u8))
+            {
+                value = true;
+                return true;
+            }
+
+            if (valueUtf8.SequenceEqual("false"u8))
+            {
+                value = false;
+                return true;
+            }
+        }
+
+        value = false;
+        return false;
+    }
+
+    private static bool TryParseInt64(ReadOnlySpan<byte> valueUtf8, ScalarTag tag, out long value)
+    {
+        if (tag is ScalarTag.Int or ScalarTag.Unknown)
+        {
+            if (Utf8Parser.TryParse(valueUtf8, out value, out var consumed) && consumed == valueUtf8.Length)
+            {
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static bool TryParseDouble(ReadOnlySpan<byte> valueUtf8, ScalarTag tag, out double value)
+    {
+        if (tag is ScalarTag.Float or ScalarTag.Int or ScalarTag.Unknown)
+        {
+            if (Utf8Parser.TryParse(valueUtf8, out value, out var consumed) && consumed == valueUtf8.Length)
+            {
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
     }
 
     private static void ParseOn(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
@@ -1030,17 +1403,20 @@ public static class WorkflowParser
         string error,
         Utf8ScalarValidator? scalarValidator = null)
     {
+        if (scalarValidator is null)
+        {
+            _ = ParseStringOrStringSequence(ref reader, diagnostics, error);
+            return;
+        }
+
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            if (scalarValidator is not null)
+            var validationError = scalarValidator(reader.GetScalarUtf8());
+            if (validationError is not null)
             {
-                var valueUtf8 = reader.GetScalarUtf8();
-                var validationError = scalarValidator(valueUtf8);
-                if (validationError is not null)
-                {
-                    AddError(diagnostics, validationError, reader.CurrentStart);
-                }
+                AddError(diagnostics, validationError, reader.CurrentStart);
             }
+
             reader.Read();
             return;
         }
@@ -1062,14 +1438,10 @@ public static class WorkflowParser
                 continue;
             }
 
-            if (scalarValidator is not null)
+            var validationError = scalarValidator(reader.GetScalarUtf8());
+            if (validationError is not null)
             {
-                var valueUtf8 = reader.GetScalarUtf8();
-                var validationError = scalarValidator(valueUtf8);
-                if (validationError is not null)
-                {
-                    AddError(diagnostics, validationError, reader.CurrentStart);
-                }
+                AddError(diagnostics, validationError, reader.CurrentStart);
             }
 
             reader.Read();
@@ -1538,18 +1910,7 @@ public static class WorkflowParser
         ExpressionValidationContext context,
         string shapeError)
     {
-        if (reader.CurrentKind != YamlEventKind.Scalar)
-        {
-            AddError(diagnostics, shapeError, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return;
-        }
-
-        var valueMark = reader.CurrentStart;
-        var valueUtf8 = reader.GetScalarUtf8();
-        var valueLocation = BuildScalarLocation(valueMark, valueUtf8.Length);
-        ValidateExpressionText(valueUtf8, valueLocation, context, diagnostics, parseWholeValueIfNoEmbedded: true);
-        reader.Read();
+        _ = ParseExpression(ref reader, diagnostics, context, shapeError);
     }
 
     private static void ValidateExpressionText(
