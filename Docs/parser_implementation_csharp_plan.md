@@ -427,6 +427,8 @@
 
 ### Step 7.1: 算術演算子の除去検討
 
+**状態**: 完了（仕様 §6.2 に合わせて算術演算子サポートを削除。`ExpressionParser` から `ParseAdditive` / `ParseMultiplicative` と unary `-` を除去し、式パースは logical/comparison/`!`/postfix のみを受理するように変更。`ExpressionTests` に算術式の非受理テストを追加）
+
 - 現行 `ParseAdditive` / `ParseMultiplicative` は GitHub Actions 仕様外
 - パーサー仕様 §6.2 に従い、使用中のテストを確認して除去 or 非推奨化
 

@@ -140,4 +140,20 @@ public sealed class ExpressionTests
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("context 'steps' is not available", StringComparison.Ordinal))).IsFalse();
     }
+
+    [Test]
+    public async Task Parse_ArithmeticBinaryOperators_ReportsDiagnostics()
+    {
+        var result = ExpressionParser.Parse("1 + 2"u8);
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnaryMinus_ReportsDiagnostics()
+    {
+        var result = ExpressionParser.Parse("-1"u8);
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token '-'", StringComparison.Ordinal))).IsTrue();
+    }
 }

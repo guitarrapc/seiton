@@ -990,7 +990,7 @@ public static class ExpressionParser
 | 5 | Loop within `ParsePrimary()` | `.prop`, `.*`, `[idx]`, `(args)` |
 | 6 (highest) | `ParsePrimary()` | literals, identifiers, `(expr)` |
 
-**Note**: C# extension adds arithmetic operators (`+`, `-`, `*`, `/`, `%`) beyond the GitHub Actions expression spec.
+**Note**: Arithmetic operators (`+`, `-`, `*`, `/`, `%`) are intentionally not supported to align with the GitHub Actions expression spec.
 
 ### 6.3 Expression AST (Spec §6.4)
 
@@ -1373,7 +1373,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 | `NotOpNode` (§6.4) | `Unary (Not)` | ✓ |
 | `CompareOpNode` (§6.4) | `Binary (Equal/NotEqual/Less/…)` | ✓ |
 | `LogicalOpNode` (§6.4) | `Binary (And/Or)` | ✓ |
-| arithmetic ops | `Binary (Add/Sub/Mul/Div/Mod)` | C# extension (not in GHA spec) |
+| arithmetic ops | — | Not supported (aligned with GHA spec) |
 | Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | **Not implemented** |
 | Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Partially implemented |
 | Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` | Arity only (no types) |

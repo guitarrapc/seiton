@@ -114,91 +114,34 @@ public static class ExpressionParser
 
         private int ParseRelational()
         {
-            var left = ParseAdditive();
+            var left = ParseUnary();
             while (true)
             {
                 if (Match("<="u8))
                 {
-                    var right = ParseAdditive();
+                    var right = ParseUnary();
                     left = AddBinary(left, right, ExpressionOperator.LessOrEqual);
                     continue;
                 }
 
                 if (Match(">="u8))
                 {
-                    var right = ParseAdditive();
+                    var right = ParseUnary();
                     left = AddBinary(left, right, ExpressionOperator.GreaterOrEqual);
                     continue;
                 }
 
                 if (Match("<"u8))
                 {
-                    var right = ParseAdditive();
+                    var right = ParseUnary();
                     left = AddBinary(left, right, ExpressionOperator.Less);
                     continue;
                 }
 
                 if (Match(">"u8))
                 {
-                    var right = ParseAdditive();
+                    var right = ParseUnary();
                     left = AddBinary(left, right, ExpressionOperator.Greater);
-                    continue;
-                }
-
-                break;
-            }
-
-            return left;
-        }
-
-        private int ParseAdditive()
-        {
-            var left = ParseMultiplicative();
-            while (true)
-            {
-                if (Match("+"u8))
-                {
-                    var right = ParseMultiplicative();
-                    left = AddBinary(left, right, ExpressionOperator.Add);
-                    continue;
-                }
-
-                if (Match("-"u8))
-                {
-                    var right = ParseMultiplicative();
-                    left = AddBinary(left, right, ExpressionOperator.Subtract);
-                    continue;
-                }
-
-                break;
-            }
-
-            return left;
-        }
-
-        private int ParseMultiplicative()
-        {
-            var left = ParseUnary();
-            while (true)
-            {
-                if (Match("*"u8))
-                {
-                    var right = ParseUnary();
-                    left = AddBinary(left, right, ExpressionOperator.Multiply);
-                    continue;
-                }
-
-                if (Match("/"u8))
-                {
-                    var right = ParseUnary();
-                    left = AddBinary(left, right, ExpressionOperator.Divide);
-                    continue;
-                }
-
-                if (Match("%"u8))
-                {
-                    var right = ParseUnary();
-                    left = AddBinary(left, right, ExpressionOperator.Modulo);
                     continue;
                 }
 
@@ -220,18 +163,6 @@ public static class ExpressionParser
                 }
 
                 return AddNode(new ExpressionNode(ExpressionNodeKind.Unary, operand, -1, 0, 0, default, ExpressionOperator.Not));
-            }
-
-            if (Match("-"u8))
-            {
-                var operand = ParseUnary();
-                if (operand < 0)
-                {
-                    AddError("unary '-' requires an operand");
-                    return -1;
-                }
-
-                return AddNode(new ExpressionNode(ExpressionNodeKind.Unary, operand, -1, 0, 0, default, ExpressionOperator.Negate));
             }
 
             return ParsePrimary();

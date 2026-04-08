@@ -26,13 +26,7 @@ public enum ExpressionOperator
     LessOrEqual,
     Greater,
     GreaterOrEqual,
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Modulo,
     Not,
-    Negate,
 }
 
 public readonly record struct ExpressionNode(
