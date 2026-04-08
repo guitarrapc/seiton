@@ -469,6 +469,24 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secrets scalar must be 'inherit'", StringComparison.Ordinal))).IsTrue();
     }
 
+    [Test]
+    public async Task Parse_JobIf_WithStepOnlyContext_ReportsSemanticError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: steps.prep.outputs.ok == 'true'\n    steps:\n      - run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepIf_UnknownFunction_ReportsSemanticError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: unknownFn(github.ref)\n        run: echo ok\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-unknown-function.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
+    }
+
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
     {
         var refsRoot = Path.Combine(repoRoot, ".references");

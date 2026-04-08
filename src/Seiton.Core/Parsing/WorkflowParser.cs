@@ -289,6 +289,20 @@ public static class WorkflowParser
                 continue;
             }
 
+            if (keyUtf8.SequenceEqual("if"u8))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    ParseConditionalExpression(
+                        ref reader,
+                        diagnostics,
+                        ExpressionValidationContext.Job,
+                        $"job '{DecodeUtf8(source, jobId)}' if must be scalar");
+                }
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("strategy"u8))
             {
                 reader.Read(); // consume key
@@ -504,6 +518,20 @@ public static class WorkflowParser
                         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar", reader.CurrentMark);
                     }
                     reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("if"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    ParseConditionalExpression(
+                        ref reader,
+                        diagnostics,
+                        ExpressionValidationContext.Step,
+                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar");
                 }
                 continue;
             }
@@ -1357,6 +1385,176 @@ public static class WorkflowParser
 
         ParseStringMapping(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets must be mapping or scalar 'inherit'");
     }
+
+    private static void ParseConditionalExpression(
+        ref VYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        ExpressionValidationContext context,
+        string shapeError)
+    {
+        if (reader.CurrentEventType != ParseEventType.Scalar)
+        {
+            AddError(diagnostics, shapeError, reader.CurrentMark);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        var valueMark = reader.CurrentMark;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var valueLocation = BuildScalarLocation(valueMark, valueUtf8.Length);
+        ValidateExpressionText(valueUtf8, valueLocation, context, diagnostics);
+        reader.Read();
+    }
+
+    private static void ValidateExpressionText(
+        ReadOnlySpan<byte> valueUtf8,
+        TextRange valueLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics)
+    {
+        var hasEmbedded = false;
+        var i = 0;
+        while (i + 3 < valueUtf8.Length)
+        {
+            if (valueUtf8[i] == (byte)'$' && valueUtf8[i + 1] == (byte)'{' && valueUtf8[i + 2] == (byte)'{')
+            {
+                hasEmbedded = true;
+                var exprStart = i + 3;
+                var end = IndexOf(valueUtf8, exprStart, "}}"u8);
+                if (end < 0)
+                {
+                    break;
+                }
+
+                var trimmed = TrimAsciiWhiteSpace(valueUtf8, exprStart, end - exprStart);
+                if (trimmed.Length > 0)
+                {
+                    var expressionUtf8 = valueUtf8.Slice(trimmed.Offset, trimmed.Length);
+                    var expressionLocation = ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length);
+                    ParseAndValidateExpression(expressionUtf8, expressionLocation, context, diagnostics);
+                }
+
+                i = end + 2;
+                continue;
+            }
+
+            i++;
+        }
+
+        if (!hasEmbedded)
+        {
+            var trimmed = TrimAsciiWhiteSpace(valueUtf8, 0, valueUtf8.Length);
+            if (trimmed.Length <= 0)
+            {
+                return;
+            }
+
+            ParseAndValidateExpression(
+                valueUtf8.Slice(trimmed.Offset, trimmed.Length),
+                ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length),
+                context,
+                diagnostics);
+        }
+    }
+
+    private static void ParseAndValidateExpression(
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics)
+    {
+        var parseResult = ExpressionParser.Parse(expressionUtf8);
+        for (var i = 0; i < parseResult.Diagnostics.Length; i++)
+        {
+            var parseDiagnostic = parseResult.Diagnostics[i];
+            diagnostics.Add(new Diagnostic(
+                parseDiagnostic.Severity,
+                $"expression parse error: {parseDiagnostic.Message}",
+                ShiftLocation(expressionLocation, parseDiagnostic.Location.Start, parseDiagnostic.Location.Length)));
+        }
+
+        var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expressionUtf8,
+            expressionLocation,
+            context);
+        for (var i = 0; i < semanticDiagnostics.Length; i++)
+        {
+            diagnostics.Add(semanticDiagnostics[i]);
+        }
+    }
+
+    private static TextRange BuildScalarLocation(Marker mark, int length)
+    {
+        var safeLength = length <= 0 ? 1 : length;
+        return new TextRange(
+            Start: mark.Position,
+            Length: safeLength,
+            StartLine: mark.Line,
+            StartColumn: mark.Col,
+            EndLine: mark.Line,
+            EndColumn: mark.Col + safeLength - 1);
+    }
+
+    private static TextRange ShiftLocation(TextRange baseLocation, int relativeOffset, int length)
+    {
+        var safeLength = length <= 0 ? 1 : length;
+        return new TextRange(
+            Start: baseLocation.Start + relativeOffset,
+            Length: safeLength,
+            StartLine: baseLocation.StartLine,
+            StartColumn: baseLocation.StartColumn + relativeOffset,
+            EndLine: baseLocation.EndLine,
+            EndColumn: baseLocation.StartColumn + relativeOffset + safeLength - 1);
+    }
+
+    private static Utf8Slice TrimAsciiWhiteSpace(ReadOnlySpan<byte> source, int offset, int length)
+    {
+        if (length <= 0)
+        {
+            return new Utf8Slice(offset, 0);
+        }
+
+        var start = offset;
+        var end = offset + length - 1;
+
+        while (start <= end && IsAsciiWhiteSpace(source[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && IsAsciiWhiteSpace(source[end]))
+        {
+            end--;
+        }
+
+        if (end < start)
+        {
+            return new Utf8Slice(offset, 0);
+        }
+
+        return new Utf8Slice(start, end - start + 1);
+    }
+
+    private static int IndexOf(ReadOnlySpan<byte> source, int start, ReadOnlySpan<byte> pattern)
+    {
+        if (pattern.IsEmpty || start >= source.Length)
+        {
+            return -1;
+        }
+
+        for (var i = start; i <= source.Length - pattern.Length; i++)
+        {
+            if (source.Slice(i, pattern.Length).SequenceEqual(pattern))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool IsAsciiWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)
     {
