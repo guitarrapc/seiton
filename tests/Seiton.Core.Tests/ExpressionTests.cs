@@ -302,4 +302,116 @@ public sealed class ExpressionTests
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got bool", StringComparison.Ordinal))).IsTrue();
     }
+
+    // ── ExpressionVisitor.VisitExprNode ───────────────────────────────────────
+
+    [Test]
+    public async Task VisitExprNode_SingleLiteral_FiresEnterAndLeave()
+    {
+        var expression = "'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var calls = new List<(bool entering, ExpressionNodeKind kind)>();
+
+        ExpressionVisitor.VisitExprNode(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            (_, node, _, entering) => calls.Add((entering, node.Kind)));
+
+        await Assert.That(calls.Count).IsEqualTo(2);
+        await Assert.That(calls[0]).IsEqualTo((true, ExpressionNodeKind.StringLiteral));
+        await Assert.That(calls[1]).IsEqualTo((false, ExpressionNodeKind.StringLiteral));
+    }
+
+    [Test]
+    public async Task VisitExprNode_BinaryExpression_VisitsAllThreeNodes()
+    {
+        // `a && b` → Binary(And, Identifier(a), Identifier(b))
+        var expression = "github.actor == 'x'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var visitedKinds = new List<ExpressionNodeKind>();
+
+        ExpressionVisitor.VisitExprNode(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            (_, node, _, entering) =>
+            {
+                if (entering) visitedKinds.Add(node.Kind);
+            });
+
+        // Binary root, MemberAccess (github.actor), Identifier (github), StringLiteral ('x')
+        await Assert.That(visitedKinds).Contains(ExpressionNodeKind.Binary);
+        await Assert.That(visitedKinds).Contains(ExpressionNodeKind.MemberAccess);
+        await Assert.That(visitedKinds).Contains(ExpressionNodeKind.Identifier);
+        await Assert.That(visitedKinds).Contains(ExpressionNodeKind.StringLiteral);
+    }
+
+    [Test]
+    public async Task VisitExprNode_FunctionCall_VisitsCalleeAndArguments()
+    {
+        var expression = "contains(github.ref, 'main')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var expressionBytes = expression.ToArray();
+        var identifiers = new List<string>();
+
+        ExpressionVisitor.VisitExprNode(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            (_, node, _, entering) =>
+            {
+                if (entering && node.Kind == ExpressionNodeKind.Identifier)
+                {
+                    identifiers.Add(System.Text.Encoding.UTF8.GetString(node.Token.AsSpan(expressionBytes)));
+                }
+            });
+
+        // "contains" (callee), "github" (context root in github.ref)
+        await Assert.That(identifiers).Contains("contains");
+        await Assert.That(identifiers).Contains("github");
+    }
+
+    [Test]
+    public async Task VisitExprNode_TraversalOrder_EnterBeforeLeave()
+    {
+        var expression = "!cancelled()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var log = new List<string>();
+
+        ExpressionVisitor.VisitExprNode(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            (_, node, _, entering) => log.Add($"{(entering ? "enter" : "leave")}:{node.Kind}"));
+
+        // Unary enter must precede its child's enter, and Unary leave must follow its child's leave.
+        var unaryEnterIndex = log.IndexOf($"enter:{ExpressionNodeKind.Unary}");
+        var unaryLeaveIndex = log.IndexOf($"leave:{ExpressionNodeKind.Unary}");
+        var funcEnterIndex = log.IndexOf($"enter:{ExpressionNodeKind.FunctionCall}");
+        var funcLeaveIndex = log.IndexOf($"leave:{ExpressionNodeKind.FunctionCall}");
+
+        await Assert.That(unaryEnterIndex).IsLessThan(funcEnterIndex);
+        await Assert.That(funcLeaveIndex).IsLessThan(unaryLeaveIndex);
+    }
+
+    [Test]
+    public async Task VisitExprNode_ParentId_IsCorrectForChildren()
+    {
+        var expression = "github.ref"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var parentMap = new Dictionary<int, int>(); // nodeId → parentId
+
+        ExpressionVisitor.VisitExprNode(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            (nodeId, _, parentId, entering) =>
+            {
+                if (entering) parentMap[nodeId] = parentId;
+            });
+
+        // Root node must have parentId = -1.
+        await Assert.That(parentMap[parseResult.RootNode]).IsEqualTo(-1);
+    }
 }

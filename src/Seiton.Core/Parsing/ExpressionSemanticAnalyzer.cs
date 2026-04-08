@@ -25,147 +25,51 @@ public static class ExpressionSemanticAnalyzer
 
         var diagnostics = new List<Diagnostic>(4);
         var validatedRootIdentifiers = new List<int>(4);
-        ValidateNode(
+        var nodes = parseResult.Nodes;
+        var arguments = parseResult.Arguments;
+        // ReadOnlySpan<byte> cannot be captured in a lambda; copy to array for closure use.
+        var expressionBytes = expressionUtf8.ToArray();
+
+        ExpressionVisitor.VisitExprNode(
             parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
-            expressionUtf8,
-            expressionLocation,
-            context,
-            diagnostics,
-            validatedRootIdentifiers,
-            isFunctionCallee: false);
-        return diagnostics.ToArray();
-    }
-
-    private static void ValidateNode(
-        int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expressionUtf8,
-        TextRange expressionLocation,
-        ExpressionValidationContext context,
-        List<Diagnostic> diagnostics,
-        List<int> validatedRootIdentifiers,
-        bool isFunctionCallee)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return;
-        }
-
-        var node = nodes[nodeId];
-        switch (node.Kind)
-        {
-            case ExpressionNodeKind.FunctionCall:
-                ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
-                for (var i = 0; i < node.ArgCount; i++)
+            nodes,
+            arguments,
+            (nodeId, node, parentId, entering) =>
+            {
+                if (!entering)
                 {
-                    var argIndex = node.ArgStart + i;
-                    if (argIndex >= 0 && argIndex < arguments.Length)
+                    return;
+                }
+
+                switch (node.Kind)
+                {
+                    case ExpressionNodeKind.FunctionCall:
+                        ValidateFunctionCall(node, nodes, arguments, expressionBytes, expressionLocation, diagnostics);
+                        break;
+
+                    case ExpressionNodeKind.Identifier:
                     {
-                        ValidateNode(
-                            arguments[argIndex],
-                            nodes,
-                            arguments,
-                            expressionUtf8,
-                            expressionLocation,
-                            context,
-                            diagnostics,
-                            validatedRootIdentifiers,
-                            isFunctionCallee: false);
+                        // Skip the function name identifier — it is resolved via TryGetFunctionArity, not context root validation.
+                        var isFunctionCallee = parentId >= 0
+                            && parentId < nodes.Length
+                            && nodes[parentId].Kind == ExpressionNodeKind.FunctionCall
+                            && nodes[parentId].Left == nodeId;
+                        if (!isFunctionCallee)
+                        {
+                            ValidateContextRoot(nodeId, nodes, expressionBytes, expressionLocation, context, diagnostics, validatedRootIdentifiers);
+                        }
+                        break;
                     }
+
+                    case ExpressionNodeKind.MemberAccess:
+                    case ExpressionNodeKind.WildcardAccess:
+                    case ExpressionNodeKind.IndexAccess:
+                        ValidateContextRoot(nodeId, nodes, expressionBytes, expressionLocation, context, diagnostics, validatedRootIdentifiers);
+                        break;
                 }
-                return;
+            });
 
-            case ExpressionNodeKind.Identifier:
-                if (!isFunctionCallee)
-                {
-                    ValidateContextRoot(
-                        nodeId,
-                        nodes,
-                        expressionUtf8,
-                        expressionLocation,
-                        context,
-                        diagnostics,
-                        validatedRootIdentifiers);
-                }
-                return;
-
-            case ExpressionNodeKind.MemberAccess:
-            case ExpressionNodeKind.WildcardAccess:
-            case ExpressionNodeKind.IndexAccess:
-                ValidateContextRoot(
-                    nodeId,
-                    nodes,
-                    expressionUtf8,
-                    expressionLocation,
-                    context,
-                    diagnostics,
-                    validatedRootIdentifiers);
-
-                ValidateNode(
-                    node.Left,
-                    nodes,
-                    arguments,
-                    expressionUtf8,
-                    expressionLocation,
-                    context,
-                    diagnostics,
-                    validatedRootIdentifiers,
-                    isFunctionCallee: false);
-
-                if (node.Kind == ExpressionNodeKind.IndexAccess)
-                {
-                    ValidateNode(
-                        node.Right,
-                        nodes,
-                        arguments,
-                        expressionUtf8,
-                        expressionLocation,
-                        context,
-                        diagnostics,
-                        validatedRootIdentifiers,
-                        isFunctionCallee: false);
-                }
-                return;
-
-            case ExpressionNodeKind.Unary:
-                ValidateNode(
-                    node.Left,
-                    nodes,
-                    arguments,
-                    expressionUtf8,
-                    expressionLocation,
-                    context,
-                    diagnostics,
-                    validatedRootIdentifiers,
-                    isFunctionCallee: false);
-                return;
-
-            case ExpressionNodeKind.Binary:
-                ValidateNode(
-                    node.Left,
-                    nodes,
-                    arguments,
-                    expressionUtf8,
-                    expressionLocation,
-                    context,
-                    diagnostics,
-                    validatedRootIdentifiers,
-                    isFunctionCallee: false);
-                ValidateNode(
-                    node.Right,
-                    nodes,
-                    arguments,
-                    expressionUtf8,
-                    expressionLocation,
-                    context,
-                    diagnostics,
-                    validatedRootIdentifiers,
-                    isFunctionCallee: false);
-                return;
-        }
+        return diagnostics.ToArray();
     }
 
     private static void ValidateFunctionCall(

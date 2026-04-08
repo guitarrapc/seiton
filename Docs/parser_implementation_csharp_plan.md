@@ -448,12 +448,21 @@
 - `ExpressionStaticType` enum と `GetStaticType()` / `StaticTypeName()` ヘルパーを削除
 - テスト 12 件追加（literals × 4、演算子 × 3、関数戻り値 × 3、コンテキストアクセス × 1、型不一致バリデーション × 1）。全 112 テスト通過
 
-### Step 7.3: 式 Visitor
+### Step 7.3: 式 Visitor ✅
 
 - `VisitExprNode()` パターンの実装（パーサー仕様 §6.5, C# 実装仕様 §6.1）
 - semantic checker をこのパターンで書き直す
 
 **完了条件**: 式 AST の巡回が Visitor パターンで動作する
+
+**実装結果**:
+- `src/Seiton.Core/Parsing/ExpressionVisitor.cs` を新規作成: `ExprNodeVisitor` delegate（`int nodeId, ExpressionNode node, int parentId, bool entering`）と `ExpressionVisitor.VisitExprNode()` 静的メソッドを実装。`entering=true` で子の前、`entering=false` で子の後に callback を呼ぶ depth-first 巡回
+  - 仕様シグネチャの `ExprNodeVisitor(node, parentId, entering)` に `nodeId` を追加。function callee 判別（`nodes[parentId].Left == nodeId`）に必要なため
+  - ノード種別ごとに子を正しく巡回: Unary→Left, Binary→Left+Right, MemberAccess/WildcardAccess→Left, IndexAccess→Left+Right, FunctionCall→Left(callee)+Arguments, Leaf→なし
+- `ExpressionSemanticAnalyzer.Validate()` を書き直し: 手書きの `ValidateNode()` 再帰を削除し `ExpressionVisitor.VisitExprNode()` を使用
+  - `ReadOnlySpan<byte>` はラムダでキャプチャ不可のため `ToArray()` して `byte[]` でクロージャに渡す
+  - function callee 判別を `parentId` と `nodes[parentId].Left == nodeId` で行う
+- テスト 5 件追加（単一リテラルの enter/leave × 1、二項式の全ノード巡回 × 1、関数呼び出しで callee と引数が訪問されること × 1、enter-before-leave の巡回順序 × 1、root ノードの parentId == -1 × 1）。全 117 テスト通過
 
 ---
 

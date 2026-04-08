@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 /// <summary>
 /// Base class for the expression type hierarchy (Spec §7.3).
