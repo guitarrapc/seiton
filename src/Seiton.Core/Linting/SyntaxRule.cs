@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -64,6 +65,28 @@ public sealed class SyntaxRule : IRule
 
     public void VisitStep(Step step)
     {
+        if (step.Exec is not ExecAction actionExec || actionExec.Inputs is null || actionExec.Inputs.Count == 0)
+        {
+            return;
+        }
+
+        var usesText = actionExec.Uses.Value.AsSpan(config.Utf8Yaml);
+        if (!PopularActions.TryGet(usesText, out var actionSpec))
+        {
+            return;
+        }
+
+        var actionName = Decode(actionExec.Uses.Value);
+        foreach (var pair in actionExec.Inputs)
+        {
+            if (actionSpec.IsInputAllowed(pair.Key.Span))
+            {
+                continue;
+            }
+
+            var inputName = Encoding.UTF8.GetString(pair.Key.Span);
+            AddStepWarning(step, $"unknown input '{inputName}' for action '{actionName}'");
+        }
     }
 
     void AddJobError(Job job, string message)
@@ -74,6 +97,23 @@ public sealed class SyntaxRule : IRule
     TextRange BuildJobLocation(Job job)
     {
         var range = job.Id.Range;
+        return new TextRange(
+            Start: range.Start,
+            Length: 0,
+            StartLine: range.StartLine,
+            StartColumn: range.StartColumn,
+            EndLine: range.StartLine,
+            EndColumn: range.StartColumn);
+    }
+
+    void AddStepWarning(Step step, string message)
+    {
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, message, BuildStepLocation(step)));
+    }
+
+    TextRange BuildStepLocation(Step step)
+    {
+        var range = step.Range;
         return new TextRange(
             Start: range.Start,
             Length: 0,

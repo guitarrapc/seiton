@@ -104,6 +104,59 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot have both uses and runs-on", StringComparison.Ordinal))).IsTrue();
     }
 
+    [Test]
+    public async Task SyntaxRule_ReportsUnknownInputForPopularAction()
+    {
+        var source = "actions/checkout@v4";
+        var sourceBytes = Encoding.UTF8.GetBytes(source);
+
+        var workflow = new Workflow
+        {
+            Jobs = new Dictionary<Utf8String, Job>
+            {
+                [new Utf8String("build"u8)] = new Job
+                {
+                    Id = new StringNode
+                    {
+                        Value = new Utf8Slice(0, 0),
+                        Range = new TextRange(0, 0, 1, 1, 1, 1),
+                    },
+                    RunsOn = new Runner(),
+                    Steps =
+                    [
+                        new Step
+                        {
+                            Exec = new ExecAction
+                            {
+                                Kind = StepExecKind.Action,
+                                Uses = new StringNode
+                                {
+                                    Value = new Utf8Slice(0, sourceBytes.Length),
+                                    Range = new TextRange(0, sourceBytes.Length, 1, 1, 1, sourceBytes.Length + 1),
+                                },
+                                Inputs = new Dictionary<Utf8String, StringNode>
+                                {
+                                    [new Utf8String("fetch-depht"u8)] = new StringNode { Value = new Utf8Slice(0, 0) },
+                                },
+                            },
+                            Range = new TextRange(0, 0, 1, 1, 1, 1),
+                        },
+                    ],
+                },
+            },
+        };
+
+        var visitor = new WorkflowVisitor();
+        var rule = new SyntaxRule();
+        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes });
+        visitor.AddPass(rule);
+
+        visitor.Visit(workflow);
+        var diagnostics = rule.GetDiagnostics();
+
+        await Assert.That(diagnostics.Any(x => x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("unknown input 'fetch-depht' for action 'actions/checkout@v4'", StringComparison.Ordinal))).IsTrue();
+    }
+
     sealed class CountingRule : IRule
     {
         LintConfig? config;

@@ -411,6 +411,8 @@
 
 ### Step 6.3: Popular Actions Metadata
 
+**状態**: 完了（`src/Seiton.Core/Generated/PopularActions.g.cs` を追加し、主要アクションの input 名テーブルを実装。`SyntaxRule` から `uses` + `with` を参照して既知アクションの未知 input を warning 診断する導線を追加）
+
 **ファイル**: `src/Seiton.Core/Generated/PopularActions.g.cs`
 
 - actionlint の `popular_actions.go` に相当
