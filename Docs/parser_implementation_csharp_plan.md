@@ -349,6 +349,8 @@
 
 ### Step 5.1: IPass インターフェースと WorkflowVisitor
 
+**状態**: 完了（`IPass` と `WorkflowVisitor` を実装し、`WorkflowPre → JobPre → Step → JobPost → WorkflowPost` の巡回順を unit test で検証）
+
 **ファイル**: `src/Seiton.Core/Linting/IPass.cs`, `WorkflowVisitor.cs`
 
 - `IPass` interface（パーサー仕様 §8.1, C# 実装仕様 §5.1）
