@@ -744,41 +744,41 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
     }
 
-        [Test]
-        public async Task Parse_JobEnv_WithStepOnlyContext_ReportsSemanticError()
-        {
-            var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env:\n      BAD: ${{ steps.prep.outputs.ok }}\n    steps:\n      - run: echo ok\n";
+    [Test]
+    public async Task Parse_JobEnv_WithStepOnlyContext_ReportsSemanticError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env:\n      BAD: ${{ steps.prep.outputs.ok }}\n    steps:\n      - run: echo ok\n";
 
-            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
 
-        [Test]
-        public async Task Parse_StepRun_EmbeddedUnknownFunction_ReportsSemanticError()
-        {
-            var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ unknownFn(github.ref) }}\n";
+    [Test]
+    public async Task Parse_StepRun_EmbeddedUnknownFunction_ReportsSemanticError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ unknownFn(github.ref) }}\n";
 
-            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-unknown-function.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-unknown-function.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
+    }
 
-        [Test]
-        public async Task Parse_StepWith_EmbeddedUnknownFunction_ReportsSemanticError()
-        {
-            var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/cache@v4\n        with:\n          key: ${{ unknownFn(github.ref) }}\n";
+    [Test]
+    public async Task Parse_StepWith_EmbeddedUnknownFunction_ReportsSemanticError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/cache@v4\n        with:\n          key: ${{ unknownFn(github.ref) }}\n";
 
-            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-with-unknown-function.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-with-unknown-function.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
+    }
 
-        [Test]
-        public async Task Parse_StepIf_FunctionTypeMismatch_ReportsSemanticError()
-        {
-            var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: contains(1, 'x')\n        run: echo ok\n";
+    [Test]
+    public async Task Parse_StepIf_FunctionTypeMismatch_ReportsSemanticError()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: contains(1, 'x')\n        run: echo ok\n";
 
-            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-type-mismatch.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-type-mismatch.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
+    }
 
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
     {
