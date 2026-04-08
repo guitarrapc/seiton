@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Buffers.Text;
+using Seiton.Core.Generated;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing.Ast;
 
@@ -17,7 +18,7 @@ public static class WorkflowParser
 
     private readonly struct OnEventInfo
     {
-        public OnEventInfo(string name, bool isKnown, OnEventSpecs.EventSpec spec)
+        public OnEventInfo(string name, bool isKnown, WebhookTypes.EventSpec spec)
         {
             Name = name;
             IsKnown = isKnown;
@@ -28,7 +29,7 @@ public static class WorkflowParser
 
         public bool IsKnown { get; }
 
-        public OnEventSpecs.EventSpec Spec { get; }
+        public WebhookTypes.EventSpec Spec { get; }
     }
 
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
@@ -2319,10 +2320,10 @@ public static class WorkflowParser
         {
             return eventInfo.Spec.Id switch
             {
-                OnEventSpecs.EventId.Schedule => new ScheduledEvent { EventName = nameNode, Range = nameNode.Range },
-                OnEventSpecs.EventId.WorkflowDispatch => new WorkflowDispatchEvent { EventName = nameNode, Range = nameNode.Range },
-                OnEventSpecs.EventId.WorkflowCall => new WorkflowCallEvent { EventName = nameNode, Range = nameNode.Range },
-                OnEventSpecs.EventId.RepositoryDispatch => new RepositoryDispatchEvent { EventName = nameNode, Range = nameNode.Range },
+                WebhookTypes.EventId.Schedule => new ScheduledEvent { EventName = nameNode, Range = nameNode.Range },
+                WebhookTypes.EventId.WorkflowDispatch => new WorkflowDispatchEvent { EventName = nameNode, Range = nameNode.Range },
+                WebhookTypes.EventId.WorkflowCall => new WorkflowCallEvent { EventName = nameNode, Range = nameNode.Range },
+                WebhookTypes.EventId.RepositoryDispatch => new RepositoryDispatchEvent { EventName = nameNode, Range = nameNode.Range },
                 _ => new WebhookEvent { EventName = nameNode, Hook = nameNode, Range = nameNode.Range },
             };
         }
@@ -2345,10 +2346,10 @@ public static class WorkflowParser
 
         return eventInfo.Spec.Id switch
         {
-            OnEventSpecs.EventId.Schedule => ParseScheduleEvent(ref reader, diagnostics, nameNode),
-            OnEventSpecs.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, diagnostics, nameNode),
-            OnEventSpecs.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, diagnostics, nameNode),
-            OnEventSpecs.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, diagnostics, in eventInfo, nameNode),
+            WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, diagnostics, nameNode),
+            WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, diagnostics, nameNode),
+            WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, diagnostics, nameNode),
+            WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, diagnostics, in eventInfo, nameNode),
             _ => BuildSimpleEvent(in eventInfo, nameNode),
         };
     }
@@ -2356,10 +2357,10 @@ public static class WorkflowParser
     private static bool IsSpecialOnEvent(in OnEventInfo eventInfo)
     {
         return eventInfo.IsKnown
-            && (eventInfo.Spec.Id == OnEventSpecs.EventId.Schedule
-                || eventInfo.Spec.Id == OnEventSpecs.EventId.WorkflowDispatch
-                || eventInfo.Spec.Id == OnEventSpecs.EventId.WorkflowCall
-                || eventInfo.Spec.Id == OnEventSpecs.EventId.RepositoryDispatch);
+            && (eventInfo.Spec.Id == WebhookTypes.EventId.Schedule
+                || eventInfo.Spec.Id == WebhookTypes.EventId.WorkflowDispatch
+                || eventInfo.Spec.Id == WebhookTypes.EventId.WorkflowCall
+                || eventInfo.Spec.Id == WebhookTypes.EventId.RepositoryDispatch);
     }
 
     private static ScheduledEvent ParseScheduleEvent(
@@ -5455,7 +5456,7 @@ public static class WorkflowParser
         try
         {
             var eventNameUtf8 = reader.GetScalarUtf8();
-            if (OnEventSpecs.TryGet(eventNameUtf8, out var knownEventName, out var knownSpec))
+            if (WebhookTypes.TryGet(eventNameUtf8, out var knownEventName, out var knownSpec))
             {
                 return new OnEventInfo(knownEventName, isKnown: true, knownSpec);
             }

@@ -400,6 +400,8 @@
 
 ### Step 6.2: Webhook Types テーブル
 
+**状態**: 完了（`src/Seiton.Core/Generated/WebhookTypes.g.cs` を追加し、`WorkflowParser` のイベント仕様参照を hand-written `OnEventSpecs` から generated テーブルへ移行）
+
 **ファイル**: `src/Seiton.Core/Generated/WebhookTypes.g.cs`
 
 - 現行 `OnEventSpecs` の手実装を generated data で置換可能にする

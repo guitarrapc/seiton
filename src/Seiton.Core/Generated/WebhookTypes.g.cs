@@ -1,6 +1,6 @@
-﻿namespace Seiton.Core.Parsing;
+namespace Seiton.Core.Generated;
 
-internal static class OnEventSpecs
+internal static class WebhookTypes
 {
     internal enum ActivityTypesMode
     {
@@ -180,3 +180,4 @@ internal static class OnEventSpecs
         }
     }
 }
+
