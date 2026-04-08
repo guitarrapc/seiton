@@ -7,14 +7,32 @@
 
 ## Important Guidelines
 
-When implementing or reviewing sorting algorithms, refer to these detailed guides:
+When implementing or reviewing parser algorithms, refer to these detailed guides:
 
-- **[Architecture](agent_docs/architecture.md)** - Understand the Context + SortSpan pattern
+- **[Architecture](agent_docs/architecture.md)** - Understand the Parser's overall architecture and design principles
 - **[Coding Style](agent_docs/coding_style.md)** - C# style conventions for this project
 - **[Performance Requirements](agent_docs/performance_requirements.md)** - Zero-allocation, aggressive inlining, and memory management
 - **[Testing Guidelines](agent_docs/testing_guidelines.md)** - Writing/Run effective unit tests
 
 **Script Rule:** Don't write any multi-line PowerShell Code in the shell. If you need to run a script, create a file then executte it.
+
+### Parser Allocation Guardrails (Always-On)
+
+For files under `src/Seiton.Core/Parsing/**`, follow these rules strictly.
+
+1. Hot path key/value checks must use UTF-8 span comparisons (`ReadOnlySpan<byte>`), not `string` comparisons.
+2. Avoid `GetScalarString()` and `Encoding.UTF8.GetString(...)` in normal success paths.
+3. String conversion is allowed only for diagnostics, logs, and explicit fallback paths.
+4. Do not introduce `new T[]`, `List<T>`, `Dictionary<TKey, TValue>`, LINQ, or regex in parser hot paths.
+5. Reuse parsed metadata (for example event spec resolution) instead of repeated lookups.
+6. If a value must be kept, prefer `Utf8Slice`/offset-length over materialized `string`.
+
+Before completing parser changes, validate all of the following.
+
+1. No new `GetScalarString()` usage was added on success paths.
+2. Newly introduced key checks are UTF-8 span based.
+3. Diagnostics still show useful text when errors occur.
+4. Parser test suite passes.
 
 ## How to Work on This Project
 
@@ -57,7 +75,7 @@ dotnet run sandbox/DotnetFiles/YourCsFile.cs
 
 ## Progressive Disclosure
 
-Before implementing a new sorting algorithm or making significant changes:
+Before implementing a parser/ast or making significant changes:
 
 1. Read the relevant documentation files in `.github/agent_docs/`
 2. Review existing similar implementations in `src/`
