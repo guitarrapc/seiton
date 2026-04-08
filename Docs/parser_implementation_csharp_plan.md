@@ -1,22 +1,21 @@
 # Parser Implementation Plan
 
-> `Seiton_Parser_spec.md` に基づき、パーサーを段階的に完成させるための実装計画。
-> 各ステップは独立してテスト可能な単位で区切られている。
+> `Seiton_Parser_spec.md`（パーサー仕様）と `Seiton_Parser_csharp_spec.md`（C# 実装仕様）に基づき、パーサーを段階的に完成させるための実装計画。各ステップを独立してテスト可能な単位で区切って記述する。
 
 ## 現状サマリー
 
-| 領域 | 現行状態 |
+| 領域 | 現行状況 |
 |---|---|
-| YAML 読み取り | `VYamlStreamReader`（`ref struct`）で VYaml を直接ラップ。interface 抽象なし |
-| パーサー本体 | `WorkflowParser` が shape 検証 + diagnostics。全 parse 関数は `void`、AST を返さない |
-| 出力モデル | `WorkflowDocument`（boolean フラグ + `Utf8Slice` 2 つ）、typed AST なし |
+| YAML 読み取り | `VYamlStreamReader` は `ref struct` で VYaml を直接ラップ。interface 抽象なし |
+| パーサー本体 | `WorkflowParser` は shape 検証 + diagnostics。parse 関数は `void`、AST を返さない |
+| 出力モデル | `WorkflowDocument` は boolean フラグ + `Utf8Slice` 2 つ、typed AST なし |
 | `on:` パース | イベント名検証 + options/types 検証済み。typed event node なし |
-| Job/Step | キー検証・排他制約チェック済み。typed node なし |
+| Job/Step | キー検証・排他制約済み。typed node なし |
 | permissions/defaults/concurrency | `SkipCurrentNode()` のみ |
 | 式パーサー | 再帰下降 + arena-style flat array で完成。算術演算は GHA 仕様外の独自拡張あり |
 | 式セマンティクス | context availability + function arity + 一部リテラル型チェック |
 | 式抽出 | `${{ }}` 抽出 → parse → validate パイプライン完成 |
-| イベントスペック | `OnEventSpecs` で 33 イベント + activity types + options を UTF-8 span で管理済み |
+| イベントスペック | `OnEventSpecs` で 33 イベント + activity types + options を UTF-8 span で管理 |
 | Visitor / Pass | 未実装 |
 | Rule Engine | 未実装 |
 | Generated Data | `OnEventSpecs` のみ手実装。availability / popular actions 未実装 |
@@ -25,30 +24,30 @@
 
 ## Phase 1: YAML アダプター層
 
-**目的**: パーサー本体から VYaml 依存を排除し、差し替え可能なアダプター層を構築する。
+**目標**: パーサー本体から VYaml 依存を排除し、差し替え可能なアダプター層を構築する
 
-### Step 1.1: 自前列挙型の定義
+### Step 1.1: 自前型の定義
 
 **ファイル**: `src/Seiton.Core/Parsing/YamlEventKind.cs`, `ScalarTag.cs`
 
-- `YamlEventKind` enum を定義（仕様 §3.1A.3）
-- `ScalarTag` enum を定義（仕様 §3.1A.3）
-- `TextPosition` は既存 `TextRange` をそのまま使うか、新設するか判断
+- `YamlEventKind` enum を定義
+- `ScalarTag` enum を定義
+- `TextPosition` は既存の `TextRange` をそのまま使うか、新設するか判断
 
-**完了条件**: enum が定義され、ビルドが通る。
+**完了条件**: enum が定義され、ビルドが通る
 
 ### Step 1.2: IYamlStreamReader インターフェースの定義
 
 **ファイル**: `src/Seiton.Core/Parsing/IYamlStreamReader.cs`
 
-- 仕様 §3.1A.2 の `IYamlStreamReader` を定義
-- ただし `ref struct` は interface を実装できないため、設計判断が必要:
-  - **案 A**: `interface IYamlStreamReader` + `class VYamlStreamAdapter`（仮想呼び出しコスト発生）
-  - **案 B**: `WorkflowParser<TReader> where TReader : IYamlStreamReader` で generic 化（JIT devirtualization）
-  - **案 C**: interface なしで `VYamlStreamReader` の API 署名だけ統一（差し替え時に手動修正）
-- 初期は **案 A** で実装し、ベンチマークで問題があれば案 B に移行
+- C# 実装仕様 §2.2 の `IYamlStreamReader` を定義
+- ただし `ref struct` は interface を実装できないため、設計判断が必要
+  - **案A**: `interface IYamlStreamReader` + `class VYamlStreamAdapter` → 仮想呼び出しコスト発生
+  - **案B**: `WorkflowParser<TReader> where TReader : IYamlStreamReader` で generic 化 → devirtualization 可能
+  - **案C**: interface なしで `VYamlStreamReader` の API 署名だけ統一 → 差し替え時に手動修正
+  - 初期は **案A** で実装、ベンチマークで問題があれば案B に移行
 
-**完了条件**: interface が定義され、ビルドが通る。
+**完了条件**: interface が定義され、ビルドが通る
 
 ### Step 1.3: VYamlStreamAdapter の実装
 
@@ -57,10 +56,10 @@
 - 既存 `VYamlStreamReader` を `VYamlStreamAdapter : IYamlStreamReader` にリネーム・変換
 - VYaml の `ParseEventType` → `YamlEventKind` 変換を実装
 - VYaml の `Marker` → `TextPosition` / `TextRange` 変換を実装
-- `GetScalarTag()` を実装（VYaml のタグ情報が不足する場合は値パターンで推定）
+- `GetScalarTag()` を実装、VYaml のタグ情報が不足する場合は値パターンで推定
 - `IsScalarQuoted()` を実装
 
-**完了条件**: 既存テストが `VYamlStreamAdapter` 経由で全パスする。
+**完了条件**: 既存テストが `VYamlStreamAdapter` 経由で全パスする
 
 ### Step 1.4: WorkflowParser の VYaml 直接参照を排除
 
@@ -71,23 +70,23 @@
 - `Marker` → `TextPosition` / adapter 経由に置換
 - `VYamlStreamReader.cs` を削除（`VYamlStreamAdapter.cs` に統合済み）
 
-**完了条件**: WorkflowParser.cs 内に VYaml 名前空間の using が残らない。既存テスト全パス。
+**完了条件**: WorkflowParser.cs 内に VYaml 名前空間の using が残らない。既存テストがパス
 
 ### Step 1.5: テスト用 FakeYamlStreamReader
 
 **ファイル**: `tests/Seiton.Core.Tests/FakeYamlStreamReader.cs`
 
 - `IYamlStreamReader` を実装するテスト用 fake
-- イベント列を配列で受け取り、順に返す
+- イベント列を配列で受け取り、順次返す
 - YAML ファイルなしでパーサー単体テストが可能になる
 
-**完了条件**: fake reader でパーサーの最小テストが書ける。
+**完了条件**: fake reader でパーサーの最小テストが書ける
 
 ---
 
 ## Phase 2: AST 型定義
 
-**目的**: 仕様 §2 の全 AST ノードを定義する。パーサーはまだ変更しない。
+**目標**: 仕様 §2 の全 AST ノードを定義する。パーサーはまだ変更しない
 
 ### Step 2.1: 共通ノード型
 
@@ -96,7 +95,7 @@
 - `StringNode`, `BoolNode`, `IntNode`, `FloatNode`（仕様 §2.6）
 - 既存 `Utf8Slice`, `TextRange` を活用
 
-**完了条件**: 型が定義され、ビルドが通る。
+**完了条件**: 型が定義され、ビルドが通る
 
 ### Step 2.2: Workflow ルートノード
 
@@ -105,7 +104,7 @@
 - `Workflow` class（仕様 §2.2）
 - 一旦フィールドをすべて nullable で定義
 
-**完了条件**: 型が定義され、ビルドが通る。
+**完了条件**: 型が定義され、ビルドが通る
 
 ### Step 2.3: Event ノード群
 
@@ -116,7 +115,7 @@
 - `WebhookEventFilter`, `ScheduleEntry`, `DispatchInput`, `DispatchInputType`
 - `WorkflowCallEventInput`, `WorkflowCallInputType`, `WorkflowCallEventSecret`, `WorkflowCallEventOutput`
 
-**完了条件**: 型が定義され、ビルドが通る。
+**完了条件**: 型が定義され、ビルドが通る
 
 ### Step 2.4: Job ノード
 
@@ -124,7 +123,7 @@
 
 - `Job` class（仕様 §2.4）
 
-**完了条件**: 型が定義され、ビルドが通る。
+**完了条件**: 型が定義され、ビルドが通る
 
 ### Step 2.5: Step ノード群
 
@@ -132,7 +131,7 @@
 
 - `Step`, `StepExec`, `StepExecKind`, `ExecRun`, `ExecAction`（仕様 §2.5）
 
-**完了条件**: 型が定義され、ビルドが通る。
+**完了条件**: 型が定義され、ビルドが通る
 
 ### Step 2.6: 構造ノード群
 
@@ -149,26 +148,26 @@
 - `Container`, `Services`, `Service`, `Credentials`（仕様 §2.14）
 - `WorkflowCall`, `WorkflowCallInput`, `WorkflowCallSecret`（仕様 §2.15）
 
-**完了条件**: 型が定義され、ビルドが通る。
+**完了条件**: 型が定義され、ビルドが通る
 
 ### Step 2.7: ParseResult の更新
 
 **ファイル**: `src/Seiton.Core/Parsing/Diagnostics.cs`
 
-- `ParseResult.Workflow` を `WorkflowDocument` → `Workflow?` に変更
+- `ParseResult.Workflow` の型を `WorkflowDocument` → `Workflow?` に変更
 - `WorkflowDocument` は非推奨化（互換性のため一時的に残す）
 
-**完了条件**: ビルドが通る（ParseResult を使う箇所は一時的に null を返す）。
+**完了条件**: ビルドが通る。ParseResult を使う箇所は一時的に null を返す
 
 ---
 
-## Phase 3: パーサー書き換え — AST 構築
+## Phase 3: パーサー書き換え（AST 構築）
 
-**目的**: 既存の shape 検証ロジックを維持しつつ、typed AST を構築するようにパーサーを書き換える。
+**目標**: 既存の shape 検証ロジックを維持しつつ、typed AST を構築するようにパーサーを書き換える
 
 ### Step 3.1: Scalar ヘルパー実装
 
-**ファイル**: `src/Seiton.Core/Parsing/WorkflowParser.cs`（or 分割先）
+**ファイル**: `src/Seiton.Core/Parsing/WorkflowParser.cs`（先に着手）
 
 - `parseString()` → `StringNode`（仕様 §4.1）
 - `parseBool()` → `BoolNode`（仕様 §4.2）
@@ -181,11 +180,11 @@
 
 **テスト**: 各ヘルパーの単体テスト（FakeYamlStreamReader 使用）
 
-**完了条件**: ヘルパーが値を返し、テストがパスする。
+**完了条件**: ヘルパーが値を返し、テストがパスする
 
 ### Step 3.2: Workflow トップレベルパースの AST 化
 
-**目的**: `Parse()` が `Workflow` AST を返すようにする。
+**目標**: `Parse()` が `Workflow` AST を返すようにする
 
 - まず `name`, `run-name` を `StringNode` で返す
 - `on`, `jobs` はまだスタブ（空配列）
@@ -194,18 +193,18 @@
 
 **テスト**: `Parse(minimalWorkflow)` が `Workflow { Name = "test", Jobs = {} }` を返すことを検証
 
-**完了条件**: `ParseResult.Workflow` が非 null の `Workflow` を返す。既存テスト全パス。
+**完了条件**: `ParseResult.Workflow` が非 null の `Workflow` を返す。既存テストがパス
 
 ### Step 3.3: Permissions / Env / Defaults / Concurrency パース
 
-- `ParsePermissions()` → `Permissions` node（仕様 §3.5）
-- `ParseEnv()` → `Env` node（仕様 §3.6）
-- `ParseDefaults()` → `Defaults` node（仕様 §3.7）
-- `ParseConcurrency()` → `Concurrency` node（仕様 §3.8）
+- `ParsePermissions()` → `Permissions` node（パーサー仕様 §3.5）
+- `ParseEnv()` → `Env` node（パーサー仕様 §3.6）
+- `ParseDefaults()` → `Defaults` node（パーサー仕様 §3.7）
+- `ParseConcurrency()` → `Concurrency` node（パーサー仕様 §3.8）
 
 **テスト**: 各 parse 関数の yaml → AST node 変換テスト
 
-**完了条件**: workflow.Permissions / Env / Defaults / Concurrency が populated。テストパス。
+**完了条件**: workflow.Permissions / Env / Defaults / Concurrency が populated。テストパス
 
 ### Step 3.4: Events パースの AST 化
 
@@ -216,7 +215,7 @@
 
 **テスト**: `on: push`, `on: [push, pull_request]`, `on: { push: { branches: [main] } }` のテスト
 
-**完了条件**: `workflow.On` が typed `Event[]` を持つ。既存 on テスト全パス。
+**完了条件**: `workflow.On` が typed `Event[]` を持つ。既存 on テストがパス
 
 ### Step 3.5: ScheduledEvent / WorkflowDispatchEvent / WorkflowCallEvent パース
 
@@ -233,7 +232,7 @@
 
 **テスト**: 各イベント型の yaml → AST 変換テスト
 
-**完了条件**: 全イベント型が構造化 AST を返す。
+**完了条件**: 全イベント型が構造化 AST を返す
 
 ### Step 3.6: Job パースの AST 化
 
@@ -248,7 +247,7 @@
 
 **テスト**: 各 Job 下位構造の yaml → AST 変換テスト
 
-**完了条件**: `workflow.Jobs["job-id"]` が typed `Job` を返す。既存 job テスト全パス。
+**完了条件**: `workflow.Jobs["job-id"]` が typed `Job` を返す。既存 job テストがパス
 
 ### Step 3.7: Step パースの AST 化
 
@@ -259,15 +258,15 @@
 
 **テスト**: run step, uses step, docker step の yaml → AST 変換テスト
 
-**完了条件**: `job.Steps[i].Exec` が `ExecRun` or `ExecAction` を返す。既存 step テスト全パス。
+**完了条件**: `job.Steps[i].Exec` が `ExecRun` or `ExecAction` を返す。既存 step テストがパス
 
 ### Step 3.8: WorkflowDocument の廃止
 
 - `WorkflowDocument` を削除
-- `ParseResult.Workflow` が `Workflow?` を返すことを全テストで確認
+- `ParseResult.Workflow` が `Workflow?` を返すことをテストで確認
 - ベンチマークの更新
 
-**完了条件**: `WorkflowDocument` への参照がコード上にない。全テスト・ベンチマークパス。
+**完了条件**: `WorkflowDocument` への参照がコード上にない。テスト・ベンチマークパス
 
 ---
 
@@ -275,56 +274,56 @@
 
 ### Step 4.1: ParseMapping ヘルパー
 
-- 仕様 §3.3 の汎用 mapping 走査ルーチンを実装
-- case-insensitive / case-sensitive の指定可能
+- パーサー仕様 §3.3 の汎用 mapping 走査ルーチンを実装
+- case-insensitive / case-sensitive の切り替え可能
 - 重複キー検出（duplicate key → error、先勝ち）
 - `<<` merge key → error
 
-**テスト**: 重複キー、merge key のErrorがdiagnosticsに出ること
+**テスト**: 重複キー、merge key の Error が diagnostics に出ること
 
-**完了条件**: mapping 走査の共通ルーチンが動作し、テストパス。
+**完了条件**: mapping 走査の共通ルーチンが動作し、テストパス
 
-### Step 4.2: 既存パース関数を ParseMapping に移行
+### Step 4.2: 既存パース関数の ParseMapping に移行
 
 - `ParseJobsMapping`, `ParseOnMapping`, 各 parse 関数を汎用 mapping ルーチン経由に書き換え
 - 重複キー検出が全 mapping で有効になる
 
-**完了条件**: 既存テスト全パス。新たに duplicate key テスト追加。
+**完了条件**: 既存テストがパス。新たに duplicate key テスト追加
 
 ---
 
 ## Phase 5: Visitor / Pass パターン
 
-**目的**: AST 巡回の基盤を構築し、ルールエンジンの土台を作る。
+**目標**: AST 巡回の基盤を構築し、ルールエンジンの土台を作る
 
 ### Step 5.1: IPass インターフェースと WorkflowVisitor
 
 **ファイル**: `src/Seiton.Core/Linting/IPass.cs`, `WorkflowVisitor.cs`
 
-- `IPass` interface（仕様 §8.1）
-- `WorkflowVisitor`（仕様 §8.2）
+- `IPass` interface（パーサー仕様 §8.1, C# 実装仕様 §5.1）
+- `WorkflowVisitor`（パーサー仕様 §8.2, C# 実装仕様 §5.2）
 - 巡回順: WorkflowPre → JobPre → Step → JobPost → WorkflowPost
 
 **テスト**: dummy pass で巡回順序を検証
 
-**完了条件**: Visitor が全ノードを正しい順序で訪問する。
+**完了条件**: Visitor が全ノードを正しい順序で訪問する
 
 ### Step 5.2: IRule インターフェース
 
 **ファイル**: `src/Seiton.Core/Linting/IRule.cs`
 
-- `IRule : IPass`（仕様 §8.4）
+- `IRule : IPass`（パーサー仕様 §8.3, C# 実装仕様 §5.3）
 - `Id`, `Name`, `GetDiagnostics()`, `SetConfig()`
 
-**完了条件**: interface が定義され、ビルドが通る。
+**完了条件**: interface が定義され、ビルドが通る
 
-### Step 5.3: 既存 syntax diagnostics を SyntaxRule に移行
+### Step 5.3: 既存 syntax diagnostics の SyntaxRule に移行
 
 - パーサー内の未知キー検出・排他検証等は引き続きパーサーで行う
-- Visitor 側に移行する候補: permissions の値検証、reusable workflow 制約のうちセマンティックなもの等
-- 最初は 1-2 個のルールを試作して Visitor パイプラインの動作を確認
+- Visitor 側に移行する候補: permissions の値検証、reusable workflow 制約など、よりセマンティックなもの
+- 最初の 1-2 個のルールを試作して Visitor パイプラインの動作を確認
 
-**完了条件**: 少なくとも 1 つの Rule が Visitor 経由で diagnostics を返す。
+**完了条件**: 少なくとも 1 つの Rule が Visitor 経由で diagnostics を返す
 
 ---
 
@@ -334,11 +333,11 @@
 
 **ファイル**: `src/Seiton.Core/Generated/Availability.g.cs`
 
-- 仕様 §7.2 の完全な availability table を生成
+- パーサー仕様 §7.2 の完全な availability table を生成
 - 現行 `ExpressionSemanticAnalyzer` の手実装を置換
 - キー位置（`if:` / `env:` / `with:` 等）ごとの粒度で管理
 
-**完了条件**: semantic analyzer が generated table を参照。テストパス。
+**完了条件**: semantic analyzer が generated table を参照。テストパス
 
 ### Step 6.2: Webhook Types テーブル
 
@@ -347,7 +346,7 @@
 - 現行 `OnEventSpecs` の手実装を generated data で置換可能にする
 - 初期は手実装で十分。生成スクリプトは後回しで可
 
-**完了条件**: スクリプト or 手動で最新データが反映される仕組みの設計。
+**完了条件**: スクリプト or 手動で最新データが反映される仕組みの設計
 
 ### Step 6.3: Popular Actions Metadata
 
@@ -357,32 +356,32 @@
 - action.yml から input 名・型を取得し、static table 化
 - ルールエンジンから参照（パーサーは直接使わない）
 
-**完了条件**: 設計と初期データの投入。
+**完了条件**: 設計と初期データの投入
 
 ---
 
 ## Phase 7: 式パーサー改善
 
-### Step 7.1: 算術演算の除去検討
+### Step 7.1: 算術演算子の除去検討
 
 - 現行 `ParseAdditive` / `ParseMultiplicative` は GitHub Actions 仕様外
-- 仕様 §6.2 に従い、使用中のテストを確認のうえ除去 or 非推奨化
+- パーサー仕様 §6.2 に従い、使用中のテストを確認して除去 or 非推奨化
 
-**完了条件**: 判断を記録。除去する場合はテスト更新。
+**完了条件**: 判断を記録。除去する場合はテスト更新
 
 ### Step 7.2: ExprType 型階層の導入
 
-- `AnyType`, `NullType`, `BoolType`, `NumberType`, `StringType`, `ObjectType`, `ArrayType`（仕様 §7.3）
+- `AnyType`, `NullType`, `BoolType`, `NumberType`, `StringType`, `ObjectType`, `ArrayType`（パーサー仕様 §7.3）
 - `ExprSemanticsChecker` に bottom-up 型推論を追加
 
-**完了条件**: リテラル・関数戻り値・context プロパティの型推論が動作する。
+**完了条件**: リテラル・関数戻り値・context プロパティの型推論が動作する
 
 ### Step 7.3: 式 Visitor
 
-- `VisitExprNode()` パターンの実装（仕様 §6.5）
+- `VisitExprNode()` パターンの実装（パーサー仕様 §6.5, C# 実装仕様 §6.1）
 - semantic checker をこのパターンで書き直す
 
-**完了条件**: 式 AST の巡回が Visitor パターンで動作する。
+**完了条件**: 式 AST の巡回が Visitor パターンで動作する
 
 ---
 
@@ -393,14 +392,14 @@
 - `.references/actionlint-main/testdata/` の fixture を使った期待 diagnostics 照合テスト
 - 既存の smoke テスト + err テスト（`empty.yaml`, `empty_on.yaml`, `case_sensitive_keys.yaml`）を拡充
 
-**完了条件**: 主要テストケースで期待 diagnostics サブセット一致。
+**完了条件**: 主要テストケースで期待 diagnostics サブセットが一致
 
 ### Step 8.2: AST 構造テスト
 
 - 各 AST ノードが yaml から正しく構築されることの property-based テスト
 - `FakeYamlStreamReader` を使ったパーサー単体テスト
 
-**完了条件**: 全 AST ノード型に最低 1 つの構築テスト。
+**完了条件**: 全 AST ノード型に最低 1 つの構築テスト
 
 ### Step 8.3: ベンチマーク更新
 
@@ -408,7 +407,7 @@
 - adapter 層のオーバーヘッド測定
 - allocation 回帰テスト（`[MemoryDiagnoser]` で tracking）
 
-**完了条件**: ベンチマーク結果のベースライン記録。
+**完了条件**: ベンチマーク結果のベースライン記録
 
 ---
 
@@ -421,8 +420,8 @@ Phase 1 (adapter)
             ├─> Phase 4 (mapping helpers)
             └─> Phase 5 (Visitor/Pass)
                  └─> Phase 6 (generated data)
-Phase 7 (expression improvements) — Phase 3 以降いつでも着手可
-Phase 8 (testing/benchmarks)      — 各 Phase 完了時に随時実施
+Phase 7 (expression improvements)  ← Phase 3 以降いつでも着手可
+Phase 8 (testing/benchmarks)       ← 各 Phase 完了時に随時実施
 ```
 
 ---
