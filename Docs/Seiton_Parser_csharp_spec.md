@@ -1,12 +1,16 @@
 # Seiton Parser C# Implementation Specification
 
 > Implementation specification for the parser described in `Seiton_Parser_spec.md`, targeting C# with zero-allocation / high-performance design.
+> This is a companion to `Seiton_Parser_go_spec.md` (Go target).
+> Both language specs share the same §0–§11 outline; only language-specific content differs.
 
 ---
 
-## 0. Gap Analysis of Current C# Implementation
+## 0. C# Preamble
 
-### 0.1 Features Missing Compared to actionlint (Go)
+### 0.1 Gap Analysis of Current C# Implementation
+
+#### 0.1.1 Features Missing Compared to actionlint (Go)
 
 Differences between `.references/actionlint-main` implementation and `src/Seiton.Core/Parsing`.
 
@@ -32,14 +36,14 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
 | **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | `OnEventSpecs` has webhook events + activity types (hand-implemented). Availability / popular actions not implemented |
 
-### 0.2 Perspectives to Supplement from ghalint
+#### 0.1.2 Perspectives to Supplement from ghalint
 
 | Perspective | Details |
 |---|---|
 | Polymorphic YAML fields | Custom parsing patterns for `permissions` (scalar or mapping), `container` (scalar or mapping), `secrets` (`"inherit"` or mapping) — current C# only handles `secrets` |
 | Minimal policy model | ghalint defines structs only for needed fields. This spec builds a full AST but maintains all Job/Step fields to support future rules |
 
-### 0.3 Perspectives to Supplement from zizmor
+#### 0.1.3 Perspectives to Supplement from zizmor
 
 | Perspective | Details |
 |---|---|
@@ -47,11 +51,9 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 | JSON Schema auxiliary validation | May be implemented later with vendored schema. Out of scope for this parser spec |
 | Context risk table (`context-capabilities`) | Managed as generated data. Belongs to the rule layer, not the parser |
 
----
+### 0.2 Design Principles
 
-## 1. Design Principles
-
-### 1.1 Zero-Allocation Policy
+#### 0.2.1 Zero-Allocation Policy
 
 1. Accept UTF-8 input as `ReadOnlySpan<byte>`
 2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison; avoid `string` comparison
@@ -60,7 +62,7 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 5. Use generated static tables for metadata lookup
 6. Do not hold YAML library-specific types outside the adapter layer
 
-### 1.2 When String Materialization is Allowed
+#### 0.2.2 When String Materialization is Allowed
 
 String conversion is permitted only in these cases:
 
@@ -70,7 +72,7 @@ String conversion is permitted only in these cases:
 
 As a rule, **do not materialize strings for AST storage**.
 
-### 1.3 Things to Avoid
+#### 0.2.3 Things to Avoid
 
 1. DOM construction of the entire YAML
 2. Conversion to `Dictionary<string, object>`
@@ -79,14 +81,12 @@ As a rule, **do not materialize strings for AST storage**.
 5. `new T[]`, `List<T>`, `Dictionary<TKey, TValue>` on hot paths
 6. `GetScalarString()` on success paths
 
----
-
-## 2. YAML Adapter Layer (Anti-Corruption Layer)
+### 0.3 YAML Adapter Layer (Anti-Corruption Layer)
 
 An **Anti-Corruption Layer** is placed between the parser core and the YAML library.
 This layer ensures that replacing the YAML serializer/deserializer does not propagate changes to the parser core.
 
-### 2.1 Architecture
+#### 0.3.1 Architecture
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -107,7 +107,7 @@ This layer ensures that replacing the YAML serializer/deserializer does not prop
                  Adapter     (for testing)
 ```
 
-### 2.2 IYamlStreamReader Interface
+#### 0.3.2 IYamlStreamReader Interface
 
 The **sole YAML reading contract** that the parser core depends on.
 
@@ -141,7 +141,7 @@ public interface IYamlStreamReader
 }
 ```
 
-### 2.3 Custom Enumerations
+#### 0.3.3 Custom Enumerations
 
 The YAML event types and tag types referenced by the parser core are custom enums independent of any YAML library.
 
@@ -180,7 +180,7 @@ public readonly record struct TextPosition(
     int Column);
 ```
 
-### 2.4 VYamlStreamAdapter (VYaml Implementation)
+#### 0.3.4 VYamlStreamAdapter (VYaml Implementation)
 
 The current default implementation. Holds a VYaml `YamlParser` internally and converts it to `IYamlStreamReader`.
 
@@ -212,7 +212,7 @@ internal sealed ref struct VYamlStreamAdapter : IYamlStreamReader
 
 **Important**: VYaml-specific types (`ParseEventType`, `Marker`, `YamlParser`, etc.) appear only in this file. The parser core and tests never reference them.
 
-### 2.5 Rationale for the Adapter Layer
+#### 0.3.5 Rationale for the Adapter Layer
 
 | Problem | Solved by adapter |
 |---|---|
@@ -222,14 +222,14 @@ internal sealed ref struct VYamlStreamAdapter : IYamlStreamReader
 | Need to replace with another serializer like YamlDotNet | Just implement a new adapter; parser remains unchanged |
 | Scalar tag retrieval (`!!str`, `!!int`, etc.) differs per library | Absorbed by normalizing to `ScalarTag` enum |
 
-### 2.6 Replacement Procedure
+#### 0.3.6 Replacement Procedure
 
 1. Create a new adapter class implementing `IYamlStreamReader` (e.g., `YamlDotNetStreamAdapter`)
 2. Replace the adapter factory in the entry point (`WorkflowParser.Parse()`)
 3. Parse functions in the parser core require **no changes at all**
 4. Existing tests pass as-is (because the `IYamlStreamReader` contract is the same)
 
-### 2.7 Scalar Tag Information
+#### 0.3.7 Scalar Tag Information
 
 Tag information equivalent to actionlint (Go)'s `yaml.Node.Tag` (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`) is returned by the adapter layer's `IYamlStreamReader.GetScalarTag()` as a `ScalarTag` enum.
 
@@ -239,7 +239,7 @@ Tag information equivalent to actionlint (Go)'s `yaml.Node.Tag` (`!!str`, `!!boo
 
 The parser core references only the `ScalarTag` enum and has no knowledge of library-specific tag representations.
 
-### 2.8 Relationship with Current VYamlStreamReader
+#### 0.3.8 Relationship with Current VYamlStreamReader
 
 The current `VYamlStreamReader` (`ref struct`) is the predecessor of `IYamlStreamReader`. Going forward:
 
@@ -252,19 +252,94 @@ The current `VYamlStreamReader` (`ref struct`) is the predecessor of `IYamlStrea
 
 ---
 
-## 3. AST C# Type Definitions
+## 1. Overall Parser Flow (Spec §1)
+
+### 1.1 Entry Point (Spec §1.1)
+
+```csharp
+public static ParseResult Parse(byte[] utf8Yaml, string filePath)
+```
+
+- Return: `ParseResult { Workflow?, Diagnostic[], HasFatalError }`
+- Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null
+- Errors during AST construction are accumulated, not immediately fatal
+
+### 1.2 Parse Pipeline
+
+```
+Parse(byte[], string)
+  1. Create IYamlStreamReader via VYamlStreamAdapter
+  2. reader.SkipHeader()
+  3. WorkflowParser.ParseWorkflow(reader) → Workflow AST + Diagnostic[]
+  4. Return ParseResult
+```
+
+### 1.3 Linter Integration
+
+Target architecture:
+
+```csharp
+public sealed class LintEngine
+{
+    public LintResult Check(byte[] utf8Yaml, string filePath)
+    {
+        // 1. Parse(utf8Yaml, filePath) → ParseResult
+        // 2. Construct IRule set
+        // 3. WorkflowVisitor.Visit(workflow)
+        // 4. Collect diagnostics from each Rule
+        // 5. FilterErrors → Sort + Dedup → Output
+    }
+}
+```
+
+---
+
+## 2. AST Definitions (Spec §2)
 
 > For field semantics and constraints, see `Seiton_Parser_spec.md` §2.
 > Only the C# type structure is defined here.
 
-### 3.1 AST Design Principles
+### 2.1 Primitive Types (Spec §2.6)
+
+```csharp
+public sealed class StringNode
+{
+    public Utf8Slice Value { get; init; }
+    public bool Quoted { get; init; }
+    public StringNode? Expression { get; init; }
+    public TextRange Range { get; init; }
+}
+
+public sealed class BoolNode
+{
+    public bool Value { get; init; }
+    public StringNode? Expression { get; init; }
+    public TextRange Range { get; init; }
+}
+
+public sealed class IntNode
+{
+    public long Value { get; init; }
+    public StringNode? Expression { get; init; }
+    public TextRange Range { get; init; }
+}
+
+public sealed class FloatNode
+{
+    public double Value { get; init; }
+    public StringNode? Expression { get; init; }
+    public TextRange Range { get; init; }
+}
+```
+
+AST design principles:
 
 - Use `sealed class` with `{ get; init; }` properties
 - TextRange is held as `TextRange Range` on every node
 - Nullable types represent YAML omission
 - Collections use `IReadOnlyList<T>` or `IReadOnlyDictionary<TKey, TValue>` for public API; internally built with arrays or dictionaries
 
-### 3.2 Workflow
+### 2.2 Workflow (Spec §2.2)
 
 ```csharp
 public sealed class Workflow
@@ -282,7 +357,7 @@ public sealed class Workflow
 }
 ```
 
-### 3.3 Events
+### 2.3 Events (Spec §2.3)
 
 ```csharp
 public abstract class Event
@@ -398,7 +473,7 @@ public sealed class RepositoryDispatchEvent : Event
 }
 ```
 
-### 3.4 Job
+### 2.4 Job (Spec §2.4)
 
 ```csharp
 public sealed class Job
@@ -425,7 +500,7 @@ public sealed class Job
 }
 ```
 
-### 3.5 Step / StepExec
+### 2.5 Step and Exec (Spec §2.5)
 
 ```csharp
 public sealed class Step
@@ -464,40 +539,7 @@ public sealed class ExecAction : StepExec
 }
 ```
 
-### 3.6 Common Nodes
-
-```csharp
-public sealed class StringNode
-{
-    public Utf8Slice Value { get; init; }
-    public bool Quoted { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class BoolNode
-{
-    public bool Value { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class IntNode
-{
-    public long Value { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class FloatNode
-{
-    public double Value { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
-```
-
-### 3.7 Structural Nodes
+### 2.6 Structural Nodes (Spec §2.7–§2.11)
 
 ```csharp
 public sealed class Permissions
@@ -562,6 +604,18 @@ public sealed class Runner
     public TextRange Range { get; init; }
 }
 
+public sealed class WorkflowCall
+{
+    public StringNode Uses { get; init; }
+    public Dictionary<string, WorkflowCallInput>? Inputs { get; init; }
+    public Dictionary<string, WorkflowCallSecret>? Secrets { get; init; }
+    public bool InheritSecrets { get; init; }
+}
+```
+
+### 2.7 Strategy / Matrix (Spec §2.13)
+
+```csharp
 public sealed class Strategy
 {
     public Matrix? Matrix { get; init; }
@@ -591,21 +645,11 @@ public sealed class MatrixCombinations
     public StringNode? Expression { get; init; }
     public IReadOnlyList<IReadOnlyDictionary<string, RawYamlValue>>? Entries { get; init; }
 }
+```
 
-public abstract class RawYamlValue { }
-public sealed class RawYamlString : RawYamlValue
-{
-    public StringNode Value { get; init; }
-}
-public sealed class RawYamlArray : RawYamlValue
-{
-    public IReadOnlyList<RawYamlValue> Items { get; init; }
-}
-public sealed class RawYamlObject : RawYamlValue
-{
-    public IReadOnlyDictionary<string, RawYamlValue> Properties { get; init; }
-}
+### 2.8 Container / Services / Credentials (Spec §2.14)
 
+```csharp
 public sealed class Container
 {
     public StringNode Image { get; init; }
@@ -638,59 +682,323 @@ public sealed class Credentials
     public StringNode? Expression { get; init; }
     public TextRange Range { get; init; }
 }
+```
 
-public sealed class WorkflowCall
+### 2.9 RawYAMLValue
+
+```csharp
+public abstract class RawYamlValue { }
+public sealed class RawYamlString : RawYamlValue
 {
-    public StringNode Uses { get; init; }
-    public Dictionary<string, WorkflowCallInput>? Inputs { get; init; }
-    public Dictionary<string, WorkflowCallSecret>? Secrets { get; init; }
-    public bool InheritSecrets { get; init; }
+    public StringNode Value { get; init; }
+}
+public sealed class RawYamlArray : RawYamlValue
+{
+    public IReadOnlyList<RawYamlValue> Items { get; init; }
+}
+public sealed class RawYamlObject : RawYamlValue
+{
+    public IReadOnlyDictionary<string, RawYamlValue> Properties { get; init; }
 }
 ```
 
 ---
 
-## 4. Entry Point and Output Model
+## 3. Parse Algorithms (Spec §3)
 
-### 4.1 Entry Point
+> For the full parse function → C# method mapping table, see Appendix A.
+
+### 3.1 Parser State
 
 ```csharp
-public static ParseResult Parse(byte[] utf8Yaml, string filePath)
+public ref struct WorkflowParser
+{
+    private IYamlStreamReader _reader;
+    private List<Diagnostic> _diagnostics;
+}
 ```
 
-- Return: `ParseResult { Workflow?, Diagnostic[], HasFatalError }`
-- Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null
-- Errors during AST construction are accumulated, not immediately fatal
+The parser accumulates diagnostics in a list and never aborts on the first error (multi-error recovery, Spec §5.1).
 
-### 4.2 Diagnostic Type
+### 3.2 Mapping Traversal (Spec §3.3)
 
 ```csharp
-public readonly record struct Diagnostic(
-    DiagnosticSeverity Severity,
-    string Message,
-    TextRange Location,
-    string? RuleId = null,
-    TextRange[]? RelatedLocations = null,
-    string? Help = null);
+// Target signature. Iterates a YAML mapping with duplicate detection and optional case-insensitivity.
+private void ParseMapping(string sectionName, bool allowEmpty, bool caseSensitive, Action<string, StringNode> handler)
 ```
 
-### 4.3 TextRange
+Mapping traversal behavior:
+1. Check for null scalar → if `allowEmpty`, return; otherwise error
+2. Expect `MappingStart`
+3. Read key/value pairs via `IYamlStreamReader`
+4. Normalize key to lower-case if `caseSensitive = false`
+5. Detect duplicate keys; report error
+6. Detect `<<` (YAML merge key); report error
+7. Invoke handler for each entry
+8. If not `allowEmpty` and 0 entries, report error
+
+### 3.3 Workflow Parse (Spec §3.2)
 
 ```csharp
-public readonly record struct TextRange(
-    int Start,
-    int Length,
-    int StartLine,
-    int StartColumn,
-    int EndLine,
-    int EndColumn);
+private Workflow ParseWorkflow(IYamlStreamReader reader)
+```
+
+Top-level mapping traversal:
+- `"name"` → `ParseString`
+- `"run-name"` → `ParseString`
+- `"on"` → `ParseEvents`
+- `"permissions"` → `ParsePermissions`
+- `"env"` → `ParseEnv`
+- `"defaults"` → `ParseDefaults`
+- `"concurrency"` → `ParseConcurrency`
+- `"jobs"` → `ParseJobs`
+- Other → `unexpectedKey`
+
+Post-validation: `on` and `jobs` are required.
+
+### 3.4 Events Parse (Spec §3.4)
+
+```csharp
+private IReadOnlyList<Event> ParseEvents(IYamlStreamReader reader)
+private Event ParseEventWithNoConfig(IYamlStreamReader reader)
+```
+
+Three forms: scalar → single event, sequence → multiple events, mapping → events with config.
+
+For mapping form, dispatches by event name:
+- `"schedule"` → `ParseScheduleEvent`
+- `"workflow_dispatch"` → `ParseWorkflowDispatchEvent`
+- `"repository_dispatch"` → `ParseRepositoryDispatchEvent`
+- `"workflow_call"` → `ParseWorkflowCallEvent`
+- other → `ParseWebhookEvent`
+
+### 3.5 Structural Section Parse (Spec §3.5–§3.8)
+
+```csharp
+private Permissions? ParsePermissions(IYamlStreamReader reader)   // Spec §3.5
+private Env? ParseEnv(IYamlStreamReader reader)                   // Spec §3.6
+private Defaults? ParseDefaults(IYamlStreamReader reader)         // Spec §3.7
+private Concurrency? ParseConcurrency(IYamlStreamReader reader)   // Spec §3.8
+private Environment? ParseEnvironment(IYamlStreamReader reader)   // Spec §3.14
+private IReadOnlyDictionary<string, StringNode>? ParseOutputs(IYamlStreamReader reader) // Spec §3.10
+```
+
+### 3.6 Job Parse (Spec §3.9–§3.10)
+
+```csharp
+private IReadOnlyDictionary<string, Job> ParseJobs(IYamlStreamReader reader) // Spec §3.9
+private Job ParseJob(StringNode id, IYamlStreamReader reader)                // Spec §3.10
+private Runner? ParseRunsOn(IYamlStreamReader reader)                        // Spec §3.13
+private FloatNode? ParseTimeoutMinutes(IYamlStreamReader reader)             // validates > 0
+```
+
+Job parsing includes reusable workflow detection and constraint validation (Spec §3.10.1):
+- If `uses` is present → reusable workflow call; certain keys are forbidden
+- If `uses` is absent → normal job; `steps` and `runs-on` are required
+
+### 3.7 Step Parse (Spec §3.11–§3.12)
+
+```csharp
+private IReadOnlyList<Step> ParseSteps(IYamlStreamReader reader)                     // Spec §3.11
+private Step ParseStep(IYamlStreamReader reader)                                      // Spec §3.12
+private ExecAction ParseStepExecAction(/* entries */, bool isDocker)                  // Spec §3.12.1
+private ExecRun ParseStepExecRun(/* entries */)                                       // Spec §3.12.2
+```
+
+Step parsing uses a **2-pass design** (Spec §3.12):
+1. **Pass 1**: Collect all entries, find `run` or `uses` key
+2. **Pass 2**: Dispatch to `ParseStepExecRun` or `ParseStepExecAction`
+
+### 3.8 Strategy / Matrix Parse (Spec §3.15)
+
+```csharp
+private Strategy? ParseStrategy(IYamlStreamReader reader)
+private Matrix? ParseMatrix(IYamlStreamReader reader)
+private MatrixCombinations? ParseMatrixCombinations(string section, IYamlStreamReader reader)
+private RawYamlValue ParseRawYamlValue(IYamlStreamReader reader)
+```
+
+### 3.9 Container / Services Parse (Spec §3.16–§3.18)
+
+```csharp
+private Container? ParseContainer(string section, IYamlStreamReader reader)  // Spec §3.16
+private Services? ParseServices(IYamlStreamReader reader)                    // Spec §3.17
+private Credentials? ParseCredentials(IYamlStreamReader reader)              // Spec §3.18
 ```
 
 ---
 
-## 5. Visitor / Pass C# Interfaces
+## 4. Scalar Parsing Helpers (Spec §4)
 
-### 5.1 Pass Interface
+Scalar tag information (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`) is obtained via `IYamlStreamReader.GetScalarTag()`, which returns a `ScalarTag` enum normalized by the adapter layer.
+
+### 4.1 parseString (Spec §4.1)
+
+```csharp
+private StringNode? ParseString(IYamlStreamReader reader, bool allowEmpty = false)
+```
+
+### 4.2 parseBool (Spec §4.2)
+
+```csharp
+private BoolNode? ParseBool(IYamlStreamReader reader)
+```
+
+### 4.3 parseInt (Spec §4.3)
+
+```csharp
+private IntNode? ParseInt(IYamlStreamReader reader)
+```
+
+### 4.4 parseFloat (Spec §4.4)
+
+```csharp
+private FloatNode? ParseFloat(IYamlStreamReader reader)
+```
+
+### 4.5 parseExpression (Spec §4.5)
+
+```csharp
+private StringNode? ParseExpression(IYamlStreamReader reader, string expecting)
+```
+
+### 4.6 mayParseExpression (Spec §4.6)
+
+```csharp
+private StringNode? MayParseExpression(IYamlStreamReader reader)
+```
+
+### 4.7 Collection Helpers (Spec §4.7)
+
+```csharp
+private IReadOnlyList<StringNode> ParseStringOrStringSequence(
+    string section, IYamlStreamReader reader, bool allowEmpty = false, bool allowElemEmpty = false)
+```
+
+---
+
+## 5. Error Recovery (Spec §5)
+
+### 5.1 Error Reporting
+
+```csharp
+private void AddError(TextRange location, string message)
+private void AddErrorf(TextRange location, string format, params object[] args)
+private void UnexpectedKey(StringNode key, string section, string[] expected)
+private void MissingExpression(TextRange location, string expecting)
+```
+
+### 5.2 Recovery Patterns
+
+The parser never aborts on a single error. Each parse function:
+1. Validates the current event kind
+2. On mismatch, reports an error and calls `reader.SkipCurrentNode()`
+3. The caller continues processing remaining entries
+
+| Situation | Recovery |
+|---|---|
+| Unknown key | error + `SkipCurrentNode()` |
+| Type mismatch | error + `SkipCurrentNode()` |
+| Missing required key | aggregate error after mapping traversal |
+| Exclusive constraint violation | aggregate error after mapping traversal |
+| YAML parse failure | Convert to `Diagnostic[]`, `Workflow = null` |
+| Duplicate key | error + ignore the later key (first wins) |
+
+---
+
+## 6. Expression Parser (Spec §6)
+
+### 6.1 Lexer (Spec §6.3)
+
+Inline lexing within `ExpressionParser`. Tokenizes the expression string during recursive descent.
+
+### 6.2 Parser (Spec §6.2)
+
+```csharp
+public static class ExpressionParser
+{
+    public static ExpressionNode[] Parse(ReadOnlySpan<char> expression, out int[] arguments);
+}
+```
+
+**Recursive descent precedence layers (lowest to highest):**
+
+| Precedence | Method | Operators |
+|---|---|---|
+| 1 (lowest) | `ParseOr()` | `\|\|` |
+| 2 | `ParseAnd()` | `&&` |
+| 3 | `ParseEquality()` + `ParseRelational()` | `==`, `!=`, `<`, `<=`, `>`, `>=` |
+| 4 | `ParseUnary()` | `!` (unary) |
+| 5 | Loop within `ParsePrimary()` | `.prop`, `.*`, `[idx]`, `(args)` |
+| 6 (highest) | `ParsePrimary()` | literals, identifiers, `(expr)` |
+
+**Note**: C# extension adds arithmetic operators (`+`, `-`, `*`, `/`, `%`) beyond the GitHub Actions expression spec.
+
+### 6.3 Expression AST (Spec §6.4)
+
+| Spec Node | C# Counterpart |
+|---|---|
+| `VariableNode` | `Identifier` |
+| `ObjectDerefNode` | `MemberAccess` |
+| `ArrayDerefNode` | `WildcardAccess` |
+| `IndexAccessNode` | `IndexAccess` |
+| `FuncCallNode` | `FunctionCall` |
+| `NotOpNode` | `Unary (Not)` |
+| `CompareOpNode` | `Binary (Equal/NotEqual/Less/…)` |
+| `LogicalOpNode` | `Binary (And/Or)` |
+
+### 6.4 Expression Visitor (Spec §6.5)
+
+```csharp
+public delegate void ExprNodeVisitor(ExpressionNode node, int parentId, bool entering);
+
+public static void VisitExprNode(
+    int nodeId,
+    ExpressionNode[] nodes,
+    int[] arguments,
+    ExprNodeVisitor visitor);
+```
+
+---
+
+## 7. Expression Semantic Analysis (Spec §7)
+
+### 7.1 Function Signatures (Spec §7.1)
+
+```csharp
+// Current implementation: arity-only check
+public static bool TryGetFunctionArity(string name, out int minArgs, out int maxArgs)
+```
+
+Target: full type-checking equivalent to Go's `FuncSignature` with overloaded resolution.
+
+### 7.2 Context Availability (Spec §7.2)
+
+```csharp
+// Current implementation: context root validation
+public class ExpressionSemanticAnalyzer
+{
+    // Checks that root identifiers (github, env, steps, etc.)
+    // are available at the current position
+}
+```
+
+Target: position-based context availability with per-key granularity.
+
+### 7.3 Type System (Spec §7.3)
+
+As a future implementation, a type system equivalent to actionlint's `ExprType` hierarchy will be introduced:
+- `AnyType` / `NullType` / `BoolType` / `NumberType` / `StringType`
+- `ObjectType` (properties map) / `ArrayType` (element type)
+- `EmptyObjectType` / `EmptyArrayType`
+
+Type inference is performed bottom-up in `ExprSemanticsChecker` while traversing expressions.
+
+---
+
+## 8. Visitor / Pass (Spec §8)
+
+### 8.1 Pass Interface (Spec §8.1)
 
 ```csharp
 public interface IPass
@@ -703,7 +1011,7 @@ public interface IPass
 }
 ```
 
-### 5.2 Visitor
+### 8.2 Visitor (Spec §8.2)
 
 ```csharp
 public sealed class WorkflowVisitor
@@ -741,7 +1049,19 @@ public sealed class WorkflowVisitor
 }
 ```
 
-### 5.3 Rule Interface
+Traversal order:
+
+```
+VisitWorkflowPre(workflow)      // all passes
+  for each job:
+    VisitJobPre(job)            // all passes
+    for each step:
+      VisitStep(step)           // all passes
+    VisitJobPost(job)           // all passes
+VisitWorkflowPost(workflow)     // all passes
+```
+
+### 8.3 Rule Interface (Spec §8.3)
 
 ```csharp
 public interface IRule : IPass
@@ -757,50 +1077,110 @@ Each Rule inspects the AST within `IPass` methods and accumulates diagnostics in
 
 ---
 
-## 6. Expression Parser C# Implementation
+## 9. Generated Data (Spec §9)
 
-### 6.1 Expression Visitor
+### 9.1 Data Files
 
-```csharp
-public delegate void ExprNodeVisitor(ExpressionNode node, int parentId, bool entering);
-
-public static void VisitExprNode(
-    int nodeId,
-    ExpressionNode[] nodes,
-    int[] arguments,
-    ExprNodeVisitor visitor);
-```
-
-### 6.2 Expression Type System
-
-As a future implementation, a type system equivalent to actionlint's `ExprType` hierarchy will be introduced:
-- `AnyType` / `NullType` / `BoolType` / `NumberType` / `StringType`
-- `ObjectType` (properties map) / `ArrayType` (element type)
-- `EmptyObjectType` / `EmptyArrayType`
-
-Type inference is performed bottom-up in `ExprSemanticsChecker` while traversing expressions.
-
----
-
-## 7. Generated Data Files
-
-| Data | Source | File Name |
+| Data | File | Description |
 |---|---|---|
-| Webhook event + activity types | GitHub Docs | `WebhookTypes.g.cs` |
-| Context availability table | GitHub Docs | `Availability.g.cs` |
-| Special function names | GitHub Docs | Within `Availability.g.cs` |
-| Popular actions metadata | Fetched from action.yml | `PopularActions.g.cs` |
+| Webhook event + activity types | `WebhookTypes.g.cs` | Static table mapping event names to allowed activity types and filter options |
+| Context availability | `Availability.g.cs` | Which expression contexts and special functions are available at each workflow position |
+| Popular actions metadata | `PopularActions.g.cs` | Well-known GitHub Actions with expected input/output names and types |
 
-### 7.1 Update Policy
+### 9.2 Update Policy
 
 - Fetch external data via update command (`Seiton.Update` or script)
 - Commit generated results as `.g.cs`
 - CI periodic runs detect diffs and create auto PRs
 - Parser and rules do not make network requests at runtime
 
-### 7.2 Relationship with Current `OnEventSpecs`
+#### 9.2.1 Relationship with Current `OnEventSpecs`
 
 `OnEventSpecs` is a hand-implemented event name + activity types table. It can be replaced by `WebhookTypes.g.cs` in the future, but the hand-implementation is sufficient initially.
+
+---
+
+## 10. Diagnostic Model (Spec §10)
+
+### 10.1 Diagnostic Structure (Spec §10.1)
+
+```csharp
+public readonly record struct Diagnostic(
+    DiagnosticSeverity Severity,
+    string Message,
+    TextRange Location,
+    string? RuleId = null,
+    TextRange[]? RelatedLocations = null,
+    string? Help = null);
+```
+
+TextRange:
+
+```csharp
+public readonly record struct TextRange(
+    int Start,
+    int Length,
+    int StartLine,
+    int StartColumn,
+    int EndLine,
+    int EndColumn);
+```
+
+### 10.2 Location Policy (Spec §10.2)
+
+| Situation | Primary location |
+|---|---|
+| Unknown key | Key position |
+| Type mismatch | Value position |
+| Missing required key | Section start position |
+| Exclusive constraint violation | Position of the causative key |
+| Duplicate key | Position of the 2nd key |
+| Expression error | Offset within expression mapped to source position |
+
+---
+
+## 11. Design Decisions
+
+### 11.1 Event-Stream vs DOM
+
+The C# implementation uses an event-stream parser (via `IYamlStreamReader`) rather than a DOM tree. This enables zero-allocation parsing where the YAML document is never fully materialized in memory. Trade-off: no random access to nodes (compared to Go's `yaml.Node` tree model).
+
+### 11.2 ref struct Adapter → Generic Type Parameter
+
+`ref struct` cannot implement interfaces in current C#. To maintain both the `ref struct` performance advantage and the adapter abstraction:
+
+- Use `WorkflowParser<TReader> where TReader : IYamlStreamReader` to enable JIT devirtualization
+- All parse functions become generic on `TReader`
+- The concrete adapter type is known at compile-time, eliminating virtual dispatch overhead
+
+### 11.3 Two-Pass Step Parsing (Spec §3.12)
+
+Same pattern as Go: steps are parsed in two passes because the step kind determines which keys are valid, but the `run`/`uses` key may appear anywhere in the mapping. With event-stream parsing, entries are buffered during Pass 1 since they cannot be re-read.
+
+### 11.4 Polymorphic YAML Fields (Spec §14)
+
+The event-stream equivalent of Go's `switch n.Kind` pattern:
+
+```csharp
+// Check current event kind for polymorphic dispatch
+switch (reader.CurrentKind)
+{
+    case YamlEventKind.Scalar:
+        // simple form
+        break;
+    case YamlEventKind.MappingStart:
+        // detailed form
+        break;
+    default:
+        AddError(reader.CurrentStart, "...");
+        reader.SkipCurrentNode();
+        break;
+}
+```
+
+### 11.5 Case Sensitivity (Spec §13)
+
+Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `ReadOnlySpan<byte>` comparison with `ToLowerInvariant` equivalence, avoiding string materialization.
 
 ---
 
