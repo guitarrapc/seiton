@@ -10,12 +10,13 @@
 | パーサー本体 | `WorkflowParser` は shape 検証 + diagnostics。parse 関数は `void`、AST を返さない |
 | 出力モデル | `WorkflowDocument` は boolean フラグ + `Utf8Slice` 2 つ、typed AST なし |
 | `on:` パース | イベント名検証 + options/types 検証済み。typed event node なし |
-| Job/Step | キー検証・排他制約済み。typed node なし |
+| Job/Step | キー検証・排他制約・reusable workflow 関連制約・`secrets: inherit` 形状検証あり。typed node なし |
 | permissions/defaults/concurrency | `SkipCurrentNode()` のみ |
 | 式パーサー | 再帰下降 + arena-style flat array で完成。算術演算は GHA 仕様外の独自拡張あり |
 | 式セマンティクス | context availability + function arity + 一部リテラル型チェック |
 | 式抽出 | `${{ }}` 抽出 → parse → validate パイプライン完成 |
 | イベントスペック | `OnEventSpecs` で 33 イベント + activity types + options を UTF-8 span で管理 |
+| テスト基盤 | `ParserTests` / `ExpressionTests` に加えて corpus smoke（actionlint/ghalint/zizmor と actionlint testdata）を実装済み |
 | Visitor / Pass | 未実装 |
 | Rule Engine | 未実装 |
 | Generated Data | `OnEventSpecs` のみ手実装。availability / popular actions 未実装 |
@@ -389,8 +390,9 @@
 
 ### Step 8.1: actionlint testdata ベースの統合テスト
 
-- `.references/actionlint-main/testdata/` の fixture を使った期待 diagnostics 照合テスト
-- 既存の smoke テスト + err テスト（`empty.yaml`, `empty_on.yaml`, `case_sensitive_keys.yaml`）を拡充
+- 現状: `.references/actionlint-main/testdata/` を含む corpus smoke（例外なく parse できること、broken fixture で失敗が出ること）は実装済み
+- 次ステップ: fixture ごとの期待 diagnostics（サブセット）照合に拡張する
+- 既存の単体テスト群（unknown key、on オプション排他、式関数/arity/type など）を diagnostics 照合方式に段階的に統一する
 
 **完了条件**: 主要テストケースで期待 diagnostics サブセットが一致
 
