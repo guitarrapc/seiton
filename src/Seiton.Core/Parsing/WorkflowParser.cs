@@ -250,6 +250,20 @@ public static class WorkflowParser
                 continue;
             }
 
+            if (keyUtf8.SequenceEqual("env"u8))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    ParseStringMapping(
+                        ref reader,
+                        diagnostics,
+                        $"job '{DecodeUtf8(source, jobId)}' env must be mapping",
+                        ExpressionValidationContext.Job);
+                }
+                continue;
+            }
+
             if (keyUtf8.SequenceEqual("steps"u8))
             {
                 reader.Read(); // consume key
@@ -501,8 +515,20 @@ public static class WorkflowParser
                     if (reader.CurrentEventType != ParseEventType.Scalar)
                     {
                         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar", reader.CurrentMark);
+                        reader.SkipCurrentNode();
                     }
-                    reader.SkipCurrentNode();
+                    else
+                    {
+                        var valueMark = reader.CurrentMark;
+                        var valueUtf8 = reader.GetScalarUtf8();
+                        ValidateExpressionText(
+                            valueUtf8,
+                            BuildScalarLocation(valueMark, valueUtf8.Length),
+                            ExpressionValidationContext.Step,
+                            diagnostics,
+                            parseWholeValueIfNoEmbedded: false);
+                        reader.Read();
+                    }
                 }
                 continue;
             }
@@ -532,6 +558,34 @@ public static class WorkflowParser
                         diagnostics,
                         ExpressionValidationContext.Step,
                         $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("with"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    ParseStringMapping(
+                        ref reader,
+                        diagnostics,
+                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with must be mapping",
+                        ExpressionValidationContext.Step);
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("env"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    ParseStringMapping(
+                        ref reader,
+                        diagnostics,
+                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
+                        ExpressionValidationContext.Step);
                 }
                 continue;
             }
@@ -1328,7 +1382,11 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseStringMapping(ref VYamlStreamReader reader, List<Diagnostic> diagnostics, string error)
+    private static void ParseStringMapping(
+        ref VYamlStreamReader reader,
+        List<Diagnostic> diagnostics,
+        string error,
+        ExpressionValidationContext? expressionContext = null)
     {
         if (reader.CurrentEventType != ParseEventType.MappingStart)
         {
@@ -1360,8 +1418,25 @@ public static class WorkflowParser
             if (reader.CurrentEventType != ParseEventType.Scalar)
             {
                 AddError(diagnostics, error, reader.CurrentMark);
+                reader.SkipCurrentNode();
+                continue;
             }
-            reader.SkipCurrentNode();
+
+            if (expressionContext.HasValue)
+            {
+                var valueMark = reader.CurrentMark;
+                var valueUtf8 = reader.GetScalarUtf8();
+                ValidateExpressionText(
+                    valueUtf8,
+                    BuildScalarLocation(valueMark, valueUtf8.Length),
+                    expressionContext.Value,
+                    diagnostics,
+                    parseWholeValueIfNoEmbedded: false);
+                reader.Read();
+                continue;
+            }
+
+            reader.Read();
         }
 
         if (reader.CurrentEventType == ParseEventType.MappingEnd)
@@ -1402,7 +1477,7 @@ public static class WorkflowParser
         var valueMark = reader.CurrentMark;
         var valueUtf8 = reader.GetScalarUtf8();
         var valueLocation = BuildScalarLocation(valueMark, valueUtf8.Length);
-        ValidateExpressionText(valueUtf8, valueLocation, context, diagnostics);
+        ValidateExpressionText(valueUtf8, valueLocation, context, diagnostics, parseWholeValueIfNoEmbedded: true);
         reader.Read();
     }
 
@@ -1410,7 +1485,8 @@ public static class WorkflowParser
         ReadOnlySpan<byte> valueUtf8,
         TextRange valueLocation,
         ExpressionValidationContext context,
-        List<Diagnostic> diagnostics)
+        List<Diagnostic> diagnostics,
+        bool parseWholeValueIfNoEmbedded)
     {
         var hasEmbedded = false;
         var i = 0;
@@ -1441,7 +1517,7 @@ public static class WorkflowParser
             i++;
         }
 
-        if (!hasEmbedded)
+        if (!hasEmbedded && parseWholeValueIfNoEmbedded)
         {
             var trimmed = TrimAsciiWhiteSpace(valueUtf8, 0, valueUtf8.Length);
             if (trimmed.Length <= 0)

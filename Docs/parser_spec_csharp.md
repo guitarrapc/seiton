@@ -630,13 +630,14 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 2. function signature: 主要組み込み関数の引数個数を検証
 3. extractor から parse + semantic を一体で実行する API を追加
 4. `WorkflowParser` の `jobs.<id>.if` / `jobs.<id>.steps[].if` で parse + semantic 検証を実行
+5. `WorkflowParser` の `jobs.<id>.env` / `jobs.<id>.steps[].env` / `jobs.<id>.steps[].with` / `jobs.<id>.steps[].run` は `${{ ... }}` 埋め込み式のみ semantic 検証を実行
 
 この段階の制約:
 
 1. 型推論ベースの厳密な型検証（例: `contains` の引数型妥当性）は未実装
 2. function call target は識別子のみ許容（member call の特殊ケースは未対応）
 3. availability table は actionlint 完全互換ではなく、主要 context に限定した最小セット
-4. parser 本体への接続は `if` キーから先行導入し、他の expression 許容キーは後続段で拡張する
+4. parser 本体への接続は `if` を優先して導入し、その後 `env` / `with` / `run` の埋め込み式へ段階拡張した
 
 実装上の教訓:
 
