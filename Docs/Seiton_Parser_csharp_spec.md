@@ -56,21 +56,23 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 #### 0.2.1 Zero-Allocation Policy
 
 1. Accept UTF-8 input as `ReadOnlySpan<byte>`
-2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison; avoid `string` comparison
+2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison
 3. Store `Utf8Slice` (offset + length) in AST, not `Span<T>`
-4. Never create temporary strings except for diagnostics
+4. Use `Utf8String` (owned byte copy) for dictionary keys; never `System.String`
 5. Use generated static tables for metadata lookup
 6. Do not hold YAML library-specific types outside the adapter layer
+7. **`System.String` is banned on the normal success path** — AST node fields, dictionary keys, parse function return types, and intermediate values must use the UTF-8 type vocabulary defined in §0.2.4
 
-#### 0.2.2 When String Materialization is Allowed
+#### 0.2.2 When `System.String` is Permitted (Exhaustive)
 
-String conversion is permitted only in these cases:
+`System.String` may appear **only** in the following locations:
 
-1. Display strings embedded in diagnostic messages
-2. Locations requiring hash key conversion where `Utf8Slice` handling is prohibitively expensive
-3. Values frequently referenced by downstream semantic rules where interning is beneficial
+1. **Diagnostic output** — `Diagnostic.Message`, `Diagnostic.RuleId`, `Diagnostic.Help`
+2. **Rule metadata** — `IRule.Id`, `IRule.Name` (compile-time constants)
+3. **Diagnostic-only adapter method** — `IYamlStreamReader.GetScalarString()`
+4. **Compile-time literal parameters** — section name strings passed to error-reporting helpers (e.g., `"jobs"` in `ParseMapping`)
 
-As a rule, **do not materialize strings for AST storage**.
+All other locations — AST node fields, dictionary keys, parse function return types, and intermediate values — must use the UTF-8 type vocabulary (§0.2.4).
 
 #### 0.2.3 Things to Avoid
 
@@ -80,6 +82,48 @@ As a rule, **do not materialize strings for AST storage**.
 4. LINQ during parsing
 5. `new T[]`, `List<T>`, `Dictionary<TKey, TValue>` on hot paths
 6. `GetScalarString()` on success paths
+7. `System.String` in AST fields or dictionary keys (use `Utf8Slice` / `Utf8String`)
+8. UTF-16 transcoding on the normal path
+
+#### 0.2.4 UTF-8 Type Vocabulary
+
+The following types form the string representation layer for the C# implementation. The YAML adapter delivers all scalars as UTF-8 bytes (`ReadOnlySpan<byte>`), and the parser preserves this representation throughout the AST.
+
+| Type | Ownership | Lifetime | Use Case |
+|---|---|---|---|
+| `ReadOnlySpan<byte>` | Non-owning, stack-only | Current parse position only | Transient key matching, value inspection in parse functions |
+| `Utf8Slice` | Non-owning (offset + length into input buffer) | Input buffer lifetime | AST scalar values (`StringNode.Value`, etc.) |
+| `Utf8String` | Owning (immutable `byte[]` copy) | Unbounded | Dictionary keys in AST, case-normalized identifiers |
+
+```csharp
+/// Owned immutable UTF-8 byte sequence.
+/// Used as dictionary key where the value must outlive the current parse position.
+/// Implements IEquatable<Utf8String> and GetHashCode over raw bytes.
+/// No UTF-16 transcoding occurs.
+public readonly struct Utf8String : IEquatable<Utf8String>
+{
+    private readonly byte[] _bytes;
+    public ReadOnlySpan<byte> Span => _bytes;
+    public int Length => _bytes.Length;
+
+    // Construction
+    public Utf8String(ReadOnlySpan<byte> utf8) => _bytes = utf8.ToArray();
+
+    // Equality and hashing operate directly on UTF-8 bytes
+    public bool Equals(Utf8String other) => Span.SequenceEqual(other.Span);
+    public override int GetHashCode() => XxHash3.HashToUInt64(_bytes);
+}
+```
+
+**Construction from parse context:**
+- From `ReadOnlySpan<byte>`: `new Utf8String(reader.GetScalarUtf8())` — copies the key bytes
+- From `Utf8Slice`: `slice.ToUtf8String(sourceBuffer)` — copies the referenced range
+- Case-normalized: `Utf8String.FromLowerAscii(span)` — copies with ASCII lower-case conversion
+
+**Design rationale:**
+- `Utf8Slice` avoids allocation for the vast majority of AST scalar values (names, expressions, etc.) that are read but never used as lookup keys
+- `Utf8String` allocates a small `byte[]` copy only for dictionary keys (job IDs, env var names, input names, etc.) where hashing and ownership are required
+- `System.String` is never constructed on the normal path — the parser operates entirely in UTF-8 byte space
 
 ### 0.3 YAML Adapter Layer (Anti-Corruption Layer)
 
@@ -337,7 +381,10 @@ AST design principles:
 - Use `sealed class` with `{ get; init; }` properties
 - TextRange is held as `TextRange Range` on every node
 - Nullable types represent YAML omission
-- Collections use `IReadOnlyList<T>` or `IReadOnlyDictionary<TKey, TValue>` for public API; internally built with arrays or dictionaries
+- Scalar values use `Utf8Slice` (non-owning reference into input buffer), never `System.String`
+- Dictionary keys use `Utf8String` (owned UTF-8 byte copy), never `System.String`
+- Collections use `IReadOnlyList<T>` or `IReadOnlyDictionary<Utf8String, TValue>` for public API; internally built with arrays or dictionaries
+- No AST node stores `System.String` — see §0.2.1 and §0.2.4 for the complete type vocabulary
 
 ### 2.2 Workflow (Spec §2.2)
 
@@ -351,8 +398,8 @@ public sealed class Workflow
     public Env? Env { get; init; }
     public Defaults? Defaults { get; init; }
     public Concurrency? Concurrency { get; init; }
-    public IReadOnlyDictionary<string, Job> Jobs { get; init; }
-        = new Dictionary<string, Job>();
+    public IReadOnlyDictionary<Utf8String, Job> Jobs { get; init; }
+        = new Dictionary<Utf8String, Job>();
     public TextRange Range { get; init; }
 }
 ```
@@ -401,7 +448,7 @@ public sealed class ScheduleEntry
 
 public sealed class WorkflowDispatchEvent : Event
 {
-    public IReadOnlyDictionary<string, DispatchInput>? Inputs { get; init; }
+    public IReadOnlyDictionary<Utf8String, DispatchInput>? Inputs { get; init; }
 }
 
 public sealed class DispatchInput
@@ -428,14 +475,14 @@ public enum DispatchInputType
 public sealed class WorkflowCallEvent : Event
 {
     public IReadOnlyList<WorkflowCallEventInput>? Inputs { get; init; }
-    public IReadOnlyDictionary<string, WorkflowCallEventSecret>? Secrets { get; init; }
-    public IReadOnlyDictionary<string, WorkflowCallEventOutput>? Outputs { get; init; }
+    public IReadOnlyDictionary<Utf8String, WorkflowCallEventSecret>? Secrets { get; init; }
+    public IReadOnlyDictionary<Utf8String, WorkflowCallEventOutput>? Outputs { get; init; }
 }
 
 public sealed class WorkflowCallEventInput
 {
     public StringNode Name { get; init; }
-    public string Id { get; init; }   // lower-case
+    public Utf8String Id { get; init; }   // lower-case (Utf8String.FromLowerAscii)
     public StringNode? Description { get; init; }
     public BoolNode? Required { get; init; }
     public StringNode? Default { get; init; }
@@ -485,7 +532,7 @@ public sealed class Job
     public Permissions? Permissions { get; init; }
     public Environment? Environment { get; init; }
     public Concurrency? Concurrency { get; init; }
-    public IReadOnlyDictionary<string, StringNode>? Outputs { get; init; }
+    public IReadOnlyDictionary<Utf8String, StringNode>? Outputs { get; init; }
     public Env? Env { get; init; }
     public Defaults? Defaults { get; init; }
     public StringNode? If { get; init; }
@@ -533,7 +580,7 @@ public sealed class ExecRun : StepExec
 public sealed class ExecAction : StepExec
 {
     public StringNode Uses { get; init; }
-    public IReadOnlyDictionary<string, StringNode>? Inputs { get; init; }
+    public IReadOnlyDictionary<Utf8String, StringNode>? Inputs { get; init; }
     public StringNode? Entrypoint { get; init; }   // docker only
     public StringNode? Args { get; init; }          // docker only
 }
@@ -545,7 +592,7 @@ public sealed class ExecAction : StepExec
 public sealed class Permissions
 {
     public StringNode? All { get; init; }               // "read-all" / "write-all"
-    public IReadOnlyDictionary<string, PermissionScope>? Scopes { get; init; }
+    public IReadOnlyDictionary<Utf8String, PermissionScope>? Scopes { get; init; }
     public TextRange Range { get; init; }
 }
 
@@ -558,7 +605,7 @@ public sealed class PermissionScope
 public sealed class Env
 {
     public StringNode? Expression { get; init; }        // entire ${{ }}
-    public IReadOnlyDictionary<string, EnvVar>? Vars { get; init; }
+    public IReadOnlyDictionary<Utf8String, EnvVar>? Vars { get; init; }
     public TextRange Range { get; init; }
 }
 
@@ -607,8 +654,8 @@ public sealed class Runner
 public sealed class WorkflowCall
 {
     public StringNode Uses { get; init; }
-    public Dictionary<string, WorkflowCallInput>? Inputs { get; init; }
-    public Dictionary<string, WorkflowCallSecret>? Secrets { get; init; }
+    public Dictionary<Utf8String, WorkflowCallInput>? Inputs { get; init; }
+    public Dictionary<Utf8String, WorkflowCallSecret>? Secrets { get; init; }
     public bool InheritSecrets { get; init; }
 }
 ```
@@ -629,7 +676,7 @@ public sealed class Matrix
     public StringNode? Expression { get; init; }
     public IReadOnlyList<MatrixCombinations>? Include { get; init; }
     public IReadOnlyList<MatrixCombinations>? Exclude { get; init; }
-    public IReadOnlyDictionary<string, MatrixRow>? Rows { get; init; }
+    public IReadOnlyDictionary<Utf8String, MatrixRow>? Rows { get; init; }
     public TextRange Range { get; init; }
 }
 
@@ -643,7 +690,7 @@ public sealed class MatrixRow
 public sealed class MatrixCombinations
 {
     public StringNode? Expression { get; init; }
-    public IReadOnlyList<IReadOnlyDictionary<string, RawYamlValue>>? Entries { get; init; }
+    public IReadOnlyList<IReadOnlyDictionary<Utf8String, RawYamlValue>>? Entries { get; init; }
 }
 ```
 
@@ -664,7 +711,7 @@ public sealed class Container
 public sealed class Services
 {
     public StringNode? Expression { get; init; }
-    public IReadOnlyDictionary<string, Service>? ServiceMap { get; init; }
+    public IReadOnlyDictionary<Utf8String, Service>? ServiceMap { get; init; }
     public TextRange Range { get; init; }
 }
 
@@ -698,7 +745,7 @@ public sealed class RawYamlArray : RawYamlValue
 }
 public sealed class RawYamlObject : RawYamlValue
 {
-    public IReadOnlyDictionary<string, RawYamlValue> Properties { get; init; }
+    public IReadOnlyDictionary<Utf8String, RawYamlValue> Properties { get; init; }
 }
 ```
 
@@ -722,20 +769,31 @@ The parser accumulates diagnostics in a list and never aborts on the first error
 
 ### 3.2 Mapping Traversal (Spec §3.3)
 
+Mapping traversal is **inlined** at each call site rather than using a callback delegate. This is because `ReadOnlySpan<byte>` (the key representation) cannot be captured in `Action<T>` delegates.
+
 ```csharp
-// Target signature. Iterates a YAML mapping with duplicate detection and optional case-insensitivity.
-private void ParseMapping(string sectionName, bool allowEmpty, bool caseSensitive, Action<string, StringNode> handler)
+// Conceptual pattern — each parse function embeds this loop directly.
+// No callback delegate; key matching is performed inline via ReadOnlySpan<byte>.
+private void ParseMappingInline(
+    ReadOnlySpan<byte> sectionNameUtf8,  // for diagnostics only
+    bool allowEmpty,
+    bool caseSensitive)
+{
+    // 1. Check for null scalar → allowEmpty ? return : error
+    // 2. Expect MappingStart
+    // 3. Loop: Read key as ReadOnlySpan<byte>
+    //    - Normalize to lower-case via Ascii.ToLower if !caseSensitive
+    //    - Detect duplicate keys (tracked via Utf8String set)
+    //    - Detect "<<" merge key → error
+    //    - Switch on key bytes:
+    //        if (keyUtf8.SequenceEqual("name"u8)) ...
+    //        else if (keyUtf8.SequenceEqual("jobs"u8)) ...
+    //        else → UnexpectedKey
+    // 4. If !allowEmpty && 0 entries → error
+}
 ```
 
-Mapping traversal behavior:
-1. Check for null scalar → if `allowEmpty`, return; otherwise error
-2. Expect `MappingStart`
-3. Read key/value pairs via `IYamlStreamReader`
-4. Normalize key to lower-case if `caseSensitive = false`
-5. Detect duplicate keys; report error
-6. Detect `<<` (YAML merge key); report error
-7. Invoke handler for each entry
-8. If not `allowEmpty` and 0 entries, report error
+**Key design:** The caller reads `reader.GetScalarUtf8()` to get the key as `ReadOnlySpan<byte>`, performs `SequenceEqual` comparisons against UTF-8 literal constants (`"name"u8`, `"jobs"u8`, etc.), and never materializes `System.String`.
 
 ### 3.3 Workflow Parse (Spec §3.2)
 
@@ -780,13 +838,13 @@ private Env? ParseEnv(IYamlStreamReader reader)                   // Spec §3.6
 private Defaults? ParseDefaults(IYamlStreamReader reader)         // Spec §3.7
 private Concurrency? ParseConcurrency(IYamlStreamReader reader)   // Spec §3.8
 private Environment? ParseEnvironment(IYamlStreamReader reader)   // Spec §3.14
-private IReadOnlyDictionary<string, StringNode>? ParseOutputs(IYamlStreamReader reader) // Spec §3.10
+private IReadOnlyDictionary<Utf8String, StringNode>? ParseOutputs(IYamlStreamReader reader) // Spec §3.10
 ```
 
 ### 3.6 Job Parse (Spec §3.9–§3.10)
 
 ```csharp
-private IReadOnlyDictionary<string, Job> ParseJobs(IYamlStreamReader reader) // Spec §3.9
+private IReadOnlyDictionary<Utf8String, Job> ParseJobs(IYamlStreamReader reader) // Spec §3.9
 private Job ParseJob(StringNode id, IYamlStreamReader reader)                // Spec §3.10
 private Runner? ParseRunsOn(IYamlStreamReader reader)                        // Spec §3.13
 private FloatNode? ParseTimeoutMinutes(IYamlStreamReader reader)             // validates > 0
@@ -967,8 +1025,11 @@ public static void VisitExprNode(
 
 ```csharp
 // Current implementation: arity-only check
-public static bool TryGetFunctionArity(string name, out int minArgs, out int maxArgs)
+// Function name is received as ReadOnlySpan<byte> for zero-allocation lookup.
+public static bool TryGetFunctionArity(ReadOnlySpan<byte> nameUtf8, out int minArgs, out int maxArgs)
 ```
+
+Function name lookup uses UTF-8 byte comparison against a static table of known function names (`"contains"u8`, `"startsWith"u8`, etc.). No `System.String` is materialized for function resolution.
 
 Target: full type-checking equivalent to Go's `FuncSignature` with overloaded resolution.
 
@@ -1141,11 +1202,23 @@ public readonly record struct TextRange(
 
 ## 11. Design Decisions
 
-### 11.1 Event-Stream vs DOM
+### 11.1 String-Free Normal Path
+
+The C# implementation enforces a **`System.String`-free normal path**: no AST node, dictionary key, or parse function intermediate value uses `System.String`. The UTF-8 type vocabulary (§0.2.4) provides three tiers:
+
+- `ReadOnlySpan<byte>` for transient comparisons (key matching in mapping loops)
+- `Utf8Slice` for AST scalar values (non-owning reference into the input buffer)
+- `Utf8String` for dictionary keys (owned copy of UTF-8 bytes)
+
+This constraint is enforced at the language specification level, not as a guideline. Any code change introducing `System.String` on the success path is a spec violation.
+
+`System.String` appears only in diagnostic output, rule metadata, and compile-time literal parameters — see §0.2.2 for the exhaustive list.
+
+### 11.2 Event-Stream vs DOM
 
 The C# implementation uses an event-stream parser (via `IYamlStreamReader`) rather than a DOM tree. This enables zero-allocation parsing where the YAML document is never fully materialized in memory. Trade-off: no random access to nodes (compared to Go's `yaml.Node` tree model).
 
-### 11.2 ref struct Adapter → Generic Type Parameter
+### 11.3 ref struct Adapter → Generic Type Parameter
 
 `ref struct` cannot implement interfaces in current C#. To maintain both the `ref struct` performance advantage and the adapter abstraction:
 
@@ -1153,11 +1226,11 @@ The C# implementation uses an event-stream parser (via `IYamlStreamReader`) rath
 - All parse functions become generic on `TReader`
 - The concrete adapter type is known at compile-time, eliminating virtual dispatch overhead
 
-### 11.3 Two-Pass Step Parsing (Spec §3.12)
+### 11.4 Two-Pass Step Parsing (Spec §3.12)
 
 Same pattern as Go: steps are parsed in two passes because the step kind determines which keys are valid, but the `run`/`uses` key may appear anywhere in the mapping. With event-stream parsing, entries are buffered during Pass 1 since they cannot be re-read.
 
-### 11.4 Polymorphic YAML Fields (Spec §14)
+### 11.5 Polymorphic YAML Fields (Spec §14)
 
 The event-stream equivalent of Go's `switch n.Kind` pattern:
 
@@ -1178,7 +1251,7 @@ switch (reader.CurrentKind)
 }
 ```
 
-### 11.5 Case Sensitivity (Spec §13)
+### 11.6 Case Sensitivity (Spec §13)
 
 Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `ReadOnlySpan<byte>` comparison with `ToLowerInvariant` equivalence, avoiding string materialization.
 
