@@ -25,51 +25,76 @@ public static class ExpressionSemanticAnalyzer
 
         var diagnostics = new List<Diagnostic>(4);
         var validatedRootIdentifiers = new List<int>(4);
-        var nodes = parseResult.Nodes;
-        var arguments = parseResult.Arguments;
-        // ReadOnlySpan<byte> cannot be captured in a lambda; copy to array for closure use.
-        var expressionBytes = expressionUtf8.ToArray();
+        var visitor = new SemanticValidationVisitor
+        {
+            ExpressionUtf8 = expressionUtf8,
+            ExpressionLocation = expressionLocation,
+            Context = context,
+            Nodes = parseResult.Nodes,
+            Arguments = parseResult.Arguments,
+            Diagnostics = diagnostics,
+            ValidatedRootIdentifiers = validatedRootIdentifiers,
+        };
 
         ExpressionVisitor.VisitExprNode(
             parseResult.RootNode,
-            nodes,
-            arguments,
-            (nodeId, node, parentId, entering) =>
-            {
-                if (!entering)
-                {
-                    return;
-                }
-
-                switch (node.Kind)
-                {
-                    case ExpressionNodeKind.FunctionCall:
-                        ValidateFunctionCall(node, nodes, arguments, expressionBytes, expressionLocation, diagnostics);
-                        break;
-
-                    case ExpressionNodeKind.Identifier:
-                    {
-                        // Skip the function name identifier — it is resolved via TryGetFunctionArity, not context root validation.
-                        var isFunctionCallee = parentId >= 0
-                            && parentId < nodes.Length
-                            && nodes[parentId].Kind == ExpressionNodeKind.FunctionCall
-                            && nodes[parentId].Left == nodeId;
-                        if (!isFunctionCallee)
-                        {
-                            ValidateContextRoot(nodeId, nodes, expressionBytes, expressionLocation, context, diagnostics, validatedRootIdentifiers);
-                        }
-                        break;
-                    }
-
-                    case ExpressionNodeKind.MemberAccess:
-                    case ExpressionNodeKind.WildcardAccess:
-                    case ExpressionNodeKind.IndexAccess:
-                        ValidateContextRoot(nodeId, nodes, expressionBytes, expressionLocation, context, diagnostics, validatedRootIdentifiers);
-                        break;
-                }
-            });
+            parseResult.Nodes,
+            parseResult.Arguments,
+            ref visitor);
 
         return diagnostics.ToArray();
+    }
+
+    /// <summary>
+    /// Zero-allocation visitor state for <see cref="Validate"/>.
+    /// Declared as a <c>ref struct</c> so it can hold <see cref="ReadOnlySpan{byte}"/> as a field
+    /// and implement <see cref="IExprNodeVisitor"/> (C# 13 / .NET 9+ allows ref structs to implement interfaces).
+    /// Passed by <c>ref</c> to <see cref="ExpressionVisitor.VisitExprNode{TVisitor}"/> to avoid boxing.
+    /// </summary>
+    private ref struct SemanticValidationVisitor : IExprNodeVisitor
+    {
+        public ReadOnlySpan<byte> ExpressionUtf8;
+        public TextRange ExpressionLocation;
+        public ExpressionValidationContext Context;
+        public ExpressionNode[] Nodes;
+        public int[] Arguments;
+        public List<Diagnostic> Diagnostics;
+        public List<int> ValidatedRootIdentifiers;
+
+        public void Visit(int nodeId, ExpressionNode node, int parentId, bool entering)
+        {
+            if (!entering)
+            {
+                return;
+            }
+
+            switch (node.Kind)
+            {
+                case ExpressionNodeKind.FunctionCall:
+                    ValidateFunctionCall(node, Nodes, Arguments, ExpressionUtf8, ExpressionLocation, Diagnostics);
+                    break;
+
+                case ExpressionNodeKind.Identifier:
+                {
+                    // Skip the function name identifier — it is resolved via TryGetFunctionArity, not context root validation.
+                    var isFunctionCallee = parentId >= 0
+                        && parentId < Nodes.Length
+                        && Nodes[parentId].Kind == ExpressionNodeKind.FunctionCall
+                        && Nodes[parentId].Left == nodeId;
+                    if (!isFunctionCallee)
+                    {
+                        ValidateContextRoot(nodeId, Nodes, ExpressionUtf8, ExpressionLocation, Context, Diagnostics, ValidatedRootIdentifiers);
+                    }
+                    break;
+                }
+
+                case ExpressionNodeKind.MemberAccess:
+                case ExpressionNodeKind.WildcardAccess:
+                case ExpressionNodeKind.IndexAccess:
+                    ValidateContextRoot(nodeId, Nodes, ExpressionUtf8, ExpressionLocation, Context, Diagnostics, ValidatedRootIdentifiers);
+                    break;
+            }
+        }
     }
 
     private static void ValidateFunctionCall(

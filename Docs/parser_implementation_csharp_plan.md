@@ -434,7 +434,7 @@
 
 **完了条件**: 判断を記録。除去する場合はテスト更新
 
-### Step 7.2: ExprType 型階層の導入 ✅
+### Step 7.2: ExprType 型階層の導入
 
 - `AnyType`, `NullType`, `BoolType`, `NumberType`, `StringType`, `ObjectType`, `ArrayType`（パーサー仕様 §7.3）
 - `ExprSemanticsChecker` に bottom-up 型推論を追加
@@ -456,13 +456,18 @@
 **完了条件**: 式 AST の巡回が Visitor パターンで動作する
 
 **実装結果**:
-- `src/Seiton.Core/Parsing/ExpressionVisitor.cs` を新規作成: `ExprNodeVisitor` delegate（`int nodeId, ExpressionNode node, int parentId, bool entering`）と `ExpressionVisitor.VisitExprNode()` 静的メソッドを実装。`entering=true` で子の前、`entering=false` で子の後に callback を呼ぶ depth-first 巡回
+- `src/Seiton.Core/Parsing/ExpressionVisitor.cs` を新規作成: depth-first 巡回の 2 つのオーバーロードを提供
+  - `VisitExprNode(... ExprNodeVisitor visitor)` — デリゲート版。スパンをキャプチャしない呼び元向け
+  - `VisitExprNode<TVisitor>(... ref TVisitor visitor) where TVisitor : IExprNodeVisitor, allows ref struct` — ゼロアロケーション版。`ref struct` 実装者が `ReadOnlySpan<byte>` をフィールドに直接保持できる（C# 13 / .NET 9+ の `allows ref struct` 反制約と ref struct インターフェース実装を活用）
+  - `IExprNodeVisitor` インターフェース（`void Visit(int nodeId, ExpressionNode node, int parentId, bool entering)`）を追加。`ref struct` が実装可能なため `ToArray()` 不要
   - 仕様シグネチャの `ExprNodeVisitor(node, parentId, entering)` に `nodeId` を追加。function callee 判別（`nodes[parentId].Left == nodeId`）に必要なため
   - ノード種別ごとに子を正しく巡回: Unary→Left, Binary→Left+Right, MemberAccess/WildcardAccess→Left, IndexAccess→Left+Right, FunctionCall→Left(callee)+Arguments, Leaf→なし
-- `ExpressionSemanticAnalyzer.Validate()` を書き直し: 手書きの `ValidateNode()` 再帰を削除し `ExpressionVisitor.VisitExprNode()` を使用
-  - `ReadOnlySpan<byte>` はラムダでキャプチャ不可のため `ToArray()` して `byte[]` でクロージャに渡す
-  - function callee 判別を `parentId` と `nodes[parentId].Left == nodeId` で行う
-- テスト 5 件追加（単一リテラルの enter/leave × 1、二項式の全ノード巡回 × 1、関数呼び出しで callee と引数が訪問されること × 1、enter-before-leave の巡回順序 × 1、root ノードの parentId == -1 × 1）。全 117 テスト通過
+- `ExpressionSemanticAnalyzer.Validate()` を書き直し: 手書きの `ValidateNode()` 再帰を削除し、`private ref struct SemanticValidationVisitor : IExprNodeVisitor` + `VisitExprNode<TVisitor>` を使用
+  - `SemanticValidationVisitor` が `ReadOnlySpan<byte> ExpressionUtf8` をフィールドに直接保持。`ToArray()` は一切なし
+  - function callee 判別を `parentId` と `Nodes[parentId].Left == nodeId` で行う
+- テスト 5 件追加（単一リテラルの enter/leave × 1、二項式の全ノード巡回 × 1、関数呼び出しで callee と引数が訪問されること × 1、enter-before-leave の巡回順序 × 1、root ノードの parentId == -1 × 1）
+  - `VisitExprNode_FunctionCall_VisitsCalleeAndArguments` は `private ref struct IdentifierNamesVisitor : IExprNodeVisitor` + 同期ヘルパー `CollectIdentifierNames()` を使用。`async Task` は ref struct をまたげないため同期/非同期を分離して実現
+- 全 117 テスト通過
 
 ---
 

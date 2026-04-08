@@ -17,6 +17,17 @@
 public delegate void ExprNodeVisitor(int nodeId, ExpressionNode node, int parentId, bool entering);
 
 /// <summary>
+/// Structural visitor interface for zero-allocation expression AST traversal (Spec §6.5).
+/// Implement this on a <c>ref struct</c> to capture <see cref="ReadOnlySpan{T}"/> state without heap allocation.
+/// In C# 13 / .NET 9+, <c>ref struct</c> types can implement interfaces.
+/// Callers pass the implementor as <c>ref TVisitor</c> to avoid boxing.
+/// </summary>
+public interface IExprNodeVisitor
+{
+    void Visit(int nodeId, ExpressionNode node, int parentId, bool entering);
+}
+
+/// <summary>
 /// Depth-first traversal of an expression AST produced by <see cref="ExpressionParser"/> (Spec §6.5).
 /// </summary>
 public static class ExpressionVisitor
@@ -25,6 +36,11 @@ public static class ExpressionVisitor
     /// Traverses the expression AST rooted at <paramref name="nodeId"/> depth-first.
     /// Calls <paramref name="visitor"/> twice per node:
     /// once with <c>entering = true</c> (before children) and once with <c>entering = false</c> (after children).
+    /// <para>
+    /// Use this overload for simple cases where all captured state is heap-allocated (no <see cref="ReadOnlySpan{T}"/>).
+    /// For callers that need to capture <see cref="ReadOnlySpan{T}"/> without allocation, use
+    /// <see cref="VisitExprNode{TVisitor}(int, ExpressionNode[], int[], ref TVisitor, int)"/> instead.
+    /// </para>
     /// </summary>
     /// <param name="nodeId">Root index into <paramref name="nodes"/>. Pass -1 or out-of-range to no-op.</param>
     /// <param name="nodes">The flat node array from <see cref="ExpressionParseResult.Nodes"/>.</param>
@@ -59,18 +75,15 @@ public static class ExpressionVisitor
 
             case ExpressionNodeKind.MemberAccess:
             case ExpressionNodeKind.WildcardAccess:
-                // Left = base expression being accessed.
                 VisitExprNode(node.Left, nodes, arguments, visitor, nodeId);
                 break;
 
             case ExpressionNodeKind.IndexAccess:
-                // Left = base expression, Right = index expression.
                 VisitExprNode(node.Left, nodes, arguments, visitor, nodeId);
                 VisitExprNode(node.Right, nodes, arguments, visitor, nodeId);
                 break;
 
             case ExpressionNodeKind.FunctionCall:
-                // Left = callee identifier (function name), then arguments in order.
                 VisitExprNode(node.Left, nodes, arguments, visitor, nodeId);
                 for (var i = 0; i < node.ArgCount; i++)
                 {
@@ -81,11 +94,68 @@ public static class ExpressionVisitor
                     }
                 }
                 break;
-
-            // Leaf nodes (Identifier, StringLiteral, NumberLiteral, BooleanLiteral, NullLiteral)
-            // have no children — nothing to recurse into.
         }
 
         visitor(nodeId, node, parentId, entering: false);
+    }
+
+    /// <summary>
+    /// Zero-allocation overload for callers that implement <see cref="IExprNodeVisitor"/> as a <c>ref struct</c>.
+    /// The visitor is passed by <c>ref</c> to avoid boxing, and may hold <see cref="ReadOnlySpan{T}"/> fields.
+    /// The <c>allows ref struct</c> anti-constraint (C# 13 / .NET 9+) permits <typeparamref name="TVisitor"/>
+    /// to be a ref struct while still satisfying the <see cref="IExprNodeVisitor"/> interface.
+    /// Interface dispatch uses a constrained virtual call, which the JIT can devirtualize for struct types.
+    /// </summary>
+    public static void VisitExprNode<TVisitor>(
+        int nodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ref TVisitor visitor,
+        int parentId = -1)
+        where TVisitor : IExprNodeVisitor, allows ref struct
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return;
+        }
+
+        var node = nodes[nodeId];
+        visitor.Visit(nodeId, node, parentId, entering: true);
+
+        switch (node.Kind)
+        {
+            case ExpressionNodeKind.Unary:
+                VisitExprNode(node.Left, nodes, arguments, ref visitor, nodeId);
+                break;
+
+            case ExpressionNodeKind.Binary:
+                VisitExprNode(node.Left, nodes, arguments, ref visitor, nodeId);
+                VisitExprNode(node.Right, nodes, arguments, ref visitor, nodeId);
+                break;
+
+            case ExpressionNodeKind.MemberAccess:
+            case ExpressionNodeKind.WildcardAccess:
+                VisitExprNode(node.Left, nodes, arguments, ref visitor, nodeId);
+                break;
+
+            case ExpressionNodeKind.IndexAccess:
+                VisitExprNode(node.Left, nodes, arguments, ref visitor, nodeId);
+                VisitExprNode(node.Right, nodes, arguments, ref visitor, nodeId);
+                break;
+
+            case ExpressionNodeKind.FunctionCall:
+                VisitExprNode(node.Left, nodes, arguments, ref visitor, nodeId);
+                for (var i = 0; i < node.ArgCount; i++)
+                {
+                    var argIndex = node.ArgStart + i;
+                    if (argIndex >= 0 && argIndex < arguments.Length)
+                    {
+                        VisitExprNode(arguments[argIndex], nodes, arguments, ref visitor, nodeId);
+                    }
+                }
+                break;
+        }
+
+        visitor.Visit(nodeId, node, parentId, entering: false);
     }
 }

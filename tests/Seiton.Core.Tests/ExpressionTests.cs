@@ -352,24 +352,42 @@ public sealed class ExpressionTests
     {
         var expression = "contains(github.ref, 'main')"u8;
         var parseResult = ExpressionParser.Parse(expression);
-        var expressionBytes = expression.ToArray();
-        var identifiers = new List<string>();
-
-        ExpressionVisitor.VisitExprNode(
-            parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
-            (_, node, _, entering) =>
-            {
-                if (entering && node.Kind == ExpressionNodeKind.Identifier)
-                {
-                    identifiers.Add(System.Text.Encoding.UTF8.GetString(node.Token.AsSpan(expressionBytes)));
-                }
-            });
+        var identifiers = CollectIdentifierNames(expression, parseResult);
 
         // "contains" (callee), "github" (context root in github.ref)
         await Assert.That(identifiers).Contains("contains");
         await Assert.That(identifiers).Contains("github");
+    }
+
+    /// <summary>
+    /// Synchronous helper that uses the <see cref="IExprNodeVisitor"/> generic overload so that
+    /// <see cref="ReadOnlySpan{byte}"/> is held directly in the <c>ref struct</c> visitor — no <c>ToArray()</c>.
+    /// Must be a separate (non-async) method because <c>ref struct</c> locals cannot survive across <c>await</c>.
+    /// </summary>
+    private static List<string> CollectIdentifierNames(ReadOnlySpan<byte> expressionUtf8, ExpressionParseResult parseResult)
+    {
+        var visitor = new IdentifierNamesVisitor { ExpressionUtf8 = expressionUtf8, Identifiers = new List<string>() };
+        ExpressionVisitor.VisitExprNode(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, ref visitor);
+        return visitor.Identifiers;
+    }
+
+    /// <summary>
+    /// Collects the string representations of all <see cref="ExpressionNodeKind.Identifier"/> nodes
+    /// encountered during traversal. Declared as a <c>ref struct</c> implementing <see cref="IExprNodeVisitor"/>
+    /// so it can hold <see cref="ReadOnlySpan{byte}"/> without any heap allocation.
+    /// </summary>
+    private ref struct IdentifierNamesVisitor : IExprNodeVisitor
+    {
+        public ReadOnlySpan<byte> ExpressionUtf8;
+        public List<string> Identifiers;
+
+        public void Visit(int nodeId, ExpressionNode node, int parentId, bool entering)
+        {
+            if (entering && node.Kind == ExpressionNodeKind.Identifier)
+            {
+                Identifiers.Add(Encoding.UTF8.GetString(node.Token.AsSpan(ExpressionUtf8)));
+            }
+        }
     }
 
     [Test]
