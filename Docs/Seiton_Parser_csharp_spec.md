@@ -16,7 +16,7 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 
 | Category | Implemented in actionlint | Current C# State |
 |---|---|---|
-| **AST Construction** | Parser returns typed AST (`Workflow`, `Job`, `Step`, …) | `WorkflowDocument` has only `HasName` / `HasJobs` flags. No typed Job/Step/Event nodes |
+| **AST Construction** | Parser returns typed AST (`Workflow`, `Job`, `Step`, …) | Implemented. `ParseResult.Workflow` returns typed `Workflow` AST（`WorkflowDocument` removed） |
 | **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Key name and option validation exists for `on`, but no structured AST nodes generated |
 | **workflow_dispatch inputs** | `type` (string/number/boolean/choice/environment), `options`, `required`, `default` parsed individually | Not implemented |
 | **workflow_call inputs/secrets/outputs** | Required validation for `type` on inputs, `required` on secrets, `value` on outputs | Not implemented |

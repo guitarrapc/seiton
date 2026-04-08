@@ -8,7 +8,7 @@
 |---|---|
 | YAML 読み取り | `VYamlStreamReader` は `ref struct` で VYaml を直接ラップ。interface 抽象なし |
 | パーサー本体 | `WorkflowParser` は shape 検証 + diagnostics。parse 関数は `void`、AST を返さない |
-| 出力モデル | `WorkflowDocument` は boolean フラグ + `Utf8Slice` 2 つ、typed AST なし |
+| 出力モデル | `ParseResult.Workflow` は `Workflow?` を返却。`WorkflowDocument` は削除済み |
 | `on:` パース | イベント名検証 + options/types 検証済み。typed event node なし |
 | Job/Step | キー検証・排他制約・reusable workflow 関連制約・`secrets: inherit` 形状検証あり。typed node なし |
 | permissions/defaults/concurrency | `SkipCurrentNode()` のみ |
@@ -303,6 +303,8 @@
 **完了条件**: `job.Steps[i].Exec` が `ExecRun` or `ExecAction` を返す。既存 step テストがパス
 
 ### Step 3.8: WorkflowDocument の廃止
+
+**状態**: 完了（`WorkflowDocument` は削除済みで、`ParseResult.Workflow` は `Workflow?` を返却。現行コードに `WorkflowDocument` 参照なし）
 
 - `WorkflowDocument` を削除
 - `ParseResult.Workflow` が `Workflow?` を返すことをテストで確認
