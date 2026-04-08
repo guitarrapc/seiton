@@ -110,4 +110,19 @@ public sealed class ExpressionTests
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects 2 argument(s), but got 1", StringComparison.Ordinal))).IsTrue();
     }
+
+    [Test]
+    public async Task ParseAndValidate_FunctionTypeMismatch_ReportsDiagnostic()
+    {
+        var expression = "contains(1, 'x')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
+    }
 }

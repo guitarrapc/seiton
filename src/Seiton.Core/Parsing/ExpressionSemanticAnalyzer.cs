@@ -9,6 +9,15 @@ public enum ExpressionValidationContext
     Step,
 }
 
+public enum ExpressionStaticType
+{
+    Unknown,
+    String,
+    Number,
+    Boolean,
+    Null,
+}
+
 public static class ExpressionSemanticAnalyzer
 {
     public static Diagnostic[] Validate(
@@ -57,7 +66,7 @@ public static class ExpressionSemanticAnalyzer
         switch (node.Kind)
         {
             case ExpressionNodeKind.FunctionCall:
-                ValidateFunctionCall(node, nodes, expressionUtf8, expressionLocation, diagnostics);
+                ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 for (var i = 0; i < node.ArgCount; i++)
                 {
                     var argIndex = node.ArgStart + i;
@@ -170,6 +179,7 @@ public static class ExpressionSemanticAnalyzer
     private static void ValidateFunctionCall(
         ExpressionNode functionCall,
         ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -210,6 +220,133 @@ public static class ExpressionSemanticAnalyzer
                 message,
                 ToLocation(expressionLocation, callee.Token)));
         }
+
+        ValidateFunctionArgumentTypes(functionCall, nodes, arguments, functionName, expressionLocation, diagnostics);
+    }
+
+    private static void ValidateFunctionArgumentTypes(
+        ExpressionNode functionCall,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> functionName,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (SequenceEqualAsciiIgnoreCase(functionName, "contains"u8)
+            || SequenceEqualAsciiIgnoreCase(functionName, "startsWith"u8)
+            || SequenceEqualAsciiIgnoreCase(functionName, "endsWith"u8))
+        {
+            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 0, functionName);
+            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 1, functionName);
+            return;
+        }
+
+        if (SequenceEqualAsciiIgnoreCase(functionName, "format"u8)
+            || SequenceEqualAsciiIgnoreCase(functionName, "fromJson"u8))
+        {
+            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 0, functionName);
+            return;
+        }
+
+        if (SequenceEqualAsciiIgnoreCase(functionName, "join"u8))
+        {
+            // join(arrayOrString, separator?) where separator must be string when provided.
+            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 1, functionName);
+            return;
+        }
+
+        if (SequenceEqualAsciiIgnoreCase(functionName, "hashFiles"u8))
+        {
+            // hashFiles(path, path, ...) expects string globs.
+            for (var i = 0; i < functionCall.ArgCount; i++)
+            {
+                ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, i, functionName);
+            }
+        }
+    }
+
+    private static void ValidateStringArg(
+        ExpressionNode functionCall,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics,
+        int argPosition,
+        ReadOnlySpan<byte> functionName)
+    {
+        if (!TryGetArgumentNode(functionCall, nodes, arguments, argPosition, out var argumentNode))
+        {
+            return;
+        }
+
+        var argumentType = GetStaticType(argumentNode);
+        if (argumentType is ExpressionStaticType.Unknown or ExpressionStaticType.String)
+        {
+            return;
+        }
+
+        diagnostics.Add(new Diagnostic(
+            DiagnosticSeverity.Error,
+            $"function {Encoding.UTF8.GetString(functionName)} argument {argPosition + 1} should be string, but got {StaticTypeName(argumentType)}",
+            ToNodeLocation(expressionLocation, argumentNode)));
+    }
+
+    private static bool TryGetArgumentNode(ExpressionNode functionCall, ExpressionNode[] nodes, int[] arguments, int argPosition, out ExpressionNode argumentNode)
+    {
+        argumentNode = default;
+        if (argPosition < 0 || argPosition >= functionCall.ArgCount)
+        {
+            return false;
+        }
+
+        var argIndex = functionCall.ArgStart + argPosition;
+        if (argIndex < 0 || argIndex >= arguments.Length)
+        {
+            return false;
+        }
+
+        var argNodeId = arguments[argIndex];
+        if (argNodeId < 0 || argNodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        argumentNode = nodes[argNodeId];
+        return true;
+    }
+
+    private static ExpressionStaticType GetStaticType(ExpressionNode node)
+    {
+        return node.Kind switch
+        {
+            ExpressionNodeKind.StringLiteral => ExpressionStaticType.String,
+            ExpressionNodeKind.NumberLiteral => ExpressionStaticType.Number,
+            ExpressionNodeKind.BooleanLiteral => ExpressionStaticType.Boolean,
+            ExpressionNodeKind.NullLiteral => ExpressionStaticType.Null,
+            _ => ExpressionStaticType.Unknown,
+        };
+    }
+
+    private static string StaticTypeName(ExpressionStaticType type)
+    {
+        return type switch
+        {
+            ExpressionStaticType.String => "string",
+            ExpressionStaticType.Number => "number",
+            ExpressionStaticType.Boolean => "boolean",
+            ExpressionStaticType.Null => "null",
+            _ => "unknown",
+        };
+    }
+
+    private static TextRange ToNodeLocation(TextRange expressionLocation, ExpressionNode node)
+    {
+        if (node.Token.Length <= 0)
+        {
+            return expressionLocation;
+        }
+
+        return ToLocation(expressionLocation, node.Token);
     }
 
     private static string FormatExpectedArity(int min, int max)

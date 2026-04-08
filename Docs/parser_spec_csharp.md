@@ -634,10 +634,17 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 
 この段階の制約:
 
-1. 型推論ベースの厳密な型検証（例: `contains` の引数型妥当性）は未実装
+1. 型推論ベースの厳密な型検証は未実装（ただし literal から判定できる一部関数引数型は初期検証を導入）
 2. function call target は識別子のみ許容（member call の特殊ケースは未対応）
 3. availability table は actionlint 完全互換ではなく、主要 context に限定した最小セット
 4. parser 本体への接続は `if` を優先して導入し、その後 `env` / `with` / `run` の埋め込み式へ段階拡張した
+
+初期型検証で現在カバーしている関数:
+
+1. `contains` / `startsWith` / `endsWith`: 文字列引数の literal 型チェック
+2. `format` / `fromJson`: 第 1 引数の文字列 literal 型チェック
+3. `join`: 第 2 引数（separator）がある場合の文字列 literal 型チェック
+4. `hashFiles`: 全引数の文字列 literal 型チェック
 
 実装上の教訓:
 

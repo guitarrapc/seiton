@@ -753,6 +753,15 @@ public sealed class ParserTests
             await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
         }
 
+        [Test]
+        public async Task Parse_StepIf_FunctionTypeMismatch_ReportsSemanticError()
+        {
+            var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: contains(1, 'x')\n        run: echo ok\n";
+
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-type-mismatch.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
+        }
+
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
     {
         var refsRoot = Path.Combine(repoRoot, ".references");
