@@ -89,7 +89,7 @@ internal static class OnEventSpecs
 
     internal readonly struct EventSpec
     {
-        private EventId Id { get; }
+        internal EventId Id { get; }
 
         public EventSpec(EventId id)
         {

@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Tests;
 
@@ -27,7 +28,8 @@ public sealed class ParserTests
         await Assert.That(result.Workflow!.Name is not null).IsTrue();
         await Assert.That(result.Workflow.Name!.Value.Length).IsGreaterThan(0);
         await Assert.That(result.Workflow.RunName).IsNull();
-        await Assert.That(result.Workflow.On.Count).IsEqualTo(0);
+        await Assert.That(result.Workflow.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
         await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -43,7 +45,8 @@ public sealed class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.RunName is not null).IsTrue();
         await Assert.That(result.Workflow.RunName!.Value.Length).IsGreaterThan(0);
-        await Assert.That(result.Workflow.On.Count).IsEqualTo(0);
+        await Assert.That(result.Workflow.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
         await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -390,6 +393,122 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-types.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not support option", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_OnSchedule_PopulatesEventAst()
+    {
+        var yaml = """
+        on:
+            schedule:
+                - cron: '0 0 * * *'
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-schedule.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<ScheduledEvent>();
+        var evt = (ScheduledEvent)result.Workflow.On[0];
+        await Assert.That(evt.Schedules.Count).IsEqualTo(1);
+        await Assert.That(evt.Schedules[0].Cron is not null).IsTrue();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_OnWorkflowDispatch_PopulatesEventAst()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    target:
+                        description: Deploy target
+                        required: true
+                        type: choice
+                        options: [dev, prod]
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-workflow-dispatch.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WorkflowDispatchEvent>();
+        var evt = (WorkflowDispatchEvent)result.Workflow.On[0];
+        await Assert.That(evt.Inputs is not null).IsTrue();
+        await Assert.That(evt.Inputs!.Count).IsEqualTo(1);
+        var key = Utf8String.FromLowerAscii("target"u8);
+        await Assert.That(evt.Inputs.ContainsKey(key)).IsTrue();
+        var input = evt.Inputs[key];
+        await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
+        await Assert.That(input.Required is not null).IsTrue();
+        await Assert.That(input.Required!.Value).IsTrue();
+        await Assert.That(input.Options is not null).IsTrue();
+        await Assert.That(input.Options!.Count).IsEqualTo(2);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_OnWorkflowCall_PopulatesEventAst()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                inputs:
+                    image:
+                        required: true
+                        type: string
+                secrets:
+                    token:
+                        required: true
+                outputs:
+                    digest:
+                        value: digest-sha
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-workflow-call.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WorkflowCallEvent>();
+        var evt = (WorkflowCallEvent)result.Workflow.On[0];
+        await Assert.That(evt.Inputs is not null).IsTrue();
+        await Assert.That(evt.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(evt.Inputs[0].Type).IsEqualTo(WorkflowCallInputType.String);
+        await Assert.That(evt.Secrets is not null).IsTrue();
+        await Assert.That(evt.Secrets!.Count).IsEqualTo(1);
+        await Assert.That(evt.Outputs is not null).IsTrue();
+        await Assert.That(evt.Outputs!.Count).IsEqualTo(1);
+        await Assert.That(evt.Outputs.Values.First().Value is not null).IsTrue();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_OnRepositoryDispatch_PopulatesEventAst()
+    {
+        var yaml = """
+        on:
+            repository_dispatch:
+                types: [sync, deploy]
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-ast.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<RepositoryDispatchEvent>();
+        var evt = (RepositoryDispatchEvent)result.Workflow.On[0];
+        await Assert.That(evt.Types is not null).IsTrue();
+        await Assert.That(evt.Types!.Count).IsEqualTo(2);
+        await Assert.That(result.Diagnostics).IsEmpty();
     }
 
     [Test]
@@ -863,6 +982,63 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-type-mismatch.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnScalar_PopulatesEventAst()
+    {
+        var yaml = "on: push\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-scalar.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        var evt = result.Workflow.On[0];
+        await Assert.That(evt).IsTypeOf<WebhookEvent>();
+        var webhook = (WebhookEvent)evt;
+        await Assert.That(webhook.Hook.Value.Length).IsGreaterThan(0);
+        await Assert.That(webhook.Types).IsNull();
+        await Assert.That(webhook.Branches).IsNull();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_OnSequence_PopulatesEventAst()
+    {
+        var yaml = "on: [push, pull_request]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-sequence.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(2);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
+        await Assert.That(result.Workflow.On[1]).IsTypeOf<WebhookEvent>();
+        var first = (WebhookEvent)result.Workflow.On[0];
+        var second = (WebhookEvent)result.Workflow.On[1];
+        await Assert.That(first.Hook.Value.Length).IsGreaterThan(0);
+        await Assert.That(second.Hook.Value.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_OnMappingWithFilters_PopulatesEventAst()
+    {
+        var yaml = """
+        on:
+            push:
+                branches: [main]
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-mapping-filters.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
+        var webhook = (WebhookEvent)result.Workflow.On[0];
+        await Assert.That(webhook.Branches is not null).IsTrue();
+        await Assert.That(webhook.Branches!.Values.Count).IsEqualTo(1);
+        await Assert.That(webhook.BranchesIgnore).IsNull();
+        await Assert.That(result.Diagnostics).IsEmpty();
     }
 
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)

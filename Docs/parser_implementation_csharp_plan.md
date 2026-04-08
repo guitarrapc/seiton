@@ -241,6 +241,8 @@
 
 ### Step 3.4: Events パースの AST 化
 
+**状態**: 完了（`on` の scalar / sequence / mapping 3形態を `Event[]` として AST 化し、WebhookEvent フィルタと既存 diagnostics を維持）
+
 - `ParseOn()` → `Event[]` を返す
 - scalar / sequence / mapping の 3 形態対応（仕様 §3.4）
 - `ParseWebhookEvent()` → `WebhookEvent`（仕様 §3.4.2）
@@ -251,6 +253,8 @@
 **完了条件**: `workflow.On` が typed `Event[]` を持つ。既存 on テストがパス
 
 ### Step 3.5: ScheduledEvent / WorkflowDispatchEvent / WorkflowCallEvent パース
+
+**状態**: 完了（`schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` の専用パーサーを実装し、typed event AST を生成）
 
 - `ParseScheduleEvent()` → `ScheduledEvent`（仕様 §2.3.2）
   - `cron`, `timezone` キーをパース
