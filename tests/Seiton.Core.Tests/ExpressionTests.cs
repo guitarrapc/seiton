@@ -156,4 +156,150 @@ public sealed class ExpressionTests
 
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token '-'", StringComparison.Ordinal))).IsTrue();
     }
+
+    // ── InferType: literal nodes ──────────────────────────────────────────────
+
+    [Test]
+    public async Task InferType_StringLiteral_ReturnsString()
+    {
+        var expression = "'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_NumberLiteral_ReturnsNumber()
+    {
+        var expression = "42"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Number);
+    }
+
+    [Test]
+    public async Task InferType_BooleanLiteral_ReturnsBool()
+    {
+        var expression = "true"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_NullLiteral_ReturnsNull()
+    {
+        var expression = "null"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Null);
+    }
+
+    // ── InferType: unary and binary operators ─────────────────────────────────
+
+    [Test]
+    public async Task InferType_UnaryNot_ReturnsBool()
+    {
+        var expression = "!cancelled()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_BinaryComparison_ReturnsBool()
+    {
+        var expression = "github.ref == 'refs/heads/main'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_BinaryLogical_ReturnsBool()
+    {
+        var expression = "success() && github.event_name == 'push'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    // ── InferType: function return types ──────────────────────────────────────
+
+    [Test]
+    public async Task InferType_BoolReturningFunction_ReturnsBool()
+    {
+        var expression = "contains(github.ref, 'main')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_StringReturningFunction_ReturnsString()
+    {
+        var expression = "format('Hello {0}', github.actor)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_AnyReturningFunction_ReturnsAny()
+    {
+        var expression = "fromJson(steps.build.outputs.matrix)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Any);
+    }
+
+    // ── InferType: context access ─────────────────────────────────────────────
+
+    [Test]
+    public async Task InferType_ContextAccess_ReturnsAny()
+    {
+        var expression = "github.ref"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Any);
+    }
+
+    // ── ValidateStringArg: improved bottom-up type check ─────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_BinaryExprPassedAsStringArg_ReportsDiagnostic()
+    {
+        var expression = "contains(github.sha == 'abc', 'x')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got bool", StringComparison.Ordinal))).IsTrue();
+    }
 }

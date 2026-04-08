@@ -10,15 +10,6 @@ public enum ExpressionValidationContext
     Step,
 }
 
-public enum ExpressionStaticType
-{
-    Unknown,
-    String,
-    Number,
-    Boolean,
-    Null,
-}
-
 public static class ExpressionSemanticAnalyzer
 {
     public static Diagnostic[] Validate(
@@ -222,13 +213,14 @@ public static class ExpressionSemanticAnalyzer
                 ToLocation(expressionLocation, callee.Token)));
         }
 
-        ValidateFunctionArgumentTypes(functionCall, nodes, arguments, functionName, expressionLocation, diagnostics);
+        ValidateFunctionArgumentTypes(functionCall, nodes, arguments, expressionUtf8, functionName, expressionLocation, diagnostics);
     }
 
     private static void ValidateFunctionArgumentTypes(
         ExpressionNode functionCall,
         ExpressionNode[] nodes,
         int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
         ReadOnlySpan<byte> functionName,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -237,22 +229,22 @@ public static class ExpressionSemanticAnalyzer
             || SequenceEqualAsciiIgnoreCase(functionName, "startsWith"u8)
             || SequenceEqualAsciiIgnoreCase(functionName, "endsWith"u8))
         {
-            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 0, functionName);
-            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 1, functionName);
+            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 0, functionName);
+            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 1, functionName);
             return;
         }
 
         if (SequenceEqualAsciiIgnoreCase(functionName, "format"u8)
             || SequenceEqualAsciiIgnoreCase(functionName, "fromJson"u8))
         {
-            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 0, functionName);
+            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 0, functionName);
             return;
         }
 
         if (SequenceEqualAsciiIgnoreCase(functionName, "join"u8))
         {
             // join(arrayOrString, separator?) where separator must be string when provided.
-            ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, 1, functionName);
+            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 1, functionName);
             return;
         }
 
@@ -261,7 +253,7 @@ public static class ExpressionSemanticAnalyzer
             // hashFiles(path, path, ...) expects string globs.
             for (var i = 0; i < functionCall.ArgCount; i++)
             {
-                ValidateStringArg(functionCall, nodes, arguments, expressionLocation, diagnostics, i, functionName);
+                ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, i, functionName);
             }
         }
     }
@@ -270,6 +262,7 @@ public static class ExpressionSemanticAnalyzer
         ExpressionNode functionCall,
         ExpressionNode[] nodes,
         int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics,
         int argPosition,
@@ -280,15 +273,21 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
-        var argumentType = GetStaticType(argumentNode);
-        if (argumentType is ExpressionStaticType.Unknown or ExpressionStaticType.String)
+        var argIndex = functionCall.ArgStart + argPosition;
+        if (argIndex < 0 || argIndex >= arguments.Length)
+        {
+            return;
+        }
+
+        var argumentType = InferType(arguments[argIndex], nodes, arguments, expressionUtf8);
+        if (argumentType is AnyExprType or StringExprType)
         {
             return;
         }
 
         diagnostics.Add(new Diagnostic(
             DiagnosticSeverity.Error,
-            $"function {Encoding.UTF8.GetString(functionName)} argument {argPosition + 1} should be string, but got {StaticTypeName(argumentType)}",
+            $"function {Encoding.UTF8.GetString(functionName)} argument {argPosition + 1} should be string, but got {argumentType.TypeName}",
             ToNodeLocation(expressionLocation, argumentNode)));
     }
 
@@ -316,28 +315,96 @@ public static class ExpressionSemanticAnalyzer
         return true;
     }
 
-    private static ExpressionStaticType GetStaticType(ExpressionNode node)
+    /// <summary>
+    /// Infers the <see cref="ExprType"/> of the expression rooted at <paramref name="nodeId"/>.
+    /// Performs a bottom-up traversal: the type of a node is derived from its children.
+    /// Returns <see cref="ExprType.Any"/> for anything that cannot be statically determined.
+    /// </summary>
+    public static ExprType InferType(
+        int nodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
     {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return ExprType.Any;
+        }
+
+        var node = nodes[nodeId];
         return node.Kind switch
         {
-            ExpressionNodeKind.StringLiteral => ExpressionStaticType.String,
-            ExpressionNodeKind.NumberLiteral => ExpressionStaticType.Number,
-            ExpressionNodeKind.BooleanLiteral => ExpressionStaticType.Boolean,
-            ExpressionNodeKind.NullLiteral => ExpressionStaticType.Null,
-            _ => ExpressionStaticType.Unknown,
+            ExpressionNodeKind.StringLiteral => ExprType.String,
+            ExpressionNodeKind.NumberLiteral => ExprType.Number,
+            ExpressionNodeKind.BooleanLiteral => ExprType.Bool,
+            ExpressionNodeKind.NullLiteral => ExprType.Null,
+            ExpressionNodeKind.Unary => InferUnaryType(node, nodes, arguments, expressionUtf8),
+            ExpressionNodeKind.Binary => InferBinaryType(node),
+            ExpressionNodeKind.FunctionCall => InferFunctionReturnType(node, nodes, expressionUtf8),
+            _ => ExprType.Any,
         };
     }
 
-    private static string StaticTypeName(ExpressionStaticType type)
+    private static ExprType InferUnaryType(ExpressionNode node, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expressionUtf8)
     {
-        return type switch
+        // Only unary operator remaining after arithmetic removal is `!`, which always yields bool.
+        return ExprType.Bool;
+    }
+
+    private static ExprType InferBinaryType(ExpressionNode node)
+    {
+        return node.Operator switch
         {
-            ExpressionStaticType.String => "string",
-            ExpressionStaticType.Number => "number",
-            ExpressionStaticType.Boolean => "boolean",
-            ExpressionStaticType.Null => "null",
-            _ => "unknown",
+            // Comparisons and logical operators always yield bool.
+            ExpressionOperator.Equal
+                or ExpressionOperator.NotEqual
+                or ExpressionOperator.Less
+                or ExpressionOperator.LessOrEqual
+                or ExpressionOperator.Greater
+                or ExpressionOperator.GreaterOrEqual
+                or ExpressionOperator.And
+                or ExpressionOperator.Or => ExprType.Bool,
+            _ => ExprType.Any,
         };
+    }
+
+    private static ExprType InferFunctionReturnType(ExpressionNode functionCall, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    {
+        if (functionCall.Left < 0 || functionCall.Left >= nodes.Length)
+        {
+            return ExprType.Any;
+        }
+
+        var callee = nodes[functionCall.Left];
+        if (callee.Kind != ExpressionNodeKind.Identifier)
+        {
+            return ExprType.Any;
+        }
+
+        var name = callee.Token.AsSpan(expressionUtf8);
+
+        // Bool-returning functions.
+        if (SequenceEqualAsciiIgnoreCase(name, "contains"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "startsWith"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "endsWith"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "success"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "failure"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "always"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "cancelled"u8))
+        {
+            return ExprType.Bool;
+        }
+
+        // String-returning functions.
+        if (SequenceEqualAsciiIgnoreCase(name, "format"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "join"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "toJson"u8)
+            || SequenceEqualAsciiIgnoreCase(name, "hashFiles"u8))
+        {
+            return ExprType.String;
+        }
+
+        return ExprType.Any;
     }
 
     private static TextRange ToNodeLocation(TextRange expressionLocation, ExpressionNode node)

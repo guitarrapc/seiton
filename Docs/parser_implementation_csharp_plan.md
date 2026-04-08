@@ -434,12 +434,19 @@
 
 **完了条件**: 判断を記録。除去する場合はテスト更新
 
-### Step 7.2: ExprType 型階層の導入
+### Step 7.2: ExprType 型階層の導入 ✅
 
 - `AnyType`, `NullType`, `BoolType`, `NumberType`, `StringType`, `ObjectType`, `ArrayType`（パーサー仕様 §7.3）
 - `ExprSemanticsChecker` に bottom-up 型推論を追加
 
 **完了条件**: リテラル・関数戻り値・context プロパティの型推論が動作する
+
+**実装結果**:
+- `src/Seiton.Core/Parsing/ExprType.cs` を新規作成: 抽象基底 `ExprType` + 具体型 7 種（`AnyExprType`, `NullExprType`, `BoolExprType`, `NumberExprType`, `StringExprType`, `ObjectExprType`, `ArrayExprType`）。シングルトンアクセサ (`ExprType.Any`/`Bool`/etc.)。`IsAssignableTo()` により Any は全型と互換
+- `ExpressionSemanticAnalyzer` に `public static ExprType InferType(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expressionUtf8)` を追加: Literal → 対応型、Unary `!` / Binary 比較・論理 → `Bool`、FunctionCall → 関数ごとの戻り型（Bool: contains/startsWith/endsWith/success/failure/always/cancelled、String: format/join/toJson/hashFiles、Any: fromJson）
+- `ValidateStringArg` が shallow literal チェックから `InferType()` による bottom-up 型推論に変更。`expressionUtf8` を `ValidateFunctionArgumentTypes` → `ValidateStringArg` へ伝播
+- `ExpressionStaticType` enum と `GetStaticType()` / `StaticTypeName()` ヘルパーを削除
+- テスト 12 件追加（literals × 4、演算子 × 3、関数戻り値 × 3、コンテキストアクセス × 1、型不一致バリデーション × 1）。全 112 テスト通過
 
 ### Step 7.3: 式 Visitor
 
