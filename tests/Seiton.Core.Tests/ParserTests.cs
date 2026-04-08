@@ -19,10 +19,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "minimal.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "minimal.yml");
 
         await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.Workflow).IsNull();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.Name is not null).IsTrue();
+        await Assert.That(result.Workflow.Name!.Value.Length).IsGreaterThan(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 

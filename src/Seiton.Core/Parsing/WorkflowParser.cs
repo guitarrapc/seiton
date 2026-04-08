@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
 
@@ -42,6 +43,8 @@ public static class WorkflowParser
 
         reader.Read(); // skip MappingStart
 
+        StringNode? nameNode = null;
+        StringNode? runNameNode = null;
         var hasOn = false;
         var hasJobs = false;
 
@@ -64,7 +67,7 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read(); // consume key
-                _ = ReadScalarOrSkip(ref reader, diagnostics, "name must be scalar");
+                nameNode = ParseStringNode(ref reader, diagnostics, "name must be scalar");
                 continue;
             }
 
@@ -84,6 +87,7 @@ public static class WorkflowParser
                 }
 
                 var runNameMark = reader.CurrentStart;
+                var runNameSlice = reader.GetScalarSlice();
                 var runNameUtf8 = reader.GetScalarUtf8();
                 ValidateExpressionText(
                     runNameUtf8,
@@ -91,6 +95,14 @@ public static class WorkflowParser
                     ExpressionValidationContext.Workflow,
                     diagnostics,
                     parseWholeValueIfNoEmbedded: false);
+
+                runNameNode = new StringNode
+                {
+                    Value = runNameSlice,
+                    Quoted = reader.IsScalarQuoted(),
+                    Range = BuildScalarLocation(runNameMark, runNameUtf8.Length),
+                };
+
                 reader.Read();
                 continue;
             }
@@ -184,7 +196,16 @@ public static class WorkflowParser
             AddError(diagnostics, "required key 'jobs' is missing", new TextPosition(0, 1, 1));
         }
 
-        return new ParseResult(null, diagnostics.ToArray(), HasFatalError: false);
+        var workflow = new Workflow
+        {
+            Name = nameNode,
+            RunName = runNameNode,
+            On = [],
+            Jobs = new Dictionary<Utf8String, Job>(),
+            Range = default,
+        };
+
+        return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
     }
 
     private static void ParseJobsMapping(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
@@ -712,6 +733,34 @@ public static class WorkflowParser
         var slice = reader.GetScalarSlice();
         reader.Read();
         return slice;
+    }
+
+    private static StringNode? ParseStringNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        var node = new StringNode
+        {
+            Value = slice,
+            Quoted = reader.IsScalarQuoted(),
+            Range = BuildScalarLocation(mark, valueUtf8.Length),
+        };
+
+        reader.Read();
+        return node;
     }
 
     private static void ParseOn(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
