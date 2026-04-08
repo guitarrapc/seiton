@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting;
+﻿using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -46,6 +47,61 @@ public sealed class RuleInterfaceTests
         await Assert.That(rule.JobPostCount).IsEqualTo(1);
         await Assert.That(rule.WorkflowPostCount).IsEqualTo(1);
         await Assert.That(rule.GetDiagnostics()).IsEmpty();
+    }
+
+    [Test]
+    public async Task SyntaxRule_ReportsJobConstraintDiagnostics()
+    {
+        var source = """
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            uses: ./.github/workflows/reusable.yml
+            steps:
+              - run: echo hello
+        """;
+
+        var workflow = new Workflow
+        {
+            Jobs = new Dictionary<Utf8String, Job>
+            {
+                [new Utf8String("build"u8)] = new Job
+                {
+                    Id = new StringNode
+                    {
+                        Value = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+                        Range = new TextRange(0, 0, 1, 1, 1, 1),
+                    },
+                    RunsOn = new Runner(),
+                    WorkflowCall = new WorkflowCall
+                    {
+                        Uses = new StringNode { Value = new Utf8Slice(0, 0) },
+                    },
+                    Steps =
+                    [
+                        new Step
+                        {
+                            Exec = new ExecRun
+                            {
+                                Kind = StepExecKind.Run,
+                                Run = new StringNode { Value = new Utf8Slice(0, 0) },
+                            },
+                        },
+                    ],
+                },
+            },
+        };
+
+        var visitor = new WorkflowVisitor();
+        var rule = new SyntaxRule();
+        rule.SetConfig(new LintConfig { Utf8Yaml = Encoding.UTF8.GetBytes(source) });
+        visitor.AddPass(rule);
+
+        visitor.Visit(workflow);
+        var diagnostics = rule.GetDiagnostics();
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot have both uses and runs-on", StringComparison.Ordinal))).IsTrue();
     }
 
     sealed class CountingRule : IRule

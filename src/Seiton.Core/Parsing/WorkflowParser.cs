@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Buffers.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -33,10 +34,10 @@ public static class WorkflowParser
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
         var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
-        return Parse(ref reader, utf8Yaml, filePath);
+        return Parse(ref reader, utf8Yaml, filePath, utf8Yaml);
     }
 
-    internal static ParseResult Parse(ref VYamlStreamAdapter reader, ReadOnlySpan<byte> source, string filePath)
+    internal static ParseResult Parse(ref VYamlStreamAdapter reader, ReadOnlySpan<byte> source, string filePath, byte[]? sourceBytes = null)
     {
         var diagnostics = new List<Diagnostic>(16);
 
@@ -233,6 +234,13 @@ public static class WorkflowParser
             Jobs = jobs,
             Range = default,
         };
+
+        var syntaxRule = new SyntaxRule();
+        syntaxRule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes });
+        var visitor = new WorkflowVisitor();
+        visitor.AddPass(syntaxRule);
+        visitor.Visit(workflow);
+        diagnostics.AddRange(syntaxRule.GetDiagnostics());
 
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
     }
@@ -835,8 +843,6 @@ public static class WorkflowParser
             return new Job { Id = jobIdNode, Range = jobIdNode.Range };
         }
 
-        var hasRunsOn = false;
-        var hasSteps = false;
         var hasUses = false;
         var hasWith = false;
         var hasSecrets = false;
@@ -880,7 +886,6 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("runs-on"u8))
             {
                 reader.Read(); // consume key
-                hasRunsOn = true;
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "runs-on";
@@ -932,7 +937,6 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("steps"u8))
             {
                 reader.Read(); // consume key
-                hasSteps = true;
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "steps";
@@ -1199,32 +1203,12 @@ public static class WorkflowParser
             reader.Read();
         }
 
-        if (hasUses && hasSteps)
-        {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' cannot have both uses and steps", jobIdMark);
-        }
-
-        if (hasUses && hasRunsOn)
-        {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' cannot have both uses and runs-on", jobIdMark);
-        }
-
         if (hasUses && stepsOnlyKeyInReusable is not null)
         {
             AddError(
                 diagnostics,
                 $"when job '{DecodeUtf8(source, jobId)}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
                 stepsOnlyKeyInReusableMark);
-        }
-
-        if (!hasUses && !hasRunsOn)
-        {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' requires runs-on (or uses)", jobIdMark);
-        }
-
-        if (!hasUses && !hasSteps)
-        {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' requires steps (or uses)", jobIdMark);
         }
 
         if (!hasUses && hasWith)

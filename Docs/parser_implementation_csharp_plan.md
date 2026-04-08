@@ -374,6 +374,8 @@
 
 ### Step 5.3: 既存 syntax diagnostics の SyntaxRule に移行
 
+**状態**: 完了（`SyntaxRule` を実装して `WorkflowVisitor` から実行し、job 制約診断の一部を parser 直書きから rule 側へ移行。`uses` と `steps` / `runs-on` の排他、および `runs-on`・`steps` 必須条件の検証を `VisitJobPre` で実施）
+
 - パーサー内の未知キー検出・排他検証等は引き続きパーサーで行う
 - Visitor 側に移行する候補: permissions の値検証、reusable workflow 制約など、よりセマンティックなもの
 - 最初の 1-2 個のルールを試作して Visitor パイプラインの動作を確認

@@ -3,4 +3,6 @@
 public sealed class LintConfig
 {
     public static LintConfig Empty { get; } = new();
+
+    public byte[]? Utf8Yaml { get; init; }
 }
