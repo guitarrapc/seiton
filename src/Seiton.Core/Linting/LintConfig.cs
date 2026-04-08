@@ -1,0 +1,6 @@
+﻿namespace Seiton.Core.Linting;
+
+public sealed class LintConfig
+{
+    public static LintConfig Empty { get; } = new();
+}

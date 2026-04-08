@@ -363,6 +363,8 @@
 
 ### Step 5.2: IRule インターフェース
 
+**状態**: 完了（`IRule : IPass` を追加し、`Id` / `Name` / `GetDiagnostics()` / `SetConfig(LintConfig)` を定義。`WorkflowVisitor` と組み合わせた rule 実装テストを追加）
+
 **ファイル**: `src/Seiton.Core/Linting/IRule.cs`
 
 - `IRule : IPass`（パーサー仕様 §8.3, C# 実装仕様 §5.3）
