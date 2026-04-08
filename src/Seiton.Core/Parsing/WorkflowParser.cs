@@ -8,6 +8,12 @@ public static class WorkflowParser
 {
     private delegate string? Utf8ScalarValidator(ReadOnlySpan<byte> valueUtf8);
 
+    private enum MappingKeyComparison
+    {
+        CaseSensitive,
+        AsciiCaseInsensitive,
+    }
+
     private readonly struct OnEventInfo
     {
         public OnEventInfo(string name, bool isKnown, OnEventSpecs.EventSpec spec)
@@ -54,6 +60,7 @@ public static class WorkflowParser
         var hasJobs = false;
         Event[] onEvents = [];
         Dictionary<Utf8String, Job> jobs = [];
+        var workflowKeys = new HashSet<Utf8String>();
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -70,6 +77,22 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                workflowKeys,
+                MappingKeyComparison.CaseSensitive,
+                "workflow"))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
 
             if (keyUtf8.SequenceEqual("name"u8))
             {
@@ -626,6 +649,7 @@ public static class WorkflowParser
     private static Dictionary<Utf8String, Job> ParseJobsMapping(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
     {
         var jobs = new Dictionary<Utf8String, Job>();
+        var seenJobIds = new HashSet<Utf8String>();
         // current is MappingStart
         reader.Read();
 
@@ -645,6 +669,23 @@ public static class WorkflowParser
             var jobIdMark = reader.CurrentStart;
             var jobId = reader.GetScalarSlice();
             var jobIdUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                jobIdUtf8,
+                jobIdMark,
+                diagnostics,
+                seenJobIds,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "jobs"))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var jobIdNode = new StringNode
             {
                 Value = jobId,
@@ -4260,6 +4301,7 @@ public static class WorkflowParser
             return;
         }
 
+        var keys = new HashSet<Utf8String>();
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -4271,6 +4313,25 @@ public static class WorkflowParser
                 {
                     reader.SkipCurrentNode();
                 }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.CaseSensitive,
+                error))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
                 continue;
             }
 
@@ -4800,6 +4861,32 @@ public static class WorkflowParser
     }
 
     private static bool IsAsciiWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
+
+    private static bool TryRegisterMappingKey(
+        ReadOnlySpan<byte> keyUtf8,
+        TextPosition keyMark,
+        List<Diagnostic> diagnostics,
+        HashSet<Utf8String> keys,
+        MappingKeyComparison comparison,
+        string mappingName)
+    {
+        if (keyUtf8.SequenceEqual("<<"u8))
+        {
+            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+            return false;
+        }
+
+        var normalizedKey = comparison == MappingKeyComparison.CaseSensitive
+            ? new Utf8String(keyUtf8)
+            : Utf8String.FromLowerAscii(keyUtf8);
+        if (keys.Add(normalizedKey))
+        {
+            return true;
+        }
+
+        AddError(diagnostics, $"{mappingName} contains duplicate key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
+        return false;
+    }
 
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)
     {

@@ -147,6 +147,35 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_DuplicateWorkflowKey_ReportsError()
+    {
+        var yaml = """
+        on: push
+        on: pull_request
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "duplicate-workflow-key.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("workflow contains duplicate key: on", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_MergeKey_ReportsError()
+    {
+        var yaml = """
+        <<:
+          on: push
+        on: push
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "merge-key.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("workflow does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_OnTypeInvalid_ReportsError()
     {
         var yaml = """

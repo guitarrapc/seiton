@@ -320,6 +320,8 @@
 
 ### Step 4.1: ParseMapping ヘルパー
 
+**状態**: 完了（`TryRegisterMappingKey` を導入し、case-sensitive / ASCII case-insensitive 切替、duplicate key 検出、`<<` merge key エラーを実装。`workflow` / `jobs` / 汎用 string mapping 走査に適用）
+
 - パーサー仕様 §3.3 の mapping 走査「共通パターン」を整備
 - case-insensitive / case-sensitive の切り替え可能
 - 重複キー検出（duplicate key → error、先勝ち）
