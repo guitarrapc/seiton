@@ -67,4 +67,47 @@ public sealed class ExpressionTests
         await Assert.That(result.Occurrences.Length).IsEqualTo(1);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("expression parse error", StringComparison.Ordinal))).IsTrue();
     }
+
+    [Test]
+    public async Task ExtractParseAndValidate_JobContext_DisallowsStepsContext()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: ${{ steps.build.outputs.value == 'ok' }}\n    steps:\n      - run: echo ok\n";
+
+        var result = ExpressionExtractor.ExtractParseAndValidate(
+            Encoding.UTF8.GetBytes(yaml),
+            ExpressionValidationContext.Job);
+
+        await Assert.That(result.Occurrences.Length).IsEqualTo(1);
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_UnknownFunction_ReportsDiagnostic()
+    {
+        var expression = "unknownFn(github.ref)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FunctionArity_ReportsDiagnostic()
+    {
+        var expression = "contains(github.ref)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("expects 2 argument(s), but got 1", StringComparison.Ordinal))).IsTrue();
+    }
 }

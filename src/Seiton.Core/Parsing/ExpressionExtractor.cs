@@ -70,6 +70,39 @@ public static class ExpressionExtractor
         return (occurrences, diagnostics.ToArray());
     }
 
+    public static (ExpressionOccurrence[] Occurrences, Diagnostic[] Diagnostics) ExtractParseAndValidate(
+        byte[] utf8Yaml,
+        ExpressionValidationContext context)
+    {
+        var occurrences = Extract(utf8Yaml);
+        var diagnostics = new List<Diagnostic>();
+
+        foreach (var occurrence in occurrences)
+        {
+            var expression = occurrence.Slice.AsSpan(utf8Yaml);
+            var parseResult = ExpressionParser.Parse(expression);
+            for (var i = 0; i < parseResult.Diagnostics.Length; i++)
+            {
+                diagnostics.Add(new Diagnostic(
+                    parseResult.Diagnostics[i].Severity,
+                    $"expression parse error: {parseResult.Diagnostics[i].Message}",
+                    occurrence.Location));
+            }
+
+            var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(
+                parseResult,
+                expression,
+                occurrence.Location,
+                context);
+            for (var i = 0; i < semanticDiagnostics.Length; i++)
+            {
+                diagnostics.Add(semanticDiagnostics[i]);
+            }
+        }
+
+        return (occurrences, diagnostics.ToArray());
+    }
+
     private static Utf8Slice TrimAsciiWhiteSpace(byte[] source, int offset, int length)
     {
         var start = offset;

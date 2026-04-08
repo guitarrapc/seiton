@@ -617,10 +617,29 @@ C# + VYaml で Go/actionlint 型パーサーを実装する案は、十分に現
 
 補足:
 
-1. これは最小 AST であり、actionlint の expression semantics 相当の型検証や context availability は未実装
+1. これは最小 AST であり、actionlint の expression semantics 相当は初期版のみ（型検証は未実装）
 2. 後段で availability table と関数シグネチャ検証を接続する前提
 3. AST は class ではなく `struct` ノード配列で保持する
 4. extractor は `string` を生成せず、元 YAML 上の `Utf8Slice` を occurrence に保持してパーサーへ直接渡す
+
+### expression semantic 検証（初期版）
+
+最小 AST の後段として、初期版の semantic 検証を追加した。
+
+1. context availability: workflow/job/step の 3 文脈に対して root context の可用性を検証
+2. function signature: 主要組み込み関数の引数個数を検証
+3. extractor から parse + semantic を一体で実行する API を追加
+
+この段階の制約:
+
+1. 型推論ベースの厳密な型検証（例: `contains` の引数型妥当性）は未実装
+2. function call target は識別子のみ許容（member call の特殊ケースは未対応）
+3. availability table は actionlint 完全互換ではなく、主要 context に限定した最小セット
+
+実装上の教訓:
+
+1. semantic 診断は parser 診断と同じ `Diagnostic` 形式に揃えると、統合時の API 変更を最小化できる
+2. root context は member/index/wildcard chain の最上位識別子だけを 1 回検証し、重複診断を防ぐ
 
 ### actionlint testdata の期待診断ベース比較
 
