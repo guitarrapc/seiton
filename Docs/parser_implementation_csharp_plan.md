@@ -291,6 +291,8 @@
 
 ### Step 3.7: Step パースの AST 化
 
+**状態**: 完了（`ParseStep` が `Step` ノードを構築し、`ExecRun` / `ExecAction` を判別して `job.Steps` へ格納。`run` vs `uses` 排他 diagnostics を維持）
+
 - `ParseStep()` → `Step` node（仕様 §3.12）
 - `parseStepExecRun()` → `ExecRun` node（仕様 §3.12.2）
 - `parseStepExecAction()` → `ExecAction` node（仕様 §3.12.1）

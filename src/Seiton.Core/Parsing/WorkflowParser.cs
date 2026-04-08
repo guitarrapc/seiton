@@ -689,6 +689,7 @@ public static class WorkflowParser
         Env? envNode = null;
         Defaults? defaultsNode = null;
         StringNode? ifNode = null;
+        Step[]? stepsNode = null;
         FloatNode? timeoutMinutesNode = null;
         Strategy? strategyNode = null;
         BoolNode? continueOnErrorNode = null;
@@ -798,7 +799,7 @@ public static class WorkflowParser
                     }
                     else
                     {
-                        ParseSteps(ref reader, diagnostics, source, jobId);
+                        stepsNode = ParseSteps(ref reader, diagnostics, source, jobId);
                     }
                 }
                 continue;
@@ -1101,6 +1102,7 @@ public static class WorkflowParser
             Env = envNode,
             Defaults = defaultsNode,
             If = ifNode,
+            Steps = stepsNode,
             TimeoutMinutes = timeoutMinutesNode,
             Strategy = strategyNode,
             ContinueOnError = continueOnErrorNode,
@@ -1111,37 +1113,56 @@ public static class WorkflowParser
         };
     }
 
-    private static void ParseSteps(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Step[] ParseSteps(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
-        // current is SequenceStart
-        reader.Read();
+        var steps = new List<Step>(8);
+        reader.Read(); // consume SequenceStart
 
         var stepIndex = 0;
         while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
         {
             stepIndex++;
-            ParseStep(ref reader, diagnostics, source, jobId, stepIndex);
+            var step = ParseStep(ref reader, diagnostics, source, jobId, stepIndex);
+            if (step is not null)
+            {
+                steps.Add(step);
+            }
         }
 
         if (reader.CurrentKind == YamlEventKind.SequenceEnd)
         {
             reader.Read();
         }
+
+        return steps.ToArray();
     }
 
-    private static void ParseStep(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
+    private static Step? ParseStep(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return;
+            return null;
         }
 
         var hasRun = false;
         var hasUses = false;
+        StringNode? idNode = null;
+        StringNode? ifNode = null;
+        StringNode? nameNode = null;
+        Env? envNode = null;
+        BoolNode? continueOnErrorNode = null;
+        FloatNode? timeoutMinutesNode = null;
+        StringNode? runNode = null;
+        StringNode? usesNode = null;
+        StringNode? shellNode = null;
+        StringNode? workingDirectoryNode = null;
+        Dictionary<Utf8String, StringNode>? withInputs = null;
+        StringNode? dockerEntrypoint = null;
+        StringNode? dockerArgs = null;
 
-        reader.Read();
+        reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -1164,7 +1185,7 @@ public static class WorkflowParser
                 hasRun = true;
                 if (!reader.End)
                 {
-                    _ = ParseStringAndValidateExpression(
+                    runNode = ParseStringAndValidateExpression(
                         ref reader,
                         diagnostics,
                         ExpressionValidationContext.Step,
@@ -1180,7 +1201,27 @@ public static class WorkflowParser
                 hasUses = true;
                 if (!reader.End)
                 {
-                    _ = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar");
+                    usesNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("name"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    nameNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] name must be scalar");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("id"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    idNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar");
                 }
                 continue;
             }
@@ -1190,7 +1231,7 @@ public static class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    ParseConditionalExpression(
+                    ifNode = ParseExpression(
                         ref reader,
                         diagnostics,
                         ExpressionValidationContext.Step,
@@ -1204,11 +1245,65 @@ public static class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    ParseStringMapping(
+                    withInputs = ParseStepWithInputsNode(
                         ref reader,
                         diagnostics,
-                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with must be mapping",
-                        ExpressionValidationContext.Step);
+                        source,
+                        jobId,
+                        stepIndex,
+                        out var entrypoint,
+                        out var args);
+                    dockerEntrypoint = entrypoint;
+                    dockerArgs = args;
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("shell"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    shellNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] shell must be scalar");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("working-directory"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    workingDirectoryNode = ParseStringAndValidateExpression(
+                        ref reader,
+                        diagnostics,
+                        ExpressionValidationContext.Step,
+                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] working-directory must be scalar",
+                        parseWholeValueIfNoEmbedded: false);
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("timeout-minutes"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    timeoutMinutesNode = ParseFloat(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("continue-on-error"u8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    continueOnErrorNode = ParseBoolOrExpression(
+                        ref reader,
+                        diagnostics,
+                        ExpressionValidationContext.Step,
+                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] continue-on-error must be bool or expression");
                 }
                 continue;
             }
@@ -1218,11 +1313,20 @@ public static class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    ParseStringMapping(
-                        ref reader,
-                        diagnostics,
-                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
-                        ExpressionValidationContext.Step);
+                    if (reader.CurrentKind != YamlEventKind.MappingStart)
+                    {
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping", reader.CurrentStart);
+                        reader.SkipCurrentNode();
+                    }
+                    else
+                    {
+                        envNode = ParseEnvNode(
+                            ref reader,
+                            diagnostics,
+                            source,
+                            $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
+                            ExpressionValidationContext.Step);
+                    }
                 }
                 continue;
             }
@@ -1239,7 +1343,6 @@ public static class WorkflowParser
             }
 
             var key = Encoding.UTF8.GetString(keyUtf8);
-
             AddError(diagnostics, $"unexpected step key '{key}' in job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]", keyMark);
             if (!reader.End)
             {
@@ -1261,6 +1364,120 @@ public static class WorkflowParser
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] requires run or uses", reader.CurrentStart);
         }
+
+        StepExec exec;
+        if (hasRun)
+        {
+            exec = new ExecRun
+            {
+                Kind = StepExecKind.Run,
+                Run = runNode ?? new StringNode { Value = default, Quoted = false, Range = default },
+                Shell = shellNode,
+                WorkingDirectory = workingDirectoryNode,
+                Range = runNode?.Range ?? default,
+            };
+        }
+        else
+        {
+            exec = new ExecAction
+            {
+                Kind = StepExecKind.Action,
+                Uses = usesNode ?? new StringNode { Value = default, Quoted = false, Range = default },
+                Inputs = withInputs,
+                Entrypoint = dockerEntrypoint,
+                Args = dockerArgs,
+                Range = usesNode?.Range ?? default,
+            };
+        }
+
+        return new Step
+        {
+            Id = idNode,
+            If = ifNode,
+            Name = nameNode,
+            Exec = exec,
+            Env = envNode,
+            ContinueOnError = continueOnErrorNode,
+            TimeoutMinutes = timeoutMinutesNode,
+            Range = exec.Range,
+        };
+    }
+
+    private static Dictionary<Utf8String, StringNode>? ParseStepWithInputsNode(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        Utf8Slice jobId,
+        int stepIndex,
+        out StringNode? entrypoint,
+        out StringNode? args)
+    {
+        entrypoint = null;
+        args = null;
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with must be mapping", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var map = new Dictionary<Utf8String, StringNode>();
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with must be mapping", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            var key = Utf8String.FromLowerAscii(keyUtf8);
+            var isEntrypoint = keyUtf8.SequenceEqual("entrypoint"u8);
+            var isArgs = keyUtf8.SequenceEqual("args"u8);
+
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            var value = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Step,
+                $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with.{Encoding.UTF8.GetString(keyUtf8)} must be scalar",
+                parseWholeValueIfNoEmbedded: false);
+
+            if (value is null)
+            {
+                continue;
+            }
+
+            map[key] = value;
+            if (isEntrypoint)
+            {
+                entrypoint = value;
+            }
+            else if (isArgs)
+            {
+                args = value;
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return map;
     }
 
     private static bool IsKnownJobKey(ReadOnlySpan<byte> keyUtf8)

@@ -909,6 +909,92 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_StepRun_PopulatesExecRunAst()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Run Step
+                      run: echo ok
+                      shell: bash
+                      working-directory: src
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-ast.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var jobKey = Utf8String.FromLowerAscii("build"u8);
+        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        await Assert.That(step.Name is not null).IsTrue();
+        await Assert.That(step.Exec).IsTypeOf<ExecRun>();
+        var exec = (ExecRun)step.Exec;
+        await Assert.That(exec.Run.Value.Length).IsGreaterThan(0);
+        await Assert.That(exec.Shell is not null).IsTrue();
+        await Assert.That(exec.WorkingDirectory is not null).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepUses_PopulatesExecActionAst()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        fetch-depth: '0'
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-uses-ast.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var jobKey = Utf8String.FromLowerAscii("build"u8);
+        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        await Assert.That(step.Exec).IsTypeOf<ExecAction>();
+        var exec = (ExecAction)step.Exec;
+        await Assert.That(exec.Uses.Value.Length).IsGreaterThan(0);
+        await Assert.That(exec.Inputs is not null).IsTrue();
+        await Assert.That(exec.Inputs!.Count).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task Parse_StepDockerAction_PopulatesEntrypointAndArgsAst()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: docker://alpine:3.20
+                      with:
+                        entrypoint: /bin/sh
+                        args: -c "echo ok"
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-docker-ast.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var jobKey = Utf8String.FromLowerAscii("build"u8);
+        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        await Assert.That(step.Exec).IsTypeOf<ExecAction>();
+        var exec = (ExecAction)step.Exec;
+        await Assert.That(exec.Entrypoint is not null).IsTrue();
+        await Assert.That(exec.Args is not null).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_JobMustBeMapping_ReportsError()
     {
         var yaml = """
