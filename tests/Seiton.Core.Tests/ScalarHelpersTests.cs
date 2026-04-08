@@ -1,5 +1,4 @@
 ﻿using Seiton.Core.Parsing;
-using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Tests;
 
@@ -158,4 +157,4 @@ public sealed class ScalarHelpersTests
             new TextPosition(0, 1, 1),
             new TextPosition(0, 1, 1));
     }
- }
+}

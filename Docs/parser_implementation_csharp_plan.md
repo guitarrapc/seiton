@@ -228,6 +228,8 @@
 
 ### Step 3.3: Permissions / Env / Defaults / Concurrency パース
 
+**状態**: 完了（`workflow.Permissions` / `workflow.Env` / `workflow.Defaults` / `workflow.Concurrency` の AST 構築を実装。既存 shape/diagnostics を維持しつつ top-level 構造ノードを populate）
+
 - `ParsePermissions()` → `Permissions` node（パーサー仕様 §3.5）
 - `ParseEnv()` → `Env` node（パーサー仕様 §3.6）
 - `ParseDefaults()` → `Defaults` node（パーサー仕様 §3.7）

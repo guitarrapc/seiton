@@ -46,6 +46,10 @@ public static class WorkflowParser
 
         StringNode? nameNode = null;
         StringNode? runNameNode = null;
+        Permissions? permissionsNode = null;
+        Env? envNode = null;
+        Defaults? defaultsNode = null;
+        Concurrency? concurrencyNode = null;
         var hasOn = false;
         var hasJobs = false;
 
@@ -127,23 +131,42 @@ public static class WorkflowParser
                 reader.Read(); // consume key
                 if (!reader.End)
                 {
-                    ParseStringMapping(
+                    envNode = ParseEnvNode(
                         ref reader,
                         diagnostics,
+                        source,
                         "workflow env must be mapping",
                         ExpressionValidationContext.Workflow);
                 }
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("permissions"u8) ||
-                keyUtf8.SequenceEqual("defaults"u8) ||
-                keyUtf8.SequenceEqual("concurrency"u8))
+            if (keyUtf8.SequenceEqual("permissions"u8))
             {
                 reader.Read(); // consume key
                 if (!reader.End)
                 {
-                    reader.SkipCurrentNode();
+                    permissionsNode = ParsePermissionsNode(ref reader, diagnostics, source, "workflow permissions must be scalar or mapping");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("defaults"u8))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    defaultsNode = ParseDefaultsNode(ref reader, diagnostics, "workflow defaults must be mapping");
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("concurrency"u8))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    concurrencyNode = ParseConcurrencyNode(ref reader, diagnostics, "workflow concurrency must be scalar or mapping", ExpressionValidationContext.Workflow);
                 }
                 continue;
             }
@@ -178,11 +201,424 @@ public static class WorkflowParser
             Name = nameNode,
             RunName = runNameNode,
             On = [],
+            Permissions = permissionsNode,
+            Env = envNode,
+            Defaults = defaultsNode,
+            Concurrency = concurrencyNode,
             Jobs = new Dictionary<Utf8String, Job>(),
             Range = default,
         };
 
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
+    }
+
+    private static Permissions? ParsePermissionsNode(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        string error)
+    {
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var all = ParseString(ref reader, diagnostics, error);
+            return all is null
+                ? null
+                : new Permissions
+                {
+                    All = all,
+                    Range = all.Range,
+                };
+        }
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, error, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var scopes = new Dictionary<Utf8String, PermissionScope>();
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
+            var keyUtf8 = reader.GetScalarUtf8();
+            var keyNode = new StringNode
+            {
+                Value = keySlice,
+                Quoted = reader.IsScalarQuoted(),
+                Range = BuildScalarLocation(keyMark, keyUtf8.Length),
+            };
+
+            reader.Read(); // consume key
+            if (reader.End)
+            {
+                break;
+            }
+
+            var valueNode = ParseString(ref reader, diagnostics, error);
+            if (valueNode is null)
+            {
+                continue;
+            }
+
+            scopes[keySlice.ToUtf8String(source)] = new PermissionScope
+            {
+                Name = keyNode,
+                Value = valueNode,
+            };
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new Permissions
+        {
+            Scopes = scopes,
+            Range = default,
+        };
+    }
+
+    private static Env? ParseEnvNode(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ReadOnlySpan<byte> source,
+        string error,
+        ExpressionValidationContext expressionContext)
+    {
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var expression = ParseStringAndValidateExpression(ref reader, diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
+            return expression is null
+                ? null
+                : new Env
+                {
+                    Expression = expression,
+                    Range = expression.Range,
+                };
+        }
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, error, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var vars = new Dictionary<Utf8String, EnvVar>();
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
+            var keyUtf8 = reader.GetScalarUtf8();
+            var keyNode = new StringNode
+            {
+                Value = keySlice,
+                Quoted = reader.IsScalarQuoted(),
+                Range = BuildScalarLocation(keyMark, keyUtf8.Length),
+            };
+
+            reader.Read(); // consume key
+            if (reader.End)
+            {
+                break;
+            }
+
+            var valueNode = ParseStringAndValidateExpression(ref reader, diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
+            if (valueNode is null)
+            {
+                continue;
+            }
+
+            vars[keySlice.ToUtf8String(source)] = new EnvVar
+            {
+                Name = keyNode,
+                Value = valueNode,
+            };
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new Env
+        {
+            Vars = vars,
+            Range = default,
+        };
+    }
+
+    private static Defaults? ParseDefaultsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string error)
+    {
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, error, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        StringNode? shellNode = null;
+        StringNode? workingDirectoryNode = null;
+
+        reader.Read(); // consume defaults mapping
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            var isRun = keyUtf8.SequenceEqual("run"u8);
+            reader.Read(); // consume key
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (isRun)
+            {
+                if (reader.CurrentKind != YamlEventKind.MappingStart)
+                {
+                    AddError(diagnostics, "workflow defaults.run must be mapping", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    continue;
+                }
+
+                reader.Read(); // consume run mapping
+                while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    if (reader.CurrentKind != YamlEventKind.Scalar)
+                    {
+                        AddError(diagnostics, "workflow defaults.run must be mapping", reader.CurrentStart);
+                        reader.SkipCurrentNode();
+                        if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+                        continue;
+                    }
+
+                    var runKeyMark = reader.CurrentStart;
+                    var runKeyUtf8 = reader.GetScalarUtf8();
+                    var isShell = runKeyUtf8.SequenceEqual("shell"u8);
+                    var isWorkingDirectory = runKeyUtf8.SequenceEqual("working-directory"u8);
+                    reader.Read();
+                    if (reader.End)
+                    {
+                        break;
+                    }
+
+                    if (isShell)
+                    {
+                        shellNode = ParseString(ref reader, diagnostics, "workflow defaults.run.shell must be scalar");
+                        continue;
+                    }
+
+                    if (isWorkingDirectory)
+                    {
+                        workingDirectoryNode = ParseString(ref reader, diagnostics, "workflow defaults.run.working-directory must be scalar");
+                        continue;
+                    }
+
+                    AddError(diagnostics, $"unexpected workflow defaults.run key: {Encoding.UTF8.GetString(runKeyUtf8)}", runKeyMark);
+                    reader.SkipCurrentNode();
+                }
+
+                if (reader.CurrentKind == YamlEventKind.MappingEnd)
+                {
+                    reader.Read();
+                }
+
+                continue;
+            }
+
+            AddError(diagnostics, $"unexpected workflow defaults key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new Defaults
+        {
+            Run = new DefaultsRun
+            {
+                Shell = shellNode,
+                WorkingDirectory = workingDirectoryNode,
+                Range = default,
+            },
+            Range = default,
+        };
+    }
+
+    private static Concurrency? ParseConcurrencyNode(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        string error,
+        ExpressionValidationContext expressionContext)
+    {
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var group = ParseStringAndValidateExpression(ref reader, diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
+            return group is null
+                ? null
+                : new Concurrency
+                {
+                    Group = group,
+                    Range = group.Range,
+                };
+        }
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, error, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        StringNode? groupNode = null;
+        BoolNode? cancelInProgressNode = null;
+        reader.Read(); // consume mapping
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            var isGroup = keyUtf8.SequenceEqual("group"u8);
+            var isCancelInProgress = keyUtf8.SequenceEqual("cancel-in-progress"u8);
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (isGroup)
+            {
+                groupNode = ParseStringAndValidateExpression(ref reader, diagnostics, expressionContext, "workflow concurrency.group must be scalar", parseWholeValueIfNoEmbedded: false);
+                continue;
+            }
+
+            if (isCancelInProgress)
+            {
+                cancelInProgressNode = ParseBoolOrExpression(ref reader, diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
+                continue;
+            }
+
+            AddError(diagnostics, $"unexpected workflow concurrency key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        if (groupNode is null)
+        {
+            return null;
+        }
+
+        return new Concurrency
+        {
+            Group = groupNode,
+            CancelInProgress = cancelInProgressNode,
+            Range = default,
+        };
+    }
+
+    private static BoolNode? ParseBoolOrExpression(
+        ref VYamlStreamAdapter reader,
+        List<Diagnostic> diagnostics,
+        ExpressionValidationContext context,
+        string errorMessage)
+    {
+        if (reader.End)
+        {
+            return null;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        var range = BuildScalarLocation(mark, valueUtf8.Length);
+
+        if (TryParseBool(valueUtf8, tag, out var value))
+        {
+            var boolNode = new BoolNode
+            {
+                Value = value,
+                Range = range,
+            };
+            reader.Read();
+            return boolNode;
+        }
+
+        var expressionNode = ParseStringAndValidateExpression(ref reader, diagnostics, context, errorMessage, parseWholeValueIfNoEmbedded: false);
+        if (expressionNode is null)
+        {
+            return null;
+        }
+
+        return new BoolNode
+        {
+            Value = false,
+            Expression = expressionNode,
+            Range = range,
+        };
     }
 
     private static void ParseJobsMapping(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)

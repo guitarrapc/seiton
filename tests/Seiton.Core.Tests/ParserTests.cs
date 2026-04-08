@@ -49,6 +49,70 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_WorkflowStructuralNodes_PopulatesAst()
+    {
+        var yaml = """
+                name: ci
+                on: push
+                permissions:
+                    contents: read
+                    actions: write
+                env:
+                    FOO: bar-${{ github.ref }}
+                defaults:
+                    run:
+                        shell: bash
+                        working-directory: src
+                concurrency:
+                    group: ci-${{ github.ref }}
+                    cancel-in-progress: true
+                jobs: {}
+                """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-structural.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.Permissions is not null).IsTrue();
+        await Assert.That(result.Workflow.Permissions!.Scopes is not null).IsTrue();
+        await Assert.That(result.Workflow.Permissions.Scopes!.Count).IsEqualTo(2);
+        await Assert.That(result.Workflow.Env is not null).IsTrue();
+        await Assert.That(result.Workflow.Env!.Vars is not null).IsTrue();
+        await Assert.That(result.Workflow.Env.Vars!.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.Defaults is not null).IsTrue();
+        await Assert.That(result.Workflow.Defaults!.Run.Shell is not null).IsTrue();
+        await Assert.That(result.Workflow.Defaults.Run.WorkingDirectory is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency!.Group.Value.Length).IsGreaterThan(0);
+        await Assert.That(result.Workflow.Concurrency.CancelInProgress is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency.CancelInProgress!.Value).IsTrue();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowPermissionsAndConcurrencyScalar_PopulatesAst()
+    {
+        var yaml = """
+                on: push
+                permissions: read-all
+                concurrency: ci-${{ github.ref }}
+                jobs: {}
+                """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-scalar-structural.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.Permissions is not null).IsTrue();
+        await Assert.That(result.Workflow.Permissions!.All is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency!.Group.Value.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
     public async Task Parse_MissingRequiredKeys_ReportsErrors()
     {
         var yaml = """
