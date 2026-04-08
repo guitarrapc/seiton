@@ -166,7 +166,7 @@ Source Generator は必須ではなく、初期段階ではむしろ不要であ
 
 ```text
 src/
-  Seiton.Cli/
+  Seiton/
     Program.cs
     Commands/
       LintCommand.cs
