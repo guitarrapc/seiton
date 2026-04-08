@@ -42,12 +42,8 @@ public static class WorkflowParser
 
         reader.Read(); // skip MappingStart
 
-        var hasName = false;
-        var hasRunName = false;
         var hasOn = false;
         var hasJobs = false;
-        Utf8Slice name = default;
-        Utf8Slice runName = default;
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -68,18 +64,15 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read(); // consume key
-                hasName = true;
-                name = ReadScalarOrSkip(ref reader, diagnostics, "name must be scalar");
+                _ = ReadScalarOrSkip(ref reader, diagnostics, "name must be scalar");
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("run-name"u8))
             {
                 reader.Read(); // consume key
-                hasRunName = true;
                 if (reader.End)
                 {
-                    runName = default;
                     continue;
                 }
 
@@ -87,12 +80,10 @@ public static class WorkflowParser
                 {
                     AddError(diagnostics, "run-name must be scalar", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    runName = default;
                     continue;
                 }
 
                 var runNameMark = reader.CurrentStart;
-                runName = reader.GetScalarSlice();
                 var runNameUtf8 = reader.GetScalarUtf8();
                 ValidateExpressionText(
                     runNameUtf8,
@@ -193,15 +184,7 @@ public static class WorkflowParser
             AddError(diagnostics, "required key 'jobs' is missing", new TextPosition(0, 1, 1));
         }
 
-        var document = new WorkflowDocument(
-            HasName: hasName,
-            Name: name,
-            HasRunName: hasRunName,
-            RunName: runName,
-            HasOn: hasOn,
-            HasJobs: hasJobs);
-
-        return new ParseResult(document, diagnostics.ToArray(), HasFatalError: false);
+        return new ParseResult(null, diagnostics.ToArray(), HasFatalError: false);
     }
 
     private static void ParseJobsMapping(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)

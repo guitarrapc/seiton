@@ -22,8 +22,7 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "minimal.yml");
 
         await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.Workflow.HasOn).IsTrue();
-        await Assert.That(result.Workflow.HasJobs).IsTrue();
+        await Assert.That(result.Workflow).IsNull();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 

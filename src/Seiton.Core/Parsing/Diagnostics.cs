@@ -1,5 +1,7 @@
 ﻿namespace Seiton.Core.Parsing;
 
+using Seiton.Core.Parsing.Ast;
+
 public enum DiagnosticSeverity
 {
     Info,
@@ -13,6 +15,6 @@ public readonly record struct Diagnostic(
     TextRange Location);
 
 public readonly record struct ParseResult(
-    WorkflowDocument Workflow,
+    Workflow? Workflow,
     Diagnostic[] Diagnostics,
     bool HasFatalError);
