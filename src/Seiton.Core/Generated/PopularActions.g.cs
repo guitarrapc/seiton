@@ -1,4 +1,4 @@
-namespace Seiton.Core.Generated;
+﻿namespace Seiton.Core.Generated;
 
 internal static class PopularActions
 {

@@ -175,25 +175,25 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("workflow does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
     }
 
-        [Test]
-        public async Task Parse_OnMappingDuplicateKey_ReportsError()
-        {
-                var yaml = """
+    [Test]
+    public async Task Parse_OnMappingDuplicateKey_ReportsError()
+    {
+        var yaml = """
                 on:
                     push: {}
                     PUSH: {}
                 jobs: {}
                 """
-                .Replace("\r\n", "\n");
+        .Replace("\r\n", "\n");
 
-                var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-duplicate.yml");
-                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on contains duplicate key: PUSH", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-duplicate.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on contains duplicate key: PUSH", StringComparison.Ordinal))).IsTrue();
+    }
 
-        [Test]
-        public async Task Parse_JobsMappingDuplicateKey_ReportsError()
-        {
-                var yaml = """
+    [Test]
+    public async Task Parse_JobsMappingDuplicateKey_ReportsError()
+    {
+        var yaml = """
                 on: push
                 jobs:
                     build:
@@ -205,16 +205,16 @@ public sealed class ParserTests
                         steps:
                             - run: echo two
                 """
-                .Replace("\r\n", "\n");
+        .Replace("\r\n", "\n");
 
-                var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-duplicate.yml");
-                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs contains duplicate key: BUILD", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-duplicate.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs contains duplicate key: BUILD", StringComparison.Ordinal))).IsTrue();
+    }
 
-        [Test]
-        public async Task Parse_OnWorkflowDispatchInputsMergeKey_ReportsError()
-        {
-                var yaml = """
+    [Test]
+    public async Task Parse_OnWorkflowDispatchInputsMergeKey_ReportsError()
+    {
+        var yaml = """
                 on:
                     workflow_dispatch:
                         inputs:
@@ -227,11 +227,11 @@ public sealed class ParserTests
                                 type: string
                 jobs: {}
                 """
-                .Replace("\r\n", "\n");
+        .Replace("\r\n", "\n");
 
-                var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-dispatch-inputs-merge.yml");
-                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch.inputs does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-dispatch-inputs-merge.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch.inputs does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
+    }
 
     [Test]
     public async Task Parse_OnTypeInvalid_ReportsError()

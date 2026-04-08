@@ -2191,13 +2191,13 @@ public static class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var eventMark = reader.CurrentStart;
-                var eventInfo = ReadOnEventInfo(ref reader); // try-catch inside for non-UTF8 scalars
-                ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
-                Utf8Slice eventSlice;
-                int eventByteLen;
-                try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
-                catch { eventSlice = default; eventByteLen = 0; }
-                var nameNode = new StringNode { Value = eventSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(eventMark, eventByteLen) };
+            var eventInfo = ReadOnEventInfo(ref reader); // try-catch inside for non-UTF8 scalars
+            ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
+            Utf8Slice eventSlice;
+            int eventByteLen;
+            try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
+            catch { eventSlice = default; eventByteLen = 0; }
+            var nameNode = new StringNode { Value = eventSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(eventMark, eventByteLen) };
             reader.Read();
             return [BuildSimpleEvent(in eventInfo, nameNode)];
         }
