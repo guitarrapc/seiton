@@ -45,6 +45,53 @@ Parse(utf8Yaml, filePath) -> ParseResult
 | `parser.parse()` -> `*Workflow` | `Parser.parse()` -> `Workflow` AST node |
 | `linter.check()` constructs Rules + Visitor | `LintEngine.Check()` with equivalent structure |
 
+### 1.3 End-to-End Call Sequence (Parse -> Interpret -> Evaluate -> Hooks)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Caller as LintEngine.Check
+  participant Adapter as YAML Adapter
+  participant Parser as WorkflowParser
+  participant AST as Workflow AST
+  participant Visitor as Rule Visitor
+  participant Expr as Expression Parser
+  participant Sem as Expression Semantic Analyzer
+  participant Rule as Rule Hooks
+
+  Caller->>Adapter: Read UTF-8 YAML event stream
+  Caller->>Parser: Parse(utf8Yaml, filePath)
+  Parser->>Adapter: Pull events / resolve aliases
+  Parser->>Parser: Interpret keys and node kinds
+  Parser->>AST: Construct typed nodes + ranges
+  Parser-->>Caller: ParseResult(workflow, diagnostics)
+
+  alt has fatal YAML/parse error
+    Caller-->>Caller: Keep parser diagnostics and skip traversal
+  else workflow available
+    Caller->>Visitor: Visit(workflow, rules)
+    Visitor->>Rule: VisitWorkflowPre(workflow)
+    loop each job
+      Visitor->>Rule: VisitJobPre(job)
+      loop each step
+        Visitor->>Rule: VisitStep(step)
+        opt expression-bearing field (if/env/with/...)
+          Rule->>Expr: ParseExpression(${{ ... }})
+          Expr-->>Rule: Expression AST
+          Rule->>Sem: Validate context/types/functions
+          Sem-->>Rule: semantic diagnostics
+        end
+      end
+      Visitor->>Rule: VisitJobPost(job)
+    end
+    Visitor->>Rule: VisitWorkflowPost(workflow)
+  end
+
+  Rule-->>Caller: Accumulated rule diagnostics
+  Caller-->>Caller: Filter + Sort + Dedup
+  Caller-->>Caller: Return final diagnostics
+```
+
 ---
 
 ## 2. AST Definitions
