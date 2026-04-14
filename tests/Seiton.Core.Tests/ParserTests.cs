@@ -749,36 +749,56 @@ public sealed class ParserTests
             return;
         }
 
-        var expectations = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        // Subset matching intentionally checks only stable, parser-owned message fragments.
+        // This keeps the corpus test resilient to wording differences versus actionlint output.
+        var expectations = new[]
         {
-            ["empty.yaml"] = ["workflow root must be mapping"],
-            ["empty_on.yaml"] = ["unknown event in on"],
-            ["case_sensitive_keys.yaml"] = ["unexpected workflow key", "unexpected job key"],
+            new ErrFixtureExpectation("empty.yaml", ["workflow root must be mapping"]),
+            new ErrFixtureExpectation("empty_on.yaml", ["unknown event in on"]),
+            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected workflow key", "unexpected job key"]),
+            new ErrFixtureExpectation("duplicate_keys.yaml", ["contains duplicate key"]),
+            new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
+            new ErrFixtureExpectation("invalid_steps.yaml", ["cannot have both run and uses", "requires run or uses"]),
         };
 
         var failures = new List<string>();
-        foreach (var (fileName, expectedMessages) in expectations)
+        foreach (var expectation in expectations)
         {
-            var path = Path.Combine(errRoot, fileName);
-            if (!File.Exists(path))
-            {
-                failures.Add($"missing fixture: {fileName}");
-                continue;
-            }
-
-            var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
-            for (var i = 0; i < expectedMessages.Length; i++)
-            {
-                var expected = expectedMessages[i];
-                var found = result.Diagnostics.Any(d => d.Message.Contains(expected, StringComparison.Ordinal));
-                if (!found)
-                {
-                    failures.Add($"{fileName}: expected diagnostic containing '{expected}' was not found");
-                }
-            }
+            AssertFixtureDiagnosticSubset(errRoot, expectation, failures);
         }
 
         await Assert.That(failures).IsEmpty();
+    }
+
+    private readonly record struct ErrFixtureExpectation(string FileName, string[] ExpectedSubstrings);
+
+    private static void AssertFixtureDiagnosticSubset(
+        string errRoot,
+        ErrFixtureExpectation expectation,
+        List<string> failures)
+    {
+        var path = Path.Combine(errRoot, expectation.FileName);
+        if (!File.Exists(path))
+        {
+            failures.Add($"missing fixture: {expectation.FileName}");
+            return;
+        }
+
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        for (var i = 0; i < expectation.ExpectedSubstrings.Length; i++)
+        {
+            var expected = expectation.ExpectedSubstrings[i];
+            var found = result.Diagnostics.Any(d => d.Message.Contains(expected, StringComparison.Ordinal));
+            if (found)
+            {
+                continue;
+            }
+
+            var observed = result.Diagnostics.Length == 0
+                ? "<no diagnostics>"
+                : string.Join(" | ", result.Diagnostics.Select(static d => d.Message));
+            failures.Add($"{expectation.FileName}: expected diagnostic containing '{expected}' was not found. observed={observed}");
+        }
     }
 
     [Test]

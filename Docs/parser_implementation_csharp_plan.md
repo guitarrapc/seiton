@@ -473,11 +473,20 @@
 
 ## Phase 8: テスト強化・ベンチマーク
 
-### Step 8.1: actionlint testdata ベースの統合テスト
+### Step 8.1: actionlint testdata ベースの統合テスト ✅
 
-- 現状: `.references/actionlint-main/testdata/` を含む corpus smoke（例外なく parse できること、broken fixture で失敗が出ること）は実装済み
-- 次ステップ: fixture ごとの期待 diagnostics（サブセット）照合に拡張する
-- 既存の単体テスト群（unknown key、on オプション排他、式関数/arity/type など）を diagnostics 照合方式に段階的に統一する
+**状態**: 完了（actionlint err fixture に対する diagnostics サブセット照合を実装し、既存 corpus smoke と併用で回帰検知を強化）
+
+- `tests/Seiton.Core.Tests/ParserTests.cs` の `Parse_ActionlintErrFixtures_ExpectedDiagnosticsSubset` を table-driven 化
+- fixture ごとに期待する diagnostics の部分文字列を宣言し、共通ヘルパー `AssertFixtureDiagnosticSubset` で検証
+- 初期対象 fixture を 6 件に拡張:
+  - `empty.yaml` → `workflow root must be mapping`
+  - `empty_on.yaml` → `unknown event in on`
+  - `case_sensitive_keys.yaml` → `unexpected workflow key` / `unexpected job key`
+  - `duplicate_keys.yaml` → `contains duplicate key`
+  - `invalid_int_at_max_parallel.yaml` → `strategy.max-parallel must be integer`
+  - `invalid_steps.yaml` → `cannot have both run and uses` / `requires run or uses`
+- 期待不一致時は observed diagnostics を併記して失敗させるため、fixture 差分の調査が容易
 
 **完了条件**: 主要テストケースで期待 diagnostics サブセットが一致
 
