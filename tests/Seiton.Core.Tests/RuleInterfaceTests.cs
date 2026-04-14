@@ -8,6 +8,38 @@ namespace Seiton.Core.Tests;
 public sealed class RuleInterfaceTests
 {
     [Test]
+    public async Task LintEngine_ReturnsCombinedParseAndRuleDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            steps:
+              - run: echo hello
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "lint-engine.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.ParseDiagnostics).IsEmpty();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_FatalParse_ReturnsParseDiagnosticsOnly()
+    {
+        var yaml = "[]";
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "fatal.yml");
+
+        await Assert.That(result.HasFatalError).IsTrue();
+        await Assert.That(result.Workflow).IsNull();
+        await Assert.That(result.Diagnostics).HasSingleItem();
+        await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be mapping");
+    }
+
+    [Test]
     public async Task RuleInterface_CanBeUsedWithWorkflowVisitor()
     {
         var workflow = new Workflow

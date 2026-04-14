@@ -557,11 +557,16 @@
 ### Priority 2: ルール層の実用化
 
 4. **`LintEngine` 導入と parser からの rule 実行分離**
-  - parser 直接実行の `SyntaxRule` を `LintEngine` 側に移し、`Parse` と `Lint` の責務を分離する。
+  - 状態: 完了
+  - parser 直接実行だった `SyntaxRule` を `LintEngine.Check(byte[], string)` 側へ移し、`WorkflowParser.Parse(...)` は parse diagnostics のみを返すように整理。
+  - `LintResult` を追加し、`ParseResult` と最終 diagnostics を分離して保持。
   - 目的: 仕様 §1.3 アーキテクチャへ整合。
 
 5. **Rule セットの拡張（SyntaxRule 依存の縮小）**
-  - `IRule` 実装を段階的に追加し、parser 内のセマンティック診断を visitor/rule 側へ移管する。
+  - 状態: 部分完了
+  - `SyntaxRule` を `LintEngine` の既定 rule として運用し、job 制約と popular action input 検証を rule 層で実行する形に統一。
+  - parser テストのうち rule 由来の診断期待は `LintEngine` ベースへ移行。
+  - 残タスク: permissions 値検証、reusable workflow 制約など追加の semantic rule を `IRule` 実装として分離。
   - 目的: 仕様 §8.3 の「ルールエンジン化」を進める。
 
 ### Priority 3: テストの網羅性を仕様レベルへ引き上げる

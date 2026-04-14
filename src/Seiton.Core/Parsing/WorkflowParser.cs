@@ -1,7 +1,6 @@
 ﻿using System.Text;
 using System.Buffers.Text;
 using Seiton.Core.Generated;
-using Seiton.Core.Linting;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -235,13 +234,6 @@ public static class WorkflowParser
             Jobs = jobs,
             Range = default,
         };
-
-        var syntaxRule = new SyntaxRule();
-        syntaxRule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes });
-        var visitor = new WorkflowVisitor();
-        visitor.AddPass(syntaxRule);
-        visitor.Visit(workflow);
-        diagnostics.AddRange(syntaxRule.GetDiagnostics());
 
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
     }
