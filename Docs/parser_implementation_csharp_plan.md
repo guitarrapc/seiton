@@ -737,6 +737,7 @@
 - Rule 責務境界をコードコメントで固定し、優先順位（`job-structure` → `reusable-workflow` → `permissions` → `popular-action-inputs`）を明示。
 - `LintEngine` で rule diagnostics を優先順位順に整列し、同一診断の重複を deterministic に統合する処理を追加。
 - `RuleInterfaceTests` に rule別 table-driven 回帰テストを追加（各 rule で正常系 1 件 + 異常系 2 件）。
+- 追加の lesson learned: `with: { ... }` を含むケースで `PopularActionInputsRule` が未発火する事象は rule 本体ではなく scalar slice 解決の問題だった。`VYamlStreamAdapter.GetScalarSlice()` を「ソース先頭からの逐次 forward 検索」で安定化し、`ParserTests` に `Parse_StepUses_WithFlowStyleInputs_PreservesUsesScalar` を追加して再発防止した。
 
 #### H. Expression Semantic Checker の actionlint 同等性向上
 

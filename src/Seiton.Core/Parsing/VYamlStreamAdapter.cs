@@ -6,9 +6,13 @@ namespace Seiton.Core.Parsing;
 internal ref struct VYamlStreamAdapter : IYamlStreamReader
 {
     private YamlParser _parser;
+    private readonly Memory<byte> _source;
+    private int _scalarSliceCursor;
 
     public VYamlStreamAdapter(Memory<byte> bytes)
     {
+        _source = bytes;
+        _scalarSliceCursor = 0;
         _parser = YamlParser.FromBytes(bytes);
     }
 
@@ -39,9 +43,46 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
     public Utf8Slice GetScalarSlice()
     {
-        var mark = _parser.CurrentMark;
         var utf8 = _parser.GetScalarAsUtf8();
-        return new Utf8Slice(mark.Position, utf8.Length);
+        if (utf8.Length == 0)
+        {
+            var emptyStart = _scalarSliceCursor <= _source.Length ? _scalarSliceCursor : _source.Length;
+            return new Utf8Slice(emptyStart, 0);
+        }
+
+        var source = _source.Span;
+        var start = -1;
+        if (_scalarSliceCursor <= source.Length - utf8.Length)
+        {
+            var idx = source[_scalarSliceCursor..].IndexOf(utf8);
+            if (idx >= 0)
+            {
+                start = _scalarSliceCursor + idx;
+            }
+        }
+
+        if (start < 0)
+        {
+            var mark = _parser.CurrentMark;
+            var maxStart = source.Length - utf8.Length;
+            if (maxStart < 0)
+            {
+                maxStart = 0;
+            }
+
+            start = mark.Position;
+            if (start < 0)
+            {
+                start = 0;
+            }
+            else if (start > maxStart)
+            {
+                start = maxStart;
+            }
+        }
+
+        _scalarSliceCursor = start + utf8.Length;
+        return new Utf8Slice(start, utf8.Length);
     }
 
     public string? GetScalarString() => _parser.GetScalarAsString();

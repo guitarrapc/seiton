@@ -1304,6 +1304,36 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_StepUses_WithFlowStyleInputs_PreservesUsesScalar()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with: { fetch-depht: 1 }
+        """
+        .Replace("\r\n", "\n");
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "step-uses-flow-with.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var jobKey = Utf8String.FromLowerAscii("build"u8);
+        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        await Assert.That(step.Exec).IsTypeOf<ExecAction>();
+
+        var exec = (ExecAction)step.Exec;
+        var uses = Encoding.UTF8.GetString(exec.Uses.Value.AsSpan(bytes));
+        await Assert.That(uses).IsEqualTo("actions/checkout@v4");
+        await Assert.That(exec.Inputs is not null).IsTrue();
+        await Assert.That(exec.Inputs!.ContainsKey(Utf8String.FromLowerAscii("fetch-depht"u8))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_StepDockerAction_PopulatesEntrypointAndArgsAst()
     {
         var yaml = """
