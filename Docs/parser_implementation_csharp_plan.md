@@ -543,14 +543,18 @@
 ### Priority 1: 仕様整合の残ギャップを埋める
 
 1. **YAML アダプター境界の完全整備**
+  - 状態: 完了
   - `WorkflowParser` の `ref VYamlStreamAdapter` 直結を、仕様の `IYamlStreamReader` 境界（または `WorkflowParser<TReader>`）に合わせる。
+  - public parse 経路から `VYamlStreamAdapter` 直結の internal API を除去し、`ParseCore` に内部化。
   - 目的: YAML 実装差し替え容易性と仕様 §0.3 の整合。
 
 2. **String-free success path の厳密化**
+  - 状態: 完了
   - `VYamlStreamAdapter.GetScalarTag()` 内の UTF-16 変換を除去し、タグ推定を UTF-8 バイト処理のみで完結させる。
   - 目的: 仕様 §0.2.1 / §11.1 の厳密遵守。
 
 3. **`runs-on` mapping / expression の完全対応**
+  - 状態: 完了
   - 現在の scalar/sequence 中心実装に対し、`labels` + `group` mapping と expression パスを仕様どおり補完。
   - 目的: 仕様 §2.12 / §3.13 の残差分解消。
 
