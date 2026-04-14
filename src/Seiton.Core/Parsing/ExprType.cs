@@ -30,6 +30,21 @@ public abstract class ExprType
     /// <summary>Array type whose element type is Any.</summary>
     public static ArrayExprType EmptyArray { get; } = new ArrayExprType(Any);
 
+    /// <summary>Creates an object type with optional known properties and dynamic property type.</summary>
+    public static ObjectExprType Object(
+        IReadOnlyDictionary<Utf8String, ExprType>? properties = null,
+        ExprType? dynamicPropertyType = null,
+        bool strict = false)
+    {
+        return new ObjectExprType(properties, dynamicPropertyType, strict);
+    }
+
+    /// <summary>Creates an array type with the given element type.</summary>
+    public static ArrayExprType ArrayOf(ExprType elementType)
+    {
+        return new ArrayExprType(elementType);
+    }
+
     /// <summary>Human-readable name for use in diagnostic messages.</summary>
     public abstract string TypeName { get; }
 
@@ -91,9 +106,84 @@ public sealed class StringExprType : ExprType
 /// <summary>Object type, optionally with a static property map.</summary>
 public sealed class ObjectExprType : ExprType
 {
-    internal ObjectExprType() { }
+    readonly IReadOnlyDictionary<Utf8String, ExprType>? properties;
+
+    internal ObjectExprType(
+        IReadOnlyDictionary<Utf8String, ExprType>? properties = null,
+        ExprType? dynamicPropertyType = null,
+        bool strict = false)
+    {
+        this.properties = properties;
+        DynamicPropertyType = dynamicPropertyType;
+        Strict = strict;
+    }
+
+    public IReadOnlyDictionary<Utf8String, ExprType>? Properties => properties;
+
+    public ExprType? DynamicPropertyType { get; }
+
+    public bool Strict { get; }
 
     public override string TypeName => "object";
+
+    public override bool IsAssignableTo(ExprType target)
+    {
+        if (base.IsAssignableTo(target))
+        {
+            return true;
+        }
+
+        return target is ObjectExprType;
+    }
+
+    public bool TryGetProperty(ReadOnlySpan<byte> nameUtf8, out ExprType propertyType)
+    {
+        if (properties is not null)
+        {
+            foreach (var pair in properties)
+            {
+                if (EqualsAsciiIgnoreCase(pair.Key.Span, nameUtf8))
+                {
+                    propertyType = pair.Value;
+                    return true;
+                }
+            }
+        }
+
+        if (DynamicPropertyType is not null)
+        {
+            propertyType = DynamicPropertyType;
+            return true;
+        }
+
+        propertyType = ExprType.Any;
+        return false;
+    }
+
+    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static byte ToLowerAscii(byte value)
+    {
+        return value is >= (byte)'A' and <= (byte)'Z'
+            ? (byte)(value + 32)
+            : value;
+    }
 }
 
 /// <summary>Array type with a known element type.</summary>
@@ -107,5 +197,16 @@ public sealed class ArrayExprType : ExprType
     /// <summary>The type of each element in the array.</summary>
     public ExprType ElementType { get; }
 
-    public override string TypeName => "array";
+    public override string TypeName => $"array<{ElementType.TypeName}>";
+
+    public override bool IsAssignableTo(ExprType target)
+    {
+        if (base.IsAssignableTo(target))
+        {
+            return true;
+        }
+
+        return target is ArrayExprType arrayTarget
+            && ElementType.IsAssignableTo(arrayTarget.ElementType);
+    }
 }

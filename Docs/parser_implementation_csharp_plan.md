@@ -741,12 +741,19 @@
 
 #### H. Expression Semantic Checker の actionlint 同等性向上
 
-- [ ] 関数シグネチャ検証を arity 中心から型付きシグネチャ検証へ拡張（overload を含む）
-- [ ] `ExpressionSemanticAnalyzer.InferType()` の推論対象を拡大し、`Any` 依存の診断不能ケースを縮小する
-- [ ] 型不一致 diagnostics のメッセージ契約を固定し、Parser/ExpressionTests に統合テストを追加する
+- [x] 関数シグネチャ検証を arity 中心から型付きシグネチャ検証へ拡張（overload を含む）
+- [x] `ExpressionSemanticAnalyzer.InferType()` の推論対象を拡大し、`Any` 依存の診断不能ケースを縮小する
+- [x] 型不一致 diagnostics のメッセージ契約を固定し、Parser/ExpressionTests に統合テストを追加する
 
 完了条件:
 - C# spec §7.1/§7.3 の「Target」記述を実装済みへ寄せられる状態になる
+
+実装結果:
+- 欠落していた `ExpressionSemanticAnalyzer` / `ExpressionValidationContext` を復元し、関数仕様を overload 可能な typed signature モデル（戻り値型・引数型・可変長引数）へ置換。
+- built-in 関数 (`contains`, `startsWith`, `endsWith`, `format`, `join`, `toJson`, `fromJson`, `hashFiles`, `success/failure/cancelled/always`) に対し、arity と型を同時検証するよう変更。
+- diagnostics 契約を固定: `unknown expression function: ...` / `function '...' expects ...` / `argument N should be ...`。
+- `InferType()` を拡張し、`MemberAccess` / `IndexAccess` / `WildcardAccess` / `FunctionCall` を bottom-up 推論。特に `fromJson('<literal-json>')` は literal JSON を解析して object/array 要素型を推論。
+- `ExpressionTests` に overload 許容ケース（array `contains`）と `fromJson` literal 推論（member/index）を追加し、既存 Parser 側の semantic 診断統合テストと合わせて回帰を固定。
 
 #### I. Context Availability の位置依存検証を完成
 

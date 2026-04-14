@@ -127,6 +127,21 @@ public sealed class ExpressionTests
     }
 
     [Test]
+    public async Task ParseAndValidate_FunctionOverload_ArrayContains_AllowsArrayFirstArg()
+    {
+        var expression = "contains(fromJson('[1,2,3]'), 2)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task ParseAndValidate_StepContext_AllowsStepsRoot()
     {
         var expression = "steps.build.outputs.value"u8;
@@ -271,6 +286,28 @@ public sealed class ExpressionTests
         var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Any);
+    }
+
+    [Test]
+    public async Task InferType_FromJsonLiteralMemberAccess_ReturnsTypedProperty()
+    {
+        var expression = "fromJson('{\"enabled\":true}').enabled"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_FromJsonLiteralArrayIndex_ReturnsElementType()
+    {
+        var expression = "fromJson('[1,2,3]')[0]"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Number);
     }
 
     // ── InferType: context access ─────────────────────────────────────────────

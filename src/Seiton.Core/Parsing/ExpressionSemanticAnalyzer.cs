@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.Json;
 using Seiton.Core.Generated;
 
 namespace Seiton.Core.Parsing;
@@ -12,6 +13,84 @@ public enum ExpressionValidationContext
 
 public static class ExpressionSemanticAnalyzer
 {
+    readonly record struct FuncOverload(ExprType ReturnType, ExprType[] Parameters, ExprType? VariadicParameter = null)
+    {
+        public int MinArgs => Parameters.Length;
+
+        public int MaxArgs => VariadicParameter is null ? Parameters.Length : int.MaxValue;
+
+        public bool AcceptsArgCount(int argCount)
+        {
+            return argCount >= MinArgs && argCount <= MaxArgs;
+        }
+
+        public ExprType GetExpectedTypeAt(int index)
+        {
+            if (index < Parameters.Length)
+            {
+                return Parameters[index];
+            }
+
+            return VariadicParameter ?? ExprType.Any;
+        }
+    }
+
+    readonly record struct FunctionSpec(byte[] NameUtf8, FuncOverload[] Overloads);
+
+    static readonly FunctionSpec[] Specs =
+    [
+        new FunctionSpec("contains"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, [ExprType.String, ExprType.Any]),
+            new FuncOverload(ExprType.Bool, [ExprType.ArrayOf(ExprType.Any), ExprType.Any]),
+        ]),
+        new FunctionSpec("startswith"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
+        ]),
+        new FunctionSpec("endswith"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
+        ]),
+        new FunctionSpec("format"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.String, [ExprType.String], ExprType.Any),
+        ]),
+        new FunctionSpec("join"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any)]),
+            new FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any), ExprType.String]),
+        ]),
+        new FunctionSpec("tojson"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.String, [ExprType.Any]),
+        ]),
+        new FunctionSpec("fromjson"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Any, [ExprType.String]),
+        ]),
+        new FunctionSpec("hashfiles"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.String, [ExprType.String], ExprType.String),
+        ]),
+        new FunctionSpec("success"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, []),
+        ]),
+        new FunctionSpec("failure"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, []),
+        ]),
+        new FunctionSpec("cancelled"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, []),
+        ]),
+        new FunctionSpec("always"u8.ToArray(),
+        [
+            new FuncOverload(ExprType.Bool, []),
+        ]),
+    ];
+
     public static Diagnostic[] Validate(
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
@@ -23,232 +102,11 @@ public static class ExpressionSemanticAnalyzer
             return [];
         }
 
-        var diagnostics = new List<Diagnostic>(4);
-        var validatedRootIdentifiers = new List<int>(4);
-        var visitor = new SemanticValidationVisitor
-        {
-            ExpressionUtf8 = expressionUtf8,
-            ExpressionLocation = expressionLocation,
-            Context = context,
-            Nodes = parseResult.Nodes,
-            Arguments = parseResult.Arguments,
-            Diagnostics = diagnostics,
-            ValidatedRootIdentifiers = validatedRootIdentifiers,
-        };
-
-        ExpressionVisitor.VisitExprNode(
-            parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
-            ref visitor);
-
+        var diagnostics = new List<Diagnostic>();
+        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes, parseResult.Arguments, expressionUtf8, expressionLocation, context, diagnostics);
         return diagnostics.ToArray();
     }
 
-    /// <summary>
-    /// Zero-allocation visitor state for <see cref="Validate"/>.
-    /// Declared as a <c>ref struct</c> so it can hold <see cref="ReadOnlySpan{byte}"/> as a field
-    /// and implement <see cref="IExprNodeVisitor"/> (C# 13 / .NET 9+ allows ref structs to implement interfaces).
-    /// Passed by <c>ref</c> to <see cref="ExpressionVisitor.VisitExprNode{TVisitor}"/> to avoid boxing.
-    /// </summary>
-    private ref struct SemanticValidationVisitor : IExprNodeVisitor
-    {
-        public ReadOnlySpan<byte> ExpressionUtf8;
-        public TextRange ExpressionLocation;
-        public ExpressionValidationContext Context;
-        public ExpressionNode[] Nodes;
-        public int[] Arguments;
-        public List<Diagnostic> Diagnostics;
-        public List<int> ValidatedRootIdentifiers;
-
-        public void Visit(int nodeId, ExpressionNode node, int parentId, bool entering)
-        {
-            if (!entering)
-            {
-                return;
-            }
-
-            switch (node.Kind)
-            {
-                case ExpressionNodeKind.FunctionCall:
-                    ValidateFunctionCall(node, Nodes, Arguments, ExpressionUtf8, ExpressionLocation, Diagnostics);
-                    break;
-
-                case ExpressionNodeKind.Identifier:
-                {
-                    // Skip the function name identifier — it is resolved via TryGetFunctionArity, not context root validation.
-                    var isFunctionCallee = parentId >= 0
-                        && parentId < Nodes.Length
-                        && Nodes[parentId].Kind == ExpressionNodeKind.FunctionCall
-                        && Nodes[parentId].Left == nodeId;
-                    if (!isFunctionCallee)
-                    {
-                        ValidateContextRoot(nodeId, Nodes, ExpressionUtf8, ExpressionLocation, Context, Diagnostics, ValidatedRootIdentifiers);
-                    }
-                    break;
-                }
-
-                case ExpressionNodeKind.MemberAccess:
-                case ExpressionNodeKind.WildcardAccess:
-                case ExpressionNodeKind.IndexAccess:
-                    ValidateContextRoot(nodeId, Nodes, ExpressionUtf8, ExpressionLocation, Context, Diagnostics, ValidatedRootIdentifiers);
-                    break;
-            }
-        }
-    }
-
-    private static void ValidateFunctionCall(
-        ExpressionNode functionCall,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expressionUtf8,
-        TextRange expressionLocation,
-        List<Diagnostic> diagnostics)
-    {
-        if (functionCall.Left < 0 || functionCall.Left >= nodes.Length)
-        {
-            return;
-        }
-
-        var callee = nodes[functionCall.Left];
-        if (callee.Kind != ExpressionNodeKind.Identifier)
-        {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                "function call target must be identifier",
-                expressionLocation));
-            return;
-        }
-
-        var functionName = callee.Token.AsSpan(expressionUtf8);
-        if (!TryGetFunctionArity(functionName, out var minArgs, out var maxArgs))
-        {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"unknown expression function: {Encoding.UTF8.GetString(functionName)}",
-                ToLocation(expressionLocation, callee.Token)));
-            return;
-        }
-
-        if (functionCall.ArgCount < minArgs || functionCall.ArgCount > maxArgs)
-        {
-            var message = maxArgs == int.MaxValue
-                ? $"function {Encoding.UTF8.GetString(functionName)} expects at least {minArgs} argument(s), but got {functionCall.ArgCount}"
-                : $"function {Encoding.UTF8.GetString(functionName)} expects {FormatExpectedArity(minArgs, maxArgs)} argument(s), but got {functionCall.ArgCount}";
-
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                message,
-                ToLocation(expressionLocation, callee.Token)));
-        }
-
-        ValidateFunctionArgumentTypes(functionCall, nodes, arguments, expressionUtf8, functionName, expressionLocation, diagnostics);
-    }
-
-    private static void ValidateFunctionArgumentTypes(
-        ExpressionNode functionCall,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expressionUtf8,
-        ReadOnlySpan<byte> functionName,
-        TextRange expressionLocation,
-        List<Diagnostic> diagnostics)
-    {
-        if (SequenceEqualAsciiIgnoreCase(functionName, "contains"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "startsWith"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "endsWith"u8))
-        {
-            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 0, functionName);
-            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 1, functionName);
-            return;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "format"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "fromJson"u8))
-        {
-            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 0, functionName);
-            return;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "join"u8))
-        {
-            // join(arrayOrString, separator?) where separator must be string when provided.
-            ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, 1, functionName);
-            return;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "hashFiles"u8))
-        {
-            // hashFiles(path, path, ...) expects string globs.
-            for (var i = 0; i < functionCall.ArgCount; i++)
-            {
-                ValidateStringArg(functionCall, nodes, arguments, expressionUtf8, expressionLocation, diagnostics, i, functionName);
-            }
-        }
-    }
-
-    private static void ValidateStringArg(
-        ExpressionNode functionCall,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expressionUtf8,
-        TextRange expressionLocation,
-        List<Diagnostic> diagnostics,
-        int argPosition,
-        ReadOnlySpan<byte> functionName)
-    {
-        if (!TryGetArgumentNode(functionCall, nodes, arguments, argPosition, out var argumentNode))
-        {
-            return;
-        }
-
-        var argIndex = functionCall.ArgStart + argPosition;
-        if (argIndex < 0 || argIndex >= arguments.Length)
-        {
-            return;
-        }
-
-        var argumentType = InferType(arguments[argIndex], nodes, arguments, expressionUtf8);
-        if (argumentType is AnyExprType or StringExprType)
-        {
-            return;
-        }
-
-        diagnostics.Add(new Diagnostic(
-            DiagnosticSeverity.Error,
-            $"function {Encoding.UTF8.GetString(functionName)} argument {argPosition + 1} should be string, but got {argumentType.TypeName}",
-            ToNodeLocation(expressionLocation, argumentNode)));
-    }
-
-    private static bool TryGetArgumentNode(ExpressionNode functionCall, ExpressionNode[] nodes, int[] arguments, int argPosition, out ExpressionNode argumentNode)
-    {
-        argumentNode = default;
-        if (argPosition < 0 || argPosition >= functionCall.ArgCount)
-        {
-            return false;
-        }
-
-        var argIndex = functionCall.ArgStart + argPosition;
-        if (argIndex < 0 || argIndex >= arguments.Length)
-        {
-            return false;
-        }
-
-        var argNodeId = arguments[argIndex];
-        if (argNodeId < 0 || argNodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        argumentNode = nodes[argNodeId];
-        return true;
-    }
-
-    /// <summary>
-    /// Infers the <see cref="ExprType"/> of the expression rooted at <paramref name="nodeId"/>.
-    /// Performs a bottom-up traversal: the type of a node is derived from its children.
-    /// Returns <see cref="ExprType.Any"/> for anything that cannot be statically determined.
-    /// </summary>
     public static ExprType InferType(
         int nodeId,
         ExpressionNode[] nodes,
@@ -267,161 +125,504 @@ public static class ExpressionSemanticAnalyzer
             ExpressionNodeKind.NumberLiteral => ExprType.Number,
             ExpressionNodeKind.BooleanLiteral => ExprType.Bool,
             ExpressionNodeKind.NullLiteral => ExprType.Null,
-            ExpressionNodeKind.Unary => InferUnaryType(node, nodes, arguments, expressionUtf8),
+            ExpressionNodeKind.Identifier => ExprType.Any,
+            ExpressionNodeKind.Unary => node.Operator == ExpressionOperator.Not
+                ? ExprType.Bool
+                : ExprType.Any,
             ExpressionNodeKind.Binary => InferBinaryType(node),
-            ExpressionNodeKind.FunctionCall => InferFunctionReturnType(node, nodes, expressionUtf8),
+            ExpressionNodeKind.MemberAccess => InferMemberAccessType(node, nodes, arguments, expressionUtf8),
+            ExpressionNodeKind.IndexAccess => InferIndexAccessType(node, nodes, arguments, expressionUtf8),
+            ExpressionNodeKind.WildcardAccess => InferWildcardType(node, nodes, arguments, expressionUtf8),
+            ExpressionNodeKind.FunctionCall => InferFunctionCallType(node, nodes, arguments, expressionUtf8),
             _ => ExprType.Any,
         };
     }
 
-    private static ExprType InferUnaryType(ExpressionNode node, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expressionUtf8)
+    public static bool TryGetFunctionArity(ReadOnlySpan<byte> nameUtf8, out int minArgs, out int maxArgs)
     {
-        // Only unary operator remaining after arithmetic removal is `!`, which always yields bool.
-        return ExprType.Bool;
+        if (TryGetFunctionSpec(nameUtf8, out var spec))
+        {
+            minArgs = int.MaxValue;
+            maxArgs = 0;
+            for (var i = 0; i < spec.Overloads.Length; i++)
+            {
+                var overload = spec.Overloads[i];
+                if (overload.MinArgs < minArgs)
+                {
+                    minArgs = overload.MinArgs;
+                }
+
+                if (overload.MaxArgs > maxArgs)
+                {
+                    maxArgs = overload.MaxArgs;
+                }
+            }
+
+            if (minArgs == int.MaxValue)
+            {
+                minArgs = 0;
+            }
+
+            return true;
+        }
+
+        minArgs = 0;
+        maxArgs = 0;
+        return false;
     }
 
-    private static ExprType InferBinaryType(ExpressionNode node)
-    {
-        return node.Operator switch
-        {
-            // Comparisons and logical operators always yield bool.
-            ExpressionOperator.Equal
-                or ExpressionOperator.NotEqual
-                or ExpressionOperator.Less
-                or ExpressionOperator.LessOrEqual
-                or ExpressionOperator.Greater
-                or ExpressionOperator.GreaterOrEqual
-                or ExpressionOperator.And
-                or ExpressionOperator.Or => ExprType.Bool,
-            _ => ExprType.Any,
-        };
-    }
-
-    private static ExprType InferFunctionReturnType(ExpressionNode functionCall, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
-    {
-        if (functionCall.Left < 0 || functionCall.Left >= nodes.Length)
-        {
-            return ExprType.Any;
-        }
-
-        var callee = nodes[functionCall.Left];
-        if (callee.Kind != ExpressionNodeKind.Identifier)
-        {
-            return ExprType.Any;
-        }
-
-        var name = callee.Token.AsSpan(expressionUtf8);
-
-        // Bool-returning functions.
-        if (SequenceEqualAsciiIgnoreCase(name, "contains"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "startsWith"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "endsWith"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "success"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "failure"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "always"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "cancelled"u8))
-        {
-            return ExprType.Bool;
-        }
-
-        // String-returning functions.
-        if (SequenceEqualAsciiIgnoreCase(name, "format"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "join"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "toJson"u8)
-            || SequenceEqualAsciiIgnoreCase(name, "hashFiles"u8))
-        {
-            return ExprType.String;
-        }
-
-        return ExprType.Any;
-    }
-
-    private static TextRange ToNodeLocation(TextRange expressionLocation, ExpressionNode node)
-    {
-        if (node.Token.Length <= 0)
-        {
-            return expressionLocation;
-        }
-
-        return ToLocation(expressionLocation, node.Token);
-    }
-
-    private static string FormatExpectedArity(int min, int max)
-    {
-        if (min == max)
-        {
-            return min.ToString();
-        }
-
-        return $"{min}-{max}";
-    }
-
-    private static void ValidateContextRoot(
+    static void ValidateNode(
         int nodeId,
+        int parentId,
         ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         ExpressionValidationContext context,
-        List<Diagnostic> diagnostics,
-        List<int> validatedRootIdentifiers)
+        List<Diagnostic> diagnostics)
     {
-        if (!TryGetRootIdentifier(nodeId, nodes, out var rootIdentifierNodeId, out var rootToken))
+        if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return;
         }
 
-        for (var i = 0; i < validatedRootIdentifiers.Count; i++)
+        var node = nodes[nodeId];
+
+        if (node.Kind == ExpressionNodeKind.Identifier && IsContextRootIdentifier(nodeId, parentId, nodes))
         {
-            if (validatedRootIdentifiers[i] == rootIdentifierNodeId)
+            var rootName = node.Token.AsSpan(expressionUtf8);
+            if (!Availability.IsRootContextAvailable(context, rootName))
+            {
+                var rootNameText = Encoding.UTF8.GetString(rootName);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"context '{rootNameText}' is not available in {ToContextText(context)} expressions",
+                    expressionLocation));
+            }
+        }
+
+        if (node.Kind == ExpressionNodeKind.FunctionCall)
+        {
+            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+        }
+
+        switch (node.Kind)
+        {
+            case ExpressionNodeKind.Unary:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                break;
+            case ExpressionNodeKind.Binary:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                break;
+            case ExpressionNodeKind.MemberAccess:
+            case ExpressionNodeKind.WildcardAccess:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                break;
+            case ExpressionNodeKind.IndexAccess:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                break;
+            case ExpressionNodeKind.FunctionCall:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                for (var i = 0; i < node.ArgCount; i++)
+                {
+                    var argIndex = node.ArgStart + i;
+                    if (argIndex >= 0 && argIndex < arguments.Length)
+                    {
+                        ValidateNode(arguments[argIndex], nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                    }
+                }
+                break;
+        }
+    }
+
+    static void ValidateFunctionCall(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (node.Left < 0 || node.Left >= nodes.Length)
+        {
+            return;
+        }
+
+        var callee = nodes[node.Left];
+        if (callee.Kind != ExpressionNodeKind.Identifier)
+        {
+            return;
+        }
+
+        var nameUtf8 = callee.Token.AsSpan(expressionUtf8);
+        if (!TryGetFunctionSpec(nameUtf8, out var spec))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"unknown expression function: {Encoding.UTF8.GetString(nameUtf8)}",
+                expressionLocation));
+            return;
+        }
+
+        var argCount = node.ArgCount;
+        var countMatches = false;
+        for (var i = 0; i < spec.Overloads.Length; i++)
+        {
+            if (spec.Overloads[i].AcceptsArgCount(argCount))
+            {
+                countMatches = true;
+                break;
+            }
+        }
+
+        if (!countMatches)
+        {
+            var (minArgs, maxArgs) = GetArityRange(spec);
+            var message = maxArgs == minArgs
+                ? $"function '{Encoding.UTF8.GetString(nameUtf8)}' expects {minArgs} argument(s), but got {argCount}"
+                : $"function '{Encoding.UTF8.GetString(nameUtf8)}' expects {minArgs}-{maxArgs} argument(s), but got {argCount}";
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, expressionLocation));
+            return;
+        }
+
+        var argTypes = new ExprType[argCount];
+        for (var i = 0; i < argCount; i++)
+        {
+            var argIndex = node.ArgStart + i;
+            if (argIndex >= 0 && argIndex < arguments.Length)
+            {
+                argTypes[i] = InferType(arguments[argIndex], nodes, arguments, expressionUtf8);
+            }
+            else
+            {
+                argTypes[i] = ExprType.Any;
+            }
+        }
+
+        for (var i = 0; i < spec.Overloads.Length; i++)
+        {
+            var overload = spec.Overloads[i];
+            if (!overload.AcceptsArgCount(argCount))
+            {
+                continue;
+            }
+
+            if (TryValidateAgainstOverload(overload, argTypes, out _, out _, out _))
             {
                 return;
             }
         }
 
-        validatedRootIdentifiers.Add(rootIdentifierNodeId);
-        var rootName = rootToken.AsSpan(expressionUtf8);
-        if (IsRootAvailableInContext(rootName, context))
+        for (var i = 0; i < spec.Overloads.Length; i++)
         {
+            var overload = spec.Overloads[i];
+            if (!overload.AcceptsArgCount(argCount))
+            {
+                continue;
+            }
+
+            if (TryValidateAgainstOverload(overload, argTypes, out var errorArgIndex, out var expectedType, out var actualType))
+            {
+                return;
+            }
+
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"argument {errorArgIndex + 1} should be {expectedType.TypeName}, but got {actualType.TypeName}",
+                expressionLocation));
             return;
         }
-
-        diagnostics.Add(new Diagnostic(
-            DiagnosticSeverity.Error,
-            $"context '{Encoding.UTF8.GetString(rootName)}' is not available in {ContextName(context)} expressions",
-            ToLocation(expressionLocation, rootToken)));
     }
 
-    private static bool TryGetRootIdentifier(int nodeId, ExpressionNode[] nodes, out int rootNodeId, out Utf8Slice token)
+    static bool TryValidateAgainstOverload(FuncOverload overload, ExprType[] argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
     {
-        rootNodeId = -1;
-        token = default;
-
-        var currentNodeId = nodeId;
-        while (currentNodeId >= 0 && currentNodeId < nodes.Length)
+        for (var i = 0; i < argTypes.Length; i++)
         {
-            var node = nodes[currentNodeId];
-            switch (node.Kind)
+            var expectedType = overload.GetExpectedTypeAt(i);
+            var actualType = argTypes[i];
+            if (!actualType.IsAssignableTo(expectedType))
             {
-                case ExpressionNodeKind.Identifier:
-                    rootNodeId = currentNodeId;
-                    token = node.Token;
-                    return true;
-
-                case ExpressionNodeKind.MemberAccess:
-                case ExpressionNodeKind.WildcardAccess:
-                case ExpressionNodeKind.IndexAccess:
-                    currentNodeId = node.Left;
-                    continue;
-
-                default:
-                    return false;
+                errorArgIndex = i;
+                expected = expectedType;
+                actual = actualType;
+                return false;
             }
         }
 
+        errorArgIndex = -1;
+        expected = ExprType.Any;
+        actual = ExprType.Any;
+        return true;
+    }
+
+    static (int MinArgs, int MaxArgs) GetArityRange(FunctionSpec spec)
+    {
+        var minArgs = int.MaxValue;
+        var maxArgs = 0;
+        for (var i = 0; i < spec.Overloads.Length; i++)
+        {
+            var overload = spec.Overloads[i];
+            if (overload.MinArgs < minArgs)
+            {
+                minArgs = overload.MinArgs;
+            }
+
+            if (overload.MaxArgs > maxArgs)
+            {
+                maxArgs = overload.MaxArgs;
+            }
+        }
+
+        if (minArgs == int.MaxValue)
+        {
+            minArgs = 0;
+        }
+
+        return (minArgs, maxArgs);
+    }
+
+    static ExprType InferBinaryType(ExpressionNode node)
+    {
+        return node.Operator switch
+        {
+            ExpressionOperator.And
+                or ExpressionOperator.Or
+                or ExpressionOperator.Equal
+                or ExpressionOperator.NotEqual
+                or ExpressionOperator.Less
+                or ExpressionOperator.LessOrEqual
+                or ExpressionOperator.Greater
+                or ExpressionOperator.GreaterOrEqual => ExprType.Bool,
+            _ => ExprType.Any,
+        };
+    }
+
+    static ExprType InferMemberAccessType(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
+    {
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        if (leftType is ObjectExprType objectType)
+        {
+            if (objectType.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propertyType))
+            {
+                return propertyType;
+            }
+
+            return ExprType.Any;
+        }
+
+        if (leftType is ArrayExprType arrayType)
+        {
+            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            {
+                return arrayType.ElementType;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    static ExprType InferIndexAccessType(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
+    {
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+
+        if (leftType is ArrayExprType arrayType)
+        {
+            if (rightType.IsAssignableTo(ExprType.Number) || rightType is AnyExprType)
+            {
+                return arrayType.ElementType;
+            }
+
+            return ExprType.Any;
+        }
+
+        if (leftType is ObjectExprType objectType)
+        {
+            if (node.Right >= 0
+                && node.Right < nodes.Length
+                && nodes[node.Right].Kind == ExpressionNodeKind.StringLiteral)
+            {
+                var propertyName = nodes[node.Right].Token.AsSpan(expressionUtf8);
+                if (objectType.TryGetProperty(propertyName, out var propertyType))
+                {
+                    return propertyType;
+                }
+            }
+
+            if (rightType.IsAssignableTo(ExprType.String) || rightType is AnyExprType)
+            {
+                return objectType.DynamicPropertyType ?? ExprType.Any;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    static ExprType InferWildcardType(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
+    {
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        if (leftType is ArrayExprType arrayType)
+        {
+            return arrayType.ElementType;
+        }
+
+        if (leftType is ObjectExprType objectType)
+        {
+            return objectType.DynamicPropertyType ?? ExprType.Any;
+        }
+
+        return ExprType.Any;
+    }
+
+    static ExprType InferFunctionCallType(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
+    {
+        if (node.Left < 0 || node.Left >= nodes.Length)
+        {
+            return ExprType.Any;
+        }
+
+        var callee = nodes[node.Left];
+        if (callee.Kind != ExpressionNodeKind.Identifier)
+        {
+            return ExprType.Any;
+        }
+
+        var nameUtf8 = callee.Token.AsSpan(expressionUtf8);
+        if (!TryGetFunctionSpec(nameUtf8, out var spec))
+        {
+            return ExprType.Any;
+        }
+
+        if (EqualsAsciiIgnoreCase(nameUtf8, "fromjson"u8)
+            && node.ArgCount == 1
+            && node.ArgStart >= 0
+            && node.ArgStart < arguments.Length)
+        {
+            var argNodeIndex = arguments[node.ArgStart];
+            var literalType = TryInferFromJsonLiteral(argNodeIndex, nodes, expressionUtf8);
+            if (literalType is not null)
+            {
+                return literalType;
+            }
+        }
+
+        for (var i = 0; i < spec.Overloads.Length; i++)
+        {
+            if (spec.Overloads[i].AcceptsArgCount(node.ArgCount))
+            {
+                return spec.Overloads[i].ReturnType;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    static ExprType? TryInferFromJsonLiteral(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return null;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind != ExpressionNodeKind.StringLiteral)
+        {
+            return null;
+        }
+
+        var jsonText = Encoding.UTF8.GetString(node.Token.AsSpan(expressionUtf8));
+        try
+        {
+            using var document = JsonDocument.Parse(jsonText);
+            return ConvertJsonType(document.RootElement);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static ExprType ConvertJsonType(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+            {
+                var properties = new Dictionary<Utf8String, ExprType>();
+                foreach (var property in element.EnumerateObject())
+                {
+                    properties[new Utf8String(Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
+                }
+
+                return ExprType.Object(properties, dynamicPropertyType: ExprType.Any, strict: false);
+            }
+            case JsonValueKind.Array:
+            {
+                ExprType? elementType = null;
+                foreach (var child in element.EnumerateArray())
+                {
+                    var current = ConvertJsonType(child);
+                    if (elementType is null)
+                    {
+                        elementType = current;
+                    }
+                    else if (!current.IsAssignableTo(elementType) || !elementType.IsAssignableTo(current))
+                    {
+                        elementType = ExprType.Any;
+                        break;
+                    }
+                }
+
+                return ExprType.ArrayOf(elementType ?? ExprType.Any);
+            }
+            case JsonValueKind.String:
+                return ExprType.String;
+            case JsonValueKind.Number:
+                return ExprType.Number;
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                return ExprType.Bool;
+            case JsonValueKind.Null:
+                return ExprType.Null;
+            default:
+                return ExprType.Any;
+        }
+    }
+
+    static bool TryGetFunctionSpec(ReadOnlySpan<byte> nameUtf8, out FunctionSpec spec)
+    {
+        for (var i = 0; i < Specs.Length; i++)
+        {
+            if (EqualsAsciiIgnoreCase(nameUtf8, Specs[i].NameUtf8))
+            {
+                spec = Specs[i];
+                return true;
+            }
+        }
+
+        spec = default;
         return false;
     }
 
-    private static string ContextName(ExpressionValidationContext context)
+    static string ToContextText(ExpressionValidationContext context)
     {
         return context switch
         {
@@ -432,67 +633,26 @@ public static class ExpressionSemanticAnalyzer
         };
     }
 
-    private static bool IsRootAvailableInContext(ReadOnlySpan<byte> rootName, ExpressionValidationContext context)
+    static bool IsContextRootIdentifier(int nodeId, int parentId, ExpressionNode[] nodes)
     {
-        return Availability.IsRootContextAvailable(context, rootName);
+        if (parentId < 0)
+        {
+            return true;
+        }
+
+        if (parentId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var parent = nodes[parentId];
+        return parent.Left == nodeId
+            && (parent.Kind == ExpressionNodeKind.MemberAccess
+                || parent.Kind == ExpressionNodeKind.IndexAccess
+                || parent.Kind == ExpressionNodeKind.WildcardAccess);
     }
 
-    private static bool TryGetFunctionArity(ReadOnlySpan<byte> functionName, out int minArgs, out int maxArgs)
-    {
-        if (SequenceEqualAsciiIgnoreCase(functionName, "contains"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "startsWith"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "endsWith"u8))
-        {
-            minArgs = 2;
-            maxArgs = 2;
-            return true;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "format"u8))
-        {
-            minArgs = 1;
-            maxArgs = int.MaxValue;
-            return true;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "join"u8))
-        {
-            minArgs = 1;
-            maxArgs = 2;
-            return true;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "toJson"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "fromJson"u8))
-        {
-            minArgs = 1;
-            maxArgs = 1;
-            return true;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "success"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "failure"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "cancelled"u8)
-            || SequenceEqualAsciiIgnoreCase(functionName, "always"u8))
-        {
-            minArgs = 0;
-            maxArgs = 0;
-            return true;
-        }
-
-        if (SequenceEqualAsciiIgnoreCase(functionName, "hashFiles"u8))
-        {
-            minArgs = 1;
-            maxArgs = int.MaxValue;
-            return true;
-        }
-
-        minArgs = 0;
-        maxArgs = 0;
-        return false;
-    }
-
-    private static bool SequenceEqualAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
     {
         if (left.Length != right.Length)
         {
@@ -501,9 +661,7 @@ public static class ExpressionSemanticAnalyzer
 
         for (var i = 0; i < left.Length; i++)
         {
-            var l = left[i];
-            var r = right[i];
-            if (ToLowerAscii(l) != ToLowerAscii(r))
+            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
             {
                 return false;
             }
@@ -512,32 +670,10 @@ public static class ExpressionSemanticAnalyzer
         return true;
     }
 
-    private static byte ToLowerAscii(byte value)
+    static byte ToLowerAscii(byte value)
     {
-        if (value is >= (byte)'A' and <= (byte)'Z')
-        {
-            return (byte)(value + 32);
-        }
-
-        return value;
-    }
-
-    private static TextRange ToLocation(TextRange expressionLocation, Utf8Slice token)
-    {
-        if (token.Length <= 0)
-        {
-            return expressionLocation;
-        }
-
-        var start = expressionLocation.Start + token.Offset;
-        var startColumn = expressionLocation.StartColumn + token.Offset;
-        var endColumn = startColumn + token.Length - 1;
-        return new TextRange(
-            Start: start,
-            Length: token.Length,
-            StartLine: expressionLocation.StartLine,
-            StartColumn: startColumn,
-            EndLine: expressionLocation.StartLine,
-            EndColumn: endColumn);
+        return value is >= (byte)'A' and <= (byte)'Z'
+            ? (byte)(value + 32)
+            : value;
     }
 }
