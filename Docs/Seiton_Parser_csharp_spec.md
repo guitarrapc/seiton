@@ -16,25 +16,25 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 
 | Category | Implemented in actionlint | Current C# State |
 |---|---|---|
-| **AST Construction** | Parser returns typed AST (`Workflow`, `Job`, `Step`, …) | Implemented. `ParseResult.Workflow` returns typed `Workflow` AST（`WorkflowDocument` removed） |
-| **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Key name and option validation exists for `on`, but no structured AST nodes generated |
-| **workflow_dispatch inputs** | `type` (string/number/boolean/choice/environment), `options`, `required`, `default` parsed individually | Not implemented |
-| **workflow_call inputs/secrets/outputs** | Required validation for `type` on inputs, `required` on secrets, `value` on outputs | Not implemented |
-| **schedule cron/timezone** | `cron` / `timezone` keys parsed individually in mapping | Not implemented |
-| **Permissions Structure** | scalar (`read-all` / `write-all`) or mapping (scope → value) returned as typed node | skip only |
-| **Defaults / Concurrency** | `defaults.run.shell`, `defaults.run.working-directory` returned as typed node | skip only |
-| **Environment** | scalar (name) or mapping (`name`, `url`, `deployment`) as typed node | Not implemented |
-| **Runner (runs-on)** | scalar/sequence → labels, mapping → `labels` + `group`, expression supported | Shape validation only, no typed node |
-| **Step ExecRun / ExecAction** | `run` step → `ExecRun`, `uses` step → `ExecAction` as variant. Docker step separates `entrypoint` / `args` | `hasRun` / `hasUses` flags only |
-| **Matrix & Strategy** | `matrix` row/include/exclude recursively parsed as `RawYAMLValue`, `fail-fast` / `max-parallel` typed | Shape validation only |
-| **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Shape validation only |
+| **AST Construction** | Parser returns typed AST (`Workflow`, `Job`, `Step`, …) | Implemented. `ParseResult.Workflow` returns typed `Workflow` AST (`WorkflowDocument` removed) |
+| **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Implemented for `schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` as structured AST nodes. `image_version` remains out-of-scope |
+| **workflow_dispatch inputs** | `type` (string/number/boolean/choice/environment), `options`, `required`, `default` parsed individually | Implemented |
+| **workflow_call inputs/secrets/outputs** | Required validation for `type` on inputs, `required` on secrets, `value` on outputs | Implemented |
+| **schedule cron/timezone** | `cron` / `timezone` keys parsed individually in mapping | Implemented |
+| **Permissions Structure** | scalar (`read-all` / `write-all`) or mapping (scope → value) returned as typed node | Implemented |
+| **Defaults / Concurrency** | `defaults.run.shell`, `defaults.run.working-directory` returned as typed node | Implemented |
+| **Environment** | scalar (name) or mapping (`name`, `url`, `deployment`) as typed node | Implemented |
+| **Runner (runs-on)** | scalar/sequence → labels, mapping → `labels` + `group`, expression supported | Partially implemented (`labels` scalar/sequence is implemented; mapping + expression support is partial) |
+| **Step ExecRun / ExecAction** | `run` step → `ExecRun`, `uses` step → `ExecAction` as variant. Docker step separates `entrypoint` / `args` | Implemented |
+| **Matrix & Strategy** | `matrix` row/include/exclude recursively parsed as `RawYAMLValue`, `fail-fast` / `max-parallel` typed | Implemented |
+| **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented |
 | **YAML Alias Resolution** | All aliases resolved before parsing; recursive aliases detected and reported as errors | Not implemented (VYaml may resolve internally) |
-| **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Not implemented |
-| **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Does not exist |
-| **Rule Engine** | `Rule` interface × 15+ rules | Does not exist |
-| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | `ExpressionSemanticAnalyzer` has context root / function arity only. No type inference |
+| **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
+| **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
+| **Rule Engine** | `Rule` interface × 15+ rules | Partially implemented (`IRule` + `SyntaxRule` are available; rule set is minimal) |
+| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Partially implemented (`ExprType` hierarchy + bottom-up inference + function argument checks). Full actionlint-equivalent typing is pending |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
-| **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | `OnEventSpecs` has webhook events + activity types (hand-implemented). Availability / popular actions not implemented |
+| **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
 
 #### 0.1.2 Perspectives to Supplement from ghalint
 
@@ -1267,83 +1267,83 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `Parse(utf8Yaml, filePath)` | `WorkflowParser.Parse(byte[], string)` | §1.1 | Partially implemented |
+| `Parse(utf8Yaml, filePath)` | `WorkflowParser.Parse(byte[], string)` | §1.1 | Implemented |
 
 ### A.2 Workflow-Level Parse Functions
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `ParseWorkflow(utf8Yaml)` | `WorkflowParser.ParseWorkflow(IYamlStreamReader)` | §3.2 | Partially implemented |
-| `ParseEvents(node)` | `WorkflowParser.ParseEvents(IYamlStreamReader)` | §3.4 | Partially implemented (no typed nodes) |
-| `ParsePermissions(node)` | `WorkflowParser.ParsePermissions(IYamlStreamReader)` | §3.5 | **Not implemented** (skip) |
-| `ParseEnv(node)` | `WorkflowParser.ParseEnv(IYamlStreamReader)` | §3.6 | Partially implemented |
-| `ParseDefaults(node)` | `WorkflowParser.ParseDefaults(IYamlStreamReader)` | §3.7 | **Not implemented** (skip) |
-| `ParseConcurrency(node)` | `WorkflowParser.ParseConcurrency(IYamlStreamReader)` | §3.8 | **Not implemented** (skip) |
-| `ParseJobs(node)` | `WorkflowParser.ParseJobs(IYamlStreamReader)` | §3.9 | Partially implemented |
+| `ParseWorkflow(utf8Yaml)` | `WorkflowParser.ParseWorkflow(IYamlStreamReader)` | §3.2 | Implemented in `WorkflowParser.Parse(...)` entrypoint (method name differs) |
+| `ParseEvents(node)` | `WorkflowParser.ParseEvents(IYamlStreamReader)` | §3.4 | Implemented (builds typed `Event` nodes) |
+| `ParsePermissions(node)` | `WorkflowParser.ParsePermissions(IYamlStreamReader)` | §3.5 | Implemented (`ParsePermissionsNode`) |
+| `ParseEnv(node)` | `WorkflowParser.ParseEnv(IYamlStreamReader)` | §3.6 | Implemented |
+| `ParseDefaults(node)` | `WorkflowParser.ParseDefaults(IYamlStreamReader)` | §3.7 | Implemented |
+| `ParseConcurrency(node)` | `WorkflowParser.ParseConcurrency(IYamlStreamReader)` | §3.8 | Implemented |
+| `ParseJobs(node)` | `WorkflowParser.ParseJobs(IYamlStreamReader)` | §3.9 | Implemented |
 
 ### A.3 Event Parse Functions
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `parseEventWithNoConfig(node)` | `WorkflowParser.ParseEventWithNoConfig(IYamlStreamReader)` | §3.4.1 | Not implemented |
-| `ParseWebhookEvent(name, configNode)` | `WorkflowParser.ParseWebhookEvent(StringNode, IYamlStreamReader)` | §3.4.2 | Partially implemented |
-| `parseWebhookEventFilter(name, node)` | `WorkflowParser.ParseWebhookEventFilter(StringNode, IYamlStreamReader)` | §3.4.2 | Not implemented |
-| `ParseScheduleEvent(pos, node)` | `WorkflowParser.ParseScheduleEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
-| `ParseWorkflowDispatchEvent(pos, node)` | `WorkflowParser.ParseWorkflowDispatchEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
-| `ParseWorkflowCallEvent(pos, node)` | `WorkflowParser.ParseWorkflowCallEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
-| `ParseRepositoryDispatchEvent(pos, node)` | `WorkflowParser.ParseRepositoryDispatchEvent(IYamlStreamReader)` | §3.4 | **Not implemented** |
+| `parseEventWithNoConfig(node)` | `WorkflowParser.ParseEventWithNoConfig(IYamlStreamReader)` | §3.4.1 | Implemented (`BuildSimpleEvent` equivalent) |
+| `ParseWebhookEvent(name, configNode)` | `WorkflowParser.ParseWebhookEvent(StringNode, IYamlStreamReader)` | §3.4.2 | Implemented (`ParseWebhookEventWithOptions`) |
+| `parseWebhookEventFilter(name, node)` | `WorkflowParser.ParseWebhookEventFilter(StringNode, IYamlStreamReader)` | §3.4.2 | Implemented (constructed inline rather than as a dedicated method) |
+| `ParseScheduleEvent(pos, node)` | `WorkflowParser.ParseScheduleEvent(IYamlStreamReader)` | §3.4 | Implemented |
+| `ParseWorkflowDispatchEvent(pos, node)` | `WorkflowParser.ParseWorkflowDispatchEvent(IYamlStreamReader)` | §3.4 | Implemented |
+| `ParseWorkflowCallEvent(pos, node)` | `WorkflowParser.ParseWorkflowCallEvent(IYamlStreamReader)` | §3.4 | Implemented |
+| `ParseRepositoryDispatchEvent(pos, node)` | `WorkflowParser.ParseRepositoryDispatchEvent(IYamlStreamReader)` | §3.4 | Implemented |
 
 ### A.4 Job / Step Parse Functions
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `ParseJob(id, node)` | `WorkflowParser.ParseJob(StringNode, IYamlStreamReader)` | §3.10 | Partially implemented (flags only) |
-| `ParseSteps(node)` | `WorkflowParser.ParseSteps(IYamlStreamReader)` | §3.11 | Partially implemented (flags only) |
-| `ParseStep(node)` | `WorkflowParser.ParseStep(IYamlStreamReader)` | §3.12 | Partially implemented (flags only) |
-| `parseStepExecAction(entries, isDocker)` | `WorkflowParser.ParseStepExecAction(…, bool)` | §3.12.1 | **Not implemented** |
-| `parseStepExecRun(entries)` | `WorkflowParser.ParseStepExecRun(…)` | §3.12.2 | **Not implemented** |
+| `ParseJob(id, node)` | `WorkflowParser.ParseJob(StringNode, IYamlStreamReader)` | §3.10 | Implemented |
+| `ParseSteps(node)` | `WorkflowParser.ParseSteps(IYamlStreamReader)` | §3.11 | Implemented |
+| `ParseStep(node)` | `WorkflowParser.ParseStep(IYamlStreamReader)` | §3.12 | Implemented |
+| `parseStepExecAction(entries, isDocker)` | `WorkflowParser.ParseStepExecAction(…, bool)` | §3.12.1 | Implemented (constructed inline in `ParseStep`) |
+| `parseStepExecRun(entries)` | `WorkflowParser.ParseStepExecRun(…)` | §3.12.2 | Implemented (constructed inline in `ParseStep`) |
 
 ### A.5 Structural Section Parse Functions
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 | **Not implemented** (shape check) |
-| `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironment(IYamlStreamReader)` | §3.14 | **Not implemented** |
-| `ParseOutputs(node)` | `WorkflowParser.ParseOutputs(IYamlStreamReader)` | §3.10 | **Not implemented** (skip) |
-| `ParseStrategy(node)` | `WorkflowParser.ParseStrategy(IYamlStreamReader)` | §3.15 | Shape only |
-| `ParseMatrix(node)` | `WorkflowParser.ParseMatrix(IYamlStreamReader)` | §3.15 | Shape only |
-| `parseMatrixCombinations(sec, node)` | `WorkflowParser.ParseMatrixCombinations(string, IYamlStreamReader)` | §3.15 | **Not implemented** |
-| `parseRawYAMLValue(node)` | `WorkflowParser.ParseRawYamlValue(IYamlStreamReader)` | §3.15 | **Not implemented** |
-| `ParseContainer(section, node)` | `WorkflowParser.ParseContainer(string, IYamlStreamReader)` | §3.16 | Shape only |
-| `ParseServices(node)` | `WorkflowParser.ParseServices(IYamlStreamReader)` | §3.17 | Shape only |
-| `ParseCredentials(node)` | `WorkflowParser.ParseCredentials(IYamlStreamReader)` | §3.18 | Shape only |
+| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 | Partially implemented (scalar/sequence labels implemented; mapping form incomplete) |
+| `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironment(IYamlStreamReader)` | §3.14 | Implemented |
+| `ParseOutputs(node)` | `WorkflowParser.ParseOutputs(IYamlStreamReader)` | §3.10 | Implemented |
+| `ParseStrategy(node)` | `WorkflowParser.ParseStrategy(IYamlStreamReader)` | §3.15 | Implemented |
+| `ParseMatrix(node)` | `WorkflowParser.ParseMatrix(IYamlStreamReader)` | §3.15 | Implemented |
+| `parseMatrixCombinations(sec, node)` | `WorkflowParser.ParseMatrixCombinations(string, IYamlStreamReader)` | §3.15 | Implemented |
+| `parseRawYAMLValue(node)` | `WorkflowParser.ParseRawYamlValue(IYamlStreamReader)` | §3.15 | Implemented |
+| `ParseContainer(section, node)` | `WorkflowParser.ParseContainer(string, IYamlStreamReader)` | §3.16 | Implemented |
+| `ParseServices(node)` | `WorkflowParser.ParseServices(IYamlStreamReader)` | §3.17 | Implemented |
+| `ParseCredentials(node)` | `WorkflowParser.ParseCredentials(IYamlStreamReader)` | §3.18 | Implemented |
 
 ### A.6 Generic Mapping / Collection Helpers
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | `WorkflowParser.ParseMapping(string, bool, bool)` | §3.3 | **Not implemented** (inline) |
-| `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence(string, IYamlStreamReader, bool, bool)` | §4.7 | **Not implemented** |
+| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | `WorkflowParser.ParseMapping(string, bool, bool)` | §3.3 | Implemented as inline pattern + `TryRegisterMappingKey` utility |
+| `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence(string, IYamlStreamReader, bool, bool)` | §4.7 | Implemented |
 
 ### A.7 Scalar Helpers
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `parseString(node, allowEmpty)` | `WorkflowParser.ParseString(IYamlStreamReader, bool)` | §4.1 | Partial match (`ReadScalarOrSkip`) |
-| `parseBool(node)` | `WorkflowParser.ParseBool(IYamlStreamReader)` | §4.2 | **Not implemented** |
-| `parseInt(node)` | `WorkflowParser.ParseInt(IYamlStreamReader)` | §4.3 | **Not implemented** |
-| `parseFloat(node)` | `WorkflowParser.ParseFloat(IYamlStreamReader)` | §4.4 | **Not implemented** |
-| `parseExpression(node, expecting)` | `WorkflowParser.ParseExpression(IYamlStreamReader, string)` | §4.5 | **Not implemented** |
-| `mayParseExpression(node)` | `WorkflowParser.MayParseExpression(IYamlStreamReader)` | §4.6 | **Not implemented** |
-| `parseTimeoutMinutes(node)` | `WorkflowParser.ParseTimeoutMinutes(IYamlStreamReader)` | §3.10 | **Not implemented** |
+| `parseString(node, allowEmpty)` | `WorkflowParser.ParseString(IYamlStreamReader, bool)` | §4.1 | Implemented |
+| `parseBool(node)` | `WorkflowParser.ParseBool(IYamlStreamReader)` | §4.2 | Implemented |
+| `parseInt(node)` | `WorkflowParser.ParseInt(IYamlStreamReader)` | §4.3 | Implemented |
+| `parseFloat(node)` | `WorkflowParser.ParseFloat(IYamlStreamReader)` | §4.4 | Implemented |
+| `parseExpression(node, expecting)` | `WorkflowParser.ParseExpression(IYamlStreamReader, string)` | §4.5 | Implemented |
+| `mayParseExpression(node)` | `WorkflowParser.MayParseExpression(IYamlStreamReader)` | §4.6 | Implemented |
+| `parseTimeoutMinutes(node)` | `WorkflowParser.ParseTimeoutMinutes(IYamlStreamReader)` | §3.10 | Partially implemented (not split into a dedicated method; handled via `ParseFloat` + additional validation) |
 
 ### A.8 Visitor / Pass
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | §8.2 | **Not implemented** |
-| `Pass` interface | `IPass` | §8.1 | **Not implemented** |
-| `Rule` interface | `IRule : IPass` | §8.3 | **Not implemented** |
+| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | §8.2 | Implemented |
+| `Pass` interface | `IPass` | §8.1 | Implemented |
+| `Rule` interface | `IRule : IPass` | §8.3 | Implemented |
 
 ### A.9 Alias Resolution
 
@@ -1374,8 +1374,8 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 | `CompareOpNode` (§6.4) | `Binary (Equal/NotEqual/Less/…)` | ✓ |
 | `LogicalOpNode` (§6.4) | `Binary (And/Or)` | ✓ |
 | arithmetic ops | — | Not supported (aligned with GHA spec) |
-| Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | **Not implemented** |
-| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Partially implemented |
+| Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | ✓ Implemented |
+| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Partially implemented (includes type inference, but not yet fully actionlint-compatible) |
 | Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` | Arity only (no types) |
-| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` context-root check | Partially implemented |
-| ExprType hierarchy (§7.3) | — | **Not implemented** |
+| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` context-root check | Partially implemented (uses generated availability table) |
+| ExprType hierarchy (§7.3) | `ExprType` hierarchy + `InferType()` | Partially implemented |

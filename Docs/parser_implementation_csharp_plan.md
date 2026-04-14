@@ -536,6 +536,52 @@
 
 ---
 
+## 次にやるべきこと（2026-04-14 時点）
+
+以下は、`Seiton_Parser_csharp_spec.md` の同期後ステータスを前提にした優先度付きの継続タスク。
+
+### Priority 1: 仕様整合の残ギャップを埋める
+
+1. **YAML アダプター境界の完全整備**
+  - `WorkflowParser` の `ref VYamlStreamAdapter` 直結を、仕様の `IYamlStreamReader` 境界（または `WorkflowParser<TReader>`）に合わせる。
+  - 目的: YAML 実装差し替え容易性と仕様 §0.3 の整合。
+
+2. **String-free success path の厳密化**
+  - `VYamlStreamAdapter.GetScalarTag()` 内の UTF-16 変換を除去し、タグ推定を UTF-8 バイト処理のみで完結させる。
+  - 目的: 仕様 §0.2.1 / §11.1 の厳密遵守。
+
+3. **`runs-on` mapping / expression の完全対応**
+  - 現在の scalar/sequence 中心実装に対し、`labels` + `group` mapping と expression パスを仕様どおり補完。
+  - 目的: 仕様 §2.12 / §3.13 の残差分解消。
+
+### Priority 2: ルール層の実用化
+
+4. **`LintEngine` 導入と parser からの rule 実行分離**
+  - parser 直接実行の `SyntaxRule` を `LintEngine` 側に移し、`Parse` と `Lint` の責務を分離する。
+  - 目的: 仕様 §1.3 アーキテクチャへ整合。
+
+5. **Rule セットの拡張（SyntaxRule 依存の縮小）**
+  - `IRule` 実装を段階的に追加し、parser 内のセマンティック診断を visitor/rule 側へ移管する。
+  - 目的: 仕様 §8.3 の「ルールエンジン化」を進める。
+
+### Priority 3: テストの網羅性を仕様レベルへ引き上げる
+
+6. **actionlint err fixture の期待診断セット拡張**
+  - 既存 subset を増やし、主要カテゴリ（型違反、必須キー不足、排他制約、重複キー）を網羅。
+
+7. **alias 系の明示テスト追加**
+  - dangling alias / recursive alias / alias merge の挙動を fixture 固定で検証し、仕様との差分を可視化。
+
+8. **AST ゴールデンテストの拡張**
+  - `runs-on` mapping、container/services、workflow_call job などの深い構造を fixture ベースで固定化。
+
+### Priority 4: ドキュメント整合
+
+9. **`Seiton_Parser_csharp_spec.md` と `parser_implementation_csharp_plan.md` の定期同期運用**
+  - 実装完了時に status table と plan の「完了/未完」記述を同時更新する運用ルールを明文化する。
+
+---
+
 ## 依存関係グラフ
 
 ```
