@@ -14,7 +14,7 @@
 
 #### 0.1.1 Features Missing Compared to actionlint (Go)
 
-Differences between `.references/actionlint-main` implementation and `src/Seiton.Core/Parsing`.
+Differences between `.references/actionlint` implementation and `src/Seiton.Core/Parsing`.
 
 | Category | Implemented in actionlint | Current C# State |
 |---|---|---|

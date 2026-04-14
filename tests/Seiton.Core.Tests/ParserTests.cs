@@ -2058,10 +2058,10 @@ public sealed class ParserTests
         var actionlintFixtureRoot = Path.Combine(repoRoot, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata");
         var candidates = new[]
         {
-            Path.Combine(refsRoot, "actionlint-main", ".github", "workflows"),
-            Path.Combine(refsRoot, "ghalint-main", ".github", "workflows"),
-            Path.Combine(refsRoot, "zizmor-main", ".github", "workflows"),
-            Path.Combine(refsRoot, "ghalint-main"),
+            Path.Combine(refsRoot, "actionlint", ".github", "workflows"),
+            Path.Combine(refsRoot, "ghalint", ".github", "workflows"),
+            Path.Combine(refsRoot, "zizmor", ".github", "workflows"),
+            Path.Combine(refsRoot, "ghalint"),
             Path.Combine(actionlintFixtureRoot, "ok"),
             Path.Combine(actionlintFixtureRoot, "bench"),
             Path.Combine(actionlintFixtureRoot, "reusable_workflow_metadata"),
