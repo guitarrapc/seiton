@@ -628,13 +628,18 @@
 
 #### A. Parser と Lint の責務を仕様に合わせて確定
 
-- [ ] 方針決定: Job 制約（`uses` と `steps`/`runs-on` 排他、`with`/`secrets` の `uses` 依存、normal job の `steps`/`runs-on` 必須）を
+- [x] 方針決定: Job 制約（`uses` と `steps`/`runs-on` 排他、`with`/`secrets` の `uses` 依存、normal job の `steps`/`runs-on` 必須）を
   - パーサー責務に戻す
   - もしくは Lint 責務として `Seiton_Parser_spec.md` 側を改訂する
-- [ ] 決定した責務に合わせて `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` / 本 plan を同一 PR で同期更新
-- [ ] 期待挙動を固定するテストを追加
+- [x] 決定した責務に合わせて `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` / 本 plan を同一 PR で同期更新
+- [x] 期待挙動を固定するテストを追加
   - Parser 側で検証するなら `WorkflowParser.Parse` の diagnostics を直接検証
   - Lint 側で検証するなら Parser 非検出 + Lint 検出の組を明示
+
+実装結果:
+- Parser を責務の一次判定系として採用。`WorkflowParser.ParseJobNode` で Job 制約を診断するように変更。
+- `ParserTests` の該当ケースを Parser 診断前提へ更新。
+- `RuleInterfaceTests` の ParseDiagnostics 前提を更新し、RuleId 検証は parser 診断と衝突しない条件に修正。
 
 #### B. 数値制約（`> 0`）の実装とテスト
 

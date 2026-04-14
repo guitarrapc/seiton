@@ -23,7 +23,7 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Workflow is not null).IsTrue();
-        await Assert.That(result.ParseDiagnostics).IsEmpty();
+        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -53,7 +53,9 @@ public sealed class RuleInterfaceTests
                 """;
 
                 var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
-                var diagnostic = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal));
+                var diagnostic = result.Diagnostics.FirstOrDefault(x =>
+                    x.RuleId == "job-structure"
+                    && x.Message.Contains("requires runs-on", StringComparison.Ordinal));
 
                 await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
                 await Assert.That(diagnostic.RuleId).IsEqualTo("job-structure");
@@ -258,7 +260,7 @@ public sealed class RuleInterfaceTests
 
                 var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
 
-                await Assert.That(result.ParseDiagnostics).IsEmpty();
+                await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
                 await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
         }
 

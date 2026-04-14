@@ -829,6 +829,10 @@ func (p *parser) parseCredentials(pos *Pos, n *yaml.Node) *Credentials
 
 // ParseServices (Spec §3.17)
 func (p *parser) parseServices(n *yaml.Node) *Services
+
+Implementation note (2026-04-14 sync):
+- Job structural constraints (`uses` vs `steps`/`runs-on`, and `with`/`secrets` requires `uses`) are parser-level diagnostics.
+- Rule/visitor diagnostics are additive; parser diagnostics remain the base contract.
 ```
 
 ---

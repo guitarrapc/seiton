@@ -1190,6 +1190,52 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        var decodedJobId = DecodeUtf8(source, jobId);
+        var hasUses = workflowCallNode is not null && workflowCallNode.Uses.Value.Length > 0;
+        var hasSteps = stepsNode is not null;
+        var hasRunsOn = runsOnNode is not null;
+
+        if (hasUses && hasSteps)
+        {
+            AddError(diagnostics, $"job '{decodedJobId}' cannot have both uses and steps", jobIdMark);
+        }
+
+        if (hasUses && hasRunsOn)
+        {
+            AddError(diagnostics, $"job '{decodedJobId}' cannot have both uses and runs-on", jobIdMark);
+        }
+
+        if (!hasUses && !hasRunsOn)
+        {
+            AddError(diagnostics, $"job '{decodedJobId}' requires runs-on (or uses)", jobIdMark);
+        }
+
+        if (!hasUses && !hasSteps)
+        {
+            AddError(diagnostics, $"job '{decodedJobId}' requires steps (or uses)", jobIdMark);
+        }
+
+        if (!hasUses && workflowCallNode is not null)
+        {
+            if (workflowCallNode.Inputs is not null && workflowCallNode.Inputs.Count > 0)
+            {
+                AddError(diagnostics, $"job '{decodedJobId}' key 'with' requires uses", jobIdMark);
+            }
+
+            if ((workflowCallNode.Secrets is not null && workflowCallNode.Secrets.Count > 0) || workflowCallNode.InheritSecrets)
+            {
+                AddError(diagnostics, $"job '{decodedJobId}' key 'secrets' requires uses", jobIdMark);
+            }
+        }
+
+        if (hasUses && stepsOnlyKeyInReusable is not null)
+        {
+            AddError(
+                diagnostics,
+                $"when job '{decodedJobId}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
+                stepsOnlyKeyInReusableMark);
+        }
+
         return new Job
         {
             Id = jobIdNode,

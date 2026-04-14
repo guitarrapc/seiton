@@ -964,7 +964,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
 
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
@@ -984,7 +984,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
 
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
@@ -1380,7 +1380,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-reuse-steps-only-key.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
 
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-reuse-steps-only-key.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
@@ -1402,7 +1402,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
 
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();

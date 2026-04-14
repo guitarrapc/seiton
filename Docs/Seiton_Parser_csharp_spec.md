@@ -856,6 +856,10 @@ Job parsing includes reusable workflow detection and constraint validation (Spec
 - If `uses` is present → reusable workflow call; certain keys are forbidden
 - If `uses` is absent → normal job; `steps` and `runs-on` are required
 
+Implementation note (2026-04-14):
+- C# implementation emits these job-structure diagnostics at parse time in `WorkflowParser.ParseJobNode`.
+- Lint rules may still report overlapping diagnostics for AST-only visitor scenarios, but parser output is the primary contract.
+
 ### 3.7 Step Parse (Spec §3.11–§3.12)
 
 ```csharp
