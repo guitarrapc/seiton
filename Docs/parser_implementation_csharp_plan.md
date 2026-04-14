@@ -490,10 +490,20 @@
 
 **完了条件**: 主要テストケースで期待 diagnostics サブセットが一致
 
-### Step 8.2: AST 構造テスト
+### Step 8.2: AST 構造テスト ✅
 
-- 各 AST ノードが yaml から正しく構築されることの property-based テスト
-- `FakeYamlStreamReader` を使ったパーサー単体テスト
+**状態**: 完了（AST 深部ノードの構築検証を統合テストとして追加し、特に matrix の RawYaml 階層を型レベルで検証）
+
+- `tests/Seiton.Core.Tests/ParserTests.cs` に AST 構造テストを追加
+  - `Parse_AstStructure_ComprehensiveWorkflow_PopulatesDeepNodes`
+  - `Parse_AstStructure_MatrixRawYamlKinds_PopulatesStringArrayObjectNodes`
+- 検証対象（抜粋）:
+  - Workflow 直下: `Name`, `RunName`, `Permissions`, `Env`, `Defaults`, `Concurrency`
+  - Event 系: `WebhookEvent`, `ScheduledEvent`（`ScheduleEntry.Cron/Timezone`）, `WorkflowDispatchEvent`（`DispatchInput`）, `WorkflowCallEvent`（`WorkflowCallEventInput/Secret/Output`）, `RepositoryDispatchEvent`
+  - Job/Step 系: `Job` の主要フィールド、`ExecRun` / `ExecAction`、reusable workflow の `WorkflowCall`
+  - Structural 系: `Strategy.Matrix`、`Container`、`Services`
+  - Raw YAML 系: `RawYamlString` / `RawYamlArray` / `RawYamlObject` の実体型とネスト
+- matrix 検証では `include/exclude/rows` の各経路で `RawYamlValue` サブタイプが正しく構築されることを確認
 
 **完了条件**: 全 AST ノード型に最低 1 つの構築テスト
 

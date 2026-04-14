@@ -1415,6 +1415,270 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
+    [Test]
+    public async Task Parse_AstStructure_ComprehensiveWorkflow_PopulatesDeepNodes()
+    {
+        var yaml = """
+        name: ci
+        run-name: CI Run
+        on:
+            push:
+                branches: [main]
+                paths-ignore: [docs/**]
+            schedule:
+                - cron: '0 0 * * *'
+                  timezone: 'UTC'
+            workflow_dispatch:
+                inputs:
+                    target:
+                        description: Deploy target
+                        required: true
+                        default: dev
+                        type: choice
+                        options: [dev, prod]
+            workflow_call:
+                inputs:
+                    image:
+                        required: true
+                        type: string
+                        default: alpine
+                secrets:
+                    token:
+                        required: true
+                outputs:
+                    digest:
+                        value: digest-sha
+            repository_dispatch:
+                types: [sync, deploy]
+        permissions:
+            contents: read
+        env:
+            GLOBAL: value
+        defaults:
+            run:
+                shell: bash
+                working-directory: src
+        concurrency:
+            group: ci-${{ github.ref }}
+            cancel-in-progress: true
+        jobs:
+            build:
+                name: Build Job
+                needs: [prep]
+                runs-on: ubuntu-latest
+                environment:
+                    name: production
+                    url: https://example.com
+                permissions:
+                    contents: read
+                concurrency:
+                    group: build-${{ github.ref }}
+                    cancel-in-progress: false
+                strategy:
+                    fail-fast: true
+                    max-parallel: 2
+                    matrix:
+                        include:
+                            - os: ubuntu-latest
+                        exclude:
+                            - os: windows-latest
+                        os: [ubuntu-latest, windows-latest]
+                container:
+                    image: node:20
+                    credentials:
+                        username: user
+                        password: pass
+                    env:
+                        INSIDE: "yes"
+                    ports: ["8080"]
+                    volumes: ["/tmp:/tmp"]
+                    options: --cpus 1
+                services:
+                    redis:
+                        image: redis:7
+                outputs:
+                    digest: sha256
+                env:
+                    JOB_ENV: job_value
+                defaults:
+                    run:
+                        shell: pwsh
+                        working-directory: app
+                if: ${{ github.ref != '' }}
+                timeout-minutes: 15
+                continue-on-error: false
+                steps:
+                    - id: run1
+                      name: Run Step
+                      run: echo ok
+                      shell: bash
+                      working-directory: .
+                      env:
+                        STEP_ENV: step_value
+                      continue-on-error: true
+                      timeout-minutes: 5
+                    - id: act1
+                      if: ${{ success() }}
+                      uses: actions/checkout@v4
+                      with:
+                        fetch-depth: '0'
+                      env:
+                        STEP2_ENV: value
+            call:
+                uses: owner/repo/.github/workflows/reuse.yml@main
+                with:
+                    target: prod
+                secrets:
+                    token: ghs_dummy_token
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "ast-comprehensive.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var workflow = result.Workflow!;
+
+        await Assert.That(workflow.Name is not null).IsTrue();
+        await Assert.That(workflow.RunName is not null).IsTrue();
+        await Assert.That(workflow.Permissions is not null).IsTrue();
+        await Assert.That(workflow.Env is not null).IsTrue();
+        await Assert.That(workflow.Defaults is not null).IsTrue();
+        await Assert.That(workflow.Concurrency is not null).IsTrue();
+
+        await Assert.That(workflow.On.Count).IsEqualTo(5);
+        await Assert.That(workflow.On.Any(static e => e is WebhookEvent)).IsTrue();
+        await Assert.That(workflow.On.Any(static e => e is ScheduledEvent)).IsTrue();
+        await Assert.That(workflow.On.Any(static e => e is WorkflowDispatchEvent)).IsTrue();
+        await Assert.That(workflow.On.Any(static e => e is WorkflowCallEvent)).IsTrue();
+        await Assert.That(workflow.On.Any(static e => e is RepositoryDispatchEvent)).IsTrue();
+
+        var scheduled = (ScheduledEvent)workflow.On.First(static e => e is ScheduledEvent);
+        await Assert.That(scheduled.Schedules.Count).IsEqualTo(1);
+        await Assert.That(scheduled.Schedules[0].Cron is not null).IsTrue();
+        await Assert.That(scheduled.Schedules[0].Timezone is not null).IsTrue();
+
+        var dispatch = (WorkflowDispatchEvent)workflow.On.First(static e => e is WorkflowDispatchEvent);
+        await Assert.That(dispatch.Inputs is not null).IsTrue();
+        await Assert.That(dispatch.Inputs!.Count).IsEqualTo(1);
+        var targetKey = Utf8String.FromLowerAscii("target"u8);
+        await Assert.That(dispatch.Inputs.ContainsKey(targetKey)).IsTrue();
+        await Assert.That(dispatch.Inputs[targetKey].Type).IsEqualTo(DispatchInputType.Choice);
+
+        var callEvent = (WorkflowCallEvent)workflow.On.First(static e => e is WorkflowCallEvent);
+        await Assert.That(callEvent.Inputs is not null).IsTrue();
+        await Assert.That(callEvent.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(callEvent.Inputs[0].Type).IsEqualTo(WorkflowCallInputType.String);
+        await Assert.That(callEvent.Secrets is not null).IsTrue();
+        await Assert.That(callEvent.Secrets!.Count).IsEqualTo(1);
+        await Assert.That(callEvent.Outputs is not null).IsTrue();
+        await Assert.That(callEvent.Outputs!.Count).IsEqualTo(1);
+
+        var buildKey = Utf8String.FromLowerAscii("build"u8);
+        var callKey = Utf8String.FromLowerAscii("call"u8);
+        await Assert.That(workflow.Jobs.ContainsKey(buildKey)).IsTrue();
+        await Assert.That(workflow.Jobs.ContainsKey(callKey)).IsTrue();
+
+        var buildJob = workflow.Jobs[buildKey];
+        await Assert.That(buildJob.Needs is not null).IsTrue();
+        await Assert.That(buildJob.RunsOn is not null).IsTrue();
+        await Assert.That(buildJob.Environment is not null).IsTrue();
+        await Assert.That(buildJob.Permissions is not null).IsTrue();
+        await Assert.That(buildJob.Concurrency is not null).IsTrue();
+        await Assert.That(buildJob.Outputs is not null).IsTrue();
+        await Assert.That(buildJob.Env is not null).IsTrue();
+        await Assert.That(buildJob.Defaults is not null).IsTrue();
+        await Assert.That(buildJob.If is not null).IsTrue();
+        await Assert.That(buildJob.TimeoutMinutes is not null).IsTrue();
+        await Assert.That(buildJob.ContinueOnError is not null).IsTrue();
+        await Assert.That(buildJob.Strategy is not null).IsTrue();
+        await Assert.That(buildJob.Container is not null).IsTrue();
+        await Assert.That(buildJob.Services is not null).IsTrue();
+        await Assert.That(buildJob.Steps is not null).IsTrue();
+        await Assert.That(buildJob.Steps!.Count).IsEqualTo(2);
+
+        var runStep = buildJob.Steps[0];
+        await Assert.That(runStep.Exec).IsTypeOf<ExecRun>();
+        await Assert.That(runStep.Env is not null).IsTrue();
+        await Assert.That(runStep.ContinueOnError is not null).IsTrue();
+        await Assert.That(runStep.TimeoutMinutes is not null).IsTrue();
+
+        var actionStep = buildJob.Steps[1];
+        await Assert.That(actionStep.Exec).IsTypeOf<ExecAction>();
+        var actionExec = (ExecAction)actionStep.Exec;
+        await Assert.That(actionExec.Inputs is not null).IsTrue();
+        await Assert.That(actionExec.Inputs!.Count).IsEqualTo(1);
+
+        var callJob = workflow.Jobs[callKey];
+        await Assert.That(callJob.WorkflowCall is not null).IsTrue();
+        await Assert.That(callJob.WorkflowCall!.Inputs is not null).IsTrue();
+        await Assert.That(callJob.WorkflowCall.Secrets is not null).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_AstStructure_MatrixRawYamlKinds_PopulatesStringArrayObjectNodes()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                strategy:
+                    matrix:
+                        include:
+                            - os: ubuntu-latest
+                              meta:
+                                distro: ubuntu
+                                versions: [20, 22]
+                        exclude:
+                            - os: windows-latest
+                        axis:
+                            - plain
+                            - { nested: [x, y] }
+                            - [one, two]
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "ast-matrix-rawyaml.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+
+        var buildKey = Utf8String.FromLowerAscii("build"u8);
+        var axisKey = Utf8String.FromLowerAscii("axis"u8);
+        var job = result.Workflow!.Jobs[buildKey];
+        await Assert.That(job.Strategy is not null).IsTrue();
+        await Assert.That(job.Strategy!.Matrix is not null).IsTrue();
+
+        var matrix = job.Strategy.Matrix!;
+        await Assert.That(matrix.Include is not null).IsTrue();
+        await Assert.That(matrix.Exclude is not null).IsTrue();
+        await Assert.That(matrix.Rows is not null).IsTrue();
+        await Assert.That(matrix.Rows!.ContainsKey(axisKey)).IsTrue();
+
+        var axisRow = matrix.Rows[axisKey];
+        await Assert.That(axisRow.Values is not null).IsTrue();
+        await Assert.That(axisRow.Values!.Count).IsEqualTo(3);
+        await Assert.That(axisRow.Values[0]).IsTypeOf<RawYamlString>();
+        await Assert.That(axisRow.Values[1]).IsTypeOf<RawYamlObject>();
+        await Assert.That(axisRow.Values[2]).IsTypeOf<RawYamlArray>();
+
+        await Assert.That(matrix.Include![0].Entries is not null).IsTrue();
+        var includeEntries = matrix.Include[0].Entries!;
+        await Assert.That(includeEntries.Count).IsEqualTo(1);
+        var includeEntry = includeEntries[0];
+        var metaKey = Utf8String.FromLowerAscii("meta"u8);
+        await Assert.That(includeEntry.ContainsKey(metaKey)).IsTrue();
+        await Assert.That(includeEntry[metaKey]).IsTypeOf<RawYamlObject>();
+
+        var metaObject = (RawYamlObject)includeEntry[metaKey];
+        var versionsKey = Utf8String.FromLowerAscii("versions"u8);
+        await Assert.That(metaObject.Properties.ContainsKey(versionsKey)).IsTrue();
+        await Assert.That(metaObject.Properties[versionsKey]).IsTypeOf<RawYamlArray>();
+    }
+
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
     {
         var refsRoot = Path.Combine(repoRoot, ".references");
