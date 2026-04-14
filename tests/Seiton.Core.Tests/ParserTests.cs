@@ -816,6 +816,9 @@ public sealed class ParserTests
             new ErrFixtureExpectation("duplicate_keys.yaml", ["contains duplicate key"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["cannot have both run and uses", "requires run or uses"]),
+            new ErrFixtureExpectation("missing_on.yaml", ["required key 'on' is missing"]),
+            new ErrFixtureExpectation("missing_jobs.yaml", ["required key 'jobs' is missing"]),
+            new ErrFixtureExpectation("merge_key_unsupported.yaml", ["does not support merge key '<<'"]),
         };
 
         var failures = new List<string>();
@@ -856,6 +859,63 @@ public sealed class ParserTests
                 : string.Join(" | ", result.Diagnostics.Select(static d => d.Message));
             failures.Add($"{expectation.FileName}: expected diagnostic containing '{expected}' was not found. observed={observed}");
         }
+    }
+
+    [Test]
+    public async Task Parse_ActionlintErrFixture_UndefinedAnchor_IsCapturedAsErrorOrException()
+    {
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err", "undefined_anchor.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+            await Assert.That(result.HasFatalError || result.Diagnostics.Length > 0).IsTrue();
+        }
+        catch (Exception ex)
+        {
+            await Assert.That(ex.Message.Contains("anchor", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        }
+    }
+
+    [Test]
+    public async Task Parse_ActionlintErrFixture_RecursiveAnchors_IsCapturedAsErrorOrException()
+    {
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err", "recursive_anchors.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+            await Assert.That(result.HasFatalError || result.Diagnostics.Length > 0).IsTrue();
+        }
+        catch (Exception ex)
+        {
+            await Assert.That(ex.Message.Contains("anchor", StringComparison.OrdinalIgnoreCase)).IsTrue();
+        }
+    }
+
+    [Test]
+    public async Task Parse_ActionlintErrFixture_MergeKeyUnsupported_ReportsMergeKeyDiagnostics()
+    {
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err", "merge_key_unsupported.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

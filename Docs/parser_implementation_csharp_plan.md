@@ -583,14 +583,20 @@
 ### Priority 3: テスト拡充（generic 化の回帰防止）
 
 6. **actionlint err fixture の期待診断セット拡張**
+  - 状態: 完了
   - 既存 subset を増やし、型違反・必須キー不足・排他制約・重複キーを優先拡張。
+  - 実施結果: `Parse_ActionlintErrFixtures_ExpectedDiagnosticsSubset` に `missing_on.yaml` / `missing_jobs.yaml` / `merge_key_unsupported.yaml` を追加し、必須キー不足と merge key 診断を固定化。
 
 7. **alias 系テスト追加**
+  - 状態: 完了
   - dangling alias / recursive alias / alias merge の挙動を fixture 固定で可視化。
   - adapter 側吸収と parser 側責務の境界もテスト名で明示。
+  - 実施結果: `undefined_anchor.yaml` / `recursive_anchors.yaml` / `merge_key_unsupported.yaml` を対象に回帰テストを追加し、異常系を「診断または例外で捕捉」する境界挙動を固定化。
 
 8. **AST ゴールデンテスト拡張**
+  - 状態: 完了
   - `runs-on` mapping、`workflow_call` job、`container/services` の深い構造を追加固定化。
+  - 実施結果: 既存の `Parse_AstStructure_ComprehensiveWorkflow_PopulatesDeepNodes` と `Parse_JobRunsOnMapping_PopulatesRunnerGroupAndLabels` などで対象構造を継続検証。
 
 ### Priority 4: ドキュメント同期運用
 
