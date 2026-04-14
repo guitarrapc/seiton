@@ -38,7 +38,27 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Workflow).IsNull();
         await Assert.That(result.Diagnostics).HasSingleItem();
         await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be mapping");
+                await Assert.That(result.Diagnostics[0].FilePath).IsEqualTo("fatal.yml");
     }
+
+        [Test]
+        public async Task LintEngine_RuleDiagnostics_IncludeRuleIdAndFilePath()
+        {
+                var yaml = """
+                on: push
+                jobs:
+                    build:
+                        steps:
+                            - run: echo hello
+                """;
+
+                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
+                var diagnostic = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal));
+
+                await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
+                await Assert.That(diagnostic.RuleId).IsEqualTo("job-structure");
+                await Assert.That(diagnostic.FilePath).IsEqualTo("rule-filepath.yml");
+        }
 
     [Test]
     public async Task RuleInterface_CanBeUsedWithWorkflowVisitor()

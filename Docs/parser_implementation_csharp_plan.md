@@ -567,14 +567,18 @@
 ### Priority 2: Diagnostic モデルの仕様追従
 
 4. **`filePath` を Diagnostic 出力へ正式反映**
+  - 状態: 完了
   - 目標: `Parse(byte[], string)` の `filePath` を diagnostics に一貫して伝搬。
   - 補足: rule 由来 diagnostics も含めた最終出力で path が欠落しないことを確認。
-  - 完了条件: parser/lint 双方の代表テストで `FilePath` を検証。
+  - 実施結果: parser diagnostics は `WorkflowParser.Parse` で `FilePath` を付与、rule diagnostics は `LintConfig.FilePath` + `RuleBase` 共通ヘルパーで付与。
+  - 完了条件: 達成（`RuleInterfaceTests` で parser/lint 双方の `FilePath` を検証）。
 
 5. **Spec §10 との整合確認（RuleId/Help/RelatedLocations）**
+  - 状態: 完了
   - `Diagnostic` モデルと `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` の記述差分を解消。
   - 必要なら spec 側の status table/本文も更新。
-  - 完了条件: spec と実装の項目差分がなくなる。
+  - 実施結果: `Seiton_Parser_spec.md` の Diagnostic table に `FilePath` を追記し、`Seiton_Parser_csharp_spec.md` の `Diagnostic` シグネチャへ `FilePath` を追加。
+  - 完了条件: 達成。
 
 ### Priority 3: テスト拡充（generic 化の回帰防止）
 

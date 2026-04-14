@@ -1172,7 +1172,8 @@ public readonly record struct Diagnostic(
     TextRange Location,
     string? RuleId = null,
     TextRange[]? RelatedLocations = null,
-    string? Help = null);
+    string? Help = null,
+    string? FilePath = null);
 ```
 
 TextRange:

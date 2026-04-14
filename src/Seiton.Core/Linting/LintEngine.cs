@@ -50,7 +50,11 @@ public sealed class LintEngine
         }
 
         var visitor = new WorkflowVisitor();
-        var config = new LintConfig { Utf8Yaml = utf8Yaml };
+        var config = new LintConfig
+        {
+            Utf8Yaml = utf8Yaml,
+            FilePath = filePath,
+        };
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];

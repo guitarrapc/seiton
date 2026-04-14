@@ -44,22 +44,32 @@ public abstract class RuleBase : IRule
 
     protected void AddJobError(Job job, string message)
     {
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, BuildJobLocation(job)));
+        AddDiagnostic(DiagnosticSeverity.Error, message, BuildJobLocation(job));
     }
 
     protected void AddStepWarning(Step step, string message)
     {
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, message, BuildStepLocation(step)));
+        AddDiagnostic(DiagnosticSeverity.Warning, message, BuildStepLocation(step));
     }
 
     protected void AddWorkflowError(Workflow workflow, string message, TextRange location)
     {
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+        AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
     protected void AddJobError(Job job, string message, TextRange location)
     {
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+        AddDiagnostic(DiagnosticSeverity.Error, message, location);
+    }
+
+    void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location)
+    {
+        diagnostics.Add(new Diagnostic(
+            severity,
+            message,
+            location,
+            RuleId: Id,
+            FilePath: Config.FilePath));
     }
 
     protected string Decode(Utf8Slice slice)

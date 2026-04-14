@@ -894,6 +894,7 @@ Each Rule inspects the AST within Pass callbacks and accumulates diagnostics int
 | RuleId | string? | Applicable rule ID (for rule-originated diagnostics) |
 | RelatedLocations | TextRange[]? | Related positions (e.g., opposing side of exclusive constraint) |
 | Help | string? | Fix suggestion |
+| FilePath | string? | Source file path propagated from Parse/Lint entrypoint |
 
 ### 10.2 Location Policy
 
