@@ -622,6 +622,58 @@
 4. Priority 3-6, 3-7, 3-8（回帰防止テスト拡充）
 5. Priority 4-9（文書同期）
 
+### 追加作業リスト（仕様整合監査対応）
+
+以下は、2026-04-14 の監査結果を反映した差分タスク。既存 plan の「完了済み項目」とは別に、次スプリントで消化する。
+
+#### A. Parser と Lint の責務を仕様に合わせて確定
+
+- [ ] 方針決定: Job 制約（`uses` と `steps`/`runs-on` 排他、`with`/`secrets` の `uses` 依存、normal job の `steps`/`runs-on` 必須）を
+  - パーサー責務に戻す
+  - もしくは Lint 責務として `Seiton_Parser_spec.md` 側を改訂する
+- [ ] 決定した責務に合わせて `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` / 本 plan を同一 PR で同期更新
+- [ ] 期待挙動を固定するテストを追加
+  - Parser 側で検証するなら `WorkflowParser.Parse` の diagnostics を直接検証
+  - Lint 側で検証するなら Parser 非検出 + Lint 検出の組を明示
+
+#### B. 数値制約（`> 0`）の実装とテスト
+
+- [ ] `job.timeout-minutes` に `> 0` 制約を追加（0, 負値で error）
+- [ ] `step.timeout-minutes` に `> 0` 制約を追加（0, 負値で error）
+- [ ] `strategy.max-parallel` に `> 0` 制約を追加（0, 負値で error）
+- [ ] 回帰テストを追加
+  - `timeout-minutes: 0` / `-1`
+  - `max-parallel: 0` / `-1`
+  - 既存の型不正テスト（non-int/non-float）との重複を避ける
+
+#### C. 必須キー検証の負ケーステスト拡充
+
+- [ ] `on.workflow_call.inputs.<id>.type is required` の負ケースを追加
+- [ ] `on.workflow_call.outputs.<id>.value is required` の負ケースを追加
+- [ ] `on.schedule item requires cron` の負ケースを追加（空 mapping / timezone のみ）
+- [ ] 既存の happy path テストとの対になる table-driven テストへ統合
+
+#### D. Alias 方針の明文化とテスト固定
+
+- [ ] Alias 解決を parser が担うか、YAML adapter 任せにするかを明文化
+- [ ] 方針に応じて diagnostics 契約を固定
+  - undefined anchor
+  - recursive anchor
+  - merge key を含む alias ケース
+- [ ] corpus smoke の除外条件（`dangling_alias` など）を見直し、理由をコメントで明記
+
+#### E. C# spec のドリフト修正
+
+- [ ] `runs-on` を「partial」から実装実態へ更新（mapping + expression の対応状況を明記）
+- [ ] 未実装/部分実装テーブルを現行コードに合わせて棚卸し
+- [ ] 本 plan の「現状サマリー」を現行実装に合わせて更新（古い記述の削除）
+
+#### F. 完了判定（この監査対応の Exit Criteria）
+
+- [ ] `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj` が全パス
+- [ ] 仕様と実装の責務境界について、4 文書（Parser spec / C# spec / Go spec / plan）に矛盾がない
+- [ ] 上記 A-E の追加テストが CI で安定して再現可能
+
 ---
 
 ## 依存関係グラフ
