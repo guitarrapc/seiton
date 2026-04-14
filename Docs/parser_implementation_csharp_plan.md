@@ -543,20 +543,26 @@
 ### Priority 1: Parser Core の generic 化（必須）
 
 1. **`WorkflowParser` に internal generic core を導入**
+  - 状態: 完了
   - 目標: `ParseCore<TReader>(ref TReader reader, ReadOnlySpan<byte> source)`（`where TReader : IYamlStreamReader, allows ref struct`）を追加。
   - 方針: public API `Parse(byte[] utf8Yaml, string filePath)` は維持し、`VYamlStreamAdapter` は entrypoint の factory のみに閉じ込める。
-  - 完了条件: parser 内部の主要 parse ヘルパーが `ref TReader` 経由で呼べる。
+  - 実施結果: `ParseCore<TReader>` を実装し、entrypoint 以外の parser 本体は generic reader で統一。
+  - 完了条件: 達成。
 
 2. **段階移行（大規模一括変換を避ける）**
+  - 状態: 完了
   - フェーズA: scalar helper 群（`ParseString/Bool/Int/Float/Expression`）を generic 化。
   - フェーズB: top-level と `on` / `jobs` の骨格 parser を generic 化。
   - フェーズC: job/step/event の下位 parser を generic 化。
-  - 完了条件: `WorkflowParser.cs` の `ref VYamlStreamAdapter` 依存が public parse entrypoint 以外で消える。
+  - 実施結果: `WorkflowParser.cs` の `ref VYamlStreamAdapter` 依存は public parse entrypoint の adapter 生成箇所のみ。
+  - 完了条件: 達成。
 
 3. **置換耐性の検証**
+  - 状態: 完了
   - `FakeYamlStreamReader` を使った最小統合テスト（root mapping, scalar parse, key traversal）を追加。
   - 将来の `YamlDotNet` adapter を想定したテスト観点を明文化。
-  - 完了条件: 「adapter 置換時に parser 本体を触らない」ことをテストで担保。
+  - 実施結果: `ParserAdapterResilienceTests` を追加し、`ParseWithReader<TReader>` 経由で最小 workflow parse と duplicate key 診断を検証。
+  - 完了条件: 達成。
 
 ### Priority 2: Diagnostic モデルの仕様追従
 
