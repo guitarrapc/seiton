@@ -1034,6 +1034,10 @@ public static class WorkflowParser
                 if (!reader.End)
                 {
                     timeoutMinutesNode = ParseFloat(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number");
+                    if (timeoutMinutesNode is not null && timeoutMinutesNode.Value <= 0)
+                    {
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be greater than 0", keyMark);
+                    }
                 }
                 continue;
             }
@@ -1439,6 +1443,10 @@ public static class WorkflowParser
                 if (!reader.End)
                 {
                     timeoutMinutesNode = ParseFloat(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number");
+                    if (timeoutMinutesNode is not null && timeoutMinutesNode.Value <= 0)
+                    {
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be greater than 0", keyMark);
+                    }
                 }
                 continue;
             }
@@ -3973,6 +3981,10 @@ public static class WorkflowParser
                 if (!reader.End)
                 {
                     maxParallel = ParseInt(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer");
+                    if (maxParallel is not null && maxParallel.Value <= 0)
+                    {
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be greater than 0", keyMark);
+                    }
                 }
                 continue;
             }

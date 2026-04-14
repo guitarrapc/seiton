@@ -643,13 +643,21 @@
 
 #### B. 数値制約（`> 0`）の実装とテスト
 
-- [ ] `job.timeout-minutes` に `> 0` 制約を追加（0, 負値で error）
-- [ ] `step.timeout-minutes` に `> 0` 制約を追加（0, 負値で error）
-- [ ] `strategy.max-parallel` に `> 0` 制約を追加（0, 負値で error）
-- [ ] 回帰テストを追加
+- [x] `job.timeout-minutes` に `> 0` 制約を追加（0, 負値で error）
+- [x] `step.timeout-minutes` に `> 0` 制約を追加（0, 負値で error）
+- [x] `strategy.max-parallel` に `> 0` 制約を追加（0, 負値で error）
+- [x] 回帰テストを追加
   - `timeout-minutes: 0` / `-1`
   - `max-parallel: 0` / `-1`
   - 既存の型不正テスト（non-int/non-float）との重複を避ける
+
+実装結果:
+- `WorkflowParser` に non-positive 数値検証を追加。
+  - Job: `timeout-minutes <= 0` を error
+  - Step: `timeout-minutes <= 0` を error
+  - Strategy: `max-parallel <= 0` を error
+- `ParserTests` に 3 つの回帰テストを追加（job/step timeout, strategy max-parallel の 0/-1 ケース）。
+- `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj` で全件パス（136 passed）。
 
 #### C. 必須キー検証の負ケーステスト拡充
 

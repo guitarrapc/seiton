@@ -1331,6 +1331,77 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_JobTimeoutMinutes_NonPositive_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            zero:
+                runs-on: ubuntu-latest
+                timeout-minutes: 0
+                steps:
+                    - run: echo ok
+            neg:
+                runs-on: ubuntu-latest
+                timeout-minutes: -1
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-timeout-non-positive.yml");
+        var count = result.Diagnostics.Count(x => x.Message.Contains("timeout-minutes must be greater than 0", StringComparison.Ordinal));
+        await Assert.That(count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task Parse_StepTimeoutMinutes_NonPositive_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - timeout-minutes: 0
+                      run: echo zero
+                    - timeout-minutes: -1
+                      run: echo neg
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-timeout-non-positive.yml");
+        var count = result.Diagnostics.Count(x => x.Message.Contains("timeout-minutes must be greater than 0", StringComparison.Ordinal));
+        await Assert.That(count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task Parse_StrategyMaxParallel_NonPositive_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            zero:
+                runs-on: ubuntu-latest
+                strategy:
+                    max-parallel: 0
+                steps:
+                    - run: echo zero
+            neg:
+                runs-on: ubuntu-latest
+                strategy:
+                    max-parallel: -1
+                steps:
+                    - run: echo neg
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-max-parallel-non-positive.yml");
+        var count = result.Diagnostics.Count(x => x.Message.Contains("strategy.max-parallel must be greater than 0", StringComparison.Ordinal));
+        await Assert.That(count).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task Parse_JobContainerMissingImage_ReportsError()
     {
         var yaml = """
