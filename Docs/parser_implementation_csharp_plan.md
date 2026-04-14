@@ -661,10 +661,18 @@
 
 #### C. 必須キー検証の負ケーステスト拡充
 
-- [ ] `on.workflow_call.inputs.<id>.type is required` の負ケースを追加
-- [ ] `on.workflow_call.outputs.<id>.value is required` の負ケースを追加
-- [ ] `on.schedule item requires cron` の負ケースを追加（空 mapping / timezone のみ）
-- [ ] 既存の happy path テストとの対になる table-driven テストへ統合
+- [x] `on.workflow_call.inputs.<id>.type is required` の負ケースを追加
+- [x] `on.workflow_call.outputs.<id>.value is required` の負ケースを追加
+- [x] `on.schedule item requires cron` の負ケースを追加（空 mapping / timezone のみ）
+- [x] 既存の happy path テストとの対になる table-driven テストへ統合
+
+実装結果:
+- `ParserTests` に `Parse_RequiredKeys_WorkflowCallAndSchedule_ReportsError_TableDriven` を追加。
+- 以下 4 ケースを table-driven で検証:
+  - workflow_call input で `type` 欠落
+  - workflow_call output で `value` 欠落
+  - schedule item が空 mapping
+  - schedule item が timezone のみ
 
 #### D. Alias 方針の明文化とテスト固定
 

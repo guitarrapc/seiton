@@ -599,6 +599,65 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_RequiredKeys_WorkflowCallAndSchedule_ReportsError_TableDriven()
+    {
+        var cases = new (string Name, string Yaml, string ExpectedMessagePart)[]
+        {
+            (
+                "workflow_call input missing type",
+                """
+                on:
+                    workflow_call:
+                        inputs:
+                            image:
+                                required: true
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.workflow_call.inputs.image.type is required"
+            ),
+            (
+                "workflow_call output missing value",
+                """
+                on:
+                    workflow_call:
+                        outputs:
+                            digest:
+                                description: output
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.workflow_call.outputs.digest.value is required"
+            ),
+            (
+                "schedule item empty mapping",
+                """
+                on:
+                    schedule:
+                        - {}
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.schedule item requires cron"
+            ),
+            (
+                "schedule item timezone only",
+                """
+                on:
+                    schedule:
+                        - timezone: UTC
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.schedule item requires cron"
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"required-keys-{i}.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains(c.ExpectedMessagePart, StringComparison.Ordinal))).IsTrue();
+        }
+    }
+
+    [Test]
     public async Task Parse_OnRepositoryDispatch_PopulatesEventAst()
     {
         var yaml = """
