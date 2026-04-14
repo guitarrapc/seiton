@@ -538,57 +538,65 @@
 
 ## 次にやるべきこと（2026-04-14 時点）
 
-以下は、`Seiton_Parser_csharp_spec.md` の同期後ステータスを前提にした優先度付きの継続タスク。
+以下は、仕様整合を維持しつつ次の実装を安全に進めるための**実行順付き作業計画**。
 
-### Priority 1: 仕様整合の残ギャップを埋める
+### Priority 1: Parser Core の generic 化（必須）
 
-1. **YAML アダプター境界の完全整備**
-  - 状態: 完了
-  - `WorkflowParser` の `ref VYamlStreamAdapter` 直結を、仕様の `IYamlStreamReader` 境界（または `WorkflowParser<TReader>`）に合わせる。
-  - public parse 経路から `VYamlStreamAdapter` 直結の internal API を除去し、`ParseCore` に内部化。
-  - 目的: YAML 実装差し替え容易性と仕様 §0.3 の整合。
+1. **`WorkflowParser` に internal generic core を導入**
+  - 目標: `ParseCore<TReader>(ref TReader reader, ReadOnlySpan<byte> source)`（`where TReader : IYamlStreamReader, allows ref struct`）を追加。
+  - 方針: public API `Parse(byte[] utf8Yaml, string filePath)` は維持し、`VYamlStreamAdapter` は entrypoint の factory のみに閉じ込める。
+  - 完了条件: parser 内部の主要 parse ヘルパーが `ref TReader` 経由で呼べる。
 
-2. **String-free success path の厳密化**
-  - 状態: 完了
-  - `VYamlStreamAdapter.GetScalarTag()` 内の UTF-16 変換を除去し、タグ推定を UTF-8 バイト処理のみで完結させる。
-  - 目的: 仕様 §0.2.1 / §11.1 の厳密遵守。
+2. **段階移行（大規模一括変換を避ける）**
+  - フェーズA: scalar helper 群（`ParseString/Bool/Int/Float/Expression`）を generic 化。
+  - フェーズB: top-level と `on` / `jobs` の骨格 parser を generic 化。
+  - フェーズC: job/step/event の下位 parser を generic 化。
+  - 完了条件: `WorkflowParser.cs` の `ref VYamlStreamAdapter` 依存が public parse entrypoint 以外で消える。
 
-3. **`runs-on` mapping / expression の完全対応**
-  - 状態: 完了
-  - 現在の scalar/sequence 中心実装に対し、`labels` + `group` mapping と expression パスを仕様どおり補完。
-  - 目的: 仕様 §2.12 / §3.13 の残差分解消。
+3. **置換耐性の検証**
+  - `FakeYamlStreamReader` を使った最小統合テスト（root mapping, scalar parse, key traversal）を追加。
+  - 将来の `YamlDotNet` adapter を想定したテスト観点を明文化。
+  - 完了条件: 「adapter 置換時に parser 本体を触らない」ことをテストで担保。
 
-### Priority 2: ルール層の実用化
+### Priority 2: Diagnostic モデルの仕様追従
 
-4. **`LintEngine` 導入と parser からの rule 実行分離**
-  - 状態: 完了
-  - parser 直接実行だった `SyntaxRule` を `LintEngine.Check(byte[], string)` 側へ移し、`WorkflowParser.Parse(...)` は parse diagnostics のみを返すように整理。
-  - `LintResult` を追加し、`ParseResult` と最終 diagnostics を分離して保持。
-  - 目的: 仕様 §1.3 アーキテクチャへ整合。
+4. **`filePath` を Diagnostic 出力へ正式反映**
+  - 目標: `Parse(byte[], string)` の `filePath` を diagnostics に一貫して伝搬。
+  - 補足: rule 由来 diagnostics も含めた最終出力で path が欠落しないことを確認。
+  - 完了条件: parser/lint 双方の代表テストで `FilePath` を検証。
 
-5. **Rule セットの拡張（SyntaxRule 依存の縮小）**
-  - 状態: 完了
-  - `JobStructureRule`、`ReusableWorkflowRule`、`PermissionsRule`、`PopularActionInputsRule` を追加し、`LintEngine` の既定 rule セットを分割構成へ更新。
-  - `SyntaxRule` は互換ラッパーとして残しつつ、既定実行経路からは外した。
-  - parser テストのうち rule 由来の診断期待は `LintEngine` ベースへ移行。
-  - reusable workflow 制約、permissions 値検証、popular action input 検証を parser 直書きではなく `IRule` 実装側で評価する形に整理。
-  - 目的: 仕様 §8.3 の「ルールエンジン化」を進める。
+5. **Spec §10 との整合確認（RuleId/Help/RelatedLocations）**
+  - `Diagnostic` モデルと `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` の記述差分を解消。
+  - 必要なら spec 側の status table/本文も更新。
+  - 完了条件: spec と実装の項目差分がなくなる。
 
-### Priority 3: テストの網羅性を仕様レベルへ引き上げる
+### Priority 3: テスト拡充（generic 化の回帰防止）
 
 6. **actionlint err fixture の期待診断セット拡張**
-  - 既存 subset を増やし、主要カテゴリ（型違反、必須キー不足、排他制約、重複キー）を網羅。
+  - 既存 subset を増やし、型違反・必須キー不足・排他制約・重複キーを優先拡張。
 
-7. **alias 系の明示テスト追加**
-  - dangling alias / recursive alias / alias merge の挙動を fixture 固定で検証し、仕様との差分を可視化。
+7. **alias 系テスト追加**
+  - dangling alias / recursive alias / alias merge の挙動を fixture 固定で可視化。
+  - adapter 側吸収と parser 側責務の境界もテスト名で明示。
 
-8. **AST ゴールデンテストの拡張**
-  - `runs-on` mapping、container/services、workflow_call job などの深い構造を fixture ベースで固定化。
+8. **AST ゴールデンテスト拡張**
+  - `runs-on` mapping、`workflow_call` job、`container/services` の深い構造を追加固定化。
 
-### Priority 4: ドキュメント整合
+### Priority 4: ドキュメント同期運用
 
-9. **`Seiton_Parser_csharp_spec.md` と `parser_implementation_csharp_plan.md` の定期同期運用**
-  - 実装完了時に status table と plan の「完了/未完」記述を同時更新する運用ルールを明文化する。
+9. **spec/plan 同期の運用ルールを明文化**
+  - `Seiton_Parser_spec.md` を source of truth とし、以下 3 文書を同時更新対象として固定。
+  - `Seiton_Parser_csharp_spec.md`
+  - `Seiton_Parser_go_spec.md`
+  - `parser_implementation_csharp_plan.md`
+
+### 実行順（推奨）
+
+1. Priority 1-1, 1-2（generic core の導入と段階移行）
+2. Priority 1-3（置換耐性テスト追加）
+3. Priority 2-4, 2-5（Diagnostic 仕様整合）
+4. Priority 3-6, 3-7, 3-8（回帰防止テスト拡充）
+5. Priority 4-9（文書同期）
 
 ---
 
