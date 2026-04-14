@@ -723,20 +723,76 @@ public sealed class ParserTests
 
         await Assert.That(files.Length).IsGreaterThan(0);
 
-        var failedCount = 0;
+        var problematicCount = 0;
         foreach (var file in files)
         {
             try
             {
-                _ = WorkflowParser.Parse(File.ReadAllBytes(file), file);
+                var result = WorkflowParser.Parse(File.ReadAllBytes(file), file);
+                if (result.HasFatalError || result.Diagnostics.Length > 0)
+                {
+                    problematicCount++;
+                }
             }
             catch
             {
-                failedCount++;
+                problematicCount++;
             }
         }
 
-        await Assert.That(failedCount).IsGreaterThan(0);
+        await Assert.That(problematicCount).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task Parse_ActionlintOkFixtures_DoNotHaveFatalErrors()
+    {
+        var root = FindRepoRoot();
+        var actionlintTestdata = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata");
+        if (!Directory.Exists(actionlintTestdata))
+        {
+            return;
+        }
+
+        var candidateRoots = new[]
+        {
+            Path.Combine(actionlintTestdata, "ok"),
+            Path.Combine(actionlintTestdata, "bench"),
+            Path.Combine(actionlintTestdata, "reusable_workflow_metadata"),
+        };
+
+        var files = candidateRoots
+            .Where(Directory.Exists)
+            .SelectMany(static dir => Directory.EnumerateFiles(dir, "*.yml", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(dir, "*.yaml", SearchOption.AllDirectories)))
+            .Where(static f =>
+            {
+                var n = f.Replace('\\', '/');
+                return !n.Contains("/broken", StringComparison.OrdinalIgnoreCase)
+                    && !n.Contains("broken_", StringComparison.OrdinalIgnoreCase)
+                    && !n.Contains("/err/", StringComparison.OrdinalIgnoreCase);
+            })
+            .ToArray();
+
+        await Assert.That(files.Length).IsGreaterThan(0);
+
+        var failures = new List<string>();
+        foreach (var file in files)
+        {
+            try
+            {
+                var result = WorkflowParser.Parse(File.ReadAllBytes(file), file);
+                if (result.HasFatalError)
+                {
+                    failures.Add($"{file}: unexpected fatal parse error");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{file}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        await Assert.That(failures).IsEmpty();
     }
 
     [Test]
@@ -1684,12 +1740,16 @@ public sealed class ParserTests
     {
         var refsRoot = Path.Combine(repoRoot, ".references");
         var localCorpusRoot = Path.Combine(repoRoot, "tests", "Seiton.Core.Tests", "fixtures", "corpus");
+        var actionlintFixtureRoot = Path.Combine(repoRoot, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata");
         var candidates = new[]
         {
             Path.Combine(refsRoot, "actionlint-main", ".github", "workflows"),
             Path.Combine(refsRoot, "ghalint-main", ".github", "workflows"),
             Path.Combine(refsRoot, "zizmor-main", ".github", "workflows"),
             Path.Combine(refsRoot, "ghalint-main"),
+            Path.Combine(actionlintFixtureRoot, "ok"),
+            Path.Combine(actionlintFixtureRoot, "bench"),
+            Path.Combine(actionlintFixtureRoot, "reusable_workflow_metadata"),
             localCorpusRoot,
         };
 
