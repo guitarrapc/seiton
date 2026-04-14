@@ -705,9 +705,19 @@
 
 #### F. 完了判定（この監査対応の Exit Criteria）
 
-- [ ] `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj` が全パス
-- [ ] 仕様と実装の責務境界について、4 文書（Parser spec / C# spec / Go spec / plan）に矛盾がない
-- [ ] 上記 A-E の追加テストが CI で安定して再現可能
+- [x] `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj` が全パス
+- [x] 仕様と実装の責務境界について、4 文書（Parser spec / C# spec / Go spec / plan）に矛盾がない
+- [x] 上記 A-E の追加テストが CI で安定して再現可能
+
+実装結果:
+- テスト再実行を 2 回実施し、いずれも `137 passed / 0 failed` を確認。
+  - 1 回目: duration 2.071s
+  - 2 回目: duration 1.916s
+- 4 文書の責務境界を突合し、以下の整合を確認。
+  - Job 構造制約（`uses` vs `steps`/`runs-on`、`with`/`secrets` の `uses` 依存）は parser 側の一次診断契約。
+  - Alias は adapter/library 側解決を前提とし、失敗時は parse failure 診断へ正規化（C#）。
+  - YAML parse failure の扱いは parser spec 側でも adapter/library 起因失敗を含む旨を明記。
+- A-E で追加した table-driven / fixture 固定テスト（必須キー、数値制約、alias 異常、job 制約）は再実行で同一結果を返し、回帰検知の再現性を確認。
 
 ---
 
