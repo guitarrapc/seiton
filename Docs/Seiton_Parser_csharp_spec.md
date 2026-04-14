@@ -3,6 +3,8 @@
 > Implementation specification for the parser described in `Seiton_Parser_spec.md`, targeting C# with zero-allocation / high-performance design.
 > This is a companion to `Seiton_Parser_go_spec.md` (Go target).
 > Both language specs share the same §0–§11 outline; only language-specific content differs.
+>
+> **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this C# spec is updated, also review and update `Seiton_Parser_spec.md`, `Seiton_Parser_go_spec.md`, and `parser_implementation_csharp_plan.md` in the same PR/commit scope.
 
 ---
 

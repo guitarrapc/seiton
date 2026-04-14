@@ -4,6 +4,8 @@
 > This is a companion to `Seiton_Parser_csharp_spec.md` (C# target).
 > Both language specs share the same §0–§11 outline; only language-specific content differs.
 > The design is derived from [actionlint](https://github.com/rhysd/actionlint) as the reference implementation, but all types and signatures described here are Seiton's own specification.
+>
+> **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this Go spec is updated, also review and update `Seiton_Parser_spec.md`, `Seiton_Parser_csharp_spec.md`, and `parser_implementation_csharp_plan.md` in the same PR/commit scope.
 
 ---
 

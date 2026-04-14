@@ -601,10 +601,18 @@
 ### Priority 4: ドキュメント同期運用
 
 9. **spec/plan 同期の運用ルールを明文化**
+  - 状態: 完了
   - `Seiton_Parser_spec.md` を source of truth とし、以下 3 文書を同時更新対象として固定。
   - `Seiton_Parser_csharp_spec.md`
   - `Seiton_Parser_go_spec.md`
   - `parser_implementation_csharp_plan.md`
+  - 実施結果: 3 文書を同時更新対象とする運用ルールを明文化し、実装時のドキュメント更新順を固定化。
+  - 運用手順:
+    1. 仕様レベル変更は `Seiton_Parser_spec.md` を先に更新する。
+    2. 同一コミット（または同一 PR）で `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` / `parser_implementation_csharp_plan.md` を追従更新する。
+    3. 追従不要と判断した文書がある場合は、PR 説明または plan の実施結果に理由を明記する。
+    4. 実装変更後は「仕様（WHAT/WHY）と実装結果（lesson learned）が矛盾しない」ことを確認する。
+  - 完了条件: 達成。
 
 ### 実行順（推奨）
 
