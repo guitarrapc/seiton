@@ -9,9 +9,9 @@
 | YAML 読み取り | `IYamlStreamReader` + `VYamlStreamAdapter` を使用。`WorkflowParser` は generic core（`ParseCore<TReader>`）で adapter 差し替え可能 |
 | パーサー本体 | `WorkflowParser` は shape 検証 + AST 構築 + diagnostics を実行。`ParseResult.Workflow` に typed AST を返却 |
 | 出力モデル | `ParseResult.Workflow` は `Workflow?` を返却。`WorkflowDocument` は削除済み |
-| `on:` パース | scalar/sequence/mapping の 3 形態を `Event[]` として AST 化。`schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` も typed node で構築 |
-| Job/Step | `Job` / `Step` を typed node で構築。`uses` と `steps`/`runs-on` 排他、`with`/`secrets` 依存、必須キーを parser で診断 |
-| permissions/defaults/concurrency | top-level / job-level ともに typed node 構築済み（shape 診断維持） |
+| `on:` パース | scalar/sequence/mapping の 3 形態を `Event[]` として AST 化。`schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` も typed node で構築。なお `on: schedule` scalar 形の spec 整合は残課題 |
+| Job/Step | `Job` / `Step` を typed node で構築。`uses` と `steps`/`runs-on` 排他、`with`/`secrets` 依存、必須キーを parser で診断。`services` / `credentials` の expression 形は残課題 |
+| permissions/defaults/concurrency | top-level / job-level ともに typed node 構築済み。`defaults.run` 必須と `concurrency.group` 必須の spec 整合は残課題 |
 | 式パーサー | 再帰下降 + arena-style flat array。GHA 仕様に合わせて算術演算子サポートを削除済み |
 | 式セマンティクス | generated availability + function arity + bottom-up 型推論（`ExprType`）を実装 |
 | 式抽出 | `${{ }}` 抽出 → parse → validate パイプライン完成 |
@@ -770,20 +770,75 @@
 - key 粒度 fixture `context-availability-key-granularity.yml` と `ParserTests` の fixture 駆動検証を spec 側の説明へ反映。
 - これにより I の残作業は解消し、計画上の H/I 境界は「special function availability の finer-grained parity は将来課題、root context availability は現実装として完了」に整理した。
 
----
+### 追加作業リスト（2026-04-14 spec 監査差分の反映）
 
-## 依存関係グラフ
+以下は、2026-04-14 の spec 充足確認で判明した未充足項目。既存の「完了済み」フェーズとは独立に、次スプリントで消化する。
 
-```
-Phase 1 (adapter)
-  └─> Phase 2 (AST types)
-       └─> Phase 3 (parser rewrite)
-            ├─> Phase 4 (mapping helpers)
-            └─> Phase 5 (Visitor/Pass)
-                 └─> Phase 6 (generated data)
-Phase 7 (expression improvements)  ← Phase 3 以降いつでも着手可
-Phase 8 (testing/benchmarks)       ← 各 Phase 完了時に随時実施
-```
+#### J. Defaults / Concurrency の必須制約を spec に合わせる
+
+- [ ] `defaults.run` 未指定時に parser error を出す
+  - spec 根拠: `Seiton_Parser_spec.md` §3.7 / §12
+  - 現状: `ParseDefaultsNode` は `run` が一度も出なくても `Defaults` を返す
+- [ ] `concurrency.group` 未指定時に parser error を出す
+  - spec 根拠: `Seiton_Parser_spec.md` §3.8 / §12
+  - 現状: `ParseConcurrencyNode` は `groupNode is null` の場合に無言で `null` を返す
+- [ ] top-level / job-level の両経路で負ケース回帰テストを追加する
+  - `defaults: {}`
+  - `defaults: { foo: bar }`
+  - `concurrency: { cancel-in-progress: true }`
+  - `job.concurrency: { cancel-in-progress: false }`
+
+完了条件:
+- parser diagnostics が `defaults.run` / `concurrency.group` の欠落を確実に報告する
+- `ParserTests` に top-level / job-level の負ケースが追加される
+
+#### K. YAML polymorphic field の spec 差分を解消する
+
+- [ ] `on: schedule` scalar 形を spec どおり error に変更する
+  - spec 根拠: `parseEventWithNoConfig` は `schedule` に mapping required error を要求
+  - 現状: `BuildSimpleEvent` が `ScheduledEvent` を無条件生成する
+- [ ] `services: ${{ ... }}` を `Services.Expression` として受理する
+  - spec 根拠: `Seiton_Parser_spec.md` §3.17
+  - 現状: mapping 以外を `services must be mapping` で reject する
+- [ ] `credentials: ${{ ... }}` を `Credentials.Expression` として受理する
+  - spec 根拠: `Seiton_Parser_spec.md` §3.18
+  - 現状: mapping 以外を `credentials must be mapping` で reject する
+- [ ] container/service 配下の `env: ${{ ... }}` を `Env.Expression` として受理する
+  - spec 根拠: `Seiton_Parser_spec.md` §2.8 / §14
+  - 現状: container env は mapping 強制
+- [ ] special event の no-config scalar 形を直接固定化するテストを追加する
+  - `on: workflow_dispatch` → empty `WorkflowDispatchEvent`
+  - `on: workflow_call` → empty `WorkflowCallEvent`
+  - `on: repository_dispatch` → empty `RepositoryDispatchEvent`
+  - `on: schedule` → error
+
+完了条件:
+- spec §3.4.1 / §3.17 / §3.18 / §14 の分岐が parser 実装と一致する
+- `ParserTests` に polymorphic field の正常系・異常系が対で追加される
+
+#### L. AST Range の充足率を上げる
+
+- [ ] `Workflow.Range` を含む主要構造ノードで `Range = default` を解消する
+  - 優先対象: `Workflow`, `Permissions`, `Env`, `Defaults`, `Concurrency`, `Strategy`, `Matrix`, `Services`, `Container`, `Credentials`
+- [ ] node 単位で「default range ではない」ことを確認するテストを追加する
+  - top-level workflow
+  - event node 1 件以上
+  - job / step node 1 件以上
+  - structural node 1 件以上
+- [ ] diagnostics location policy と node range の責務を混同しないよう spec 文言も確認する
+
+完了条件:
+- spec の「All major nodes carry source position (range)」に対して主要 AST ノードが実測で non-default range を返す
+- range 回帰テストが CI で安定する
+
+#### M. 監査差分のドキュメント同期
+
+- [ ] 上記 J-L の修正と同一 PR で `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` を再確認する
+- [ ] spec を実装に寄せるのではなく、まず source of truth の `Seiton_Parser_spec.md` に対して実装修正を優先する
+- [ ] 実装完了後に本 plan の「現状サマリー」を更新し、残課題の行を解消する
+
+完了条件:
+- 4 文書間で `defaults`, `concurrency`, `schedule`, `services`, `credentials`, `range` の記述に矛盾がない
 
 ---
 
