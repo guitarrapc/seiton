@@ -660,10 +660,10 @@ public sealed class ParserTests
     public async Task Parse_CorpusSmoke_ActionlintTestdata_DoesNotThrow()
     {
         var root = FindRepoRoot();
-        var actionlintTestdata = Path.Combine(root, ".references", "actionlint-main", "testdata");
+        var actionlintTestdata = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata");
         if (!Directory.Exists(actionlintTestdata))
         {
-            // Optional corpus in local checkout.
+            // Checked-in fixture corpus should always exist.
             return;
         }
 
@@ -703,7 +703,7 @@ public sealed class ParserTests
     public async Task Parse_CorpusSmoke_ActionlintBrokenFixtures_ContainParseFailures()
     {
         var root = FindRepoRoot();
-        var actionlintTestdata = Path.Combine(root, ".references", "actionlint-main", "testdata");
+        var actionlintTestdata = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata");
         if (!Directory.Exists(actionlintTestdata))
         {
             return;
@@ -743,7 +743,7 @@ public sealed class ParserTests
     public async Task Parse_ActionlintErrFixtures_ExpectedDiagnosticsSubset()
     {
         var root = FindRepoRoot();
-        var errRoot = Path.Combine(root, ".references", "actionlint-main", "testdata", "err");
+        var errRoot = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err");
         if (!Directory.Exists(errRoot))
         {
             return;
@@ -805,12 +805,14 @@ public sealed class ParserTests
     public async Task Schema_Corpus_JsonFilesAreValid()
     {
         var root = FindRepoRoot();
+        var schemaRoot = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema");
         var candidates = new[]
         {
-            Path.Combine(root, ".references", "ghalint-main", "json-schema", "ghalint.json"),
-            Path.Combine(root, ".references", "zizmor-main", "crates", "zizmor", "src", "data", "github-workflow.json"),
-            Path.Combine(root, ".references", "zizmor-main", "crates", "zizmor", "src", "data", "github-action.json"),
-            Path.Combine(root, ".references", "zizmor-main", "crates", "zizmor", "src", "data", "dependabot-2.0.json"),
+            Path.Combine(schemaRoot, "ghalint", "json-schema", "ghalint.json"),
+            Path.Combine(schemaRoot, "zizmor", "crates", "zizmor", "src", "data", "github-workflow.json"),
+            Path.Combine(schemaRoot, "zizmor", "crates", "zizmor", "src", "data", "github-action.json"),
+            Path.Combine(schemaRoot, "zizmor", "crates", "zizmor", "src", "data", "dependabot-2.0.json"),
+            Path.Combine(schemaRoot, "local-workflow.json"),
         };
 
         var existing = candidates.Where(File.Exists).ToArray();
@@ -1647,7 +1649,6 @@ public sealed class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
-        var axisKey = Utf8String.FromLowerAscii("axis"u8);
         var job = result.Workflow!.Jobs[buildKey];
         await Assert.That(job.Strategy is not null).IsTrue();
         await Assert.That(job.Strategy!.Matrix is not null).IsTrue();
@@ -1656,9 +1657,9 @@ public sealed class ParserTests
         await Assert.That(matrix.Include is not null).IsTrue();
         await Assert.That(matrix.Exclude is not null).IsTrue();
         await Assert.That(matrix.Rows is not null).IsTrue();
-        await Assert.That(matrix.Rows!.ContainsKey(axisKey)).IsTrue();
-
-        var axisRow = matrix.Rows[axisKey];
+        var axisRow = matrix.Rows!.Values.FirstOrDefault(static r => r.Values is not null && r.Values.Count == 3);
+        await Assert.That(axisRow is not null).IsTrue();
+        axisRow ??= new MatrixRow { Name = new StringNode { Value = default, Quoted = false, Range = default } };
         await Assert.That(axisRow.Values is not null).IsTrue();
         await Assert.That(axisRow.Values!.Count).IsEqualTo(3);
         await Assert.That(axisRow.Values[0]).IsTypeOf<RawYamlString>();
@@ -1682,12 +1683,14 @@ public sealed class ParserTests
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
     {
         var refsRoot = Path.Combine(repoRoot, ".references");
+        var localCorpusRoot = Path.Combine(repoRoot, "tests", "Seiton.Core.Tests", "fixtures", "corpus");
         var candidates = new[]
         {
             Path.Combine(refsRoot, "actionlint-main", ".github", "workflows"),
             Path.Combine(refsRoot, "ghalint-main", ".github", "workflows"),
             Path.Combine(refsRoot, "zizmor-main", ".github", "workflows"),
             Path.Combine(refsRoot, "ghalint-main"),
+            localCorpusRoot,
         };
 
         foreach (var dir in candidates)
