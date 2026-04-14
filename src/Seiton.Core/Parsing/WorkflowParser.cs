@@ -34,7 +34,19 @@ public static class WorkflowParser
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
         var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
-        return ParseCore(ref reader, utf8Yaml);
+        var result = ParseCore(ref reader, utf8Yaml);
+        if (string.IsNullOrEmpty(filePath) || result.Diagnostics.Length == 0)
+        {
+            return result;
+        }
+
+        var diagnostics = new Diagnostic[result.Diagnostics.Length];
+        for (var i = 0; i < result.Diagnostics.Length; i++)
+        {
+            diagnostics[i] = result.Diagnostics[i] with { FilePath = filePath };
+        }
+
+        return result with { Diagnostics = diagnostics };
     }
 
     private static ParseResult ParseCore(ref VYamlStreamAdapter reader, ReadOnlySpan<byte> source)
