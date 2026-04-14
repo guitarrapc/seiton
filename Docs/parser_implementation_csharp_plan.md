@@ -676,12 +676,21 @@
 
 #### D. Alias 方針の明文化とテスト固定
 
-- [ ] Alias 解決を parser が担うか、YAML adapter 任せにするかを明文化
-- [ ] 方針に応じて diagnostics 契約を固定
+- [x] Alias 解決を parser が担うか、YAML adapter 任せにするかを明文化
+- [x] 方針に応じて diagnostics 契約を固定
   - undefined anchor
   - recursive anchor
   - merge key を含む alias ケース
-- [ ] corpus smoke の除外条件（`dangling_alias` など）を見直し、理由をコメントで明記
+- [x] corpus smoke の除外条件（`dangling_alias` など）を見直し、理由をコメントで明記
+
+実装結果:
+- Alias 解決は parser 本体ではなく YAML adapter / YAML ライブラリ層の責務として固定。
+- `WorkflowParser.Parse` で adapter 由来例外を捕捉し、`yaml parse failure: ...` の fatal diagnostic として返す契約を追加。
+- `ParserTests` の alias 異常テストを「診断または例外」から決定的契約へ更新。
+  - `undefined_anchor`: fatal diagnostic（`yaml parse failure`）
+  - `recursive_anchors`: 解析継続時の構造診断（例: `must be mapping`）
+- `Parse_ActionlintErrFixtures_ExpectedDiagnosticsSubset` に alias 異常 fixture（`undefined_anchor.yaml` / `recursive_anchors.yaml`）を追加。
+- corpus smoke の `dangling_alias` 除外・包含の意図をコメントで明示。
 
 #### E. C# spec のドリフト修正
 

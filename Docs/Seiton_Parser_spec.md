@@ -705,7 +705,7 @@ The parser uses tag information (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`
 | Type mismatch | error + SkipCurrentNode |
 | Missing required key | aggregate error after mapping traversal |
 | Exclusive constraint violation | aggregate error after mapping traversal |
-| YAML parse failure | Convert to `Diagnostic[]`, `Workflow = null` |
+| YAML parse failure (including alias resolution failure in adapter/library) | Convert to `Diagnostic[]`, `Workflow = null` |
 | Duplicate key | error + ignore the later key (first wins) |
 
 ---

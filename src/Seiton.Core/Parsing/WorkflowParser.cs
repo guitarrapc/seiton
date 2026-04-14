@@ -33,20 +33,39 @@ public static class WorkflowParser
 
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
-        var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
-        var result = ParseCore(ref reader, utf8Yaml);
-        if (string.IsNullOrEmpty(filePath) || result.Diagnostics.Length == 0)
+        try
         {
-            return result;
-        }
+            var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+            var result = ParseCore(ref reader, utf8Yaml);
+            if (string.IsNullOrEmpty(filePath) || result.Diagnostics.Length == 0)
+            {
+                return result;
+            }
 
-        var diagnostics = new Diagnostic[result.Diagnostics.Length];
-        for (var i = 0; i < result.Diagnostics.Length; i++)
+            var diagnostics = new Diagnostic[result.Diagnostics.Length];
+            for (var i = 0; i < result.Diagnostics.Length; i++)
+            {
+                diagnostics[i] = result.Diagnostics[i] with { FilePath = filePath };
+            }
+
+            return result with { Diagnostics = diagnostics };
+        }
+        catch (Exception ex)
         {
-            diagnostics[i] = result.Diagnostics[i] with { FilePath = filePath };
+            var location = new TextRange(
+                Start: 0,
+                Length: 0,
+                StartLine: 1,
+                StartColumn: 1,
+                EndLine: 1,
+                EndColumn: 1);
+            var diagnostic = new Diagnostic(
+                Severity: DiagnosticSeverity.Error,
+                Message: $"yaml parse failure: {ex.Message}",
+                Location: location,
+                FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
+            return new ParseResult(default, [diagnostic], HasFatalError: true);
         }
-
-        return result with { Diagnostics = diagnostics };
     }
 
     internal static ParseResult ParseWithReader<TReader>(ref TReader reader, ReadOnlySpan<byte> source)

@@ -734,6 +734,8 @@ public sealed class ParserTests
         var files = allFiles.Where(static f =>
         {
             var n = f.Replace('\\', '/');
+            // Keep dangling_alias out of the non-error smoke set: alias failures are
+            // intentionally validated in dedicated error-fixture tests.
             return !n.Contains("/testdata/err/", StringComparison.OrdinalIgnoreCase)
                 && !n.Contains("/broken/", StringComparison.OrdinalIgnoreCase)
                 && !n.Contains("broken_yaml", StringComparison.OrdinalIgnoreCase)
@@ -774,6 +776,8 @@ public sealed class ParserTests
             .Where(static f =>
             {
                 var n = f.Replace('\\', '/');
+                // Includes dangling_alias on purpose: this bucket tracks malformed YAML
+                // and parser-fatal inputs that must not be treated as successful parses.
                 return n.Contains("/testdata/err/", StringComparison.OrdinalIgnoreCase)
                     || n.Contains("/broken/", StringComparison.OrdinalIgnoreCase)
                     || n.Contains("broken_yaml", StringComparison.OrdinalIgnoreCase)
@@ -878,6 +882,8 @@ public sealed class ParserTests
             new ErrFixtureExpectation("missing_on.yaml", ["required key 'on' is missing"]),
             new ErrFixtureExpectation("missing_jobs.yaml", ["required key 'jobs' is missing"]),
             new ErrFixtureExpectation("merge_key_unsupported.yaml", ["does not support merge key '<<'"]),
+            new ErrFixtureExpectation("undefined_anchor.yaml", ["yaml parse failure"]),
+            new ErrFixtureExpectation("recursive_anchors.yaml", ["must be mapping"]),
         };
 
         var failures = new List<string>();
@@ -921,7 +927,7 @@ public sealed class ParserTests
     }
 
     [Test]
-    public async Task Parse_ActionlintErrFixture_UndefinedAnchor_IsCapturedAsErrorOrException()
+    public async Task Parse_ActionlintErrFixture_UndefinedAnchor_ReportsFatalYamlParseDiagnostic()
     {
         var root = FindRepoRoot();
         var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err", "undefined_anchor.yaml");
@@ -930,19 +936,13 @@ public sealed class ParserTests
             return;
         }
 
-        try
-        {
-            var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
-            await Assert.That(result.HasFatalError || result.Diagnostics.Length > 0).IsTrue();
-        }
-        catch (Exception ex)
-        {
-            await Assert.That(ex.Message.Contains("anchor", StringComparison.OrdinalIgnoreCase)).IsTrue();
-        }
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        await Assert.That(result.HasFatalError).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     [Test]
-    public async Task Parse_ActionlintErrFixture_RecursiveAnchors_IsCapturedAsErrorOrException()
+    public async Task Parse_ActionlintErrFixture_RecursiveAnchors_ReportsDeterministicDiagnostics()
     {
         var root = FindRepoRoot();
         var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err", "recursive_anchors.yaml");
@@ -951,15 +951,9 @@ public sealed class ParserTests
             return;
         }
 
-        try
-        {
-            var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
-            await Assert.That(result.HasFatalError || result.Diagnostics.Length > 0).IsTrue();
-        }
-        catch (Exception ex)
-        {
-            await Assert.That(ex.Message.Contains("anchor", StringComparison.OrdinalIgnoreCase)).IsTrue();
-        }
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        await Assert.That(result.Diagnostics.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("must be mapping", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     [Test]

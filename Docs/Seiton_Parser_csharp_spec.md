@@ -30,7 +30,7 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 | **Step ExecRun / ExecAction** | `run` step → `ExecRun`, `uses` step → `ExecAction` as variant. Docker step separates `entrypoint` / `args` | Implemented |
 | **Matrix & Strategy** | `matrix` row/include/exclude recursively parsed as `RawYAMLValue`, `fail-fast` / `max-parallel` typed | Implemented |
 | **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented |
-| **YAML Alias Resolution** | All aliases resolved before parsing; recursive aliases detected and reported as errors | Not implemented (VYaml may resolve internally) |
+| **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
 | **Rule Engine** | `Rule` interface × 15+ rules | Partially implemented (`IRule` + `SyntaxRule` are available; rule set is minimal) |
@@ -1356,7 +1356,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `resolveAliases(root)` | Handled by YAML adapter layer | §1.1 step 1b | **Not implemented** |
+| `resolveAliases(root)` | Handled by YAML adapter layer (`VYaml`) | §1.1 step 1b | Implemented (adapter-owned). If adapter throws, parser converts it into `yaml parse failure` fatal diagnostics |
 
 ## Appendix B: Seiton Expression Parser → C# Mapping
 
