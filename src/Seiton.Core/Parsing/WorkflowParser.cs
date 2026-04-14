@@ -250,7 +250,8 @@ public static class WorkflowParser
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
     }
 
-    private static Permissions? ParsePermissionsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)
+    private static Permissions? ParsePermissionsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -351,7 +352,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Env? ParseEnvNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext expressionContext)
+    private static Env? ParseEnvNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext expressionContext)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -446,7 +448,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Defaults? ParseDefaultsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string error)
+    private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string error)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -595,7 +598,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Concurrency? ParseConcurrencyNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext)
+    private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -694,7 +698,8 @@ public static class WorkflowParser
         };
     }
 
-    private static BoolNode? ParseBoolOrExpression(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+    private static BoolNode? ParseBoolOrExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
         {
@@ -2675,7 +2680,8 @@ public static class WorkflowParser
         return type;
     }
 
-    private static BoolNode? ParseBoolNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string errorMessage)
+    private static BoolNode? ParseBoolNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
         {
@@ -3766,7 +3772,8 @@ public static class WorkflowParser
         }
     }
 
-    private static void ParseScalarOrScalarSequence(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string error, Utf8ScalarValidator? scalarValidator = null)
+    private static void ParseScalarOrScalarSequence<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string error, Utf8ScalarValidator? scalarValidator = null)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (scalarValidator is null)
         {
@@ -4605,7 +4612,8 @@ public static class WorkflowParser
         };
     }
 
-    private static void ParseStringMapping(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null)
+    private static void ParseStringMapping<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -5222,7 +5230,8 @@ public static class WorkflowParser
         ParseStringMapping(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets must be mapping or scalar 'inherit'");
     }
 
-    private static void ParseConditionalExpression(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
+    private static void ParseConditionalExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         _ = ParseExpression(ref reader, diagnostics, context, shapeError);
     }
@@ -5441,7 +5450,8 @@ public static class WorkflowParser
         }
     }
 
-    private static OnEventInfo ReadOnEventInfo(ref VYamlStreamAdapter reader)
+    private static OnEventInfo ReadOnEventInfo<TReader>(ref TReader reader)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         try
         {
@@ -5461,7 +5471,8 @@ public static class WorkflowParser
         return new OnEventInfo(reader.GetScalarString() ?? string.Empty, isKnown: false, default);
     }
 
-    private static void ParseOnTypes(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+    private static void ParseOnTypes<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
