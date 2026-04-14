@@ -38,13 +38,13 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Workflow).IsNull();
         await Assert.That(result.Diagnostics).HasSingleItem();
         await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be mapping");
-                await Assert.That(result.Diagnostics[0].FilePath).IsEqualTo("fatal.yml");
+        await Assert.That(result.Diagnostics[0].FilePath).IsEqualTo("fatal.yml");
     }
 
-        [Test]
-        public async Task LintEngine_RuleDiagnostics_IncludeRuleIdAndFilePath()
-        {
-                var yaml = """
+    [Test]
+    public async Task LintEngine_RuleDiagnostics_IncludeRuleIdAndFilePath()
+    {
+        var yaml = """
                 on: push
                 jobs:
                     build:
@@ -52,15 +52,15 @@ public sealed class RuleInterfaceTests
                             - run: echo hello
                 """;
 
-                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
-                var diagnostic = result.Diagnostics.FirstOrDefault(x =>
-                    x.RuleId == "job-structure"
-                    && x.Message.Contains("requires runs-on", StringComparison.Ordinal));
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
+        var diagnostic = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId == "job-structure"
+            && x.Message.Contains("requires runs-on", StringComparison.Ordinal));
 
-                await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
-                await Assert.That(diagnostic.RuleId).IsEqualTo("job-structure");
-                await Assert.That(diagnostic.FilePath).IsEqualTo("rule-filepath.yml");
-        }
+        await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
+        await Assert.That(diagnostic.RuleId).IsEqualTo("job-structure");
+        await Assert.That(diagnostic.FilePath).IsEqualTo("rule-filepath.yml");
+    }
 
     [Test]
     public async Task RuleInterface_CanBeUsedWithWorkflowVisitor()
@@ -107,10 +107,10 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task SyntaxRule_ReportsJobConstraintDiagnostics()
     {
-                var source = """
+        var source = """
         jobs:
           build:
-                        uses: ./.github/workflows/reusable.yml
+            uses: ./.github/workflows/reusable.yml
             runs-on: ubuntu-latest
             steps:
               - run: echo hello
@@ -212,57 +212,412 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostics.Any(x => x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("unknown input 'fetch-depht' for action 'actions/checkout@v4'", StringComparison.Ordinal))).IsTrue();
     }
 
-        [Test]
-        public async Task LintEngine_ReportsInvalidWorkflowPermissionsScalar()
+    [Test]
+    public async Task LintEngine_ReportsInvalidWorkflowPermissionsScalar()
+    {
+        var yaml = """
+        on: push
+        permissions: admin-all
+        jobs: {}
+        """.Replace("\r\n", "\n");
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scalar.yml");
+
+        await Assert.That(result.ParseDiagnostics).IsEmpty();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions scalar must be 'read-all' or 'write-all'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_ReportsInvalidJobPermissionScopeValue()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                permissions:
+                    contents: admin
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """.Replace("\r\n", "\n");
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
+
+        await Assert.That(result.ParseDiagnostics).IsEmpty();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions.contents must be one of 'read', 'write', or 'none'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_ReportsReusableWorkflowForbiddenKeys()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            reuse:
+                uses: owner/repo/.github/workflows/reuse.yml@main
+                container: node:20
+        """.Replace("\r\n", "\n");
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
+
+        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task RuleRegression_JobStructureRule_TableDriven()
+    {
+        var cases = new[]
         {
-                var yaml = """
+            new RuleCase(
+            "ok-normal-job",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-uses-with-steps",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+                    steps:
+                        - run: echo ng
+            """,
+            ["cannot have both uses and steps"]),
+            new RuleCase(
+            "ng-missing-runs-on",
+            """
+            on: push
+            jobs:
+                build:
+                    steps:
+                        - run: echo ng
+            """,
+            ["requires runs-on"]),
+        };
+
+        await AssertRuleCases(new JobStructureRule(), "job-structure", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ReusableWorkflowRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-reusable-allowed-keys",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+                    with:
+                        target: prod
+                    secrets: inherit
+                    if: ${{ github.ref != '' }}
+                    needs: []
+                    concurrency: deploy
+            """,
+            []),
+            new RuleCase(
+            "ng-without-uses",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    with:
+                        target: prod
+                    steps:
+                        - run: echo ng
+            """,
+            ["key 'with' requires uses"]),
+            new RuleCase(
+            "ng-forbidden-key-with-uses",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+                    container: node:20
+            """,
+            ["calls reusable workflow with uses"]),
+        };
+
+        await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_PermissionsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-job-scope-read",
+            """
+            on: push
+            jobs:
+                build:
+                    permissions:
+                        contents: read
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-invalid-scalar",
+            """
+            on: push
+            permissions: admin-all
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar must be 'read-all' or 'write-all'"]),
+            new RuleCase(
+            "ng-job-invalid-scope",
+            """
+            on: push
+            jobs:
+                build:
+                    permissions:
+                        contents: admin
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions.contents must be one of 'read', 'write', or 'none'"]),
+        };
+
+        await AssertRuleCases(new PermissionsRule(), "permissions", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_PopularActionInputsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-known-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { fetch-depth: 1 }
+            """,
+            []),
+            new RuleCase(
+            "ng-typo-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { fetch-depht: 1 }
+            """,
+            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'"]),
+            new RuleCase(
+            "ng-unknown-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { totally-unknown-input: true }
+            """,
+            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'"]),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
+    public async Task LintEngine_DeduplicatesRuleDiagnostics_ByPriority()
+    {
+        var yaml = """
                 on: push
-                permissions: admin-all
                 jobs: {}
-                """.Replace("\r\n", "\n");
+                """;
 
-                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scalar.yml");
+        var engine = new LintEngine(
+        [
+                new DuplicateDiagnosticRule("permissions"),
+                        new DuplicateDiagnosticRule("job-structure"),
+                ]);
 
-                await Assert.That(result.ParseDiagnostics).IsEmpty();
-                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions scalar must be 'read-all' or 'write-all'", StringComparison.Ordinal))).IsTrue();
-        }
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "priority-dedup.yml");
+        var duplicated = result.Diagnostics
+                .Where(static x => x.Message == "shared duplicate diagnostic")
+                .ToArray();
 
-        [Test]
-        public async Task LintEngine_ReportsInvalidJobPermissionScopeValue()
+        await Assert.That(duplicated.Length).IsEqualTo(1);
+        await Assert.That(duplicated[0].RuleId).IsEqualTo("job-structure");
+    }
+
+    static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases)
+    {
+        for (var i = 0; i < cases.Length; i++)
         {
-                var yaml = """
-                on: push
-                jobs:
-                    build:
-                        permissions:
-                            contents: admin
-                        runs-on: ubuntu-latest
-                        steps:
-                            - run: echo ok
-                """.Replace("\r\n", "\n");
+            var c = cases[i];
+            var yaml = NormalizeYaml(c.Yaml);
+            var result = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml");
+            var diagnostics = result.Diagnostics.Where(x => x.RuleId == ruleId).ToArray();
 
-                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
+            if (c.ExpectedSubstrings.Length == 0)
+            {
+                await Assert.That(diagnostics).IsEmpty();
+                continue;
+            }
 
-                await Assert.That(result.ParseDiagnostics).IsEmpty();
-                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions.contents must be one of 'read', 'write', or 'none'", StringComparison.Ordinal))).IsTrue();
+            for (var j = 0; j < c.ExpectedSubstrings.Length; j++)
+            {
+                var expected = c.ExpectedSubstrings[j];
+                var found = diagnostics.Any(x => x.Message.Contains(expected, StringComparison.Ordinal));
+                if (!found)
+                {
+                    var observed = diagnostics.Length == 0
+                        ? "<no rule diagnostics>"
+                        : string.Join(" | ", diagnostics.Select(static x => x.Message));
+                    throw new InvalidOperationException($"rule={ruleId} case={c.Name} expected={expected} observed={observed}");
+                }
+            }
         }
+    }
 
-        [Test]
-        public async Task LintEngine_ReportsReusableWorkflowForbiddenKeys()
+    static string NormalizeYaml(string raw)
+    {
+        var normalized = raw.Replace("\r\n", "\n");
+        var lines = normalized.Split('\n');
+
+        var start = 0;
+        while (start < lines.Length && string.IsNullOrWhiteSpace(lines[start]))
         {
-                var yaml = """
-                on: push
-                jobs:
-                    reuse:
-                        uses: owner/repo/.github/workflows/reuse.yml@main
-                        container: node:20
-                """.Replace("\r\n", "\n");
-
-                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
-
-                await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
-                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+            start++;
         }
+
+        var end = lines.Length - 1;
+        while (end >= start && string.IsNullOrWhiteSpace(lines[end]))
+        {
+            end--;
+        }
+
+        if (end < start)
+        {
+            return string.Empty;
+        }
+
+        var minIndent = int.MaxValue;
+        for (var i = start; i <= end; i++)
+        {
+            var line = lines[i];
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var indent = 0;
+            while (indent < line.Length && line[indent] == ' ')
+            {
+                indent++;
+            }
+
+            if (indent < minIndent)
+            {
+                minIndent = indent;
+            }
+        }
+
+        if (minIndent == int.MaxValue)
+        {
+            minIndent = 0;
+        }
+
+        var builder = new StringBuilder();
+        for (var i = start; i <= end; i++)
+        {
+            var line = lines[i];
+            if (line.Length >= minIndent)
+            {
+                builder.Append(line[minIndent..]);
+            }
+            else
+            {
+                builder.Append(line);
+            }
+
+            if (i < end)
+            {
+                builder.Append('\n');
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    readonly record struct RuleCase(string Name, string Yaml, string[] ExpectedSubstrings);
+
+    sealed class DuplicateDiagnosticRule : IRule
+    {
+        readonly List<Diagnostic> diagnostics = [];
+
+        public DuplicateDiagnosticRule(string id)
+        {
+            Id = id;
+        }
+
+        public string Id { get; }
+
+        public string Name => $"Duplicate-{Id}";
+
+        public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
+
+        public void SetConfig(LintConfig config)
+        {
+        }
+
+        public void VisitWorkflowPre(Workflow workflow)
+        {
+            diagnostics.Clear();
+            diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "shared duplicate diagnostic",
+                    new TextRange(0, 0, 1, 1, 1, 1),
+                    RuleId: Id));
+        }
+
+        public void VisitWorkflowPost(Workflow workflow)
+        {
+        }
+
+        public void VisitJobPre(Job job)
+        {
+        }
+
+        public void VisitJobPost(Job job)
+        {
+        }
+
+        public void VisitStep(Step step)
+        {
+        }
+    }
 
     sealed class CountingRule : IRule
     {

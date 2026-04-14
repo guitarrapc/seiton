@@ -5,13 +5,7 @@ namespace Seiton.Core.Linting;
 
 public sealed class SyntaxRule : IRule
 {
-    readonly IRule[] rules =
-    [
-        new JobStructureRule(),
-        new ReusableWorkflowRule(),
-        new PermissionsRule(),
-        new PopularActionInputsRule(),
-    ];
+    readonly IRule[] rules = RuleCatalog.CreateDefaultRules();
 
     public string Id => "syntax";
 

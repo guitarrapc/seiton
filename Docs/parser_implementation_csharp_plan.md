@@ -725,12 +725,18 @@
 
 #### G. Rule Engine の拡張（spec 準拠）
 
-- [ ] `SyntaxRule` 依存の最小構成から、spec 記載のルール責務へ段階拡張する
-- [ ] 既存 rule（`JobStructureRule` / `ReusableWorkflowRule` / `PermissionsRule` / `PopularActionInputsRule`）の責務境界を文書化し、重複診断の優先順位を固定する
-- [ ] Rule ごとの回帰テストを table-driven で追加（正常系 1 + 異常系 2 以上）
+- [x] `SyntaxRule` 依存の最小構成から、spec 記載のルール責務へ段階拡張する
+- [x] 既存 rule（`JobStructureRule` / `ReusableWorkflowRule` / `PermissionsRule` / `PopularActionInputsRule`）の責務境界を文書化し、重複診断の優先順位を固定する
+- [x] Rule ごとの回帰テストを table-driven で追加（正常系 1 + 異常系 2 以上）
 
 完了条件:
 - `Seiton_Parser_csharp_spec.md` の Rule Engine を partially から更新できるだけの実装・テスト証跡が揃う
+
+実装結果:
+- `RuleCatalog` を追加し、既定ルール構成を共通化（`SyntaxRule` / `LintEngine` の両方で同一構成を使用）。
+- Rule 責務境界をコードコメントで固定し、優先順位（`job-structure` → `reusable-workflow` → `permissions` → `popular-action-inputs`）を明示。
+- `LintEngine` で rule diagnostics を優先順位順に整列し、同一診断の重複を deterministic に統合する処理を追加。
+- `RuleInterfaceTests` に rule別 table-driven 回帰テストを追加（各 rule で正常系 1 件 + 異常系 2 件）。
 
 #### H. Expression Semantic Checker の actionlint 同等性向上
 
