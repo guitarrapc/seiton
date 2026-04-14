@@ -719,6 +719,37 @@
   - YAML parse failure の扱いは parser spec 側でも adapter/library 起因失敗を含む旨を明記。
 - A-E で追加した table-driven / fixture 固定テスト（必須キー、数値制約、alias 異常、job 制約）は再実行で同一結果を返し、回帰検知の再現性を確認。
 
+### 追加作業リスト（C# spec 未充足項目対応）
+
+以下は、`Seiton_Parser_csharp_spec.md` の「Partially implemented」領域を解消するための次スプリント向けタスク。
+
+#### G. Rule Engine の拡張（spec 準拠）
+
+- [ ] `SyntaxRule` 依存の最小構成から、spec 記載のルール責務へ段階拡張する
+- [ ] 既存 rule（`JobStructureRule` / `ReusableWorkflowRule` / `PermissionsRule` / `PopularActionInputsRule`）の責務境界を文書化し、重複診断の優先順位を固定する
+- [ ] Rule ごとの回帰テストを table-driven で追加（正常系 1 + 異常系 2 以上）
+
+完了条件:
+- `Seiton_Parser_csharp_spec.md` の Rule Engine を partially から更新できるだけの実装・テスト証跡が揃う
+
+#### H. Expression Semantic Checker の actionlint 同等性向上
+
+- [ ] 関数シグネチャ検証を arity 中心から型付きシグネチャ検証へ拡張（overload を含む）
+- [ ] `ExpressionSemanticAnalyzer.InferType()` の推論対象を拡大し、`Any` 依存の診断不能ケースを縮小する
+- [ ] 型不一致 diagnostics のメッセージ契約を固定し、Parser/ExpressionTests に統合テストを追加する
+
+完了条件:
+- C# spec §7.1/§7.3 の「Target」記述を実装済みへ寄せられる状態になる
+
+#### I. Context Availability の位置依存検証を完成
+
+- [ ] 生成テーブル（`Availability.g.cs`）をキー位置粒度（`if`/`env`/`with` など）で検証するテストセットを追加
+- [ ] workflow/job/step の同一 root identifier でも位置により許可が変わるケースを fixture で固定化
+- [ ] C# spec §7.2 の「Target」記述を現実装と一致する表現へ更新する
+
+完了条件:
+- Context availability に関する partially/target 表記が解消され、仕様・実装・テストの 3 点が一致する
+
 ---
 
 ## 依存関係グラフ
