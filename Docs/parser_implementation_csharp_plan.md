@@ -752,17 +752,23 @@
 - 欠落していた `ExpressionSemanticAnalyzer` / `ExpressionValidationContext` を復元し、関数仕様を overload 可能な typed signature モデル（戻り値型・引数型・可変長引数）へ置換。
 - built-in 関数 (`contains`, `startsWith`, `endsWith`, `format`, `join`, `toJson`, `fromJson`, `hashFiles`, `success/failure/cancelled/always`) に対し、arity と型を同時検証するよう変更。
 - diagnostics 契約を固定: `unknown expression function: ...` / `function '...' expects ...` / `argument N should be ...`。
+- `format()` に対してプレースホルダ整合チェック（`{n}` と実引数数）を追加し、`format placeholder '{n}' requires argument ...` 診断を導入。
 - `InferType()` を拡張し、`MemberAccess` / `IndexAccess` / `WildcardAccess` / `FunctionCall` を bottom-up 推論。特に `fromJson('<literal-json>')` は literal JSON を解析して object/array 要素型を推論。
-- `ExpressionTests` に overload 許容ケース（array `contains`）と `fromJson` literal 推論（member/index）を追加し、既存 Parser 側の semantic 診断統合テストと合わせて回帰を固定。
+- `ExpressionTests` に overload 許容ケース（array `contains`）と `fromJson` literal 推論（member/index）、`format()` プレースホルダ整合の正常/異常ケースを追加し、既存 Parser 側の semantic 診断統合テストと合わせて回帰を固定。
 
 #### I. Context Availability の位置依存検証を完成
 
-- [ ] 生成テーブル（`Availability.g.cs`）をキー位置粒度（`if`/`env`/`with` など）で検証するテストセットを追加
-- [ ] workflow/job/step の同一 root identifier でも位置により許可が変わるケースを fixture で固定化
-- [ ] C# spec §7.2 の「Target」記述を現実装と一致する表現へ更新する
+- [x] 生成テーブル（`Availability.g.cs`）をキー位置粒度（`if`/`env`/`with` など）で検証するテストセットを追加
+- [x] workflow/job/step の同一 root identifier でも位置により許可が変わるケースを fixture で固定化
+- [x] C# spec §7.2 の「Target」記述を現実装と一致する表現へ更新する
 
 完了条件:
 - Context availability に関する partially/target 表記が解消され、仕様・実装・テストの 3 点が一致する
+
+実装結果:
+- `Availability.g.cs` の root-context 判定を parser の expression site（workflow/job/step）に結びつけた現実装に合わせて、`Seiton_Parser_csharp_spec.md` §7.2 を更新。
+- key 粒度 fixture `context-availability-key-granularity.yml` と `ParserTests` の fixture 駆動検証を spec 側の説明へ反映。
+- これにより I の残作業は解消し、計画上の H/I 境界は「special function availability の finer-grained parity は将来課題、root context availability は現実装として完了」に整理した。
 
 ---
 

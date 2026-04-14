@@ -142,6 +142,36 @@ public sealed class ExpressionTests
     }
 
     [Test]
+    public async Task ParseAndValidate_FormatPlaceholderOutOfRange_ReportsDiagnostic()
+    {
+        var expression = "format('value-{1}', github.ref)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("format placeholder '{1}' requires argument 2, but got 1 format argument(s)", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FormatPlaceholderInRange_DoesNotReportDiagnostic()
+    {
+        var expression = "format('value-{0}', github.ref)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("format placeholder", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task ParseAndValidate_StepContext_AllowsStepsRoot()
     {
         var expression = "steps.build.outputs.value"u8;

@@ -34,7 +34,7 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
 | **Rule Engine** | `Rule` interface × 15+ rules | Partially implemented (`IRule` + `SyntaxRule` are available; rule set is minimal) |
-| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Partially implemented (`ExprType` hierarchy + bottom-up inference + function argument checks). Full actionlint-equivalent typing is pending |
+| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented for the current supported function/context set (`ExprType` hierarchy + bottom-up inference + typed function signatures + key-granularity context checks). Remaining gaps are limited to future actionlint parity work |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
 | **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
 
@@ -1030,36 +1030,51 @@ public static void VisitExprNode(
 ### 7.1 Function Signatures (Spec §7.1)
 
 ```csharp
-// Current implementation: arity-only check
+// Current implementation: typed overload-based signature check
 // Function name is received as ReadOnlySpan<byte> for zero-allocation lookup.
 public static bool TryGetFunctionArity(ReadOnlySpan<byte> nameUtf8, out int minArgs, out int maxArgs)
 ```
 
 Function name lookup uses UTF-8 byte comparison against a static table of known function names (`"contains"u8`, `"startsWith"u8`, etc.). No `System.String` is materialized for function resolution.
 
-Target: full type-checking equivalent to Go's `FuncSignature` with overloaded resolution.
+The current C# implementation validates built-in functions through typed overload metadata in `ExpressionSemanticAnalyzer`:
+- overload resolution is performed by argument count and `ExprType` compatibility
+- diagnostics are emitted for unknown functions, arity mismatches, argument type mismatches, and `format()` placeholder/index mismatches
+- supported built-ins currently include `contains`, `startsWith`, `endsWith`, `format`, `join`, `toJson`, `fromJson`, `hashFiles`, `success`, `failure`, `cancelled`, and `always`
 
 ### 7.2 Context Availability (Spec §7.2)
 
 ```csharp
-// Current implementation: context root validation
+// Current implementation: generated root-context validation at expression positions
 public class ExpressionSemanticAnalyzer
 {
     // Checks that root identifiers (github, env, steps, etc.)
-    // are available at the current position
+    // are available for the current expression position / key location
 }
 ```
 
-Target: position-based context availability with per-key granularity.
+The current C# implementation uses `Availability.g.cs` together with the parser call site to enforce position-dependent root availability:
+- workflow-level expression sites use `ExpressionValidationContext.Workflow`
+- job-level expression sites use `ExpressionValidationContext.Job`
+- step-level expression sites use `ExpressionValidationContext.Step`
+- fixture coverage fixes the same root identifier producing different results depending on key position (`run-name`, workflow `env`, job `if`, job `env`, step `if`)
+
+This implements position-based root-context availability with key-level granularity for the currently modeled parser expression sites.
 
 ### 7.3 Type System (Spec §7.3)
 
-As a future implementation, a type system equivalent to actionlint's `ExprType` hierarchy will be introduced:
+The current C# implementation provides an `ExprType` hierarchy equivalent in shape to actionlint's core expression types:
 - `AnyType` / `NullType` / `BoolType` / `NumberType` / `StringType`
 - `ObjectType` (properties map) / `ArrayType` (element type)
 - `EmptyObjectType` / `EmptyArrayType`
 
-Type inference is performed bottom-up in `ExprSemanticsChecker` while traversing expressions.
+Type inference is performed bottom-up in `ExpressionSemanticAnalyzer.InferType()` while traversing expressions.
+
+Implemented inference currently covers:
+- literals, unary `!`, comparison/logical operators
+- member/index/wildcard access over inferred object/array types
+- built-in function return types
+- `fromJson('<literal-json>')` shape inference for object/array/property/index access
 
 ---
 
@@ -1382,7 +1397,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 | `LogicalOpNode` (§6.4) | `Binary (And/Or)` | ✓ |
 | arithmetic ops | — | Not supported (aligned with GHA spec) |
 | Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | ✓ Implemented |
-| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Partially implemented (includes type inference, but not yet fully actionlint-compatible) |
-| Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` | Arity only (no types) |
-| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` generated availability checks | Implemented (generated availability table is used for context validation) |
-| ExprType hierarchy (§7.3) | `ExprType` hierarchy + `InferType()` | Partially implemented |
+| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Implemented for current supported built-ins and parser expression sites |
+| Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` + typed overload metadata in `ExpressionSemanticAnalyzer` | Implemented (typed overloads and `format()` placeholder validation) |
+| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` generated availability checks | Implemented (generated availability table + key-granularity parser fixtures) |
+| ExprType hierarchy (§7.3) | `ExprType` hierarchy + `InferType()` | Implemented for current supported expression/type inference paths |

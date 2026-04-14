@@ -1,0 +1,15 @@
+run-name: ${{ steps.prep.outputs.tag }}
+on: push
+env:
+  WF_OK: ${{ vars.ORG_NAME }}
+jobs:
+  build:
+    if: ${{ env.SHOULD_NOT_BE_HERE == 'x' }}
+    runs-on: ubuntu-latest
+    env:
+      JOB_BAD: ${{ steps.prep.outputs.value }}
+    steps:
+      - id: prep
+        run: echo ok
+      - if: ${{ steps.prep.outputs.value == 'ok' }}
+        run: echo still-ok

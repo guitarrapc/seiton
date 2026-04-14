@@ -301,6 +301,7 @@ public static class ExpressionSemanticAnalyzer
             }
         }
 
+        var typeMatched = false;
         for (var i = 0; i < spec.Overloads.Length; i++)
         {
             var overload = spec.Overloads[i];
@@ -311,8 +312,15 @@ public static class ExpressionSemanticAnalyzer
 
             if (TryValidateAgainstOverload(overload, argTypes, out _, out _, out _))
             {
-                return;
+                typeMatched = true;
+                break;
             }
+        }
+
+        if (typeMatched)
+        {
+            ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+            return;
         }
 
         for (var i = 0; i < spec.Overloads.Length; i++)
@@ -333,6 +341,98 @@ public static class ExpressionSemanticAnalyzer
                 $"argument {errorArgIndex + 1} should be {expectedType.TypeName}, but got {actualType.TypeName}",
                 expressionLocation));
             return;
+        }
+
+        ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+    }
+
+    static void ValidateFormatPlaceholders(
+        ExpressionNode functionCallNode,
+        ReadOnlySpan<byte> functionNameUtf8,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (!EqualsAsciiIgnoreCase(functionNameUtf8, "format"u8))
+        {
+            return;
+        }
+
+        if (functionCallNode.ArgCount == 0 || functionCallNode.ArgStart < 0 || functionCallNode.ArgStart >= arguments.Length)
+        {
+            return;
+        }
+
+        var templateNodeId = arguments[functionCallNode.ArgStart];
+        if (templateNodeId < 0 || templateNodeId >= nodes.Length)
+        {
+            return;
+        }
+
+        var templateNode = nodes[templateNodeId];
+        if (templateNode.Kind != ExpressionNodeKind.StringLiteral)
+        {
+            return;
+        }
+
+        var template = templateNode.Token.AsSpan(expressionUtf8);
+        var formatArgCount = functionCallNode.ArgCount - 1;
+
+        for (var i = 0; i < template.Length; i++)
+        {
+            if (template[i] != (byte)'{')
+            {
+                continue;
+            }
+
+            if (i + 1 < template.Length && template[i + 1] == (byte)'{')
+            {
+                i++;
+                continue;
+            }
+
+            var j = i + 1;
+            var hasDigits = false;
+            var indexValue = 0;
+            while (j < template.Length && template[j] is >= (byte)'0' and <= (byte)'9')
+            {
+                hasDigits = true;
+                indexValue = (indexValue * 10) + (template[j] - (byte)'0');
+                j++;
+            }
+
+            if (!hasDigits)
+            {
+                continue;
+            }
+
+            if (j >= template.Length)
+            {
+                continue;
+            }
+
+            while (j < template.Length && template[j] != (byte)'}')
+            {
+                j++;
+            }
+
+            if (j >= template.Length)
+            {
+                continue;
+            }
+
+            if (indexValue >= formatArgCount)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"format placeholder '{{{indexValue}}}' requires argument {indexValue + 1}, but got {formatArgCount} format argument(s)",
+                    expressionLocation));
+                return;
+            }
+
+            i = j;
         }
     }
 

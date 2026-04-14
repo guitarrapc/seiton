@@ -717,6 +717,25 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_Fixture_ContextAvailability_KeyGranularity()
+    {
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "corpus", "context-availability-key-granularity.yml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        var messages = result.Diagnostics.Select(static d => d.Message).ToArray();
+
+        await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in workflow expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("context 'env' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in step expressions", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task Parse_CorpusSmoke_ActionlintTestdata_DoesNotThrow()
     {
         var root = FindRepoRoot();
@@ -1685,6 +1704,23 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-type-mismatch.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepRun_FormatPlaceholderOutOfRange_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ${{ format('value-{1}', github.ref) }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-format-placeholder.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("format placeholder '{1}' requires argument 2, but got 1 format argument(s)", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
