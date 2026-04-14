@@ -507,11 +507,30 @@
 
 **完了条件**: 全 AST ノード型に最低 1 つの構築テスト
 
-### Step 8.3: ベンチマーク更新
+### Step 8.3: ベンチマーク更新 ✅
 
-- `ParsingBenchmark` を AST 構築込みのベンチマークに更新
-- adapter 層のオーバーヘッド測定
-- allocation 回帰テスト（`[MemoryDiagnoser]` で tracking）
+**状態**: 完了（`src/Seiton.Benchmark/ParsingBenchmark.cs` を実装し、AST 構築込みベンチマークと adapter 相当オーバーヘッド比較を追加。`MemoryDiagnoser` で allocation を記録）
+
+- `ParsingBenchmark` を実装（`Small` / `Medium` / `Large` の 3 シナリオ）
+  - `WorkflowParser.Parse (AST + rules)`（baseline）
+  - `ExpressionExtractor.ExtractParseAndValidate`
+  - `VYaml raw event scan`
+  - `VYaml scan + adapter-like mapping`
+- adapter 層オーバーヘッド測定は「生 VYaml スキャン」と「イベント種別マッピング込みスキャン」の差分で把握
+- allocation 回帰計測は `Program.cs` の `MemoryDiagnoser.Default` + benchmark class の `[MemoryDiagnoser]` で有効化
+- 実行コマンド:
+  - `dotnet run -c Release --project src/Seiton.Benchmark -- --filter *ParsingBenchmark*`
+
+**ベースライン（ShortRun, .NET 10, local）**:
+- Small:
+  - `WorkflowParser.Parse (AST + rules)`: `37.243 us`, `30072 B`
+  - `ExpressionExtractor.ExtractParseAndValidate`: `6.827 us`, `14032 B`
+- Medium:
+  - `WorkflowParser.Parse (AST + rules)`: `299.190 us`, `244664 B`
+  - `ExpressionExtractor.ExtractParseAndValidate`: `70.187 us`, `152160 B`
+- Large:
+  - `WorkflowParser.Parse (AST + rules)`: `1466.948 us`, `1135016 B`
+  - `ExpressionExtractor.ExtractParseAndValidate`: `349.151 us`, `737320 B`
 
 **完了条件**: ベンチマーク結果のベースライン記録
 
