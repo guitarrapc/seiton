@@ -49,6 +49,12 @@ public static class WorkflowParser
         return result with { Diagnostics = diagnostics };
     }
 
+    internal static ParseResult ParseWithReader<TReader>(ref TReader reader, ReadOnlySpan<byte> source)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        return ParseCore(ref reader, source);
+    }
+
     private static ParseResult ParseCore<TReader>(ref TReader reader, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
