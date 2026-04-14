@@ -8,7 +8,10 @@ public sealed class LintEngine
 
     public LintEngine()
     {
-        rules.Add(new SyntaxRule());
+        rules.Add(new JobStructureRule());
+        rules.Add(new ReusableWorkflowRule());
+        rules.Add(new PermissionsRule());
+        rules.Add(new PopularActionInputsRule());
     }
 
     public LintEngine(IEnumerable<IRule> rules)

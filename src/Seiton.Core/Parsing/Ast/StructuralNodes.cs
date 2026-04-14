@@ -13,7 +13,11 @@ public sealed class PermissionScope
 {
     public StringNode Name { get; init; } = null!;
 
+    public Utf8String NameText { get; init; }
+
     public StringNode Value { get; init; } = null!;
+
+    public Utf8String ValueText { get; init; }
 }
 
 public sealed class Env

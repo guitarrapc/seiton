@@ -563,10 +563,11 @@
   - 目的: 仕様 §1.3 アーキテクチャへ整合。
 
 5. **Rule セットの拡張（SyntaxRule 依存の縮小）**
-  - 状態: 部分完了
-  - `SyntaxRule` を `LintEngine` の既定 rule として運用し、job 制約と popular action input 検証を rule 層で実行する形に統一。
+  - 状態: 完了
+  - `JobStructureRule`、`ReusableWorkflowRule`、`PermissionsRule`、`PopularActionInputsRule` を追加し、`LintEngine` の既定 rule セットを分割構成へ更新。
+  - `SyntaxRule` は互換ラッパーとして残しつつ、既定実行経路からは外した。
   - parser テストのうち rule 由来の診断期待は `LintEngine` ベースへ移行。
-  - 残タスク: permissions 値検証、reusable workflow 制約など追加の semantic rule を `IRule` 実装として分離。
+  - reusable workflow 制約、permissions 値検証、popular action input 検証を parser 直書きではなく `IRule` 実装側で評価する形に整理。
   - 目的: 仕様 §8.3 の「ルールエンジン化」を進める。
 
 ### Priority 3: テストの網羅性を仕様レベルへ引き上げる

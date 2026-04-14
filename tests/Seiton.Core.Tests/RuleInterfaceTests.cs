@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Linq;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
@@ -84,11 +85,11 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task SyntaxRule_ReportsJobConstraintDiagnostics()
     {
-        var source = """
+                var source = """
         jobs:
           build:
+                        uses: ./.github/workflows/reusable.yml
             runs-on: ubuntu-latest
-            uses: ./.github/workflows/reusable.yml
             steps:
               - run: echo hello
         """;
@@ -107,7 +108,7 @@ public sealed class RuleInterfaceTests
                     RunsOn = new Runner(),
                     WorkflowCall = new WorkflowCall
                     {
-                        Uses = new StringNode { Value = new Utf8Slice(0, 0) },
+                        Uses = new StringNode { Value = new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length) },
                     },
                     Steps =
                     [
@@ -188,6 +189,58 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostics.Any(x => x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("unknown input 'fetch-depht' for action 'actions/checkout@v4'", StringComparison.Ordinal))).IsTrue();
     }
+
+        [Test]
+        public async Task LintEngine_ReportsInvalidWorkflowPermissionsScalar()
+        {
+                var yaml = """
+                on: push
+                permissions: admin-all
+                jobs: {}
+                """.Replace("\r\n", "\n");
+
+                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scalar.yml");
+
+                await Assert.That(result.ParseDiagnostics).IsEmpty();
+                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions scalar must be 'read-all' or 'write-all'", StringComparison.Ordinal))).IsTrue();
+        }
+
+        [Test]
+        public async Task LintEngine_ReportsInvalidJobPermissionScopeValue()
+        {
+                var yaml = """
+                on: push
+                jobs:
+                    build:
+                        permissions:
+                            contents: admin
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """.Replace("\r\n", "\n");
+
+                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
+
+                await Assert.That(result.ParseDiagnostics).IsEmpty();
+                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions.contents must be one of 'read', 'write', or 'none'", StringComparison.Ordinal))).IsTrue();
+        }
+
+        [Test]
+        public async Task LintEngine_ReportsReusableWorkflowForbiddenKeys()
+        {
+                var yaml = """
+                on: push
+                jobs:
+                    reuse:
+                        uses: owner/repo/.github/workflows/reuse.yml@main
+                        container: node:20
+                """.Replace("\r\n", "\n");
+
+                var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
+
+                await Assert.That(result.ParseDiagnostics).IsEmpty();
+                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+        }
 
     sealed class CountingRule : IRule
     {

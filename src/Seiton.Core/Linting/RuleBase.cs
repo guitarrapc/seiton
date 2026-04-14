@@ -1,0 +1,108 @@
+﻿using System.Text;
+using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Linting;
+
+public abstract class RuleBase : IRule
+{
+    readonly List<Diagnostic> diagnostics = [];
+    protected LintConfig Config { get; private set; } = LintConfig.Empty;
+
+    public abstract string Id { get; }
+
+    public abstract string Name { get; }
+
+    public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
+
+    public virtual void SetConfig(LintConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        Config = config;
+    }
+
+    public virtual void VisitWorkflowPre(Workflow workflow)
+    {
+        diagnostics.Clear();
+    }
+
+    public virtual void VisitWorkflowPost(Workflow workflow)
+    {
+    }
+
+    public virtual void VisitJobPre(Job job)
+    {
+    }
+
+    public virtual void VisitJobPost(Job job)
+    {
+    }
+
+    public virtual void VisitStep(Step step)
+    {
+    }
+
+    protected void AddJobError(Job job, string message)
+    {
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, BuildJobLocation(job)));
+    }
+
+    protected void AddStepWarning(Step step, string message)
+    {
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, message, BuildStepLocation(step)));
+    }
+
+    protected void AddWorkflowError(Workflow workflow, string message, TextRange location)
+    {
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+    }
+
+    protected void AddJobError(Job job, string message, TextRange location)
+    {
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+    }
+
+    protected string Decode(Utf8Slice slice)
+    {
+        if (Config.Utf8Yaml is null || slice.Length <= 0)
+        {
+            return string.Empty;
+        }
+
+        return Encoding.UTF8.GetString(slice.AsSpan(Config.Utf8Yaml));
+    }
+
+    protected static string Decode(Utf8String value)
+    {
+        return value.Length == 0 ? string.Empty : Encoding.UTF8.GetString(value.Span);
+    }
+
+    protected static TextRange BuildJobLocation(Job job)
+    {
+        var range = job.Id.Range;
+        return new TextRange(
+            Start: range.Start,
+            Length: 0,
+            StartLine: range.StartLine,
+            StartColumn: range.StartColumn,
+            EndLine: range.StartLine,
+            EndColumn: range.StartColumn);
+    }
+
+    protected static TextRange BuildStepLocation(Step step)
+    {
+        var range = step.Range;
+        return new TextRange(
+            Start: range.Start,
+            Length: 0,
+            StartLine: range.StartLine,
+            StartColumn: range.StartColumn,
+            EndLine: range.StartLine,
+            EndColumn: range.StartColumn);
+    }
+
+    protected static bool HasNodeValue(StringNode? node)
+    {
+        return node is not null && node.Value.Length > 0;
+    }
+}

@@ -299,6 +299,7 @@ public static class WorkflowParser
                 continue;
             }
 
+            var keyText = new Utf8String(keyUtf8);
             var keyNode = new StringNode
             {
                 Value = keySlice,
@@ -312,16 +313,21 @@ public static class WorkflowParser
                 break;
             }
 
+            var valueText = reader.CurrentKind == YamlEventKind.Scalar
+                ? new Utf8String(reader.GetScalarUtf8())
+                : default;
             var valueNode = ParseString(ref reader, diagnostics, error);
             if (valueNode is null)
             {
                 continue;
             }
 
-            scopes[keySlice.ToUtf8String(source)] = new PermissionScope
+            scopes[keyText] = new PermissionScope
             {
                 Name = keyNode,
+                NameText = keyText,
                 Value = valueNode,
+                ValueText = valueText,
             };
         }
 
@@ -836,9 +842,6 @@ public static class WorkflowParser
             return new Job { Id = jobIdNode, Range = jobIdNode.Range };
         }
 
-        var hasUses = false;
-        var hasWith = false;
-        var hasSecrets = false;
         string? stepsOnlyKeyInReusable = null;
         TextPosition stepsOnlyKeyInReusableMark = default;
         var keys = new HashSet<Utf8String>();
@@ -953,7 +956,6 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("uses"u8))
             {
                 reader.Read(); // consume key
-                hasUses = true;
                 if (!reader.End)
                 {
                     var usesNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar");
@@ -1105,7 +1107,6 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("with"u8))
             {
                 reader.Read(); // consume key
-                hasWith = true;
                 if (!reader.End)
                 {
                     var inputs = ParseWorkflowCallInputsNode(ref reader, diagnostics, source, jobId);
@@ -1136,7 +1137,6 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("secrets"u8))
             {
                 reader.Read(); // consume key
-                hasSecrets = true;
                 if (!reader.End)
                 {
                     var secrets = ParseWorkflowCallSecretsNode(ref reader, diagnostics, source, jobId, out var inheritSecrets);
@@ -1196,24 +1196,6 @@ public static class WorkflowParser
             reader.Read();
         }
 
-        if (hasUses && stepsOnlyKeyInReusable is not null)
-        {
-            AddError(
-                diagnostics,
-                $"when job '{DecodeUtf8(source, jobId)}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
-                stepsOnlyKeyInReusableMark);
-        }
-
-        if (!hasUses && hasWith)
-        {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' key 'with' requires uses", jobIdMark);
-        }
-
-        if (!hasUses && hasSecrets)
-        {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' key 'secrets' requires uses", jobIdMark);
-        }
-
         return new Job
         {
             Id = jobIdNode,
@@ -1233,7 +1215,7 @@ public static class WorkflowParser
             ContinueOnError = continueOnErrorNode,
             Container = containerNode,
             Services = servicesNode,
-            WorkflowCall = hasUses ? workflowCallNode : null,
+            WorkflowCall = workflowCallNode,
             Range = jobIdNode.Range,
         };
     }
