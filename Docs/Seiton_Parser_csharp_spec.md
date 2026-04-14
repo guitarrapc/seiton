@@ -26,7 +26,7 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 | **Permissions Structure** | scalar (`read-all` / `write-all`) or mapping (scope → value) returned as typed node | Implemented |
 | **Defaults / Concurrency** | `defaults.run.shell`, `defaults.run.working-directory` returned as typed node | Implemented |
 | **Environment** | scalar (name) or mapping (`name`, `url`, `deployment`) as typed node | Implemented |
-| **Runner (runs-on)** | scalar/sequence → labels, mapping → `labels` + `group`, expression supported | Partially implemented (`labels` scalar/sequence is implemented; mapping + expression support is partial) |
+| **Runner (runs-on)** | scalar/sequence → labels, mapping → `labels` + `group`, expression supported | Implemented (scalar/sequence/mapping + expression paths are parsed into `Runner`) |
 | **Step ExecRun / ExecAction** | `run` step → `ExecRun`, `uses` step → `ExecAction` as variant. Docker step separates `entrypoint` / `args` | Implemented |
 | **Matrix & Strategy** | `matrix` row/include/exclude recursively parsed as `RawYAMLValue`, `fail-fast` / `max-parallel` typed | Implemented |
 | **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented |
@@ -42,7 +42,7 @@ Differences between `.references/actionlint-main` implementation and `src/Seiton
 
 | Perspective | Details |
 |---|---|
-| Polymorphic YAML fields | Custom parsing patterns for `permissions` (scalar or mapping), `container` (scalar or mapping), `secrets` (`"inherit"` or mapping) — current C# only handles `secrets` |
+| Polymorphic YAML fields | Custom parsing patterns for `permissions` (scalar or mapping), `container` (scalar or mapping), `secrets` (`"inherit"` or mapping) — implemented in current C# parser |
 | Minimal policy model | ghalint defines structs only for needed fields. This spec builds a full AST but maintains all Job/Step fields to support future rules |
 
 #### 0.1.3 Perspectives to Supplement from zizmor
@@ -285,16 +285,16 @@ Tag information equivalent to actionlint (Go)'s `yaml.Node.Tag` (`!!str`, `!!boo
 
 The parser core references only the `ScalarTag` enum and has no knowledge of library-specific tag representations.
 
-#### 0.3.8 Relationship with Current VYamlStreamReader
+#### 0.3.8 Relationship with Current VYaml Adapter
 
-The current `VYamlStreamReader` (`ref struct`) is the predecessor of `IYamlStreamReader`. Going forward:
+The parser has already completed the adapter migration:
 
-1. Define the `IYamlStreamReader` interface
-2. Rename `VYamlStreamReader` to `VYamlStreamAdapter` and implement `IYamlStreamReader`
-3. Change all parse functions in `WorkflowParser` from `ref VYamlStreamReader` → `IYamlStreamReader`
-4. Contain all references to VYaml-specific types (`ParseEventType`, `Marker`) within the adapter
+1. `IYamlStreamReader` defines the parser-facing contract.
+2. `VYamlStreamAdapter` is the production adapter used by `WorkflowParser.Parse(byte[], string)`.
+3. Parser internals run through generic core methods (`ParseCore<TReader> where TReader : IYamlStreamReader, allows ref struct`) to keep adapter calls devirtualizable.
+4. VYaml-specific event/type absorption is contained in the adapter boundary.
 
-**Note**: `ref struct` cannot implement interfaces, so the adapter must be a `class` or passed via generic type parameter. If there are performance concerns, adopt the `WorkflowParser<TReader> where TReader : IYamlStreamReader` pattern to enable JIT devirtualization.
+This means the entry point remains stable while alternate adapters can be introduced without rewriting parser core logic.
 
 ---
 
@@ -1314,7 +1314,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 | Partially implemented (scalar/sequence labels implemented; mapping form incomplete) |
+| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 | Implemented (supports scalar, sequence, mapping with `group`/`labels`, and expression forms) |
 | `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironment(IYamlStreamReader)` | §3.14 | Implemented |
 | `ParseOutputs(node)` | `WorkflowParser.ParseOutputs(IYamlStreamReader)` | §3.10 | Implemented |
 | `ParseStrategy(node)` | `WorkflowParser.ParseStrategy(IYamlStreamReader)` | §3.15 | Implemented |
@@ -1342,7 +1342,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 | `parseFloat(node)` | `WorkflowParser.ParseFloat(IYamlStreamReader)` | §4.4 | Implemented |
 | `parseExpression(node, expecting)` | `WorkflowParser.ParseExpression(IYamlStreamReader, string)` | §4.5 | Implemented |
 | `mayParseExpression(node)` | `WorkflowParser.MayParseExpression(IYamlStreamReader)` | §4.6 | Implemented |
-| `parseTimeoutMinutes(node)` | `WorkflowParser.ParseTimeoutMinutes(IYamlStreamReader)` | §3.10 | Partially implemented (not split into a dedicated method; handled via `ParseFloat` + additional validation) |
+| `parseTimeoutMinutes(node)` | `WorkflowParser.ParseTimeoutMinutes(IYamlStreamReader)` | §3.10 | Implemented (parsed via scalar helpers with inline `> 0` validation for job/step timeout fields) |
 
 ### A.8 Visitor / Pass
 
@@ -1384,5 +1384,5 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 | Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | ✓ Implemented |
 | Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Partially implemented (includes type inference, but not yet fully actionlint-compatible) |
 | Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` | Arity only (no types) |
-| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` context-root check | Partially implemented (uses generated availability table) |
+| Context Availability (§7.2) | `ExpressionSemanticAnalyzer` generated availability checks | Implemented (generated availability table is used for context validation) |
 | ExprType hierarchy (§7.3) | `ExprType` hierarchy + `InferType()` | Partially implemented |

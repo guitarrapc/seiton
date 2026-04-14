@@ -6,20 +6,20 @@
 
 | 領域 | 現行状況 |
 |---|---|
-| YAML 読み取り | `VYamlStreamReader` は `ref struct` で VYaml を直接ラップ。interface 抽象なし |
-| パーサー本体 | `WorkflowParser` は shape 検証 + diagnostics。parse 関数は `void`、AST を返さない |
+| YAML 読み取り | `IYamlStreamReader` + `VYamlStreamAdapter` を使用。`WorkflowParser` は generic core（`ParseCore<TReader>`）で adapter 差し替え可能 |
+| パーサー本体 | `WorkflowParser` は shape 検証 + AST 構築 + diagnostics を実行。`ParseResult.Workflow` に typed AST を返却 |
 | 出力モデル | `ParseResult.Workflow` は `Workflow?` を返却。`WorkflowDocument` は削除済み |
-| `on:` パース | イベント名検証 + options/types 検証済み。typed event node なし |
-| Job/Step | キー検証・排他制約・reusable workflow 関連制約・`secrets: inherit` 形状検証あり。typed node なし |
-| permissions/defaults/concurrency | `SkipCurrentNode()` のみ |
-| 式パーサー | 再帰下降 + arena-style flat array で完成。算術演算は GHA 仕様外の独自拡張あり |
-| 式セマンティクス | context availability + function arity + 一部リテラル型チェック |
+| `on:` パース | scalar/sequence/mapping の 3 形態を `Event[]` として AST 化。`schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` も typed node で構築 |
+| Job/Step | `Job` / `Step` を typed node で構築。`uses` と `steps`/`runs-on` 排他、`with`/`secrets` 依存、必須キーを parser で診断 |
+| permissions/defaults/concurrency | top-level / job-level ともに typed node 構築済み（shape 診断維持） |
+| 式パーサー | 再帰下降 + arena-style flat array。GHA 仕様に合わせて算術演算子サポートを削除済み |
+| 式セマンティクス | generated availability + function arity + bottom-up 型推論（`ExprType`）を実装 |
 | 式抽出 | `${{ }}` 抽出 → parse → validate パイプライン完成 |
-| イベントスペック | `OnEventSpecs` で 33 イベント + activity types + options を UTF-8 span で管理 |
+| イベントスペック | generated `WebhookTypes.g.cs` を参照して UTF-8 span ベースで検証 |
 | テスト基盤 | `ParserTests` / `ExpressionTests` に加えて corpus smoke（actionlint/ghalint/zizmor と actionlint testdata）を実装済み |
-| Visitor / Pass | 未実装 |
-| Rule Engine | 未実装 |
-| Generated Data | `OnEventSpecs` のみ手実装。availability / popular actions 未実装 |
+| Visitor / Pass | `IPass` + `WorkflowVisitor` 実装済み |
+| Rule Engine | `IRule` + `SyntaxRule` を実装済み（ルール拡充は継続課題） |
+| Generated Data | `WebhookTypes.g.cs` / `Availability.g.cs` / `PopularActions.g.cs` を実装済み |
 
 ---
 
@@ -591,7 +591,7 @@
   - 状態: 完了
   - dangling alias / recursive alias / alias merge の挙動を fixture 固定で可視化。
   - adapter 側吸収と parser 側責務の境界もテスト名で明示。
-  - 実施結果: `undefined_anchor.yaml` / `recursive_anchors.yaml` / `merge_key_unsupported.yaml` を対象に回帰テストを追加し、異常系を「診断または例外で捕捉」する境界挙動を固定化。
+  - 実施結果: `undefined_anchor.yaml` / `recursive_anchors.yaml` / `merge_key_unsupported.yaml` を対象に回帰テストを追加し、異常系を決定的診断契約（fatal parse diagnostic または構造診断）として固定化。
 
 8. **AST ゴールデンテスト拡張**
   - 状態: 完了
@@ -694,9 +694,14 @@
 
 #### E. C# spec のドリフト修正
 
-- [ ] `runs-on` を「partial」から実装実態へ更新（mapping + expression の対応状況を明記）
-- [ ] 未実装/部分実装テーブルを現行コードに合わせて棚卸し
-- [ ] 本 plan の「現状サマリー」を現行実装に合わせて更新（古い記述の削除）
+- [x] `runs-on` を「partial」から実装実態へ更新（mapping + expression の対応状況を明記）
+- [x] 未実装/部分実装テーブルを現行コードに合わせて棚卸し
+- [x] 本 plan の「現状サマリー」を現行実装に合わせて更新（古い記述の削除）
+
+実装結果:
+- `Seiton_Parser_csharp_spec.md` の `Runner (runs-on)` を実装済みへ更新し、A.5 の `ParseRunsOn` ステータスを scalar/sequence/mapping + expression 対応として明記。
+- 同 spec の drift 箇所を更新（adapter 移行完了の実態、`parseTimeoutMinutes` の実装形態、Context Availability の generated table 適用）し、旧来の移行前記述を解消。
+- 本 plan の「現状サマリー」を 2026-04-14 時点の実装状態に更新し、初期フェーズ前提の古い説明を削除。
 
 #### F. 完了判定（この監査対応の Exit Criteria）
 
