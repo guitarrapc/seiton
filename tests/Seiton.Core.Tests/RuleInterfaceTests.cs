@@ -45,12 +45,12 @@ public sealed class RuleInterfaceTests
     public async Task LintEngine_RuleDiagnostics_IncludeRuleIdAndFilePath()
     {
         var yaml = """
-                on: push
-                jobs:
-                    build:
-                        steps:
-                            - run: echo hello
-                """;
+        on: push
+        jobs:
+            build:
+                steps:
+                    - run: echo hello
+        """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
         var diagnostic = result.Diagnostics.FirstOrDefault(x =>
@@ -458,14 +458,14 @@ public sealed class RuleInterfaceTests
 
         var engine = new LintEngine(
         [
-                new DuplicateDiagnosticRule("permissions"),
-                        new DuplicateDiagnosticRule("job-structure"),
-                ]);
+            new DuplicateDiagnosticRule("permissions"),
+                new DuplicateDiagnosticRule("job-structure"),
+        ]);
 
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "priority-dedup.yml");
         var duplicated = result.Diagnostics
-                .Where(static x => x.Message == "shared duplicate diagnostic")
-                .ToArray();
+            .Where(static x => x.Message == "shared duplicate diagnostic")
+            .ToArray();
 
         await Assert.That(duplicated.Length).IsEqualTo(1);
         await Assert.That(duplicated[0].RuleId).IsEqualTo("job-structure");

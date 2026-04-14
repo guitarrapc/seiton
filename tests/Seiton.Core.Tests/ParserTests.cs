@@ -180,11 +180,11 @@ public sealed class ParserTests
     public async Task Parse_OnMappingDuplicateKey_ReportsError()
     {
         var yaml = """
-                on:
-                    push: {}
-                    PUSH: {}
-                jobs: {}
-                """
+        on:
+            push: {}
+            PUSH: {}
+        jobs: {}
+        """
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-duplicate.yml");
@@ -195,17 +195,17 @@ public sealed class ParserTests
     public async Task Parse_JobsMappingDuplicateKey_ReportsError()
     {
         var yaml = """
-                on: push
-                jobs:
-                    build:
-                        runs-on: ubuntu-latest
-                        steps:
-                            - run: echo one
-                    BUILD:
-                        runs-on: ubuntu-latest
-                        steps:
-                            - run: echo two
-                """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            BUILD:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-duplicate.yml");
@@ -216,18 +216,18 @@ public sealed class ParserTests
     public async Task Parse_OnWorkflowDispatchInputsMergeKey_ReportsError()
     {
         var yaml = """
-                on:
-                    workflow_dispatch:
-                        inputs:
-                            <<:
-                                a:
-                                    type: string
-                            name:
-                                description: d
-                                required: true
-                                type: string
-                jobs: {}
-                """
+        on:
+            workflow_dispatch:
+                inputs:
+                    <<:
+                        a:
+                            type: string
+                    name:
+                        description: d
+                        required: true
+                        type: string
+        jobs: {}
+        """
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-dispatch-inputs-merge.yml");
