@@ -4677,13 +4677,17 @@ public static class WorkflowParser
                 continue;
             }
 
+            var isUsername = keyUtf8.SequenceEqual("username"u8);
+            var isPassword = keyUtf8.SequenceEqual("password"u8);
+            var keyText = isUsername || isPassword ? null : Encoding.UTF8.GetString(keyUtf8);
+
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            if (keyUtf8.SequenceEqual("username"u8))
+            if (isUsername)
             {
                 hasUsername = true;
                 username = ParseStringAndValidateExpression(
@@ -4694,7 +4698,7 @@ public static class WorkflowParser
                     parseWholeValueIfNoEmbedded: false);
                 continue;
             }
-            else if (keyUtf8.SequenceEqual("password"u8))
+            else if (isPassword)
             {
                 hasPassword = true;
                 password = ParseStringAndValidateExpression(
@@ -4707,17 +4711,16 @@ public static class WorkflowParser
             }
             else
             {
-                var unexpectedKey = Encoding.UTF8.GetString(keyUtf8);
-                AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key: {unexpectedKey}", keyMark);
+                AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key: {keyText}", keyMark);
             }
 
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                var fieldName = keyUtf8.SequenceEqual("username"u8)
+                var fieldName = isUsername
                     ? "username"
-                    : keyUtf8.SequenceEqual("password"u8)
+                    : isPassword
                         ? "password"
-                        : Encoding.UTF8.GetString(keyUtf8);
+                        : keyText;
                 AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.{fieldName} must be scalar", reader.CurrentStart);
             }
             reader.SkipCurrentNode();
@@ -4826,11 +4829,150 @@ public static class WorkflowParser
 
     private static Runner? ParseRunsOnNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
     {
-        var labels = ParseStringOrStringSequence(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' runs-on must be scalar or sequence of scalar");
+        var section = $"job '{DecodeUtf8(source, jobId)}' runs-on";
+
+        if (reader.CurrentKind == YamlEventKind.MappingStart)
+        {
+            StringNode[]? labels = null;
+            StringNode? labelsExpr = null;
+            StringNode? group = null;
+            var keys = new HashSet<Utf8String>();
+
+            reader.Read();
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            {
+                if (reader.CurrentKind != YamlEventKind.Scalar)
+                {
+                    AddError(diagnostics, $"{section} key must be scalar", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var keyMark = reader.CurrentStart;
+                var keyUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterMappingKey(
+                    keyUtf8,
+                    keyMark,
+                    diagnostics,
+                    keys,
+                    MappingKeyComparison.AsciiCaseInsensitive,
+                    "runs-on"))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var isLabels = keyUtf8.SequenceEqual("labels"u8);
+                var isGroup = keyUtf8.SequenceEqual("group"u8);
+                var unknownKey = isLabels || isGroup ? null : Encoding.UTF8.GetString(keyUtf8);
+
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                if (isLabels)
+                {
+                    if (reader.CurrentKind == YamlEventKind.Scalar)
+                    {
+                        var valueUtf8 = reader.GetScalarUtf8();
+                        if (ContainsExpression(valueUtf8))
+                        {
+                            labelsExpr = ParseStringAndValidateExpression(
+                                ref reader,
+                                diagnostics,
+                                ExpressionValidationContext.Job,
+                                $"{section}.labels must be scalar, sequence, or expression",
+                                parseWholeValueIfNoEmbedded: false);
+                        }
+                        else
+                        {
+                            labels = ParseStringOrStringSequence(
+                                ref reader,
+                                diagnostics,
+                                $"{section}.labels must be scalar, sequence, or expression");
+                        }
+                    }
+                    else
+                    {
+                        labels = ParseStringOrStringSequence(
+                            ref reader,
+                            diagnostics,
+                            $"{section}.labels must be scalar, sequence, or expression");
+                    }
+
+                    continue;
+                }
+
+                if (isGroup)
+                {
+                    group = ParseStringAndValidateExpression(
+                        ref reader,
+                        diagnostics,
+                        ExpressionValidationContext.Job,
+                        $"{section}.group must be scalar",
+                        parseWholeValueIfNoEmbedded: false);
+                    continue;
+                }
+
+                AddError(diagnostics, $"unexpected runs-on key: {unknownKey}", keyMark);
+                reader.SkipCurrentNode();
+            }
+
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            {
+                reader.Read();
+            }
+
+            if (labels is null && labelsExpr is null)
+            {
+                AddError(diagnostics, $"{section} requires labels", new TextPosition(0, 1, 1));
+            }
+
+            return new Runner
+            {
+                Labels = labels,
+                LabelsExpr = labelsExpr,
+                Group = group,
+                Range = labelsExpr?.Range ?? group?.Range ?? (labels is { Length: > 0 } ? labels[0].Range : default),
+            };
+        }
+
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var scalarUtf8 = reader.GetScalarUtf8();
+            if (ContainsExpression(scalarUtf8))
+            {
+                var expr = ParseStringAndValidateExpression(
+                    ref reader,
+                    diagnostics,
+                    ExpressionValidationContext.Job,
+                    $"{section} must be scalar, sequence, or mapping",
+                    parseWholeValueIfNoEmbedded: false);
+                return new Runner
+                {
+                    LabelsExpr = expr,
+                    Range = expr?.Range ?? default,
+                };
+            }
+        }
+
+        var labelsFallback = ParseStringOrStringSequence(ref reader, diagnostics, $"{section} must be scalar, sequence, or mapping");
         return new Runner
         {
-            Labels = labels,
-            Range = labels.Length > 0 ? labels[0].Range : default,
+            Labels = labelsFallback,
+            Range = labelsFallback.Length > 0 ? labelsFallback[0].Range : default,
         };
     }
 
@@ -5314,6 +5456,21 @@ public static class WorkflowParser
         {
             diagnostics.Add(semanticDiagnostics[i]);
         }
+    }
+
+    private static bool ContainsExpression(ReadOnlySpan<byte> valueUtf8)
+    {
+        for (var i = 0; i + 2 < valueUtf8.Length; i++)
+        {
+            if (valueUtf8[i] == (byte)'$'
+                && valueUtf8[i + 1] == (byte)'{'
+                && valueUtf8[i + 2] == (byte)'{')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static TextRange BuildScalarLocation(TextPosition mark, int length)

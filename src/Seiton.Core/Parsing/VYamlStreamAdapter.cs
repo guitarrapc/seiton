@@ -1,11 +1,9 @@
-﻿using System.Globalization;
-using System.Buffers.Text;
-using System.Text;
+﻿using System.Buffers.Text;
 using VYaml.Parser;
 
 namespace Seiton.Core.Parsing;
 
-internal ref struct VYamlStreamAdapter
+internal ref struct VYamlStreamAdapter : IYamlStreamReader
 {
     private YamlParser _parser;
 
@@ -71,8 +69,7 @@ internal ref struct VYamlStreamAdapter
             return ScalarTag.Int;
         }
 
-        var text = Encoding.UTF8.GetString(value);
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        if (Utf8Parser.TryParse(value, out double _, out var consumedFloat) && consumedFloat == value.Length)
         {
             return ScalarTag.Float;
         }

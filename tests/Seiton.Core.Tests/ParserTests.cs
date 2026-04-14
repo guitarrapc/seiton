@@ -1039,6 +1039,58 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_JobRunsOnMapping_PopulatesRunnerGroupAndLabels()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on:
+                    group: default
+                    labels: [ubuntu-latest, x64]
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-runs-on-mapping.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var jobKey = Utf8String.FromLowerAscii("build"u8);
+        var runner = result.Workflow!.Jobs[jobKey].RunsOn;
+        await Assert.That(runner is not null).IsTrue();
+        await Assert.That(runner!.Group is not null).IsTrue();
+        await Assert.That(runner.Labels is not null).IsTrue();
+        await Assert.That(runner.Labels!.Count).IsEqualTo(2);
+        await Assert.That(runner.LabelsExpr).IsNull();
+    }
+
+    [Test]
+    public async Task Parse_JobRunsOnExpression_PopulatesRunnerLabelsExpr()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ${{ github.ref }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-runs-on-expression.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var jobKey = Utf8String.FromLowerAscii("build"u8);
+        var runner = result.Workflow!.Jobs[jobKey].RunsOn;
+        await Assert.That(runner is not null).IsTrue();
+        await Assert.That(runner!.LabelsExpr is not null).IsTrue();
+        await Assert.That(runner.Labels).IsNull();
+    }
+
+    [Test]
     public async Task Parse_StepWithoutRunOrUses_ReportsError()
     {
         var yaml = """
