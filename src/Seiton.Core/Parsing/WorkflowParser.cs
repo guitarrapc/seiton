@@ -49,7 +49,8 @@ public static class WorkflowParser
         return result with { Diagnostics = diagnostics };
     }
 
-    private static ParseResult ParseCore(ref VYamlStreamAdapter reader, ReadOnlySpan<byte> source)
+    private static ParseResult ParseCore<TReader>(ref TReader reader, ReadOnlySpan<byte> source)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var diagnostics = new List<Diagnostic>(16);
 
@@ -743,7 +744,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, Job> ParseJobsMapping(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static Dictionary<Utf8String, Job> ParseJobsMapping<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var jobs = new Dictionary<Utf8String, Job>();
         var seenJobIds = new HashSet<Utf8String>();
@@ -809,7 +811,8 @@ public static class WorkflowParser
         return jobs;
     }
 
-    private static Job ParseJobNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition jobIdMark, StringNode jobIdNode)
+    private static Job ParseJobNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition jobIdMark, StringNode jobIdNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         StringNode? nameNode = null;
         StringNode[]? needsNode = null;
@@ -1205,7 +1208,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Step[] ParseSteps(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Step[] ParseSteps<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var steps = new List<Step>(8);
         reader.Read(); // consume SequenceStart
@@ -1229,7 +1233,8 @@ public static class WorkflowParser
         return steps.ToArray();
     }
 
-    private static Step? ParseStep(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
+    private static Step? ParseStep<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -1495,7 +1500,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, StringNode>? ParseStepWithInputsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNode? entrypoint, out StringNode? args)
+    private static Dictionary<Utf8String, StringNode>? ParseStepWithInputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNode? entrypoint, out StringNode? args)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         entrypoint = null;
         args = null;
@@ -2122,7 +2128,8 @@ public static class WorkflowParser
         return false;
     }
 
-    private static Event[] ParseOnEvents(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static Event[] ParseOnEvents<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -2267,7 +2274,8 @@ public static class WorkflowParser
         return new WebhookEvent { EventName = nameNode, Hook = nameNode, Range = nameNode.Range };
     }
 
-    private static Event ParseOnEventWithOptions(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNode nameNode)
+    private static Event ParseOnEventWithOptions<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (!IsSpecialOnEvent(in eventInfo))
         {
@@ -2294,10 +2302,11 @@ public static class WorkflowParser
                 || eventInfo.Spec.Id == WebhookTypes.EventId.RepositoryDispatch);
     }
 
-    private static ScheduledEvent ParseScheduleEvent(
-        ref VYamlStreamAdapter reader,
+    private static ScheduledEvent ParseScheduleEvent<TReader>(
+        ref TReader reader,
         List<Diagnostic> diagnostics,
         StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
@@ -2329,7 +2338,8 @@ public static class WorkflowParser
         return new ScheduledEvent { EventName = nameNode, Schedules = schedules.ToArray(), Range = nameNode.Range };
     }
 
-    private static ScheduleEntry ParseScheduleEntry(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static ScheduleEntry ParseScheduleEntry<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         TextRange range = default;
         StringNode? cron = null;
@@ -2414,7 +2424,8 @@ public static class WorkflowParser
         };
     }
 
-    private static WorkflowDispatchEvent ParseWorkflowDispatchEvent(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, StringNode nameNode)
+    private static WorkflowDispatchEvent ParseWorkflowDispatchEvent<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2482,7 +2493,8 @@ public static class WorkflowParser
         return new WorkflowDispatchEvent { EventName = nameNode, Inputs = inputs, Range = nameNode.Range };
     }
 
-    private static Dictionary<Utf8String, DispatchInput>? ParseWorkflowDispatchInputs(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static Dictionary<Utf8String, DispatchInput>? ParseWorkflowDispatchInputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2544,7 +2556,8 @@ public static class WorkflowParser
         return map;
     }
 
-    private static DispatchInput ParseWorkflowDispatchInput(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, StringNode nameNode)
+    private static DispatchInput ParseWorkflowDispatchInput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         StringNode? description = null;
         BoolNode? required = null;
@@ -2654,7 +2667,8 @@ public static class WorkflowParser
         };
     }
 
-    private static DispatchInputType ParseDispatchInputType(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static DispatchInputType ParseDispatchInputType<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
@@ -2714,7 +2728,8 @@ public static class WorkflowParser
         return node;
     }
 
-    private static WorkflowCallEvent ParseWorkflowCallEvent(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, StringNode nameNode)
+    private static WorkflowCallEvent ParseWorkflowCallEvent<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2806,7 +2821,8 @@ public static class WorkflowParser
         };
     }
 
-    private static WorkflowCallEventInput[]? ParseWorkflowCallInputs(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static WorkflowCallEventInput[]? ParseWorkflowCallInputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -2867,7 +2883,8 @@ public static class WorkflowParser
         return list.ToArray();
     }
 
-    private static WorkflowCallEventInput ParseWorkflowCallInput(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, StringNode nameNode, Utf8String id, string idText)
+    private static WorkflowCallEventInput ParseWorkflowCallInput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode, Utf8String id, string idText)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         StringNode? description = null;
         BoolNode? required = null;
@@ -2979,7 +2996,8 @@ public static class WorkflowParser
         };
     }
 
-    private static WorkflowCallInputType ParseWorkflowCallInputType(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static WorkflowCallInputType ParseWorkflowCallInputType<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
@@ -3002,7 +3020,8 @@ public static class WorkflowParser
         return type;
     }
 
-    private static Dictionary<Utf8String, WorkflowCallEventSecret>? ParseWorkflowCallSecrets(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static Dictionary<Utf8String, WorkflowCallEventSecret>? ParseWorkflowCallSecrets<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -3062,7 +3081,8 @@ public static class WorkflowParser
         return map;
     }
 
-    private static WorkflowCallEventSecret ParseWorkflowCallSecret(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, StringNode nameNode)
+    private static WorkflowCallEventSecret ParseWorkflowCallSecret<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         StringNode? description = null;
         BoolNode? required = null;
@@ -3145,7 +3165,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, WorkflowCallEventOutput>? ParseWorkflowCallOutputs(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics)
+    private static Dictionary<Utf8String, WorkflowCallEventOutput>? ParseWorkflowCallOutputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -3206,7 +3227,8 @@ public static class WorkflowParser
         return map;
     }
 
-    private static WorkflowCallEventOutput ParseWorkflowCallOutput(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, StringNode nameNode, string idText)
+    private static WorkflowCallEventOutput ParseWorkflowCallOutput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode, string idText)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         StringNode? description = null;
         StringNode? value = null;
@@ -3302,7 +3324,8 @@ public static class WorkflowParser
         };
     }
 
-    private static RepositoryDispatchEvent ParseRepositoryDispatchEvent(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, StringNode nameNode)
+    private static RepositoryDispatchEvent ParseRepositoryDispatchEvent<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -3370,7 +3393,8 @@ public static class WorkflowParser
         return new RepositoryDispatchEvent { EventName = nameNode, Types = types, Range = nameNode.Range };
     }
 
-    private static WebhookEvent ParseWebhookEventWithOptions(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNode nameNode)
+    private static WebhookEvent ParseWebhookEventWithOptions<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var hasBranches = false;
         var hasBranchesIgnore = false;
@@ -3560,7 +3584,8 @@ public static class WorkflowParser
         };
     }
 
-    private static StringNode[] ParseOnTypesNodes(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+    private static StringNode[] ParseOnTypesNodes<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -3611,7 +3636,8 @@ public static class WorkflowParser
         return list.ToArray();
     }
 
-    private static void ParseOnEventOptions(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark)
+    private static void ParseOnEventOptions<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var hasBranches = false;
         var hasBranchesIgnore = false;
@@ -3825,7 +3851,8 @@ public static class WorkflowParser
         }
     }
 
-    private static Strategy ParseStrategy(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Strategy ParseStrategy<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         Matrix? matrix = null;
         BoolNode? failFast = null;
@@ -3921,7 +3948,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Matrix? ParseMatrix(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Matrix? ParseMatrix<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -4064,7 +4092,8 @@ public static class WorkflowParser
         };
     }
 
-    private static MatrixCombinations[] ParseMatrixCombinations(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
+    private static MatrixCombinations[] ParseMatrixCombinations<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -4119,7 +4148,8 @@ public static class WorkflowParser
         ];
     }
 
-    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8)
+    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
@@ -4143,7 +4173,8 @@ public static class WorkflowParser
         return values;
     }
 
-    private static RawYamlValue ParseRawYamlValue(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static RawYamlValue ParseRawYamlValue<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -4173,7 +4204,8 @@ public static class WorkflowParser
         return new RawYamlString { Value = new StringNode { Value = default, Quoted = false, Range = default } };
     }
 
-    private static IReadOnlyDictionary<Utf8String, RawYamlValue> ParseRawYamlObject(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static IReadOnlyDictionary<Utf8String, RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var map = new Dictionary<Utf8String, RawYamlValue>();
         var keys = new HashSet<Utf8String>();
@@ -4228,7 +4260,8 @@ public static class WorkflowParser
         return map;
     }
 
-    private static Services? ParseServices(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Services? ParseServices<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -4310,7 +4343,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Container? ParseContainerLike(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)
+    private static Container? ParseContainerLike<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -4498,7 +4532,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Credentials? ParseCredentials(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
+    private static Credentials? ParseCredentials<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -4692,7 +4727,8 @@ public static class WorkflowParser
         }
     }
 
-    private static Runner? ParseRunsOnNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Runner? ParseRunsOnNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         var section = $"job '{DecodeUtf8(source, jobId)}' runs-on";
 
@@ -4841,7 +4877,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Seiton.Core.Parsing.Ast.Environment? ParseEnvironmentNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Seiton.Core.Parsing.Ast.Environment? ParseEnvironmentNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
@@ -4959,7 +4996,8 @@ public static class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, StringNode>? ParseOutputsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Dictionary<Utf8String, StringNode>? ParseOutputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -5029,7 +5067,8 @@ public static class WorkflowParser
         return outputs;
     }
 
-    private static Dictionary<Utf8String, WorkflowCallInput>? ParseWorkflowCallInputsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Dictionary<Utf8String, WorkflowCallInput>? ParseWorkflowCallInputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -5113,7 +5152,8 @@ public static class WorkflowParser
         return map;
     }
 
-    private static Dictionary<Utf8String, WorkflowCallSecret>? ParseWorkflowCallSecretsNode(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, out bool inheritSecrets)
+    private static Dictionary<Utf8String, WorkflowCallSecret>? ParseWorkflowCallSecretsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, out bool inheritSecrets)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         inheritSecrets = false;
 
@@ -5214,7 +5254,8 @@ public static class WorkflowParser
         return map;
     }
 
-    private static void ParseJobSecrets(ref VYamlStreamAdapter reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static void ParseJobSecrets<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
