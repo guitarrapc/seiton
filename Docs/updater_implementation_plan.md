@@ -204,16 +204,21 @@ Implementation notes (current):
 - Added model: `src/Seiton.Update/Model/WebhookEventModel.cs`
 - Added generator: `src/Seiton.Update/Generators/WebhookTypesCSharpGenerator.cs`
 - Added primary parser: `src/Seiton.Update/Parsers/GitHubWebhookSourceParser.cs`
+- Added docs parser: `src/Seiton.Update/Parsers/GitHubDocsWebhookMarkdownParser.cs`
 - Kept reference parser for parity: `src/Seiton.Update/Parsers/ActionlintWebhookSourceParser.cs`
 - Added sync/verify service: `src/Seiton.Update/Services/WebhookSyncService.cs`
+- Added fetch source service: `src/Seiton.Update/Sources/GitHubWebhookFetcher.cs`
+- Added manifest service/model: `src/Seiton.Update/Services/WebhookManifestService.cs`, `src/Seiton.Update/Model/SourceManifest.cs`
 - Added source resolver: `src/Seiton.Update/Services/WebhookSourcePathResolver.cs`
-  - primary generation source: `data/sources/webhooks/github/webhook_types.json`
+  - primary generation source (normalized snapshot): `data/sources/webhooks/github/webhook_types.json`
   - actionlint parity reference: `data/sources/webhooks/actionlint/all_webhooks.go` or `.references/actionlint/all_webhooks.go`
 - Added primary vendored snapshot: `data/sources/webhooks/github/webhook_types.json`
 - Added tests: `tests/Seiton.Update.Tests/WebhookUpdaterGoldenTests.cs`
 - Added test project: `tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj`
-- `sync webhooks` regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` from GitHub primary snapshot.
-- `verify webhooks` checks staleness against GitHub primary snapshot first.
+- `fetch-webhooks` ingests official GitHub sources (`json.schemastore.org/github-workflow.json` + GitHub Docs markdown) and writes normalized snapshot + `data/sources/manifest.json` provenance.
+- `sync webhooks` regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` from normalized primary snapshot.
+- `verify webhooks` checks staleness against normalized primary snapshot.
+- `parity-webhooks` is an explicit actionlint differential command (separated from verify).
 - actionlint parity diff is executed as a secondary, separate validation path when reference input exists.
 - CI includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
 - Golden tests and CI verification run without requiring `.references` when vendored primary snapshot is present.

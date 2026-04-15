@@ -52,9 +52,31 @@ app.Add("verify-webhooks", () =>
     }
 });
 
+// Fetch GitHub primary source and update the local snapshot + manifest.
+app.Add("fetch-webhooks", async () =>
+{
+    var code = await WebhookCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-webhooks failed with code {code}");
+    }
+});
+
+// Compare local snapshot against actionlint reference (parity check only, no staleness check).
+app.Add("parity-webhooks", () =>
+{
+    var code = WebhookCommands.ParityCheck(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parity-webhooks failed with code {code}");
+    }
+});
+
 try
 {
-    app.Run(args);
+    await app.RunAsync(args);
     return Environment.ExitCode;
 }
 catch

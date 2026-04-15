@@ -910,6 +910,17 @@ Each Rule inspects the AST within Pass callbacks and accumulates diagnostics int
 - Commit generated results; CI detects diffs -> auto PR
 - Parser and rules do not make network requests at runtime
 
+### 9.2.1 Webhook Activity Type Conflict Resolution (Normative)
+
+For webhook event activity types, official GitHub sources may disagree (for example, GitHub Docs vs SchemaStore metadata).
+
+- Normalized generated data must treat GitHub Docs as the primary value source when the Docs event table is parseable.
+- SchemaStore metadata is still ingested as an official source and used as fallback when Docs values are unavailable/unparseable for a given event.
+- Conflicts between official sources must be recorded in a dedicated official-source diff report; they must not be silently discarded.
+- actionlint parity checks remain secondary and must not override the official-source resolution above.
+
+Example: if GitHub Docs lists `check_suite` activity types as `completed` while SchemaStore includes additional values, normalized output follows the Docs value and the mismatch is reported.
+
 ---
 
 ## 10. Diagnostic Specification

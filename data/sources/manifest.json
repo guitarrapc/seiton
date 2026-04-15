@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "dataset": "webhooks",
+      "sourceUrl": "https://json.schemastore.org/github-workflow.json",
+      "sourceUrls": [
+        "https://json.schemastore.org/github-workflow.json",
+        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md"
+      ],
+      "fetchedAtUtc": "2026-04-15T08:10:42.1082223\u002B00:00",
+      "parserVersion": "3",
+      "contentHash": "sha256:b4fa4257c8e730c4420ba80fc8a80de4facce3d72e10c668bd225390cfb050c3"
+    }
+  ]
+}

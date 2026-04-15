@@ -1265,6 +1265,17 @@ Rules are implemented as Passes. Rule injection/filtering is supported via `Lint
 - Commit generated results; CI detects diffs → auto PR
 - Parser and rules do not make network requests at runtime
 
+### 9.2.1 Webhook Activity Type Conflict Resolution
+
+When official GitHub sources disagree for webhook activity types:
+
+- Normalization prefers GitHub Docs values when the Docs event table is parseable.
+- SchemaStore metadata is still consumed as an official source and acts as fallback for events where Docs values are unavailable/unparseable.
+- Official-source mismatches are recorded in a dedicated official-source diff report and surfaced for review.
+- actionlint parity remains a secondary differential signal and never overrides official-source resolution.
+
+Example: if Docs lists `check_suite` as `completed` while SchemaStore includes additional values, generated webhook data follows the Docs value and reports the mismatch.
+
 ---
 
 ## 10. Diagnostic Model (Spec §10)

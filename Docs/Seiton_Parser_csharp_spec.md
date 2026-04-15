@@ -1215,7 +1215,18 @@ Scope note:
 - CI periodic runs detect diffs and create auto PRs
 - Parser and rules do not make network requests at runtime
 
-#### 9.2.1 Relationship with Current `OnEventSpecs`
+#### 9.2.1 Webhook Activity Type Conflict Resolution
+
+When official GitHub sources disagree for webhook activity types:
+
+- `Seiton.Update` resolves to GitHub Docs values when the Docs table is parseable for the event.
+- SchemaStore metadata remains an official source and is used as fallback for events where Docs values are unavailable or unparseable.
+- Official-source mismatches are emitted to a dedicated official-source diff report and are treated as reviewable signals.
+- actionlint parity is a separate differential check and never overrides the official-source resolution.
+
+Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore includes additional values, `WebhookTypes.g.cs` is generated from the Docs value and the mismatch is reported.
+
+#### 9.2.2 Relationship with Current `OnEventSpecs`
 
 `OnEventSpecs` is a hand-implemented event name + activity types table. It is an implementation detail that may later be replaced by `WebhookTypes.g.cs`; this migration does not change Seiton's current support contract by itself.
 

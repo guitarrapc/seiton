@@ -1,11 +1,47 @@
 ﻿using System.Text;
 using Seiton.Update;
 using Seiton.Update.Services;
+using Seiton.Update.Sources;
 
 namespace Seiton.Update.Commands;
 
 internal static class WebhookCommands
 {
+    public static async Task<int> Fetch(string repoRoot)
+    {
+        var fetcher = new GitHubWebhookFetcher();
+        var entry = await fetcher.FetchAsync(repoRoot);
+
+        var manifestService = new WebhookManifestService();
+        var manifest = manifestService.Load(repoRoot);
+        manifest = manifestService.Upsert(manifest, entry);
+        manifestService.Save(repoRoot, manifest);
+
+        UpdateLogger.Info($"[fetch:webhooks] manifest updated ({entry.ContentHash[..24]}...)");
+        return 0;
+    }
+
+    public static int ParityCheck(string repoRoot)
+    {
+        var checker = new WebhookParityChecker();
+        if (!checker.TryCompare(repoRoot, out var diff))
+        {
+            UpdateLogger.Info("[parity:webhooks] skipped (actionlint reference source not found).");
+            return 0;
+        }
+
+        WriteDiffReport(repoRoot, diff, "parity");
+        if (!diff.HasDifferences)
+        {
+            UpdateLogger.Info("[parity:webhooks] parity check passed.");
+            return 0;
+        }
+
+        UpdateLogger.Error($"[parity:webhooks] differences detected. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
+        return 4;
+    }
+
+
     public static int Sync(string repoRoot)
     {
         var syncService = new WebhookSyncService();
@@ -45,23 +81,8 @@ internal static class WebhookCommands
             return 4;
         }
 
-        var checker = new WebhookParityChecker();
-        if (!checker.TryCompare(repoRoot, out var diff))
-        {
-            UpdateLogger.Info("[verify:webhooks] actionlint parity skipped (reference source not found).");
-            return 0;
-        }
-
-        WriteDiffReport(repoRoot, diff, "verify");
-
-        if (!diff.HasDifferences)
-        {
-            UpdateLogger.Info("[verify:webhooks] actionlint parity check passed.");
-            return 0;
-        }
-
-        UpdateLogger.Error($"[verify:webhooks] actionlint parity check failed. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
-        return 4;
+        UpdateLogger.Info("[verify:webhooks] generated file is up to date with GitHub primary source.");
+        return 0;
     }
 
     static void WriteDiffReport(string repoRoot, Model.WebhookDiffResult diff, string mode)

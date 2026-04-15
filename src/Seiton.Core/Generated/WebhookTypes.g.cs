@@ -28,6 +28,9 @@ internal static class WebhookTypes
         MergeGroup,
         Milestone,
         PageBuild,
+        Project,
+        ProjectCard,
+        ProjectColumn,
         Public,
         PullRequest,
         PullRequestReview,
@@ -64,6 +67,9 @@ internal static class WebhookTypes
         if (eventNameUtf8.SequenceEqual("merge_group"u8)) { eventName = "merge_group"; spec = new(EventId.MergeGroup); return true; }
         if (eventNameUtf8.SequenceEqual("milestone"u8)) { eventName = "milestone"; spec = new(EventId.Milestone); return true; }
         if (eventNameUtf8.SequenceEqual("page_build"u8)) { eventName = "page_build"; spec = new(EventId.PageBuild); return true; }
+        if (eventNameUtf8.SequenceEqual("project"u8)) { eventName = "project"; spec = new(EventId.Project); return true; }
+        if (eventNameUtf8.SequenceEqual("project_card"u8)) { eventName = "project_card"; spec = new(EventId.ProjectCard); return true; }
+        if (eventNameUtf8.SequenceEqual("project_column"u8)) { eventName = "project_column"; spec = new(EventId.ProjectColumn); return true; }
         if (eventNameUtf8.SequenceEqual("public"u8)) { eventName = "public"; spec = new(EventId.Public); return true; }
         if (eventNameUtf8.SequenceEqual("pull_request"u8)) { eventName = "pull_request"; spec = new(EventId.PullRequest); return true; }
         if (eventNameUtf8.SequenceEqual("pull_request_review"u8)) { eventName = "pull_request_review"; spec = new(EventId.PullRequestReview); return true; }
@@ -138,24 +144,27 @@ internal static class WebhookTypes
             }
 
             return Id switch
-            {                EventId.BranchProtectionRule => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
-                EventId.CheckRun => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("rerequested"u8) || valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("requested_action"u8),
+            {                EventId.BranchProtectionRule => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
+                EventId.CheckRun => valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("requested_action"u8) || valueUtf8.SequenceEqual("rerequested"u8),
                 EventId.CheckSuite => valueUtf8.SequenceEqual("completed"u8),
-                EventId.Discussion => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("unpinned"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("category_changed"u8) || valueUtf8.SequenceEqual("answered"u8) || valueUtf8.SequenceEqual("unanswered"u8),
-                EventId.DiscussionComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
-                EventId.IssueComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
-                EventId.Issues => valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("unpinned"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("reopened"u8) || valueUtf8.SequenceEqual("assigned"u8) || valueUtf8.SequenceEqual("unassigned"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("milestoned"u8) || valueUtf8.SequenceEqual("demilestoned"u8) || valueUtf8.SequenceEqual("typed"u8) || valueUtf8.SequenceEqual("untyped"u8),
-                EventId.Label => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
+                EventId.Discussion => valueUtf8.SequenceEqual("answered"u8) || valueUtf8.SequenceEqual("category_changed"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("unanswered"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("unpinned"u8),
+                EventId.DiscussionComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
+                EventId.IssueComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
+                EventId.Issues => valueUtf8.SequenceEqual("assigned"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("demilestoned"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("milestoned"u8) || valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("reopened"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("typed"u8) || valueUtf8.SequenceEqual("unassigned"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("unpinned"u8) || valueUtf8.SequenceEqual("untyped"u8),
+                EventId.Label => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
                 EventId.MergeGroup => valueUtf8.SequenceEqual("checks_requested"u8),
-                EventId.Milestone => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
-                EventId.PullRequest => IsPullRequestType(valueUtf8),
-                EventId.PullRequestReview => valueUtf8.SequenceEqual("submitted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("dismissed"u8),
-                EventId.PullRequestReviewComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8),
-                EventId.PullRequestTarget => IsPullRequestType(valueUtf8),
+                EventId.Milestone => valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("opened"u8),
+                EventId.Project => valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("reopened"u8),
+                EventId.ProjectCard => valueUtf8.SequenceEqual("converted"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("moved"u8),
+                EventId.ProjectColumn => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("moved"u8) || valueUtf8.SequenceEqual("updated"u8),
+                EventId.PullRequest => valueUtf8.SequenceEqual("assigned"u8) || valueUtf8.SequenceEqual("unassigned"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("reopened"u8) || valueUtf8.SequenceEqual("synchronize"u8) || valueUtf8.SequenceEqual("converted_to_draft"u8) || valueUtf8.SequenceEqual("ready_for_review"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("milestoned"u8) || valueUtf8.SequenceEqual("demilestoned"u8) || valueUtf8.SequenceEqual("review_requested"u8) || valueUtf8.SequenceEqual("review_request_removed"u8) || valueUtf8.SequenceEqual("auto_merge_enabled"u8) || valueUtf8.SequenceEqual("auto_merge_disabled"u8) || valueUtf8.SequenceEqual("enqueued"u8) || valueUtf8.SequenceEqual("dequeued"u8),
+                EventId.PullRequestReview => valueUtf8.SequenceEqual("dismissed"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("submitted"u8),
+                EventId.PullRequestReviewComment => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
+                EventId.PullRequestTarget => valueUtf8.SequenceEqual("assigned"u8) || valueUtf8.SequenceEqual("unassigned"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("opened"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("closed"u8) || valueUtf8.SequenceEqual("reopened"u8) || valueUtf8.SequenceEqual("synchronize"u8) || valueUtf8.SequenceEqual("converted_to_draft"u8) || valueUtf8.SequenceEqual("ready_for_review"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("review_requested"u8) || valueUtf8.SequenceEqual("review_request_removed"u8) || valueUtf8.SequenceEqual("auto_merge_enabled"u8) || valueUtf8.SequenceEqual("auto_merge_disabled"u8),
                 EventId.RegistryPackage => valueUtf8.SequenceEqual("published"u8) || valueUtf8.SequenceEqual("updated"u8),
-                EventId.Release => valueUtf8.SequenceEqual("published"u8) || valueUtf8.SequenceEqual("unpublished"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("prereleased"u8) || valueUtf8.SequenceEqual("released"u8),
+                EventId.Release => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("prereleased"u8) || valueUtf8.SequenceEqual("published"u8) || valueUtf8.SequenceEqual("released"u8) || valueUtf8.SequenceEqual("unpublished"u8),
                 EventId.Watch => valueUtf8.SequenceEqual("started"u8),
-                EventId.WorkflowRun => valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("requested"u8) || valueUtf8.SequenceEqual("in_progress"u8),
+                EventId.WorkflowRun => valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("in_progress"u8) || valueUtf8.SequenceEqual("requested"u8),
                 _ => false,
             };
         }
@@ -164,12 +173,8 @@ internal static class WebhookTypes
         {
             return Id switch
             {                EventId.RepositoryDispatch => ActivityTypesMode.Any,
-                EventId.BranchProtectionRule or EventId.CheckRun or EventId.CheckSuite or EventId.Discussion or EventId.DiscussionComment or EventId.IssueComment or EventId.Issues or EventId.Label or EventId.MergeGroup or EventId.Milestone or EventId.PullRequest or EventId.PullRequestReview or EventId.PullRequestReviewComment or EventId.PullRequestTarget or EventId.RegistryPackage or EventId.Release or EventId.Watch or EventId.WorkflowRun => ActivityTypesMode.Restricted,
+                EventId.BranchProtectionRule or EventId.CheckRun or EventId.CheckSuite or EventId.Discussion or EventId.DiscussionComment or EventId.IssueComment or EventId.Issues or EventId.Label or EventId.MergeGroup or EventId.Milestone or EventId.Project or EventId.ProjectCard or EventId.ProjectColumn or EventId.PullRequest or EventId.PullRequestReview or EventId.PullRequestReviewComment or EventId.PullRequestTarget or EventId.RegistryPackage or EventId.Release or EventId.Watch or EventId.WorkflowRun => ActivityTypesMode.Restricted,
                 _ => ActivityTypesMode.NotSupported,
             };
-        }
-        private static bool IsPullRequestType(ReadOnlySpan<byte> value)
-        {
-            return value.SequenceEqual("assigned"u8) || value.SequenceEqual("unassigned"u8) || value.SequenceEqual("labeled"u8) || value.SequenceEqual("unlabeled"u8) || value.SequenceEqual("opened"u8) || value.SequenceEqual("edited"u8) || value.SequenceEqual("closed"u8) || value.SequenceEqual("reopened"u8) || value.SequenceEqual("synchronize"u8) || value.SequenceEqual("converted_to_draft"u8) || value.SequenceEqual("locked"u8) || value.SequenceEqual("unlocked"u8) || value.SequenceEqual("enqueued"u8) || value.SequenceEqual("dequeued"u8) || value.SequenceEqual("milestoned"u8) || value.SequenceEqual("demilestoned"u8) || value.SequenceEqual("ready_for_review"u8) || value.SequenceEqual("review_requested"u8) || value.SequenceEqual("review_request_removed"u8) || value.SequenceEqual("auto_merge_enabled"u8) || value.SequenceEqual("auto_merge_disabled"u8);
         }    }
 }
