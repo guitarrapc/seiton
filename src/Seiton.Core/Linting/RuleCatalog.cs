@@ -18,6 +18,7 @@ internal static class RuleCatalog
         ("dangerous-triggers", 6, static () => new DangerousTriggersRule()),
         ("job-permissions-required", 7, static () => new JobPermissionsRequiredRule()),
         ("needs-graph", 8, static () => new NeedsGraphRule()),
+        ("shell-name", 9, static () => new ShellNameRule()),
     ];
 
     public static IRule[] CreateDefaultRules()

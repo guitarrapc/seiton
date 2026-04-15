@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(9);
+        await Assert.That(rules.Length).IsEqualTo(10);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -292,6 +292,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[6].Id).IsEqualTo("dangerous-triggers");
         await Assert.That(rules[7].Id).IsEqualTo("job-permissions-required");
         await Assert.That(rules[8].Id).IsEqualTo("needs-graph");
+        await Assert.That(rules[9].Id).IsEqualTo("shell-name");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -302,6 +303,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("dangerous-triggers")).IsEqualTo(6);
         await Assert.That(RuleCatalog.GetPriority("job-permissions-required")).IsEqualTo(7);
         await Assert.That(RuleCatalog.GetPriority("needs-graph")).IsEqualTo(8);
+        await Assert.That(RuleCatalog.GetPriority("shell-name")).IsEqualTo(9);
     }
 
     [Test]
@@ -969,6 +971,145 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ShellNameRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-bash",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+                          shell: bash
+            """,
+            []),
+            new RuleCase(
+            "ok-pwsh",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+                          shell: pwsh
+            """,
+            []),
+            new RuleCase(
+            "ok-powershell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+                          shell: powershell
+            """,
+            []),
+            new RuleCase(
+            "ok-sh",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+                          shell: sh
+            """,
+            []),
+            new RuleCase(
+            "ok-cmd",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+                          shell: cmd
+            """,
+            []),
+            new RuleCase(
+            "ok-python",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: print('ok')
+                          shell: python
+            """,
+            []),
+            new RuleCase(
+            "ok-expression-skipped",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+                          shell: ${{ inputs.shell }}
+            """,
+            []),
+            new RuleCase(
+            "ok-no-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-invalid-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+                          shell: zsh
+            """,
+            ["shell name", "invalid"]),
+            new RuleCase(
+            "ng-empty-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+                          shell: ''
+            """,
+            ["shell name", "invalid"]),
+        };
+
+        await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
     }
 
     [Test]

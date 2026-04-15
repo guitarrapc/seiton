@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` の 9 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` の 10 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）が利用可能 |
 | ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
@@ -30,7 +30,9 @@
 | `unpinned-uses` | `UnpinnedUsesRule` | `uses:` の ref が 40 桁 hex 以外（`@v4` / `@main` 等）の場合に warning。`./` ローカル・`docker://` は除外。reusable workflow も対象 | zizmor / ghalint |
 | `unpinned-image` | `UnpinnedImageRule` | `uses: docker://...` / `container.image` / `services.*.image` が `@sha256:<64-hex>` 以外の場合に warning | 独自 |
 | `dangerous-triggers` | `DangerousTriggersRule` | `pull_request_target` / `workflow_run` を検出したら warning | zizmor |
-| `job-permissions-required` | `JobPermissionsRequiredRule` | `permissions` 未定義の全 job（通常 job・reusable workflow 呼び出し job 共通）を warning | ghalint || `needs-graph` | `NeedsGraphRule` | `needs` で存在しない job ID を参照している場合に error | actionlint |
+| `job-permissions-required` | `JobPermissionsRequiredRule` | `permissions` 未定義の全 job（通常 job・reusable workflow 呼び出し job 共通）を warning | ghalint || `needs-graph` | `NeedsGraphRule` | `needs` で存在しない job ID を参照している場合に error。循環参照を DFS で検出して error | actionlint |
+| `shell-name` | `ShellNameRule` | `run:` step の `shell:` 値が有効値（bash / sh / pwsh / powershell / cmd / python）以外の場合に error | actionlint |
+
 ---
 
 ## インフラギャップ
@@ -186,6 +188,8 @@
   - それ以外は error を報告
 
 **完了条件**: 有効シェル名は通過、無効名はエラーのテストがパスする
+
+**実装メモ**: 完了。`ShellNameRule` を実装。`VisitStep` で `ExecRun.Shell` が非 null の場合に検査。`IsValidShellName()` で `bash` / `sh` / `pwsh` / `powershell` / `cmd` / `python` の 6 値を UTF-8 span 比較。`Expression is not null` だけでなく `IndexOf("${{"u8) >= 0` のバイトスキャンで式値をスキップ（パーサーが `Shell` の `Expression` を常に設定するわけではないため）。`RuleBase` に `AddStepError(step, message, location)` ヘルパーを追加。エラー位置は `run.Shell.Range` を使用。`RuleCatalog` に priority 9 で登録済み。table-driven 回帰テスト（10 ケース）を `RuleInterfaceTests` に追加。
 
 ### Step 2.7: RuleCatalog に P1 ルールを登録
 
@@ -411,7 +415,7 @@ P4 --> P5B
 | 6 | `dangerous-triggers` | **実装済み** | zizmor | VisitEvent |
 | 7 | `job-permissions-required` | **実装済み** | ghalint | — |
 | 8 | `needs-graph` | **実装済み** | actionlint | — |
-| 9 | `shell-name` | Phase 2 | actionlint | — |
+| 9 | `shell-name` | **実装済み** | actionlint | — |
 | 10 | `runner-label` | Phase 3 | actionlint | RunnerLabels.g.cs |
 | 11 | `id-naming` | Phase 3 | actionlint | — |
 | 12 | `glob-pattern` | Phase 3 | actionlint | VisitEvent |

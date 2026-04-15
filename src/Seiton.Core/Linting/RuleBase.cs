@@ -56,6 +56,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildStepLocation(step));
     }
 
+    protected void AddStepError(Step step, string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location);
+    }
+
     protected void AddJobWarning(Job job, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildJobLocation(job));
