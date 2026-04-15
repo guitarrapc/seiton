@@ -2024,6 +2024,114 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_NonDisableableRule_InRuleOptions_ReportsConfigurationErrorAndKeepsRuleEnabled()
+    {
+        var yaml = """
+        on: push
+        permissions: write-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["deny-write-all"] = new RuleOption(Enabled: false),
+            },
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_MinimumSeverity_InRuleOptions_ReportsConfigurationErrorAndKeepsEffectiveSeverity()
+    {
+        var yaml = """
+        on: push
+        permissions: write-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["deny-write-all"] = new RuleOption(Severity: DiagnosticSeverity.Warning),
+            },
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
+        var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-write-all");
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
+        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_NonDisableableRule_InlineSuppression_ReportsConfigurationErrorAndDoesNotSuppress()
+    {
+        var yaml = """
+        on: push
+        # seiton: disable-next-line deny-write-all
+        permissions: write-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-inline.yml");
+        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_NonDisableableRule_ConfigExclusion_ReportsConfigurationErrorAndDoesNotSuppress()
+    {
+        var yaml = """
+        on: push
+        permissions: write-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", ["deny-write-all"]),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-exclusion.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task LintEngine_RuleOptions_UnknownRuleId_ReportsConfigurationErrorWithSuggestion()
     {
         var yaml = """

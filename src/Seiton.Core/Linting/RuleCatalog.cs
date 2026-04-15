@@ -1,4 +1,6 @@
-﻿namespace Seiton.Core.Linting;
+﻿using Seiton.Core.Parsing;
+
+namespace Seiton.Core.Linting;
 
 internal static class RuleCatalog
 {
@@ -31,6 +33,10 @@ internal static class RuleCatalog
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
 
     static readonly IReadOnlyDictionary<string, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
+
+    static readonly IReadOnlySet<string> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
+
+    static readonly IReadOnlyDictionary<string, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
 
     public static IRule[] CreateDefaultRules()
     {
@@ -142,6 +148,23 @@ internal static class RuleCatalog
         return ids;
     }
 
+    public static bool IsNonDisableable(string? ruleId)
+    {
+        return TryResolveRuleId(ruleId, out var resolvedRuleId)
+            && NonDisableableRuleIds.Contains(resolvedRuleId);
+    }
+
+    public static bool TryGetMinimumSeverity(string? ruleId, out DiagnosticSeverity minimumSeverity)
+    {
+        minimumSeverity = default;
+        if (!TryResolveRuleId(ruleId, out var resolvedRuleId))
+        {
+            return false;
+        }
+
+        return MinimumSeverities.TryGetValue(resolvedRuleId, out minimumSeverity);
+    }
+
     static bool TryFindRuleIdBySemanticId(string input, out string resolvedRuleId)
     {
         resolvedRuleId = string.Empty;
@@ -181,6 +204,22 @@ internal static class RuleCatalog
         }
 
         return reverse;
+    }
+
+    static IReadOnlySet<string> BuildNonDisableableRuleIdSet()
+    {
+        return new HashSet<string>(StringComparer.Ordinal)
+        {
+            "deny-write-all",
+        };
+    }
+
+    static IReadOnlyDictionary<string, DiagnosticSeverity> BuildMinimumSeverityMap()
+    {
+        return new Dictionary<string, DiagnosticSeverity>(StringComparer.Ordinal)
+        {
+            ["deny-write-all"] = DiagnosticSeverity.Error,
+        };
     }
 
     static int ComputeEditDistanceIgnoreCase(string left, string right)

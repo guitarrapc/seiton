@@ -14,7 +14,7 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` の 15 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
-| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性を実装済み。fail-safe 制約は実装待ち |
+| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約を実装済み |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
 
 ---
@@ -375,6 +375,8 @@
 - 制約違反設定は設定エラーとして報告
 
 **完了条件**: disable 不可ルール無効化や最低 severity 未満設定が失敗するテストがパスする
+
+**実装メモ**: 完了。`RuleCatalog` に fail-safe ポリシー（`IsNonDisableable` / `TryGetMinimumSeverity`）を追加し、`deny-write-all` を non-disableable + minimum severity `Error` として定義。`LintEngine` では `RuleOptions` 正規化時に disable 不可/最低 severity 制約を検証し、違反設定は設定エラーとして報告して無効化する。inline (`seiton: disable-*`) と config exclusion (`LintConfig.Exclusions`) でも non-disableable rule の抑制要求を設定エラーとして拒否。`RuleInterfaceTests` に rule-options / inline / config exclusion の fail-safe 回帰テストを追加し、制約違反時にルール診断が抑制されないことを検証。
 
 ---
 

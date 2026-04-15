@@ -602,6 +602,17 @@ public sealed class LintEngine
             var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
             if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
             {
+                if (RuleCatalog.IsNonDisableable(internalRuleId))
+                {
+                    var nonDisableableTokenStart = lineStartOffset + tokenColumn - 1;
+                    configurationDiagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        $"rule '{internalRuleId}' is non-disableable",
+                        new TextRange(nonDisableableTokenStart, ruleIdToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + ruleIdToken.Length),
+                        FilePath: filePath));
+                    continue;
+                }
+
                 target[internalRuleId] = new SuppressionAnchor(lineNumber, tokenColumn);
                 continue;
             }
@@ -634,7 +645,31 @@ public sealed class LintEngine
         {
             if (RuleCatalog.TryResolveRuleId(pair.Key, out var resolvedRuleId))
             {
-                normalized[resolvedRuleId] = pair.Value;
+                var option = pair.Value;
+
+                if (!option.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        $"rule '{resolvedRuleId}' is non-disableable",
+                        new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
+                        FilePath: filePath));
+                    option = option with { Enabled = true };
+                }
+
+                if (option.Severity is not null
+                    && RuleCatalog.TryGetMinimumSeverity(resolvedRuleId, out var minimumSeverity)
+                    && option.Severity.Value < minimumSeverity)
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        $"rule '{resolvedRuleId}' minimum severity is '{minimumSeverity}', but '{option.Severity.Value}' was specified",
+                        new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
+                        FilePath: filePath));
+                    option = option with { Severity = null };
+                }
+
+                normalized[resolvedRuleId] = option;
                 continue;
             }
 
@@ -680,6 +715,16 @@ public sealed class LintEngine
                 var ruleId = ruleIds[j];
                 if (RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
                 {
+                    if (RuleCatalog.IsNonDisableable(resolvedRuleId))
+                    {
+                        diagnostics.Add(new Diagnostic(
+                            DiagnosticSeverity.Error,
+                            $"rule '{resolvedRuleId}' is non-disableable",
+                            new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
+                            FilePath: filePath));
+                        continue;
+                    }
+
                     normalizedRuleIds.Add(resolvedRuleId);
                     continue;
                 }
