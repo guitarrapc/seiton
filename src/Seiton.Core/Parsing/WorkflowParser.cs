@@ -974,6 +974,12 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("env"u8))
             {
                 reader.Read(); // consume key
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "env";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
                     envNode = ParseEnvNode(ref reader, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.Job);
@@ -1044,6 +1050,12 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("environment"u8))
             {
                 reader.Read();
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "environment";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
                     environmentNode = ParseEnvironmentNode(ref reader, diagnostics, source, jobId);
@@ -1064,6 +1076,12 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("outputs"u8))
             {
                 reader.Read();
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "outputs";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
                     outputsNode = ParseOutputsNode(ref reader, diagnostics, source, jobId);
@@ -1074,6 +1092,12 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("defaults"u8))
             {
                 reader.Read();
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "defaults";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
                     defaultsNode = ParseDefaultsNode(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' defaults must be mapping");
@@ -1084,6 +1108,12 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("timeout-minutes"u8))
             {
                 reader.Read();
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "timeout-minutes";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
                     timeoutMinutesNode = ParseFloat(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number");
@@ -1098,6 +1128,12 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("continue-on-error"u8))
             {
                 reader.Read();
+                if (stepsOnlyKeyInReusable is null)
+                {
+                    stepsOnlyKeyInReusable = "continue-on-error";
+                    stepsOnlyKeyInReusableMark = keyMark;
+                }
+
                 if (!reader.End)
                 {
                     continueOnErrorNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' continue-on-error must be bool or expression");

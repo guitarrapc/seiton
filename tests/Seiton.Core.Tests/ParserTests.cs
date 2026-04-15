@@ -1317,6 +1317,24 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_JobMissingSteps_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires steps", StringComparison.Ordinal))).IsTrue();
+
+        var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml");
+        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("requires steps", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_JobWithUsesAndSteps_ReportsError()
     {
         var yaml = """
@@ -1815,22 +1833,50 @@ public sealed class ParserTests
     }
 
     [Test]
-    public async Task Parse_ReusableWorkflowWithStepsOnlyKey_ReportsError()
+    public async Task Parse_ReusableWorkflowForbiddenKeys_ReportsError_TableDriven()
     {
-        var yaml = """
-        on: push
-        jobs:
-            reuse:
-                uses: owner/repo/.github/workflows/reuse.yml@main
-                container: node:20
-        """
-        .Replace("\r\n", "\n");
+        static string BuildYaml(string body)
+        {
+            return (
+                    "on: push\n"
+                    + "jobs:\n"
+                    + "  reuse:\n"
+                    + "    uses: owner/repo/.github/workflows/reuse.yml@main\n"
+                    + body
+                    + "\n")
+                    .Replace("\r\n", "\n");
+        }
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-reuse-steps-only-key.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+        var cases = new (string Name, string Body, string Key)[]
+        {
+            ("runs-on", "    runs-on: ubuntu-latest", "runs-on"),
+            ("environment", "    environment: prod", "environment"),
+            ("outputs", "    outputs:\n      digest: sha256", "outputs"),
+            ("env", "    env:\n      FOO: bar", "env"),
+            ("defaults", "    defaults:\n      run:\n        shell: bash", "defaults"),
+            ("steps", "    steps:\n      - run: echo ok", "steps"),
+            ("timeout-minutes", "    timeout-minutes: 5", "timeout-minutes"),
+            ("continue-on-error", "    continue-on-error: true", "continue-on-error"),
+            ("container", "    container: node:20", "container"),
+        };
 
-        var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-reuse-steps-only-key.yml");
-        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+        foreach (var c in cases)
+        {
+            var yaml = BuildYaml(c.Body);
+            var fileName = $"job-reuse-forbidden-{c.Name}.yml";
+
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), fileName);
+            if (!result.Diagnostics.Any(x => x.Message.Contains($"key '{c.Key}' is not allowed", StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException($"parser case '{c.Name}' diagnostics: {string.Join(" | ", result.Diagnostics.Select(x => x.Message))}");
+            }
+
+            var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), fileName);
+            if (!lintResult.Diagnostics.Any(x => x.Message.Contains($"key '{c.Key}' is not allowed", StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException($"lint case '{c.Name}' diagnostics: {string.Join(" | ", lintResult.Diagnostics.Select(x => x.Message))}");
+            }
+        }
     }
 
     [Test]
@@ -1853,6 +1899,27 @@ public sealed class ParserTests
 
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobSecretsWithoutUses_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                secrets: inherit
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
+
+        var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml");
+        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

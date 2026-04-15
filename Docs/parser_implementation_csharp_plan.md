@@ -888,16 +888,16 @@
 
 #### N. Parser 必須制約の未固定テストを補完する
 
-- [ ] normal job で `steps` 欠落時の parser diagnostic を専用回帰テストで固定する
+- [x] normal job で `steps` 欠落時の parser diagnostic を専用回帰テストで固定する
   - spec 根拠: `Seiton_Parser_spec.md` §3.10 / §12
   - 現状: 実装は `job '{id}' requires steps (or uses)` を出すが、`runs-on` 欠落ほど明示的な専用テストがない
-- [ ] `job.secrets` が `uses` なしで指定された場合の parser diagnostic を専用回帰テストで固定する
+- [x] `job.secrets` が `uses` なしで指定された場合の parser diagnostic を専用回帰テストで固定する
   - spec 根拠: `Seiton_Parser_spec.md` §3.10 / §12
   - 現状: `secrets: not-inherit` の scalar 形エラーはあるが、post-validation の `key 'secrets' requires uses` を直接固定していない
-- [ ] reusable workflow call で禁止される steps-only keys の負ケースを table-driven で網羅する
+- [x] reusable workflow call で禁止される steps-only keys の負ケースを table-driven で網羅する
   - 対象: `runs-on`, `environment`, `outputs`, `env`, `defaults`, `steps`, `timeout-minutes`, `continue-on-error`, `container`
   - 現状: `container` 1 ケースのみで、`TryGetStepsOnlyReusableJobKeyName(...)` の一覧全体は固定されていない
-- [ ] parser と `LintEngine.Check()` の両方で同一メッセージが出ることを確認する
+- [x] parser と `LintEngine.Check()` の両方で同一メッセージが出ることを確認する
 
 完了条件:
 - `ParserTests` に `steps required`, `secrets requires uses`, reusable workflow forbidden keys 一覧の負ケースが追加される
@@ -905,6 +905,13 @@
 
 期待成果:
 - 「実装はあるが専用テストがない」状態を解消し、parser spec coverage をテスト観点でも閉じる
+
+実装結果:
+- `ParserTests` に `Parse_JobMissingSteps_ReportsError` を追加し、normal job の `steps` 欠落で parser / `LintEngine.Check()` の双方が `requires steps` を返すことを固定した。
+- `ParserTests` に `Parse_JobSecretsWithoutUses_ReportsError` を追加し、`secrets: inherit` を `uses` なしで与えた際の post-validation diagnostics（`key 'secrets' requires uses`）を直接検証するようにした。
+- 既存の単発 forbidden-key テストを `Parse_ReusableWorkflowForbiddenKeys_ReportsError_TableDriven` へ置き換え、`runs-on`, `environment`, `outputs`, `env`, `defaults`, `steps`, `timeout-minutes`, `continue-on-error`, `container` の 9 ケースを table-driven で固定した。
+- この table-driven 回帰で露出した実装漏れとして、reusable workflow job における `environment`, `outputs`, `env`, `defaults`, `timeout-minutes`, `continue-on-error` が `stepsOnlyKeyInReusable` に記録されていなかったため、`WorkflowParser.ParseJobNode` の direct key branches でも forbidden-key tracking を追加した。
+- `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj` で 161 passed / 0 failed を確認。
 
 #### O. Rule Engine の spec 充足方針を確定する
 
