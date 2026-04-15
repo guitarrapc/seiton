@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` の 13 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` の 14 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
@@ -36,6 +36,7 @@
 | `runner-label` | `RunnerLabelRule` | GitHub-hosted 既知 runner label 以外（`self-hosted` 含有・式は除外）の `runs-on` を warning | actionlint |
 | `id-naming` | `IdNamingRule` | `job.id` / `step.id` が `[a-zA-Z0-9_-]` 以外の文字を含む場合に error | actionlint |
 | `glob-pattern` | `GlobPatternRule` | `on.<event>.branches/tags/paths` 系フィルタ値の glob 構文（`***` / 未閉鎖 `[` / 余剰 `]`）を検査し、不正を error | actionlint |
+| `deny-write-all` | `DenyWriteAllRule` | `permissions: write-all`（workflow / job）を検出して error | ghalint |
 
 ---
 
@@ -267,6 +268,8 @@
 
 **完了条件**: `permissions: write-all` が error になるテストがパスする
 
+**実装メモ**: 完了。`DenyWriteAllRule` を独立クラスとして追加し、`VisitWorkflowPre` / `VisitJobPre` で `permissions.All` を検査。`write-all` を検出した場合は error を報告する。判定は UTF-8 span の `SequenceEqual("write-all"u8)` を使用し、式値（`Expression` 非 null または `${{` を含む値）は静的評価不能としてスキップ。診断位置は `permissions.All.Range`。`RuleCatalog` に priority 13 で登録済み。`RuleInterfaceTests` に table-driven 回帰テスト（4 ケース）を追加し、workflow/job 両方の `write-all` でエラーになることと `read-all`/scope 指定が通過することを検証。
+
 ### Step 3.5: credentials ルール
 
 **ファイル**: `src/Seiton.Core/Linting/CredentialsRule.cs`
@@ -432,8 +435,8 @@ P4 --> P5B
 | 9 | `shell-name` | **実装済み** | actionlint | — |
 | 10 | `runner-label` | **実装済み** | actionlint | RunnerLabels.g.cs |
 | 11 | `id-naming` | **実装済み** | actionlint | — |
-| 12 | `glob-pattern` | Phase 3 | actionlint | VisitEvent |
-| 13 | `deny-write-all` | Phase 3 | ghalint | — |
+| 12 | `glob-pattern` | **実装済み** | actionlint | VisitEvent |
+| 13 | `deny-write-all` | **実装済み** | ghalint | — |
 | 14 | `credentials` | Phase 3 | actionlint | — |
 | — | `template-injection` | Phase 5 | zizmor | 式 AST 連携 |
 | — | `expr-undefined-var` | Phase 5 | actionlint | 式 AST 連携 |

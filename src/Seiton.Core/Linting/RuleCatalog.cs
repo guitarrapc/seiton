@@ -22,6 +22,7 @@ internal static class RuleCatalog
         ("runner-label", 10, static () => new RunnerLabelRule()),
         ("id-naming", 11, static () => new IdNamingRule()),
         ("glob-pattern", 12, static () => new GlobPatternRule()),
+        ("deny-write-all", 13, static () => new DenyWriteAllRule()),
     ];
 
     public static IRule[] CreateDefaultRules()

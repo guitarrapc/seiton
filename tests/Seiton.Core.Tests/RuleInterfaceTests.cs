@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(13);
+        await Assert.That(rules.Length).IsEqualTo(14);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -296,6 +296,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[10].Id).IsEqualTo("runner-label");
         await Assert.That(rules[11].Id).IsEqualTo("id-naming");
         await Assert.That(rules[12].Id).IsEqualTo("glob-pattern");
+        await Assert.That(rules[13].Id).IsEqualTo("deny-write-all");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -310,6 +311,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("runner-label")).IsEqualTo(10);
         await Assert.That(RuleCatalog.GetPriority("id-naming")).IsEqualTo(11);
         await Assert.That(RuleCatalog.GetPriority("glob-pattern")).IsEqualTo(12);
+        await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(13);
     }
 
     [Test]
@@ -1439,6 +1441,66 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_DenyWriteAllRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-workflow-read-all",
+            """
+            on: push
+            permissions: read-all
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-job-scopes-only",
+            """
+            on: push
+            jobs:
+                build:
+                    permissions:
+                        contents: write
+                        actions: read
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-write-all",
+            """
+            on: push
+            permissions: write-all
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'write-all' is forbidden"]),
+            new RuleCase(
+            "ng-job-write-all",
+            """
+            on: push
+            jobs:
+                build:
+                    permissions: write-all
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'write-all' is forbidden"]),
+        };
+
+        await AssertRuleCases(new DenyWriteAllRule(), "deny-write-all", cases);
     }
 
     [Test]
