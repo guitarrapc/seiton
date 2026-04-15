@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(10);
+        await Assert.That(rules.Length).IsEqualTo(11);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -293,6 +293,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[7].Id).IsEqualTo("job-permissions-required");
         await Assert.That(rules[8].Id).IsEqualTo("needs-graph");
         await Assert.That(rules[9].Id).IsEqualTo("shell-name");
+        await Assert.That(rules[10].Id).IsEqualTo("runner-label");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -304,6 +305,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("job-permissions-required")).IsEqualTo(7);
         await Assert.That(RuleCatalog.GetPriority("needs-graph")).IsEqualTo(8);
         await Assert.That(RuleCatalog.GetPriority("shell-name")).IsEqualTo(9);
+        await Assert.That(RuleCatalog.GetPriority("runner-label")).IsEqualTo(10);
     }
 
     [Test]
@@ -1170,6 +1172,114 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-ubuntu-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-windows-2022",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-2022
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-macos-14",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: macos-14
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-self-hosted-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [self-hosted, linux, x64, custom-runner]
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-runs-on-expression-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.runner }}
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-unknown-ubuntu-label",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-9999
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["not a known GitHub-hosted runner label"]),
+            new RuleCase(
+            "ng-unknown-mapping-label",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on:
+                        labels: [custom-hosted]
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["not a known GitHub-hosted runner label"]),
+            new RuleCase(
+            "ok-mapping-labels-with-self-hosted-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on:
+                        labels: [self-hosted, custom-hosted]
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
     }
 
     [Test]

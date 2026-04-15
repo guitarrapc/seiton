@@ -19,6 +19,7 @@ internal static class RuleCatalog
         ("job-permissions-required", 7, static () => new JobPermissionsRequiredRule()),
         ("needs-graph", 8, static () => new NeedsGraphRule()),
         ("shell-name", 9, static () => new ShellNameRule()),
+        ("runner-label", 10, static () => new RunnerLabelRule()),
     ];
 
     public static IRule[] CreateDefaultRules()
