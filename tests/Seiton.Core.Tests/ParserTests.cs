@@ -658,6 +658,116 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_DefaultsMissingRun_ReportsError_TableDriven()
+    {
+        var cases = new (string Name, string Yaml)[]
+        {
+            (
+                "top-level defaults empty mapping",
+                """
+                on: push
+                defaults: {}
+                jobs: {}
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "top-level defaults with unexpected key only",
+                """
+                on: push
+                defaults:
+                    foo: bar
+                jobs: {}
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "job-level defaults empty mapping",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        defaults: {}
+                        steps: []
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "job-level defaults with unexpected key only",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        defaults:
+                            foo: bar
+                        steps: []
+                """.Replace("\r\n", "\n")
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"defaults-missing-run-{i}.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("defaults should have run", StringComparison.Ordinal))).IsTrue();
+        }
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyMissingGroup_ReportsError_TableDriven()
+    {
+        var cases = new (string Name, string Yaml)[]
+        {
+            (
+                "top-level concurrency cancel-in-progress only",
+                """
+                on: push
+                concurrency:
+                    cancel-in-progress: true
+                jobs: {}
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "top-level concurrency empty mapping",
+                """
+                on: push
+                concurrency: {}
+                jobs: {}
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "job-level concurrency cancel-in-progress only",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        concurrency:
+                            cancel-in-progress: false
+                        steps: []
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "job-level concurrency empty mapping",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        concurrency: {}
+                        steps: []
+                """.Replace("\r\n", "\n")
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"concurrency-missing-group-{i}.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("concurrency.group is required", StringComparison.Ordinal))).IsTrue();
+        }
+    }
+
+    [Test]
     public async Task Parse_OnRepositoryDispatch_PopulatesEventAst()
     {
         var yaml = """

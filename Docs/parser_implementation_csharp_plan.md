@@ -776,13 +776,13 @@
 
 #### J. Defaults / Concurrency の必須制約を spec に合わせる
 
-- [ ] `defaults.run` 未指定時に parser error を出す
+- [x] `defaults.run` 未指定時に parser error を出す
   - spec 根拠: `Seiton_Parser_spec.md` §3.7 / §12
   - 現状: `ParseDefaultsNode` は `run` が一度も出なくても `Defaults` を返す
-- [ ] `concurrency.group` 未指定時に parser error を出す
+- [x] `concurrency.group` 未指定時に parser error を出す
   - spec 根拠: `Seiton_Parser_spec.md` §3.8 / §12
   - 現状: `ParseConcurrencyNode` は `groupNode is null` の場合に無言で `null` を返す
-- [ ] top-level / job-level の両経路で負ケース回帰テストを追加する
+- [x] top-level / job-level の両経路で負ケース回帰テストを追加する
   - `defaults: {}`
   - `defaults: { foo: bar }`
   - `concurrency: { cancel-in-progress: true }`
@@ -791,6 +791,12 @@
 完了条件:
 - parser diagnostics が `defaults.run` / `concurrency.group` の欠落を確実に報告する
 - `ParserTests` に top-level / job-level の負ケースが追加される
+
+実装結果:
+- `ParseDefaultsNode` で `hasRun` フラグと `mappingMark` を追加。mapping 走査後に `!hasRun` の場合、`"defaults should have run"` エラーを追加して `null` を返す。
+- `ParseConcurrencyNode` で `mappingMark` を追加。`groupNode is null` 時に `"concurrency.group is required"` エラーを追加（top-level / job-level 共通）。
+- `ParserTests` に `Parse_DefaultsMissingRun_ReportsError_TableDriven`（4 ケース）と `Parse_ConcurrencyMissingGroup_ReportsError_TableDriven`（4 ケース）を追加。
+- `dotnet test` で 152 passed / 0 failed を確認。
 
 #### K. YAML polymorphic field の spec 差分を解消する
 

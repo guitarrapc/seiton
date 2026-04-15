@@ -487,6 +487,8 @@ public static class WorkflowParser
         StringNode? shellNode = null;
         StringNode? workingDirectoryNode = null;
         var keys = new HashSet<Utf8String>();
+        var hasRun = false;
+        var mappingMark = reader.CurrentStart;
 
         reader.Read(); // consume defaults mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -530,6 +532,7 @@ public static class WorkflowParser
 
             if (isRun)
             {
+                hasRun = true;
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
                     AddError(diagnostics, "workflow defaults.run must be mapping", reader.CurrentStart);
@@ -612,6 +615,12 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        if (!hasRun)
+        {
+            AddError(diagnostics, "defaults should have run", mappingMark);
+            return null;
+        }
+
         return new Defaults
         {
             Run = new DefaultsRun
@@ -649,6 +658,7 @@ public static class WorkflowParser
         StringNode? groupNode = null;
         BoolNode? cancelInProgressNode = null;
         var keys = new HashSet<Utf8String>();
+        var mappingMark = reader.CurrentStart;
         reader.Read(); // consume mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -713,6 +723,7 @@ public static class WorkflowParser
 
         if (groupNode is null)
         {
+            AddError(diagnostics, "concurrency.group is required", mappingMark);
             return null;
         }
 
