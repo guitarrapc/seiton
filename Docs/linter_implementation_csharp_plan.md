@@ -392,6 +392,8 @@
 
 - `ExpressionContext ExprContext { get; init; }` を追加し、式解析時のコンテキスト（イベント種別等）を渡せるようにする
 
+**実装メモ**: 完了。`LintConfig` に `ExprContext`（`ExpressionContext`）を追加し、`ExpressionContext.Empty` をデフォルト値として設定。`LintEngine` の `effectiveConfig` 生成時にも `config.ExprContext` を引き継ぐよう更新し、後続の式ベースルールが linter 実行コンテキストを参照できる受け口を整備した。
+
 ### Step 5.2: template-injection ルール
 
 **ファイル**: `src/Seiton.Core/Linting/TemplateInjectionRule.cs`

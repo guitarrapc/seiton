@@ -78,6 +78,7 @@ public sealed class LintEngine
             Utf8Yaml = utf8Yaml,
             FilePath = filePath,
             RuleOptions = normalizedRuleOptions.RuleOptions,
+            ExprContext = config?.ExprContext ?? ExpressionContext.Empty,
         };
 
         var activeRules = new List<IRule>(rules.Count);

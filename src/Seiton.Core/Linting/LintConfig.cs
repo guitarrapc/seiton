@@ -13,6 +13,14 @@ public sealed class LintConfig
     public IReadOnlyDictionary<string, RuleOption>? RuleOptions { get; init; }
 
     public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
+
+    public ExpressionContext ExprContext { get; init; } = ExpressionContext.Empty;
+}
+
+public sealed record ExpressionContext(
+    IReadOnlyList<string>? EventTypes = null)
+{
+    public static ExpressionContext Empty { get; } = new();
 }
 
 public sealed record RuleOption(bool Enabled = true, DiagnosticSeverity? Severity = null);
