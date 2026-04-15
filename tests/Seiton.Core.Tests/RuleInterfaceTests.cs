@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(15);
+        await Assert.That(rules.Length).IsEqualTo(16);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -298,6 +298,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[12].Id).IsEqualTo("glob-pattern");
         await Assert.That(rules[13].Id).IsEqualTo("deny-write-all");
         await Assert.That(rules[14].Id).IsEqualTo("credentials");
+        await Assert.That(rules[15].Id).IsEqualTo("template-injection");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -314,6 +315,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("glob-pattern")).IsEqualTo(12);
         await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(13);
         await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(14);
+        await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(15);
     }
 
     [Test]
@@ -1609,6 +1611,73 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new CredentialsRule(), "credentials", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-run-with-safe-expression",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.ref }}"
+            """,
+            []),
+            new RuleCase(
+            "ok-run-without-expression",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hello
+            """,
+            []),
+            new RuleCase(
+            "ng-run-uses-github-event-pull-request-title",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.pull_request.title }}"
+            """,
+            ["template injection risk", "run", "github.event"]),
+            new RuleCase(
+            "ng-env-uses-github-event-comment-body",
+            """
+            on: issue_comment
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            COMMENT_BODY: ${{ github.event.comment.body }}
+                          run: echo "$COMMENT_BODY"
+            """,
+            ["template injection risk", "env.COMMENT_BODY", "github.event"]),
+            new RuleCase(
+            "ng-run-uses-bracket-event-access",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github['event'].pull_request.title }}"
+            """,
+            ["template injection risk", "run", "github.event"]),
+        };
+
+        await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
     }
 
     [Test]

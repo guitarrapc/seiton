@@ -28,6 +28,7 @@ internal static class RuleCatalog
         ("glob-pattern", 12, static () => new GlobPatternRule()),
         ("deny-write-all", 13, static () => new DenyWriteAllRule()),
         ("credentials", 14, static () => new CredentialsRule()),
+        ("template-injection", 15, static () => new TemplateInjectionRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
