@@ -29,6 +29,7 @@ internal static class RuleCatalog
         ("deny-write-all", 13, static () => new DenyWriteAllRule()),
         ("credentials", 14, static () => new CredentialsRule()),
         ("template-injection", 15, static () => new TemplateInjectionRule()),
+        ("expr-undefined-var", 16, static () => new ExprUndefinedVarRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();

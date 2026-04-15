@@ -12,10 +12,10 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` の 16 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` の 17 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約を実装済み |
-| 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
+| 式ベースルール | `template-injection` / `expr-undefined-var` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
 
@@ -39,6 +39,7 @@
 | `deny-write-all` | `DenyWriteAllRule` | `permissions: write-all`（workflow / job）を検出して error | ghalint |
 | `credentials` | `CredentialsRule` | `job.container` / `job.services.*` の image がカスタムレジストリで credentials 未設定の場合に warning | actionlint |
 | `template-injection` | `TemplateInjectionRule` | `run:` / `step.env` の式に `github.event` 由来データを直接展開している場合に error | zizmor |
+| `expr-undefined-var` | `ExprUndefinedVarRule` | `job/step` の `if` / `env` / `with` における使用不可コンテキスト参照（例: `steps` in job）を error | actionlint |
 
 ---
 
@@ -414,6 +415,8 @@
 - `VisitStep` / `VisitJobPre` の `if:` / `env:` / `with:` を式 AST で解析
   - `Availability.g.cs` を参照して、使用コンテキストで有効でない変数を error 報告
 
+**実装メモ**: 完了。`ExprUndefinedVarRule` を追加し、`VisitJobPre` / `VisitStep` で `if`（全体式）と `env` / `with`（埋め込み式 `${{ ... }}`）を解析するよう実装。`ExpressionParser` + `ExpressionVisitor` で root identifier を抽出し、`Availability.IsRootContextAvailable` で job/step コンテキスト可用性を判定して未定義参照を error 報告する。`RuleCatalog` に priority 16 で登録し、`RuleInterfaceTests` に table-driven 回帰テスト（6 ケース）を追加。
+
 ---
 
 ## ルール実装ロードマップ
@@ -478,7 +481,7 @@ P4 --> P5B
 | 13 | `deny-write-all` | **実装済み** | ghalint | — |
 | 14 | `credentials` | **実装済み** | actionlint | — |
 | 15 | `template-injection` | **実装済み** | zizmor | 式 AST 連携 |
-| — | `expr-undefined-var` | Phase 5 | actionlint | 式 AST 連携 |
+| 16 | `expr-undefined-var` | **実装済み** | actionlint | 式 AST 連携 |
 
 ## チェックリスト（全 Phase 共通）
 

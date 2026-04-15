@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(16);
+        await Assert.That(rules.Length).IsEqualTo(17);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -299,6 +299,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[13].Id).IsEqualTo("deny-write-all");
         await Assert.That(rules[14].Id).IsEqualTo("credentials");
         await Assert.That(rules[15].Id).IsEqualTo("template-injection");
+        await Assert.That(rules[16].Id).IsEqualTo("expr-undefined-var");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -316,6 +317,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(13);
         await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(14);
         await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(15);
+        await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(16);
     }
 
     [Test]
@@ -1678,6 +1680,93 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-step-if-uses-steps-context",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: prep
+                          run: echo ok
+                        - if: ${{ steps.prep.outcome == 'success' }}
+                          run: echo next
+            """,
+            []),
+            new RuleCase(
+            "ok-step-with-safe-context",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                            repository: ${{ github.repository }}
+            """,
+            []),
+            new RuleCase(
+            "ng-job-if-uses-steps-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ steps.prep.outcome == 'success' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["job.if", "undefined context 'steps'", "job scope"]),
+            new RuleCase(
+            "ng-step-if-uses-unknown-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ foobar.value == 'x' }}
+                          run: echo ng
+            """,
+            ["step.if", "undefined context 'foobar'", "step scope"]),
+            new RuleCase(
+            "ng-step-env-uses-unknown-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            DATA: ${{ unknown.payload }}
+                          run: echo "$DATA"
+            """,
+            ["step.env.DATA", "undefined context 'unknown'", "step scope"]),
+            new RuleCase(
+            "ng-step-with-uses-unknown-context",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                            repository: ${{ unknown.repository }}
+            """,
+            ["step.with.repository", "undefined context 'unknown'", "step scope"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
     [Test]
