@@ -479,6 +479,78 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-action-pinned-sha",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567
+            """,
+            []),
+            new RuleCase(
+            "ng-action-tag-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            ["not pinned to a full-length commit SHA"]),
+            new RuleCase(
+            "ok-local-action-reference",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/setup
+            """,
+            []),
+            new RuleCase(
+            "ok-docker-action-reference",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker://rhysd/actionlint:latest
+            """,
+            []),
+            new RuleCase(
+            "ok-reusable-workflow-pinned-sha",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: owner/repo/.github/workflows/reusable.yml@0123456789abcdef0123456789abcdef01234567
+            """,
+            []),
+            new RuleCase(
+            "ng-reusable-workflow-branch-ref",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: owner/repo/.github/workflows/reusable.yml@main
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases);
+    }
+
+    [Test]
     public async Task LintEngine_DeduplicatesRuleDiagnostics_ByPriority()
     {
         var yaml = """
