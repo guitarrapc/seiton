@@ -292,6 +292,8 @@
 
 **完了条件**: `new LintEngine()` だけで全 P2 ルールが動作する
 
+**実装メモ**: 完了。`RuleCatalog.DefaultRuleFactories` に P2 ルール 5 件（`runner-label`=10 / `id-naming`=11 / `glob-pattern`=12 / `deny-write-all`=13 / `credentials`=14）を登録済み。`RuleCatalog_DefaultRules_MatchDocumentedScope` でルール数 15 件、ID 順、priority 値を検証済み。`new LintEngine()` のデフォルト実行で P2 ルールが有効化されることを確認。
+
 ---
 
 ## Phase 4: ルール制御機構
