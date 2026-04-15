@@ -6,6 +6,118 @@ namespace Seiton.Update.Tests;
 public sealed class PopularActionsPipelineStageTests
 {
     [Test]
+    public async Task ParseLocalSourceFiles_UsesTargetsConfigToSelectActionSet()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            var targetsJson = """
+                        {
+                            "schemaVersion": 1,
+                            "targets": [
+                                {
+                                    "actionRef": "actions/checkout@v4",
+                                    "uses": "actions/checkout",
+                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                                    "rawFileName": "actions_checkout_v4.action.yml"
+                                }
+                            ]
+                        }
+                        """;
+            File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            fetcher.ParseLocalSourceFiles(tempRepo);
+
+            var parsedPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "github", "parsed", "popular-actions-metadata.json");
+            using var doc = JsonDocument.Parse(File.ReadAllText(parsedPath));
+
+            var actions = doc.RootElement.GetProperty("actions").EnumerateArray().ToList();
+            await Assert.That(actions.Count).IsEqualTo(1);
+            await Assert.That(actions[0].GetProperty("uses").GetString()).IsEqualTo("actions/checkout");
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ParseLocalSourceFiles_WhenTargetsConfigHasDuplicateUses_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            var targetsJson = """
+                        {
+                            "schemaVersion": 1,
+                            "targets": [
+                                {
+                                    "actionRef": "actions/checkout@v4",
+                                    "uses": "actions/checkout",
+                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                                    "rawFileName": "actions_checkout_v4.action.yml"
+                                },
+                                {
+                                    "actionRef": "actions/checkout@v4",
+                                    "uses": "actions/checkout",
+                                    "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
+                                    "rawFileName": "actions_setup-node_v4.action.yml"
+                                }
+                            ]
+                        }
+                        """;
+            File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            await Assert.That(() => fetcher.ParseLocalSourceFiles(tempRepo)).ThrowsException();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ParseLocalSourceFiles_WhenTargetsConfigMissingRequiredField_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            var targetsJson = """
+                        {
+                            "schemaVersion": 1,
+                            "targets": [
+                                {
+                                    "actionRef": "actions/checkout@v4",
+                                    "uses": "",
+                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                                    "rawFileName": "actions_checkout_v4.action.yml"
+                                }
+                            ]
+                        }
+                        """;
+            File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            await Assert.That(() => fetcher.ParseLocalSourceFiles(tempRepo)).ThrowsException();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task ParseLocalSourceFiles_ProducesOutputMatchingCommittedParsedFile()
     {
         var repoRoot = FindRepoRoot();
@@ -99,8 +211,13 @@ public sealed class PopularActionsPipelineStageTests
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcRaw = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw");
+        var srcTargets = Path.Combine(repoRoot, "data", "sources", "popular-actions", "targets.json");
+        var dstTargetsDir = Path.Combine(tempRepo, "data", "sources", "popular-actions");
         var dstRaw = Path.Combine(tempRepo, "data", "sources", "popular-actions", "github", "raw");
+        Directory.CreateDirectory(dstTargetsDir);
         Directory.CreateDirectory(dstRaw);
+
+        File.Copy(srcTargets, Path.Combine(dstTargetsDir, "targets.json"), overwrite: true);
 
         foreach (var file in Directory.GetFiles(srcRaw))
         {

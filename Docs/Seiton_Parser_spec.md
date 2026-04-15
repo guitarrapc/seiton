@@ -974,6 +974,40 @@ Each stage may be invoked independently:
 - Stage 3 re-merges using existing parsed artifacts without network access.
 - An orchestrator command runs all 3 stages in sequence.
 
+### 9.4 Popular Actions Target Configuration (Normative)
+
+The set of popular actions to ingest is a repository-managed configuration, not a hard-coded list in updater source code.
+
+#### 9.4.1 Purpose
+
+- Make popular-actions ingestion extensible without code changes.
+- Keep target-set changes reviewable as data-only diffs.
+- Ensure deterministic regeneration when the target set changes.
+
+#### 9.4.2 Configuration Contract
+
+- Target-set configuration file path: `data/sources/popular-actions/targets.json`.
+- The file is committed to the repository and versioned with code.
+- Each entry identifies:
+  - canonical `uses` name (for generated lookup keys)
+  - immutable metadata source locator (owner/repo + ref, or equivalent fixed URL)
+  - local raw artifact file name used in stage-1 output
+
+The exact schema may evolve, but those three identity fields are required for contract compatibility.
+
+#### 9.4.3 Determinism and Validation Rules
+
+- Duplicate `uses` entries are invalid and must fail update execution.
+- Duplicate raw artifact file names are invalid and must fail update execution.
+- Entries with missing required identity fields are invalid and must fail update execution.
+- Merged canonical output must be stable under ASCII ordering of target entries and input names.
+
+#### 9.4.4 Operational Policy
+
+- Adding/removing a target action is performed by editing `targets.json` and re-running updater sync.
+- Target-set modifications and resulting generated diffs must be reviewed together in one change set.
+- CI `verify --dataset all` remains the contract gate for stale generated artifacts after target-set updates.
+
 ---
 
 ## 10. Diagnostic Specification

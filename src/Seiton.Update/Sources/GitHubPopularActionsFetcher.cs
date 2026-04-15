@@ -8,17 +8,6 @@ namespace Seiton.Update.Sources;
 
 internal sealed class GitHubPopularActionsFetcher
 {
-    static readonly PopularActionSource[] PopularActionSources =
-    [
-        new("actions/checkout@v4", "actions/checkout", "https://raw.githubusercontent.com/actions/checkout/v4/action.yml", "actions_checkout_v4.action.yml"),
-        new("actions/setup-dotnet@v4", "actions/setup-dotnet", "https://raw.githubusercontent.com/actions/setup-dotnet/v4/action.yml", "actions_setup-dotnet_v4.action.yml"),
-        new("actions/setup-node@v4", "actions/setup-node", "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml", "actions_setup-node_v4.action.yml"),
-        new("actions/cache@v4", "actions/cache", "https://raw.githubusercontent.com/actions/cache/v4/action.yml", "actions_cache_v4.action.yml"),
-        new("actions/upload-artifact@v4", "actions/upload-artifact", "https://raw.githubusercontent.com/actions/upload-artifact/v4/action.yml", "actions_upload-artifact_v4.action.yml"),
-        new("actions/download-artifact@v4", "actions/download-artifact", "https://raw.githubusercontent.com/actions/download-artifact/v4/action.yml", "actions_download-artifact_v4.action.yml"),
-        new("docker/login-action@v3", "docker/login-action", "https://raw.githubusercontent.com/docker/login-action/v3/action.yml", "docker_login-action_v3.action.yml"),
-    ];
-
     static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -27,13 +16,14 @@ internal sealed class GitHubPopularActionsFetcher
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
     {
+        var sources = LoadSources(repoRoot);
         await FetchSourceFilesAsync(repoRoot);
         ParseLocalSourceFiles(repoRoot);
         MergeParsedSources(repoRoot);
 
         var paths = Paths(repoRoot);
         var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var source in PopularActionSources)
+        foreach (var source in sources)
         {
             var path = Path.Combine(paths.RawDir, source.RawFileName);
             hashes[source.RawFileName] = ComputeSha256(File.ReadAllText(path));
@@ -42,7 +32,7 @@ internal sealed class GitHubPopularActionsFetcher
         return new SourceManifestEntry
         {
             Dataset = "popular-actions",
-            SourceUrls = PopularActionSources.Select(static x => x.Url).ToList(),
+            SourceUrls = sources.Select(static x => x.Url).ToList(),
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = hashes,
         };
@@ -51,6 +41,7 @@ internal sealed class GitHubPopularActionsFetcher
     public async Task FetchSourceFilesAsync(string repoRoot)
     {
         UpdateLogger.Info("[fetch:popular-actions:sources] downloading official GitHub action metadata files...");
+        var sources = LoadSources(repoRoot);
 
         using var client = new HttpClient();
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
@@ -59,7 +50,7 @@ internal sealed class GitHubPopularActionsFetcher
         var paths = Paths(repoRoot);
         Directory.CreateDirectory(paths.RawDir);
 
-        foreach (var source in PopularActionSources)
+        foreach (var source in sources)
         {
             var content = await client.GetStringAsync(source.Url);
             var hash = ComputeSha256(content);
@@ -73,7 +64,8 @@ internal sealed class GitHubPopularActionsFetcher
     public void ParseLocalSourceFiles(string repoRoot)
     {
         var paths = Paths(repoRoot);
-        foreach (var source in PopularActionSources)
+        var sources = LoadSources(repoRoot);
+        foreach (var source in sources)
         {
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
             if (!File.Exists(rawPath))
@@ -94,7 +86,7 @@ internal sealed class GitHubPopularActionsFetcher
             Actions = [],
         };
 
-        foreach (var source in PopularActionSources)
+        foreach (var source in sources)
         {
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
             var text = File.ReadAllText(rawPath);
@@ -182,6 +174,86 @@ internal sealed class GitHubPopularActionsFetcher
         };
     }
 
+    static IReadOnlyList<PopularActionSource> LoadSources(string repoRoot)
+    {
+        var configPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "targets.json");
+        if (!File.Exists(configPath))
+        {
+            throw new FileNotFoundException(
+                "Popular-actions target config is missing. Expected data/sources/popular-actions/targets.json.",
+                configPath);
+        }
+
+        var configText = File.ReadAllText(configPath);
+        var config = JsonSerializer.Deserialize<PopularActionsTargetConfig>(configText, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        }) ?? throw new InvalidDataException($"Invalid popular-actions target config: {configPath}");
+
+        var sources = (config.Targets ?? [])
+            .Select(static x => new PopularActionSource
+            {
+                ActionRef = (x.ActionRef ?? string.Empty).Trim(),
+                Uses = (x.Uses ?? string.Empty).Trim(),
+                Url = (x.Url ?? string.Empty).Trim(),
+                RawFileName = (x.RawFileName ?? string.Empty).Trim(),
+            })
+            .ToList();
+
+        if (sources.Count == 0)
+        {
+            throw new InvalidDataException($"Popular-actions target config has no targets: {configPath}");
+        }
+
+        var seenUses = new HashSet<string>(StringComparer.Ordinal);
+        var seenRawFileNames = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < sources.Count; i++)
+        {
+            var source = sources[i];
+            var entryName = $"targets[{i}]";
+
+            if (string.IsNullOrWhiteSpace(source.Uses))
+            {
+                throw new InvalidDataException($"Popular-actions target config {entryName}.uses is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(source.Url))
+            {
+                throw new InvalidDataException($"Popular-actions target config {entryName}.url is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(source.RawFileName))
+            {
+                throw new InvalidDataException($"Popular-actions target config {entryName}.rawFileName is required.");
+            }
+
+            if (source.RawFileName.IndexOfAny(['/', '\\']) >= 0)
+            {
+                throw new InvalidDataException($"Popular-actions target config {entryName}.rawFileName must be a file name only.");
+            }
+
+            if (!seenUses.Add(source.Uses))
+            {
+                throw new InvalidDataException($"Popular-actions target config has duplicate uses: {source.Uses}");
+            }
+
+            if (!seenRawFileNames.Add(source.RawFileName))
+            {
+                throw new InvalidDataException($"Popular-actions target config has duplicate rawFileName: {source.RawFileName}");
+            }
+
+            if (string.IsNullOrWhiteSpace(source.ActionRef))
+            {
+                source.ActionRef = source.Uses;
+            }
+        }
+
+        return sources
+            .OrderBy(static x => x.Uses, StringComparer.Ordinal)
+            .ToList();
+    }
+
     static string ComputeSha256(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
@@ -191,18 +263,16 @@ internal sealed class GitHubPopularActionsFetcher
 
     sealed class PopularActionSource
     {
-        public PopularActionSource(string actionRef, string uses, string url, string rawFileName)
-        {
-            ActionRef = actionRef;
-            Uses = uses;
-            Url = url;
-            RawFileName = rawFileName;
-        }
+        public string ActionRef { get; set; } = string.Empty;
+        public string Uses { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
+        public string RawFileName { get; set; } = string.Empty;
+    }
 
-        public string ActionRef { get; }
-        public string Uses { get; }
-        public string Url { get; }
-        public string RawFileName { get; }
+    sealed class PopularActionsTargetConfig
+    {
+        public int SchemaVersion { get; set; } = 1;
+        public List<PopularActionSource>? Targets { get; set; }
     }
 
     sealed class PopularActionsPaths

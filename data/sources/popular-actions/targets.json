@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "actionRef": "actions/cache@v4",
+      "uses": "actions/cache",
+      "url": "https://raw.githubusercontent.com/actions/cache/v4/action.yml",
+      "rawFileName": "actions_cache_v4.action.yml"
+    },
+    {
+      "actionRef": "actions/checkout@v4",
+      "uses": "actions/checkout",
+      "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+      "rawFileName": "actions_checkout_v4.action.yml"
+    },
+    {
+      "actionRef": "actions/download-artifact@v4",
+      "uses": "actions/download-artifact",
+      "url": "https://raw.githubusercontent.com/actions/download-artifact/v4/action.yml",
+      "rawFileName": "actions_download-artifact_v4.action.yml"
+    },
+    {
+      "actionRef": "actions/setup-dotnet@v4",
+      "uses": "actions/setup-dotnet",
+      "url": "https://raw.githubusercontent.com/actions/setup-dotnet/v4/action.yml",
+      "rawFileName": "actions_setup-dotnet_v4.action.yml"
+    },
+    {
+      "actionRef": "actions/setup-node@v4",
+      "uses": "actions/setup-node",
+      "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
+      "rawFileName": "actions_setup-node_v4.action.yml"
+    },
+    {
+      "actionRef": "actions/upload-artifact@v4",
+      "uses": "actions/upload-artifact",
+      "url": "https://raw.githubusercontent.com/actions/upload-artifact/v4/action.yml",
+      "rawFileName": "actions_upload-artifact_v4.action.yml"
+    },
+    {
+      "actionRef": "docker/login-action@v3",
+      "uses": "docker/login-action",
+      "url": "https://raw.githubusercontent.com/docker/login-action/v3/action.yml",
+      "rawFileName": "docker_login-action_v3.action.yml"
+    }
+  ]
+}

@@ -1300,6 +1300,15 @@ data/sources/manifest.json                    ← provenance metadata (dataset, 
 
 All artifacts are committed to the repository.
 
+### 9.4 Popular Actions Target Configuration (Spec §9.4)
+
+Popular-actions ingestion is driven by repository configuration instead of hard-coded targets.
+
+- Target-set file: `data/sources/popular-actions/targets.json`
+- Required identity fields per entry: canonical `uses`, immutable source locator, raw artifact file name
+- Invalid configuration (duplicate `uses`, duplicate raw artifact file names, missing required identity fields) must fail updater execution
+- Target-set updates are applied by editing configuration and re-running updater sync/verify
+
 ---
 
 ## 10. Diagnostic Model (Spec §10)

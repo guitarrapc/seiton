@@ -1272,6 +1272,19 @@ data/sources/manifest.json
 - `*ParseLocalSourceFiles` and `*MergeParsedSources` are network-free and reproducible from cached raw artifacts.
 - Each stage writes Git-tracked artifacts enabling independent review of downloads, parse results, and merge decisions.
 
+### 9.4 Popular Actions Target Configuration (Spec §9.4)
+
+Popular-actions ingestion uses a repository-managed target-set configuration file:
+
+- `data/sources/popular-actions/targets.json`
+
+Contract highlights:
+
+- Target entries are data, not hard-coded source constants.
+- Each entry must provide canonical `uses`, immutable source locator, and raw artifact file name.
+- Duplicate `uses` or duplicate raw artifact file names are invalid and fail updater execution.
+- Target-set edits are applied by updating `targets.json` and running `sync --dataset popular-actions` (or `sync --dataset all`).
+
 ---
 
 ## 10. Diagnostic Model (Spec §10)

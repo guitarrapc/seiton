@@ -397,6 +397,36 @@ Implementation notes (current):
 - Added explicit link from parser implementation plan to updater implementation plan.
   - `Docs/parser_implementation_csharp_plan.md`
 
+### Phase U7: Popular Actions Target Configuration Externalization
+
+Status:
+- In Progress (spec contract is defined; implementation migration started)
+
+Tasks:
+- Add repository-managed target config file: `data/sources/popular-actions/targets.json`.
+- Replace hard-coded target list in updater source with config loading.
+- Add contract validation for required fields and duplicate keys:
+  - duplicate `uses` -> fail
+  - duplicate `rawFileName` -> fail
+  - missing required fields (`uses`, immutable source locator URL, `rawFileName`) -> fail
+- Keep stage contract intact (`fetch-*`, `parse-*`, `merge-*`) while making target set data-driven.
+- Add tests for valid-config path and invalid-config failure behavior.
+
+Exit criteria:
+- `fetch-popular-actions-sources` / `parse-popular-actions-sources` use `targets.json` as the source of truth.
+- Editing `targets.json` changes parsed/merged outputs deterministically without code edits.
+- CI verify remains green for existing target set and fails on invalid target config.
+
+Implementation notes (current):
+- Added initial migration in `src/Seiton.Update/Sources/GitHubPopularActionsFetcher.cs`:
+  - load targets from `data/sources/popular-actions/targets.json`
+  - validate duplicates/missing required fields
+  - preserve deterministic ordering by `uses`
+- Added initial tests in `tests/Seiton.Update.Tests/PopularActionsPipelineStageTests.cs` for:
+  - config-driven target selection
+  - duplicate `uses` rejection
+  - missing required field rejection
+
 ## 8. Test Plan
 
 Unit tests:
