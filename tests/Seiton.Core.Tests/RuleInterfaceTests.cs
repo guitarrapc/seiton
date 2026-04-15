@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(7);
+        await Assert.That(rules.Length).IsEqualTo(8);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -290,6 +290,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[4].Id).IsEqualTo("unpinned-uses");
         await Assert.That(rules[5].Id).IsEqualTo("unpinned-image");
         await Assert.That(rules[6].Id).IsEqualTo("dangerous-triggers");
+        await Assert.That(rules[7].Id).IsEqualTo("job-permissions-required");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -298,6 +299,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("unpinned-uses")).IsEqualTo(4);
         await Assert.That(RuleCatalog.GetPriority("unpinned-image")).IsEqualTo(5);
         await Assert.That(RuleCatalog.GetPriority("dangerous-triggers")).IsEqualTo(6);
+        await Assert.That(RuleCatalog.GetPriority("job-permissions-required")).IsEqualTo(7);
     }
 
     [Test]
@@ -731,6 +733,89 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new DangerousTriggersRule(), "dangerous-triggers", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_JobPermissionsRequiredRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-permissions-defined",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions:
+                        contents: read
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-permissions-read-all",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: read-all
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-reusable-workflow-job-with-permissions",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+                    permissions:
+                        contents: read
+            """,
+            []),
+            new RuleCase(
+            "ng-reusable-workflow-job-no-permissions",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+            """,
+            ["does not have permissions defined"]),
+            new RuleCase(
+            "ng-no-permissions",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not have permissions defined"]),
+            new RuleCase(
+            "ng-multiple-jobs-one-missing",
+            """
+            on: push
+            jobs:
+                ok-job:
+                    runs-on: ubuntu-latest
+                    permissions:
+                        contents: read
+                    steps:
+                        - run: echo ok
+                ng-job:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not have permissions defined"]),
+        };
+
+        await AssertRuleCases(new JobPermissionsRequiredRule(), "job-permissions-required", cases);
     }
 
     [Test]

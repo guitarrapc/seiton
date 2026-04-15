@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` の 7 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` の 8 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）が利用可能 |
 | ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
@@ -30,6 +30,7 @@
 | `unpinned-uses` | `UnpinnedUsesRule` | `uses:` の ref が 40 桁 hex 以外（`@v4` / `@main` 等）の場合に warning。`./` ローカル・`docker://` は除外。reusable workflow も対象 | zizmor / ghalint |
 | `unpinned-image` | `UnpinnedImageRule` | `uses: docker://...` / `container.image` / `services.*.image` が `@sha256:<64-hex>` 以外の場合に warning | 独自 |
 | `dangerous-triggers` | `DangerousTriggersRule` | `pull_request_target` / `workflow_run` を検出したら warning | zizmor |
+| `job-permissions-required` | `JobPermissionsRequiredRule` | `permissions` 未定義の全 job（通常 job・reusable workflow 呼び出し job 共通）を warning | ghalint |
 
 ---
 
@@ -152,10 +153,12 @@
 **ファイル**: `src/Seiton.Core/Linting/JobPermissionsRequiredRule.cs`
 
 - 対応: ghalint `job_permissions`
-- `VisitJobPre` で `job.Permissions is null` かつ `job.WorkflowCall is null` の場合に warning を報告
-  - reusable workflow 呼び出し job は permissions を設定できないため除外
+- `VisitJobPre` で `job.Permissions is null` の場合に warning を報告
+  - reusable workflow 呼び出し job も対象。呼び出し側 job に `permissions:` を明示することで呼び出されるワークフローに渡す権限を制御できる
 
-**完了条件**: permissions なし通常 job は warning、permissions あり job / reusable job は warning なしのテストがパスする
+**完了条件**: permissions なし job（通常 job / reusable workflow 呼び出し job 両方）は warning、permissions あり job は warning なしのテストがパスする
+
+**実装メモ**: 完了。`JobPermissionsRequiredRule` を実装。`VisitJobPre` で `job.Permissions is null` の場合に warning を報告。reusable workflow 呼び出し job も除外しない（呼び出し側 job に `permissions:` を設定することで呼び出されるワークフローに渡す権限を制御できるため）。`RuleCatalog` に priority 7 で登録済み。table-driven 回帰テスト（6 ケース）を `RuleInterfaceTests` に追加。
 
 ### Step 2.5: needs-graph ルール
 
@@ -403,7 +406,7 @@ P4 --> P5B
 | 4 | `unpinned-uses` | **実装済み** | zizmor / ghalint | — |
 | 5 | `unpinned-image` | **実装済み** | 独自 | — |
 | 6 | `dangerous-triggers` | **実装済み** | zizmor | VisitEvent |
-| 7 | `job-permissions-required` | Phase 2 | ghalint | — |
+| 7 | `job-permissions-required` | **実装済み** | ghalint | — |
 | 8 | `needs-graph` | Phase 2 | actionlint | — |
 | 9 | `shell-name` | Phase 2 | actionlint | — |
 | 10 | `runner-label` | Phase 3 | actionlint | RunnerLabels.g.cs |
