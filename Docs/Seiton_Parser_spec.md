@@ -136,6 +136,7 @@ Event has the following derived types:
 - **WorkflowDispatchEvent**: `workflow_dispatch` event
 - **WorkflowCallEvent**: `workflow_call` event
 - **RepositoryDispatchEvent**: `repository_dispatch` event
+- **ImageVersionEvent**: `image_version` event
 
 All Events have `EventName` and `Range`.
 
@@ -190,6 +191,13 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 | Field | Type | Description |
 |---|---|---|
 | Types | StringNode[]? | Custom event types |
+
+#### 2.3.6 ImageVersionEvent
+
+| Field | Type | Description |
+|---|---|---|
+| Names | StringNode[]? | Image name patterns |
+| Versions | StringNode[]? | Image version patterns |
 
 ### 2.4 Job
 
@@ -368,8 +376,13 @@ ParseEvents(node):
 
 When the scalar is an event name:
 - `"schedule"` -> error (mapping required)
-- `"repository_dispatch"` / `"workflow_dispatch"` / `"workflow_call"` -> empty typed event
+- `"repository_dispatch"` / `"workflow_dispatch"` / `"workflow_call"` / `"image_version"` -> empty typed event
 - other -> `WebhookEvent { Hook = name }`
+
+For mapping form of `image_version`:
+- `names` -> sequence of scalar
+- `versions` -> sequence of scalar
+- other -> unexpectedKey
 
 #### 3.4.2 WebhookEvent Parse
 

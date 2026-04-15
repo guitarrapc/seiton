@@ -941,20 +941,20 @@
 
 #### P. `image_version` の parser 実装ギャップを解消する
 
-- [ ] `Seiton_Parser_spec.md` §3.4 の `ParseImageVersionEvent` 分岐に合わせて C# parser を実装する
+- [x] `Seiton_Parser_spec.md` §3.4 の `ParseImageVersionEvent` 分岐に合わせて C# parser を実装する
   - `WorkflowParser` の special event 分岐に `image_version` を追加する
   - `on: image_version` の mapping 形を dedicated parser で処理する
-- [ ] `image_version` の AST ノード設計を C# spec とコードで統一する
+- [x] `image_version` の AST ノード設計を C# spec とコードで統一する
   - `names` / `versions` を保持する typed node を定義する（空・欠落時の扱いも含む）
   - scalar/sequence/no-config 形の受理・拒否契約を spec に合わせて固定する
-- [ ] diagnostics 契約を parser spec と揃える
+- [x] diagnostics 契約を parser spec と揃える
   - 想定外キー時のメッセージ
   - 型不正（mapping 必須、配列要素型不正など）のメッセージ
-- [ ] regression tests を parser / lint 両経路で固定する
+- [x] regression tests を parser / lint 両経路で固定する
   - 正常系: `names` のみ、`versions` のみ、`names` + `versions`
   - 異常系: 不正キー、型不正、空構成
   - `WorkflowParser.Parse` と `LintEngine.Check()` の双方で期待診断を確認
-- [ ] 仕様・計画書の同期更新を同一 PR で完了する
+- [x] 仕様・計画書の同期更新を同一 PR で完了する
   - `Seiton_Parser_spec.md`（source of truth）
   - `Seiton_Parser_csharp_spec.md`
   - `Seiton_Parser_go_spec.md`
@@ -967,6 +967,19 @@
 
 期待成果:
 - 「source-of-truth には記載があるが C# 実装が未追従」という状態を解消し、spec 充足判定の曖昧さをなくす
+
+実装結果:
+- `src/Seiton.Core/Parsing/Ast/Events.cs` に `ImageVersionEvent` を追加し、`Names` / `Versions` を typed AST として保持するようにした。
+- `src/Seiton.Core/Parsing/WorkflowParser.cs` で `image_version` を special event 経路へ追加し、`ParseImageVersionEvent` を新規実装。
+  - scalar/sequence の no-config 形は `BuildSimpleEvent` で empty `ImageVersionEvent` として受理。
+  - mapping 形は `names` / `versions` のみ受理し、どちらも sequence of scalar を必須化。
+  - 診断契約を固定: `on.image_version must be mapping` / `on.image_version does not support option: ...` / `on.image_version.names must be sequence of scalar` / `on.image_version.versions must be sequence of scalar`。
+- `tests/Seiton.Core.Tests/ParserTests.cs` に `image_version` 正常系・異常系の table-driven 回帰を追加し、既存の special-event scalar テストと comprehensive AST テストへ `ImageVersionEvent` の検証を組み込んだ。
+- 仕様同期:
+  - `Seiton_Parser_spec.md`: Event derived types と AST 節に `ImageVersionEvent` を追加し、`parseEventWithNoConfig` と `image_version` mapping options 契約を更新。
+  - `Seiton_Parser_csharp_spec.md`: Event Detail Parse を実装済みへ更新。
+  - `Seiton_Parser_go_spec.md`: `ImageVersionEvent` と parse function 記述は既存内容で整合していたため追記不要。
+- `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj` を実行し、`164 passed / 0 failed` を確認。
 
 ---
 

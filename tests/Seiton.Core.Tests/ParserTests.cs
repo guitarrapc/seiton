@@ -535,6 +535,7 @@ public sealed class ParserTests
             ("workflow_dispatch", typeof(WorkflowDispatchEvent)),
             ("workflow_call", typeof(WorkflowCallEvent)),
             ("repository_dispatch", typeof(RepositoryDispatchEvent)),
+            ("image_version", typeof(ImageVersionEvent)),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -951,6 +952,121 @@ public sealed class ParserTests
         await Assert.That(evt.Types is not null).IsTrue();
         await Assert.That(evt.Types!.Count).IsEqualTo(2);
         await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_OnImageVersion_PopulatesEventAst_TableDriven()
+    {
+        var cases = new (string Name, string Yaml, int ExpectedNames, int ExpectedVersions)[]
+        {
+            (
+                "names-only",
+                """
+                on:
+                    image_version:
+                        names: [my-image, other-image]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                2,
+                0
+            ),
+            (
+                "versions-only",
+                """
+                on:
+                    image_version:
+                        versions: [1.*, 2.*]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                0,
+                2
+            ),
+            (
+                "names-and-versions",
+                """
+                on:
+                    image_version:
+                        names: [my-image]
+                        versions: [3.*]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                1,
+                1
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"on-image-version-{c.Name}.yml");
+
+            await Assert.That(result.Workflow is not null).IsTrue();
+            await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+            await Assert.That(result.Workflow.On[0]).IsTypeOf<ImageVersionEvent>();
+            var evt = (ImageVersionEvent)result.Workflow.On[0];
+            await Assert.That(evt.Names?.Count ?? 0).IsEqualTo(c.ExpectedNames);
+            await Assert.That(evt.Versions?.Count ?? 0).IsEqualTo(c.ExpectedVersions);
+            await Assert.That(result.Diagnostics).IsEmpty();
+        }
+    }
+
+    [Test]
+    public async Task Parse_OnImageVersion_InvalidForms_ReportDiagnostics_TableDriven()
+    {
+        var cases = new (string Name, string Yaml, string ExpectedDiagnostic)[]
+        {
+            (
+                "non-mapping-event-config",
+                """
+                on:
+                    image_version: true
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.image_version must be mapping"
+            ),
+            (
+                "unknown-option",
+                """
+                on:
+                    image_version:
+                        entrypoint: [x]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.image_version does not support option: entrypoint"
+            ),
+            (
+                "names-must-be-sequence",
+                """
+                on:
+                    image_version:
+                        names: one
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.image_version.names must be sequence of scalar"
+            ),
+            (
+                "versions-must-be-sequence",
+                """
+                on:
+                    image_version:
+                        versions:
+                            foo: bar
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "on.image_version.versions must be sequence of scalar"
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var bytes = Encoding.UTF8.GetBytes(c.Yaml);
+            var result = WorkflowParser.Parse(bytes, $"on-image-version-invalid-{c.Name}.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains(c.ExpectedDiagnostic, StringComparison.Ordinal))).IsTrue();
+
+            var lintResult = new LintEngine().Check(bytes, $"on-image-version-invalid-{c.Name}.yml");
+            await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains(c.ExpectedDiagnostic, StringComparison.Ordinal))).IsTrue();
+        }
     }
 
     [Test]
@@ -2164,6 +2280,9 @@ public sealed class ParserTests
                         value: digest-sha
             repository_dispatch:
                 types: [sync, deploy]
+            image_version:
+                names: [base-image]
+                versions: [1.*]
         permissions:
             contents: read
         env:
@@ -2260,12 +2379,13 @@ public sealed class ParserTests
         await Assert.That(workflow.Defaults is not null).IsTrue();
         await Assert.That(workflow.Concurrency is not null).IsTrue();
 
-        await Assert.That(workflow.On.Count).IsEqualTo(5);
+        await Assert.That(workflow.On.Count).IsEqualTo(6);
         await Assert.That(workflow.On.Any(static e => e is WebhookEvent)).IsTrue();
         await Assert.That(workflow.On.Any(static e => e is ScheduledEvent)).IsTrue();
         await Assert.That(workflow.On.Any(static e => e is WorkflowDispatchEvent)).IsTrue();
         await Assert.That(workflow.On.Any(static e => e is WorkflowCallEvent)).IsTrue();
         await Assert.That(workflow.On.Any(static e => e is RepositoryDispatchEvent)).IsTrue();
+        await Assert.That(workflow.On.Any(static e => e is ImageVersionEvent)).IsTrue();
 
         var scheduled = (ScheduledEvent)workflow.On.First(static e => e is ScheduledEvent);
         await Assert.That(scheduled.Schedules.Count).IsEqualTo(1);
@@ -2287,6 +2407,12 @@ public sealed class ParserTests
         await Assert.That(callEvent.Secrets!.Count).IsEqualTo(1);
         await Assert.That(callEvent.Outputs is not null).IsTrue();
         await Assert.That(callEvent.Outputs!.Count).IsEqualTo(1);
+
+        var imageVersionEvent = (ImageVersionEvent)workflow.On.First(static e => e is ImageVersionEvent);
+        await Assert.That(imageVersionEvent.Names is not null).IsTrue();
+        await Assert.That(imageVersionEvent.Names!.Count).IsEqualTo(1);
+        await Assert.That(imageVersionEvent.Versions is not null).IsTrue();
+        await Assert.That(imageVersionEvent.Versions!.Count).IsEqualTo(1);
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
         var callKey = Utf8String.FromLowerAscii("call"u8);

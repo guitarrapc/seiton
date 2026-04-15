@@ -141,3 +141,10 @@ public sealed class RepositoryDispatchEvent : Event
 {
     public IReadOnlyList<StringNode>? Types { get; init; }
 }
+
+public sealed class ImageVersionEvent : Event
+{
+    public IReadOnlyList<StringNode>? Names { get; init; }
+
+    public IReadOnlyList<StringNode>? Versions { get; init; }
+}

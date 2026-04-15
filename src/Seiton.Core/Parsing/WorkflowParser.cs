@@ -2437,6 +2437,7 @@ public static class WorkflowParser
                 WebhookTypes.EventId.WorkflowDispatch => new WorkflowDispatchEvent { EventName = nameNode, Range = nameNode.Range },
                 WebhookTypes.EventId.WorkflowCall => new WorkflowCallEvent { EventName = nameNode, Range = nameNode.Range },
                 WebhookTypes.EventId.RepositoryDispatch => new RepositoryDispatchEvent { EventName = nameNode, Range = nameNode.Range },
+                WebhookTypes.EventId.ImageVersion => new ImageVersionEvent { EventName = nameNode, Range = nameNode.Range },
                 _ => new WebhookEvent { EventName = nameNode, Hook = nameNode, Range = nameNode.Range },
             };
         }
@@ -2459,6 +2460,7 @@ public static class WorkflowParser
             WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, diagnostics, nameNode),
             WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, diagnostics, nameNode),
             WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, diagnostics, in eventInfo, nameNode),
+            WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, diagnostics, nameNode),
             _ => BuildSimpleEvent(in eventInfo, nameNode),
         };
     }
@@ -2469,7 +2471,8 @@ public static class WorkflowParser
             && (eventInfo.Spec.Id == WebhookTypes.EventId.Schedule
                 || eventInfo.Spec.Id == WebhookTypes.EventId.WorkflowDispatch
                 || eventInfo.Spec.Id == WebhookTypes.EventId.WorkflowCall
-                || eventInfo.Spec.Id == WebhookTypes.EventId.RepositoryDispatch);
+                || eventInfo.Spec.Id == WebhookTypes.EventId.RepositoryDispatch
+                || eventInfo.Spec.Id == WebhookTypes.EventId.ImageVersion);
     }
 
     private static ScheduledEvent ParseScheduleEvent<TReader>(
@@ -3565,6 +3568,84 @@ public static class WorkflowParser
         return new RepositoryDispatchEvent { EventName = nameNode, Types = types, Range = nameNode.Range };
     }
 
+    private static ImageVersionEvent ParseImageVersionEvent<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, "on.image_version must be mapping", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return new ImageVersionEvent { EventName = nameNode, Names = null, Versions = null, Range = nameNode.Range };
+        }
+
+        StringNode[]? names = null;
+        StringNode[]? versions = null;
+        var keys = new HashSet<Utf8String>();
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, "on.image_version option key must be scalar", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "on.image_version"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("names"u8))
+            {
+                reader.Read();
+                names = ParseStringSequence(ref reader, diagnostics, "on.image_version.names must be sequence of scalar");
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("versions"u8))
+            {
+                reader.Read();
+                versions = ParseStringSequence(ref reader, diagnostics, "on.image_version.versions must be sequence of scalar");
+                continue;
+            }
+
+            var key = Encoding.UTF8.GetString(keyUtf8);
+            reader.Read();
+            AddError(diagnostics, $"on.image_version does not support option: {key}", keyMark);
+            if (!reader.End)
+            {
+                reader.SkipCurrentNode();
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new ImageVersionEvent { EventName = nameNode, Names = names, Versions = versions, Range = nameNode.Range };
+    }
+
     private static WebhookEvent ParseWebhookEventWithOptions<TReader>(ref TReader reader, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNode nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -3805,6 +3886,45 @@ public static class WorkflowParser
         }
 
         if (reader.CurrentKind == YamlEventKind.SequenceEnd) { reader.Read(); }
+        return list.ToArray();
+    }
+
+    private static StringNode[] ParseStringSequence<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.End)
+        {
+            return [];
+        }
+
+        if (reader.CurrentKind != YamlEventKind.SequenceStart)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return [];
+        }
+
+        var list = new List<StringNode>(4);
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+        {
+            var node = ParseString(ref reader, diagnostics, errorMessage, allowElemEmpty);
+            if (node is not null)
+            {
+                list.Add(node);
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        {
+            reader.Read();
+        }
+
+        if (!allowEmpty && list.Count == 0)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+        }
+
         return list.ToArray();
     }
 
