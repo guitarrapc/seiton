@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(17);
+        await Assert.That(rules.Length).IsEqualTo(18);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -300,6 +300,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[14].Id).IsEqualTo("credentials");
         await Assert.That(rules[15].Id).IsEqualTo("template-injection");
         await Assert.That(rules[16].Id).IsEqualTo("expr-undefined-var");
+        await Assert.That(rules[17].Id).IsEqualTo("run-env-context-direct-use");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -318,6 +319,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(14);
         await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(15);
         await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(16);
+        await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(17);
     }
 
     [Test]
@@ -1767,6 +1769,79 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_RunEnvContextDirectUseRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-run-uses-shell-variable-only",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: echo "$VERSION"
+            """,
+            []),
+            new RuleCase(
+            "ok-run-uses-non-env-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.ref_name }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-run-uses-env-dot-access",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: echo "${{ env.VERSION }}"
+            """,
+            ["must not reference", "env.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-env-bracket-access",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: echo "${{ env['VERSION'] }}"
+            """,
+            ["must not reference", "env.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-env-in-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: echo "${{ format('{0}', env.VERSION) }}"
+            """,
+            ["must not reference", "env.*", "shell variables"]),
+        };
+
+        await AssertRuleCases(new RunEnvContextDirectUseRule(), "run-env-context-direct-use", cases);
     }
 
     [Test]

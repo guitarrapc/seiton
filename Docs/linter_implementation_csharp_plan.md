@@ -12,10 +12,10 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` の 17 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` の 18 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約を実装済み |
-| 式ベースルール | `template-injection` / `expr-undefined-var` を実装済み。式 AST を linter ルールで活用開始 |
+| 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
 
@@ -40,6 +40,7 @@
 | `credentials` | `CredentialsRule` | `job.container` / `job.services.*` の image がカスタムレジストリで credentials 未設定の場合に warning | actionlint |
 | `template-injection` | `TemplateInjectionRule` | `run:` / `step.env` の式に `github.event` 由来データを直接展開している場合に error | zizmor |
 | `expr-undefined-var` | `ExprUndefinedVarRule` | `job/step` の `if` / `env` / `with` における使用不可コンテキスト参照（例: `steps` in job）を error | actionlint |
+| `run-env-context-direct-use` | `RunEnvContextDirectUseRule` | `run:` 内 `${{ env.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。shell 変数利用を促す | 独自 |
 
 ---
 
@@ -50,7 +51,7 @@
 | # | ギャップ | 影響 | 深刻度 |
 |---|---|---|---|
 | G1 | `IRule`/`WorkflowVisitor` に `VisitEvent` がない | **解消済み（Phase 1 実装）** | ✅ |
-| G2 | 式 AST の linter 連携がない | `template-injection` / `expr-*` 系が全滅 | 🔴 高 |
+| G2 | 式 AST ベースの主要セキュリティルール | **解消済み（Phase 5.4 実装）** | ✅ |
 | G3 | ルール単位の exclusion / severity override がない | `LintConfig` にオプション欄がなく、仕様で定義した exclusion・フェイルセーフ・可観測性を満たせない | 🟡 中 |
 | G4 | Job 横断ルール向けの共通状態管理ヘルパーがない | `needs` などで各ルールが ID 収集・集合管理を都度実装する必要があり、重複実装が発生する | 🟡 中 |
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
@@ -417,6 +418,21 @@
 
 **実装メモ**: 完了。`ExprUndefinedVarRule` を追加し、`VisitJobPre` / `VisitStep` で `if`（全体式）と `env` / `with`（埋め込み式 `${{ ... }}`）を解析するよう実装。`ExpressionParser` + `ExpressionVisitor` で root identifier を抽出し、`Availability.IsRootContextAvailable` で job/step コンテキスト可用性を判定して未定義参照を error 報告する。`RuleCatalog` に priority 16 で登録し、`RuleInterfaceTests` に table-driven 回帰テスト（6 ケース）を追加。
 
+### Step 5.4: run-env-context-direct-use ルール
+
+**ファイル**: `src/Seiton.Core/Linting/RunEnvContextDirectUseRule.cs`
+
+- 対応: 独自（template-injection 補完）
+- `VisitStep` で `ExecRun.Run` を走査し、`${{ env.<name> }}`（dot/bracket access を含む）の直接展開を検出して error を報告
+  - 例: `run: echo "${{ env.VERSION }}"` を検出
+  - 例: `run: echo "${{ env['VERSION'] }}"` を検出
+- `run` 内では shell 変数（`$VERSION` / `$env:VERSION`）の利用を推奨し、評価タイミング差による注入リスクを抑制する
+- `env` セクション自体（`step.env` / `job.env` / `workflow.env`）の式利用は本ルールの対象外（Step 5.2 / 5.3 の責務を維持）
+
+**完了条件**: `run` に `${{ env.* }}` を含むケースで error、shell 変数参照のみのケースで error なしのテストがパスする
+
+**実装メモ**: 完了。`RunEnvContextDirectUseRule` を追加し、`VisitStep` で `ExecRun.Run` の埋め込み式 `${{ ... }}` を抽出して `ExpressionParser` で AST 解析するよう実装。AST 走査で root context が `env` の参照（dot / bracket / function 引数経由）を検出した場合に error を報告し、メッセージで shell 変数（`$NAME` / `$env:NAME`）利用を案内する。`RuleCatalog` に priority 17 で登録し、`RuleInterfaceTests` に table-driven 回帰テスト（5 ケース）を追加。
+
 ---
 
 ## ルール実装ロードマップ
@@ -447,6 +463,7 @@ end
 subgraph "Phase 5: 式ベース（長期）"
   P5A["template-injection"]
   P5B["expr-undefined-var"]
+  P5C["run-env-context-direct-use"]
 end
 P1A --> P2B
 P1A --> P2F
@@ -456,6 +473,7 @@ P2E --> P3A
 P3D --> P4
 P4 --> P5A
 P4 --> P5B
+P4 --> P5C
 ```
 
 
@@ -482,6 +500,7 @@ P4 --> P5B
 | 14 | `credentials` | **実装済み** | actionlint | — |
 | 15 | `template-injection` | **実装済み** | zizmor | 式 AST 連携 |
 | 16 | `expr-undefined-var` | **実装済み** | actionlint | 式 AST 連携 |
+| 17 | `run-env-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 
 ## チェックリスト（全 Phase 共通）
 
