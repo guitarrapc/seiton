@@ -387,6 +387,9 @@
 
 ## Phase 6: Generated Data
 
+関連実装計画:
+- `Docs/updater_implementation_plan.md`（Seiton.Update の U1-U6 実装計画と運用契約）
+
 ### Step 6.1: Context Availability テーブル
 
 **状態**: 完了（`src/Seiton.Core/Generated/Availability.g.cs` を追加し、`ExpressionSemanticAnalyzer` の context availability 判定を generated テーブル参照へ置換）

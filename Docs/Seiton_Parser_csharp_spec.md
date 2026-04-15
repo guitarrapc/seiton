@@ -1232,33 +1232,44 @@ Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore i
 
 ### 9.3 Source Pipeline Architecture (Spec §9.3)
 
-Implements the 3-stage pipeline defined in Spec §9.3. Each stage is a separate CLI command with a corresponding method in the fetcher class (e.g., `GitHubWebhookFetcher`).
+Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`).
 
-#### 9.3.1 CLI Commands (Webhooks)
+#### 9.3.1 CLI Commands
 
-| Command | Stage | Network |
-|---|---|---|
-| `fetch-webhooks-sources` | Stage 1: download raw source files | Yes |
-| `parse-webhooks-sources` | Stage 2: parse local raw files | No |
-| `merge-webhooks-sources [--exclude-schema-only]` | Stage 3: merge parsed artifacts | No |
-| `fetch-webhooks [--exclude-schema-only]` | Orchestrate all 3 stages | Yes |
+| Dataset | Stage 1 (fetch raw) | Stage 2 (parse local) | Stage 3 (merge) | Orchestrator |
+|---|---|---|---|---|
+| webhooks | `fetch-webhooks-sources` | `parse-webhooks-sources` | `merge-webhooks-sources [--exclude-schema-only]` | `fetch-webhooks [--exclude-schema-only]` |
+| availability | `fetch-availability-sources` | `parse-availability-sources` | `merge-availability-sources` | `fetch-availability` |
+| popular-actions | `fetch-popular-actions-sources` | `parse-popular-actions-sources` | `merge-popular-actions-sources` | `fetch-popular-actions` |
 
-#### 9.3.2 Data Paths (Webhooks)
+Sync/verify entrypoints:
+
+- `sync --dataset {webhooks|availability|popular-actions|all}`
+- `verify --dataset {webhooks|availability|popular-actions|all}`
+
+#### 9.3.2 Data Paths
 
 ```
-data/sources/webhooks/github/raw/github-workflow.schema.json
-data/sources/webhooks/github/raw/events-that-trigger-workflows.docs.md
-data/sources/webhooks/github/parsed/schema-webhook-events.json
-data/sources/webhooks/github/parsed/docs-webhook-events.json
+data/sources/webhooks/github/raw/*
+data/sources/webhooks/github/parsed/*
 data/sources/webhooks/github/webhook_types.json
-data/sources/reports/official-webhooks-source-diff.md
+
+data/sources/availability/github/raw/*
+data/sources/availability/github/parsed/*
+data/sources/availability/github/availability.json
+
+data/sources/popular-actions/github/raw/*.action.yml
+data/sources/popular-actions/github/parsed/*
+data/sources/popular-actions/github/popular_actions.json
+
+data/sources/reports/*
 data/sources/manifest.json
 ```
 
 #### 9.3.3 Stage Isolation Guarantee
 
-- `FetchSourceFilesAsync` is the only method that makes network requests.
-- `ParseLocalSourceFiles` and `MergeParsedSources` are network-free and may be re-run locally against cached raw files.
+- `*FetchSourceFilesAsync` methods are the only networked paths.
+- `*ParseLocalSourceFiles` and `*MergeParsedSources` are network-free and reproducible from cached raw artifacts.
 - Each stage writes Git-tracked artifacts enabling independent review of downloads, parse results, and merge decisions.
 
 ---

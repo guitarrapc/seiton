@@ -36,7 +36,6 @@ Out of scope:
 Code:
 - `src/Seiton.Update/Seiton.Update.csproj`
 - `src/Seiton.Update/Program.cs`
-- `src/Seiton.Update/UpdaterCommands.cs`
 - `src/Seiton.Update/Commands/*.cs`
 - `src/Seiton.Update/Sources/*.cs`
 - `src/Seiton.Update/Parsers/*.cs`
@@ -75,13 +74,27 @@ Subcommands:
 - `sync --dataset webhooks`
 - `sync --dataset availability`
 - `sync --dataset popular-actions`
+- `verify --dataset webhooks`
+- `verify --dataset availability`
+- `verify --dataset popular-actions`
 - `verify` (fails when generated outputs are stale)
 - `dump-sources` (optional diagnostics)
-- convenience aliases: `sync-webhooks`, `verify-webhooks`
+- convenience aliases:
+  - `sync-webhooks`, `verify-webhooks`
+  - `sync-availability`, `verify-availability`
+  - `sync-popular-actions`, `verify-popular-actions`
 - `fetch-webhooks-sources` (download raw official webhook source files into `data/sources/...`)
 - `parse-webhooks-sources` (parse local raw files into local parsed JSON artifacts)
 - `merge-webhooks-sources` (merge parsed artifacts into `webhook_types.json`)
 - `fetch-webhooks` (orchestrates `fetch-webhooks-sources` -> `parse-webhooks-sources` -> `merge-webhooks-sources`)
+- `fetch-availability-sources` (download raw official availability source file into `data/sources/...`)
+- `parse-availability-sources` (parse local availability raw file into local parsed JSON artifacts)
+- `merge-availability-sources` (merge parsed artifacts into `availability.json`)
+- `fetch-availability` (orchestrates `fetch-availability-sources` -> `parse-availability-sources` -> `merge-availability-sources`)
+- `fetch-popular-actions-sources` (download raw official action metadata files into `data/sources/...`)
+- `parse-popular-actions-sources` (parse local action metadata files into local parsed JSON artifacts)
+- `merge-popular-actions-sources` (merge parsed artifacts into `popular_actions.json`)
+- `fetch-popular-actions` (orchestrates `fetch-popular-actions-sources` -> `parse-popular-actions-sources` -> `merge-popular-actions-sources`)
 
 Common options:
 - `--offline` use vendored snapshots only
@@ -190,7 +203,7 @@ Exit criteria:
 
 Implementation notes:
 - `src/Seiton.Update/Seiton.Update.csproj` includes `ConsoleAppFramework`.
-- `Program.cs` registers `sync`, `verify`, and convenience aliases `sync-webhooks`, `verify-webhooks`.
+- `Program.cs` registers `sync`, `verify`, dataset-specific fetch/parse/merge commands, and convenience aliases for webhooks/availability/popular-actions.
 - `seiton.slnx` includes `src/Seiton.Update/Seiton.Update.csproj`.
 
 ### Phase U2: Webhook Updater
@@ -237,7 +250,7 @@ Implementation notes (current):
 - `verify webhooks` checks staleness against normalized primary snapshot.
 - `parity-webhooks` is an explicit actionlint differential command (separated from verify).
 - actionlint parity diff is executed as a secondary, separate validation path when reference input exists.
-- CI includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
+- CI includes `Seiton.Update` verification via `verify --dataset all` in `.github/workflows/build.yaml`.
 - Golden tests and CI verification run without requiring `.references` when vendored primary snapshot is present.
 
 ### Phase U3: Availability Updater
@@ -355,10 +368,13 @@ Implementation notes (current):
   - runs:
     - `dotnet run --project src/Seiton.Update -- sync --dataset all`
     - `dotnet run --project src/Seiton.Update -- verify --dataset all`
-  - creates/updates PR with generated diffs via `peter-evans/create-pull-request`
+  - creates/updates PR with generated diffs via `gh pr` CLI flow
   - uses GitHub App token (`actions/create-github-app-token`) with `contents:write` and `pull-requests:write`
 
 ### Phase U6: Documentation and Contract Finalization
+
+Status:
+- Completed (spec wording, runbook, and cross-plan references are aligned with implementation)
 
 Tasks:
 - Update Spec section 9 in parser and C# docs from planned wording to implemented wording.
@@ -368,6 +384,18 @@ Tasks:
 Exit criteria:
 - Section 9 wording and repository behavior are consistent.
 - No references to non-existent updater remain.
+
+Implementation notes (current):
+- Updated parser spec section 9 wording to reflect implemented updater commands and manifest provenance fields.
+  - `Docs/Seiton_Parser_spec.md`
+- Updated C# implementation spec section 9 with multi-dataset CLI contract and data paths.
+  - `Docs/Seiton_Parser_csharp_spec.md`
+- Kept Go spec section 9 consistent with parser spec changes.
+  - `Docs/Seiton_Parser_go_spec.md`
+- Added updater runbook to repository README.
+  - `README.md`
+- Added explicit link from parser implementation plan to updater implementation plan.
+  - `Docs/parser_implementation_csharp_plan.md`
 
 ## 8. Test Plan
 
@@ -419,11 +447,11 @@ Risk: spec drift between docs and tool behavior.
 
 ## 11. Completion Checklist
 
-- [ ] `src/Seiton.Update` exists and is wired in solution build
-- [ ] `sync` regenerates all three generated files
-- [ ] `verify` detects stale generated files
-- [ ] updater unit/integration tests exist and pass
-- [ ] `dotnet build` and `dotnet test` pass after regeneration
-- [ ] CI has generated-data verification gate
-- [ ] parser spec and C# spec section 9 describe implemented behavior
-- [ ] parser implementation plan references updater completion
+- [x] `src/Seiton.Update` exists and is wired in solution build
+- [x] `sync` regenerates all three generated files
+- [x] `verify` detects stale generated files
+- [x] updater unit/integration tests exist and pass
+- [x] `dotnet build` and `dotnet test` pass after regeneration
+- [x] CI has generated-data verification gate
+- [x] parser spec and C# spec section 9 describe implemented behavior
+- [x] parser implementation plan references updater completion

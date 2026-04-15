@@ -960,7 +960,7 @@ data/sources/{dataset}/{provider}/raw/        ← stage 1: raw downloaded source
 data/sources/{dataset}/{provider}/parsed/     ← stage 2: per-source parsed JSON
 data/sources/{dataset}/{provider}/{name}.json ← stage 3: merged canonical snapshot
 data/sources/reports/                         ← diff and parity reports
-data/sources/manifest.json                    ← version and provenance metadata
+data/sources/manifest.json                    ← provenance metadata (dataset, sourceUrls, fetchedAtUtc, rawFileHashes)
 ```
 
 All artifacts from every stage are committed to the repository.
