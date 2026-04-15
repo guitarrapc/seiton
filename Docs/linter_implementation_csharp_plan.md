@@ -333,7 +333,26 @@
 
 **完了条件**: next-line 抑制が動作し、未知 rule-id でエラーを返すテストがパスする
 
-**実装メモ**: 完了。`LintEngine` で `# seiton-lint: disable-next-line <canonical-rule-ids>` を行単位で解析し、次行（line+1）に対する rule-id 単位の抑制を適用。複数 rule-id（`,` 区切り、空白許容）をサポート。canonical ID（`seiton-lint-rule-001` 形式）は内部 rule-id へマッピングし、未知 ID は設定エラー（`DiagnosticSeverity.Error`）として報告。`RuleInterfaceTests` に next-line 抑制・複数 ID・未知 ID エラーの回帰テストを追加。
+**実装メモ**: 完了。`LintEngine` で `# seiton-lint: disable-next-line <rule-ids>` を行単位で解析し、次行（line+1）に対する rule-id 単位の抑制を適用。複数 rule-id（`,` 区切り、空白許容）をサポート。meaningful ID（例: `job-permissions-required`）と canonical ID（`seiton-lint-rule-001` 形式）の両方を受理し、内部 rule-id へ正規化して適用。未知 ID は設定エラー（`DiagnosticSeverity.Error`）として報告。`RuleInterfaceTests` に next-line 抑制・複数 ID・未知 ID エラーの回帰テストを追加。
+
+### Step 4.3a: ルールID UX改善（意味ID優先 + 後方互換）
+
+**ファイル**: `src/Seiton.Core/Linting/LintEngine.cs`, `src/Seiton.Core/Linting/LintConfig.cs`, `src/Seiton.Core/Linting/LintResult.cs`, `src/Seiton.Core/Linting/RuleCatalog.cs`
+
+- 目的: inline directive / config で利用する rule-id の可読性を改善し、抑制意図をレビュー時に判読しやすくする
+- 方針:
+  - 意味ID（例: `job-structure`）を第一候補として受理する
+  - canonical ID（`seiton-lint-rule-001` 形式）は後方互換のため継続受理する
+  - unknown rule-id のエラーでは候補 ID（近似候補）を提示して復旧性を上げる
+  - diagnostics / suppression observability には意味IDを主表示し、必要に応じて canonical ID を補助表示する
+- 運用支援（Phase 4.4 と連携）:
+  - ルール一覧出力（ID / canonical ID / severity default / 説明）
+  - 初期設定テンプレート生成で全 rule-id をコメント付き出力
+  - LLM/MCP 利用向けに rule-id 一覧を機械可読形式で提供
+
+**完了条件**: 意味IDと canonical ID の両方で suppression が動作し、unknown rule-id エラーが候補提示を含むテストがパスする
+
+**実装メモ**: 完了。`RuleCatalog` に rule-id 解決ヘルパーを追加し、meaningful ID と canonical ID の相互解決を一元化。`LintEngine` では inline directive と `LintConfig.RuleOptions` の両方でこの解決器を利用し、意味IDを優先しつつ canonical ID 後方互換を維持。unknown rule-id は `Did you mean '<rule-id>'?` の候補提示付きで診断を返す。`RuleInterfaceTests` に semantic inline suppression / canonical RuleOptions / 候補提示付き unknown rule-id の回帰テストを追加。
 
 ### Step 4.4: file/job exclusion と可観測性を実装
 

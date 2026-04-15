@@ -1663,6 +1663,31 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_DisabledRule_CanonicalIdInRuleOptions_DoesNotEmitDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var disabledConfig = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["seiton-lint-rule-008"] = new RuleOption(Enabled: false),
+            },
+        };
+
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", disabledConfig);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_RuleSeverityOverride_RewritesDiagnosticSeverity()
     {
         var yaml = """
@@ -1735,12 +1760,36 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_InlineDisableNextLine_SupportsSemanticRuleId()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            # seiton-lint: disable-next-line job-permissions-required
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-semantic.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(8);
+    }
+
+    [Test]
     public async Task LintEngine_InlineDisableNextLine_UnknownRuleId_ReportsConfigurationError()
     {
         var yaml = """
         on: push
         jobs:
-            # seiton-lint: disable-next-line seiton-lint-rule-999
+            # seiton-lint: disable-next-line job-permissions-requred
             build:
                 runs-on: ubuntu-latest
                 steps:
@@ -1750,10 +1799,40 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-unknown-rule.yml");
         var configError = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId is null
-            && x.Message.Contains("unknown inline exclusion rule-id", StringComparison.Ordinal));
+            && x.Message.Contains("unknown rule-id", StringComparison.Ordinal));
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Message.Contains("Did you mean 'job-permissions-required'", StringComparison.Ordinal)).IsTrue();
         await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_RuleOptions_UnknownRuleId_ReportsConfigurationErrorWithSuggestion()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["job-permissions-requred"] = new RuleOption(Enabled: false),
+            },
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-options-unknown.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown rule-id", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Message.Contains("Did you mean 'job-permissions-required'", StringComparison.Ordinal)).IsTrue();
     }
 
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases)

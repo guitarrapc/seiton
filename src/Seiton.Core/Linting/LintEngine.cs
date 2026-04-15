@@ -7,25 +7,6 @@ public sealed class LintEngine
 {
     const string InlineDisableNextLinePrefix = "seiton-lint: disable-next-line";
 
-    static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["seiton-lint-rule-001"] = "job-structure",
-        ["seiton-lint-rule-002"] = "reusable-workflow",
-        ["seiton-lint-rule-003"] = "permissions",
-        ["seiton-lint-rule-004"] = "popular-action-inputs",
-        ["seiton-lint-rule-005"] = "unpinned-uses",
-        ["seiton-lint-rule-006"] = "unpinned-image",
-        ["seiton-lint-rule-007"] = "dangerous-triggers",
-        ["seiton-lint-rule-008"] = "job-permissions-required",
-        ["seiton-lint-rule-009"] = "needs-graph",
-        ["seiton-lint-rule-010"] = "shell-name",
-        ["seiton-lint-rule-011"] = "runner-label",
-        ["seiton-lint-rule-012"] = "id-naming",
-        ["seiton-lint-rule-013"] = "glob-pattern",
-        ["seiton-lint-rule-014"] = "deny-write-all",
-        ["seiton-lint-rule-015"] = "credentials",
-    };
-
     readonly List<IRule> rules = [];
 
     public LintEngine()
@@ -68,6 +49,9 @@ public sealed class LintEngine
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 8);
         diagnostics.AddRange(parseResult.Diagnostics);
 
+        var normalizedRuleOptions = NormalizeRuleOptions(config?.RuleOptions, filePath);
+        diagnostics.AddRange(normalizedRuleOptions.ConfigurationDiagnostics);
+
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath);
         diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
@@ -81,7 +65,7 @@ public sealed class LintEngine
         {
             Utf8Yaml = utf8Yaml,
             FilePath = filePath,
-            RuleOptions = config?.RuleOptions,
+            RuleOptions = normalizedRuleOptions.RuleOptions,
         };
 
         var activeRules = new List<IRule>(rules.Count);
@@ -174,25 +158,17 @@ public sealed class LintEngine
             return false;
         }
 
-        var ruleIdValue = ruleId;
-
-        if (options.TryGetValue(ruleIdValue, out option))
+        if (options.TryGetValue(ruleId, out option))
         {
             return true;
         }
 
-        foreach (var pair in options)
+        if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
         {
-            if (!string.Equals(pair.Key, ruleIdValue, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            option = pair.Value;
-            return true;
+            return false;
         }
 
-        return false;
+        return options.TryGetValue(resolvedRuleId, out option);
     }
 
     static bool IsInlineSuppressed(Diagnostic diagnostic, IReadOnlyDictionary<int, HashSet<string>> nextLineRuleSuppressions)
@@ -259,19 +235,19 @@ public sealed class LintEngine
             var ruleIds = ruleIdList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             for (var j = 0; j < ruleIds.Length; j++)
             {
-                var canonicalRuleId = ruleIds[j];
-                if (CanonicalRuleIdToRuleId.TryGetValue(canonicalRuleId, out var internalRuleId))
+                var ruleIdToken = ruleIds[j];
+                if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
                 {
                     suppressedRuleIds.Add(internalRuleId);
                     continue;
                 }
 
-                var tokenColumn = FindTokenColumn(lineCore, canonicalRuleId, commentIndex);
+                var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
                 var tokenStart = lineStartOffset + tokenColumn - 1;
                 configurationDiagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"unknown inline exclusion rule-id '{canonicalRuleId}'",
-                    new TextRange(tokenStart, canonicalRuleId.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + canonicalRuleId.Length),
+                    BuildUnknownRuleIdMessage(ruleIdToken),
+                    new TextRange(tokenStart, ruleIdToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + ruleIdToken.Length),
                     FilePath: filePath));
             }
 
@@ -285,6 +261,41 @@ public sealed class LintEngine
     {
         var tokenStart = line.IndexOf(token, fallbackStart, StringComparison.Ordinal);
         return tokenStart >= 0 ? tokenStart + 1 : fallbackStart + 2;
+    }
+
+    static RuleOptionsNormalization NormalizeRuleOptions(IReadOnlyDictionary<string, RuleOption>? options, string filePath)
+    {
+        if (options is null || options.Count == 0)
+        {
+            return RuleOptionsNormalization.Empty;
+        }
+
+        var normalized = new Dictionary<string, RuleOption>(StringComparer.Ordinal);
+        var diagnostics = new List<Diagnostic>();
+        foreach (var pair in options)
+        {
+            if (RuleCatalog.TryResolveRuleId(pair.Key, out var resolvedRuleId))
+            {
+                normalized[resolvedRuleId] = pair.Value;
+                continue;
+            }
+
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                BuildUnknownRuleIdMessage(pair.Key),
+                new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
+                FilePath: filePath));
+        }
+
+        return new RuleOptionsNormalization(normalized, diagnostics.ToArray());
+    }
+
+    static string BuildUnknownRuleIdMessage(string unknownRuleId)
+    {
+        var suggested = RuleCatalog.SuggestRuleId(unknownRuleId);
+        return suggested is null
+            ? $"unknown rule-id '{unknownRuleId}'"
+            : $"unknown rule-id '{unknownRuleId}'. Did you mean '{suggested}'?";
     }
 
     static int CompareDiagnosticsByPriority(Diagnostic x, Diagnostic y)
@@ -347,5 +358,12 @@ public sealed class LintEngine
         public static InlineSuppression Empty { get; } = new(
             new Dictionary<int, HashSet<string>>(),
             []);
+    }
+
+    readonly record struct RuleOptionsNormalization(
+        IReadOnlyDictionary<string, RuleOption>? RuleOptions,
+        Diagnostic[] ConfigurationDiagnostics)
+    {
+        public static RuleOptionsNormalization Empty { get; } = new(null, []);
     }
 }
