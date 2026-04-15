@@ -1,9 +1,31 @@
 ﻿using Seiton.Core.Parsing;
+using System.Text;
 
 namespace Seiton.Core.Linting;
 
 public sealed class LintEngine
 {
+    const string InlineDisableNextLinePrefix = "seiton-lint: disable-next-line";
+
+    static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["seiton-lint-rule-001"] = "job-structure",
+        ["seiton-lint-rule-002"] = "reusable-workflow",
+        ["seiton-lint-rule-003"] = "permissions",
+        ["seiton-lint-rule-004"] = "popular-action-inputs",
+        ["seiton-lint-rule-005"] = "unpinned-uses",
+        ["seiton-lint-rule-006"] = "unpinned-image",
+        ["seiton-lint-rule-007"] = "dangerous-triggers",
+        ["seiton-lint-rule-008"] = "job-permissions-required",
+        ["seiton-lint-rule-009"] = "needs-graph",
+        ["seiton-lint-rule-010"] = "shell-name",
+        ["seiton-lint-rule-011"] = "runner-label",
+        ["seiton-lint-rule-012"] = "id-naming",
+        ["seiton-lint-rule-013"] = "glob-pattern",
+        ["seiton-lint-rule-014"] = "deny-write-all",
+        ["seiton-lint-rule-015"] = "credentials",
+    };
+
     readonly List<IRule> rules = [];
 
     public LintEngine()
@@ -45,6 +67,9 @@ public sealed class LintEngine
 
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 8);
         diagnostics.AddRange(parseResult.Diagnostics);
+
+        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath);
+        diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
         if (rules.Count == 0)
         {
@@ -108,6 +133,11 @@ public sealed class LintEngine
                 continue;
             }
 
+            if (IsInlineSuppressed(current, inlineSuppression.NextLineRuleSuppressions))
+            {
+                continue;
+            }
+
             diagnostics.Add(current);
         }
 
@@ -165,6 +195,98 @@ public sealed class LintEngine
         return false;
     }
 
+    static bool IsInlineSuppressed(Diagnostic diagnostic, IReadOnlyDictionary<int, HashSet<string>> nextLineRuleSuppressions)
+    {
+        if (diagnostic.RuleId is null || nextLineRuleSuppressions.Count == 0)
+        {
+            return false;
+        }
+
+        if (!nextLineRuleSuppressions.TryGetValue(diagnostic.Location.StartLine, out var suppressedRuleIds))
+        {
+            return false;
+        }
+
+        return suppressedRuleIds.Contains(diagnostic.RuleId);
+    }
+
+    static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath)
+    {
+        if (utf8Yaml.Length == 0)
+        {
+            return InlineSuppression.Empty;
+        }
+
+        var text = Encoding.UTF8.GetString(utf8Yaml);
+        var lines = text.Split('\n');
+        var nextLineRuleSuppressions = new Dictionary<int, HashSet<string>>();
+        var configurationDiagnostics = new List<Diagnostic>();
+
+        var lineStartOffset = 0;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var lineNumber = i + 1;
+            var line = lines[i];
+            var lineCore = line.EndsWith("\r", StringComparison.Ordinal) ? line[..^1] : line;
+            var commentIndex = lineCore.IndexOf('#');
+            if (commentIndex < 0)
+            {
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            var commentText = lineCore[(commentIndex + 1)..].TrimStart();
+            if (!commentText.StartsWith(InlineDisableNextLinePrefix, StringComparison.Ordinal))
+            {
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            var ruleIdList = commentText[InlineDisableNextLinePrefix.Length..].Trim();
+            if (ruleIdList.Length == 0)
+            {
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            var targetLine = lineNumber + 1;
+            if (!nextLineRuleSuppressions.TryGetValue(targetLine, out var suppressedRuleIds))
+            {
+                suppressedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+                nextLineRuleSuppressions[targetLine] = suppressedRuleIds;
+            }
+
+            var ruleIds = ruleIdList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            for (var j = 0; j < ruleIds.Length; j++)
+            {
+                var canonicalRuleId = ruleIds[j];
+                if (CanonicalRuleIdToRuleId.TryGetValue(canonicalRuleId, out var internalRuleId))
+                {
+                    suppressedRuleIds.Add(internalRuleId);
+                    continue;
+                }
+
+                var tokenColumn = FindTokenColumn(lineCore, canonicalRuleId, commentIndex);
+                var tokenStart = lineStartOffset + tokenColumn - 1;
+                configurationDiagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"unknown inline exclusion rule-id '{canonicalRuleId}'",
+                    new TextRange(tokenStart, canonicalRuleId.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + canonicalRuleId.Length),
+                    FilePath: filePath));
+            }
+
+            lineStartOffset += line.Length + 1;
+        }
+
+        return new InlineSuppression(nextLineRuleSuppressions, configurationDiagnostics.ToArray());
+    }
+
+    static int FindTokenColumn(string line, string token, int fallbackStart)
+    {
+        var tokenStart = line.IndexOf(token, fallbackStart, StringComparison.Ordinal);
+        return tokenStart >= 0 ? tokenStart + 1 : fallbackStart + 2;
+    }
+
     static int CompareDiagnosticsByPriority(Diagnostic x, Diagnostic y)
     {
         var byPriority = RuleCatalog.GetPriority(x.RuleId).CompareTo(RuleCatalog.GetPriority(y.RuleId));
@@ -216,5 +338,14 @@ public sealed class LintEngine
                 diagnostic.Location.EndColumn)
         {
         }
+    }
+
+    readonly record struct InlineSuppression(
+        IReadOnlyDictionary<int, HashSet<string>> NextLineRuleSuppressions,
+        Diagnostic[] ConfigurationDiagnostics)
+    {
+        public static InlineSuppression Empty { get; } = new(
+            new Dictionary<int, HashSet<string>>(),
+            []);
     }
 }

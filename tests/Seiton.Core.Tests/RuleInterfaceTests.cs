@@ -1690,6 +1690,72 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
     }
 
+    [Test]
+    public async Task LintEngine_InlineDisableNextLine_SuppressesTargetRuleOnlyOnNextLine()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            # seiton-lint: disable-next-line seiton-lint-rule-008
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-next-line.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(8);
+    }
+
+    [Test]
+    public async Task LintEngine_InlineDisableNextLine_SupportsMultipleRuleIds()
+    {
+        var yaml = """
+        on:
+            # seiton-lint: disable-next-line seiton-lint-rule-007, seiton-lint-rule-008
+            pull_request_target:
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo test
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-multi.yml");
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "dangerous-triggers")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_InlineDisableNextLine_UnknownRuleId_ReportsConfigurationError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            # seiton-lint: disable-next-line seiton-lint-rule-999
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo test
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-unknown-rule.yml");
+        var configError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown inline exclusion rule-id", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases)
     {
         for (var i = 0; i < cases.Length; i++)

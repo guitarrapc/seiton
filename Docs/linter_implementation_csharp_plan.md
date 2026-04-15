@@ -14,7 +14,7 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` の 15 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
-| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）は実装済み。`Seiton_Linter_spec.md` で定義された inline next-line / fail-safe / 可観測性拡張は実装待ち |
+| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline next-line exclusion を実装済み。fail-safe / 可観測性拡張は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
 
 ---
@@ -332,6 +332,8 @@
 - YAML コメント取得が困難なため、UTF-8 本文の行スキャンで directive を抽出
 
 **完了条件**: next-line 抑制が動作し、未知 rule-id でエラーを返すテストがパスする
+
+**実装メモ**: 完了。`LintEngine` で `# seiton-lint: disable-next-line <canonical-rule-ids>` を行単位で解析し、次行（line+1）に対する rule-id 単位の抑制を適用。複数 rule-id（`,` 区切り、空白許容）をサポート。canonical ID（`seiton-lint-rule-001` 形式）は内部 rule-id へマッピングし、未知 ID は設定エラー（`DiagnosticSeverity.Error`）として報告。`RuleInterfaceTests` に next-line 抑制・複数 ID・未知 ID エラーの回帰テストを追加。
 
 ### Step 4.4: file/job exclusion と可観測性を実装
 
