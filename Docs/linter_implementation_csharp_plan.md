@@ -39,14 +39,24 @@
 | G1 | `IRule`/`WorkflowVisitor` に `VisitEvent` がない | `on:` トリガー系ルールが一切書けない | 🔴 高 |
 | G2 | 式 AST の linter 連携がない | `template-injection` / `expr-*` 系が全滅 | 🔴 高 |
 | G3 | ルール単位の suppress / severity override がない | `LintConfig` にオプション欄がなく、ユーザーがルールを無効化できない | 🟡 中 |
-| G4 | `VisitWorkflowPost` が全 Job マップに自然にアクセスできない | `needs` グラフ検証で `workflow.Jobs` を `VisitWorkflowPost` 経由で参照する必要がある | 🟡 中（回避可能） |
+| G4 | Job 横断ルール向けの共通状態管理ヘルパーがない | `needs` などで各ルールが ID 収集・集合管理を都度実装する必要があり、重複実装が発生する | 🟡 中 |
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
+| G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | 実装と仕様書の更新順序が揃わないと、契約差分の説明コストが増える | 🟢 低 |
 
 ---
 
 ## Phase 1: VisitEvent の追加
 
 **目標**: `WorkflowVisitor` に `On` イベント列の巡回フックを追加し、イベント系ルールの実装基盤を整える
+
+### Step 1.0: parser 仕様書への同期注記を追加
+
+**ファイル**: `Docs/Seiton_Parser_spec.md`, `Docs/Seiton_Parser_csharp_spec.md`
+
+- 現行契約（`VisitEvent` なし）を維持したまま、Phase 1 実装予定として注記を追加
+- 実装着手時に §8 のインターフェース定義・巡回順を同時更新する運用ルールを明記
+
+**完了条件**: linter 実装計画と parser 仕様書の間で、`VisitEvent` 追加の差分が明示されている
 
 ### Step 1.1: IPass / IRule に VisitEvent を追加
 

@@ -858,6 +858,12 @@ A Pass has the following callbacks:
 - `VisitJobPost(job)` — End of Job traversal
 - `VisitStep(step)` — Step visit
 
+Spec sync note:
+
+- Current contract does not include an event callback in `IPass`.
+- The linter implementation plan (`linter_implementation_csharp_plan.md`, Phase 1) tracks a planned extension to add `VisitEvent(event)` between workflow pre-visit and job traversal.
+- When that extension is implemented, this section (§8.1/§8.2) and the C# companion spec must be updated in the same change scope.
+
 ### 8.2 Traversal Order
 
 ```

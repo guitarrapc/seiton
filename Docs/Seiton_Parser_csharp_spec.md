@@ -1114,6 +1114,12 @@ public interface IPass
 }
 ```
 
+Spec sync note:
+
+- Current C# contract matches the interface above and does not yet include `VisitEvent`.
+- The planned extension is tracked in `linter_implementation_csharp_plan.md` (Phase 1).
+- When implemented, update this section and the traversal order in §8.2 together with `Seiton_Parser_spec.md`.
+
 ### 8.2 Visitor (Spec §8.2)
 
 ```csharp
