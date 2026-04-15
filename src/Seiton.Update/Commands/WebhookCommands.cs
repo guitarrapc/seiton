@@ -21,6 +21,27 @@ internal static class WebhookCommands
         return 0;
     }
 
+    public static async Task<int> FetchSources(string repoRoot)
+    {
+        var fetcher = new GitHubWebhookFetcher();
+        await fetcher.FetchSourceFilesAsync(repoRoot);
+        return 0;
+    }
+
+    public static int ParseSources(string repoRoot)
+    {
+        var fetcher = new GitHubWebhookFetcher();
+        fetcher.ParseLocalSourceFiles(repoRoot);
+        return 0;
+    }
+
+    public static int MergeSources(string repoRoot, bool excludeSchemaOnly = false)
+    {
+        var fetcher = new GitHubWebhookFetcher();
+        fetcher.MergeParsedSources(repoRoot, excludeSchemaOnly);
+        return 0;
+    }
+
     public static int ParityCheck(string repoRoot)
     {
         var checker = new WebhookParityChecker();

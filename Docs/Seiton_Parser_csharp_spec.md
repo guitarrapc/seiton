@@ -1230,6 +1230,37 @@ Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore i
 
 `OnEventSpecs` is a hand-implemented event name + activity types table. It is an implementation detail that may later be replaced by `WebhookTypes.g.cs`; this migration does not change Seiton's current support contract by itself.
 
+### 9.3 Source Pipeline Architecture (Spec §9.3)
+
+Implements the 3-stage pipeline defined in Spec §9.3. Each stage is a separate CLI command with a corresponding method in the fetcher class (e.g., `GitHubWebhookFetcher`).
+
+#### 9.3.1 CLI Commands (Webhooks)
+
+| Command | Stage | Network |
+|---|---|---|
+| `fetch-webhooks-sources` | Stage 1: download raw source files | Yes |
+| `parse-webhooks-sources` | Stage 2: parse local raw files | No |
+| `merge-webhooks-sources [--exclude-schema-only]` | Stage 3: merge parsed artifacts | No |
+| `fetch-webhooks [--exclude-schema-only]` | Orchestrate all 3 stages | Yes |
+
+#### 9.3.2 Data Paths (Webhooks)
+
+```
+data/sources/webhooks/github/raw/github-workflow.schema.json
+data/sources/webhooks/github/raw/events-that-trigger-workflows.docs.md
+data/sources/webhooks/github/parsed/schema-webhook-events.json
+data/sources/webhooks/github/parsed/docs-webhook-events.json
+data/sources/webhooks/github/webhook_types.json
+data/sources/reports/official-webhooks-source-diff.md
+data/sources/manifest.json
+```
+
+#### 9.3.3 Stage Isolation Guarantee
+
+- `FetchSourceFilesAsync` is the only method that makes network requests.
+- `ParseLocalSourceFiles` and `MergeParsedSources` are network-free and may be re-run locally against cached raw files.
+- Each stage writes Git-tracked artifacts enabling independent review of downloads, parse results, and merge decisions.
+
 ---
 
 ## 10. Diagnostic Model (Spec §10)

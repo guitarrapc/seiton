@@ -52,7 +52,7 @@ app.Add("verify-webhooks", () =>
     }
 });
 
-// Fetch GitHub primary source and update the local snapshot + manifest.
+// Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
     var code = await WebhookCommands.Fetch(repoRoot, excludeSchemaOnly);
@@ -60,6 +60,39 @@ app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
     {
         Environment.ExitCode = code;
         throw new InvalidOperationException($"fetch-webhooks failed with code {code}");
+    }
+});
+
+// Download and store raw official source files under data/sources/webhooks/github/raw/.
+app.Add("fetch-webhooks-sources", async () =>
+{
+    var code = await WebhookCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-webhooks-sources failed with code {code}");
+    }
+});
+
+// Parse local raw files under data/sources/webhooks/github/raw/ into parsed snapshots.
+app.Add("parse-webhooks-sources", () =>
+{
+    var code = WebhookCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-webhooks-sources failed with code {code}");
+    }
+});
+
+// Merge parsed snapshots into webhook_types.json.
+app.Add("merge-webhooks-sources", (bool excludeSchemaOnly = false) =>
+{
+    var code = WebhookCommands.MergeSources(repoRoot, excludeSchemaOnly);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-webhooks-sources failed with code {code}");
     }
 });
 

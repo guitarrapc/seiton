@@ -1276,6 +1276,30 @@ When official GitHub sources disagree for webhook activity types:
 
 Example: if Docs lists `check_suite` as `completed` while SchemaStore includes additional values, generated webhook data follows the Docs value and reports the mismatch.
 
+### 9.3 Source Pipeline Architecture (Spec §9.3)
+
+The update pipeline operates as a 3-stage DAG. Each stage produces Git-tracked artifacts for independent review.
+
+#### 9.3.1 Stage Summary
+
+| Stage | Input | Output | Network |
+|---|---|---|---|
+| Fetch sources | Remote URLs | `raw/` files | Yes |
+| Parse sources | `raw/` files | `parsed/` JSON | No |
+| Merge artifacts | `parsed/` JSON | canonical JSON + diff report | No |
+
+#### 9.3.2 Storage Layout
+
+```
+data/sources/{dataset}/{provider}/raw/        ← stage 1: raw downloaded source files
+data/sources/{dataset}/{provider}/parsed/     ← stage 2: per-source parsed JSON
+data/sources/{dataset}/{provider}/{name}.json ← stage 3: merged canonical snapshot
+data/sources/reports/                         ← diff and parity reports
+data/sources/manifest.json                    ← version and provenance metadata
+```
+
+All artifacts are committed to the repository.
+
 ---
 
 ## 10. Diagnostic Model (Spec §10)

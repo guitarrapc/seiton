@@ -78,6 +78,10 @@ Subcommands:
 - `verify` (fails when generated outputs are stale)
 - `dump-sources` (optional diagnostics)
 - convenience aliases: `sync-webhooks`, `verify-webhooks`
+- `fetch-webhooks-sources` (download raw official webhook source files into `data/sources/...`)
+- `parse-webhooks-sources` (parse local raw files into local parsed JSON artifacts)
+- `merge-webhooks-sources` (merge parsed artifacts into `webhook_types.json`)
+- `fetch-webhooks` (orchestrates `fetch-webhooks-sources` -> `parse-webhooks-sources` -> `merge-webhooks-sources`)
 
 Common options:
 - `--offline` use vendored snapshots only
@@ -138,7 +142,10 @@ Diff report output:
 - includes: missing in Seiton, extra in Seiton, and field-level mismatches
 
 Proposed source storage:
-- `data/sources/webhooks/*`
+- `data/sources/webhooks/github/raw/*` (downloaded official source files)
+- `data/sources/webhooks/github/parsed/*` (local parse outputs from raw files)
+- `data/sources/webhooks/github/webhook_types.json` (merged canonical snapshot)
+- `data/sources/webhooks/actionlint/*` (reference-only parity inputs)
 - `data/sources/availability/*`
 - `data/sources/popular-actions/*`
 
@@ -216,8 +223,16 @@ Implementation notes (current):
 - Added primary vendored snapshot: `data/sources/webhooks/github/webhook_types.json`
 - Added tests: `tests/Seiton.Update.Tests/WebhookUpdaterGoldenTests.cs`
 - Added test project: `tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj`
-- `fetch-webhooks` ingests official GitHub sources (`json.schemastore.org/github-workflow.json` + GitHub Docs markdown) and writes normalized snapshot + `data/sources/manifest.json` provenance.
-- `fetch-webhooks` defaults to include schema-only events for compatibility with preview/source lag; `--exclude-schema-only` can enforce docs-only event set.
+- `fetch-webhooks-sources` downloads official source files into:
+  - `data/sources/webhooks/github/raw/github-workflow.schema.json`
+  - `data/sources/webhooks/github/raw/events-that-trigger-workflows.docs.md`
+- `parse-webhooks-sources` parses local raw files and writes:
+  - `data/sources/webhooks/github/parsed/schema-webhook-events.json`
+  - `data/sources/webhooks/github/parsed/docs-webhook-events.json`
+- `merge-webhooks-sources` merges parsed local artifacts and writes canonical snapshot:
+  - `data/sources/webhooks/github/webhook_types.json`
+- `fetch-webhooks` orchestrates the above 3 commands and then updates `data/sources/manifest.json` provenance.
+- `fetch-webhooks` / `merge-webhooks-sources` default to include schema-only events for compatibility with preview/source lag; `--exclude-schema-only` can enforce docs-only event set.
 - `sync webhooks` regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` from normalized primary snapshot.
 - `verify webhooks` checks staleness against normalized primary snapshot.
 - `parity-webhooks` is an explicit actionlint differential command (separated from verify).

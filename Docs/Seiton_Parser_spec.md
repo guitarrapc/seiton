@@ -921,6 +921,59 @@ For webhook event activity types, official GitHub sources may disagree (for exam
 
 Example: if GitHub Docs lists `check_suite` activity types as `completed` while SchemaStore includes additional values, normalized output follows the Docs value and the mismatch is reported.
 
+### 9.3 Source Pipeline Architecture (Normative)
+
+Generated data is produced by a deterministic 3-stage pipeline. Each stage produces Git-tracked artifacts that are independently reviewable and reproducible.
+
+#### 9.3.1 Stage 1 — Fetch Raw Sources
+
+Download official source files verbatim and persist them locally.
+
+- Input: Remote URLs for each official source
+- Output: Raw files in `data/sources/{dataset}/{provider}/raw/`
+- Network access: **yes** (only stage that accesses the network)
+- All downloaded files must be committed to the repository so each fetch is auditable.
+
+#### 9.3.2 Stage 2 — Parse Local Source Files
+
+Parse each raw file independently and emit normalized intermediate JSON artifacts.
+
+- Input: Raw files from Stage 1
+- Output: Parsed JSON files in `data/sources/{dataset}/{provider}/parsed/`
+- Network access: **no**
+- Parsing must be deterministic given the same raw inputs.
+
+#### 9.3.3 Stage 3 — Merge Parsed Artifacts
+
+Apply conflict resolution policy (§9.2.1) across all parsed artifacts to produce one canonical snapshot.
+
+- Input: Parsed JSON files from Stage 2
+- Output:
+  - Canonical snapshot: `data/sources/{dataset}/{provider}/{snapshot}.json`
+  - Official-source diff report: `data/sources/reports/official-{dataset}-source-diff.md`
+- Network access: **no**
+
+#### 9.3.4 Storage Path Convention
+
+```
+data/sources/{dataset}/{provider}/raw/        ← stage 1: raw downloaded source files
+data/sources/{dataset}/{provider}/parsed/     ← stage 2: per-source parsed JSON
+data/sources/{dataset}/{provider}/{name}.json ← stage 3: merged canonical snapshot
+data/sources/reports/                         ← diff and parity reports
+data/sources/manifest.json                    ← version and provenance metadata
+```
+
+All artifacts from every stage are committed to the repository.
+
+#### 9.3.5 Stage Independence
+
+Each stage may be invoked independently:
+
+- Stage 1 may be re-run to refresh raw source files.
+- Stage 2 re-parses existing raw files without network access.
+- Stage 3 re-merges using existing parsed artifacts without network access.
+- An orchestrator command runs all 3 stages in sequence.
+
 ---
 
 ## 10. Diagnostic Specification

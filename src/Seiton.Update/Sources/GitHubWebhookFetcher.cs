@@ -11,49 +11,22 @@ internal sealed class GitHubWebhookFetcher
 {
     const string SchemaSourceUrl = "https://json.schemastore.org/github-workflow.json";
     const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md";
-    const string ParserVersion = "4";
+    const string ParserVersion = "5";
+
+    static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot, bool excludeSchemaOnly = false)
     {
-        UpdateLogger.Info("[fetch:webhooks] fetching official GitHub sources (schema + docs markdown)...");
+        await FetchSourceFilesAsync(repoRoot);
+        ParseLocalSourceFiles(repoRoot);
+        MergeParsedSources(repoRoot, excludeSchemaOnly);
 
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
-        client.Timeout = TimeSpan.FromSeconds(60);
-
-        var schemaContent = await client.GetStringAsync(SchemaSourceUrl);
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
-        var schemaHash = ComputeSha256(schemaContent);
-        var docsHash = ComputeSha256(docsContent);
-        var contentHash = ComputeSha256(schemaContent + "\n---\n" + docsContent);
-
-        UpdateLogger.Info($"[fetch:webhooks] downloaded schema={schemaContent.Length} bytes ({schemaHash[..16]}...), docs={docsContent.Length} bytes ({docsHash[..16]}...)");
-
-        var schemaEvents = ParseSchemaJson(schemaContent);
-        var docsParser = new GitHubDocsWebhookMarkdownParser();
-        var docsEventNames = docsParser.ParseEventNames(docsContent);
-        var docsActivityTypes = docsParser.ParseActivityTypesByEvent(docsContent);
-        var events = MergeOfficialSources(schemaEvents, docsEventNames, docsActivityTypes, excludeSchemaOnly);
-        UpdateLogger.Info($"[fetch:webhooks] normalized {events.Count} events (schema + docs merge, excludeSchemaOnly={excludeSchemaOnly}).");
-        WriteOfficialSourceDiffReport(repoRoot, schemaEvents, docsEventNames, docsActivityTypes, excludeSchemaOnly);
-
-        var snapshotJson = SerializeSnapshot(events);
-        var outputPath = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "webhook_types.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-
-        var existing = File.Exists(outputPath)
-            ? File.ReadAllText(outputPath).Replace("\r\n", "\n")
-            : string.Empty;
-
-        if (!string.Equals(existing, snapshotJson, StringComparison.Ordinal))
-        {
-            File.WriteAllText(outputPath, snapshotJson);
-            UpdateLogger.Info($"[fetch:webhooks] updated {outputPath}");
-        }
-        else
-        {
-            UpdateLogger.Info("[fetch:webhooks] snapshot already up to date.");
-        }
+        var raw = ReadRawSources(repoRoot);
+        var contentHash = ComputeSha256(raw.SchemaContent + "\n---\n" + raw.DocsContent);
 
         return new SourceManifestEntry
         {
@@ -63,6 +36,175 @@ internal sealed class GitHubWebhookFetcher
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             ParserVersion = ParserVersion,
             ContentHash = contentHash,
+        };
+    }
+
+    public async Task FetchSourceFilesAsync(string repoRoot)
+    {
+        UpdateLogger.Info("[fetch:webhooks:sources] downloading official GitHub source files...");
+
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
+        client.Timeout = TimeSpan.FromSeconds(60);
+
+        var schemaContent = await client.GetStringAsync(SchemaSourceUrl);
+        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var schemaHash = ComputeSha256(schemaContent);
+        var docsHash = ComputeSha256(docsContent);
+        UpdateLogger.Info($"[fetch:webhooks:sources] downloaded schema={schemaContent.Length} bytes ({schemaHash[..16]}...), docs={docsContent.Length} bytes ({docsHash[..16]}...)");
+
+        var paths = Paths(repoRoot);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.RawSchemaPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.RawDocsPath)!);
+
+        File.WriteAllText(paths.RawSchemaPath, schemaContent.Replace("\r\n", "\n"));
+        File.WriteAllText(paths.RawDocsPath, docsContent.Replace("\r\n", "\n"));
+
+        UpdateLogger.Info($"[fetch:webhooks:sources] wrote {paths.RawSchemaPath}");
+        UpdateLogger.Info($"[fetch:webhooks:sources] wrote {paths.RawDocsPath}");
+    }
+
+    public void ParseLocalSourceFiles(string repoRoot)
+    {
+        var paths = Paths(repoRoot);
+        if (!File.Exists(paths.RawSchemaPath) || !File.Exists(paths.RawDocsPath))
+        {
+            throw new FileNotFoundException(
+                "Webhook raw source files are missing. Run fetch-webhooks-sources first.",
+                paths.RawSchemaPath);
+        }
+
+        UpdateLogger.Info("[parse:webhooks:sources] parsing local raw source files...");
+
+        var raw = ReadRawSources(repoRoot);
+        var schemaEvents = ParseSchemaJson(raw.SchemaContent);
+
+        var docsParser = new GitHubDocsWebhookMarkdownParser();
+        var docsEventNames = docsParser.ParseEventNames(raw.DocsContent);
+        var docsActivityTypes = docsParser.ParseActivityTypesByEvent(raw.DocsContent);
+
+        var parsedSchema = new ParsedSchemaSnapshot
+        {
+            SchemaVersion = 1,
+            Source = "github-workflow-schema-raw",
+            Events = schemaEvents
+                .OrderBy(static x => x.Name, StringComparer.Ordinal)
+                .Select(static x => new ParsedWebhookEvent
+                {
+                    Name = x.Name,
+                    ActivityTypes = x.ActivityTypes is null ? null : x.ActivityTypes.ToList(),
+                })
+                .ToList(),
+        };
+
+        var parsedDocs = new ParsedDocsSnapshot
+        {
+            SchemaVersion = 1,
+            Source = "github-docs-markdown-raw",
+            Events = docsEventNames
+                .OrderBy(static x => x, StringComparer.Ordinal)
+                .Select(name => new ParsedDocsWebhookEvent
+                {
+                    Name = name,
+                    HasParseableActivityTypes = docsActivityTypes.TryGetValue(name, out _),
+                    ActivityTypes = docsActivityTypes.TryGetValue(name, out var values)
+                        ? values?.ToList()
+                        : null,
+                })
+                .ToList(),
+        };
+
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedSchemaPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedDocsPath)!);
+        File.WriteAllText(paths.ParsedSchemaPath, JsonSerializer.Serialize(parsedSchema, JsonOptions).Replace("\r\n", "\n"));
+        File.WriteAllText(paths.ParsedDocsPath, JsonSerializer.Serialize(parsedDocs, JsonOptions).Replace("\r\n", "\n"));
+
+        UpdateLogger.Info($"[parse:webhooks:sources] wrote {paths.ParsedSchemaPath}");
+        UpdateLogger.Info($"[parse:webhooks:sources] wrote {paths.ParsedDocsPath}");
+    }
+
+    public void MergeParsedSources(string repoRoot, bool excludeSchemaOnly = false)
+    {
+        var paths = Paths(repoRoot);
+        if (!File.Exists(paths.ParsedSchemaPath) || !File.Exists(paths.ParsedDocsPath))
+        {
+            throw new FileNotFoundException(
+                "Webhook parsed source files are missing. Run parse-webhooks-sources first.",
+                paths.ParsedSchemaPath);
+        }
+
+        UpdateLogger.Info($"[merge:webhooks:sources] merging parsed sources (excludeSchemaOnly={excludeSchemaOnly})...");
+
+        var parsedSchemaText = File.ReadAllText(paths.ParsedSchemaPath);
+        var parsedDocsText = File.ReadAllText(paths.ParsedDocsPath);
+
+        var parsedSchema = JsonSerializer.Deserialize<ParsedSchemaSnapshot>(parsedSchemaText, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        }) ?? throw new InvalidDataException($"Invalid parsed schema snapshot: {paths.ParsedSchemaPath}");
+
+        var parsedDocs = JsonSerializer.Deserialize<ParsedDocsSnapshot>(parsedDocsText, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        }) ?? throw new InvalidDataException($"Invalid parsed docs snapshot: {paths.ParsedDocsPath}");
+
+        var schemaEvents = parsedSchema.Events
+            .Select(static x => new WebhookEventModel(x.Name, x.ActivityTypes is null ? null : x.ActivityTypes.ToArray()))
+            .OrderBy(static x => x.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        var docsEventNames = parsedDocs.Events
+            .Select(static x => x.Name)
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var docsActivityTypes = parsedDocs.Events
+            .Where(static x => x.HasParseableActivityTypes)
+            .ToDictionary(
+                static x => x.Name,
+                static x => (IReadOnlyList<string>?)x.ActivityTypes,
+                StringComparer.Ordinal);
+
+        var events = MergeOfficialSources(schemaEvents, docsEventNames, docsActivityTypes, excludeSchemaOnly);
+        UpdateLogger.Info($"[merge:webhooks:sources] normalized {events.Count} events.");
+
+        WriteOfficialSourceDiffReport(repoRoot, schemaEvents, docsEventNames, docsActivityTypes, excludeSchemaOnly);
+
+        var snapshotJson = SerializeSnapshot(events);
+        var existing = File.Exists(paths.MergedSnapshotPath)
+            ? File.ReadAllText(paths.MergedSnapshotPath).Replace("\r\n", "\n")
+            : string.Empty;
+
+        if (!string.Equals(existing, snapshotJson, StringComparison.Ordinal))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.MergedSnapshotPath)!);
+            File.WriteAllText(paths.MergedSnapshotPath, snapshotJson);
+            UpdateLogger.Info($"[merge:webhooks:sources] updated {paths.MergedSnapshotPath}");
+        }
+        else
+        {
+            UpdateLogger.Info("[merge:webhooks:sources] snapshot already up to date.");
+        }
+    }
+
+    static (string SchemaContent, string DocsContent) ReadRawSources(string repoRoot)
+    {
+        var paths = Paths(repoRoot);
+        return (
+            File.ReadAllText(paths.RawSchemaPath),
+            File.ReadAllText(paths.RawDocsPath));
+    }
+
+    static WebhookPaths Paths(string repoRoot)
+    {
+        var baseDir = Path.Combine(repoRoot, "data", "sources", "webhooks", "github");
+        return new WebhookPaths
+        {
+            RawSchemaPath = Path.Combine(baseDir, "raw", "github-workflow.schema.json"),
+            RawDocsPath = Path.Combine(baseDir, "raw", "events-that-trigger-workflows.docs.md"),
+            ParsedSchemaPath = Path.Combine(baseDir, "parsed", "schema-webhook-events.json"),
+            ParsedDocsPath = Path.Combine(baseDir, "parsed", "docs-webhook-events.json"),
+            MergedSnapshotPath = Path.Combine(baseDir, "webhook_types.json"),
         };
     }
 
@@ -436,7 +578,7 @@ internal sealed class GitHubWebhookFetcher
         var schemaNames = schemaMap.Keys.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
 
         var docsOnly = docsNames.Where(x => !schemaMap.ContainsKey(x)).ToArray();
-        var schemaOnly = schemaNames.Where(x => !docsActivityTypes.ContainsKey(x)).ToArray();
+        var schemaOnly = schemaNames.Where(x => !docsEventNames.Contains(x)).ToArray();
 
         var mismatches = new List<(string EventName, IReadOnlyList<string>? Schema, IReadOnlyList<string>? Docs)>();
         foreach (var name in docsNames)
@@ -579,5 +721,41 @@ internal sealed class GitHubWebhookFetcher
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return "sha256:" + Convert.ToHexStringLower(hash);
+    }
+
+    sealed class WebhookPaths
+    {
+        public string RawSchemaPath { get; set; } = string.Empty;
+        public string RawDocsPath { get; set; } = string.Empty;
+        public string ParsedSchemaPath { get; set; } = string.Empty;
+        public string ParsedDocsPath { get; set; } = string.Empty;
+        public string MergedSnapshotPath { get; set; } = string.Empty;
+    }
+
+    sealed class ParsedSchemaSnapshot
+    {
+        public int SchemaVersion { get; set; }
+        public string Source { get; set; } = string.Empty;
+        public List<ParsedWebhookEvent> Events { get; set; } = [];
+    }
+
+    sealed class ParsedDocsSnapshot
+    {
+        public int SchemaVersion { get; set; }
+        public string Source { get; set; } = string.Empty;
+        public List<ParsedDocsWebhookEvent> Events { get; set; } = [];
+    }
+
+    sealed class ParsedWebhookEvent
+    {
+        public string Name { get; set; } = string.Empty;
+        public List<string>? ActivityTypes { get; set; }
+    }
+
+    sealed class ParsedDocsWebhookEvent
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool HasParseableActivityTypes { get; set; }
+        public List<string>? ActivityTypes { get; set; }
     }
 }
