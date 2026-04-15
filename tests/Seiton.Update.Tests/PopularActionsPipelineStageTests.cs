@@ -6,6 +6,84 @@ namespace Seiton.Update.Tests;
 public sealed class PopularActionsPipelineStageTests
 {
     [Test]
+    public async Task ValidateTargetsConfig_WhenValid_DoesNotThrow()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var fetcher = new GitHubPopularActionsFetcher();
+            fetcher.ValidateTargetsConfig(tempRepo);
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            await Assert.That(File.Exists(targetsPath)).IsTrue();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ValidateTargetsConfig_WhenDuplicateRawFileName_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            var targetsJson = """
+                        {
+                            "schemaVersion": 1,
+                            "targets": [
+                                {
+                                    "actionRef": "actions/checkout@v4",
+                                    "uses": "actions/checkout",
+                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                                    "rawFileName": "dup.action.yml"
+                                },
+                                {
+                                    "actionRef": "actions/setup-node@v4",
+                                    "uses": "actions/setup-node",
+                                    "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
+                                    "rawFileName": "dup.action.yml"
+                                }
+                            ]
+                        }
+                        """;
+            File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            await Assert.That(() => fetcher.ValidateTargetsConfig(tempRepo)).ThrowsException();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ValidateTargetsConfig_WhenConfigMissing_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            File.Delete(targetsPath);
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            await Assert.That(() => fetcher.ValidateTargetsConfig(tempRepo)).ThrowsException();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task ParseLocalSourceFiles_UsesTargetsConfigToSelectActionSet()
     {
         var repoRoot = FindRepoRoot();
@@ -172,6 +250,45 @@ public sealed class PopularActionsPipelineStageTests
     }
 
     [Test]
+    public async Task MergeParsedSources_WhenTargetsConfigInvalid_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithParsed(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            var targetsJson = """
+                        {
+                            "schemaVersion": 1,
+                            "targets": [
+                                {
+                                    "actionRef": "actions/checkout@v4",
+                                    "uses": "actions/checkout",
+                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                                    "rawFileName": "dup.action.yml"
+                                },
+                                {
+                                    "actionRef": "actions/setup-node@v4",
+                                    "uses": "actions/setup-node",
+                                    "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
+                                    "rawFileName": "dup.action.yml"
+                                }
+                            ]
+                        }
+                        """;
+            File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            await Assert.That(() => fetcher.MergeParsedSources(tempRepo)).ThrowsException();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task MergeParsedSources_SnapshotContainsKnownActionAndInputs()
     {
         var repoRoot = FindRepoRoot();
@@ -231,8 +348,13 @@ public sealed class PopularActionsPipelineStageTests
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcParsed = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "parsed");
+        var srcTargets = Path.Combine(repoRoot, "data", "sources", "popular-actions", "targets.json");
+        var dstTargetsDir = Path.Combine(tempRepo, "data", "sources", "popular-actions");
         var dstParsed = Path.Combine(tempRepo, "data", "sources", "popular-actions", "github", "parsed");
+        Directory.CreateDirectory(dstTargetsDir);
         Directory.CreateDirectory(dstParsed);
+
+        File.Copy(srcTargets, Path.Combine(dstTargetsDir, "targets.json"), overwrite: true);
 
         foreach (var file in Directory.GetFiles(srcParsed))
         {

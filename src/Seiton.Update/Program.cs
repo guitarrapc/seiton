@@ -186,6 +186,16 @@ app.Add("fetch-popular-actions", async () =>
     }
 });
 
+app.Add("validate-popular-actions-targets", () =>
+{
+    var code = PopularActionsCommands.ValidateTargets(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"validate-popular-actions-targets failed with code {code}");
+    }
+});
+
 app.Add("fetch-popular-actions-sources", async () =>
 {
     var code = await PopularActionsCommands.FetchSources(repoRoot);

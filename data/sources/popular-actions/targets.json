@@ -1,4 +1,5 @@
 {
+  "$schema": "./targets.schema.json",
   "schemaVersion": 1,
   "targets": [
     {

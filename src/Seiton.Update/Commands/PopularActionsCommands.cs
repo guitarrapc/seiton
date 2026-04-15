@@ -5,6 +5,14 @@ namespace Seiton.Update.Commands;
 
 internal static class PopularActionsCommands
 {
+    public static int ValidateTargets(string repoRoot)
+    {
+        var fetcher = new GitHubPopularActionsFetcher();
+        fetcher.ValidateTargetsConfig(repoRoot);
+        UpdateLogger.Info("[validate:popular-actions:targets] targets.json is valid.");
+        return 0;
+    }
+
     public static async Task<int> Fetch(string repoRoot)
     {
         var fetcher = new GitHubPopularActionsFetcher();

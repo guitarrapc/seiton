@@ -95,6 +95,7 @@ Subcommands:
 - `parse-popular-actions-sources` (parse local action metadata files into local parsed JSON artifacts)
 - `merge-popular-actions-sources` (merge parsed artifacts into `popular_actions.json`)
 - `fetch-popular-actions` (orchestrates `fetch-popular-actions-sources` -> `parse-popular-actions-sources` -> `merge-popular-actions-sources`)
+- `validate-popular-actions-targets` (validates `data/sources/popular-actions/targets.json` contract before update stages)
 
 Common options:
 - `--offline` use vendored snapshots only
@@ -400,7 +401,7 @@ Implementation notes (current):
 ### Phase U7: Popular Actions Target Configuration Externalization
 
 Status:
-- In Progress (spec contract is defined; implementation migration started)
+- Completed (config externalization, contract validation command, schema file, and CI wiring are in place)
 
 Tasks:
 - Add repository-managed target config file: `data/sources/popular-actions/targets.json`.
@@ -411,21 +412,38 @@ Tasks:
   - missing required fields (`uses`, immutable source locator URL, `rawFileName`) -> fail
 - Keep stage contract intact (`fetch-*`, `parse-*`, `merge-*`) while making target set data-driven.
 - Add tests for valid-config path and invalid-config failure behavior.
+- Add a repository JSON Schema for review-time/IDE validation:
+  - `data/sources/popular-actions/targets.schema.json`
+- Add dedicated CI validation step for target config:
+  - `dotnet run --project src/Seiton.Update -- validate-popular-actions-targets`
 
 Exit criteria:
 - `fetch-popular-actions-sources` / `parse-popular-actions-sources` use `targets.json` as the source of truth.
 - Editing `targets.json` changes parsed/merged outputs deterministically without code edits.
 - CI verify remains green for existing target set and fails on invalid target config.
+- `validate-popular-actions-targets` fails fast on malformed/invalid `targets.json` in CI and local runs.
 
 Implementation notes (current):
 - Added initial migration in `src/Seiton.Update/Sources/GitHubPopularActionsFetcher.cs`:
   - load targets from `data/sources/popular-actions/targets.json`
   - validate duplicates/missing required fields
   - preserve deterministic ordering by `uses`
-- Added initial tests in `tests/Seiton.Update.Tests/PopularActionsPipelineStageTests.cs` for:
+- Added target-config validation command:
+  - `validate-popular-actions-targets`
+  - command handler: `src/Seiton.Update/Commands/PopularActionsCommands.cs`
+  - registration: `src/Seiton.Update/Program.cs`
+- Added JSON Schema contract for review/IDE validation:
+  - `data/sources/popular-actions/targets.schema.json`
+  - `data/sources/popular-actions/targets.json` references schema via `$schema`
+- Added tests in `tests/Seiton.Update.Tests/PopularActionsPipelineStageTests.cs` for:
+  - direct `ValidateTargetsConfig` success/failure cases
   - config-driven target selection
   - duplicate `uses` rejection
+  - duplicate `rawFileName` rejection
   - missing required field rejection
+- Added CI wiring for dedicated target-config validation command:
+  - `.github/workflows/build.yaml`
+  - `.github/workflows/generated-data-update.yaml`
 
 ## 8. Test Plan
 
@@ -485,3 +503,4 @@ Risk: spec drift between docs and tool behavior.
 - [x] CI has generated-data verification gate
 - [x] parser spec and C# spec section 9 describe implemented behavior
 - [x] parser implementation plan references updater completion
+- [x] popular-actions targets are config-driven and validated (`targets.json` + schema + CI validation command)

@@ -30,6 +30,9 @@ jobs:
         with:
           dotnet-version: 10.0
 
+      - name: Validate popular-actions targets
+        run: dotnet run --project src/Seiton.Update -- validate-popular-actions-targets
+
       - name: Sync generated data
         run: dotnet run --project src/Seiton.Update -- sync --dataset all
 

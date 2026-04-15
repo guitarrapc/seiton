@@ -110,8 +110,15 @@ internal sealed class GitHubPopularActionsFetcher
         UpdateLogger.Info($"[parse:popular-actions:sources] wrote {paths.ParsedPath}");
     }
 
+    public void ValidateTargetsConfig(string repoRoot)
+    {
+        _ = LoadSources(repoRoot);
+    }
+
     public void MergeParsedSources(string repoRoot)
     {
+        _ = LoadSources(repoRoot);
+
         var paths = Paths(repoRoot);
         if (!File.Exists(paths.ParsedPath))
         {
