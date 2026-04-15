@@ -265,6 +265,23 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleCatalog_DefaultRules_MatchDocumentedScope()
+    {
+        var rules = RuleCatalog.CreateDefaultRules();
+
+        await Assert.That(rules.Length).IsEqualTo(4);
+        await Assert.That(rules[0].Id).IsEqualTo("job-structure");
+        await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
+        await Assert.That(rules[2].Id).IsEqualTo("permissions");
+        await Assert.That(rules[3].Id).IsEqualTo("popular-action-inputs");
+
+        await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
+        await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
+        await Assert.That(RuleCatalog.GetPriority("permissions")).IsEqualTo(2);
+        await Assert.That(RuleCatalog.GetPriority("popular-action-inputs")).IsEqualTo(3);
+    }
+
+    [Test]
     public async Task RuleRegression_JobStructureRule_TableDriven()
     {
         var cases = new[]

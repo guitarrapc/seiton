@@ -19,7 +19,7 @@
 | イベントスペック | generated `WebhookTypes.g.cs` を参照して UTF-8 span ベースで検証 |
 | テスト基盤 | `ParserTests` / `ExpressionTests` に加えて corpus smoke（actionlint/ghalint/zizmor と actionlint testdata）を実装済み |
 | Visitor / Pass | `IPass` + `WorkflowVisitor` 実装済み |
-| Rule Engine | `IRule` + `SyntaxRule` を実装済み（ルール拡充は継続課題） |
+| Rule Engine | `RuleCatalog` による default 4 rules（`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`）を実装済み。actionlint と同数の rule count parity は current spec の完了条件に含めない |
 | Generated Data | `WebhookTypes.g.cs` / `Availability.g.cs` / `PopularActions.g.cs` を実装済み |
 
 ---
@@ -915,22 +915,29 @@
 
 #### O. Rule Engine の spec 充足方針を確定する
 
-- [ ] `Seiton_Parser_csharp_spec.md` の Rule Engine 節を基準に、次のどちらで閉じるかを決める
+- [x] `Seiton_Parser_csharp_spec.md` の Rule Engine 節を基準に、次のどちらで閉じるかを決める
   - 実装拡張: 追加 Rule を実装して spec 記述に近づける
   - scope 縮小: 現行実装（`JobStructureRule`, `ReusableWorkflowRule`, `PermissionsRule`, `PopularActionInputsRule`）に合わせて spec を明示的に狭める
-- [ ] `RuleCatalog` の現行既定ルール群と spec の期待値の差分を棚卸しする
-  - 現状: default rule は 4 件で、`Seiton_Parser_csharp_spec.md` も Rule Engine を partially implemented と記述している
-- [ ] Rule ごとの責務境界を parser 一次診断との関係も含めて整理する
+- [x] `RuleCatalog` の現行既定ルール群と spec の期待値の差分を棚卸しする
+  - 監査時点の現状: default rule は 4 件で、`Seiton_Parser_csharp_spec.md` は Rule Engine を partially implemented と記述していた
+- [x] Rule ごとの責務境界を parser 一次診断との関係も含めて整理する
   - parser が担うもの: YAML shape / required keys / cross-key structural constraints の一次診断
   - rule が担うもの: policy / metadata / richer semantic diagnostics
-- [ ] 方針決定後、spec / plan / tests を同時に更新する
+- [x] 方針決定後、spec / plan / tests を同時に更新する
 
 完了条件:
 - `Seiton_Parser_csharp_spec.md` を厳密に読んだときに「current codebase は fully satisfied か」の答えが曖昧にならない
 - Rule Engine 節の partially implemented 表記について、実装拡張または scope 明確化のいずれかで説明責任を果たせる
 
 期待成果:
-- parser core は概ね充足済み、Rule Engine は scope 決定待ち、という現状を計画上で明文化できる
+- parser core は概ね充足済みで、Rule Engine は default 4-rule scope を完了条件とすることを計画上で明文化できる
+
+実装結果:
+- 方針は「実装拡張」ではなく「scope 明確化」を採用。現在の Seiton C# spec における Rule Engine 完了条件を、actionlint と同数の rules を持つことではなく、`RuleCatalog` の default rule pack を実装・検証済みであることに定義し直した。
+- `Seiton_Parser_csharp_spec.md` の Rule Engine 行を partially から更新し、current Seiton scope の default 4 rules（`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`）と `SyntaxRule` の位置づけを明記した。
+- 同 spec の Rule Interface 節に、parser 一次診断と rule diagnostics の責務境界、`LintEngine` の priority sort / dedup 契約、actionlint-parity rule count は out-of-scope であることを追記した。
+- `RuleInterfaceTests` に `RuleCatalog_DefaultRules_MatchDocumentedScope` を追加し、default rule pack の ID と priority 順を固定した。
+- `Seiton_Parser_spec.md` / `Seiton_Parser_go_spec.md` は rule count を completion criterion としていないため、今回の scope 明確化に伴う本文変更は不要だった。
 
 ---
 

@@ -34,7 +34,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
-| **Rule Engine** | `Rule` interface × 15+ rules | Partially implemented (`IRule` + `SyntaxRule` are available; rule set is minimal) |
+| **Rule Engine** | `Rule` interface × multiple lint rules | Implemented for the current Seiton scope. The default rule pack is `job-structure`, `reusable-workflow`, `permissions`, and `popular-action-inputs`; `SyntaxRule` composes the same pack for visitor-facing aggregation. actionlint-parity rule count is intentionally out-of-scope for this spec |
 | **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented for the current supported function/context set (`ExprType` hierarchy + bottom-up inference + typed function signatures + key-granularity context checks). Remaining gaps are limited to future actionlint parity work |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
 | **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
@@ -1163,6 +1163,22 @@ public interface IRule : IPass
 ```
 
 Each Rule inspects the AST within `IPass` methods and accumulates diagnostics in an internal `List<Diagnostic>`.
+
+### 8.3.1 Current C# Rule Scope
+
+The current C# implementation fixes the default rule contract to the following four rules via `RuleCatalog`:
+
+- `job-structure` — cross-key structural constraints on job shape
+- `reusable-workflow` — `uses` / `with` / `secrets` semantics and forbidden keys in reusable workflow calls
+- `permissions` — scalar and scope value-domain validation for permissions
+- `popular-action-inputs` — warning-level validation for well-known action input names
+
+Scope note:
+
+- Parser diagnostics remain the primary contract for YAML shape errors, required-key errors, and core cross-key structural constraints.
+- Rule diagnostics add policy / metadata / richer semantic checks on top of the parsed AST.
+- `LintEngine` uses `RuleCatalog.CreateDefaultRules()` as its default pack, sorts rule diagnostics by rule priority, and deduplicates identical diagnostics after priority ordering.
+- Matching actionlint's total rule count is not a completion criterion for this C# parser spec; the completion criterion is that the documented Seiton default rule pack is implemented and covered by regression tests.
 
 ---
 
