@@ -61,6 +61,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildJobLocation(job));
     }
 
+    protected void AddJobWarning(Job job, string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location);
+    }
+
     protected void AddWorkflowError(Workflow workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);

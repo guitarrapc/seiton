@@ -282,16 +282,20 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(4);
+        await Assert.That(rules.Length).IsEqualTo(6);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
         await Assert.That(rules[3].Id).IsEqualTo("popular-action-inputs");
+        await Assert.That(rules[4].Id).IsEqualTo("unpinned-uses");
+        await Assert.That(rules[5].Id).IsEqualTo("unpinned-image");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
         await Assert.That(RuleCatalog.GetPriority("permissions")).IsEqualTo(2);
         await Assert.That(RuleCatalog.GetPriority("popular-action-inputs")).IsEqualTo(3);
+        await Assert.That(RuleCatalog.GetPriority("unpinned-uses")).IsEqualTo(4);
+        await Assert.That(RuleCatalog.GetPriority("unpinned-image")).IsEqualTo(5);
     }
 
     [Test]
@@ -548,6 +552,116 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedImageRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-docker-uses-pinned-digest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker://rhysd/actionlint@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+            """,
+            []),
+            new RuleCase(
+            "ng-docker-uses-tag",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker://rhysd/actionlint:latest
+            """,
+            ["not pinned by digest"]),
+            new RuleCase(
+            "ok-job-container-pinned-digest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-job-container-tag",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app:1.0.0
+                    steps:
+                        - run: echo ng
+            """,
+            ["not pinned by digest"]),
+            new RuleCase(
+            "ng-job-container-implicit-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app
+                    steps:
+                        - run: echo ng
+            """,
+            ["not pinned by digest"]),
+            new RuleCase(
+            "ok-service-container-pinned-digest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        db:
+                            image: postgres@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-service-container-tag",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        db:
+                            image: postgres:16
+                    steps:
+                        - run: echo ng
+            """,
+            ["not pinned by digest"]),
+            new RuleCase(
+            "ok-non-docker-uses-is-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new UnpinnedImageRule(), "unpinned-image", cases);
     }
 
     [Test]

@@ -13,6 +13,8 @@ internal static class RuleCatalog
         ("reusable-workflow", 1, static () => new ReusableWorkflowRule()),
         ("permissions", 2, static () => new PermissionsRule()),
         ("popular-action-inputs", 3, static () => new PopularActionInputsRule()),
+        ("unpinned-uses", 4, static () => new UnpinnedUsesRule()),
+        ("unpinned-image", 5, static () => new UnpinnedImageRule()),
     ];
 
     public static IRule[] CreateDefaultRules()

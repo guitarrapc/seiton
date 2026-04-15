@@ -94,7 +94,7 @@
 
 ## Phase 2: P1 ルール（AST だけで実装可能・価値が高い）
 
-**目標**: 既存 AST を使いきれる 5 ルールを追加する。新たな AST 変更は不要
+**目標**: 既存 AST を使いきれる 6 ルールを追加する。新たな AST 変更は不要
 
 ### Step 2.1: unpinned-uses ルール
 
@@ -109,7 +109,24 @@
 
 **完了条件**: SHA ピン済みの uses は警告なし、`@v4` / `@main` 等は警告ありのテストがパスする
 
-### Step 2.2: dangerous-triggers ルール
+### Step 2.2: unpinned-image ルール
+
+**ファイル**: `src/Seiton.Core/Linting/UnpinnedImageRule.cs`
+
+- 対応: コンテナイメージの digest pin 強制（独自拡張）
+- `VisitStep` で `uses: docker://...` を検査
+  - `docker://<image>@sha256:<64 hex>` 形式のみを pinned とみなす
+  - `:latest` や `:1.2.3` など tag 指定、implicit latest（tag/digest なし）は warning を報告
+- `VisitJobPre` で `job.container.image` と `job.services.*.image` を検査
+  - 同様に `@sha256:<64 hex>` 以外を warning
+  - 式（`${{ }}`）は現段階では評価不能なためスキップ
+- `run:` のシェルスクリプト内 `docker run ...` 解析はスコープ外
+  - 文字列解析では誤検知/取りこぼしが多いため、必要なら将来 `run` 専用ルールとして分離
+
+**完了条件**: `docker://...:latest` / `container.image: repo/app:tag` / `services.*.image: repo/app` で warning、`@sha256:...` では warning なしのテストがパスする
+
+
+### Step 2.3: dangerous-triggers ルール
 
 **ファイル**: `src/Seiton.Core/Linting/DangerousTriggersRule.cs`
 
@@ -122,7 +139,7 @@
 
 **完了条件**: `pull_request_target` / `workflow_run` を含む workflow で warning が出る
 
-### Step 2.3: job-permissions-required ルール
+### Step 2.4: job-permissions-required ルール
 
 **ファイル**: `src/Seiton.Core/Linting/JobPermissionsRequiredRule.cs`
 
@@ -132,7 +149,7 @@
 
 **完了条件**: permissions なし通常 job は warning、permissions あり job / reusable job は warning なしのテストがパスする
 
-### Step 2.4: needs-graph ルール
+### Step 2.5: needs-graph ルール
 
 **ファイル**: `src/Seiton.Core/Linting/NeedsGraphRule.cs`
 
@@ -144,7 +161,7 @@
 
 **完了条件**: 存在しない job ID を `needs` で参照したときにエラーが出るテストがパスする
 
-### Step 2.5: shell-name ルール
+### Step 2.6: shell-name ルール
 
 **ファイル**: `src/Seiton.Core/Linting/ShellNameRule.cs`
 
@@ -156,11 +173,11 @@
 
 **完了条件**: 有効シェル名は通過、無効名はエラーのテストがパスする
 
-### Step 2.6: RuleCatalog に P1 ルールを登録
+### Step 2.7: RuleCatalog に P1 ルールを登録
 
 **ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`
 
-- `DefaultRuleFactories` に `unpinned-uses`（priority 4）/ `dangerous-triggers`（5）/ `job-permissions-required`（6）/ `needs-graph`（7）/ `shell-name`（8）を追加
+- `DefaultRuleFactories` に `unpinned-uses`（priority 4）/ `unpinned-image`（5）/ `dangerous-triggers`（6）/ `job-permissions-required`（7）/ `needs-graph`（8）/ `shell-name`（9）を追加
 
 **完了条件**: `new LintEngine()` だけで全 P1 ルールが動作する
 
@@ -334,10 +351,11 @@ subgraph "Phase 1: インフラ"
 end
 subgraph "Phase 2: P1ルール"
   P2A["unpinned-uses"]
-  P2B["dangerous-triggers"]
-  P2C["job-permissions-required"]
-  P2D["needs-graph"]
-  P2E["shell-name"]
+  P2B["unpinned-image"]
+  P2C["dangerous-triggers"]
+  P2D["job-permissions-required"]
+  P2E["needs-graph"]
+  P2F["shell-name"]
 end
 subgraph "Phase 3: P2ルール"
   P3A["runner-label"]
@@ -354,10 +372,10 @@ subgraph "Phase 5: 式ベース（長期）"
   P5B["expr-undefined-var"]
 end
 P1A --> P2B
-P1A --> P2E
+P1A --> P2F
 P1A --> P3C
-P2A --> P2C
-P2D --> P3A
+P2A --> P2D
+P2E --> P3A
 P3D --> P4
 P4 --> P5A
 P4 --> P5B
@@ -375,14 +393,15 @@ P4 --> P5B
 | 2 | `permissions` | 実装済み | actionlint | — |
 | 3 | `popular-action-inputs` | 実装済み | actionlint | — |
 | 4 | `unpinned-uses` | Phase 2 | zizmor / ghalint | — |
-| 5 | `dangerous-triggers` | Phase 2 | zizmor | VisitEvent |
-| 6 | `job-permissions-required` | Phase 2 | ghalint | — |
-| 7 | `needs-graph` | Phase 2 | actionlint | — |
-| 8 | `shell-name` | Phase 2 | actionlint | — |
-| 9 | `runner-label` | Phase 3 | actionlint | RunnerLabels.g.cs |
-| 10 | `id-naming` | Phase 3 | actionlint | — |
-| 11 | `glob-pattern` | Phase 3 | actionlint | VisitEvent |
-| 12 | `deny-write-all` | Phase 3 | ghalint | — |
-| 13 | `credentials` | Phase 3 | actionlint | — |
+| 5 | `unpinned-image` | Phase 2 | 独自 | — |
+| 6 | `dangerous-triggers` | Phase 2 | zizmor | VisitEvent |
+| 7 | `job-permissions-required` | Phase 2 | ghalint | — |
+| 8 | `needs-graph` | Phase 2 | actionlint | — |
+| 9 | `shell-name` | Phase 2 | actionlint | — |
+| 10 | `runner-label` | Phase 3 | actionlint | RunnerLabels.g.cs |
+| 11 | `id-naming` | Phase 3 | actionlint | — |
+| 12 | `glob-pattern` | Phase 3 | actionlint | VisitEvent |
+| 13 | `deny-write-all` | Phase 3 | ghalint | — |
+| 14 | `credentials` | Phase 3 | actionlint | — |
 | — | `template-injection` | Phase 5 | zizmor | 式 AST 連携 |
 | — | `expr-undefined-var` | Phase 5 | actionlint | 式 AST 連携 |
