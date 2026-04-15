@@ -66,6 +66,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
+    protected void AddEventWarning(Event ev, string message)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, BuildEventLocation(ev));
+    }
+
     protected void AddWorkflowError(Workflow workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
@@ -104,6 +109,18 @@ public abstract class RuleBase : IRule
     protected static TextRange BuildJobLocation(Job job)
     {
         var range = job.Id.Range;
+        return new TextRange(
+            Start: range.Start,
+            Length: 0,
+            StartLine: range.StartLine,
+            StartColumn: range.StartColumn,
+            EndLine: range.StartLine,
+            EndColumn: range.StartColumn);
+    }
+
+    protected static TextRange BuildEventLocation(Event ev)
+    {
+        var range = ev.EventName.Range;
         return new TextRange(
             Start: range.Start,
             Length: 0,

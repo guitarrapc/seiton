@@ -282,13 +282,14 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(6);
+        await Assert.That(rules.Length).IsEqualTo(7);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
         await Assert.That(rules[3].Id).IsEqualTo("popular-action-inputs");
         await Assert.That(rules[4].Id).IsEqualTo("unpinned-uses");
         await Assert.That(rules[5].Id).IsEqualTo("unpinned-image");
+        await Assert.That(rules[6].Id).IsEqualTo("dangerous-triggers");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -296,6 +297,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("popular-action-inputs")).IsEqualTo(3);
         await Assert.That(RuleCatalog.GetPriority("unpinned-uses")).IsEqualTo(4);
         await Assert.That(RuleCatalog.GetPriority("unpinned-image")).IsEqualTo(5);
+        await Assert.That(RuleCatalog.GetPriority("dangerous-triggers")).IsEqualTo(6);
     }
 
     [Test]
@@ -662,6 +664,73 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new UnpinnedImageRule(), "unpinned-image", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_DangerousTriggersRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-push",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-pull-request",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-pull-request-target",
+            """
+            on: pull_request_target
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["potentially dangerous"]),
+            new RuleCase(
+            "ng-workflow-run",
+            """
+            on: workflow_run
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["potentially dangerous"]),
+            new RuleCase(
+            "ng-multiple-dangerous-triggers",
+            """
+            on:
+                pull_request_target:
+                workflow_run:
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["potentially dangerous"]),
+        };
+
+        await AssertRuleCases(new DangerousTriggersRule(), "dangerous-triggers", cases);
     }
 
     [Test]

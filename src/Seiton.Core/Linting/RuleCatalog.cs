@@ -15,6 +15,7 @@ internal static class RuleCatalog
         ("popular-action-inputs", 3, static () => new PopularActionInputsRule()),
         ("unpinned-uses", 4, static () => new UnpinnedUsesRule()),
         ("unpinned-image", 5, static () => new UnpinnedImageRule()),
+        ("dangerous-triggers", 6, static () => new DangerousTriggersRule()),
     ];
 
     public static IRule[] CreateDefaultRules()
