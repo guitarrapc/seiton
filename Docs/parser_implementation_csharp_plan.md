@@ -990,10 +990,20 @@
 
 各 Step 完了時に以下を確認する:
 
-- [ ] `dotnet build` が通る
-- [ ] `dotnet test` が全パスする
-- [ ] Parsing フォルダ内に新規 `GetScalarString()` が success path に追加されていない（allocation guardrails）
-- [ ] 新規 key 判定が UTF-8 span ベースである
-- [ ] AST / parser の success path に `System.String` を導入していない（診断系を除く）
-- [ ] dictionary キーは `Utf8String`、スカラー値は `Utf8Slice` の方針を満たす
-- [ ] diagnostics が有用なメッセージと正確な位置を持つ
+### ビルド / テスト
+- [x] `dotnet build` が通る
+- [x] `dotnet test` が全パスする（回帰なし）
+
+### Allocation Guardrails（Parsing フォルダ対象）
+- [x] Parsing フォルダ内に新規 `GetScalarString()` が success path に追加されていない
+- [x] 新規 key 判定が UTF-8 span ベースである（`SequenceEqual("..."u8)` 使用）
+- [x] AST / parser の success path に `System.String` を導入していない（診断・ログ系を除く）
+- [x] `new T[]` / `List<T>` / LINQ / regex をパース hot-path に導入していない
+- [x] dictionary キーは `Utf8String`、スカラー値は `Utf8Slice` の方針を満たす
+
+### AST / 仕様整合
+- [x] 新規 AST ノードに `TextRange` が設定されている（major node に non-default range）
+- [x] diagnostics が有用なメッセージと正確な位置を持つ
+- [x] 仕様ドキュメント 4 文書（`Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` / 本 plan）を同期更新した
+
+> **注記**: 上記はすべてのパーサー Phase（1–8）が完了した時点の状態。新規パーサー変更が発生した場合は各項目を再確認すること。

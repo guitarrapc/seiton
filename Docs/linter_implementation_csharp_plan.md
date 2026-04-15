@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` の 4 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` の 7 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）が利用可能 |
 | ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
@@ -27,6 +27,9 @@
 | `reusable-workflow` | `ReusableWorkflowRule` | `uses` なしで `with`/`secrets`、`uses` ありで禁止キー共存 | actionlint |
 | `permissions` | `PermissionsRule` | scalar が `read-all`/`write-all` か、スコープ値が `read`/`write`/`none` か | actionlint |
 | `popular-action-inputs` | `PopularActionInputsRule` | 既知アクション (`PopularActions.g.cs`) の入力名バリデーション（Warning） | actionlint（独自拡張） |
+| `unpinned-uses` | `UnpinnedUsesRule` | `uses:` の ref が 40 桁 hex 以外（`@v4` / `@main` 等）の場合に warning。`./` ローカル・`docker://` は除外。reusable workflow も対象 | zizmor / ghalint |
+| `unpinned-image` | `UnpinnedImageRule` | `uses: docker://...` / `container.image` / `services.*.image` が `@sha256:<64-hex>` 以外の場合に warning | 独自 |
+| `dangerous-triggers` | `DangerousTriggersRule` | `pull_request_target` / `workflow_run` を検出したら warning | zizmor |
 
 ---
 
@@ -109,6 +112,8 @@
 
 **完了条件**: SHA ピン済みの uses は警告なし、`@v4` / `@main` 等は警告ありのテストがパスする
 
+**実装メモ**: 完了。`UnpinnedUsesRule` を実装し、`IsFullLengthCommitShaPinned()` で 40 桁 hex 判定（UTF-8 span）。`VisitStep`（`ExecAction`）と `VisitJobPre`（`WorkflowCall`）の両経路を検査。`RuleCatalog` に priority 4 で登録済み。table-driven 回帰テスト（6 ケース）を `RuleInterfaceTests` に追加。
+
 ### Step 2.2: unpinned-image ルール
 
 **ファイル**: `src/Seiton.Core/Linting/UnpinnedImageRule.cs`
@@ -125,6 +130,7 @@
 
 **完了条件**: `docker://...:latest` / `container.image: repo/app:tag` / `services.*.image: repo/app` で warning、`@sha256:...` では warning なしのテストがパスする
 
+**実装メモ**: 完了。`UnpinnedImageRule` を実装（`unpinned-tag` から改名）。`IsSha256DigestPinned()` で `@sha256:<64-hex>` を判定（UTF-8 span）。`VisitStep`（`docker://` uses）、`VisitJobPre`（`job.container.image` / `services.*.image`）の 3 箇所を検査。`RuleBase` に `AddJobWarning(job, message, location)` オーバーロードを追加して正確な位置を付与。`RuleCatalog` に priority 5 で登録済み。table-driven 回帰テスト（8 ケース）を `RuleInterfaceTests` に追加。
 
 ### Step 2.3: dangerous-triggers ルール
 
@@ -138,6 +144,8 @@
 - 将来的に zizmor と ghalint の更新に合わせてリスト追加できるよう、検出対象を列挙で管理
 
 **完了条件**: `pull_request_target` / `workflow_run` を含む workflow で warning が出る
+
+**実装メモ**: 完了。`DangerousTriggersRule` を実装。`DangerousEventIds` 配列（`PullRequestTarget` / `WorkflowRun`）で検出対象を管理し、将来のイベント追加は配列 1 行で対応可能。`WebhookTypes.TryGet()` で UTF-8 span から `EventId` を取得する。`RuleBase` に `AddEventWarning()` / `BuildEventLocation()` ヘルパーを追加。`RuleCatalog` に priority 6 で登録済み。table-driven 回帰テスト（5 ケース）を `RuleInterfaceTests` に追加。
 
 ### Step 2.4: job-permissions-required ルール
 
@@ -392,9 +400,9 @@ P4 --> P5B
 | 1 | `reusable-workflow` | 実装済み | actionlint | — |
 | 2 | `permissions` | 実装済み | actionlint | — |
 | 3 | `popular-action-inputs` | 実装済み | actionlint | — |
-| 4 | `unpinned-uses` | Phase 2 | zizmor / ghalint | — |
-| 5 | `unpinned-image` | Phase 2 | 独自 | — |
-| 6 | `dangerous-triggers` | Phase 2 | zizmor | VisitEvent |
+| 4 | `unpinned-uses` | **実装済み** | zizmor / ghalint | — |
+| 5 | `unpinned-image` | **実装済み** | 独自 | — |
+| 6 | `dangerous-triggers` | **実装済み** | zizmor | VisitEvent |
 | 7 | `job-permissions-required` | Phase 2 | ghalint | — |
 | 8 | `needs-graph` | Phase 2 | actionlint | — |
 | 9 | `shell-name` | Phase 2 | actionlint | — |
@@ -405,3 +413,33 @@ P4 --> P5B
 | 14 | `credentials` | Phase 3 | actionlint | — |
 | — | `template-injection` | Phase 5 | zizmor | 式 AST 連携 |
 | — | `expr-undefined-var` | Phase 5 | actionlint | 式 AST 連携 |
+
+## チェックリスト（全 Phase 共通）
+
+各ルール実装完了時に以下を確認する:
+
+### ビルド / テスト
+- [ ] `dotnet build` が通る
+- [ ] `dotnet test` が全パスする（回帰なし）
+
+### ルール実装品質（Linting フォルダ対象）
+- [ ] `RuleBase` を継承し、`Id` / `Name` / 必要な `VisitXxx` のみをオーバーライドしている
+- [ ] `VisitXxx` ホットパスで UTF-8 span 比較を使い、`Decode()` / `string` 生成を診断メッセージ構築時のみに限定している
+- [ ] `new T[]` / `List<T>` / LINQ / regex を `VisitXxx` ホットパスに導入していない
+- [ ] 位置情報（`TextRange`）が正確である（`BuildJobLocation` / `BuildStepLocation` / `BuildEventLocation` 等を適切に使用）
+- [ ] diagnostics のメッセージが有用で、対象（rule id / ファイルパス / 問題箇所）を特定できる
+
+### Visitor / Catalog 連携
+- [ ] `SyntaxRule` の `VisitXxx` 委譲が漏れなく追加されている（新 hook を追加した場合のみ確認）
+- [ ] `RuleCatalog.DefaultRuleFactories` に正しい priority で登録されている
+- [ ] `RuleCatalog_DefaultRules_MatchDocumentedScope` テストが更新されている
+
+### テスト
+- [ ] `RuleInterfaceTests` に table-driven 回帰テストが追加されている（正常系 1 件以上 + 異常系 2 件以上）
+- [ ] 本計画書の該当 Step に記載された完了条件をすべて満たすテストが全件パスする
+
+### ドキュメント
+- [ ] 本計画書の該当 Step に **実装メモ**: 完了 を追記した
+- [ ] 完了したルールを「実装済みルール詳細」テーブルに追加した
+- [ ] 「現状サマリー」の実装済みルール数を更新した
+- [ ] 「ルール優先度一覧」の Phase 列を **実装済み** に更新した
