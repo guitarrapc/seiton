@@ -31,7 +31,7 @@
 | `unpinned-image` | `UnpinnedImageRule` | `uses: docker://...` / `container.image` / `services.*.image` が `@sha256:<64-hex>` 以外の場合に warning | 独自 |
 | `dangerous-triggers` | `DangerousTriggersRule` | `pull_request_target` / `workflow_run` を検出したら warning | zizmor |
 | `job-permissions-required` | `JobPermissionsRequiredRule` | `permissions` 未定義の全 job（通常 job・reusable workflow 呼び出し job 共通）を warning | ghalint || `needs-graph` | `NeedsGraphRule` | `needs` で存在しない job ID を参照している場合に error。循環参照を DFS で検出して error | actionlint |
-| `shell-name` | `ShellNameRule` | `run:` step の `shell:` 値が有効値（bash / sh / pwsh / powershell / cmd / python）以外の場合に error | actionlint |
+| `shell-name` | `ShellNameRule` | `run:` step の `shell:` 値、`workflow.defaults.run.shell`、`job.defaults.run.shell` が有効値（bash / sh / pwsh / powershell / cmd / python）以外の場合に error | actionlint |
 
 ---
 
@@ -186,10 +186,12 @@
   - 有効値: `bash` / `sh` / `pwsh` / `powershell` / `cmd` / `python`（UTF-8 span 比較）
   - 式 (`${{ }}`) が含まれる場合はスキップ
   - それ以外は error を報告
+- `VisitWorkflowPre` で `workflow.defaults.run.shell` を検査（同上）
+- `VisitJobPre` で `job.defaults.run.shell` を検査（同上）
 
 **完了条件**: 有効シェル名は通過、無効名はエラーのテストがパスする
 
-**実装メモ**: 完了。`ShellNameRule` を実装。`VisitStep` で `ExecRun.Shell` が非 null の場合に検査。`IsValidShellName()` で `bash` / `sh` / `pwsh` / `powershell` / `cmd` / `python` の 6 値を UTF-8 span 比較。`Expression is not null` だけでなく `IndexOf("${{"u8) >= 0` のバイトスキャンで式値をスキップ（パーサーが `Shell` の `Expression` を常に設定するわけではないため）。`RuleBase` に `AddStepError(step, message, location)` ヘルパーを追加。エラー位置は `run.Shell.Range` を使用。`RuleCatalog` に priority 9 で登録済み。table-driven 回帰テスト（10 ケース）を `RuleInterfaceTests` に追加。
+**実装メモ**: 完了。`ShellNameRule` を実装。`VisitStep`（`ExecRun.Shell`）・`VisitWorkflowPre`（`workflow.Defaults.Run.Shell`）・`VisitJobPre`（`job.Defaults.Run.Shell`）の 3 箇所を検査。`IsValidShellName()` で `bash` / `sh` / `pwsh` / `powershell` / `cmd` / `python` の 6 値を UTF-8 span 比較。`Expression is not null` だけでなく `IndexOf("${{"u8) >= 0` のバイトスキャンで式値をスキップ（パーサーが `Shell` の `Expression` を常に設定するわけではないため）。`CheckDefaultsRunShell()` ヘルパーメソッドで workflow / job 両方の defaults 検査ロジックを共通化。`RuleBase` に `AddStepError(step, message, location)` ヘルパーを追加。エラー位置は各 `shellNode.Range` を使用。`RuleCatalog` に priority 9 で登録済み。table-driven 回帰テスト（14 ケース）を `RuleInterfaceTests` に追加。
 
 ### Step 2.7: RuleCatalog に P1 ルールを登録
 

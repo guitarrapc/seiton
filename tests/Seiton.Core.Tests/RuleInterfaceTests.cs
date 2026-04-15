@@ -1107,6 +1107,66 @@ public sealed class RuleInterfaceTests
                           shell: ''
             """,
             ["shell name", "invalid"]),
+            new RuleCase(
+            "ok-workflow-defaults-bash",
+            """
+            on: push
+            defaults:
+                run:
+                    shell: bash
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-job-defaults-pwsh",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    permissions: {}
+                    defaults:
+                        run:
+                            shell: pwsh
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-defaults-invalid-shell",
+            """
+            on: push
+            defaults:
+                run:
+                    shell: zsh
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            ["shell name", "invalid"]),
+            new RuleCase(
+            "ng-job-defaults-invalid-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    defaults:
+                        run:
+                            shell: fish
+                    steps:
+                        - run: echo ok
+            """,
+            ["shell name", "invalid"]),
         };
 
         await AssertRuleCases(new ShellNameRule(), "shell-name", cases);

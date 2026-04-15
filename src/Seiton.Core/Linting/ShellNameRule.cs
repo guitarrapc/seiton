@@ -8,6 +8,19 @@ public sealed class ShellNameRule : RuleBase
 
     public override string Name => "Shell Name Rule";
 
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        CheckDefaultsRunShell(workflow.Defaults, shellNode =>
+            AddWorkflowError(workflow, BuildInvalidShellMessage(shellNode), shellNode.Range));
+    }
+
+    public override void VisitJobPre(Job job)
+    {
+        CheckDefaultsRunShell(job.Defaults, shellNode =>
+            AddJobError(job, BuildInvalidShellMessage(shellNode), shellNode.Range));
+    }
+
     public override void VisitStep(Step step)
     {
         if (step.Exec is not ExecRun run || run.Shell is null || Config.Utf8Yaml is null)
@@ -28,8 +41,39 @@ public sealed class ShellNameRule : RuleBase
             return;
         }
 
-        var shellText = Decode(run.Shell.Value);
-        AddStepError(step, $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python", run.Shell.Range);
+        AddStepError(step, BuildInvalidShellMessage(run.Shell), run.Shell.Range);
+    }
+
+    void CheckDefaultsRunShell(Defaults? defaults, Action<StringNode> report)
+    {
+        if (defaults is null || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        var shellNode = defaults.Run?.Shell;
+        if (shellNode is null)
+        {
+            return;
+        }
+
+        var shellSpan = shellNode.Value.AsSpan(Config.Utf8Yaml);
+
+        if (shellNode.Expression is not null || shellSpan.IndexOf("${{"u8) >= 0)
+        {
+            return;
+        }
+
+        if (!IsValidShellName(shellSpan))
+        {
+            report(shellNode);
+        }
+    }
+
+    string BuildInvalidShellMessage(StringNode shellNode)
+    {
+        var shellText = Decode(shellNode.Value);
+        return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python";
     }
 
     static bool IsValidShellName(ReadOnlySpan<byte> shell)
