@@ -34,6 +34,16 @@
       }
     },
     {
+      "dataset": "runner-labels",
+      "sourceUrls": [
+        "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md"
+      ],
+      "fetchedAtUtc": "2026-04-15T16:43:48.6871053\u002B00:00",
+      "rawFileHashes": {
+        "github-hosted-runners.docs.md": "sha256:7550f3ebad58d1d9cb1e32324e1163c83100a5367055b8dd12e440af2e931ccb"
+      }
+    },
+    {
       "dataset": "webhooks",
       "sourceUrls": [
         "https://json.schemastore.org/github-workflow.json",

@@ -1,22 +1,36 @@
-﻿namespace Seiton.Core.Generated;
+namespace Seiton.Core.Generated;
 
 internal static class RunnerLabels
 {
     internal static bool IsKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
-        return EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-latest"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-24.04"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-22.04"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-20.04"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "windows-latest"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "windows-2025"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "windows-2022"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "windows-2019"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "macos-latest"u8)
+        return IsStableHostedLabel(labelUtf8)
+            || IsPreviewHostedLabel(labelUtf8);
+    }
+
+    internal static bool IsPreviewHostedLabel(ReadOnlySpan<byte> labelUtf8)
+    {
+        return EqualsAsciiIgnoreCase(labelUtf8, "windows-2025-vs2026"u8);
+    }
+
+    internal static bool IsStableHostedLabel(ReadOnlySpan<byte> labelUtf8)
+    {
+        return EqualsAsciiIgnoreCase(labelUtf8, "macos-14"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos-15"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "macos-14"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "macos-13"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "macos-12"u8);
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-15-intel"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-26"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-26-intel"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-latest"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-22.04"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-22.04-arm"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-24.04"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-24.04-arm"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-latest"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-slim"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows-11-arm"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows-2022"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows-2025"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows-latest"u8);
     }
 
     internal static bool IsSelfHostedLabel(ReadOnlySpan<byte> labelUtf8)

@@ -92,6 +92,26 @@ app.Add("verify-popular-actions", () =>
     }
 });
 
+app.Add("sync-runner-labels", () =>
+{
+    var code = RunnerLabelsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-runner-labels failed with code {code}");
+    }
+});
+
+app.Add("verify-runner-labels", () =>
+{
+    var code = RunnerLabelsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-runner-labels failed with code {code}");
+    }
+});
+
 // Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
@@ -226,6 +246,46 @@ app.Add("merge-popular-actions-sources", () =>
     }
 });
 
+app.Add("fetch-runner-labels", async () =>
+{
+    var code = await RunnerLabelsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-runner-labels failed with code {code}");
+    }
+});
+
+app.Add("fetch-runner-labels-sources", async () =>
+{
+    var code = await RunnerLabelsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-runner-labels-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-runner-labels-sources", () =>
+{
+    var code = RunnerLabelsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-runner-labels-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-runner-labels-sources", () =>
+{
+    var code = RunnerLabelsCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-runner-labels-sources failed with code {code}");
+    }
+});
+
 // Compare local snapshot against actionlint reference (parity check only, no staleness check).
 app.Add("parity-webhooks", () =>
 {
@@ -264,6 +324,11 @@ static int RunSync(string repoRoot, string dataset)
         return PopularActionsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "runner-labels")
+    {
+        return RunnerLabelsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -278,7 +343,13 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return PopularActionsCommands.Sync(repoRoot);
+        code = PopularActionsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return RunnerLabelsCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -302,6 +373,11 @@ static int RunVerify(string repoRoot, string dataset)
         return PopularActionsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "runner-labels")
+    {
+        return RunnerLabelsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -316,7 +392,13 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return PopularActionsCommands.Verify(repoRoot);
+        code = PopularActionsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return RunnerLabelsCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");
