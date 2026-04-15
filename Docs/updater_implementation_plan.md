@@ -17,6 +17,7 @@ Gap:
 
 In scope:
 - Introduce `src/Seiton.Update` as a .NET console tool.
+- Implement CLI command routing with `ConsoleAppFramework`.
 - Implement fetch/parse/generate pipeline for:
   - webhook events + activity types
   - expression availability table
@@ -35,6 +36,7 @@ Out of scope:
 Code:
 - `src/Seiton.Update/Seiton.Update.csproj`
 - `src/Seiton.Update/Program.cs`
+- `src/Seiton.Update/UpdaterCommands.cs`
 - `src/Seiton.Update/Commands/*.cs`
 - `src/Seiton.Update/Sources/*.cs`
 - `src/Seiton.Update/Parsers/*.cs`
@@ -63,21 +65,30 @@ Docs:
 
 ## 4. CLI Contract (Proposed)
 
+Implementation note:
+- Command and argument binding is implemented with `ConsoleAppFramework` so command methods can focus on updater logic instead of manual argument parsing.
+
 Primary command:
 - `dotnet run --project src/Seiton.Update -- sync`
 
 Subcommands:
-- `sync webhooks`
-- `sync availability`
-- `sync popular-actions`
+- `sync --dataset webhooks`
+- `sync --dataset availability`
+- `sync --dataset popular-actions`
 - `verify` (fails when generated outputs are stale)
 - `dump-sources` (optional diagnostics)
+- convenience aliases: `sync-webhooks`, `verify-webhooks`
 
 Common options:
 - `--offline` use vendored snapshots only
 - `--input-dir <path>` override source fixture directory
 - `--output-dir <path>` override generated output root
 - `--strict` fail on unknown schema shape
+
+ConsoleAppFramework mapping (target shape):
+- `sync` command method: `Sync(string dataset = "all", bool strictParity = false, ...)`
+- `verify` command method: `Verify(string dataset = "all", bool strictParity = false, ...)`
+- framework handles tokenization, type conversion, default values, and help output
 
 Exit code policy:
 - `0` success
@@ -154,11 +165,11 @@ Determinism rules:
 
 Tasks:
 - Create `src/Seiton.Update` console project.
-- Add command routing and structured logging.
+- Add `ConsoleAppFramework` command routing and structured logging.
 - Add shared utilities (I/O, hashing, deterministic ordering helpers).
 
 Exit criteria:
-- `sync --help` and `verify --help` available.
+- `sync --help` and `verify --help` are emitted by `ConsoleAppFramework` command metadata.
 - Project builds in solution CI.
 
 ### Phase U2: Webhook Updater

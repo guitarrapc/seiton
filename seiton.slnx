@@ -13,10 +13,12 @@
     <File Path="Docs/Seiton_Parser_csharp_spec.md" />
     <File Path="Docs/Seiton_Parser_go_spec.md" />
     <File Path="Docs/Seiton_Parser_spec.md" />
+    <File Path="Docs/updater_implementation_plan.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Seiton.Benchmark/Seiton.Benchmark.csproj" />
     <Project Path="src/Seiton.Core/Seiton.Core.csproj" />
+    <Project Path="src/Seiton.Update/Seiton.Update.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj" />
