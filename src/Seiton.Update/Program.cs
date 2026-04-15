@@ -72,6 +72,26 @@ app.Add("verify-availability", () =>
     }
 });
 
+app.Add("sync-popular-actions", () =>
+{
+    var code = PopularActionsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-popular-actions failed with code {code}");
+    }
+});
+
+app.Add("verify-popular-actions", () =>
+{
+    var code = PopularActionsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-popular-actions failed with code {code}");
+    }
+});
+
 // Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
@@ -156,6 +176,46 @@ app.Add("merge-availability-sources", () =>
     }
 });
 
+app.Add("fetch-popular-actions", async () =>
+{
+    var code = await PopularActionsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-popular-actions failed with code {code}");
+    }
+});
+
+app.Add("fetch-popular-actions-sources", async () =>
+{
+    var code = await PopularActionsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-popular-actions-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-popular-actions-sources", () =>
+{
+    var code = PopularActionsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-popular-actions-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-popular-actions-sources", () =>
+{
+    var code = PopularActionsCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-popular-actions-sources failed with code {code}");
+    }
+});
+
 // Compare local snapshot against actionlint reference (parity check only, no staleness check).
 app.Add("parity-webhooks", () =>
 {
@@ -189,6 +249,11 @@ static int RunSync(string repoRoot, string dataset)
         return AvailabilityCommands.Sync(repoRoot);
     }
 
+    if (dataset is "popular-actions")
+    {
+        return PopularActionsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -197,7 +262,13 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return AvailabilityCommands.Sync(repoRoot);
+        code = AvailabilityCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return PopularActionsCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -216,6 +287,11 @@ static int RunVerify(string repoRoot, string dataset)
         return AvailabilityCommands.Verify(repoRoot);
     }
 
+    if (dataset is "popular-actions")
+    {
+        return PopularActionsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -224,7 +300,13 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return AvailabilityCommands.Verify(repoRoot);
+        code = AvailabilityCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return PopularActionsCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

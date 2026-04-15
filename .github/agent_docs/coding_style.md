@@ -7,6 +7,7 @@
 - Use file-scoped namespaces to reduce indentation
 - Use collection literals where applicable
 - Use pattern matching and switch expressions
+- Use raw string literals for multi-line strings, avoid using StringBuilder for simple cases.
 
 ## Naming Conventions
 

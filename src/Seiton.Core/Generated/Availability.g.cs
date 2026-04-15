@@ -1,10 +1,9 @@
-﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Generated;
 
 public static class Availability
-{
-    static readonly byte[][] WorkflowRoots =
+{    static readonly byte[][] WorkflowRoots =
     [
         "github"u8.ToArray(),
         "inputs"u8.ToArray(),

@@ -12,6 +12,28 @@
       }
     },
     {
+      "dataset": "popular-actions",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+        "https://raw.githubusercontent.com/actions/setup-dotnet/v4/action.yml",
+        "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
+        "https://raw.githubusercontent.com/actions/cache/v4/action.yml",
+        "https://raw.githubusercontent.com/actions/upload-artifact/v4/action.yml",
+        "https://raw.githubusercontent.com/actions/download-artifact/v4/action.yml",
+        "https://raw.githubusercontent.com/docker/login-action/v3/action.yml"
+      ],
+      "fetchedAtUtc": "2026-04-15T09:45:52.1543286\u002B00:00",
+      "rawFileHashes": {
+        "actions_checkout_v4.action.yml": "sha256:b55508de183b8a6c978efc7e1d811d653acd84f4972e147f878b50301b245d00",
+        "actions_setup-dotnet_v4.action.yml": "sha256:ff2f78829720ee4505fcaab2acc519b85a328ca52c721620925b17307537babd",
+        "actions_setup-node_v4.action.yml": "sha256:8aee59063ebc272d850507febb30930de2684be1b1240cf5f3dff13179fcff0b",
+        "actions_cache_v4.action.yml": "sha256:5ba9b2391f2acf467bc0604a496001d79550de5af6b2b4e2a70a42599022aacc",
+        "actions_upload-artifact_v4.action.yml": "sha256:29b21270ff44638a165ea12abb4481796770c629e513217af7b4df1aa3821177",
+        "actions_download-artifact_v4.action.yml": "sha256:f81d687a5bb7c2c9428a2cfc32fc099c823d56faf533e7d0e1f3cdc0e10f9cc7",
+        "docker_login-action_v3.action.yml": "sha256:049f7114868ef02037f551d4e346b92c2deab0afce85d8e0a4f413938a4c5810"
+      }
+    },
+    {
       "dataset": "webhooks",
       "sourceUrls": [
         "https://json.schemastore.org/github-workflow.json",

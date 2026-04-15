@@ -287,6 +287,9 @@ Implementation notes (current):
 
 ### Phase U4: Popular Actions Updater
 
+Status:
+- Completed (action metadata fetch/parse/merge pipeline, sync/verify path, and tests are in place)
+
 Tasks:
 - Implement source ingestion for popular actions metadata.
 - Normalize action id/version + input/output schema shape.
@@ -295,6 +298,36 @@ Tasks:
 
 Exit criteria:
 - `PopularActionInputsRule` tests remain green with regenerated data.
+
+Implementation notes (current):
+- Added model: `src/Seiton.Update/Model/PopularActionModel.cs`
+- Added action metadata parser: `src/Seiton.Update/Parsers/GitHubActionMetadataYamlParser.cs`
+- Added source snapshot parser: `src/Seiton.Update/Parsers/GitHubPopularActionsSourceParser.cs`
+- Added generator: `src/Seiton.Update/Generators/PopularActionsCSharpGenerator.cs`
+- Added source resolver: `src/Seiton.Update/Services/PopularActionsSourcePathResolver.cs`
+- Added sync/verify service: `src/Seiton.Update/Services/PopularActionsSyncService.cs`
+- Added fetch source service: `src/Seiton.Update/Sources/GitHubPopularActionsFetcher.cs`
+- Added command wiring: `src/Seiton.Update/Commands/PopularActionsCommands.cs`
+- Added CLI commands:
+  - `fetch-popular-actions-sources`
+  - `parse-popular-actions-sources`
+  - `merge-popular-actions-sources`
+  - `fetch-popular-actions`
+  - `sync-popular-actions`
+  - `verify-popular-actions`
+- Added dataset routing:
+  - `sync --dataset popular-actions`
+  - `verify --dataset popular-actions`
+  - `sync --dataset all` now runs webhooks + availability + popular-actions
+  - `verify --dataset all` now runs webhooks + availability + popular-actions
+- Added primary popular-actions source artifacts:
+  - `data/sources/popular-actions/github/raw/*.action.yml`
+  - `data/sources/popular-actions/github/parsed/popular-actions-metadata.json`
+  - `data/sources/popular-actions/github/popular_actions.json`
+- Added tests:
+  - `tests/Seiton.Update.Tests/GitHubActionMetadataYamlParserTests.cs`
+  - `tests/Seiton.Update.Tests/PopularActionsPipelineStageTests.cs`
+  - `tests/Seiton.Update.Tests/PopularActionsUpdaterGoldenTests.cs`
 
 ### Phase U5: Verify Mode + CI
 

@@ -1,0 +1,36 @@
+# https://help.github.com/en/articles/metadata-syntax-for-github-actions
+name: 'Docker Login'
+description: 'GitHub Action to login against a Docker registry'
+author: 'docker'
+branding:
+  icon: 'anchor'
+  color: 'blue'
+
+inputs:
+  registry:
+    description: 'Server address of Docker registry. If not set then will default to Docker Hub'
+    required: false
+  username:
+    description: 'Username used to log against the Docker registry'
+    required: false
+  password:
+    description: 'Password or personal access token used to log against the Docker registry'
+    required: false
+  ecr:
+    description: 'Specifies whether the given registry is ECR (auto, true or false)'
+    required: false
+  scope:
+    description: 'Scope for the authentication token'
+    required: false
+  logout:
+    description: 'Log out from the Docker registry at the end of a job'
+    default: 'true'
+    required: false
+  registry-auth:
+    description: 'Raw authentication to registries, defined as YAML objects'
+    required: false
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+  post: 'dist/index.js'
