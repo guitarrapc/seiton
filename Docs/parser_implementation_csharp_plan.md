@@ -9,9 +9,10 @@
 | YAML 読み取り | `IYamlStreamReader` + `VYamlStreamAdapter` を使用。`WorkflowParser` は generic core（`ParseCore<TReader>`）で adapter 差し替え可能 |
 | パーサー本体 | `WorkflowParser` は shape 検証 + AST 構築 + diagnostics を実行。`ParseResult.Workflow` に typed AST を返却 |
 | 出力モデル | `ParseResult.Workflow` は `Workflow?` を返却。`WorkflowDocument` は削除済み |
-| `on:` パース | scalar/sequence/mapping の 3 形態を `Event[]` として AST 化。`schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` も typed node で構築。なお `on: schedule` scalar 形の spec 整合は残課題 |
-| Job/Step | `Job` / `Step` を typed node で構築。`uses` と `steps`/`runs-on` 排他、`with`/`secrets` 依存、必須キーを parser で診断。`services` / `credentials` の expression 形は残課題 |
-| permissions/defaults/concurrency | top-level / job-level ともに typed node 構築済み。`defaults.run` 必須と `concurrency.group` 必須の spec 整合は残課題 |
+| AST Range | major node に `TextRange` を保持。mapping ベースの structural node も composite range を構築し、workflow / event / job / step / selected structural node を回帰検証済み |
+| `on:` パース | scalar/sequence/mapping の 3 形態を `Event[]` として AST 化。`schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` も typed node で構築し、`schedule` は mapping 専用として scalar shortcut を parser error に正規化済み |
+| Job/Step | `Job` / `Step` を typed node で構築。`uses` と `steps`/`runs-on` 排他、`with`/`secrets` 依存、必須キーを parser で診断。`services` / `credentials` / container-service `env` の expression 形も AST 化済み |
+| permissions/defaults/concurrency | top-level / job-level ともに typed node 構築済み。`defaults.run` 必須と `concurrency.group` 必須も parser diagnostics として spec 整合済み |
 | 式パーサー | 再帰下降 + arena-style flat array。GHA 仕様に合わせて算術演算子サポートを削除済み |
 | 式セマンティクス | generated availability + function arity + bottom-up 型推論（`ExprType`）を実装 |
 | 式抽出 | `${{ }}` 抽出 → parse → validate パイプライン完成 |
@@ -872,9 +873,13 @@
 
 #### M. 監査差分のドキュメント同期
 
-- [ ] 上記 J-L の修正と同一 PR で `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` を再確認する
-- [ ] spec を実装に寄せるのではなく、まず source of truth の `Seiton_Parser_spec.md` に対して実装修正を優先する
-- [ ] 実装完了後に本 plan の「現状サマリー」を更新し、残課題の行を解消する
+- [x] 上記 J-L の修正と同一 PR で `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` を再確認する
+- [x] spec を実装に寄せるのではなく、まず source of truth の `Seiton_Parser_spec.md` に対して実装修正を優先する
+- [x] 実装完了後に本 plan の「現状サマリー」を更新し、残課題の行を解消する
+
+- `Seiton_Parser_spec.md` は J-L の実装内容と既に整合していたため、source-of-truth 側の追記は不要だった。
+- `Seiton_Parser_csharp_spec.md` は status table と polymorphic field の記述を更新し、`schedule` scalar rejection、`defaults.run` / `concurrency.group` required diagnostics、`services` / `credentials` / `env` expression support、major node range coverage を明記した。
+- `Seiton_Parser_go_spec.md` は shared behavior の説明節に同等の constraints を追記し、言語別 spec 間の読み味を揃えた。
 
 完了条件:
 - 4 文書間で `defaults`, `concurrency`, `schedule`, `services`, `credentials`, `range` の記述に矛盾がない

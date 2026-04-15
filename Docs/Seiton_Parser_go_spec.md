@@ -699,6 +699,9 @@ func (p *parser) parseEventWithNoConfig(n *yaml.Node) Event
 
 Three forms: scalar → single event, sequence → multiple events, mapping → events with config.
 
+Implementation note (2026-04-15 sync):
+- The scalar / sequence shortcut is only valid for no-config events. `schedule` keeps its mapping-only contract, so scalar `on: schedule` is a parser error in the shared spec.
+
 For mapping form, dispatches by event name:
 - `"schedule"` → `ParseScheduleEvent`
 - `"workflow_dispatch"` → `ParseWorkflowDispatchEvent`
@@ -755,6 +758,9 @@ func (p *parser) parseEnvironment(pos *Pos, n *yaml.Node) *Environment
 // ParseOutputs (Spec §3.10)
 func (p *parser) parseOutputs(n *yaml.Node) map[string]*Output
 ```
+
+Implementation note (2026-04-15 sync):
+- `defaults` requires `run` and `concurrency` requires `group`; both are parser-level structural diagnostics in the shared spec rather than later semantic checks.
 
 ### 3.6 Job Parse (Spec §3.9–§3.10)
 
@@ -829,11 +835,16 @@ func (p *parser) parseCredentials(pos *Pos, n *yaml.Node) *Credentials
 
 // ParseServices (Spec §3.17)
 func (p *parser) parseServices(n *yaml.Node) *Services
+```
 
 Implementation note (2026-04-14 sync):
 - Job structural constraints (`uses` vs `steps`/`runs-on`, and `with`/`secrets` requires `uses`) are parser-level diagnostics.
 - Rule/visitor diagnostics are additive; parser diagnostics remain the base contract.
-```
+
+Implementation note (2026-04-15 sync):
+- `services` accepts either a mapping of named services or a single expression scalar.
+- `credentials` accepts either an expression scalar or a mapping with required `username` + `password`.
+- Container-level and service-level `env` reuse the shared expression-or-mapping `Env` shape.
 
 ---
 

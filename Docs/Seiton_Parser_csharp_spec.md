@@ -19,17 +19,18 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | Category | Implemented in actionlint | Current C# State |
 |---|---|---|
 | **AST Construction** | Parser returns typed AST (`Workflow`, `Job`, `Step`, …) | Implemented. `ParseResult.Workflow` returns typed `Workflow` AST (`WorkflowDocument` removed) |
-| **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Implemented for `schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` as structured AST nodes. `image_version` remains out-of-scope |
+| **AST Range Coverage** | Major nodes carry source range suitable for tooling / diagnostics correlation | Implemented. Scalar nodes keep scalar ranges and mapping-based structural nodes build composite `TextRange` spans; covered by parser regression tests |
+| **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Implemented for `schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` as structured AST nodes. `schedule` keeps its mapping-only constraint, so scalar `on: schedule` is rejected as a parser diagnostic. `image_version` remains out-of-scope |
 | **workflow_dispatch inputs** | `type` (string/number/boolean/choice/environment), `options`, `required`, `default` parsed individually | Implemented |
 | **workflow_call inputs/secrets/outputs** | Required validation for `type` on inputs, `required` on secrets, `value` on outputs | Implemented |
 | **schedule cron/timezone** | `cron` / `timezone` keys parsed individually in mapping | Implemented |
 | **Permissions Structure** | scalar (`read-all` / `write-all`) or mapping (scope → value) returned as typed node | Implemented |
-| **Defaults / Concurrency** | `defaults.run.shell`, `defaults.run.working-directory` returned as typed node | Implemented |
+| **Defaults / Concurrency** | `defaults.run.shell`, `defaults.run.working-directory` returned as typed node | Implemented. Parser-level diagnostics enforce required `defaults.run` and required `concurrency.group` in both top-level and job-level forms |
 | **Environment** | scalar (name) or mapping (`name`, `url`, `deployment`) as typed node | Implemented |
 | **Runner (runs-on)** | scalar/sequence → labels, mapping → `labels` + `group`, expression supported | Implemented (scalar/sequence/mapping + expression paths are parsed into `Runner`) |
 | **Step ExecRun / ExecAction** | `run` step → `ExecRun`, `uses` step → `ExecAction` as variant. Docker step separates `entrypoint` / `args` | Implemented |
 | **Matrix & Strategy** | `matrix` row/include/exclude recursively parsed as `RawYAMLValue`, `fail-fast` / `max-parallel` typed | Implemented |
-| **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented |
+| **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented. `services`, `credentials`, and container/service `env` all support the shared expression-or-mapping polymorphism required by the spec |
 | **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
@@ -381,7 +382,7 @@ public sealed class FloatNode
 AST design principles:
 
 - Use `sealed class` with `{ get; init; }` properties
-- TextRange is held as `TextRange Range` on every node
+- TextRange is held as `TextRange Range` on every node; scalar nodes use scalar locations and structural mapping nodes use composite spans derived from mapping start/end marks
 - Nullable types represent YAML omission
 - Scalar values use `Utf8Slice` (non-owning reference into input buffer), never `System.String`
 - Dictionary keys use `Utf8String` (owned UTF-8 byte copy), never `System.String`
@@ -732,6 +733,12 @@ public sealed class Credentials
     public TextRange Range { get; init; }
 }
 ```
+
+Implementation notes:
+
+- `Services` accepts either a mapping of named services or a single expression scalar.
+- `Credentials` accepts either an expression scalar or a mapping with required `username` + `password`.
+- Container-level and service-level `env` reuse the same expression-or-mapping `Env` shape as top-level / job-level `env`.
 
 ### 2.9 RawYAMLValue
 
