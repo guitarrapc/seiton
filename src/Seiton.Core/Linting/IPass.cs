@@ -8,6 +8,8 @@ public interface IPass
 
     void VisitWorkflowPost(Workflow workflow);
 
+    void VisitEvent(Event ev);
+
     void VisitJobPre(Job job);
 
     void VisitJobPost(Job job);

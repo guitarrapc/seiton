@@ -62,6 +62,8 @@ public sealed class WorkflowVisitorTests
 
         public void VisitWorkflowPost(Workflow workflow) => trace.Add("workflow-post");
 
+        public void VisitEvent(Event ev) => trace.Add("event");
+
         public void VisitJobPre(Job job) => trace.Add("job-pre");
 
         public void VisitJobPost(Job job) => trace.Add("job-post");

@@ -43,7 +43,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented. `services`, `credentials`, and container/service `env` all support the shared expression-or-mapping polymorphism required by the spec |
 | **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
-| **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
+| **Visitor / Pass** | `Pass` interface → `WorkflowPre → Event → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
 | **Rule Engine** | `Rule` interface × multiple lint rules | Current contract implements the documented Seiton default rule pack: `job-structure`, `reusable-workflow`, `permissions`, and `popular-action-inputs`. `SyntaxRule` composes the same pack for visitor-facing aggregation. Matching actionlint's total rule count is a reference parity topic, not a Seiton contract requirement |
 | **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Current contract implements `ExprType`, bottom-up inference, typed built-in signatures, and key-granularity context checks for the parser expression sites Seiton models today. Remaining differences are reference parity gaps, not current-contract omissions |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
@@ -1108,17 +1108,12 @@ public interface IPass
 {
     void VisitWorkflowPre(Workflow workflow);
     void VisitWorkflowPost(Workflow workflow);
+    void VisitEvent(Event ev);
     void VisitJobPre(Job job);
     void VisitJobPost(Job job);
     void VisitStep(Step step);
 }
 ```
-
-Spec sync note:
-
-- Current C# contract matches the interface above and does not yet include `VisitEvent`.
-- The planned extension is tracked in `linter_implementation_csharp_plan.md` (Phase 1).
-- When implemented, update this section and the traversal order in §8.2 together with `Seiton_Parser_spec.md`.
 
 ### 8.2 Visitor (Spec §8.2)
 
@@ -1133,6 +1128,12 @@ public sealed class WorkflowVisitor
     {
         foreach (var pass in _passes)
             pass.VisitWorkflowPre(workflow);
+
+        foreach (var ev in workflow.On)
+        {
+            foreach (var pass in _passes)
+                pass.VisitEvent(ev);
+        }
 
         foreach (var (_, job) in workflow.Jobs)
         {
@@ -1162,6 +1163,8 @@ Traversal order:
 
 ```
 VisitWorkflowPre(workflow)      // all passes
+    for each event in workflow.On:
+        VisitEvent(event)           // all passes
   for each job:
     VisitJobPre(job)            // all passes
     for each step:

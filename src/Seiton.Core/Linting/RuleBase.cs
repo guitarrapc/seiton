@@ -30,6 +30,10 @@ public abstract class RuleBase : IRule
     {
     }
 
+    public virtual void VisitEvent(Event ev)
+    {
+    }
+
     public virtual void VisitJobPre(Job job)
     {
     }

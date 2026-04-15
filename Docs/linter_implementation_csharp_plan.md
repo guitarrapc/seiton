@@ -9,7 +9,7 @@
 | 領域 | 現行状況 |
 |---|---|
 | エンジン本体 | `LintEngine` が `WorkflowParser.Parse` → `WorkflowVisitor` → 各 `IRule` の順で実行。診断は優先度ソート後に重複除去して `LintResult` へ返却 |
-| Visitor | `WorkflowVisitor` が `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` の順で巡回。`On` イベント列の巡回フック（`VisitEvent`）は未実装 |
+| Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` の 4 ルール |
@@ -36,12 +36,12 @@
 
 | # | ギャップ | 影響 | 深刻度 |
 |---|---|---|---|
-| G1 | `IRule`/`WorkflowVisitor` に `VisitEvent` がない | `on:` トリガー系ルールが一切書けない | 🔴 高 |
+| G1 | `IRule`/`WorkflowVisitor` に `VisitEvent` がない | **解消済み（Phase 1 実装）** | ✅ |
 | G2 | 式 AST の linter 連携がない | `template-injection` / `expr-*` 系が全滅 | 🔴 高 |
 | G3 | ルール単位の suppress / severity override がない | `LintConfig` にオプション欄がなく、ユーザーがルールを無効化できない | 🟡 中 |
 | G4 | Job 横断ルール向けの共通状態管理ヘルパーがない | `needs` などで各ルールが ID 収集・集合管理を都度実装する必要があり、重複実装が発生する | 🟡 中 |
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
-| G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | 実装と仕様書の更新順序が揃わないと、契約差分の説明コストが増える | 🟢 低 |
+| G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | **解消済み（仕様同期済み）** | ✅ |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **目標**: `WorkflowVisitor` に `On` イベント列の巡回フックを追加し、イベント系ルールの実装基盤を整える
 
-### Step 1.0: parser 仕様書への同期注記を追加
+### Step 1.0: parser 仕様書への同期注記を追加（完了）
 
 **ファイル**: `Docs/Seiton_Parser_spec.md`, `Docs/Seiton_Parser_csharp_spec.md`
 
@@ -67,6 +67,8 @@
 
 **完了条件**: 既存 4 ルールがノータッチでビルド・テストがパスする
 
+**実装メモ**: 完了。`IPass` と `RuleBase` に `VisitEvent` を追加し、既存ルールは無変更で動作。
+
 ### Step 1.2: WorkflowVisitor の巡回に VisitEvent を組み込む
 
 **ファイル**: `src/Seiton.Core/Linting/WorkflowVisitor.cs`
@@ -76,6 +78,8 @@
 
 **完了条件**: `CountingRule` テストに `EventCount` を追加し、イベント数が正しく計上される
 
+**実装メモ**: 完了。`RuleInterfaceTests` の `CountingRule` に `EventCount` を追加して検証済み。
+
 ### Step 1.3: SyntaxRule の VisitEvent を委譲
 
 **ファイル**: `src/Seiton.Core/Linting/SyntaxRule.cs`
@@ -83,6 +87,8 @@
 - `VisitEvent` を配下の全ルールへ委譲するよう追加
 
 **完了条件**: ビルドが通り、既存テストがパス
+
+**実装メモ**: 完了。`SyntaxRule.VisitEvent` を追加し、配下ルールへ委譲。
 
 ---
 

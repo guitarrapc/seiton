@@ -46,6 +46,14 @@ public sealed class SyntaxRule : IRule
         }
     }
 
+    public void VisitEvent(Event ev)
+    {
+        for (var i = 0; i < rules.Length; i++)
+        {
+            rules[i].VisitEvent(ev);
+        }
+    }
+
     public void VisitJobPre(Job job)
     {
         for (var i = 0; i < rules.Length; i++)

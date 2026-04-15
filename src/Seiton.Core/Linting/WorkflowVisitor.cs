@@ -21,6 +21,15 @@ public sealed class WorkflowVisitor
             passes[i].VisitWorkflowPre(workflow);
         }
 
+        for (var e = 0; e < workflow.On.Count; e++)
+        {
+            var ev = workflow.On[e];
+            for (var i = 0; i < passes.Count; i++)
+            {
+                passes[i].VisitEvent(ev);
+            }
+        }
+
         foreach (var (_, job) in workflow.Jobs)
         {
             for (var i = 0; i < passes.Count; i++)

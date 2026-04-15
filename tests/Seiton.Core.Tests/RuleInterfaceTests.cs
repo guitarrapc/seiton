@@ -67,6 +67,18 @@ public sealed class RuleInterfaceTests
     {
         var workflow = new Workflow
         {
+            On =
+            [
+                new WebhookEvent
+                {
+                    EventName = new StringNode { Value = new Utf8Slice(0, 0) },
+                    Hook = new StringNode { Value = new Utf8Slice(0, 0) },
+                },
+                new ScheduledEvent
+                {
+                    EventName = new StringNode { Value = new Utf8Slice(0, 0) },
+                },
+            ],
             Jobs = new Dictionary<Utf8String, Job>
             {
                 [new Utf8String("build"u8)] = new Job
@@ -97,6 +109,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rule.Id).IsEqualTo("test-rule");
         await Assert.That(rule.Name).IsEqualTo("Test Rule");
         await Assert.That(rule.WorkflowPreCount).IsEqualTo(1);
+        await Assert.That(rule.EventCount).IsEqualTo(2);
         await Assert.That(rule.JobPreCount).IsEqualTo(1);
         await Assert.That(rule.StepCount).IsEqualTo(1);
         await Assert.That(rule.JobPostCount).IsEqualTo(1);
@@ -623,6 +636,10 @@ public sealed class RuleInterfaceTests
         {
         }
 
+        public void VisitEvent(Event ev)
+        {
+        }
+
         public void VisitJobPre(Job job)
         {
         }
@@ -648,6 +665,8 @@ public sealed class RuleInterfaceTests
 
         public int WorkflowPostCount { get; private set; }
 
+        public int EventCount { get; private set; }
+
         public int JobPreCount { get; private set; }
 
         public int JobPostCount { get; private set; }
@@ -672,6 +691,12 @@ public sealed class RuleInterfaceTests
         {
             EnsureConfigured();
             WorkflowPostCount++;
+        }
+
+        public void VisitEvent(Event ev)
+        {
+            EnsureConfigured();
+            EventCount++;
         }
 
         public void VisitJobPre(Job job)
