@@ -20,6 +20,7 @@ internal static class RuleCatalog
         ("needs-graph", 8, static () => new NeedsGraphRule()),
         ("shell-name", 9, static () => new ShellNameRule()),
         ("runner-label", 10, static () => new RunnerLabelRule()),
+        ("id-naming", 11, static () => new IdNamingRule()),
     ];
 
     public static IRule[] CreateDefaultRules()

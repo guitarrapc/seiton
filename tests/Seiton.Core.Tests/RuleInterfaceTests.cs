@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(11);
+        await Assert.That(rules.Length).IsEqualTo(12);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -294,6 +294,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[8].Id).IsEqualTo("needs-graph");
         await Assert.That(rules[9].Id).IsEqualTo("shell-name");
         await Assert.That(rules[10].Id).IsEqualTo("runner-label");
+        await Assert.That(rules[11].Id).IsEqualTo("id-naming");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -306,6 +307,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("needs-graph")).IsEqualTo(8);
         await Assert.That(RuleCatalog.GetPriority("shell-name")).IsEqualTo(9);
         await Assert.That(RuleCatalog.GetPriority("runner-label")).IsEqualTo(10);
+        await Assert.That(RuleCatalog.GetPriority("id-naming")).IsEqualTo(11);
     }
 
     [Test]
@@ -1280,6 +1282,92 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_IdNamingRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-valid-job-and-step-ids",
+            """
+            on: push
+            jobs:
+                Build_123:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: setup-1
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-no-step-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-step-id-expression-skipped",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: ${{ matrix.step_id }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-job-id-with-space",
+            """
+            on: push
+            jobs:
+                "bad id":
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["job id", "contains invalid characters"]),
+            new RuleCase(
+            "ng-step-id-with-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: setup.v1
+                          run: echo ng
+            """,
+            ["step id", "contains invalid characters"]),
+            new RuleCase(
+            "ng-step-id-empty",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: ''
+                          run: echo ng
+            """,
+            ["step id", "contains invalid characters"]),
+        };
+
+        await AssertRuleCases(new IdNamingRule(), "id-naming", cases);
     }
 
     [Test]
