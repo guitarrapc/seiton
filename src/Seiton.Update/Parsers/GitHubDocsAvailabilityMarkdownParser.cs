@@ -4,7 +4,7 @@ internal sealed class GitHubDocsAvailabilityMarkdownParser
 {
     public IReadOnlyDictionary<string, IReadOnlyList<string>> ParseWorkflowKeyContexts(string markdown)
     {
-        var normalized = markdown.Replace("\r\n", "\n");
+        var normalized = TextNormalization.NormalizeToLf(markdown);
         var sectionStart = normalized.IndexOf("### Context availability", StringComparison.Ordinal);
         if (sectionStart < 0)
         {

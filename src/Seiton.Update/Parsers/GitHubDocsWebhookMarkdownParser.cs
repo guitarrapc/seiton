@@ -64,7 +64,7 @@ internal sealed class GitHubDocsWebhookMarkdownParser
     static bool TryExtractActivityTypesFromTable(string section, out IReadOnlyList<string>? activityTypes)
     {
         activityTypes = null;
-        var lines = section.Replace("\r\n", "\n").Split('\n');
+        var lines = TextNormalization.NormalizeToLf(section).Split('\n');
 
         var activityHeaderIndex = -1;
         for (var i = 0; i < lines.Length; i++)

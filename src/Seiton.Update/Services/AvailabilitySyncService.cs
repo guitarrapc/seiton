@@ -1,4 +1,4 @@
-using Seiton.Update.Generators;
+﻿using Seiton.Update.Generators;
 using Seiton.Update.Parsers;
 
 namespace Seiton.Update.Services;
@@ -17,7 +17,7 @@ internal sealed class AvailabilitySyncService
         var generated = generator.Generate(availability);
 
         var current = File.Exists(outputPath)
-            ? File.ReadAllText(outputPath).Replace("\r\n", "\n")
+            ? TextNormalization.NormalizeToLf(File.ReadAllText(outputPath))
             : string.Empty;
 
         if (string.Equals(current, generated, StringComparison.Ordinal))
@@ -40,7 +40,7 @@ internal sealed class AvailabilitySyncService
 
         var availability = parser.Parse(primarySourcePath);
         var generated = generator.Generate(availability);
-        var current = File.ReadAllText(outputPath).Replace("\r\n", "\n");
+        var current = TextNormalization.NormalizeToLf(File.ReadAllText(outputPath));
         return string.Equals(current, generated, StringComparison.Ordinal);
     }
 }

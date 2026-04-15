@@ -39,7 +39,7 @@ internal sealed class WebhookManifestService
         var path = ManifestPath(repoRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var json = JsonSerializer.Serialize(manifest, JsonOptions);
-        File.WriteAllText(path, json.Replace("\r\n", "\n"));
+        File.WriteAllText(path, TextNormalization.NormalizeToLf(json));
     }
 
     static string ManifestPath(string repoRoot) =>

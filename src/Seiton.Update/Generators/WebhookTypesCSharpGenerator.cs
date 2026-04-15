@@ -188,7 +188,7 @@ internal sealed class WebhookTypesCSharpGenerator
             }
             """);
 
-        return sb.ToString().Replace("\r\n", "\n");
+        return TextNormalization.NormalizeToLf(sb.ToString());
     }
 
     static string BuildAnyOptionCondition(IReadOnlyList<string> options, string variableName)

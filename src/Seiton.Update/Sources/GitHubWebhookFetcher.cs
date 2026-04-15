@@ -58,8 +58,8 @@ internal sealed class GitHubWebhookFetcher
         Directory.CreateDirectory(Path.GetDirectoryName(paths.RawSchemaPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(paths.RawDocsPath)!);
 
-        File.WriteAllText(paths.RawSchemaPath, schemaContent.Replace("\r\n", "\n"));
-        File.WriteAllText(paths.RawDocsPath, docsContent.Replace("\r\n", "\n"));
+        File.WriteAllText(paths.RawSchemaPath, TextNormalization.NormalizeToLf(schemaContent));
+        File.WriteAllText(paths.RawDocsPath, TextNormalization.NormalizeToLf(docsContent));
 
         UpdateLogger.Info($"[fetch:webhooks:sources] wrote {paths.RawSchemaPath}");
         UpdateLogger.Info($"[fetch:webhooks:sources] wrote {paths.RawDocsPath}");
@@ -117,8 +117,8 @@ internal sealed class GitHubWebhookFetcher
 
         Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedSchemaPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedDocsPath)!);
-        File.WriteAllText(paths.ParsedSchemaPath, JsonSerializer.Serialize(parsedSchema, JsonOptions).Replace("\r\n", "\n"));
-        File.WriteAllText(paths.ParsedDocsPath, JsonSerializer.Serialize(parsedDocs, JsonOptions).Replace("\r\n", "\n"));
+        File.WriteAllText(paths.ParsedSchemaPath, TextNormalization.NormalizeToLf(JsonSerializer.Serialize(parsedSchema, JsonOptions)));
+        File.WriteAllText(paths.ParsedDocsPath, TextNormalization.NormalizeToLf(JsonSerializer.Serialize(parsedDocs, JsonOptions)));
 
         UpdateLogger.Info($"[parse:webhooks:sources] wrote {paths.ParsedSchemaPath}");
         UpdateLogger.Info($"[parse:webhooks:sources] wrote {paths.ParsedDocsPath}");
@@ -173,7 +173,7 @@ internal sealed class GitHubWebhookFetcher
 
         var snapshotJson = SerializeSnapshot(events);
         var existing = File.Exists(paths.MergedSnapshotPath)
-            ? File.ReadAllText(paths.MergedSnapshotPath).Replace("\r\n", "\n")
+            ? TextNormalization.NormalizeToLf(File.ReadAllText(paths.MergedSnapshotPath))
             : string.Empty;
 
         if (!string.Equals(existing, snapshotJson, StringComparison.Ordinal))
@@ -564,7 +564,7 @@ internal sealed class GitHubWebhookFetcher
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         });
-        return json.Replace("\r\n", "\n");
+        return TextNormalization.NormalizeToLf(json);
     }
 
     static void WriteOfficialSourceDiffReport(
@@ -659,7 +659,7 @@ internal sealed class GitHubWebhookFetcher
             }
         }
 
-        File.WriteAllText(reportPath, sb.ToString().Replace("\r\n", "\n"));
+        File.WriteAllText(reportPath, TextNormalization.NormalizeToLf(sb.ToString()));
     }
 
     static bool AreSameTypes(IReadOnlyList<string>? left, IReadOnlyList<string>? right)

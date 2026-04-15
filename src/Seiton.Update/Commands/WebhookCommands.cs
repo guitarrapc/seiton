@@ -145,6 +145,6 @@ internal static class WebhookCommands
             }
         }
 
-        File.WriteAllText(reportPath, sb.ToString().Replace("\r\n", "\n"));
+        File.WriteAllText(reportPath, TextNormalization.NormalizeToLf(sb.ToString()));
     }
 }

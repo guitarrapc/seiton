@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
@@ -52,7 +52,7 @@ internal sealed class GitHubAvailabilityFetcher
         var paths = Paths(repoRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(paths.RawDocsPath)!);
 
-        File.WriteAllText(paths.RawDocsPath, docsContent.Replace("\r\n", "\n"));
+        File.WriteAllText(paths.RawDocsPath, TextNormalization.NormalizeToLf(docsContent));
 
         UpdateLogger.Info($"[fetch:availability:sources] wrote {paths.RawDocsPath}");
     }
@@ -88,7 +88,7 @@ internal sealed class GitHubAvailabilityFetcher
         };
 
         Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedDocsPath)!);
-        File.WriteAllText(paths.ParsedDocsPath, JsonSerializer.Serialize(parsed, JsonOptions).Replace("\r\n", "\n"));
+        File.WriteAllText(paths.ParsedDocsPath, TextNormalization.NormalizeToLf(JsonSerializer.Serialize(parsed, JsonOptions)));
 
         UpdateLogger.Info($"[parse:availability:sources] wrote {paths.ParsedDocsPath}");
     }
@@ -129,9 +129,9 @@ internal sealed class GitHubAvailabilityFetcher
             stepRoots,
         };
 
-        var snapshotJson = JsonSerializer.Serialize(snapshot, JsonOptions).Replace("\r\n", "\n");
+        var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions));
         var existing = File.Exists(paths.MergedSnapshotPath)
-            ? File.ReadAllText(paths.MergedSnapshotPath).Replace("\r\n", "\n")
+            ? TextNormalization.NormalizeToLf(File.ReadAllText(paths.MergedSnapshotPath))
             : string.Empty;
 
         if (!string.Equals(existing, snapshotJson, StringComparison.Ordinal))

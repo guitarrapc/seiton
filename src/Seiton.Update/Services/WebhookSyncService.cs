@@ -17,7 +17,7 @@ internal sealed class WebhookSyncService
         var generated = generator.Generate(events);
 
         var current = File.Exists(outputPath)
-            ? File.ReadAllText(outputPath).Replace("\r\n", "\n")
+            ? TextNormalization.NormalizeToLf(File.ReadAllText(outputPath))
             : string.Empty;
 
         if (string.Equals(current, generated, StringComparison.Ordinal))
@@ -40,7 +40,7 @@ internal sealed class WebhookSyncService
 
         var events = parser.Parse(primarySourcePath);
         var generated = generator.Generate(events);
-        var current = File.ReadAllText(outputPath).Replace("\r\n", "\n");
+        var current = TextNormalization.NormalizeToLf(File.ReadAllText(outputPath));
         return string.Equals(current, generated, StringComparison.Ordinal);
     }
 }

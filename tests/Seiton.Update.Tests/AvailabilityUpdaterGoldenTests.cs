@@ -1,4 +1,4 @@
-using Seiton.Update.Generators;
+﻿using Seiton.Update.Generators;
 using Seiton.Update.Services;
 using Seiton.Update.Parsers;
 

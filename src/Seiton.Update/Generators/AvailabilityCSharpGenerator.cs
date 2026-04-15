@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Update.Model;
 
 namespace Seiton.Update.Generators;
@@ -66,7 +66,7 @@ internal sealed class AvailabilityCSharpGenerator
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
-        return sb.ToString().Replace("\r\n", "\n");
+        return TextNormalization.NormalizeToLf(sb.ToString());
     }
 
     static string[] Order(IReadOnlyList<string> values)
