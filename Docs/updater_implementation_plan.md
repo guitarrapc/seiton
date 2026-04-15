@@ -183,7 +183,7 @@ Implementation notes:
 ### Phase U2: Webhook Updater
 
 Status:
-- In progress (source parser + canonical model + deterministic C# generator implemented; test scaffold pending)
+- Completed (parser/model/generator/sync-verify path and golden tests are in place)
 
 Tasks:
 - Implement source parser for webhook event/type data.
@@ -200,8 +200,11 @@ Implementation notes (current):
 - Added model: `src/Seiton.Update/Model/WebhookEventModel.cs`
 - Added generator: `src/Seiton.Update/Generators/WebhookTypesCSharpGenerator.cs`
 - Added sync/verify service: `src/Seiton.Update/Services/WebhookSyncService.cs`
+- Added tests: `tests/Seiton.Update.Tests/WebhookUpdaterGoldenTests.cs`
+- Added test project: `tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj`
 - `sync webhooks` now regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` deterministically.
 - `verify webhooks` now checks stale generated file and returns exit code `4` on mismatch.
+- CI now includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
 
 ### Phase U3: Availability Updater
 
