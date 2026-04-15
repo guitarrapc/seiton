@@ -354,8 +354,8 @@
 
 **ファイル**: `src/Seiton.Core/Linting/IPass.cs`, `WorkflowVisitor.cs`
 
-- `IPass` interface（パーサー仕様 §8.1, C# 実装仕様 §5.1）
-- `WorkflowVisitor`（パーサー仕様 §8.2, C# 実装仕様 §5.2）
+- `IPass` interface（Linter 仕様 §4.1, C# 実装仕様 §5.1）
+- `WorkflowVisitor`（Linter 仕様 §4.2, C# 実装仕様 §5.2）
 - 巡回順: WorkflowPre → JobPre → Step → JobPost → WorkflowPost
 
 **テスト**: dummy pass で巡回順序を検証
@@ -368,7 +368,7 @@
 
 **ファイル**: `src/Seiton.Core/Linting/IRule.cs`
 
-- `IRule : IPass`（パーサー仕様 §8.3, C# 実装仕様 §5.3）
+- `IRule : IPass`（Linter 仕様 §4.3, C# 実装仕様 §5.3）
 - `Id`, `Name`, `GetDiagnostics()`, `SetConfig()`
 
 **完了条件**: interface が定義され、ビルドが通る
@@ -938,7 +938,7 @@
 実装結果:
 - 方針は「実装拡張」ではなく「scope 明確化」を採用。現在の Seiton C# spec における Rule Engine 完了条件を、actionlint と同数の rules を持つことではなく、`RuleCatalog` の default rule pack を実装・検証済みであることに定義し直した。
 - `Seiton_Parser_csharp_spec.md` の Rule Engine 行を partially から更新し、current Seiton scope の default 4 rules（`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`）と `SyntaxRule` の位置づけを明記した。
-- 同 spec の Rule Interface 節に、parser 一次診断と rule diagnostics の責務境界、`LintEngine` の priority sort / dedup 契約、actionlint-parity rule count は out-of-scope であることを追記した。
+- 同 spec の Rule Interface 節に、parser 一次診断と rule diagnostics の責務境界、`LintEngine` の priority sort / dedup 契約、actionlint-parity rule count は out-of-scope であることを追記した（責務境界の規範位置は `Seiton_Linter_spec.md` へ移管）。
 - `RuleInterfaceTests` に `RuleCatalog_DefaultRules_MatchDocumentedScope` を追加し、default rule pack の ID と priority 順を固定した。
 - `Seiton_Parser_spec.md` / `Seiton_Parser_go_spec.md` は rule count を completion criterion としていないため、今回の scope 明確化に伴う本文変更は不要だった。
 

@@ -1196,9 +1196,9 @@ func (sema *ExprSemanticsChecker) IsConstant(expr ExprNode) bool
 
 ---
 
-## 8. Visitor / Pass (Spec §8)
+## 8. Visitor / Pass (Linter Spec §4)
 
-### 8.1 Pass Interface (Spec §8.1)
+### 8.1 Pass Interface (Linter Spec §4.1)
 
 ```go
 type Pass interface {
@@ -1210,7 +1210,7 @@ type Pass interface {
 }
 ```
 
-### 8.2 Visitor (Spec §8.2)
+### 8.2 Visitor (Linter Spec §4.2)
 
 ```go
 type Visitor struct {
@@ -1241,7 +1241,7 @@ VisitWorkflowPost(workflow)     // all passes
 - If any pass callback returns an error, traversal aborts (used for internal errors, not lint diagnostics)
 - Optional debug timing per phase
 
-### 8.3 Rule Interface (Spec §8.3)
+### 8.3 Rule Interface (Linter Spec §4.3)
 
 Rules are implemented as Passes. Rule injection/filtering is supported via `LinterOptions.OnRulesCreated`.
 

@@ -49,14 +49,14 @@
 
 **目標**: `WorkflowVisitor` に `On` イベント列の巡回フックを追加し、イベント系ルールの実装基盤を整える
 
-### Step 1.0: parser 仕様書への同期注記を追加（完了）
+### Step 1.0: linter 仕様書への同期注記を追加（完了）
 
-**ファイル**: `Docs/Seiton_Parser_spec.md`, `Docs/Seiton_Parser_csharp_spec.md`
+**ファイル**: `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Parser_csharp_spec.md`
 
 - 現行契約（`VisitEvent` なし）を維持したまま、Phase 1 実装予定として注記を追加
-- 実装着手時に §8 のインターフェース定義・巡回順を同時更新する運用ルールを明記
+- 実装着手時に linter 仕様のインターフェース定義・巡回順を同時更新する運用ルールを明記
 
-**完了条件**: linter 実装計画と parser 仕様書の間で、`VisitEvent` 追加の差分が明示されている
+**完了条件**: linter 実装計画と linter 仕様書の間で、`VisitEvent` 追加の差分が明示されている
 
 ### Step 1.1: IPass / IRule に VisitEvent を追加
 

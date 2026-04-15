@@ -1,7 +1,8 @@
 # Seiton Parser Specification
 
-> Defines the specification for syntactic analysis, AST construction, Visitor traversal, and expression validation of GitHub Actions workflow YAML.
+> Defines the specification for syntactic analysis, AST construction, and expression parsing/validation of GitHub Actions workflow YAML.
 > This document is a language-agnostic parser specification. For C# implementation details, see `Seiton_Parser_csharp_spec.md`.
+> Linter execution model and rule configuration are defined in `Seiton_Linter_spec.md`.
 >
 > **Cross-document rule**: This spec is the source of truth. When revised, also review and update `Seiton_Parser_csharp_spec.md`, `Seiton_Parser_go_spec.md`, and `parser_implementation_csharp_plan.md` for consistency.
 
@@ -11,18 +12,16 @@
 
 ```
   ┌───────────────────────────────────────────────────────────────┐
-  │                     Linter.Check()                            │
+  │                        Parse()                                │
   │                                                               │
   │  1. Parse(utf8Yaml)                                           │
   │     1a. Read events via YAML Adapter Layer                    │
   │     1b. Resolve aliases                                       │
   │     1c. Parser.parse() -> Workflow AST                        │
   │     1d. Collect syntax diagnostics                            │
-  │  2. Construct Rule set                                        │
-  │  3. Visitor.Visit(workflow)                                   │
-  │     WorkflowPre -> JobPre -> Step -> JobPost -> WorkflowPost  │
-  │  4. Collect diagnostics from each Rule                        │
-  │  5. FilterErrors -> Sort + Dedup -> Output                    │
+  │  2. Parse expression-bearing scalar values                    │
+  │  3. Run expression semantic validation                         │
+  │  4. Return ParseResult(workflow, diagnostics, fatalFlag)      │
   └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,7 +37,7 @@ Parse(utf8Yaml, filePath) -> ParseResult
 
 ### 1.1.1 Supported Scope and Reference Parity
 
-This document defines Seiton's formal parser/lint contract.
+This document defines Seiton's formal parser contract.
 
 - Behavior described in this document is **in scope** for Seiton and should be kept consistent with implementation and regression tests.
 - Language-specific documents may compare Seiton against reference implementations such as actionlint. Those comparisons are informational and may identify **reference parity gaps**, but they do not expand Seiton's formal contract by themselves.
@@ -52,56 +51,31 @@ This document defines Seiton's formal parser/lint contract.
 | `yaml.Unmarshal` -> `yaml.Node` tree | Reads event stream via YAML adapter |
 | `parser.resolveAliases()` | Handled in adapter layer or YAML library internals |
 | `parser.parse()` -> `*Workflow` | `Parser.parse()` -> `Workflow` AST node |
-| `linter.check()` constructs Rules + Visitor | `LintEngine.Check()` with equivalent structure |
 
-### 1.3 End-to-End Call Sequence (Parse -> Interpret -> Evaluate -> Hooks)
+### 1.3 Parse Call Sequence (Parse -> Interpret -> Evaluate)
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Caller as LintEngine.Check
+  participant Caller as Parse entrypoint
   participant Adapter as YAML Adapter
   participant Parser as WorkflowParser
   participant AST as Workflow AST
-  participant Visitor as Rule Visitor
   participant Expr as Expression Parser
   participant Sem as Expression Semantic Analyzer
-  participant Rule as Rule Hooks
 
   Caller->>Adapter: Read UTF-8 YAML event stream
   Caller->>Parser: Parse(utf8Yaml, filePath)
   Parser->>Adapter: Pull events / resolve aliases
   Parser->>Parser: Interpret keys and node kinds
   Parser->>AST: Construct typed nodes + ranges
-  Parser-->>Caller: ParseResult(workflow, diagnostics)
-
-  alt has fatal YAML/parse error
-    Caller-->>Caller: Keep parser diagnostics and skip traversal
-  else workflow available
-    Caller->>Visitor: Visit(workflow, rules)
-    Visitor->>Rule: VisitWorkflowPre(workflow)
-    loop each event in workflow.On
-      Visitor->>Rule: VisitEvent(event)
-    end
-    loop each job
-      Visitor->>Rule: VisitJobPre(job)
-      loop each step
-        Visitor->>Rule: VisitStep(step)
-        opt expression-bearing field (if/env/with/...)
-          Rule->>Expr: ParseExpression(${{ ... }})
-          Expr-->>Rule: Expression AST
-          Rule->>Sem: Validate context/types/functions
-          Sem-->>Rule: semantic diagnostics
-        end
-      end
-      Visitor->>Rule: VisitJobPost(job)
-    end
-    Visitor->>Rule: VisitWorkflowPost(workflow)
+  loop expression-bearing fields
+    Parser->>Expr: ParseExpression(${{ ... }})
+    Expr-->>Parser: Expression AST
+    Parser->>Sem: Validate context/types/functions
+    Sem-->>Parser: semantic diagnostics
   end
-
-  Rule-->>Caller: Accumulated rule diagnostics
-  Caller-->>Caller: Filter + Sort + Dedup
-  Caller-->>Caller: Return final diagnostics
+  Parser-->>Caller: ParseResult(workflow, diagnostics)
 ```
 
 ---
@@ -849,45 +823,34 @@ Type inference is performed bottom-up while traversing the expression.
 
 ---
 
-## 8. Visitor / Pass Specification
+## 8. Parser/Linter Boundary
 
-### 8.1 Pass Interface
+### 8.1 Parser-Owned Contract
 
-A Pass has the following callbacks:
+The parser contract in this document includes:
 
-- `VisitWorkflowPre(workflow)` — Start of Workflow traversal
-- `VisitWorkflowPost(workflow)` — End of Workflow traversal
-- `VisitEvent(event)` — Event visit in `on:` traversal
-- `VisitJobPre(job)` — Start of Job traversal
-- `VisitJobPost(job)` — End of Job traversal
-- `VisitStep(step)` — Step visit
+- YAML event interpretation
+- AST node construction
+- Parser diagnostics
+- Expression parsing and semantic validation
 
-### 8.2 Traversal Order
+### 8.2 Linter-Owned Contract
 
-```
-VisitWorkflowPre(workflow)
-  for each event in workflow.On:
-    VisitEvent(event)
-  for each job in workflow.Jobs:
-    VisitJobPre(job)
-    for each step in job.Steps:
-      VisitStep(step)
-    VisitJobPost(job)
-VisitWorkflowPost(workflow)
-```
+The following are intentionally outside this document and are specified in `Seiton_Linter_spec.md`.
 
-This depth-first order is identical to actionlint.
+- Rule/pass callback interfaces
+- Rule traversal order
+- Rule configuration and final diagnostic filtering
 
-### 8.3 Rule Interface
+### 8.3 Integration Contract
 
-Rule extends Pass and adds:
+Integration between parser and linter is fixed as follows.
 
-- `Id` — Rule identifier
-- `Name` — Display name
-- `GetDiagnostics()` — Returns accumulated diagnostics
-- `SetConfig(config)` — Configuration injection
+- Linter consumes `ParseResult` from parser as its sole structural input.
+- Parser remains reusable without rule execution.
+- Rule-originated diagnostics may set `RuleId`; parser-originated diagnostics do not require `RuleId`.
 
-Each Rule inspects the AST within Pass callbacks and accumulates diagnostics internally.
+Detailed linter runtime behavior is defined in `Seiton_Linter_spec.md`.
 
 ---
 

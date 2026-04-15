@@ -43,7 +43,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented. `services`, `credentials`, and container/service `env` all support the shared expression-or-mapping polymorphism required by the spec |
 | **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
-| **Visitor / Pass** | `Pass` interface → `WorkflowPre → Event → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
+| **Visitor / Pass** | `Pass` interface → `WorkflowPre → Event → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`). Normative runtime contract is defined in `Seiton_Linter_spec.md` |
 | **Rule Engine** | `Rule` interface × multiple lint rules | Current contract implements the documented Seiton default rule pack: `job-structure`, `reusable-workflow`, `permissions`, and `popular-action-inputs`. `SyntaxRule` composes the same pack for visitor-facing aggregation. Matching actionlint's total rule count is a reference parity topic, not a Seiton contract requirement |
 | **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Current contract implements `ExprType`, bottom-up inference, typed built-in signatures, and key-granularity context checks for the parser expression sites Seiton models today. Remaining differences are reference parity gaps, not current-contract omissions |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
@@ -1099,9 +1099,9 @@ Additional inference behavior from the reference implementation should be descri
 
 ---
 
-## 8. Visitor / Pass (Spec §8)
+## 8. Visitor / Pass (Linter Spec §4)
 
-### 8.1 Pass Interface (Spec §8.1)
+### 8.1 Pass Interface (Linter Spec §4.1)
 
 ```csharp
 public interface IPass
@@ -1115,7 +1115,7 @@ public interface IPass
 }
 ```
 
-### 8.2 Visitor (Spec §8.2)
+### 8.2 Visitor (Linter Spec §4.2)
 
 ```csharp
 public sealed class WorkflowVisitor
@@ -1173,7 +1173,7 @@ VisitWorkflowPre(workflow)      // all passes
 VisitWorkflowPost(workflow)     // all passes
 ```
 
-### 8.3 Rule Interface (Spec §8.3)
+### 8.3 Rule Interface (Linter Spec §4.3)
 
 ```csharp
 public interface IRule : IPass
@@ -1477,9 +1477,9 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Signature | Spec § | Status |
 |---|---|---|---|
-| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | §8.2 | Implemented |
-| `Pass` interface | `IPass` | §8.1 | Implemented |
-| `Rule` interface | `IRule : IPass` | §8.3 | Implemented |
+| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | `Seiton_Linter_spec.md` §4.2 | Implemented |
+| `Pass` interface | `IPass` | `Seiton_Linter_spec.md` §4.1 | Implemented |
+| `Rule` interface | `IRule : IPass` | `Seiton_Linter_spec.md` §4.3 | Implemented |
 
 ### A.9 Alias Resolution
 
