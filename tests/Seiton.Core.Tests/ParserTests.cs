@@ -527,6 +527,170 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnSpecialEventsScalarForm_PopulatesEmptyEvents_TableDriven()
+    {
+        // spec §3.4.1: workflow_dispatch / workflow_call / repository_dispatch in scalar form → empty typed event
+        var cases = new (string EventName, Type ExpectedType)[]
+        {
+            ("workflow_dispatch", typeof(WorkflowDispatchEvent)),
+            ("workflow_call", typeof(WorkflowCallEvent)),
+            ("repository_dispatch", typeof(RepositoryDispatchEvent)),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var yaml = $$"""
+                on: {{c.EventName}}
+                jobs: {}
+                """.Replace("\r\n", "\n");
+
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), $"on-scalar-{c.EventName}.yml");
+
+            await Assert.That(result.Workflow is not null).IsTrue();
+            await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+            await Assert.That(result.Workflow.On[0].GetType()).IsEqualTo(c.ExpectedType);
+            await Assert.That(result.Diagnostics).IsEmpty();
+        }
+    }
+
+    [Test]
+    public async Task Parse_OnScheduleScalarForm_ReportsError_TableDriven()
+    {
+        // spec §3.4.1: schedule in scalar / sequence-item form is an error (mapping required)
+        var cases = new (string Name, string Yaml)[]
+        {
+            (
+                "scalar form",
+                """
+                on: schedule
+                jobs: {}
+                """.Replace("\r\n", "\n")
+            ),
+            (
+                "sequence form",
+                """
+                on: [push, schedule]
+                jobs: {}
+                """.Replace("\r\n", "\n")
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"on-schedule-scalar-{i}.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.schedule must be mapping", StringComparison.Ordinal))).IsTrue();
+        }
+    }
+
+    [Test]
+    public async Task Parse_ServicesExpression_PopulatesAst()
+    {
+        // spec §3.17: services: ${{ ... }} is accepted as Services { Expression }
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                services: ${{ fromJson(inputs.services) }}
+                steps: []
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "services-expression.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        await Assert.That(job.Services is not null).IsTrue();
+        await Assert.That(job.Services!.Expression is not null).IsTrue();
+        await Assert.That(job.Services.ServiceMap).IsNull();
+    }
+
+    [Test]
+    public async Task Parse_CredentialsExpression_PopulatesAst()
+    {
+        // spec §3.18: credentials: ${{ ... }} is accepted as Credentials { Expression }
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    image: node:20
+                    credentials: ${{ fromJson(secrets.creds) }}
+                steps: []
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "credentials-expression.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        await Assert.That(job.Container is not null).IsTrue();
+        await Assert.That(job.Container!.Credentials is not null).IsTrue();
+        await Assert.That(job.Container.Credentials!.Expression is not null).IsTrue();
+        await Assert.That(job.Container.Credentials.Username).IsNull();
+        await Assert.That(job.Container.Credentials.Password).IsNull();
+    }
+
+    [Test]
+    public async Task Parse_ContainerEnvExpression_PopulatesAst()
+    {
+        // spec §2.8/§14: container env accepts expression form (${{ }})
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    image: node:20
+                    env: ${{ fromJson(secrets.env_vars) }}
+                steps: []
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-env-expression.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        await Assert.That(job.Container is not null).IsTrue();
+        await Assert.That(job.Container!.Env is not null).IsTrue();
+        await Assert.That(job.Container.Env!.Expression is not null).IsTrue();
+        await Assert.That(job.Container.Env.Vars).IsNull();
+    }
+
+    [Test]
+    public async Task Parse_ServiceEnvExpression_PopulatesAst()
+    {
+        // spec §2.8/§14: service container env accepts expression form (${{ }})
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                services:
+                    redis:
+                        image: redis:7
+                        env: ${{ github.sha }}
+                steps: []
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "service-env-expression.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        await Assert.That(job.Services is not null).IsTrue();
+        await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
+        await Assert.That(job.Services.ServiceMap!.Count).IsEqualTo(1);
+        var redis = job.Services.ServiceMap.Values.First();
+        await Assert.That(redis.Container.Env is not null).IsTrue();
+        await Assert.That(redis.Container.Env!.Expression is not null).IsTrue();
+        await Assert.That(redis.Container.Env.Vars).IsNull();
+    }
+
+    [Test]
     public async Task Parse_OnWorkflowDispatch_PopulatesEventAst()
     {
         var yaml = """

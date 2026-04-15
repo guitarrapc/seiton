@@ -2232,6 +2232,12 @@ public static class WorkflowParser
             catch { eventSlice = default; eventByteLen = 0; }
             var nameNode = new StringNode { Value = eventSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(eventMark, eventByteLen) };
             reader.Read();
+            // spec §3.4.1: schedule requires mapping form; scalar form is an error
+            if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
+            {
+                AddError(diagnostics, "on.schedule must be mapping", eventMark);
+                return [];
+            }
             return [BuildSimpleEvent(in eventInfo, nameNode)];
         }
 
@@ -2257,6 +2263,12 @@ public static class WorkflowParser
                 catch { eventSlice = default; eventByteLen = 0; }
                 var nameNode = new StringNode { Value = eventSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(eventMark, eventByteLen) };
                 reader.Read();
+                // spec §3.4.1: schedule requires mapping form; scalar form is an error
+                if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
+                {
+                    AddError(diagnostics, "on.schedule must be mapping", eventMark);
+                    continue;
+                }
                 events.Add(BuildSimpleEvent(in eventInfo, nameNode));
             }
 
@@ -4357,9 +4369,23 @@ public static class WorkflowParser
     private static Services? ParseServices<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
+        // spec §3.17: expression form is accepted as Services { Expression }
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var expression = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Job,
+                $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression",
+                parseWholeValueIfNoEmbedded: false);
+            return expression is null
+                ? null
+                : new Services { Expression = expression, Range = expression.Range };
+        }
+
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping", reader.CurrentStart);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return null;
         }
@@ -4541,17 +4567,12 @@ public static class WorkflowParser
                     break;
                 }
 
-                if (reader.CurrentKind != YamlEventKind.MappingStart)
-                {
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping", reader.CurrentStart);
-                    reader.SkipCurrentNode();
-                    continue;
-                }
+                // spec §2.8/§14: env accepts expression form (${{ }}) or mapping
                 env = ParseEnvNode(
                     ref reader,
                     diagnostics,
                     source,
-                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping",
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
                     ExpressionValidationContext.Job);
                 continue;
             }
@@ -4629,9 +4650,23 @@ public static class WorkflowParser
     private static Credentials? ParseCredentials<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
         where TReader : IYamlStreamReader, allows ref struct
     {
+        // spec §3.18: expression form is accepted as Credentials { Expression }
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var expression = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Job,
+                $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression",
+                parseWholeValueIfNoEmbedded: false);
+            return expression is null
+                ? null
+                : new Credentials { Expression = expression, Range = expression.Range };
+        }
+
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping", reader.CurrentStart);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return null;
         }

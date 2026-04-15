@@ -800,19 +800,19 @@
 
 #### K. YAML polymorphic field の spec 差分を解消する
 
-- [ ] `on: schedule` scalar 形を spec どおり error に変更する
+- [x] `on: schedule` scalar 形を spec どおり error に変更する
   - spec 根拠: `parseEventWithNoConfig` は `schedule` に mapping required error を要求
   - 現状: `BuildSimpleEvent` が `ScheduledEvent` を無条件生成する
-- [ ] `services: ${{ ... }}` を `Services.Expression` として受理する
+- [x] `services: ${{ ... }}` を `Services.Expression` として受理する
   - spec 根拠: `Seiton_Parser_spec.md` §3.17
   - 現状: mapping 以外を `services must be mapping` で reject する
-- [ ] `credentials: ${{ ... }}` を `Credentials.Expression` として受理する
+- [x] `credentials: ${{ ... }}` を `Credentials.Expression` として受理する
   - spec 根拠: `Seiton_Parser_spec.md` §3.18
   - 現状: mapping 以外を `credentials must be mapping` で reject する
-- [ ] container/service 配下の `env: ${{ ... }}` を `Env.Expression` として受理する
+- [x] container/service 配下の `env: ${{ ... }}` を `Env.Expression` として受理する
   - spec 根拠: `Seiton_Parser_spec.md` §2.8 / §14
   - 現状: container env は mapping 強制
-- [ ] special event の no-config scalar 形を直接固定化するテストを追加する
+- [x] special event の no-config scalar 形を直接固定化するテストを追加する
   - `on: workflow_dispatch` → empty `WorkflowDispatchEvent`
   - `on: workflow_call` → empty `WorkflowCallEvent`
   - `on: repository_dispatch` → empty `RepositoryDispatchEvent`
@@ -821,6 +821,21 @@
 完了条件:
 - spec §3.4.1 / §3.17 / §3.18 / §14 の分岐が parser 実装と一致する
 - `ParserTests` に polymorphic field の正常系・異常系が対で追加される
+
+実装結果:
+- `ParseOnEvents` の scalar 形と sequence 形に `schedule` チェックを追加。`BuildSimpleEvent` 前に `WebhookTypes.EventId.Schedule` を検出して `"on.schedule must be mapping"` エラーを生成し、イベントを返さないようにした。
+- `ParseServices` に scalar 分岐を追加。scalar → `Services { Expression = StringNode }` を返す。mapping 以外のエラーメッセージも `"must be mapping or expression"` に更新。
+- `ParseCredentials` に scalar 分岐を追加。scalar → `Credentials { Expression = StringNode }` を返す。
+- `ParseContainerLike` の `env` キー処理から MappingStart 前チェックを削除し、`ParseEnvNode` が scalar（expression）と mapping の両方を処理できるようにした。
+- `ParserTests` に以下を追加:
+  - `Parse_OnSpecialEventsScalarForm_PopulatesEmptyEvents_TableDriven`（workflow_dispatch / workflow_call / repository_dispatch の 3 ケース）
+  - `Parse_OnScheduleScalarForm_ReportsError_TableDriven`（scalar 形 + sequence 形の 2 ケース）
+  - `Parse_ServicesExpression_PopulatesAst`
+  - `Parse_CredentialsExpression_PopulatesAst`
+  - `Parse_ContainerEnvExpression_PopulatesAst`
+  - `Parse_ServiceEnvExpression_PopulatesAst`
+- `dotnet test` で 158 passed / 0 failed を確認。
+- Lesson learned: `${{ fromJson(secrets.env_vars) }}` は VYaml で services 配下のサービスコンテナ内でキー検索に影響する可能性があるため、テストでは `${{ github.sha }}` のような単純な式を使うと確実。
 
 #### L. AST Range の充足率を上げる
 
