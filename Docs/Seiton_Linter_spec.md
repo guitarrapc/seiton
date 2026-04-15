@@ -53,6 +53,10 @@ High-level behavior:
 
 ## 4. Rule Execution Model
 
+Canonical pass traversal sequence:
+
+`WorkflowPre -> Event -> JobPre -> Step -> JobPost -> WorkflowPost`
+
 ### 4.1 Pass Hooks
 
 A pass exposes the following callbacks:

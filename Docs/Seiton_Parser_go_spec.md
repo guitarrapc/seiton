@@ -4,6 +4,7 @@
 > This is a companion to `Seiton_Parser_csharp_spec.md` (C# target).
 > Both language specs share the same §0–§11 outline; only language-specific content differs.
 > The design is derived from [actionlint](https://github.com/rhysd/actionlint) as the reference implementation, but all types and signatures described here are Seiton's own specification.
+> Go linter implementation details are specified in `Seiton_Linter_go_spec.md`.
 >
 > **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this Go spec is updated, also review and update `Seiton_Parser_spec.md`, `Seiton_Parser_csharp_spec.md`, and `parser_implementation_csharp_plan.md` in the same PR/commit scope.
 
@@ -18,11 +19,11 @@ The Seiton Parser Go implementation provides:
 1. **YAML parsing** via `go.yaml.in/yaml/v4` into a `yaml.Node` tree
 2. **Alias resolution** pre-pass on the `yaml.Node` tree
 3. **Hand-written recursive descent parser** converting `yaml.Node` into a typed AST
-4. **Visitor/Pass pattern** for AST traversal
-5. **Rule engine** executing lint rules as Pass implementations
-6. **Expression parser** (separate recursive descent parser for `${{ }}` expressions)
-7. **Expression semantic analyzer** with type inference and context validation
-8. **Generated data** for webhooks, context availability, and popular actions
+4. **Expression parser** (separate recursive descent parser for `${{ }}` expressions)
+5. **Expression semantic analyzer** with type inference and context validation
+6. **Generated data** for webhooks, context availability, and popular actions
+
+Linter-side runtime details are specified in `Seiton_Linter_go_spec.md`.
 
 ### 0.2 Package Structure
 
@@ -32,14 +33,11 @@ All code lives in a single Go package `seiton`. Key source files:
 |---|---|
 | `parse.go` | YAML → AST parser |
 | `ast.go` | AST type definitions |
-| `pass.go` | Visitor/Pass infrastructure |
-| `linter.go` | Linter entry point and orchestration |
 | `expr_parser.go` | Expression recursive descent parser |
 | `expr_lexer.go` | Expression lexer |
 | `expr_ast.go` | Expression AST nodes |
 | `expr_sema.go` | Expression semantic checker with type inference |
 | `expr_type.go` | Expression type system |
-| `rule_*.go` | Individual lint rules |
 | `error.go` | Error/diagnostic types |
 | `all_webhooks.go` | Generated webhook event data |
 | `availability.go` | Generated context availability data |
@@ -104,62 +102,12 @@ Parse([]byte)
 
 ### 1.3 Linter Integration
 
-```go
-type Linter struct {
-    projects       *Projects
-    out            io.Writer
-    logOut         io.Writer
-    logLevel       LogLevel
-    oneline        bool
-    shellcheck     string
-    pyflakes       string
-    ignorePats     IgnorePatterns
-    stdin          string
-    defaultConfig  *Config
-    errFmt         *ErrorFormatter
-    cwd            string
-    onRulesCreated func([]Rule) []Rule
-}
-```
+Go linter integration behavior is specified in `Seiton_Linter_go_spec.md`.
 
-Lint flow (Spec §1):
+This parser document only assumes the integration boundary from `Seiton_Parser_spec.md` §8:
 
-```go
-func (l *Linter) check(path string, content []byte, project *Project,
-    proc *concurrentProcess, localActions *LocalActionsCache,
-    localReusableWorkflows *LocalReusableWorkflowCache) ([]*Error, error)
-```
-
-1. `Parse(content)` → `(*Workflow, []*Error)`
-2. If parse produced a workflow, construct Rule set
-3. Build `Visitor` and add all Rules as Passes
-4. `visitor.Visit(workflow)`
-5. Collect diagnostics from each Rule
-6. Merge parse errors and rule errors
-7. `filterErrors` → sort + deduplicate → return
-
-Public API:
-
-```go
-func NewLinter(out io.Writer, opts *LinterOptions) (*Linter, error)
-func (l *Linter) LintRepository(dir string) ([]*Error, error)
-func (l *Linter) LintDir(dir string, project *Project) ([]*Error, error)
-func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*Error, error)
-func (l *Linter) LintFile(path string, project *Project) ([]*Error, error)
-func (l *Linter) LintStdin(stdin io.Reader) ([]*Error, error)
-func (l *Linter) Lint(path string, content []byte, project *Project) ([]*Error, error)
-```
-
-Uses `errgroup` + semaphore for concurrent file processing with per-project caches.
-
-Rule hook:
-
-```go
-type LinterOptions struct {
-    // ...
-    OnRulesCreated func([]Rule) []Rule  // allows external rule injection/filtering
-}
-```
+- Parser emits parse output (AST + parser diagnostics)
+- Linter consumes parser output as structural input
 
 ---
 
@@ -1196,54 +1144,14 @@ func (sema *ExprSemanticsChecker) IsConstant(expr ExprNode) bool
 
 ---
 
-## 8. Visitor / Pass (Linter Spec §4)
+## 8. Linter Integration Reference
 
-### 8.1 Pass Interface (Linter Spec §4.1)
+Linter-side implementation details are intentionally out of scope in this parser document.
 
-```go
-type Pass interface {
-    VisitStep(node *Step) error
-    VisitJobPre(node *Job) error
-    VisitJobPost(node *Job) error
-    VisitWorkflowPre(node *Workflow) error
-    VisitWorkflowPost(node *Workflow) error
-}
-```
+- Go linter runtime contract and implementation mapping: `Seiton_Linter_go_spec.md`
+- Language-agnostic linter contract: `Seiton_Linter_spec.md`
 
-### 8.2 Visitor (Linter Spec §4.2)
-
-```go
-type Visitor struct {
-    passes []Pass
-    dbg    io.Writer
-}
-
-func NewVisitor() *Visitor
-func (v *Visitor) AddPass(p Pass)
-func (v *Visitor) EnableDebug(w io.Writer)
-func (v *Visitor) Visit(n *Workflow) error
-```
-
-Traversal order:
-
-```
-VisitWorkflowPre(workflow)      // all passes
-  for each job:
-    VisitJobPre(job)            // all passes
-    for each step:
-      VisitStep(step)           // all passes
-    VisitJobPost(job)           // all passes
-VisitWorkflowPost(workflow)     // all passes
-```
-
-- Depth-first workflow traversal
-- At each stage, all registered passes are invoked in order
-- If any pass callback returns an error, traversal aborts (used for internal errors, not lint diagnostics)
-- Optional debug timing per phase
-
-### 8.3 Rule Interface (Linter Spec §4.3)
-
-Rules are implemented as Passes. Rule injection/filtering is supported via `LinterOptions.OnRulesCreated`.
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
 
 ---
 

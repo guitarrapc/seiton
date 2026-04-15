@@ -53,9 +53,12 @@ Boundary policy:
 ## 4. Normative Specifications
 
 - Parser (language-agnostic): `Docs/Seiton_Parser_spec.md`
-- Linter (language-agnostic): `Docs/Seiton_Linter_spec.md`
 - Parser C# companion: `Docs/Seiton_Parser_csharp_spec.md`
 - Parser Go companion: `Docs/Seiton_Parser_go_spec.md`
+
+- Linter (language-agnostic): `Docs/Seiton_Linter_spec.md`
+- Linter C# companion: `Docs/Seiton_Linter_csharp_spec.md`
+- Linter Go companion: `Docs/Seiton_Linter_go_spec.md`
 
 Implementation plans:
 

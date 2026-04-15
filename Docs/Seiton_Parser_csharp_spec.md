@@ -3,6 +3,7 @@
 > Implementation specification for the parser described in `Seiton_Parser_spec.md`, targeting C# with zero-allocation / high-performance design.
 > This is a companion to `Seiton_Parser_go_spec.md` (Go target).
 > Both language specs share the same §0–§11 outline; only language-specific content differs.
+> C# linter implementation details are specified in `Seiton_Linter_csharp_spec.md`.
 >
 > **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this C# spec is updated, also review and update `Seiton_Parser_spec.md`, `Seiton_Parser_go_spec.md`, and `parser_implementation_csharp_plan.md` in the same PR/commit scope.
 
@@ -43,8 +44,8 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **Container / Services** | `Container` node (image, credentials, env, ports, volumes, options), Services as `map[string]*Service` | Implemented. `services`, `credentials`, and container/service `env` all support the shared expression-or-mapping polymorphism required by the spec |
 | **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
-| **Visitor / Pass** | `Pass` interface → `WorkflowPre → Event → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`). Normative runtime contract is defined in `Seiton_Linter_spec.md` |
-| **Rule Engine** | `Rule` interface × multiple lint rules | Current contract implements the documented Seiton default rule pack: `job-structure`, `reusable-workflow`, `permissions`, and `popular-action-inputs`. `SyntaxRule` composes the same pack for visitor-facing aggregation. Matching actionlint's total rule count is a reference parity topic, not a Seiton contract requirement |
+| **Visitor / Pass** | Linter-side traversal infrastructure | Defined in `Seiton_Linter_csharp_spec.md` |
+| **Rule Engine** | Linter-side rule orchestration | Defined in `Seiton_Linter_csharp_spec.md` |
 | **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Current contract implements `ExprType`, bottom-up inference, typed built-in signatures, and key-granularity context checks for the parser expression sites Seiton models today. Remaining differences are reference parity gaps, not current-contract omissions |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
 | **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
@@ -81,7 +82,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 `System.String` may appear **only** in the following locations:
 
 1. **Diagnostic output** — `Diagnostic.Message`, `Diagnostic.RuleId`, `Diagnostic.Help`
-2. **Rule metadata** — `IRule.Id`, `IRule.Name` (compile-time constants)
+2. **Rule metadata in diagnostics** — canonical rule ID text in diagnostic output
 3. **Diagnostic-only adapter method** — `IYamlStreamReader.GetScalarString()`
 4. **Compile-time literal parameters** — section name strings passed to error-reporting helpers (e.g., `"jobs"` in `ParseMapping`)
 
@@ -333,21 +334,12 @@ Parse(byte[], string)
 
 ### 1.3 Linter Integration
 
-Target architecture:
+Linter integration behavior for C# is specified in `Seiton_Linter_csharp_spec.md`.
 
-```csharp
-public sealed class LintEngine
-{
-    public LintResult Check(byte[] utf8Yaml, string filePath)
-    {
-        // 1. Parse(utf8Yaml, filePath) → ParseResult
-        // 2. Construct IRule set
-        // 3. WorkflowVisitor.Visit(workflow)
-        // 4. Collect diagnostics from each Rule
-        // 5. FilterErrors → Sort + Dedup → Output
-    }
-}
-```
+This parser document only assumes the integration boundary from `Seiton_Parser_spec.md` §8:
+
+- Parser emits `ParseResult` (AST + parser diagnostics)
+- Linter consumes `ParseResult` as structural input
 
 ---
 
@@ -1099,109 +1091,14 @@ Additional inference behavior from the reference implementation should be descri
 
 ---
 
-## 8. Visitor / Pass (Linter Spec §4)
+## 8. Linter Integration Reference
 
-### 8.1 Pass Interface (Linter Spec §4.1)
+Linter-side implementation details are intentionally out of scope in this parser document.
 
-```csharp
-public interface IPass
-{
-    void VisitWorkflowPre(Workflow workflow);
-    void VisitWorkflowPost(Workflow workflow);
-    void VisitEvent(Event ev);
-    void VisitJobPre(Job job);
-    void VisitJobPost(Job job);
-    void VisitStep(Step step);
-}
-```
+- C# linter runtime contract and implementation mapping: `Seiton_Linter_csharp_spec.md`
+- Language-agnostic linter contract: `Seiton_Linter_spec.md`
 
-### 8.2 Visitor (Linter Spec §4.2)
-
-```csharp
-public sealed class WorkflowVisitor
-{
-    private readonly List<IPass> _passes = new();
-
-    public void AddPass(IPass pass) => _passes.Add(pass);
-
-    public void Visit(Workflow workflow)
-    {
-        foreach (var pass in _passes)
-            pass.VisitWorkflowPre(workflow);
-
-        foreach (var ev in workflow.On)
-        {
-            foreach (var pass in _passes)
-                pass.VisitEvent(ev);
-        }
-
-        foreach (var (_, job) in workflow.Jobs)
-        {
-            foreach (var pass in _passes)
-                pass.VisitJobPre(job);
-
-            if (job.Steps is not null)
-            {
-                foreach (var step in job.Steps)
-                {
-                    foreach (var pass in _passes)
-                        pass.VisitStep(step);
-                }
-            }
-
-            foreach (var pass in _passes)
-                pass.VisitJobPost(job);
-        }
-
-        foreach (var pass in _passes)
-            pass.VisitWorkflowPost(workflow);
-    }
-}
-```
-
-Traversal order:
-
-```
-VisitWorkflowPre(workflow)      // all passes
-    for each event in workflow.On:
-        VisitEvent(event)           // all passes
-  for each job:
-    VisitJobPre(job)            // all passes
-    for each step:
-      VisitStep(step)           // all passes
-    VisitJobPost(job)           // all passes
-VisitWorkflowPost(workflow)     // all passes
-```
-
-### 8.3 Rule Interface (Linter Spec §4.3)
-
-```csharp
-public interface IRule : IPass
-{
-    string Id { get; }
-    string Name { get; }
-    Diagnostic[] GetDiagnostics();
-    void SetConfig(LintConfig config);
-}
-```
-
-Each Rule inspects the AST within `IPass` methods and accumulates diagnostics in an internal `List<Diagnostic>`.
-
-### 8.3.1 Current C# Rule Scope
-
-The current C# implementation fixes the default rule contract to the following four rules via `RuleCatalog`:
-
-- `job-structure` — cross-key structural constraints on job shape
-- `reusable-workflow` — `uses` / `with` / `secrets` semantics and forbidden keys in reusable workflow calls
-- `permissions` — scalar and scope value-domain validation for permissions
-- `popular-action-inputs` — warning-level validation for well-known action input names
-
-Scope note:
-
-- Parser diagnostics remain the primary contract for YAML shape errors, required-key errors, and core cross-key structural constraints.
-- Rule diagnostics add policy / metadata / richer semantic checks on top of the parsed AST.
-- `LintEngine` uses `RuleCatalog.CreateDefaultRules()` as its default pack, sorts rule diagnostics by rule priority, and deduplicates identical diagnostics after priority ordering.
-- Matching actionlint's total rule count is not a completion criterion for this C# parser spec; the completion criterion is that the documented Seiton default rule pack is implemented and covered by regression tests.
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
 
 ---
 
