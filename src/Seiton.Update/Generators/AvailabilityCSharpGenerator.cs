@@ -27,12 +27,15 @@ internal sealed class AvailabilityCSharpGenerator
         var step = Order(model.StepRoots);
 
         var sb = new StringBuilder();
-        sb.AppendLine("using Seiton.Core.Parsing;");
-        sb.AppendLine();
-        sb.AppendLine("namespace Seiton.Core.Generated;");
-        sb.AppendLine();
-        sb.AppendLine("public static class Availability");
-        sb.AppendLine("{");
+        sb.Append(
+            """
+            using Seiton.Core.Parsing;
+
+            namespace Seiton.Core.Generated;
+
+            public static class Availability
+            {
+            """);
 
         AppendArray(sb, "WorkflowRoots", workflow);
         sb.AppendLine();
@@ -40,31 +43,34 @@ internal sealed class AvailabilityCSharpGenerator
         sb.AppendLine();
         AppendArray(sb, "StepRoots", step);
 
-        sb.AppendLine();
-        sb.AppendLine("    public static bool IsRootContextAvailable(ExpressionValidationContext context, ReadOnlySpan<byte> rootName)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        return context switch");
-        sb.AppendLine("        {");
-        sb.AppendLine("            ExpressionValidationContext.Workflow => Contains(WorkflowRoots, rootName),");
-        sb.AppendLine("            ExpressionValidationContext.Job => Contains(JobRoots, rootName),");
-        sb.AppendLine("            ExpressionValidationContext.Step => Contains(StepRoots, rootName),");
-        sb.AppendLine("            _ => false,");
-        sb.AppendLine("        };");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    static bool Contains(byte[][] table, ReadOnlySpan<byte> name)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        for (var i = 0; i < table.Length; i++)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            if (name.SequenceEqual(table[i]))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return true;");
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        sb.AppendLine("        return false;");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
+        sb.Append(
+            """
+
+                public static bool IsRootContextAvailable(ExpressionValidationContext context, ReadOnlySpan<byte> rootName)
+                {
+                    return context switch
+                    {
+                        ExpressionValidationContext.Workflow => Contains(WorkflowRoots, rootName),
+                        ExpressionValidationContext.Job => Contains(JobRoots, rootName),
+                        ExpressionValidationContext.Step => Contains(StepRoots, rootName),
+                        _ => false,
+                    };
+                }
+
+                static bool Contains(byte[][] table, ReadOnlySpan<byte> name)
+                {
+                    for (var i = 0; i < table.Length; i++)
+                    {
+                        if (name.SequenceEqual(table[i]))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+            }
+            """);
 
         return TextNormalization.NormalizeToLf(sb.ToString());
     }
