@@ -14,7 +14,7 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` の 15 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
-| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline next-line exclusion を実装済み。fail-safe / 可観測性拡張は実装待ち |
+| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性を実装済み。fail-safe 制約は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
 
 ---
@@ -363,6 +363,8 @@
 - 抑制結果の可観測性を出力（総件数、rule 別件数、ruleId + line/column）
 
 **完了条件**: suppression summary を含む結果が返り、CI で増減検知できる
+
+**実装メモ**: 完了。`LintConfig` に `Exclusions`（`LintExclusion`）を追加し、`LintEngine` で file glob + optional `jobId` による rule 単位の設定 suppression を実装。path は `/` 正規化で case-sensitive にマッチする。job スコープは `job.id` と `Job.Range` の対応から判定し、unknown rule-id / unknown job-id は設定エラーとして報告。`LintResult` に `SuppressionSummary`（総件数、rule 別件数、`SuppressionRecord`）を追加し、inline/config いずれで抑制されたか（source）と source / diagnostic の line/column を出力する。`RuleInterfaceTests` に file/job exclusion と suppression summary、unknown 設定エラーの回帰テストを追加。
 
 ### Step 4.5: フェイルセーフ制約を実装
 

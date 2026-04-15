@@ -11,6 +11,13 @@ public sealed class LintConfig
     public string? FilePath { get; init; }
 
     public IReadOnlyDictionary<string, RuleOption>? RuleOptions { get; init; }
+
+    public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
 }
 
 public sealed record RuleOption(bool Enabled = true, DiagnosticSeverity? Severity = null);
+
+public sealed record LintExclusion(
+    string FilePattern,
+    IReadOnlyList<string> RuleIds,
+    string? JobId = null);

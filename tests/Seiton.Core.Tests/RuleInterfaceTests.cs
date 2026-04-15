@@ -1899,6 +1899,131 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ConfigExclusion_FileGlob_SuppressesDiagnosticsAndEmitsSummary()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", ["job-permissions-required"]),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsEqualTo(2);
+        await Assert.That(result.SuppressionSummary.SuppressedByRule.TryGetValue("job-permissions-required", out var count) && count == 2).IsTrue();
+        await Assert.That(result.SuppressionSummary.Records.All(x => x.Source == SuppressionSource.ConfigFile)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_JobScope_SuppressesTargetJobOnly()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", ["job-permissions-required"], JobId: "build"),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(7);
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsEqualTo(1);
+        await Assert.That(result.SuppressionSummary.Records.Length).IsEqualTo(1);
+        await Assert.That(result.SuppressionSummary.Records[0].Source).IsEqualTo(SuppressionSource.ConfigJob);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_UnknownRuleId_ReportsConfigurationError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", ["job-permissions-requred"]),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown rule-id", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Message.Contains("Did you mean 'job-permissions-required'", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_UnknownJobId_ReportsConfigurationError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", ["job-permissions-required"], JobId: "buid"),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown job-id", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
     public async Task LintEngine_RuleOptions_UnknownRuleId_ReportsConfigurationErrorWithSuggestion()
     {
         var yaml = """

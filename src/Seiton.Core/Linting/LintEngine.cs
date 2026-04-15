@@ -46,7 +46,10 @@ public sealed class LintEngine
         var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
         if (parseResult.HasFatalError || parseResult.Workflow is null)
         {
-            return new LintResult(parseResult, parseResult.Diagnostics);
+            return new LintResult(parseResult, parseResult.Diagnostics)
+            {
+                SuppressionSummary = SuppressionSummary.Empty,
+            };
         }
 
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 8);
@@ -58,9 +61,15 @@ public sealed class LintEngine
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, parseResult.Workflow);
         diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
+        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow, utf8Yaml);
+        diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
+
         if (rules.Count == 0)
         {
-            return new LintResult(parseResult, diagnostics.ToArray());
+            return new LintResult(parseResult, diagnostics.ToArray())
+            {
+                SuppressionSummary = SuppressionSummary.Empty,
+            };
         }
 
         var visitor = new WorkflowVisitor();
@@ -87,7 +96,10 @@ public sealed class LintEngine
 
         if (activeRules.Count == 0)
         {
-            return new LintResult(parseResult, diagnostics.ToArray());
+            return new LintResult(parseResult, diagnostics.ToArray())
+            {
+                SuppressionSummary = SuppressionSummary.Empty,
+            };
         }
 
         visitor.Visit(parseResult.Workflow);
@@ -111,6 +123,8 @@ public sealed class LintEngine
         ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
 
         var seen = new HashSet<DiagnosticIdentity>();
+        var suppressedByRule = new Dictionary<string, int>(StringComparer.Ordinal);
+        var suppressionRecords = new List<SuppressionRecord>();
         for (var i = 0; i < ruleDiagnostics.Count; i++)
         {
             var current = ruleDiagnostics[i];
@@ -120,15 +134,28 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (IsInlineSuppressed(current, inlineSuppression))
+            if (TryGetSuppressionRecord(current, inlineSuppression, normalizedExclusions.Exclusions, normalizedExclusions.NormalizedFilePath, out var suppressionRecord))
             {
+                suppressionRecords.Add(suppressionRecord);
+                if (!suppressedByRule.TryGetValue(suppressionRecord.RuleId, out var currentCount))
+                {
+                    suppressedByRule[suppressionRecord.RuleId] = 1;
+                }
+                else
+                {
+                    suppressedByRule[suppressionRecord.RuleId] = currentCount + 1;
+                }
+
                 continue;
             }
 
             diagnostics.Add(current);
         }
 
-        return new LintResult(parseResult, diagnostics.ToArray());
+        return new LintResult(parseResult, diagnostics.ToArray())
+        {
+            SuppressionSummary = new SuppressionSummary(suppressionRecords.Count, suppressedByRule, suppressionRecords.ToArray()),
+        };
     }
 
     static bool IsRuleEnabled(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options)
@@ -174,36 +201,142 @@ public sealed class LintEngine
         return options.TryGetValue(resolvedRuleId, out option);
     }
 
-    static bool IsInlineSuppressed(Diagnostic diagnostic, InlineSuppression inlineSuppression)
+    static bool TryGetSuppressionRecord(
+        Diagnostic diagnostic,
+        InlineSuppression inlineSuppression,
+        IReadOnlyList<NormalizedExclusion> normalizedExclusions,
+        string normalizedFilePath,
+        out SuppressionRecord suppressionRecord)
     {
-        if (diagnostic.RuleId is null)
-        {
-            return false;
-        }
-
-        if (inlineSuppression.FileRuleSuppressions.Contains(diagnostic.RuleId))
+        if (TryGetInlineSuppressionRecord(diagnostic, inlineSuppression, out suppressionRecord))
         {
             return true;
         }
 
-        if (inlineSuppression.NextLineRuleSuppressions.TryGetValue(diagnostic.Location.StartLine, out var nextLineSuppressedRuleIds)
-            && nextLineSuppressedRuleIds.Contains(diagnostic.RuleId))
+        return TryGetConfigSuppressionRecord(diagnostic, inlineSuppression.JobScopes, normalizedExclusions, normalizedFilePath, out suppressionRecord);
+    }
+
+    static bool TryGetInlineSuppressionRecord(Diagnostic diagnostic, InlineSuppression inlineSuppression, out SuppressionRecord suppressionRecord)
+    {
+        if (diagnostic.RuleId is null)
         {
+            suppressionRecord = default;
+            return false;
+        }
+
+        if (inlineSuppression.FileRuleSuppressions.TryGetValue(diagnostic.RuleId, out var fileAnchor))
+        {
+            suppressionRecord = new SuppressionRecord(
+                diagnostic.RuleId,
+                SuppressionSource.InlineFile,
+                fileAnchor.Line,
+                fileAnchor.Column,
+                diagnostic.Location.StartLine,
+                diagnostic.Location.StartColumn);
+            return true;
+        }
+
+        if (inlineSuppression.NextLineRuleSuppressions.TryGetValue(diagnostic.Location.StartLine, out var nextLineSuppressedRuleIds)
+            && nextLineSuppressedRuleIds.TryGetValue(diagnostic.RuleId, out var nextLineAnchor))
+        {
+            suppressionRecord = new SuppressionRecord(
+                diagnostic.RuleId,
+                SuppressionSource.InlineNextLine,
+                nextLineAnchor.Line,
+                nextLineAnchor.Column,
+                diagnostic.Location.StartLine,
+                diagnostic.Location.StartColumn);
             return true;
         }
 
         if (inlineSuppression.JobRuleSuppressions.Count == 0)
         {
+            suppressionRecord = default;
             return false;
         }
 
         if (!TryFindJobIdForLine(diagnostic.Location.StartLine, inlineSuppression.JobScopes, out var jobId))
         {
+            suppressionRecord = default;
             return false;
         }
 
-        return inlineSuppression.JobRuleSuppressions.TryGetValue(jobId, out var jobSuppressedRuleIds)
-            && jobSuppressedRuleIds.Contains(diagnostic.RuleId);
+        if (inlineSuppression.JobRuleSuppressions.TryGetValue(jobId, out var jobSuppressedRuleIds)
+            && jobSuppressedRuleIds.TryGetValue(diagnostic.RuleId, out var jobAnchor))
+        {
+            suppressionRecord = new SuppressionRecord(
+                diagnostic.RuleId,
+                SuppressionSource.InlineJob,
+                jobAnchor.Line,
+                jobAnchor.Column,
+                diagnostic.Location.StartLine,
+                diagnostic.Location.StartColumn);
+            return true;
+        }
+
+        suppressionRecord = default;
+        return false;
+    }
+
+    static bool TryGetConfigSuppressionRecord(
+        Diagnostic diagnostic,
+        IReadOnlyList<JobScope> jobScopes,
+        IReadOnlyList<NormalizedExclusion> normalizedExclusions,
+        string normalizedFilePath,
+        out SuppressionRecord suppressionRecord)
+    {
+        suppressionRecord = default;
+        if (diagnostic.RuleId is null || normalizedExclusions.Count == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < normalizedExclusions.Count; i++)
+        {
+            var exclusion = normalizedExclusions[i];
+            if (!GlobMatch(exclusion.FilePattern, normalizedFilePath))
+            {
+                continue;
+            }
+
+            if (!exclusion.RuleIds.Contains(diagnostic.RuleId))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(exclusion.JobId))
+            {
+                suppressionRecord = new SuppressionRecord(
+                    diagnostic.RuleId,
+                    SuppressionSource.ConfigFile,
+                    1,
+                    1,
+                    diagnostic.Location.StartLine,
+                    diagnostic.Location.StartColumn);
+                return true;
+            }
+
+            if (!TryFindJobIdForLine(diagnostic.Location.StartLine, jobScopes, out var jobId))
+            {
+                continue;
+            }
+
+            if (!string.Equals(jobId, exclusion.JobId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            suppressionRecord = new SuppressionRecord(
+                diagnostic.RuleId,
+                SuppressionSource.ConfigJob,
+                1,
+                1,
+                diagnostic.Location.StartLine,
+                diagnostic.Location.StartColumn);
+            return true;
+        }
+
+        return false;
     }
 
     static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, out string jobId)
@@ -233,9 +366,9 @@ public sealed class LintEngine
         var jobScopes = BuildJobScopes(workflow, utf8Yaml);
         var text = Encoding.UTF8.GetString(utf8Yaml);
         var lines = text.Split('\n');
-        var nextLineRuleSuppressions = new Dictionary<int, HashSet<string>>();
-        var fileRuleSuppressions = new HashSet<string>(StringComparer.Ordinal);
-        var jobRuleSuppressions = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var nextLineRuleSuppressions = new Dictionary<int, Dictionary<string, SuppressionAnchor>>();
+        var fileRuleSuppressions = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
+        var jobRuleSuppressions = new Dictionary<string, Dictionary<string, SuppressionAnchor>>(StringComparer.OrdinalIgnoreCase);
         var configurationDiagnostics = new List<Diagnostic>();
 
         var lineStartOffset = 0;
@@ -288,7 +421,7 @@ public sealed class LintEngine
                     var targetLine = lineNumber + 1;
                     if (!nextLineRuleSuppressions.TryGetValue(targetLine, out var suppressedRuleIds))
                     {
-                        suppressedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+                        suppressedRuleIds = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
                         nextLineRuleSuppressions[targetLine] = suppressedRuleIds;
                     }
 
@@ -358,7 +491,7 @@ public sealed class LintEngine
 
                 if (!jobRuleSuppressions.TryGetValue(jobId, out var suppressedRuleIds))
                 {
-                    suppressedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+                    suppressedRuleIds = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
                     jobRuleSuppressions[jobId] = suppressedRuleIds;
                 }
 
@@ -454,7 +587,7 @@ public sealed class LintEngine
 
     static void AddRuleIds(
         string ruleIdList,
-        HashSet<string> target,
+        Dictionary<string, SuppressionAnchor> target,
         List<Diagnostic> configurationDiagnostics,
         string filePath,
         string lineCore,
@@ -466,13 +599,13 @@ public sealed class LintEngine
         for (var i = 0; i < ruleIds.Length; i++)
         {
             var ruleIdToken = ruleIds[i];
+            var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
             if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
             {
-                target.Add(internalRuleId);
+                target[internalRuleId] = new SuppressionAnchor(lineNumber, tokenColumn);
                 continue;
             }
 
-            var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
             var tokenStart = lineStartOffset + tokenColumn - 1;
             configurationDiagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
@@ -513,6 +646,189 @@ public sealed class LintEngine
         }
 
         return new RuleOptionsNormalization(normalized, diagnostics.ToArray());
+    }
+
+    static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
+    {
+        var normalizedFilePath = NormalizePath(filePath);
+        if (exclusions is null || exclusions.Count == 0)
+        {
+            return new ExclusionsNormalization([], normalizedFilePath, []);
+        }
+
+        var knownJobIds = BuildKnownJobIds(workflow, utf8Yaml);
+        var normalized = new List<NormalizedExclusion>(exclusions.Count);
+        var diagnostics = new List<Diagnostic>();
+
+        for (var i = 0; i < exclusions.Count; i++)
+        {
+            var exclusion = exclusions[i];
+            if (string.IsNullOrWhiteSpace(exclusion.FilePattern))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "exclusion file pattern must not be empty",
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
+            var normalizedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+            var ruleIds = exclusion.RuleIds;
+            for (var j = 0; j < ruleIds.Count; j++)
+            {
+                var ruleId = ruleIds[j];
+                if (RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
+                {
+                    normalizedRuleIds.Add(resolvedRuleId);
+                    continue;
+                }
+
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    BuildUnknownRuleIdMessage(ruleId),
+                    new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
+                    FilePath: filePath));
+            }
+
+            if (normalizedRuleIds.Count == 0)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(exclusion.JobId) && !knownJobIds.Contains(exclusion.JobId))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"unknown job-id '{exclusion.JobId}' in exclusion configuration",
+                    new TextRange(0, exclusion.JobId.Length, 1, 1, 1, 1 + exclusion.JobId.Length),
+                    FilePath: filePath));
+                continue;
+            }
+
+            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.FilePattern), normalizedRuleIds, exclusion.JobId));
+        }
+
+        return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
+    }
+
+    static string NormalizePath(string path)
+    {
+        return path.Replace('\\', '/');
+    }
+
+    static bool GlobMatch(string pattern, string path)
+    {
+        if (pattern.Length == 0)
+        {
+            return path.Length == 0;
+        }
+
+        var normalizedPattern = NormalizePath(pattern);
+        var normalizedPath = NormalizePath(path);
+        var cache = new Dictionary<(int PatternIndex, int PathIndex), bool>();
+        return GlobMatchCore(normalizedPattern, normalizedPath, 0, 0, cache);
+    }
+
+    static bool GlobMatchCore(
+        string pattern,
+        string path,
+        int patternIndex,
+        int pathIndex,
+        Dictionary<(int PatternIndex, int PathIndex), bool> cache)
+    {
+        if (cache.TryGetValue((patternIndex, pathIndex), out var cached))
+        {
+            return cached;
+        }
+
+        var patternLength = pattern.Length;
+        var pathLength = path.Length;
+
+        while (patternIndex < patternLength)
+        {
+            var ch = pattern[patternIndex];
+            if (ch == '*')
+            {
+                var isDoubleStar = patternIndex + 1 < patternLength && pattern[patternIndex + 1] == '*';
+                if (isDoubleStar)
+                {
+                    patternIndex += 2;
+                    while (patternIndex < patternLength && pattern[patternIndex] == '*')
+                    {
+                        patternIndex++;
+                    }
+
+                    if (patternIndex >= patternLength)
+                    {
+                        cache[(patternIndex, pathIndex)] = true;
+                        return true;
+                    }
+
+                    for (var cursor = pathIndex; cursor <= pathLength; cursor++)
+                    {
+                        if (GlobMatchCore(pattern, path, patternIndex, cursor, cache))
+                        {
+                            cache[(patternIndex, pathIndex)] = true;
+                            return true;
+                        }
+                    }
+
+                    cache[(patternIndex, pathIndex)] = false;
+                    return false;
+                }
+
+                patternIndex++;
+                for (var cursor = pathIndex; ; cursor++)
+                {
+                    if (GlobMatchCore(pattern, path, patternIndex, cursor, cache))
+                    {
+                        cache[(patternIndex, pathIndex)] = true;
+                        return true;
+                    }
+
+                    if (cursor >= pathLength || path[cursor] == '/')
+                    {
+                        break;
+                    }
+                }
+
+                cache[(patternIndex, pathIndex)] = false;
+                return false;
+            }
+
+            if (pathIndex >= pathLength)
+            {
+                cache[(patternIndex, pathIndex)] = false;
+                return false;
+            }
+
+            if (ch == '?')
+            {
+                if (path[pathIndex] == '/')
+                {
+                    cache[(patternIndex, pathIndex)] = false;
+                    return false;
+                }
+
+                patternIndex++;
+                pathIndex++;
+                continue;
+            }
+
+            if (ch != path[pathIndex])
+            {
+                cache[(patternIndex, pathIndex)] = false;
+                return false;
+            }
+
+            patternIndex++;
+            pathIndex++;
+        }
+
+        var result = pathIndex == pathLength;
+        cache[(patternIndex, pathIndex)] = result;
+        return result;
     }
 
     static string BuildUnknownRuleIdMessage(string unknownRuleId)
@@ -577,21 +893,23 @@ public sealed class LintEngine
     }
 
     readonly record struct InlineSuppression(
-        IReadOnlyDictionary<int, HashSet<string>> NextLineRuleSuppressions,
-        IReadOnlySet<string> FileRuleSuppressions,
-        IReadOnlyDictionary<string, HashSet<string>> JobRuleSuppressions,
+        IReadOnlyDictionary<int, Dictionary<string, SuppressionAnchor>> NextLineRuleSuppressions,
+        IReadOnlyDictionary<string, SuppressionAnchor> FileRuleSuppressions,
+        IReadOnlyDictionary<string, Dictionary<string, SuppressionAnchor>> JobRuleSuppressions,
         IReadOnlyList<JobScope> JobScopes,
         Diagnostic[] ConfigurationDiagnostics)
     {
         public static InlineSuppression Empty { get; } = new(
-            new Dictionary<int, HashSet<string>>(),
-            new HashSet<string>(StringComparer.Ordinal),
-            new Dictionary<string, HashSet<string>>(StringComparer.Ordinal),
+            new Dictionary<int, Dictionary<string, SuppressionAnchor>>(),
+            new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal),
+            new Dictionary<string, Dictionary<string, SuppressionAnchor>>(StringComparer.Ordinal),
             [],
             []);
     }
 
     readonly record struct JobScope(string JobId, int StartLine, int EndLine);
+
+    readonly record struct SuppressionAnchor(int Line, int Column);
 
     readonly record struct RuleOptionsNormalization(
         IReadOnlyDictionary<string, RuleOption>? RuleOptions,
@@ -599,4 +917,17 @@ public sealed class LintEngine
     {
         public static RuleOptionsNormalization Empty { get; } = new(null, []);
     }
+
+    readonly record struct ExclusionsNormalization(
+        IReadOnlyList<NormalizedExclusion> Exclusions,
+        string NormalizedFilePath,
+        Diagnostic[] ConfigurationDiagnostics)
+    {
+        public static ExclusionsNormalization Empty { get; } = new([], string.Empty, []);
+    }
+
+    readonly record struct NormalizedExclusion(
+        string FilePattern,
+        IReadOnlySet<string> RuleIds,
+        string? JobId);
 }
