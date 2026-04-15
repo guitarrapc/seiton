@@ -7,7 +7,7 @@
 Current state:
 - Generated data files exist in `src/Seiton.Core/Generated/`.
 - Specs (`Seiton_Parser_spec.md` and `Seiton_Parser_csharp_spec.md`) describe an update command (`Seiton.Update` or script).
-- No updater project currently exists under `src/`.
+- At plan authoring start, no updater project existed under `src/`.
 
 Gap:
 - There is no first-class, repeatable, testable update executable.
@@ -62,7 +62,7 @@ Docs:
 - `Docs/Seiton_Parser_csharp_spec.md` section 9 (status wording)
 - `Docs/parser_implementation_csharp_plan.md` link/reference to updater completion
 
-## 4. CLI Contract (Proposed)
+## 4. CLI Contract (Implemented)
 
 Implementation note:
 - Command and argument binding is implemented with `ConsoleAppFramework` so command methods can focus on updater logic instead of manual argument parsing.
@@ -78,7 +78,6 @@ Subcommands:
 - `verify --dataset availability`
 - `verify --dataset popular-actions`
 - `verify` (fails when generated outputs are stale)
-- `dump-sources` (optional diagnostics)
 - convenience aliases:
   - `sync-webhooks`, `verify-webhooks`
   - `sync-availability`, `verify-availability`
@@ -360,6 +359,7 @@ Exit criteria:
 Implementation notes (current):
 - `build` workflow verify gate now checks all implemented datasets:
   - `.github/workflows/build.yaml`
+  - `dotnet run --project src/Seiton.Update -- validate-popular-actions-targets`
   - `dotnet run --project src/Seiton.Update -- verify --dataset all`
 - Added scheduled/manual generated-data update workflow:
   - `.github/workflows/generated-data-update.yaml`
@@ -367,6 +367,7 @@ Implementation notes (current):
     - weekly schedule (`0 3 * * 1`)
     - `workflow_dispatch`
   - runs:
+    - `dotnet run --project src/Seiton.Update -- validate-popular-actions-targets`
     - `dotnet run --project src/Seiton.Update -- sync --dataset all`
     - `dotnet run --project src/Seiton.Update -- verify --dataset all`
   - creates/updates PR with generated diffs via `gh pr` CLI flow
@@ -466,10 +467,11 @@ Compatibility tests:
 ## 9. Operational Workflow
 
 Developer flow:
-1. `dotnet run --project src/Seiton.Update -- sync`
-2. `dotnet test`
-3. review generated diffs
-4. commit source snapshot + generated output + manifest updates
+1. `dotnet run --project src/Seiton.Update -- validate-popular-actions-targets`
+2. `dotnet run --project src/Seiton.Update -- sync`
+3. `dotnet test`
+4. review generated diffs
+5. commit source snapshot + generated output + manifest updates
 
 CI verification flow:
 1. run updater in verify mode
@@ -504,3 +506,4 @@ Risk: spec drift between docs and tool behavior.
 - [x] parser spec and C# spec section 9 describe implemented behavior
 - [x] parser implementation plan references updater completion
 - [x] popular-actions targets are config-driven and validated (`targets.json` + schema + CI validation command)
+- [x] CLI contract section reflects implemented command set (no stale planned-only command entries)
