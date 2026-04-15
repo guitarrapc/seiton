@@ -2263,6 +2263,78 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_AstRanges_MajorNodesAreNonDefault()
+    {
+        var yaml = """
+        name: ci
+        on:
+            push:
+                branches: [main]
+        permissions:
+            contents: read
+        env:
+            GLOBAL: value
+        defaults:
+            run:
+                shell: bash
+        concurrency:
+            group: ci-${{ github.ref }}
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                strategy:
+                    matrix:
+                        os: [ubuntu-latest]
+                container:
+                    image: node:20
+                    credentials:
+                        username: user
+                        password: pass
+                services:
+                    redis:
+                        image: redis:7
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "ast-ranges.yml");
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+
+        static bool HasRange(TextRange range) => range.Length > 0;
+
+        var workflow = result.Workflow!;
+        await Assert.That(HasRange(workflow.Range)).IsTrue();
+        await Assert.That(HasRange(workflow.On[0].Range)).IsTrue();
+        await Assert.That(workflow.Permissions is not null).IsTrue();
+        await Assert.That(HasRange(workflow.Permissions!.Range)).IsTrue();
+        await Assert.That(workflow.Env is not null).IsTrue();
+        await Assert.That(HasRange(workflow.Env!.Range)).IsTrue();
+        await Assert.That(workflow.Defaults is not null).IsTrue();
+        await Assert.That(HasRange(workflow.Defaults!.Range)).IsTrue();
+        await Assert.That(HasRange(workflow.Defaults.Run.Range)).IsTrue();
+        await Assert.That(workflow.Concurrency is not null).IsTrue();
+        await Assert.That(HasRange(workflow.Concurrency!.Range)).IsTrue();
+
+        var buildJob = workflow.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        await Assert.That(HasRange(buildJob.Range)).IsTrue();
+        await Assert.That(buildJob.Strategy is not null).IsTrue();
+        await Assert.That(HasRange(buildJob.Strategy!.Range)).IsTrue();
+        await Assert.That(buildJob.Strategy.Matrix is not null).IsTrue();
+        await Assert.That(HasRange(buildJob.Strategy.Matrix!.Range)).IsTrue();
+        await Assert.That(buildJob.Container is not null).IsTrue();
+        await Assert.That(HasRange(buildJob.Container!.Range)).IsTrue();
+        await Assert.That(buildJob.Container.Credentials is not null).IsTrue();
+        await Assert.That(HasRange(buildJob.Container.Credentials!.Range)).IsTrue();
+        await Assert.That(buildJob.Services is not null).IsTrue();
+        await Assert.That(HasRange(buildJob.Services!.Range)).IsTrue();
+        await Assert.That(buildJob.Steps is not null).IsTrue();
+        await Assert.That(HasRange(buildJob.Steps![0].Range)).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_AstStructure_MatrixRawYamlKinds_PopulatesStringArrayObjectNodes()
     {
         var yaml = """

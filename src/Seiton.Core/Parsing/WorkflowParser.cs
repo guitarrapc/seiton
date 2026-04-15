@@ -87,6 +87,9 @@ public static class WorkflowParser
             return new ParseResult(default, diagnostics.ToArray(), HasFatalError: true);
         }
 
+        var workflowStart = reader.CurrentStart;
+        var workflowRange = BuildScalarLocation(workflowStart, 1);
+
         reader.Read(); // skip MappingStart
 
         StringNode? nameNode = null;
@@ -247,6 +250,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            workflowRange = BuildCompositeLocation(workflowStart, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -270,7 +274,7 @@ public static class WorkflowParser
             Defaults = defaultsNode,
             Concurrency = concurrencyNode,
             Jobs = jobs,
-            Range = default,
+            Range = workflowRange,
         };
 
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
@@ -298,6 +302,8 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         var scopes = new Dictionary<Utf8String, PermissionScope>();
         var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
@@ -368,13 +374,14 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
         return new Permissions
         {
             Scopes = scopes,
-            Range = default,
+            Range = range,
         };
     }
 
@@ -400,6 +407,8 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         var vars = new Dictionary<Utf8String, EnvVar>();
         var keys = new HashSet<Utf8String>();
         reader.Read(); // consume MappingStart
@@ -464,13 +473,14 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
         return new Env
         {
             Vars = vars,
-            Range = default,
+            Range = range,
         };
     }
 
@@ -484,11 +494,12 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingMark = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingMark, 1);
         StringNode? shellNode = null;
         StringNode? workingDirectoryNode = null;
         var keys = new HashSet<Utf8String>();
         var hasRun = false;
-        var mappingMark = reader.CurrentStart;
 
         reader.Read(); // consume defaults mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -540,6 +551,8 @@ public static class WorkflowParser
                     continue;
                 }
 
+                var runStart = reader.CurrentStart;
+                var runRange = BuildScalarLocation(runStart, 1);
                 var runKeys = new HashSet<Utf8String>();
                 reader.Read(); // consume run mapping
                 while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -600,8 +613,11 @@ public static class WorkflowParser
 
                 if (reader.CurrentKind == YamlEventKind.MappingEnd)
                 {
+                    runRange = BuildCompositeLocation(runStart, reader.CurrentEnd);
                     reader.Read();
                 }
+
+                range = BuildCompositeLocation(mappingMark, runRange);
 
                 continue;
             }
@@ -612,6 +628,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingMark, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -627,9 +644,9 @@ public static class WorkflowParser
             {
                 Shell = shellNode,
                 WorkingDirectory = workingDirectoryNode,
-                Range = default,
+                Range = shellNode?.Range ?? workingDirectoryNode?.Range ?? range,
             },
-            Range = default,
+            Range = range,
         };
     }
 
@@ -659,6 +676,7 @@ public static class WorkflowParser
         BoolNode? cancelInProgressNode = null;
         var keys = new HashSet<Utf8String>();
         var mappingMark = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingMark, 1);
         reader.Read(); // consume mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -718,6 +736,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingMark, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -731,7 +750,7 @@ public static class WorkflowParser
         {
             Group = groupNode,
             CancelInProgress = cancelInProgressNode,
-            Range = default,
+            Range = range,
         };
     }
 
@@ -879,6 +898,8 @@ public static class WorkflowParser
         TextPosition stepsOnlyKeyInReusableMark = default;
         var keys = new HashSet<Utf8String>();
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -3960,6 +3981,8 @@ public static class WorkflowParser
         BoolNode? failFast = null;
         IntNode? maxParallel = null;
         var keys = new HashSet<Utf8String>();
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
 
         reader.Read(); // consume MappingStart
 
@@ -4042,6 +4065,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -4050,7 +4074,7 @@ public static class WorkflowParser
             Matrix = matrix,
             FailFast = failFast,
             MaxParallel = maxParallel,
-            Range = default,
+            Range = range,
         };
     }
 
@@ -4075,6 +4099,8 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         MatrixCombinations[]? include = null;
         MatrixCombinations[]? exclude = null;
         Dictionary<Utf8String, MatrixRow>? rows = null;
@@ -4186,6 +4212,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -4194,7 +4221,7 @@ public static class WorkflowParser
             Include = include,
             Exclude = exclude,
             Rows = rows,
-            Range = default,
+            Range = range,
         };
     }
 
@@ -4390,6 +4417,8 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         var map = new Dictionary<Utf8String, Service>();
         var keys = new HashSet<Utf8String>();
 
@@ -4453,13 +4482,14 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
         return new Services
         {
             ServiceMap = map,
-            Range = default,
+            Range = range,
         };
     }
 
@@ -4488,6 +4518,8 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         var hasImage = false;
         StringNode? image = null;
         Credentials? credentials = null;
@@ -4627,6 +4659,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -4643,7 +4676,7 @@ public static class WorkflowParser
             Ports = ports,
             Volumes = volumes,
             Options = options,
-            Range = image?.Range ?? default,
+            Range = range,
         };
     }
 
@@ -4671,6 +4704,8 @@ public static class WorkflowParser
             return null;
         }
 
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
         var hasUsername = false;
         var hasPassword = false;
         StringNode? username = null;
@@ -4760,6 +4795,7 @@ public static class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
             reader.Read();
         }
 
@@ -4772,7 +4808,7 @@ public static class WorkflowParser
         {
             Username = username,
             Password = password,
-            Range = username?.Range ?? password?.Range ?? default,
+            Range = range,
         };
     }
 
@@ -5501,6 +5537,29 @@ public static class WorkflowParser
             StartColumn: mark.Col,
             EndLine: mark.Line,
             EndColumn: mark.Col + safeLength - 1);
+    }
+
+    private static TextRange BuildCompositeLocation(TextPosition start, TextPosition end)
+    {
+        var safeLength = end.Position >= start.Position
+            ? (end.Position - start.Position) + 1
+            : 1;
+        var endLine = end.Line <= 0 ? start.Line : end.Line;
+        var endColumn = end.Col <= 0 ? start.Col : end.Col;
+        return new TextRange(
+            Start: start.Position,
+            Length: safeLength,
+            StartLine: start.Line,
+            StartColumn: start.Col,
+            EndLine: endLine,
+            EndColumn: endColumn);
+    }
+
+    private static TextRange BuildCompositeLocation(TextPosition start, TextRange end)
+    {
+        return BuildCompositeLocation(
+            start,
+            new TextPosition(end.Start + end.Length - 1, end.EndLine, end.EndColumn));
     }
 
     private static TextRange ShiftLocation(TextRange baseLocation, int relativeOffset, int length)

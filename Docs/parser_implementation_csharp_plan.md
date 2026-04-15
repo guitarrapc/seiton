@@ -839,18 +839,36 @@
 
 #### L. AST Range の充足率を上げる
 
-- [ ] `Workflow.Range` を含む主要構造ノードで `Range = default` を解消する
+- [x] `Workflow.Range` を含む主要構造ノードで `Range = default` を解消する
   - 優先対象: `Workflow`, `Permissions`, `Env`, `Defaults`, `Concurrency`, `Strategy`, `Matrix`, `Services`, `Container`, `Credentials`
-- [ ] node 単位で「default range ではない」ことを確認するテストを追加する
+- [x] node 単位で「default range ではない」ことを確認するテストを追加する
   - top-level workflow
   - event node 1 件以上
   - job / step node 1 件以上
   - structural node 1 件以上
-- [ ] diagnostics location policy と node range の責務を混同しないよう spec 文言も確認する
+- [x] diagnostics location policy と node range の責務を混同しないよう spec 文言も確認する
 
 完了条件:
 - spec の「All major nodes carry source position (range)」に対して主要 AST ノードが実測で non-default range を返す
 - range 回帰テストが CI で安定する
+
+実装結果:
+- `WorkflowParser` に `BuildCompositeLocation(TextPosition start, TextPosition end)` / `BuildCompositeLocation(TextPosition start, TextRange end)` を追加し、mapping/複合ノードの開始位置から終了位置までの `TextRange` を構築できるようにした。
+- 以下の主要ノードで、`MappingStart` の `CurrentStart` と `MappingEnd` の `CurrentEnd` を使って `Range` を設定するよう変更した。
+  - `Workflow`
+  - `Permissions`
+  - `Env`
+  - `Defaults` / `DefaultsRun`
+  - `Concurrency`
+  - `Strategy`
+  - `Matrix`
+  - `Services`
+  - `Container`
+  - `Credentials`
+- scalar 形の range は既存の `BuildScalarLocation` を維持し、複合ノードのみ `BuildCompositeLocation` へ切り替えたため、既存の scalar ノード位置づけはそのまま。
+- `ParserTests` に `Parse_AstRanges_MajorNodesAreNonDefault` を追加し、workflow / event / job / step / structural node の `Range.Length > 0` を回帰検証するようにした。
+- `Seiton_Parser_spec.md` の「All major nodes carry source position (range)」要件を再確認し、node range と diagnostics location は別責務のまま維持した。
+- `dotnet test` で 159 passed / 0 failed を確認。
 
 #### M. 監査差分のドキュメント同期
 
