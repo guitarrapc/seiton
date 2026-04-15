@@ -17,7 +17,7 @@ internal static class WebhookCommands
         manifest = manifestService.Upsert(manifest, entry);
         manifestService.Save(repoRoot, manifest);
 
-        UpdateLogger.Info($"[fetch:webhooks] manifest updated ({entry.ContentHash[..24]}...) excludeSchemaOnly={excludeSchemaOnly}");
+        UpdateLogger.Info($"[fetch:webhooks] manifest updated. excludeSchemaOnly={excludeSchemaOnly}");
         return 0;
     }
 

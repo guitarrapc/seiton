@@ -3,14 +3,15 @@
   "entries": [
     {
       "dataset": "webhooks",
-      "sourceUrl": "https://json.schemastore.org/github-workflow.json",
       "sourceUrls": [
         "https://json.schemastore.org/github-workflow.json",
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md"
       ],
-      "fetchedAtUtc": "2026-04-15T08:37:59.0558511\u002B00:00",
-      "parserVersion": "5",
-      "contentHash": "sha256:b4fa4257c8e730c4420ba80fc8a80de4facce3d72e10c668bd225390cfb050c3"
+      "fetchedAtUtc": "2026-04-15T08:58:11.4326461\u002B00:00",
+      "rawFileHashes": {
+        "github-workflow.schema.json": "sha256:940b07f8eb924284eb064f964b8c87ee65b0447fad4044e11a344c0b3ca6472c",
+        "events-that-trigger-workflows.docs.md": "sha256:1c1d5e9c9a99c6cac94ef11ed6e5a529423eddff7630a56d902703086cc3c105"
+      }
     }
   ]
 }

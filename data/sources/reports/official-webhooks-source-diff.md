@@ -3,7 +3,7 @@
 - source-a: https://json.schemastore.org/github-workflow.json
 - source-b: https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md
 - exclude-schema-only: False
-- generated-at-utc: 2026-04-15T08:37:59.0327463Z
+- generated-at-utc: 2026-04-15T08:58:11.4138786Z
 
 Policy: normalized snapshot follows GitHub Docs for activity types when Docs table is parseable.
 

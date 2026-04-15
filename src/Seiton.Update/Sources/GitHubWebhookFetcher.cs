@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
-using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
@@ -11,7 +10,6 @@ internal sealed class GitHubWebhookFetcher
 {
     const string SchemaSourceUrl = "https://json.schemastore.org/github-workflow.json";
     const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md";
-    const string ParserVersion = "5";
 
     static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -25,17 +23,20 @@ internal sealed class GitHubWebhookFetcher
         ParseLocalSourceFiles(repoRoot);
         MergeParsedSources(repoRoot, excludeSchemaOnly);
 
-        var raw = ReadRawSources(repoRoot);
-        var contentHash = ComputeSha256(raw.SchemaContent + "\n---\n" + raw.DocsContent);
+        var paths = Paths(repoRoot);
+        var schemaHash = ComputeSha256(File.ReadAllText(paths.RawSchemaPath));
+        var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
 
         return new SourceManifestEntry
         {
             Dataset = "webhooks",
-            SourceUrl = SchemaSourceUrl,
             SourceUrls = [SchemaSourceUrl, DocsSourceUrl],
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
-            ParserVersion = ParserVersion,
-            ContentHash = contentHash,
+            RawFileHashes = new Dictionary<string, string>
+            {
+                [Path.GetFileName(paths.RawSchemaPath)] = schemaHash,
+                [Path.GetFileName(paths.RawDocsPath)] = docsHash,
+            },
         };
     }
 
