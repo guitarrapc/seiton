@@ -201,21 +201,22 @@ Exit criteria:
 - Existing parser tests continue to pass.
 
 Implementation notes (current):
-- Added parser: `src/Seiton.Update/Parsers/ActionlintWebhookSourceParser.cs`
 - Added model: `src/Seiton.Update/Model/WebhookEventModel.cs`
 - Added generator: `src/Seiton.Update/Generators/WebhookTypesCSharpGenerator.cs`
+- Added primary parser: `src/Seiton.Update/Parsers/GitHubWebhookSourceParser.cs`
+- Kept reference parser for parity: `src/Seiton.Update/Parsers/ActionlintWebhookSourceParser.cs`
 - Added sync/verify service: `src/Seiton.Update/Services/WebhookSyncService.cs`
-- Added source resolver: `src/Seiton.Update/Services/WebhookSourcePathResolver.cs` (prefers `data/sources/webhooks/all_webhooks.go`, falls back to `.references/actionlint/all_webhooks.go`)
+- Added source resolver: `src/Seiton.Update/Services/WebhookSourcePathResolver.cs`
+  - primary generation source: `data/sources/webhooks/github/webhook_types.json`
+  - actionlint parity reference: `data/sources/webhooks/actionlint/all_webhooks.go` or `.references/actionlint/all_webhooks.go`
+- Added primary vendored snapshot: `data/sources/webhooks/github/webhook_types.json`
 - Added tests: `tests/Seiton.Update.Tests/WebhookUpdaterGoldenTests.cs`
 - Added test project: `tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj`
-- `sync webhooks` now regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` deterministically.
-- `verify webhooks` now checks stale generated file and returns exit code `4` on mismatch.
-- CI now includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
-- Golden tests and CI verification run without requiring `.references` when vendored snapshot is present.
-
-Important policy alignment note:
-- Current webhook source ingestion still relies on actionlint-shaped snapshot input for deterministic generation/parity workflows.
-- Per §5.1 primary-first policy, this must be followed by explicit official GitHub source ingestion + normalization so GitHub remains the normative source and actionlint remains verification-only.
+- `sync webhooks` regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` from GitHub primary snapshot.
+- `verify webhooks` checks staleness against GitHub primary snapshot first.
+- actionlint parity diff is executed as a secondary, separate validation path when reference input exists.
+- CI includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
+- Golden tests and CI verification run without requiring `.references` when vendored primary snapshot is present.
 
 ### Phase U3: Availability Updater
 

@@ -8,10 +8,15 @@ internal sealed class WebhookParityChecker
     static readonly Regex SeitonEventRegex = new("eventNameUtf8\\.SequenceEqual\\(\"([^\"]+)\"u8\\)", RegexOptions.Compiled);
     static readonly Regex ActionlintEventRegex = new("^\\s*\"([^\"]+)\":", RegexOptions.Compiled | RegexOptions.Multiline);
 
-    public WebhookDiffResult Compare(string repoRoot)
+    public bool TryCompare(string repoRoot, out WebhookDiffResult diff)
     {
+        if (!WebhookSourcePathResolver.TryResolveActionlintReference(repoRoot, out var actionlintPath))
+        {
+            diff = new WebhookDiffResult([], []);
+            return false;
+        }
+
         var seitonPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
-        var actionlintPath = WebhookSourcePathResolver.Resolve(repoRoot);
 
         var seitonEvents = ParseSeitonEvents(seitonPath);
         var actionlintEvents = ParseActionlintEvents(actionlintPath);
@@ -19,7 +24,8 @@ internal sealed class WebhookParityChecker
         var missingInSeiton = actionlintEvents.Except(seitonEvents, StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
         var extraInSeiton = seitonEvents.Except(actionlintEvents, StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
 
-        return new WebhookDiffResult(missingInSeiton, extraInSeiton);
+        diff = new WebhookDiffResult(missingInSeiton, extraInSeiton);
+        return true;
     }
 
     static HashSet<string> ParseSeitonEvents(string path)

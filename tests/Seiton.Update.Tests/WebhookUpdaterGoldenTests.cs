@@ -6,13 +6,13 @@ namespace Seiton.Update.Tests;
 public sealed class WebhookUpdaterGoldenTests
 {
     [Test]
-    public async Task Generate_FromActionlintSource_MatchesWebhookTypesGoldenFile()
+    public async Task Generate_FromGitHubPrimarySource_MatchesWebhookTypesGoldenFile()
     {
         var repoRoot = FindRepoRoot();
-        var sourcePath = Path.Combine(repoRoot, "data", "sources", "webhooks", "all_webhooks.go");
+        var sourcePath = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "webhook_types.json");
         var goldenPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
 
-        var parser = new Parsers.ActionlintWebhookSourceParser();
+        var parser = new Parsers.GitHubWebhookSourceParser();
         var generator = new WebhookTypesCSharpGenerator();
 
         var events = parser.Parse(sourcePath);
@@ -75,12 +75,12 @@ public sealed class WebhookUpdaterGoldenTests
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(tempRepo);
-        Directory.CreateDirectory(Path.Combine(tempRepo, "data", "sources", "webhooks"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, "data", "sources", "webhooks", "github"));
         Directory.CreateDirectory(Path.Combine(tempRepo, "src", "Seiton.Core", "Generated"));
 
         File.Copy(
-            Path.Combine(repoRoot, "data", "sources", "webhooks", "all_webhooks.go"),
-            Path.Combine(tempRepo, "data", "sources", "webhooks", "all_webhooks.go"),
+            Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "webhook_types.json"),
+            Path.Combine(tempRepo, "data", "sources", "webhooks", "github", "webhook_types.json"),
             overwrite: true);
 
         File.Copy(

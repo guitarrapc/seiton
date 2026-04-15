@@ -11,21 +11,26 @@ internal static class WebhookCommands
         var syncService = new WebhookSyncService();
         var changed = syncService.Sync(repoRoot);
 
-        var checker = new WebhookParityChecker();
-        var diff = checker.Compare(repoRoot);
-        WriteDiffReport(repoRoot, diff, "sync");
-
         UpdateLogger.Info(changed
             ? "[sync:webhooks] regenerated src/Seiton.Core/Generated/WebhookTypes.g.cs"
             : "[sync:webhooks] no file changes in WebhookTypes.g.cs");
-        UpdateLogger.Info("[sync:webhooks] diff report generated.");
+
+        var checker = new WebhookParityChecker();
+        if (!checker.TryCompare(repoRoot, out var diff))
+        {
+            UpdateLogger.Info("[sync:webhooks] actionlint parity skipped (reference source not found).");
+            return 0;
+        }
+
+        WriteDiffReport(repoRoot, diff, "sync");
+        UpdateLogger.Info("[sync:webhooks] actionlint diff report generated.");
         if (diff.HasDifferences)
         {
-            UpdateLogger.Info($"[sync:webhooks] differences detected. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
+            UpdateLogger.Info($"[sync:webhooks] actionlint differences detected. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
         }
         else
         {
-            UpdateLogger.Info("[sync:webhooks] no differences detected.");
+            UpdateLogger.Info("[sync:webhooks] actionlint parity has no differences.");
         }
 
         return 0;
@@ -36,21 +41,26 @@ internal static class WebhookCommands
         var syncService = new WebhookSyncService();
         if (!syncService.IsUpToDate(repoRoot))
         {
-            UpdateLogger.Error("[verify:webhooks] generated file is stale. run sync first.");
+            UpdateLogger.Error("[verify:webhooks] generated file is stale against GitHub primary source. run sync first.");
             return 4;
         }
 
         var checker = new WebhookParityChecker();
-        var diff = checker.Compare(repoRoot);
+        if (!checker.TryCompare(repoRoot, out var diff))
+        {
+            UpdateLogger.Info("[verify:webhooks] actionlint parity skipped (reference source not found).");
+            return 0;
+        }
+
         WriteDiffReport(repoRoot, diff, "verify");
 
         if (!diff.HasDifferences)
         {
-            UpdateLogger.Info("[verify:webhooks] parity check passed.");
+            UpdateLogger.Info("[verify:webhooks] actionlint parity check passed.");
             return 0;
         }
 
-        UpdateLogger.Error($"[verify:webhooks] parity check failed. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
+        UpdateLogger.Error($"[verify:webhooks] actionlint parity check failed. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
         return 4;
     }
 

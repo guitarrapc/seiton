@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "source": "github-docs-snapshot",
+  "events": [
+    {
+      "name": "branch_protection_rule",
+      "activityTypes": [
+        "created",
+        "edited",
+        "deleted"
+      ]
+    },
+    {
+      "name": "check_run",
+      "activityTypes": [
+        "created",
+        "rerequested",
+        "completed",
+        "requested_action"
+      ]
+    },
+    {
+      "name": "check_suite",
+      "activityTypes": [
+        "completed"
+      ]
+    },
+    {
+      "name": "create",
+      "activityTypes": []
+    },
+    {
+      "name": "delete",
+      "activityTypes": []
+    },
+    {
+      "name": "deployment",
+      "activityTypes": []
+    },
+    {
+      "name": "deployment_status",
+      "activityTypes": []
+    },
+    {
+      "name": "discussion",
+      "activityTypes": [
+        "created",
+        "edited",
+        "deleted",
+        "transferred",
+        "pinned",
+        "unpinned",
+        "labeled",
+        "unlabeled",
+        "locked",
+        "unlocked",
+        "category_changed",
+        "answered",
+        "unanswered"
+      ]
+    },
+    {
+      "name": "discussion_comment",
+      "activityTypes": [
+        "created",
+        "edited",
+        "deleted"
+      ]
+    },
+    {
+      "name": "fork",
+      "activityTypes": []
+    },
+    {
+      "name": "gollum",
+      "activityTypes": []
+    },
+    {
+      "name": "image_version",
+      "activityTypes": []
+    },
+    {
+      "name": "issue_comment",
+      "activityTypes": [
+        "created",
+        "edited",
+        "deleted"
+      ]
+    },
+    {
+      "name": "issues",
+      "activityTypes": [
+        "opened",
+        "edited",
+        "deleted",
+        "transferred",
+        "pinned",
+        "unpinned",
+        "closed",
+        "reopened",
+        "assigned",
+        "unassigned",
+        "labeled",
+        "unlabeled",
+        "locked",
+        "unlocked",
+        "milestoned",
+        "demilestoned",
+        "typed",
+        "untyped"
+      ]
+    },
+    {
+      "name": "label",
+      "activityTypes": [
+        "created",
+        "edited",
+        "deleted"
+      ]
+    },
+    {
+      "name": "merge_group",
+      "activityTypes": [
+        "checks_requested"
+      ]
+    },
+    {
+      "name": "milestone",
+      "activityTypes": [
+        "created",
+        "closed",
+        "opened",
+        "edited",
+        "deleted"
+      ]
+    },
+    {
+      "name": "page_build",
+      "activityTypes": []
+    },
+    {
+      "name": "public",
+      "activityTypes": []
+    },
+    {
+      "name": "pull_request",
+      "activityTypes": [
+        "assigned",
+        "unassigned",
+        "labeled",
+        "unlabeled",
+        "opened",
+        "edited",
+        "closed",
+        "reopened",
+        "synchronize",
+        "converted_to_draft",
+        "locked",
+        "unlocked",
+        "enqueued",
+        "dequeued",
+        "milestoned",
+        "demilestoned",
+        "ready_for_review",
+        "review_requested",
+        "review_request_removed",
+        "auto_merge_enabled",
+        "auto_merge_disabled"
+      ]
+    },
+    {
+      "name": "pull_request_review",
+      "activityTypes": [
+        "submitted",
+        "edited",
+        "dismissed"
+      ]
+    },
+    {
+      "name": "pull_request_review_comment",
+      "activityTypes": [
+        "created",
+        "edited",
+        "deleted"
+      ]
+    },
+    {
+      "name": "pull_request_target",
+      "activityTypes": [
+        "assigned",
+        "unassigned",
+        "labeled",
+        "unlabeled",
+        "opened",
+        "edited",
+        "closed",
+        "reopened",
+        "synchronize",
+        "converted_to_draft",
+        "locked",
+        "unlocked",
+        "enqueued",
+        "dequeued",
+        "milestoned",
+        "demilestoned",
+        "ready_for_review",
+        "review_requested",
+        "review_request_removed",
+        "auto_merge_enabled",
+        "auto_merge_disabled"
+      ]
+    },
+    {
+      "name": "push",
+      "activityTypes": []
+    },
+    {
+      "name": "registry_package",
+      "activityTypes": [
+        "published",
+        "updated"
+      ]
+    },
+    {
+      "name": "release",
+      "activityTypes": [
+        "published",
+        "unpublished",
+        "created",
+        "edited",
+        "deleted",
+        "prereleased",
+        "released"
+      ]
+    },
+    {
+      "name": "repository_dispatch",
+      "activityTypes": null
+    },
+    {
+      "name": "schedule",
+      "activityTypes": []
+    },
+    {
+      "name": "status",
+      "activityTypes": []
+    },
+    {
+      "name": "watch",
+      "activityTypes": [
+        "started"
+      ]
+    },
+    {
+      "name": "workflow_call",
+      "activityTypes": []
+    },
+    {
+      "name": "workflow_dispatch",
+      "activityTypes": []
+    },
+    {
+      "name": "workflow_run",
+      "activityTypes": [
+        "completed",
+        "requested",
+        "in_progress"
+      ]
+    }
+  ]
+}
