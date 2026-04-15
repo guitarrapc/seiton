@@ -92,80 +92,6 @@ Representative source layout for parser-side responsibilities:
 | `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs` | VYaml-backed reader adapter |
 | `src/Seiton.Core/Generated/*.g.cs` | Generated parser metadata tables |
 
-### 0.5 Design
-
-#### 0.5.1 Zero-Allocation Policy
-
-1. Accept UTF-8 input as `ReadOnlySpan<byte>`
-2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison
-3. Store `Utf8Slice` (offset + length) in AST, not `Span<T>`
-4. Use `Utf8String` (owned byte copy) for dictionary keys; never `System.String`
-5. Use generated static tables for metadata lookup
-6. Do not hold YAML library-specific types outside the adapter layer
-7. **`System.String` is banned on the normal success path** — AST node fields, dictionary keys, parse function return types, and intermediate values must use the UTF-8 type vocabulary defined in §0.2.4
-
-#### 0.5.2 When `System.String` is Permitted (Exhaustive)
-
-`System.String` may appear **only** in the following locations:
-
-1. **Diagnostic output** — `Diagnostic.Message`, `Diagnostic.RuleId`, `Diagnostic.Help`
-2. **Rule metadata in diagnostics** — canonical rule ID text in diagnostic output
-3. **Diagnostic-only adapter method** — `IYamlStreamReader.GetScalarString()`
-4. **Compile-time literal parameters** — section name strings passed to error-reporting helpers (e.g., `"jobs"` in `ParseMapping`)
-
-All other locations — AST node fields, dictionary keys, parse function return types, and intermediate values — must use the UTF-8 type vocabulary (§0.2.4).
-
-#### 0.5.3 Things to Avoid
-
-1. DOM construction of the entire YAML
-2. Conversion to `Dictionary<string, object>`
-3. Post-processing with `string.Split` or regex
-4. LINQ during parsing
-5. `new T[]`, `List<T>`, `Dictionary<TKey, TValue>` on hot paths
-6. `GetScalarString()` on success paths
-7. `System.String` in AST fields or dictionary keys (use `Utf8Slice` / `Utf8String`)
-8. UTF-16 transcoding on the normal path
-
-#### 0.5.4 UTF-8 Type Vocabulary
-
-The following types form the string representation layer for the C# implementation. The YAML adapter delivers all scalars as UTF-8 bytes (`ReadOnlySpan<byte>`), and the parser preserves this representation throughout the AST.
-
-| Type | Ownership | Lifetime | Use Case |
-|---|---|---|---|
-| `ReadOnlySpan<byte>` | Non-owning, stack-only | Current parse position only | Transient key matching, value inspection in parse functions |
-| `Utf8Slice` | Non-owning (offset + length into input buffer) | Input buffer lifetime | AST scalar values (`StringNode.Value`, etc.) |
-| `Utf8String` | Owning (immutable `byte[]` copy) | Unbounded | Dictionary keys in AST, case-normalized identifiers |
-
-```csharp
-/// Owned immutable UTF-8 byte sequence.
-/// Used as dictionary key where the value must outlive the current parse position.
-/// Implements IEquatable<Utf8String> and GetHashCode over raw bytes.
-/// No UTF-16 transcoding occurs.
-public readonly struct Utf8String : IEquatable<Utf8String>
-{
-    private readonly byte[] _bytes;
-    public ReadOnlySpan<byte> Span => _bytes;
-    public int Length => _bytes.Length;
-
-    // Construction
-    public Utf8String(ReadOnlySpan<byte> utf8) => _bytes = utf8.ToArray();
-
-    // Equality and hashing operate directly on UTF-8 bytes
-    public bool Equals(Utf8String other) => Span.SequenceEqual(other.Span);
-    public override int GetHashCode() => XxHash3.HashToUInt64(_bytes);
-}
-```
-
-**Construction from parse context:**
-- From `ReadOnlySpan<byte>`: `new Utf8String(reader.GetScalarUtf8())` — copies the key bytes
-- From `Utf8Slice`: `slice.ToUtf8String(sourceBuffer)` — copies the referenced range
-- Case-normalized: `Utf8String.FromLowerAscii(span)` — copies with ASCII lower-case conversion
-
-**Design rationale:**
-- `Utf8Slice` avoids allocation for the vast majority of AST scalar values (names, expressions, etc.) that are read but never used as lookup keys
-- `Utf8String` allocates a small `byte[]` copy only for dictionary keys (job IDs, env var names, input names, etc.) where hashing and ownership are required
-- `System.String` is never constructed on the normal path — the parser operates entirely in UTF-8 byte space
-
 ### 0.4 YAML/Alias
 
 #### 0.4.1 YAML Adapter Layer (Anti-Corruption Layer)
@@ -344,6 +270,80 @@ Alias resolution is a parser contract requirement but adapter/library-owned resp
 - Parser core assumes alias-normalized input events.
 - Adapter/library alias failures are normalized into fatal parse diagnostics at parser entrypoint.
 - Parser core does not directly manipulate YAML anchor/alias graph structures.
+
+### 0.5 Design
+
+#### 0.5.1 Zero-Allocation Policy
+
+1. Accept UTF-8 input as `ReadOnlySpan<byte>`
+2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison
+3. Store `Utf8Slice` (offset + length) in AST, not `Span<T>`
+4. Use `Utf8String` (owned byte copy) for dictionary keys; never `System.String`
+5. Use generated static tables for metadata lookup
+6. Do not hold YAML library-specific types outside the adapter layer
+7. **`System.String` is banned on the normal success path** — AST node fields, dictionary keys, parse function return types, and intermediate values must use the UTF-8 type vocabulary defined in §0.2.4
+
+#### 0.5.2 When `System.String` is Permitted (Exhaustive)
+
+`System.String` may appear **only** in the following locations:
+
+1. **Diagnostic output** — `Diagnostic.Message`, `Diagnostic.RuleId`, `Diagnostic.Help`
+2. **Rule metadata in diagnostics** — canonical rule ID text in diagnostic output
+3. **Diagnostic-only adapter method** — `IYamlStreamReader.GetScalarString()`
+4. **Compile-time literal parameters** — section name strings passed to error-reporting helpers (e.g., `"jobs"` in `ParseMapping`)
+
+All other locations — AST node fields, dictionary keys, parse function return types, and intermediate values — must use the UTF-8 type vocabulary (§0.2.4).
+
+#### 0.5.3 Things to Avoid
+
+1. DOM construction of the entire YAML
+2. Conversion to `Dictionary<string, object>`
+3. Post-processing with `string.Split` or regex
+4. LINQ during parsing
+5. `new T[]`, `List<T>`, `Dictionary<TKey, TValue>` on hot paths
+6. `GetScalarString()` on success paths
+7. `System.String` in AST fields or dictionary keys (use `Utf8Slice` / `Utf8String`)
+8. UTF-16 transcoding on the normal path
+
+#### 0.5.4 UTF-8 Type Vocabulary
+
+The following types form the string representation layer for the C# implementation. The YAML adapter delivers all scalars as UTF-8 bytes (`ReadOnlySpan<byte>`), and the parser preserves this representation throughout the AST.
+
+| Type | Ownership | Lifetime | Use Case |
+|---|---|---|---|
+| `ReadOnlySpan<byte>` | Non-owning, stack-only | Current parse position only | Transient key matching, value inspection in parse functions |
+| `Utf8Slice` | Non-owning (offset + length into input buffer) | Input buffer lifetime | AST scalar values (`StringNode.Value`, etc.) |
+| `Utf8String` | Owning (immutable `byte[]` copy) | Unbounded | Dictionary keys in AST, case-normalized identifiers |
+
+```csharp
+/// Owned immutable UTF-8 byte sequence.
+/// Used as dictionary key where the value must outlive the current parse position.
+/// Implements IEquatable<Utf8String> and GetHashCode over raw bytes.
+/// No UTF-16 transcoding occurs.
+public readonly struct Utf8String : IEquatable<Utf8String>
+{
+    private readonly byte[] _bytes;
+    public ReadOnlySpan<byte> Span => _bytes;
+    public int Length => _bytes.Length;
+
+    // Construction
+    public Utf8String(ReadOnlySpan<byte> utf8) => _bytes = utf8.ToArray();
+
+    // Equality and hashing operate directly on UTF-8 bytes
+    public bool Equals(Utf8String other) => Span.SequenceEqual(other.Span);
+    public override int GetHashCode() => XxHash3.HashToUInt64(_bytes);
+}
+```
+
+**Construction from parse context:**
+- From `ReadOnlySpan<byte>`: `new Utf8String(reader.GetScalarUtf8())` — copies the key bytes
+- From `Utf8Slice`: `slice.ToUtf8String(sourceBuffer)` — copies the referenced range
+- Case-normalized: `Utf8String.FromLowerAscii(span)` — copies with ASCII lower-case conversion
+
+**Design rationale:**
+- `Utf8Slice` avoids allocation for the vast majority of AST scalar values (names, expressions, etc.) that are read but never used as lookup keys
+- `Utf8String` allocates a small `byte[]` copy only for dictionary keys (job IDs, env var names, input names, etc.) where hashing and ownership are required
+- `System.String` is never constructed on the normal path — the parser operates entirely in UTF-8 byte space
 
 ---
 
