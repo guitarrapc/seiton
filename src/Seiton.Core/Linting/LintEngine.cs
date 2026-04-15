@@ -29,6 +29,11 @@ public sealed class LintEngine
 
     public LintResult Check(byte[] utf8Yaml, string filePath)
     {
+        return Check(utf8Yaml, filePath, config: null);
+    }
+
+    public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
+    {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
@@ -47,24 +52,48 @@ public sealed class LintEngine
         }
 
         var visitor = new WorkflowVisitor();
-        var config = new LintConfig
+        var effectiveConfig = new LintConfig
         {
             Utf8Yaml = utf8Yaml,
             FilePath = filePath,
+            RuleOptions = config?.RuleOptions,
         };
+
+        var activeRules = new List<IRule>(rules.Count);
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
-            rule.SetConfig(config);
+            if (!IsRuleEnabled(rule.Id, effectiveConfig.RuleOptions))
+            {
+                continue;
+            }
+
+            rule.SetConfig(effectiveConfig);
             visitor.AddPass(rule);
+            activeRules.Add(rule);
+        }
+
+        if (activeRules.Count == 0)
+        {
+            return new LintResult(parseResult, diagnostics.ToArray());
         }
 
         visitor.Visit(parseResult.Workflow);
 
-        var ruleDiagnostics = new List<Diagnostic>(rules.Count * 4);
-        for (var i = 0; i < rules.Count; i++)
+        var ruleDiagnostics = new List<Diagnostic>(activeRules.Count * 4);
+        for (var i = 0; i < activeRules.Count; i++)
         {
-            ruleDiagnostics.AddRange(rules[i].GetDiagnostics());
+            var currentRuleDiagnostics = activeRules[i].GetDiagnostics();
+            for (var j = 0; j < currentRuleDiagnostics.Length; j++)
+            {
+                var current = currentRuleDiagnostics[j];
+                if (TryGetSeverityOverride(current.RuleId, effectiveConfig.RuleOptions, out var severityOverride))
+                {
+                    current = current with { Severity = severityOverride };
+                }
+
+                ruleDiagnostics.Add(current);
+            }
         }
 
         ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
@@ -83,6 +112,57 @@ public sealed class LintEngine
         }
 
         return new LintResult(parseResult, diagnostics.ToArray());
+    }
+
+    static bool IsRuleEnabled(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options)
+    {
+        if (!TryGetRuleOption(ruleId, options, out var ruleOption))
+        {
+            return true;
+        }
+
+        return ruleOption!.Enabled;
+    }
+
+    static bool TryGetSeverityOverride(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options, out DiagnosticSeverity severity)
+    {
+        if (TryGetRuleOption(ruleId, options, out var ruleOption) && ruleOption?.Severity is not null)
+        {
+            severity = ruleOption.Severity.Value;
+            return true;
+        }
+
+        severity = default;
+        return false;
+    }
+
+    static bool TryGetRuleOption(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options, out RuleOption? option)
+    {
+        option = null;
+        if (string.IsNullOrEmpty(ruleId) || options is null || options.Count == 0)
+        {
+            return false;
+        }
+
+        var ruleIdValue = ruleId;
+
+        if (options.TryGetValue(ruleIdValue, out option))
+        {
+            return true;
+        }
+
+        foreach (var pair in options)
+        {
+            if (!string.Equals(pair.Key, ruleIdValue, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            option = pair.Value;
+            return true;
+        }
+
+        return false;
     }
 
     static int CompareDiagnosticsByPriority(Diagnostic x, Diagnostic y)

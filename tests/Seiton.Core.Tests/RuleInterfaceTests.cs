@@ -1634,6 +1634,62 @@ public sealed class RuleInterfaceTests
         await Assert.That(duplicated[0].RuleId).IsEqualTo("job-structure");
     }
 
+    [Test]
+    public async Task LintEngine_DisabledRule_DoesNotEmitDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var disabledConfig = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["job-permissions-required"] = new RuleOption(Enabled: false),
+            },
+        };
+
+        var disabledResult = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable.yml", disabledConfig);
+        await Assert.That(disabledResult.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+
+        var enabledResult = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-enabled.yml");
+        await Assert.That(enabledResult.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RuleSeverityOverride_RewritesDiagnosticSeverity()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var overrideConfig = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["job-permissions-required"] = new RuleOption(Severity: DiagnosticSeverity.Error),
+            },
+        };
+
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "severity-override.yml", overrideConfig);
+        var diagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases)
     {
         for (var i = 0; i < cases.Length; i++)

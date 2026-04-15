@@ -14,7 +14,7 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` の 15 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
-| ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
+| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）は実装済み。`Seiton_Linter_spec.md` で定義された inline next-line / fail-safe / 可観測性拡張は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
 
 ---
@@ -309,6 +309,8 @@
 
 **完了条件**: 型が追加されビルドが通る
 
+**実装メモ**: 完了。`LintConfig` に `IReadOnlyDictionary<string, RuleOption>? RuleOptions` を追加し、`RuleOption` を `Enabled`（bool）と `Severity`（`DiagnosticSeverity?`）を持つ record として定義。Step 4.1 は型追加までがスコープのため、`LintEngine` での適用（有効化/無効化・severity 上書き）は Step 4.2 で実装する。
+
 ### Step 4.2: LintEngine でルールの有効化・無効化を実装
 
 **ファイル**: `src/Seiton.Core/Linting/LintEngine.cs`
@@ -317,6 +319,8 @@
 - `Severity` が指定されている場合は診断の `Severity` を上書きして出力
 
 **完了条件**: `RuleOptions` で無効化したルールの診断が結果に含まれないテストがパスする
+
+**実装メモ**: 完了。`LintEngine.Check(byte[], string, LintConfig?)` オーバーロードを追加し、`RuleOptions` を `Check` 実行時に参照。`Enabled == false` のルールは visitor 登録をスキップし、`RuleOption.Severity` が指定されているルール診断は severity を上書きして出力する。既存 API 互換のため `Check(byte[], string)` は新オーバーロードへ委譲。`RuleInterfaceTests` に rule disable と severity override の回帰テストを追加して検証。
 
 ### Step 4.3: ファイル内 inline exclusion（next-line）を実装
 
