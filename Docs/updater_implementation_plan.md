@@ -331,6 +331,9 @@ Implementation notes (current):
 
 ### Phase U5: Verify Mode + CI
 
+Status:
+- Completed (verify gate is wired in PR CI and scheduled/manual update workflow is in place)
+
 Tasks:
 - Implement `verify` command to detect stale generated files.
 - Add CI workflow job that runs `sync` then `verify` (or `git diff --exit-code`).
@@ -339,6 +342,21 @@ Tasks:
 Exit criteria:
 - PR CI fails when generated files are outdated.
 - Manual update workflow can regenerate and produce reviewable diff.
+
+Implementation notes (current):
+- `build` workflow verify gate now checks all implemented datasets:
+  - `.github/workflows/build.yaml`
+  - `dotnet run --project src/Seiton.Update -- verify --dataset all`
+- Added scheduled/manual generated-data update workflow:
+  - `.github/workflows/generated-data-update.yaml`
+  - triggers:
+    - weekly schedule (`0 3 * * 1`)
+    - `workflow_dispatch`
+  - runs:
+    - `dotnet run --project src/Seiton.Update -- sync --dataset all`
+    - `dotnet run --project src/Seiton.Update -- verify --dataset all`
+  - creates/updates PR with generated diffs via `peter-evans/create-pull-request`
+  - uses GitHub App token (`actions/create-github-app-token`) with `contents:write` and `pull-requests:write`
 
 ### Phase U6: Documentation and Contract Finalization
 

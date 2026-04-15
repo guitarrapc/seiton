@@ -41,5 +41,5 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 10.0
-      - name: Verify Generated Webhooks
-        run: dotnet run --project src/Seiton.Update -- verify-webhooks
+      - name: Verify Generated Data
+        run: dotnet run --project src/Seiton.Update -- verify --dataset all
