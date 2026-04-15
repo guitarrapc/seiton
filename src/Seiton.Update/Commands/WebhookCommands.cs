@@ -7,10 +7,16 @@ internal static class WebhookCommands
 {
     public static int Sync(string repoRoot)
     {
+        var syncService = new WebhookSyncService();
+        var changed = syncService.Sync(repoRoot);
+
         var checker = new WebhookParityChecker();
         var diff = checker.Compare(repoRoot);
         WriteDiffReport(repoRoot, diff, "sync");
 
+        Console.WriteLine(changed
+            ? "[sync:webhooks] regenerated src/Seiton.Core/Generated/WebhookTypes.g.cs"
+            : "[sync:webhooks] no file changes in WebhookTypes.g.cs");
         Console.WriteLine("[sync:webhooks] diff report generated.");
         if (diff.HasDifferences)
         {
@@ -26,6 +32,13 @@ internal static class WebhookCommands
 
     public static int Verify(string repoRoot)
     {
+        var syncService = new WebhookSyncService();
+        if (!syncService.IsUpToDate(repoRoot))
+        {
+            Console.WriteLine("[verify:webhooks] generated file is stale. run sync first.");
+            return 4;
+        }
+
         var checker = new WebhookParityChecker();
         var diff = checker.Compare(repoRoot);
         WriteDiffReport(repoRoot, diff, "verify");

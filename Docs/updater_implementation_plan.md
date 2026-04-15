@@ -163,6 +163,9 @@ Determinism rules:
 
 ### Phase U1: Bootstrap Tooling
 
+Status:
+- Completed (ConsoleAppFramework command routing is in place and wired in solution build)
+
 Tasks:
 - Create `src/Seiton.Update` console project.
 - Add `ConsoleAppFramework` command routing and structured logging.
@@ -172,7 +175,15 @@ Exit criteria:
 - `sync --help` and `verify --help` are emitted by `ConsoleAppFramework` command metadata.
 - Project builds in solution CI.
 
+Implementation notes:
+- `src/Seiton.Update/Seiton.Update.csproj` includes `ConsoleAppFramework`.
+- `Program.cs` registers `sync`, `verify`, and convenience aliases `sync-webhooks`, `verify-webhooks`.
+- `seiton.slnx` includes `src/Seiton.Update/Seiton.Update.csproj`.
+
 ### Phase U2: Webhook Updater
+
+Status:
+- In progress (source parser + canonical model + deterministic C# generator implemented; test scaffold pending)
 
 Tasks:
 - Implement source parser for webhook event/type data.
@@ -183,6 +194,14 @@ Tasks:
 Exit criteria:
 - Regenerated `WebhookTypes.g.cs` is stable across repeated runs.
 - Existing parser tests continue to pass.
+
+Implementation notes (current):
+- Added parser: `src/Seiton.Update/Parsers/ActionlintWebhookSourceParser.cs`
+- Added model: `src/Seiton.Update/Model/WebhookEventModel.cs`
+- Added generator: `src/Seiton.Update/Generators/WebhookTypesCSharpGenerator.cs`
+- Added sync/verify service: `src/Seiton.Update/Services/WebhookSyncService.cs`
+- `sync webhooks` now regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` deterministically.
+- `verify webhooks` now checks stale generated file and returns exit code `4` on mismatch.
 
 ### Phase U3: Availability Updater
 
