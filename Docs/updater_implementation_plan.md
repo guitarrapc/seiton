@@ -116,6 +116,11 @@ Rules:
 - actionlint is used as a parity probe, not as a contract owner.
 - If primary source and actionlint disagree, updater records the diff and keeps primary-source-derived result by default.
 
+Non-negotiable correctness rule:
+- Official GitHub sources are the only normative source for generated data correctness.
+- actionlint and `.references/actionlint/**` must never become the effective contract source.
+- Any implementation path that consumes actionlint-only inputs is temporary and must be replaced or guarded by primary-source ingestion before final completion.
+
 ### 5.2 actionlint Differential Validation
 
 For each dataset, updater provides a parity-diff report against `.references/actionlint`:
@@ -207,6 +212,10 @@ Implementation notes (current):
 - `verify webhooks` now checks stale generated file and returns exit code `4` on mismatch.
 - CI now includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
 - Golden tests and CI verification run without requiring `.references` when vendored snapshot is present.
+
+Important policy alignment note:
+- Current webhook source ingestion still relies on actionlint-shaped snapshot input for deterministic generation/parity workflows.
+- Per §5.1 primary-first policy, this must be followed by explicit official GitHub source ingestion + normalization so GitHub remains the normative source and actionlint remains verification-only.
 
 ### Phase U3: Availability Updater
 

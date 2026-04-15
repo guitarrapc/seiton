@@ -1208,7 +1208,9 @@ Scope note:
 
 ### 9.2 Update Policy
 
-- Fetch external data via update command (`Seiton.Update` or script)
+- Fetch and normalize official GitHub sources first via update command (`Seiton.Update` or script)
+- Treat actionlint-derived inputs as differential validation only (non-normative)
+- If official GitHub sources and actionlint differ, generated C# data follows official GitHub sources and records parity diffs
 - Commit generated results as `.g.cs`
 - CI periodic runs detect diffs and create auto PRs
 - Parser and rules do not make network requests at runtime

@@ -896,9 +896,17 @@ Each Rule inspects the AST within Pass callbacks and accumulates diagnostics int
 | Special function names | GitHub Docs |
 | Popular actions metadata | Fetched from action.yml |
 
+### 9.1.1 Source of Truth and Reference Role (Normative)
+
+- Official GitHub sources are normative for generated data. Specifically, GitHub Docs and official GitHub metadata endpoints/files define Seiton's intended contract.
+- `actionlint` data and `.references/actionlint/**` are non-normative reference inputs used for differential validation only.
+- If official GitHub sources and actionlint differ, Seiton-generated outputs must follow official GitHub sources, and the actionlint difference should be reported as parity information.
+- Reference parity must never silently override the contract defined by official GitHub sources.
+
 ### 9.2 Update Policy
 
 - Fetch external data via update command or script
+- Resolve and normalize official GitHub sources first, then run optional/secondary differential validation against actionlint
 - Commit generated results; CI detects diffs -> auto PR
 - Parser and rules do not make network requests at runtime
 

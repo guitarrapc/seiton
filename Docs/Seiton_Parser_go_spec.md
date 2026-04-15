@@ -1259,7 +1259,9 @@ Rules are implemented as Passes. Rule injection/filtering is supported via `Lint
 
 ### 9.2 Update Policy
 
-- Fetch external data via update command or script
+- Fetch and normalize official GitHub sources first via update command or script
+- Treat actionlint-derived inputs as differential validation only (non-normative)
+- If official GitHub sources and actionlint differ, generated Go data follows official GitHub sources and records parity diffs
 - Commit generated results; CI detects diffs → auto PR
 - Parser and rules do not make network requests at runtime
 
