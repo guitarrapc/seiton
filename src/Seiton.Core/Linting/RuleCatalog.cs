@@ -17,6 +17,7 @@ internal static class RuleCatalog
         ("unpinned-image", 5, static () => new UnpinnedImageRule()),
         ("dangerous-triggers", 6, static () => new DangerousTriggersRule()),
         ("job-permissions-required", 7, static () => new JobPermissionsRequiredRule()),
+        ("needs-graph", 8, static () => new NeedsGraphRule()),
     ];
 
     public static IRule[] CreateDefaultRules()

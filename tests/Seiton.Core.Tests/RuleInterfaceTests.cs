@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(8);
+        await Assert.That(rules.Length).IsEqualTo(9);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -291,6 +291,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[5].Id).IsEqualTo("unpinned-image");
         await Assert.That(rules[6].Id).IsEqualTo("dangerous-triggers");
         await Assert.That(rules[7].Id).IsEqualTo("job-permissions-required");
+        await Assert.That(rules[8].Id).IsEqualTo("needs-graph");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -300,6 +301,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("unpinned-image")).IsEqualTo(5);
         await Assert.That(RuleCatalog.GetPriority("dangerous-triggers")).IsEqualTo(6);
         await Assert.That(RuleCatalog.GetPriority("job-permissions-required")).IsEqualTo(7);
+        await Assert.That(RuleCatalog.GetPriority("needs-graph")).IsEqualTo(8);
     }
 
     [Test]
@@ -816,6 +818,157 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new JobPermissionsRequiredRule(), "job-permissions-required", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_NeedsGraphRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-no-needs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-needs-valid-job",
+            """
+            on: push
+            jobs:
+                setup:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo setup
+                build:
+                    needs: setup
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo build
+            """,
+            []),
+            new RuleCase(
+            "ok-needs-multiple-valid",
+            """
+            on: push
+            jobs:
+                setup:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo setup
+                test:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo test
+                deploy:
+                    needs: [setup, test]
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo deploy
+            """,
+            []),
+            new RuleCase(
+            "ng-needs-unknown-job",
+            """
+            on: push
+            jobs:
+                build:
+                    needs: nonexistent
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["references unknown job"]),
+            new RuleCase(
+            "ng-needs-one-of-multiple-unknown",
+            """
+            on: push
+            jobs:
+                setup:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo setup
+                build:
+                    needs: [setup, ghost]
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["references unknown job"]),
+            new RuleCase(
+            "ng-self-reference",
+            """
+            on: push
+            jobs:
+                build:
+                    needs: build
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["circular 'needs' dependency"]),
+            new RuleCase(
+            "ng-two-job-cycle",
+            """
+            on: push
+            jobs:
+                a:
+                    needs: b
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo a
+                b:
+                    needs: a
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo b
+            """,
+            ["circular 'needs' dependency"]),
+            new RuleCase(
+            "ng-three-job-cycle",
+            """
+            on: push
+            jobs:
+                a:
+                    needs: b
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo a
+                b:
+                    needs: c
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo b
+                c:
+                    needs: a
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo c
+            """,
+            ["circular 'needs' dependency"]),
+        };
+
+        await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
     }
 
     [Test]

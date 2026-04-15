@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` の 8 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` の 9 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）が利用可能 |
 | ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
@@ -30,8 +30,7 @@
 | `unpinned-uses` | `UnpinnedUsesRule` | `uses:` の ref が 40 桁 hex 以外（`@v4` / `@main` 等）の場合に warning。`./` ローカル・`docker://` は除外。reusable workflow も対象 | zizmor / ghalint |
 | `unpinned-image` | `UnpinnedImageRule` | `uses: docker://...` / `container.image` / `services.*.image` が `@sha256:<64-hex>` 以外の場合に warning | 独自 |
 | `dangerous-triggers` | `DangerousTriggersRule` | `pull_request_target` / `workflow_run` を検出したら warning | zizmor |
-| `job-permissions-required` | `JobPermissionsRequiredRule` | `permissions` 未定義の全 job（通常 job・reusable workflow 呼び出し job 共通）を warning | ghalint |
-
+| `job-permissions-required` | `JobPermissionsRequiredRule` | `permissions` 未定義の全 job（通常 job・reusable workflow 呼び出し job 共通）を warning | ghalint || `needs-graph` | `NeedsGraphRule` | `needs` で存在しない job ID を参照している場合に error | actionlint |
 ---
 
 ## インフラギャップ
@@ -168,9 +167,13 @@
 - `VisitWorkflowPre` で `workflow.Jobs` の全 ID を収集して保持
 - `VisitJobPre` で `job.Needs` の各エントリが収集済み ID に存在するかを検証
   - 存在しない ID を参照している場合にエラーを報告
-- 循環依存（A → B → A）は将来の拡張とし、今回は未定義参照のみ対象
+- `VisitWorkflowPost` で DFS による循環参照検出を実行
+  - GitHub Actions は循環参照を実行時エラーにするため、静的に検出してエラーを報告
+  - DFS の gray（処理中）ノードへの back-edge を検出して循環と判定
 
-**完了条件**: 存在しない job ID を `needs` で参照したときにエラーが出るテストがパスする
+**完了条件**: 存在しない job ID を `needs` で参照したときにエラーが出るテストがパスする。自己参照・2 job 間・3 job 間の循環でエラーが出るテストがパスする
+
+**実装メモ**: 完了。`NeedsGraphRule` を実装。`VisitWorkflowPre` で `workflow.Jobs`（`IReadOnlyDictionary<Utf8String, Job>`）の参照をフィールドに保存。`VisitJobPre` で `job.Needs` の各エントリを `Utf8String.FromLowerAscii()` でキー化して `ContainsKey` 検証。GitHub Actions の job ID は case-insensitive（パーサーが `FromLowerAscii` で格納）なので同一の正規化を使用。エラー位置は `need.Range`（実際の needs エントリ被参照箇所）を使用。`VisitWorkflowPost` で iterative DFS（color: 0=unvisited / 1=gray / 2=black）による循環参照検出を追加。back-edge（gray ノードへの参照）を検出してエラーを報告。`RuleCatalog` に priority 8 で登録済み。table-driven 回帰テスト（8 ケース）を `RuleInterfaceTests` に追加。
 
 ### Step 2.6: shell-name ルール
 
@@ -407,7 +410,7 @@ P4 --> P5B
 | 5 | `unpinned-image` | **実装済み** | 独自 | — |
 | 6 | `dangerous-triggers` | **実装済み** | zizmor | VisitEvent |
 | 7 | `job-permissions-required` | **実装済み** | ghalint | — |
-| 8 | `needs-graph` | Phase 2 | actionlint | — |
+| 8 | `needs-graph` | **実装済み** | actionlint | — |
 | 9 | `shell-name` | Phase 2 | actionlint | — |
 | 10 | `runner-label` | Phase 3 | actionlint | RunnerLabels.g.cs |
 | 11 | `id-naming` | Phase 3 | actionlint | — |
