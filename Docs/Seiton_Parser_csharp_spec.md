@@ -11,9 +11,9 @@
 
 ## 0. C# Preamble
 
-### 0.1 Gap Analysis of Current C# Implementation
+### 0.1 Contract
 
-#### 0.1.0 Current Contract vs Reference Parity Gap
+#### 0.1.1 Current Contract vs Reference Parity Gap
 
 This document uses the following terms consistently:
 
@@ -23,7 +23,7 @@ This document uses the following terms consistently:
 
 The source of truth for Seiton's supported behavior is `Seiton_Parser_spec.md`. The actionlint comparison in this section is informational and is used only to highlight parity gaps, not to silently expand Seiton's contract.
 
-#### 0.1.1 Features Missing Compared to actionlint (Go)
+#### 0.1.2 Features Missing Compared to actionlint (Go)
 
 Differences between `.references/actionlint` implementation and `src/Seiton.Core/Parsing`.
 
@@ -50,14 +50,14 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
 | **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
 
-#### 0.1.2 Perspectives to Supplement from ghalint
+#### 0.1.3 Perspectives to Supplement from ghalint
 
 | Perspective | Details |
 |---|---|
 | Polymorphic YAML fields | Custom parsing patterns for `permissions` (scalar or mapping), `container` (scalar or mapping), `secrets` (`"inherit"` or mapping) — implemented in current C# parser |
 | Minimal policy model | ghalint defines structs only for needed fields. This spec builds a full AST but maintains all Job/Step fields to support future rules |
 
-#### 0.1.3 Perspectives to Supplement from zizmor
+#### 0.1.4 Perspectives to Supplement from zizmor
 
 | Perspective | Details |
 |---|---|
@@ -65,9 +65,36 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | JSON Schema auxiliary validation | Explicit non-goal for this parser spec. This is out of scope rather than a parity gap |
 | Context risk table (`context-capabilities`) | Managed as generated data. Belongs to the rule layer, not the parser |
 
-### 0.2 Design Principles
+### 0.2 Overview
 
-#### 0.2.1 Zero-Allocation Policy
+The Seiton Parser C# implementation provides:
+
+1. YAML event-stream parsing via adapter-backed reader (`IYamlStreamReader`)
+2. Alias resolution responsibility delegated to YAML adapter/library boundary
+3. Hand-written recursive descent parser that builds typed AST
+4. Expression parser for `${{ }}` grammar
+5. Expression semantic analyzer with context/type validation
+6. Generated metadata usage (webhooks, availability, popular actions)
+
+Linter-side runtime details are specified in `Seiton_Linter_csharp_spec.md`.
+
+### 0.3 Structure
+
+Representative source layout for parser-side responsibilities:
+
+| File/Area | Responsibility |
+|---|---|
+| `src/Seiton.Core/Parsing/WorkflowParser.cs` | Parser entrypoint and recursive-descent implementation |
+| `src/Seiton.Core/Parsing/Ast/*` | AST type definitions |
+| `src/Seiton.Core/Parsing/ExpressionParser.cs` | Expression recursive descent parser |
+| `src/Seiton.Core/Parsing/ExpressionSemanticAnalyzer.cs` | Expression semantic checking/inference |
+| `src/Seiton.Core/Parsing/IYamlStreamReader.cs` | YAML adapter boundary contract |
+| `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs` | VYaml-backed reader adapter |
+| `src/Seiton.Core/Generated/*.g.cs` | Generated parser metadata tables |
+
+### 0.5 Design
+
+#### 0.5.1 Zero-Allocation Policy
 
 1. Accept UTF-8 input as `ReadOnlySpan<byte>`
 2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison
@@ -77,7 +104,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 6. Do not hold YAML library-specific types outside the adapter layer
 7. **`System.String` is banned on the normal success path** — AST node fields, dictionary keys, parse function return types, and intermediate values must use the UTF-8 type vocabulary defined in §0.2.4
 
-#### 0.2.2 When `System.String` is Permitted (Exhaustive)
+#### 0.5.2 When `System.String` is Permitted (Exhaustive)
 
 `System.String` may appear **only** in the following locations:
 
@@ -88,7 +115,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 
 All other locations — AST node fields, dictionary keys, parse function return types, and intermediate values — must use the UTF-8 type vocabulary (§0.2.4).
 
-#### 0.2.3 Things to Avoid
+#### 0.5.3 Things to Avoid
 
 1. DOM construction of the entire YAML
 2. Conversion to `Dictionary<string, object>`
@@ -99,7 +126,7 @@ All other locations — AST node fields, dictionary keys, parse function return 
 7. `System.String` in AST fields or dictionary keys (use `Utf8Slice` / `Utf8String`)
 8. UTF-16 transcoding on the normal path
 
-#### 0.2.4 UTF-8 Type Vocabulary
+#### 0.5.4 UTF-8 Type Vocabulary
 
 The following types form the string representation layer for the C# implementation. The YAML adapter delivers all scalars as UTF-8 bytes (`ReadOnlySpan<byte>`), and the parser preserves this representation throughout the AST.
 
@@ -139,12 +166,14 @@ public readonly struct Utf8String : IEquatable<Utf8String>
 - `Utf8String` allocates a small `byte[]` copy only for dictionary keys (job IDs, env var names, input names, etc.) where hashing and ownership are required
 - `System.String` is never constructed on the normal path — the parser operates entirely in UTF-8 byte space
 
-### 0.3 YAML Adapter Layer (Anti-Corruption Layer)
+### 0.4 YAML/Alias
+
+#### 0.4.1 YAML Adapter Layer (Anti-Corruption Layer)
 
 An **Anti-Corruption Layer** is placed between the parser core and the YAML library.
 This layer ensures that replacing the YAML serializer/deserializer does not propagate changes to the parser core.
 
-#### 0.3.1 Architecture
+#### 0.4.2 Architecture
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -165,7 +194,7 @@ This layer ensures that replacing the YAML serializer/deserializer does not prop
                  Adapter     (for testing)
 ```
 
-#### 0.3.2 IYamlStreamReader Interface
+#### 0.4.3 IYamlStreamReader Interface
 
 The **sole YAML reading contract** that the parser core depends on.
 
@@ -199,7 +228,7 @@ public interface IYamlStreamReader
 }
 ```
 
-#### 0.3.3 Custom Enumerations
+#### 0.4.4 Custom Enumerations
 
 The YAML event types and tag types referenced by the parser core are custom enums independent of any YAML library.
 
@@ -238,7 +267,7 @@ public readonly record struct TextPosition(
     int Column);
 ```
 
-#### 0.3.4 VYamlStreamAdapter (VYaml Implementation)
+#### 0.4.5 VYamlStreamAdapter (VYaml Implementation)
 
 The current default implementation. Holds a VYaml `YamlParser` internally and converts it to `IYamlStreamReader`.
 
@@ -270,7 +299,7 @@ internal sealed ref struct VYamlStreamAdapter : IYamlStreamReader
 
 **Important**: VYaml-specific types (`ParseEventType`, `Marker`, `YamlParser`, etc.) appear only in this file. The parser core and tests never reference them.
 
-#### 0.3.5 Rationale for the Adapter Layer
+#### 0.4.6 Rationale for the Adapter Layer
 
 | Problem | Solved by adapter |
 |---|---|
@@ -280,14 +309,14 @@ internal sealed ref struct VYamlStreamAdapter : IYamlStreamReader
 | Need to replace with another serializer like YamlDotNet | Just implement a new adapter; parser remains unchanged |
 | Scalar tag retrieval (`!!str`, `!!int`, etc.) differs per library | Absorbed by normalizing to `ScalarTag` enum |
 
-#### 0.3.6 Replacement Procedure
+#### 0.4.7 Replacement Procedure
 
 1. Create a new adapter class implementing `IYamlStreamReader` (e.g., `YamlDotNetStreamAdapter`)
 2. Replace the adapter factory in the entry point (`WorkflowParser.Parse()`)
 3. Parse functions in the parser core require **no changes at all**
 4. Existing tests pass as-is (because the `IYamlStreamReader` contract is the same)
 
-#### 0.3.7 Scalar Tag Information
+#### 0.4.8 Scalar Tag Information
 
 Tag information equivalent to actionlint (Go)'s `yaml.Node.Tag` (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`) is returned by the adapter layer's `IYamlStreamReader.GetScalarTag()` as a `ScalarTag` enum.
 
@@ -297,7 +326,7 @@ Tag information equivalent to actionlint (Go)'s `yaml.Node.Tag` (`!!str`, `!!boo
 
 The parser core references only the `ScalarTag` enum and has no knowledge of library-specific tag representations.
 
-#### 0.3.8 Relationship with Current VYaml Adapter
+#### 0.4.9 Relationship with Current VYaml Adapter
 
 The parser has already completed the adapter migration:
 
@@ -307,6 +336,14 @@ The parser has already completed the adapter migration:
 4. VYaml-specific event/type absorption is contained in the adapter boundary.
 
 This means the entry point remains stable while alternate adapters can be introduced without rewriting parser core logic.
+
+#### 0.4.10 Alias Resolution Responsibility (Spec §1.1 step 1b)
+
+Alias resolution is a parser contract requirement but adapter/library-owned responsibility in C# runtime.
+
+- Parser core assumes alias-normalized input events.
+- Adapter/library alias failures are normalized into fatal parse diagnostics at parser entrypoint.
+- Parser core does not directly manipulate YAML anchor/alias graph structures.
 
 ---
 

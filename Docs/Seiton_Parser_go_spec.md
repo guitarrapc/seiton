@@ -12,7 +12,19 @@
 
 ## 0. Go Preamble
 
-### 0.1 Overview
+### 0.1 Contract
+
+#### 0.1.1 Current Contract vs Reference Parity Gap
+
+This document uses the following terms consistently:
+
+- **Current contract**: behavior Seiton currently implements and treats as supported parser behavior for Go.
+- **Reference parity gap**: behavior present in reference implementation (`actionlint`) but not fully matched by Seiton yet.
+- **Out of scope**: behavior intentionally excluded from this spec's completion criteria.
+
+The source of truth for supported behavior is `Seiton_Parser_spec.md`. Reference comparisons are informational and must not silently expand Seiton's contract.
+
+### 0.2 Overview
 
 The Seiton Parser Go implementation provides:
 
@@ -25,7 +37,7 @@ The Seiton Parser Go implementation provides:
 
 Linter-side runtime details are specified in `Seiton_Linter_go_spec.md`.
 
-### 0.2 Package Structure
+### 0.3 Structure
 
 All code lives in a single Go package `seiton`. Key source files:
 
@@ -43,7 +55,9 @@ All code lives in a single Go package `seiton`. Key source files:
 | `availability.go` | Generated context availability data |
 | `popular_actions.go` | Generated popular action metadata |
 
-### 0.3 yaml.Node Model
+### 0.4 YAML/Alias
+
+#### 0.4.1 yaml.Node Model
 
 ```go
 // Provided by the YAML library — not a Seiton type
@@ -58,7 +72,7 @@ type Node struct {
 }
 ```
 
-### 0.4 Alias Resolution (Spec §1.1 step 1b)
+#### 0.4.2 Alias Resolution (Spec §1.1 step 1b)
 
 ```go
 func (p *parser) resolveAliases(root *yaml.Node)
@@ -71,6 +85,14 @@ Pre-walk of the entire `yaml.Node` tree:
 3. Detect and report recursive aliases as errors
 
 Alias resolution happens **before** the parser runs, ensuring the parser never encounters `AliasNode`. This simplifies all downstream parsing logic.
+
+### 0.5 Design
+
+1. Keep parser behavior aligned with `Seiton_Parser_spec.md` current contract.
+2. Keep parser and linter responsibilities separated; linter runtime details belong to `Seiton_Linter_go_spec.md`.
+3. Keep YAML library specifics isolated from parser semantics and diagnostics contract.
+4. Prefer deterministic diagnostics accumulation and recovery over fail-fast parsing.
+5. Treat generated metadata as read-only runtime inputs, updated by explicit update pipeline.
 
 ---
 

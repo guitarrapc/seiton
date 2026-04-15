@@ -72,3 +72,4 @@ Implementation plans:
 - Parser contract changes must update parser companion docs and parser implementation plan in the same change scope.
 - Linter contract changes must update linter implementation plan in the same change scope.
 - If a change affects parser/linter boundary, update this overview document together with both component specs.
+- Language-specific companion specs must keep chapter-0 template numbering aligned as `0.1 Contract`, `0.2 Overview`, `0.3 Structure`, `0.4 Model`, `0.5 Design` (parser may name `0.4` as `YAML/Alias`).

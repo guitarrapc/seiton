@@ -6,9 +6,11 @@
 
 ---
 
-## 0. Scope
+## 0. Go Preamble
 
-This document is the Go companion for linter behavior.
+### 0.1 Contract
+
+This document defines the Go implementation contract for linter behavior under `Seiton_Linter_spec.md`.
 
 In scope:
 
@@ -21,6 +23,42 @@ Out of scope:
 
 - YAML parse algorithm details
 - AST schema definitions
+
+### 0.2 Overview
+
+The Seiton Linter Go implementation provides:
+
+1. Parse-first lint execution flow
+2. Pass-based traversal and rule execution
+3. Deterministic diagnostics post-processing
+4. Config/inline suppression integration per contract
+5. Concurrent repository/file lint execution model (implementation-dependent)
+
+### 0.3 Structure
+
+Representative implementation surface:
+
+- `Linter`
+- `LinterOptions`
+- `Visitor`
+- `Pass`
+- rule implementations
+- error/diagnostic result model
+
+### 0.4 Runtime Model
+
+Linter runtime assumes parser output as structural input and applies rule execution/post-processing over that output.
+
+- Parse result consumed first
+- Rule traversal performed next
+- Diagnostics collected, post-processed, and filtered by linter policies
+
+### 0.5 Design
+
+1. Keep parser/linter responsibility boundary strict.
+2. Keep lint output deterministic for identical input/config.
+3. Keep rule/exclusion policy behavior aligned with language-agnostic linter contract.
+4. Keep language-specific runtime details explicit and testable.
 
 ---
 

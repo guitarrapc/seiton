@@ -6,9 +6,11 @@
 
 ---
 
-## 0. Scope
+## 0. C# Preamble
 
-This document is the C# companion for linter behavior.
+### 0.1 Contract
+
+This document defines the C# implementation contract for linter behavior under `Seiton_Linter_spec.md`.
 
 In scope:
 
@@ -21,6 +23,43 @@ Out of scope:
 
 - YAML parse algorithm details
 - AST schema definitions
+
+### 0.2 Overview
+
+The Seiton Linter C# implementation provides:
+
+1. Parse-first lint entrypoint (`LintEngine.Check`)
+2. Visitor/pass traversal for workflow/event/job/step callbacks
+3. Rule pack orchestration via `RuleCatalog`
+4. Deterministic diagnostics post-processing (sort/dedup/filter)
+5. Exclusion/suppression application and observability output (contract-driven)
+
+### 0.3 Structure
+
+Representative implementation surface:
+
+- `LintEngine`
+- `LintConfig`
+- `LintResult`
+- `WorkflowVisitor`
+- `IPass`
+- `IRule`
+- `RuleCatalog`
+
+### 0.4 Runtime Model
+
+Linter runtime assumes parser output as structural input and never reparses YAML structure.
+
+- Parse result consumed first
+- Rule traversal performed next
+- Diagnostics collected, post-processed, and filtered by linter policies
+
+### 0.5 Design
+
+1. Keep parser/linter responsibility boundary strict.
+2. Keep lint output deterministic for identical input/config.
+3. Keep rule/exclusion policy behavior aligned with language-agnostic linter contract.
+4. Keep implementation status synchronized with `Docs/linter_implementation_csharp_plan.md`.
 
 ---
 
