@@ -632,6 +632,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §3.7 / §12: defaults.run is required in mapping form
         if (!hasRun)
         {
             AddError(diagnostics, "defaults should have run", mappingMark);
@@ -740,6 +741,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §3.8 / §12: concurrency.group is required
         if (groupNode is null)
         {
             AddError(diagnostics, "concurrency.group is required", mappingMark);
@@ -1250,21 +1252,25 @@ public static class WorkflowParser
         var hasSteps = stepsNode is not null;
         var hasRunsOn = runsOnNode is not null;
 
+        // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `steps`
         if (hasUses && hasSteps)
         {
             AddError(diagnostics, $"job '{decodedJobId}' cannot have both uses and steps", jobIdMark);
         }
 
+        // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `runs-on`
         if (hasUses && hasRunsOn)
         {
             AddError(diagnostics, $"job '{decodedJobId}' cannot have both uses and runs-on", jobIdMark);
         }
 
+        // spec §3.10 post-validation: normal jobs require `runs-on`
         if (!hasUses && !hasRunsOn)
         {
             AddError(diagnostics, $"job '{decodedJobId}' requires runs-on (or uses)", jobIdMark);
         }
 
+        // spec §3.10 post-validation: normal jobs require `steps`
         if (!hasUses && !hasSteps)
         {
             AddError(diagnostics, $"job '{decodedJobId}' requires steps (or uses)", jobIdMark);
@@ -1272,17 +1278,20 @@ public static class WorkflowParser
 
         if (!hasUses && workflowCallNode is not null)
         {
+            // spec §3.10 post-validation: `with` is only valid for reusable workflow calls via `uses`
             if (workflowCallNode.Inputs is not null && workflowCallNode.Inputs.Count > 0)
             {
                 AddError(diagnostics, $"job '{decodedJobId}' key 'with' requires uses", jobIdMark);
             }
 
+            // spec §3.10 post-validation: `secrets` is only valid for reusable workflow calls via `uses`
             if ((workflowCallNode.Secrets is not null && workflowCallNode.Secrets.Count > 0) || workflowCallNode.InheritSecrets)
             {
                 AddError(diagnostics, $"job '{decodedJobId}' key 'secrets' requires uses", jobIdMark);
             }
         }
 
+        // spec §3.10.1: steps-only keys are invalid when the job calls a reusable workflow via `uses`
         if (hasUses && stepsOnlyKeyInReusable is not null)
         {
             AddError(
@@ -1563,11 +1572,13 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §3.12: a step resolves to either ExecRun or ExecAction, never both
         if (hasRun && hasUses)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] cannot have both run and uses", reader.CurrentStart);
         }
 
+        // spec §3.12: a step must choose one execution form: `run` or `uses`
         if (!hasRun && !hasUses)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] requires run or uses", reader.CurrentStart);
@@ -3099,6 +3110,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §11.15 / §12: workflow_call input requires `type`
         if (!hasType)
         {
             AddError(
@@ -3430,6 +3442,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §11.17 / §12: workflow_call output requires `value`
         if (value is null)
         {
             AddError(
@@ -4663,6 +4676,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §3.16 / §12: container mapping form requires `image`
         if (requireImage && !hasImage)
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image is required", new TextPosition(0, 1, 1));
@@ -4799,6 +4813,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §3.18 / §12: credentials mapping form requires both `username` and `password`
         if (!hasUsername || !hasPassword)
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials requires both username and password", new TextPosition(0, 1, 1));
@@ -5146,6 +5161,7 @@ public static class WorkflowParser
             reader.Read();
         }
 
+        // spec §3.14 / §12: environment mapping form requires `name`
         if (nameNode is null)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.name is required", jobId.Length > 0 ? new TextPosition(0, 1, 1) : new TextPosition(0, 1, 1));
