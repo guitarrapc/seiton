@@ -76,6 +76,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildEventLocation(ev));
     }
 
+    protected void AddEventError(Event ev, string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location);
+    }
+
     protected void AddWorkflowError(Workflow workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);

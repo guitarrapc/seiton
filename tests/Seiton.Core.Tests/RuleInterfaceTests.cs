@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(12);
+        await Assert.That(rules.Length).IsEqualTo(13);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -295,6 +295,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[9].Id).IsEqualTo("shell-name");
         await Assert.That(rules[10].Id).IsEqualTo("runner-label");
         await Assert.That(rules[11].Id).IsEqualTo("id-naming");
+        await Assert.That(rules[12].Id).IsEqualTo("glob-pattern");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -308,6 +309,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("shell-name")).IsEqualTo(9);
         await Assert.That(RuleCatalog.GetPriority("runner-label")).IsEqualTo(10);
         await Assert.That(RuleCatalog.GetPriority("id-naming")).IsEqualTo(11);
+        await Assert.That(RuleCatalog.GetPriority("glob-pattern")).IsEqualTo(12);
     }
 
     [Test]
@@ -1368,6 +1370,75 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new IdNamingRule(), "id-naming", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-valid-branch-and-path-glob",
+            """
+            on:
+                pull_request:
+                    branches: [main, release/**]
+                    paths: ['src/**', '!docs/**']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-expression-skipped",
+            """
+            on:
+                push:
+                    branches:
+                        - ${{ github.ref_name }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-triple-star-in-branches",
+            """
+            on:
+                push:
+                    branches: ['feature/***']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "consecutive '*'"]),
+            new RuleCase(
+            "ng-unclosed-class-in-paths-ignore",
+            """
+            on:
+                pull_request:
+                    paths-ignore:
+                        - 'src/[abc'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "not closed"]),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
     }
 
     [Test]

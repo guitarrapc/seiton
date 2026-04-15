@@ -21,6 +21,7 @@ internal static class RuleCatalog
         ("shell-name", 9, static () => new ShellNameRule()),
         ("runner-label", 10, static () => new RunnerLabelRule()),
         ("id-naming", 11, static () => new IdNamingRule()),
+        ("glob-pattern", 12, static () => new GlobPatternRule()),
     ];
 
     public static IRule[] CreateDefaultRules()
