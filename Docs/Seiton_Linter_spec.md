@@ -111,7 +111,8 @@ Exclusion/suppression contract:
 
 ### 5.1 Rule Identifier Contract
 
-- Rule identifiers used by exclusion/suppression must use stable canonical IDs: `seiton-lint-rule-001`, `seiton-lint-rule-002`, ...
+- Rule identifiers used by exclusion/suppression should use semantic IDs (for example: `job-permissions-required`) as the primary format.
+- Stable canonical IDs (`seiton-lint-rule-001`, `seiton-lint-rule-002`, ...) are accepted for backward compatibility.
 - Canonical IDs are immutable once published.
 - If a human-readable rule name changes, canonical ID must remain unchanged.
 - Unknown rule IDs in config or inline directives are configuration errors.
@@ -144,20 +145,23 @@ Configuration file may define file-targeted exclusion entries with path globs.
 
 ### 5.5 Inline Exclusion Directive
 
-Inline suppression is next-line scoped.
+Inline suppression supports file/job/next-line scopes.
 
-- A directive comment applies only to the immediately following YAML line.
-- The directive can target one or multiple rule IDs.
-- Multiple rule ID format: comma-separated canonical IDs.
+- `disable-next-line` applies only to the immediately following YAML line.
+- `disable-job` applies to diagnostics inside the specified `job.id` scope.
+- `disable-file` applies to all diagnostics in the current workflow file.
+- A directive can target one or multiple rule IDs.
+- Multiple rule ID format is comma-separated; semantic IDs are recommended.
 
 Canonical directive format:
 
 ```
-# seiton-lint: disable-next-line seiton-lint-rule-001
-# seiton-lint: disable-next-line seiton-lint-rule-001,seiton-lint-rule-014,seiton-lint-rule-120
+# seiton: disable-next-line job-permissions-required
+# seiton: disable-job build job-permissions-required,credentials
+# seiton: disable-file dangerous-triggers,job-permissions-required
 ```
 
-Non-normative note: parsers may allow optional spaces after commas, but normalized output must preserve canonical ID matching behavior.
+Non-normative note: parsers may allow optional spaces after commas, but normalized output must preserve rule-id matching behavior.
 
 ### 5.6 Audit Metadata Policy
 

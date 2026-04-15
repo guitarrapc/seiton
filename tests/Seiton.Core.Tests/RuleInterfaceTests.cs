@@ -1721,7 +1721,7 @@ public sealed class RuleInterfaceTests
         var yaml = """
         on: push
         jobs:
-            # seiton-lint: disable-next-line seiton-lint-rule-008
+            # seiton: disable-next-line seiton-lint-rule-008
             build:
                 runs-on: ubuntu-latest
                 steps:
@@ -1744,7 +1744,7 @@ public sealed class RuleInterfaceTests
     {
         var yaml = """
         on:
-            # seiton-lint: disable-next-line seiton-lint-rule-007, seiton-lint-rule-008
+            # seiton: disable-next-line seiton-lint-rule-007, seiton-lint-rule-008
             pull_request_target:
         jobs:
             build:
@@ -1765,7 +1765,7 @@ public sealed class RuleInterfaceTests
         var yaml = """
         on: push
         jobs:
-            # seiton-lint: disable-next-line job-permissions-required
+            # seiton: disable-next-line job-permissions-required
             build:
                 runs-on: ubuntu-latest
                 steps:
@@ -1784,12 +1784,82 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_InlineSeitonDisableNextLine_SupportsSemanticRuleId()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            # seiton: disable-next-line job-permissions-required
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-next-line.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(8);
+    }
+
+    [Test]
+    public async Task LintEngine_InlineSeitonDisableFile_SuppressesRuleForEntireFile()
+    {
+        var yaml = """
+        # seiton: disable-file job-permissions-required
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-file.yml");
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_InlineSeitonDisableJob_SuppressesRuleOnlyForTargetJob()
+    {
+        var yaml = """
+        # seiton: disable-job build job-permissions-required
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-job.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(8);
+    }
+
+    [Test]
     public async Task LintEngine_InlineDisableNextLine_UnknownRuleId_ReportsConfigurationError()
     {
         var yaml = """
         on: push
         jobs:
-            # seiton-lint: disable-next-line job-permissions-requred
+            # seiton: disable-next-line job-permissions-requred
             build:
                 runs-on: ubuntu-latest
                 steps:
@@ -1803,6 +1873,28 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
         await Assert.That(configError.Message.Contains("Did you mean 'job-permissions-required'", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_InlineSeitonDisableJob_UnknownJobId_ReportsConfigurationError()
+    {
+        var yaml = """
+        # seiton: disable-job buid job-permissions-required
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo test
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-unknown-job.yml");
+        var configError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown job-id", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
         await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
     }
 

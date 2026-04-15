@@ -326,14 +326,14 @@
 
 **ファイル**: `src/Seiton.Core/Linting/LintEngine.cs`, `src/Seiton.Core/Linting/LintConfig.cs`
 
-- `# seiton-lint: disable-next-line seiton-lint-rule-001[,seiton-lint-rule-xxx...]` をサポート
-- 適用範囲は次行のみ
+- `# seiton: disable-next-line <rule-ids>` / `# seiton: disable-job <job-id> <rule-ids>` / `# seiton: disable-file <rule-ids>` をサポート
+- `disable-next-line` は次行のみ、`disable-job` は指定 job、`disable-file` はファイル全体を適用範囲とする
 - 未知 rule-id は設定エラーとして報告
 - YAML コメント取得が困難なため、UTF-8 本文の行スキャンで directive を抽出
 
 **完了条件**: next-line 抑制が動作し、未知 rule-id でエラーを返すテストがパスする
 
-**実装メモ**: 完了。`LintEngine` で `# seiton-lint: disable-next-line <rule-ids>` を行単位で解析し、次行（line+1）に対する rule-id 単位の抑制を適用。複数 rule-id（`,` 区切り、空白許容）をサポート。meaningful ID（例: `job-permissions-required`）と canonical ID（`seiton-lint-rule-001` 形式）の両方を受理し、内部 rule-id へ正規化して適用。未知 ID は設定エラー（`DiagnosticSeverity.Error`）として報告。`RuleInterfaceTests` に next-line 抑制・複数 ID・未知 ID エラーの回帰テストを追加。
+**実装メモ**: 完了。`LintEngine` で `# seiton: disable-next-line <rule-ids>` を行単位で解析し、次行（line+1）に対する rule-id 単位の抑制を適用。`# seiton: disable-job <job-id> <rule-ids>` と `# seiton: disable-file <rule-ids>` もサポートし、job/file スコープで抑制できるようにした。複数 rule-id（`,` 区切り、空白許容）をサポート。meaningful ID（例: `job-permissions-required`）と canonical ID（`seiton-lint-rule-001` 形式）の両方を受理し、内部 rule-id へ正規化して適用。未知 ID は設定エラー（`DiagnosticSeverity.Error`）として報告。`RuleInterfaceTests` に next-line/job/file 抑制と未知 ID/unknown job-id エラーの回帰テストを追加。
 
 ### Step 4.3a: ルールID UX改善（意味ID優先 + 後方互換）
 

@@ -5,7 +5,10 @@ namespace Seiton.Core.Linting;
 
 public sealed class LintEngine
 {
-    const string InlineDisableNextLinePrefix = "seiton-lint: disable-next-line";
+    const string InlineDirectivePrefix = "seiton:";
+    const string DisableNextLineCommand = "disable-next-line";
+    const string DisableJobCommand = "disable-job";
+    const string DisableFileCommand = "disable-file";
 
     readonly List<IRule> rules = [];
 
@@ -52,7 +55,7 @@ public sealed class LintEngine
         var normalizedRuleOptions = NormalizeRuleOptions(config?.RuleOptions, filePath);
         diagnostics.AddRange(normalizedRuleOptions.ConfigurationDiagnostics);
 
-        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath);
+        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, parseResult.Workflow);
         diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
         if (rules.Count == 0)
@@ -117,7 +120,7 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (IsInlineSuppressed(current, inlineSuppression.NextLineRuleSuppressions))
+            if (IsInlineSuppressed(current, inlineSuppression))
             {
                 continue;
             }
@@ -171,31 +174,68 @@ public sealed class LintEngine
         return options.TryGetValue(resolvedRuleId, out option);
     }
 
-    static bool IsInlineSuppressed(Diagnostic diagnostic, IReadOnlyDictionary<int, HashSet<string>> nextLineRuleSuppressions)
+    static bool IsInlineSuppressed(Diagnostic diagnostic, InlineSuppression inlineSuppression)
     {
-        if (diagnostic.RuleId is null || nextLineRuleSuppressions.Count == 0)
+        if (diagnostic.RuleId is null)
         {
             return false;
         }
 
-        if (!nextLineRuleSuppressions.TryGetValue(diagnostic.Location.StartLine, out var suppressedRuleIds))
+        if (inlineSuppression.FileRuleSuppressions.Contains(diagnostic.RuleId))
+        {
+            return true;
+        }
+
+        if (inlineSuppression.NextLineRuleSuppressions.TryGetValue(diagnostic.Location.StartLine, out var nextLineSuppressedRuleIds)
+            && nextLineSuppressedRuleIds.Contains(diagnostic.RuleId))
+        {
+            return true;
+        }
+
+        if (inlineSuppression.JobRuleSuppressions.Count == 0)
         {
             return false;
         }
 
-        return suppressedRuleIds.Contains(diagnostic.RuleId);
+        if (!TryFindJobIdForLine(diagnostic.Location.StartLine, inlineSuppression.JobScopes, out var jobId))
+        {
+            return false;
+        }
+
+        return inlineSuppression.JobRuleSuppressions.TryGetValue(jobId, out var jobSuppressedRuleIds)
+            && jobSuppressedRuleIds.Contains(diagnostic.RuleId);
     }
 
-    static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath)
+    static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, out string jobId)
+    {
+        for (var i = 0; i < jobScopes.Count; i++)
+        {
+            var scope = jobScopes[i];
+            if (line >= scope.StartLine && line <= scope.EndLine)
+            {
+                jobId = scope.JobId;
+                return true;
+            }
+        }
+
+        jobId = string.Empty;
+        return false;
+    }
+
+    static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow)
     {
         if (utf8Yaml.Length == 0)
         {
             return InlineSuppression.Empty;
         }
 
+        var knownJobIds = BuildKnownJobIds(workflow, utf8Yaml);
+        var jobScopes = BuildJobScopes(workflow, utf8Yaml);
         var text = Encoding.UTF8.GetString(utf8Yaml);
         var lines = text.Split('\n');
         var nextLineRuleSuppressions = new Dictionary<int, HashSet<string>>();
+        var fileRuleSuppressions = new HashSet<string>(StringComparer.Ordinal);
+        var jobRuleSuppressions = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var configurationDiagnostics = new List<Diagnostic>();
 
         var lineStartOffset = 0;
@@ -212,49 +252,234 @@ public sealed class LintEngine
             }
 
             var commentText = lineCore[(commentIndex + 1)..].TrimStart();
-            if (!commentText.StartsWith(InlineDisableNextLinePrefix, StringComparison.Ordinal))
-            {
-                lineStartOffset += line.Length + 1;
-                continue;
-            }
+            var command = string.Empty;
+            var arguments = string.Empty;
 
-            var ruleIdList = commentText[InlineDisableNextLinePrefix.Length..].Trim();
-            if (ruleIdList.Length == 0)
+            if (commentText.StartsWith(InlineDirectivePrefix, StringComparison.Ordinal))
             {
-                lineStartOffset += line.Length + 1;
-                continue;
-            }
-
-            var targetLine = lineNumber + 1;
-            if (!nextLineRuleSuppressions.TryGetValue(targetLine, out var suppressedRuleIds))
-            {
-                suppressedRuleIds = new HashSet<string>(StringComparer.Ordinal);
-                nextLineRuleSuppressions[targetLine] = suppressedRuleIds;
-            }
-
-            var ruleIds = ruleIdList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            for (var j = 0; j < ruleIds.Length; j++)
-            {
-                var ruleIdToken = ruleIds[j];
-                if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
+                var commandAndArgs = commentText[InlineDirectivePrefix.Length..].TrimStart();
+                if (commandAndArgs.Length == 0)
                 {
-                    suppressedRuleIds.Add(internalRuleId);
+                    lineStartOffset += line.Length + 1;
                     continue;
                 }
 
-                var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
-                var tokenStart = lineStartOffset + tokenColumn - 1;
-                configurationDiagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    BuildUnknownRuleIdMessage(ruleIdToken),
-                    new TextRange(tokenStart, ruleIdToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + ruleIdToken.Length),
-                    FilePath: filePath));
+                var separator = commandAndArgs.IndexOfAny(' ', '\t');
+                if (separator < 0)
+                {
+                    command = commandAndArgs;
+                }
+                else
+                {
+                    command = commandAndArgs[..separator];
+                    arguments = commandAndArgs[(separator + 1)..].Trim();
+                }
             }
+            else
+            {
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            if (string.Equals(command, DisableNextLineCommand, StringComparison.Ordinal))
+            {
+                if (arguments.Length > 0)
+                {
+                    var targetLine = lineNumber + 1;
+                    if (!nextLineRuleSuppressions.TryGetValue(targetLine, out var suppressedRuleIds))
+                    {
+                        suppressedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+                        nextLineRuleSuppressions[targetLine] = suppressedRuleIds;
+                    }
+
+                    AddRuleIds(arguments, suppressedRuleIds, configurationDiagnostics, filePath, lineCore, lineStartOffset, lineNumber, commentIndex);
+                }
+
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            if (string.Equals(command, DisableFileCommand, StringComparison.Ordinal))
+            {
+                if (arguments.Length > 0)
+                {
+                    AddRuleIds(arguments, fileRuleSuppressions, configurationDiagnostics, filePath, lineCore, lineStartOffset, lineNumber, commentIndex);
+                }
+
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            if (string.Equals(command, DisableJobCommand, StringComparison.Ordinal))
+            {
+                var separator = arguments.IndexOfAny(' ', '\t');
+                if (separator <= 0)
+                {
+                    configurationDiagnostics.Add(BuildInlineDirectiveError(
+                        "disable-job requires <job-id> and <rule-id list>",
+                        filePath,
+                        lineStartOffset,
+                        lineNumber,
+                        lineCore,
+                        commentIndex,
+                        command));
+                    lineStartOffset += line.Length + 1;
+                    continue;
+                }
+
+                var jobId = arguments[..separator].Trim();
+                var ruleIdList = arguments[(separator + 1)..].Trim();
+                if (ruleIdList.Length == 0)
+                {
+                    configurationDiagnostics.Add(BuildInlineDirectiveError(
+                        "disable-job requires at least one rule-id",
+                        filePath,
+                        lineStartOffset,
+                        lineNumber,
+                        lineCore,
+                        commentIndex,
+                        command));
+                    lineStartOffset += line.Length + 1;
+                    continue;
+                }
+
+                if (!knownJobIds.Contains(jobId))
+                {
+                    var jobColumn = FindTokenColumn(lineCore, jobId, commentIndex);
+                    var jobStart = lineStartOffset + jobColumn - 1;
+                    configurationDiagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        $"unknown job-id '{jobId}' in inline suppression directive",
+                        new TextRange(jobStart, jobId.Length, lineNumber, jobColumn, lineNumber, jobColumn + jobId.Length),
+                        FilePath: filePath));
+                    lineStartOffset += line.Length + 1;
+                    continue;
+                }
+
+                if (!jobRuleSuppressions.TryGetValue(jobId, out var suppressedRuleIds))
+                {
+                    suppressedRuleIds = new HashSet<string>(StringComparer.Ordinal);
+                    jobRuleSuppressions[jobId] = suppressedRuleIds;
+                }
+
+                AddRuleIds(ruleIdList, suppressedRuleIds, configurationDiagnostics, filePath, lineCore, lineStartOffset, lineNumber, commentIndex);
+                lineStartOffset += line.Length + 1;
+                continue;
+            }
+
+            configurationDiagnostics.Add(BuildInlineDirectiveError(
+                $"unknown inline suppression command '{command}'",
+                filePath,
+                lineStartOffset,
+                lineNumber,
+                lineCore,
+                commentIndex,
+                command));
 
             lineStartOffset += line.Length + 1;
         }
 
-        return new InlineSuppression(nextLineRuleSuppressions, configurationDiagnostics.ToArray());
+        return new InlineSuppression(
+            nextLineRuleSuppressions,
+            fileRuleSuppressions,
+            jobRuleSuppressions,
+            jobScopes,
+            configurationDiagnostics.ToArray());
+    }
+
+    static Diagnostic BuildInlineDirectiveError(string message, string filePath, int lineStartOffset, int lineNumber, string lineCore, int commentIndex, string token)
+    {
+        var tokenColumn = token.Length == 0 ? commentIndex + 2 : FindTokenColumn(lineCore, token, commentIndex);
+        var tokenStart = lineStartOffset + tokenColumn - 1;
+        var tokenLength = token.Length == 0 ? 1 : token.Length;
+
+        return new Diagnostic(
+            DiagnosticSeverity.Error,
+            message,
+            new TextRange(tokenStart, tokenLength, lineNumber, tokenColumn, lineNumber, tokenColumn + tokenLength),
+            FilePath: filePath);
+    }
+
+    static HashSet<string> BuildKnownJobIds(Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
+    {
+        var jobIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in workflow.Jobs)
+        {
+            var span = pair.Value.Id.Value.AsSpan(utf8Yaml);
+            if (span.Length == 0)
+            {
+                continue;
+            }
+
+            var jobId = Encoding.UTF8.GetString(span);
+            if (jobId.Length == 0)
+            {
+                continue;
+            }
+
+            jobIds.Add(jobId);
+        }
+
+        return jobIds;
+    }
+
+    static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
+    {
+        var scopes = new List<JobScope>(workflow.Jobs.Count);
+        foreach (var pair in workflow.Jobs)
+        {
+            var span = pair.Value.Id.Value.AsSpan(utf8Yaml);
+            if (span.Length == 0)
+            {
+                continue;
+            }
+
+            var range = pair.Value.Range;
+            if (range.StartLine <= 0 || range.EndLine <= 0)
+            {
+                continue;
+            }
+
+            var jobId = Encoding.UTF8.GetString(span);
+            if (jobId.Length == 0)
+            {
+                continue;
+            }
+
+            scopes.Add(new JobScope(jobId, range.StartLine, range.EndLine));
+        }
+
+        return scopes;
+    }
+
+    static void AddRuleIds(
+        string ruleIdList,
+        HashSet<string> target,
+        List<Diagnostic> configurationDiagnostics,
+        string filePath,
+        string lineCore,
+        int lineStartOffset,
+        int lineNumber,
+        int commentIndex)
+    {
+        var ruleIds = ruleIdList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < ruleIds.Length; i++)
+        {
+            var ruleIdToken = ruleIds[i];
+            if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
+            {
+                target.Add(internalRuleId);
+                continue;
+            }
+
+            var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
+            var tokenStart = lineStartOffset + tokenColumn - 1;
+            configurationDiagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                BuildUnknownRuleIdMessage(ruleIdToken),
+                new TextRange(tokenStart, ruleIdToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + ruleIdToken.Length),
+                FilePath: filePath));
+        }
     }
 
     static int FindTokenColumn(string line, string token, int fallbackStart)
@@ -353,12 +578,20 @@ public sealed class LintEngine
 
     readonly record struct InlineSuppression(
         IReadOnlyDictionary<int, HashSet<string>> NextLineRuleSuppressions,
+        IReadOnlySet<string> FileRuleSuppressions,
+        IReadOnlyDictionary<string, HashSet<string>> JobRuleSuppressions,
+        IReadOnlyList<JobScope> JobScopes,
         Diagnostic[] ConfigurationDiagnostics)
     {
         public static InlineSuppression Empty { get; } = new(
             new Dictionary<int, HashSet<string>>(),
+            new HashSet<string>(StringComparer.Ordinal),
+            new Dictionary<string, HashSet<string>>(StringComparer.Ordinal),
+            [],
             []);
     }
+
+    readonly record struct JobScope(string JobId, int StartLine, int EndLine);
 
     readonly record struct RuleOptionsNormalization(
         IReadOnlyDictionary<string, RuleOption>? RuleOptions,
