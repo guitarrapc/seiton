@@ -884,6 +884,47 @@
 完了条件:
 - 4 文書間で `defaults`, `concurrency`, `schedule`, `services`, `credentials`, `range` の記述に矛盾がない
 
+### 追加作業リスト（C# spec 未充足項目対応）- 2026-04-15 監査差分の反映
+
+#### N. Parser 必須制約の未固定テストを補完する
+
+- [ ] normal job で `steps` 欠落時の parser diagnostic を専用回帰テストで固定する
+  - spec 根拠: `Seiton_Parser_spec.md` §3.10 / §12
+  - 現状: 実装は `job '{id}' requires steps (or uses)` を出すが、`runs-on` 欠落ほど明示的な専用テストがない
+- [ ] `job.secrets` が `uses` なしで指定された場合の parser diagnostic を専用回帰テストで固定する
+  - spec 根拠: `Seiton_Parser_spec.md` §3.10 / §12
+  - 現状: `secrets: not-inherit` の scalar 形エラーはあるが、post-validation の `key 'secrets' requires uses` を直接固定していない
+- [ ] reusable workflow call で禁止される steps-only keys の負ケースを table-driven で網羅する
+  - 対象: `runs-on`, `environment`, `outputs`, `env`, `defaults`, `steps`, `timeout-minutes`, `continue-on-error`, `container`
+  - 現状: `container` 1 ケースのみで、`TryGetStepsOnlyReusableJobKeyName(...)` の一覧全体は固定されていない
+- [ ] parser と `LintEngine.Check()` の両方で同一メッセージが出ることを確認する
+
+完了条件:
+- `ParserTests` に `steps required`, `secrets requires uses`, reusable workflow forbidden keys 一覧の負ケースが追加される
+- parser 実装済みの conditional requirements に、未固定の post-validation 分岐が残らない
+
+期待成果:
+- 「実装はあるが専用テストがない」状態を解消し、parser spec coverage をテスト観点でも閉じる
+
+#### O. Rule Engine の spec 充足方針を確定する
+
+- [ ] `Seiton_Parser_csharp_spec.md` の Rule Engine 節を基準に、次のどちらで閉じるかを決める
+  - 実装拡張: 追加 Rule を実装して spec 記述に近づける
+  - scope 縮小: 現行実装（`JobStructureRule`, `ReusableWorkflowRule`, `PermissionsRule`, `PopularActionInputsRule`）に合わせて spec を明示的に狭める
+- [ ] `RuleCatalog` の現行既定ルール群と spec の期待値の差分を棚卸しする
+  - 現状: default rule は 4 件で、`Seiton_Parser_csharp_spec.md` も Rule Engine を partially implemented と記述している
+- [ ] Rule ごとの責務境界を parser 一次診断との関係も含めて整理する
+  - parser が担うもの: YAML shape / required keys / cross-key structural constraints の一次診断
+  - rule が担うもの: policy / metadata / richer semantic diagnostics
+- [ ] 方針決定後、spec / plan / tests を同時に更新する
+
+完了条件:
+- `Seiton_Parser_csharp_spec.md` を厳密に読んだときに「current codebase は fully satisfied か」の答えが曖昧にならない
+- Rule Engine 節の partially implemented 表記について、実装拡張または scope 明確化のいずれかで説明責任を果たせる
+
+期待成果:
+- parser core は概ね充足済み、Rule Engine は scope 決定待ち、という現状を計画上で明文化できる
+
 ---
 
 ## チェックリスト（全 Phase 共通）
