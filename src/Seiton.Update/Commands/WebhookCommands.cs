@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Update;
 using Seiton.Update.Services;
 
 namespace Seiton.Update.Commands;
@@ -14,17 +15,17 @@ internal static class WebhookCommands
         var diff = checker.Compare(repoRoot);
         WriteDiffReport(repoRoot, diff, "sync");
 
-        Console.WriteLine(changed
+        UpdateLogger.Info(changed
             ? "[sync:webhooks] regenerated src/Seiton.Core/Generated/WebhookTypes.g.cs"
             : "[sync:webhooks] no file changes in WebhookTypes.g.cs");
-        Console.WriteLine("[sync:webhooks] diff report generated.");
+        UpdateLogger.Info("[sync:webhooks] diff report generated.");
         if (diff.HasDifferences)
         {
-            Console.WriteLine($"[sync:webhooks] differences detected. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
+            UpdateLogger.Info($"[sync:webhooks] differences detected. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
         }
         else
         {
-            Console.WriteLine("[sync:webhooks] no differences detected.");
+            UpdateLogger.Info("[sync:webhooks] no differences detected.");
         }
 
         return 0;
@@ -35,7 +36,7 @@ internal static class WebhookCommands
         var syncService = new WebhookSyncService();
         if (!syncService.IsUpToDate(repoRoot))
         {
-            Console.WriteLine("[verify:webhooks] generated file is stale. run sync first.");
+            UpdateLogger.Error("[verify:webhooks] generated file is stale. run sync first.");
             return 4;
         }
 
@@ -45,11 +46,11 @@ internal static class WebhookCommands
 
         if (!diff.HasDifferences)
         {
-            Console.WriteLine("[verify:webhooks] parity check passed.");
+            UpdateLogger.Info("[verify:webhooks] parity check passed.");
             return 0;
         }
 
-        Console.WriteLine($"[verify:webhooks] parity check failed. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
+        UpdateLogger.Error($"[verify:webhooks] parity check failed. missing={diff.MissingInSeiton.Count}, extra={diff.ExtraInSeiton.Count}");
         return 4;
     }
 

@@ -10,7 +10,7 @@ internal static class Program
         var repoRoot = FindRepoRoot(Environment.CurrentDirectory);
         if (repoRoot is null)
         {
-            Console.Error.WriteLine("Repository root not found (seiton.slnx).");
+            UpdateLogger.Error("Repository root not found (seiton.slnx).");
             return 1;
         }
 
@@ -75,7 +75,7 @@ internal static class Program
             return WebhookCommands.Sync(repoRoot);
         }
 
-        Console.Error.WriteLine($"Unsupported sync dataset: {dataset}");
+        UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
         return 1;
     }
 
@@ -86,7 +86,7 @@ internal static class Program
             return WebhookCommands.Verify(repoRoot);
         }
 
-        Console.Error.WriteLine($"Unsupported verify dataset: {dataset}");
+        UpdateLogger.Error($"Unsupported verify dataset: {dataset}");
         return 1;
     }
 

@@ -34,80 +34,92 @@ internal sealed class WebhookTypesCSharpGenerator
     public string Generate(IReadOnlyList<WebhookEventModel> events)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("namespace Seiton.Core.Generated;");
-        sb.AppendLine();
-        sb.AppendLine("internal static class WebhookTypes");
-        sb.AppendLine("{");
-        sb.AppendLine("    internal enum ActivityTypesMode");
-        sb.AppendLine("    {");
-        sb.AppendLine("        NotSupported,");
-        sb.AppendLine("        Any,");
-        sb.AppendLine("        Restricted,");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    internal enum EventId");
-        sb.AppendLine("    {");
+        sb.Append(
+            """
+            namespace Seiton.Core.Generated;
+
+            internal static class WebhookTypes
+            {
+                internal enum ActivityTypesMode
+                {
+                    NotSupported,
+                    Any,
+                    Restricted,
+                }
+
+                internal enum EventId
+                {
+            """);
         foreach (var e in events)
         {
-            sb.AppendLine($"        {ToEventIdName(e.Name)},");
+            sb.Append($"        {ToEventIdName(e.Name)},\n");
         }
 
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    public static bool TryGet(ReadOnlySpan<byte> eventNameUtf8, out string eventName, out EventSpec spec)");
-        sb.AppendLine("    {");
+        sb.Append(
+            """
+                }
+
+                public static bool TryGet(ReadOnlySpan<byte> eventNameUtf8, out string eventName, out EventSpec spec)
+                {
+            """);
         foreach (var e in events)
         {
-            sb.AppendLine($"        if (eventNameUtf8.SequenceEqual(\"{e.Name}\"u8)) {{ eventName = \"{e.Name}\"; spec = new(EventId.{ToEventIdName(e.Name)}); return true; }}");
+            sb.Append($"        if (eventNameUtf8.SequenceEqual(\"{e.Name}\"u8)) {{ eventName = \"{e.Name}\"; spec = new(EventId.{ToEventIdName(e.Name)}); return true; }}\n");
         }
 
-        sb.AppendLine();
-        sb.AppendLine("        eventName = string.Empty;");
-        sb.AppendLine("        spec = default;");
-        sb.AppendLine("        return false;");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    internal readonly struct EventSpec");
-        sb.AppendLine("    {");
-        sb.AppendLine("        internal EventId Id { get; }");
-        sb.AppendLine();
-        sb.AppendLine("        public EventSpec(EventId id)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            Id = id;");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        sb.AppendLine("        public bool IsTypeOptionSupported() => GetTypesMode() is not ActivityTypesMode.NotSupported;");
-        sb.AppendLine();
-        sb.AppendLine("        public bool IsOptionAllowed(ReadOnlySpan<byte> optionUtf8)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            return Id switch");
-        sb.AppendLine("            {");
+        sb.Append(
+            """
+
+                    eventName = string.Empty;
+                    spec = default;
+                    return false;
+                }
+
+                internal readonly struct EventSpec
+                {
+                    internal EventId Id { get; }
+
+                    public EventSpec(EventId id)
+                    {
+                        Id = id;
+                    }
+
+                    public bool IsTypeOptionSupported() => GetTypesMode() is not ActivityTypesMode.NotSupported;
+
+                    public bool IsOptionAllowed(ReadOnlySpan<byte> optionUtf8)
+                    {
+                        return Id switch
+                        {
+            """);
         foreach (var e in events)
         {
             if (OptionMap.TryGetValue(e.Name, out var options) && options.Length > 0)
             {
-                sb.AppendLine($"                EventId.{ToEventIdName(e.Name)} => {BuildAnyOptionCondition(options, "optionUtf8")},");
+                sb.Append($"                EventId.{ToEventIdName(e.Name)} => {BuildAnyOptionCondition(options, "optionUtf8")},\n");
             }
         }
 
-        sb.AppendLine("                _ => false,");
-        sb.AppendLine("            };");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        sb.AppendLine("        public bool IsTypeAllowed(ReadOnlySpan<byte> valueUtf8)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            if (GetTypesMode() is ActivityTypesMode.Any)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return true;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            if (GetTypesMode() is ActivityTypesMode.NotSupported)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return false;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            return Id switch");
-        sb.AppendLine("            {");
+        sb.Append(
+            """
+                            _ => false,
+                        };
+                    }
+
+                    public bool IsTypeAllowed(ReadOnlySpan<byte> valueUtf8)
+                    {
+                        if (GetTypesMode() is ActivityTypesMode.Any)
+                        {
+                            return true;
+                        }
+
+                        if (GetTypesMode() is ActivityTypesMode.NotSupported)
+                        {
+                            return false;
+                        }
+
+                        return Id switch
+                        {
+            """);
 
         var pullRequestTypes = events.FirstOrDefault(static x => x.Name == "pull_request")?.ActivityTypes;
         var pullRequestTargetTypes = events.FirstOrDefault(static x => x.Name == "pull_request_target")?.ActivityTypes;
@@ -119,25 +131,28 @@ internal sealed class WebhookTypesCSharpGenerator
         {
             if (usePullRequestHelper && (e.Name == "pull_request" || e.Name == "pull_request_target"))
             {
-                sb.AppendLine($"                EventId.{ToEventIdName(e.Name)} => IsPullRequestType(valueUtf8),");
+                sb.Append($"                EventId.{ToEventIdName(e.Name)} => IsPullRequestType(valueUtf8),\n");
                 continue;
             }
 
-            sb.AppendLine($"                EventId.{ToEventIdName(e.Name)} => {BuildAnyValueCondition(e.ActivityTypes!, "valueUtf8")},");
+            sb.Append($"                EventId.{ToEventIdName(e.Name)} => {BuildAnyValueCondition(e.ActivityTypes!, "valueUtf8")},\n");
         }
 
-        sb.AppendLine("                _ => false,");
-        sb.AppendLine("            };");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        sb.AppendLine("        private ActivityTypesMode GetTypesMode()");
-        sb.AppendLine("        {");
-        sb.AppendLine("            return Id switch");
-        sb.AppendLine("            {");
+        sb.Append(
+            """
+                            _ => false,
+                        };
+                    }
+
+                    private ActivityTypesMode GetTypesMode()
+                    {
+                        return Id switch
+                        {
+            """);
 
         foreach (var e in events.Where(static x => x.ActivityTypes is null))
         {
-            sb.AppendLine($"                EventId.{ToEventIdName(e.Name)} => ActivityTypesMode.Any,");
+            sb.Append($"                EventId.{ToEventIdName(e.Name)} => ActivityTypesMode.Any,\n");
         }
 
         var restricted = events.Where(static x => x.ActivityTypes is { Count: > 0 }).ToArray();
@@ -145,24 +160,33 @@ internal sealed class WebhookTypesCSharpGenerator
         {
             sb.Append("                ");
             sb.Append(string.Join(" or ", restricted.Select(x => $"EventId.{ToEventIdName(x.Name)}")));
-            sb.AppendLine(" => ActivityTypesMode.Restricted,");
+            sb.Append(" => ActivityTypesMode.Restricted,\n");
         }
 
-        sb.AppendLine("                _ => ActivityTypesMode.NotSupported,");
-        sb.AppendLine("            };");
-        sb.AppendLine("        }");
+        sb.Append(
+            """
+                            _ => ActivityTypesMode.NotSupported,
+                        };
+                    }
+            """);
 
         if (usePullRequestHelper && pullRequestTypes is not null)
         {
-            sb.AppendLine();
-            sb.AppendLine("        private static bool IsPullRequestType(ReadOnlySpan<byte> value)");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            return {BuildAnyValueCondition(pullRequestTypes, "value")};");
-            sb.AppendLine("        }");
+            sb.Append(
+                $$"""
+
+                        private static bool IsPullRequestType(ReadOnlySpan<byte> value)
+                        {
+                            return {{BuildAnyValueCondition(pullRequestTypes, "value")}};
+                        }
+                """);
         }
 
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
+        sb.Append(
+            """
+                }
+            }
+            """);
 
         return sb.ToString().Replace("\r\n", "\n");
     }
