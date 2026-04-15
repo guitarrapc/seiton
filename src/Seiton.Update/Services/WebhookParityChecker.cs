@@ -11,7 +11,7 @@ internal sealed class WebhookParityChecker
     public WebhookDiffResult Compare(string repoRoot)
     {
         var seitonPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
-        var actionlintPath = Path.Combine(repoRoot, ".references", "actionlint", "all_webhooks.go");
+        var actionlintPath = WebhookSourcePathResolver.Resolve(repoRoot);
 
         var seitonEvents = ParseSeitonEvents(seitonPath);
         var actionlintEvents = ParseActionlintEvents(actionlintPath);

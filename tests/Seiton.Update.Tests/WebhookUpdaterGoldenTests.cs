@@ -9,7 +9,7 @@ public sealed class WebhookUpdaterGoldenTests
     public async Task Generate_FromActionlintSource_MatchesWebhookTypesGoldenFile()
     {
         var repoRoot = FindRepoRoot();
-        var sourcePath = Path.Combine(repoRoot, ".references", "actionlint", "all_webhooks.go");
+        var sourcePath = Path.Combine(repoRoot, "data", "sources", "webhooks", "all_webhooks.go");
         var goldenPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
 
         var parser = new Parsers.ActionlintWebhookSourceParser();
@@ -75,12 +75,12 @@ public sealed class WebhookUpdaterGoldenTests
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(tempRepo);
-        Directory.CreateDirectory(Path.Combine(tempRepo, ".references", "actionlint"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, "data", "sources", "webhooks"));
         Directory.CreateDirectory(Path.Combine(tempRepo, "src", "Seiton.Core", "Generated"));
 
         File.Copy(
-            Path.Combine(repoRoot, ".references", "actionlint", "all_webhooks.go"),
-            Path.Combine(tempRepo, ".references", "actionlint", "all_webhooks.go"),
+            Path.Combine(repoRoot, "data", "sources", "webhooks", "all_webhooks.go"),
+            Path.Combine(tempRepo, "data", "sources", "webhooks", "all_webhooks.go"),
             overwrite: true);
 
         File.Copy(

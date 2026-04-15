@@ -10,7 +10,7 @@ internal sealed class WebhookSyncService
 
     public bool Sync(string repoRoot)
     {
-        var actionlintPath = Path.Combine(repoRoot, ".references", "actionlint", "all_webhooks.go");
+        var actionlintPath = WebhookSourcePathResolver.Resolve(repoRoot);
         var outputPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
 
         var events = parser.Parse(actionlintPath);
@@ -31,7 +31,7 @@ internal sealed class WebhookSyncService
 
     public bool IsUpToDate(string repoRoot)
     {
-        var actionlintPath = Path.Combine(repoRoot, ".references", "actionlint", "all_webhooks.go");
+        var actionlintPath = WebhookSourcePathResolver.Resolve(repoRoot);
         var outputPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
         if (!File.Exists(outputPath))
         {

@@ -200,11 +200,13 @@ Implementation notes (current):
 - Added model: `src/Seiton.Update/Model/WebhookEventModel.cs`
 - Added generator: `src/Seiton.Update/Generators/WebhookTypesCSharpGenerator.cs`
 - Added sync/verify service: `src/Seiton.Update/Services/WebhookSyncService.cs`
+- Added source resolver: `src/Seiton.Update/Services/WebhookSourcePathResolver.cs` (prefers `data/sources/webhooks/all_webhooks.go`, falls back to `.references/actionlint/all_webhooks.go`)
 - Added tests: `tests/Seiton.Update.Tests/WebhookUpdaterGoldenTests.cs`
 - Added test project: `tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj`
 - `sync webhooks` now regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` deterministically.
 - `verify webhooks` now checks stale generated file and returns exit code `4` on mismatch.
 - CI now includes `Seiton.Update` verification via `verify-webhooks` in `.github/workflows/build.yaml`.
+- Golden tests and CI verification run without requiring `.references` when vendored snapshot is present.
 
 ### Phase U3: Availability Updater
 
