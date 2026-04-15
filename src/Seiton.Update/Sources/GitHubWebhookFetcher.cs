@@ -11,9 +11,9 @@ internal sealed class GitHubWebhookFetcher
 {
     const string SchemaSourceUrl = "https://json.schemastore.org/github-workflow.json";
     const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md";
-    const string ParserVersion = "3";
+    const string ParserVersion = "4";
 
-    public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
+    public async Task<SourceManifestEntry> FetchAsync(string repoRoot, bool excludeSchemaOnly = false)
     {
         UpdateLogger.Info("[fetch:webhooks] fetching official GitHub sources (schema + docs markdown)...");
 
@@ -31,10 +31,11 @@ internal sealed class GitHubWebhookFetcher
 
         var schemaEvents = ParseSchemaJson(schemaContent);
         var docsParser = new GitHubDocsWebhookMarkdownParser();
+        var docsEventNames = docsParser.ParseEventNames(docsContent);
         var docsActivityTypes = docsParser.ParseActivityTypesByEvent(docsContent);
-        var events = MergeOfficialSources(schemaEvents, docsActivityTypes);
-        UpdateLogger.Info($"[fetch:webhooks] normalized {events.Count} events (schema + docs merge).");
-        WriteOfficialSourceDiffReport(repoRoot, schemaEvents, docsActivityTypes);
+        var events = MergeOfficialSources(schemaEvents, docsEventNames, docsActivityTypes, excludeSchemaOnly);
+        UpdateLogger.Info($"[fetch:webhooks] normalized {events.Count} events (schema + docs merge, excludeSchemaOnly={excludeSchemaOnly}).");
+        WriteOfficialSourceDiffReport(repoRoot, schemaEvents, docsEventNames, docsActivityTypes, excludeSchemaOnly);
 
         var snapshotJson = SerializeSnapshot(events);
         var outputPath = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "webhook_types.json");
@@ -67,24 +68,40 @@ internal sealed class GitHubWebhookFetcher
 
     static IReadOnlyList<WebhookEventModel> MergeOfficialSources(
         IReadOnlyList<WebhookEventModel> schemaEvents,
-        IReadOnlyDictionary<string, IReadOnlyList<string>?> docsActivityTypes)
+        ISet<string> docsEventNames,
+        IReadOnlyDictionary<string, IReadOnlyList<string>?> docsActivityTypes,
+        bool excludeSchemaOnly)
     {
+        // Start from Docs because Docs are the normative value source for activity types.
         var merged = new Dictionary<string, WebhookEventModel>(StringComparer.Ordinal);
-        foreach (var model in schemaEvents)
-        {
-            merged[model.Name] = model;
-        }
-
-        // Apply GitHub Docs activity-types when available; Docs is normative per spec.
         foreach (var pair in docsActivityTypes)
         {
-            if (merged.TryGetValue(pair.Key, out var existing))
+            merged[pair.Key] = new WebhookEventModel(pair.Key, pair.Value);
+        }
+
+        // Apply schema fallback for docs-known events when docs activity-types are unavailable/unparseable.
+        foreach (var model in schemaEvents)
+        {
+            if (merged.ContainsKey(model.Name))
             {
-                merged[pair.Key] = existing with { ActivityTypes = pair.Value };
+                continue;
             }
-            else
+
+            if (docsEventNames.Contains(model.Name))
             {
-                merged[pair.Key] = new WebhookEventModel(pair.Key, pair.Value);
+                merged[model.Name] = model;
+            }
+        }
+
+        // Include schema-only events by default for compatibility with preview/source lag.
+        if (!excludeSchemaOnly)
+        {
+            foreach (var model in schemaEvents)
+            {
+                if (!merged.ContainsKey(model.Name))
+                {
+                    merged[model.Name] = model;
+                }
             }
         }
 
@@ -410,10 +427,12 @@ internal sealed class GitHubWebhookFetcher
     static void WriteOfficialSourceDiffReport(
         string repoRoot,
         IReadOnlyList<WebhookEventModel> schemaEvents,
-        IReadOnlyDictionary<string, IReadOnlyList<string>?> docsActivityTypes)
+        ISet<string> docsEventNames,
+        IReadOnlyDictionary<string, IReadOnlyList<string>?> docsActivityTypes,
+        bool excludeSchemaOnly)
     {
         var schemaMap = schemaEvents.ToDictionary(static x => x.Name, StringComparer.Ordinal);
-        var docsNames = docsActivityTypes.Keys.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        var docsNames = docsEventNames.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
         var schemaNames = schemaMap.Keys.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
 
         var docsOnly = docsNames.Where(x => !schemaMap.ContainsKey(x)).ToArray();
@@ -427,7 +446,12 @@ internal sealed class GitHubWebhookFetcher
                 continue;
             }
 
-            var docsTypes = docsActivityTypes[name];
+            if (!docsActivityTypes.TryGetValue(name, out var docsTypes))
+            {
+                // Docs heading exists but activity-types table is unavailable/unparseable.
+                continue;
+            }
+
             if (!AreSameTypes(schemaEvent.ActivityTypes, docsTypes))
             {
                 mismatches.Add((name, schemaEvent.ActivityTypes, docsTypes));
@@ -443,6 +467,7 @@ internal sealed class GitHubWebhookFetcher
         sb.AppendLine();
         sb.AppendLine("- source-a: https://json.schemastore.org/github-workflow.json");
         sb.AppendLine("- source-b: https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md");
+        sb.AppendLine($"- exclude-schema-only: {excludeSchemaOnly}");
         sb.AppendLine($"- generated-at-utc: {DateTime.UtcNow:O}");
         sb.AppendLine();
         sb.AppendLine("Policy: normalized snapshot follows GitHub Docs for activity types when Docs table is parseable.");

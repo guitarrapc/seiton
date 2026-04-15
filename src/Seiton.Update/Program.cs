@@ -53,9 +53,9 @@ app.Add("verify-webhooks", () =>
 });
 
 // Fetch GitHub primary source and update the local snapshot + manifest.
-app.Add("fetch-webhooks", async () =>
+app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
-    var code = await WebhookCommands.Fetch(repoRoot);
+    var code = await WebhookCommands.Fetch(repoRoot, excludeSchemaOnly);
     if (code != 0)
     {
         Environment.ExitCode = code;

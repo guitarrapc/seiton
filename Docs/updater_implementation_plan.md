@@ -84,6 +84,7 @@ Common options:
 - `--input-dir <path>` override source fixture directory
 - `--output-dir <path>` override generated output root
 - `--strict` fail on unknown schema shape
+- `--exclude-schema-only` (webhooks fetch) exclude events found only in SchemaStore (default behavior is include)
 
 ConsoleAppFramework mapping (target shape):
 - `sync` command method: `Sync(string dataset = "all", bool strictParity = false, ...)`
@@ -216,6 +217,7 @@ Implementation notes (current):
 - Added tests: `tests/Seiton.Update.Tests/WebhookUpdaterGoldenTests.cs`
 - Added test project: `tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj`
 - `fetch-webhooks` ingests official GitHub sources (`json.schemastore.org/github-workflow.json` + GitHub Docs markdown) and writes normalized snapshot + `data/sources/manifest.json` provenance.
+- `fetch-webhooks` defaults to include schema-only events for compatibility with preview/source lag; `--exclude-schema-only` can enforce docs-only event set.
 - `sync webhooks` regenerates `src/Seiton.Core/Generated/WebhookTypes.g.cs` from normalized primary snapshot.
 - `verify webhooks` checks staleness against normalized primary snapshot.
 - `parity-webhooks` is an explicit actionlint differential command (separated from verify).

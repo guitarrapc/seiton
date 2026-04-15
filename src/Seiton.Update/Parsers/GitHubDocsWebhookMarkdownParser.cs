@@ -46,6 +46,21 @@ internal sealed class GitHubDocsWebhookMarkdownParser
         return result;
     }
 
+    public ISet<string> ParseEventNames(string markdown)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match match in HeadingRegex.Matches(markdown))
+        {
+            var name = match.Groups["name"].Value;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                names.Add(name);
+            }
+        }
+
+        return names;
+    }
+
     static bool TryExtractActivityTypesFromTable(string section, out IReadOnlyList<string>? activityTypes)
     {
         activityTypes = null;

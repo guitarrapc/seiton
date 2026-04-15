@@ -7,17 +7,17 @@ namespace Seiton.Update.Commands;
 
 internal static class WebhookCommands
 {
-    public static async Task<int> Fetch(string repoRoot)
+    public static async Task<int> Fetch(string repoRoot, bool excludeSchemaOnly = false)
     {
         var fetcher = new GitHubWebhookFetcher();
-        var entry = await fetcher.FetchAsync(repoRoot);
+        var entry = await fetcher.FetchAsync(repoRoot, excludeSchemaOnly);
 
         var manifestService = new WebhookManifestService();
         var manifest = manifestService.Load(repoRoot);
         manifest = manifestService.Upsert(manifest, entry);
         manifestService.Save(repoRoot, manifest);
 
-        UpdateLogger.Info($"[fetch:webhooks] manifest updated ({entry.ContentHash[..24]}...)");
+        UpdateLogger.Info($"[fetch:webhooks] manifest updated ({entry.ContentHash[..24]}...) excludeSchemaOnly={excludeSchemaOnly}");
         return 0;
     }
 
