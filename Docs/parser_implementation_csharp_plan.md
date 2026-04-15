@@ -939,6 +939,35 @@
 - `RuleInterfaceTests` に `RuleCatalog_DefaultRules_MatchDocumentedScope` を追加し、default rule pack の ID と priority 順を固定した。
 - `Seiton_Parser_spec.md` / `Seiton_Parser_go_spec.md` は rule count を completion criterion としていないため、今回の scope 明確化に伴う本文変更は不要だった。
 
+#### P. `image_version` の parser 実装ギャップを解消する
+
+- [ ] `Seiton_Parser_spec.md` §3.4 の `ParseImageVersionEvent` 分岐に合わせて C# parser を実装する
+  - `WorkflowParser` の special event 分岐に `image_version` を追加する
+  - `on: image_version` の mapping 形を dedicated parser で処理する
+- [ ] `image_version` の AST ノード設計を C# spec とコードで統一する
+  - `names` / `versions` を保持する typed node を定義する（空・欠落時の扱いも含む）
+  - scalar/sequence/no-config 形の受理・拒否契約を spec に合わせて固定する
+- [ ] diagnostics 契約を parser spec と揃える
+  - 想定外キー時のメッセージ
+  - 型不正（mapping 必須、配列要素型不正など）のメッセージ
+- [ ] regression tests を parser / lint 両経路で固定する
+  - 正常系: `names` のみ、`versions` のみ、`names` + `versions`
+  - 異常系: 不正キー、型不正、空構成
+  - `WorkflowParser.Parse` と `LintEngine.Check()` の双方で期待診断を確認
+- [ ] 仕様・計画書の同期更新を同一 PR で完了する
+  - `Seiton_Parser_spec.md`（source of truth）
+  - `Seiton_Parser_csharp_spec.md`
+  - `Seiton_Parser_go_spec.md`
+  - 本 plan
+
+完了条件:
+- C# 実装で `image_version` が dedicated parser + typed AST として扱われる
+- `ParserTests` に `image_version` の正常系/異常系が追加され、CI で安定再現する
+- 4 文書間で `image_version` の扱い（in-scope / 契約 / 期待診断）に矛盾がない
+
+期待成果:
+- 「source-of-truth には記載があるが C# 実装が未追従」という状態を解消し、spec 充足判定の曖昧さをなくす
+
 ---
 
 ## チェックリスト（全 Phase 共通）
