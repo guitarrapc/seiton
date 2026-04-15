@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "source": "github-official-merged-snapshot",
+  "workflowRoots": [
+    "github",
+    "inputs",
+    "vars"
+  ],
+  "jobRoots": [
+    "github",
+    "needs",
+    "strategy",
+    "matrix",
+    "inputs",
+    "vars"
+  ],
+  "stepRoots": [
+    "github",
+    "needs",
+    "strategy",
+    "matrix",
+    "job",
+    "runner",
+    "env",
+    "vars",
+    "secrets",
+    "steps",
+    "inputs"
+  ]
+}

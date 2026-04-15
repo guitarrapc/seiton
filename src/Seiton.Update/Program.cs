@@ -52,6 +52,26 @@ app.Add("verify-webhooks", () =>
     }
 });
 
+app.Add("sync-availability", () =>
+{
+    var code = AvailabilityCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-availability failed with code {code}");
+    }
+});
+
+app.Add("verify-availability", () =>
+{
+    var code = AvailabilityCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-availability failed with code {code}");
+    }
+});
+
 // Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
@@ -96,6 +116,46 @@ app.Add("merge-webhooks-sources", (bool excludeSchemaOnly = false) =>
     }
 });
 
+app.Add("fetch-availability", async () =>
+{
+    var code = await AvailabilityCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-availability failed with code {code}");
+    }
+});
+
+app.Add("fetch-availability-sources", async () =>
+{
+    var code = await AvailabilityCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-availability-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-availability-sources", () =>
+{
+    var code = AvailabilityCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-availability-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-availability-sources", () =>
+{
+    var code = AvailabilityCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-availability-sources failed with code {code}");
+    }
+});
+
 // Compare local snapshot against actionlint reference (parity check only, no staleness check).
 app.Add("parity-webhooks", () =>
 {
@@ -119,9 +179,25 @@ catch
 
 static int RunSync(string repoRoot, string dataset)
 {
-    if (dataset is "all" or "webhooks")
+    if (dataset is "webhooks")
     {
         return WebhookCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "availability")
+    {
+        return AvailabilityCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "all")
+    {
+        var code = WebhookCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return AvailabilityCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -130,9 +206,25 @@ static int RunSync(string repoRoot, string dataset)
 
 static int RunVerify(string repoRoot, string dataset)
 {
-    if (dataset is "all" or "webhooks")
+    if (dataset is "webhooks")
     {
         return WebhookCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "availability")
+    {
+        return AvailabilityCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "all")
+    {
+        var code = WebhookCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return AvailabilityCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

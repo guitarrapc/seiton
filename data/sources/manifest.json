@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "dataset": "availability",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md"
+      ],
+      "fetchedAtUtc": "2026-04-15T09:21:12.5604978\u002B00:00",
+      "rawFileHashes": {
+        "contexts.docs.md": "sha256:5c6d380596d3de4a71bbb13be25f364f1f5dcf674e6f75720f305d97e5fde671"
+      }
+    },
+    {
       "dataset": "webhooks",
       "sourceUrls": [
         "https://json.schemastore.org/github-workflow.json",

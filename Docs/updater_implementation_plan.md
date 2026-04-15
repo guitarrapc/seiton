@@ -151,10 +151,10 @@ Proposed source storage:
 
 Provenance metadata file:
 - `data/sources/manifest.json`
-  - source URL
+  - dataset name
+  - source URLs
   - fetched timestamp (UTC)
-  - parser version
-  - content hash (sha256)
+  - per-raw-file sha256 hashes (`rawFileHashes`)
 
 ## 6. Architecture
 
@@ -242,6 +242,9 @@ Implementation notes (current):
 
 ### Phase U3: Availability Updater
 
+Status:
+- Completed (docs source fetch/parse/merge pipeline, sync/verify path, and tests are in place)
+
 Tasks:
 - Implement parser for context availability source.
 - Normalize by expression site granularity used by parser.
@@ -251,6 +254,36 @@ Tasks:
 Exit criteria:
 - Generated availability file matches parser semantic analyzer expectations.
 - Existing expression tests pass unchanged.
+
+Implementation notes (current):
+- Added model: `src/Seiton.Update/Model/AvailabilityModel.cs`
+- Added docs parser: `src/Seiton.Update/Parsers/GitHubDocsAvailabilityMarkdownParser.cs`
+- Added source snapshot parser: `src/Seiton.Update/Parsers/GitHubAvailabilitySourceParser.cs`
+- Added generator: `src/Seiton.Update/Generators/AvailabilityCSharpGenerator.cs`
+- Added source resolver: `src/Seiton.Update/Services/AvailabilitySourcePathResolver.cs`
+- Added sync/verify service: `src/Seiton.Update/Services/AvailabilitySyncService.cs`
+- Added fetch source service: `src/Seiton.Update/Sources/GitHubAvailabilityFetcher.cs`
+- Added command wiring: `src/Seiton.Update/Commands/AvailabilityCommands.cs`
+- Added CLI commands:
+  - `fetch-availability-sources`
+  - `parse-availability-sources`
+  - `merge-availability-sources`
+  - `fetch-availability`
+  - `sync-availability`
+  - `verify-availability`
+- Added dataset routing:
+  - `sync --dataset availability`
+  - `verify --dataset availability`
+  - `sync --dataset all` now runs webhooks + availability
+  - `verify --dataset all` now runs webhooks + availability
+- Added primary availability source artifacts:
+  - `data/sources/availability/github/raw/contexts.docs.md`
+  - `data/sources/availability/github/parsed/docs-context-availability.json`
+  - `data/sources/availability/github/availability.json`
+- Added tests:
+  - `tests/Seiton.Update.Tests/GitHubDocsAvailabilityMarkdownParserTests.cs`
+  - `tests/Seiton.Update.Tests/AvailabilityPipelineStageTests.cs`
+  - `tests/Seiton.Update.Tests/AvailabilityUpdaterGoldenTests.cs`
 
 ### Phase U4: Popular Actions Updater
 
