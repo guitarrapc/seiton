@@ -1,109 +1,102 @@
 ﻿using ConsoleAppFramework;
 using Seiton.Update.Commands;
+using Seiton.Update;
 
-namespace Seiton.Update;
-
-internal static class Program
+var repoRoot = FindRepoRoot(Environment.CurrentDirectory);
+if (repoRoot is null)
 {
-    static int Main(string[] args)
+    UpdateLogger.Error("Repository root not found (seiton.slnx).");
+    return 1;
+}
+
+var app = ConsoleApp.Create();
+
+app.Add("sync", (string dataset = "all") =>
+{
+    var code = RunSync(repoRoot, dataset);
+    if (code != 0)
     {
-        var repoRoot = FindRepoRoot(Environment.CurrentDirectory);
-        if (repoRoot is null)
-        {
-            UpdateLogger.Error("Repository root not found (seiton.slnx).");
-            return 1;
-        }
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync failed with code {code}");
+    }
+});
 
-        var app = ConsoleApp.Create();
+app.Add("verify", (string dataset = "all") =>
+{
+    var code = RunVerify(repoRoot, dataset);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify failed with code {code}");
+    }
+});
 
-        app.Add("sync", (string dataset = "all") =>
-        {
-            var code = RunSync(repoRoot, dataset);
-            if (code != 0)
-            {
-                Environment.ExitCode = code;
-                throw new InvalidOperationException($"sync failed with code {code}");
-            }
-        });
+// Convenience aliases to avoid option handling for the most common workflow.
+app.Add("sync-webhooks", () =>
+{
+    var code = WebhookCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-webhooks failed with code {code}");
+    }
+});
 
-        app.Add("verify", (string dataset = "all") =>
-        {
-            var code = RunVerify(repoRoot, dataset);
-            if (code != 0)
-            {
-                Environment.ExitCode = code;
-                throw new InvalidOperationException($"verify failed with code {code}");
-            }
-        });
+app.Add("verify-webhooks", () =>
+{
+    var code = WebhookCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-webhooks failed with code {code}");
+    }
+});
 
-        // Convenience aliases to avoid option handling for the most common workflow.
-        app.Add("sync-webhooks", () =>
-        {
-            var code = WebhookCommands.Sync(repoRoot);
-            if (code != 0)
-            {
-                Environment.ExitCode = code;
-                throw new InvalidOperationException($"sync-webhooks failed with code {code}");
-            }
-        });
+try
+{
+    app.Run(args);
+    return Environment.ExitCode;
+}
+catch
+{
+    return Environment.ExitCode == 0 ? 1 : Environment.ExitCode;
+}
 
-        app.Add("verify-webhooks", () =>
-        {
-            var code = WebhookCommands.Verify(repoRoot);
-            if (code != 0)
-            {
-                Environment.ExitCode = code;
-                throw new InvalidOperationException($"verify-webhooks failed with code {code}");
-            }
-        });
-
-        try
-        {
-            app.Run(args);
-            return Environment.ExitCode;
-        }
-        catch
-        {
-            return Environment.ExitCode == 0 ? 1 : Environment.ExitCode;
-        }
+static int RunSync(string repoRoot, string dataset)
+{
+    if (dataset is "all" or "webhooks")
+    {
+        return WebhookCommands.Sync(repoRoot);
     }
 
-    static int RunSync(string repoRoot, string dataset)
-    {
-        if (dataset is "all" or "webhooks")
-        {
-            return WebhookCommands.Sync(repoRoot);
-        }
+    UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
+    return 1;
+}
 
-        UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
-        return 1;
+static int RunVerify(string repoRoot, string dataset)
+{
+    if (dataset is "all" or "webhooks")
+    {
+        return WebhookCommands.Verify(repoRoot);
     }
 
-    static int RunVerify(string repoRoot, string dataset)
+    UpdateLogger.Error($"Unsupported verify dataset: {dataset}");
+    return 1;
+}
+
+static string? FindRepoRoot(string startDir)
+{
+    var dir = new DirectoryInfo(startDir);
+    while (dir is not null)
     {
-        if (dataset is "all" or "webhooks")
+        var marker = Path.Combine(dir.FullName, "seiton.slnx");
+        if (File.Exists(marker))
         {
-            return WebhookCommands.Verify(repoRoot);
+            return dir.FullName;
         }
 
-        UpdateLogger.Error($"Unsupported verify dataset: {dataset}");
-        return 1;
+        dir = dir.Parent;
     }
 
-    static string? FindRepoRoot(string startDir)
-    {
-        var dir = new DirectoryInfo(startDir);
-        while (dir is not null)
-        {
-            var marker = Path.Combine(dir.FullName, "seiton.slnx");
-            if (File.Exists(marker))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        return null;
-    }
+    return null;
 }
