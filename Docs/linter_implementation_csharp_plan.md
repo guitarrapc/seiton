@@ -14,7 +14,7 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` の 4 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）が利用可能 |
-| ルール設定 | `LintConfig` はファイルパスと UTF-8 本文のみ。ルール単位の severity 上書き・suppress は未実装 |
+| ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
 
 ---
@@ -38,7 +38,7 @@
 |---|---|---|---|
 | G1 | `IRule`/`WorkflowVisitor` に `VisitEvent` がない | **解消済み（Phase 1 実装）** | ✅ |
 | G2 | 式 AST の linter 連携がない | `template-injection` / `expr-*` 系が全滅 | 🔴 高 |
-| G3 | ルール単位の suppress / severity override がない | `LintConfig` にオプション欄がなく、ユーザーがルールを無効化できない | 🟡 中 |
+| G3 | ルール単位の exclusion / severity override がない | `LintConfig` にオプション欄がなく、仕様で定義した exclusion・フェイルセーフ・可観測性を満たせない | 🟡 中 |
 | G4 | Job 横断ルール向けの共通状態管理ヘルパーがない | `needs` などで各ルールが ID 収集・集合管理を都度実装する必要があり、重複実装が発生する | 🟡 中 |
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
 | G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | **解消済み（仕様同期済み）** | ✅ |
@@ -261,12 +261,36 @@
 
 **完了条件**: `RuleOptions` で無効化したルールの診断が結果に含まれないテストがパスする
 
-### Step 4.3: ファイル内 suppress コメントのサポート（将来）
+### Step 4.3: ファイル内 inline exclusion（next-line）を実装
 
-> 本ステップは設計検討段階。実装は Phase 4 以降に分離する。
+**ファイル**: `src/Seiton.Core/Linting/LintEngine.cs`, `src/Seiton.Core/Linting/LintConfig.cs`
 
-- `# lint:ignore rule-id` 形式のコメントを YAML 行に付加することで、特定行のルールを抑制する仕組み
-- YAML コメントは VYaml では取得困難なため、UTF-8 本文の行スキャンで対応する方向を検討
+- `# seiton-lint: disable-next-line seiton-lint-rule-001[,seiton-lint-rule-xxx...]` をサポート
+- 適用範囲は次行のみ
+- 未知 rule-id は設定エラーとして報告
+- YAML コメント取得が困難なため、UTF-8 本文の行スキャンで directive を抽出
+
+**完了条件**: next-line 抑制が動作し、未知 rule-id でエラーを返すテストがパスする
+
+### Step 4.4: file/job exclusion と可観測性を実装
+
+**ファイル**: `src/Seiton.Core/Linting/LintEngine.cs`, `src/Seiton.Core/Linting/LintResult.cs`
+
+- 設定ファイル exclusion で file glob（`/` 正規化 + case-sensitive）をサポート
+- job スコープは `job.id` ベースで評価
+- 抑制結果の可観測性を出力（総件数、rule 別件数、ruleId + line/column）
+
+**完了条件**: suppression summary を含む結果が返り、CI で増減検知できる
+
+### Step 4.5: フェイルセーフ制約を実装
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `src/Seiton.Core/Linting/LintEngine.cs`
+
+- non-disableable rule を実装
+- minimum severity 制約を実装（`Error > Warning > Info`）
+- 制約違反設定は設定エラーとして報告
+
+**完了条件**: disable 不可ルール無効化や最低 severity 未満設定が失敗するテストがパスする
 
 ---
 

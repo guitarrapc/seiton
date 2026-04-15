@@ -38,7 +38,7 @@ Check(utf8Yaml, filePath)
 | Workflow AST construction | Owns | Consumes |
 | Expression parsing and semantic typing data | Owns | Consumes |
 | Rule traversal hooks and rule execution model | - | Owns |
-| Rule configuration (enable/disable/severity) | - | Owns |
+| Rule configuration (enable/disable/severity/exclusion) | - | Owns |
 | Diagnostic aggregation from rules | - | Owns |
 | Diagnostic sort/dedup/final filtering | Shared contract (entrypoint-defined) | Owns in lint entrypoint |
 
