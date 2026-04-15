@@ -23,6 +23,7 @@ internal static class RuleCatalog
         ("id-naming", 11, static () => new IdNamingRule()),
         ("glob-pattern", 12, static () => new GlobPatternRule()),
         ("deny-write-all", 13, static () => new DenyWriteAllRule()),
+        ("credentials", 14, static () => new CredentialsRule()),
     ];
 
     public static IRule[] CreateDefaultRules()

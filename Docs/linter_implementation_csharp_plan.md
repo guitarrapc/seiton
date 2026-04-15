@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` の 14 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` の 15 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | 現実装は `LintConfig` がファイルパスと UTF-8 本文のみ。`Seiton_Linter_spec.md` で定義された rule exclusion（config + inline next-line）/ severity override / fail-safe は実装待ち |
 | 式ベースルール | 式 AST（`${{ }}`）は parser に存在するが、linter ルールからの活用はゼロ |
@@ -37,6 +37,7 @@
 | `id-naming` | `IdNamingRule` | `job.id` / `step.id` が `[a-zA-Z0-9_-]` 以外の文字を含む場合に error | actionlint |
 | `glob-pattern` | `GlobPatternRule` | `on.<event>.branches/tags/paths` 系フィルタ値の glob 構文（`***` / 未閉鎖 `[` / 余剰 `]`）を検査し、不正を error | actionlint |
 | `deny-write-all` | `DenyWriteAllRule` | `permissions: write-all`（workflow / job）を検出して error | ghalint |
+| `credentials` | `CredentialsRule` | `job.container` / `job.services.*` の image がカスタムレジストリで credentials 未設定の場合に warning | actionlint |
 
 ---
 
@@ -281,6 +282,8 @@
 
 **完了条件**: パブリックレジストリは通過、カスタムレジストリで credentials なしは warning のテストがパスする
 
+**実装メモ**: 完了。`CredentialsRule` を実装し、`VisitJobPre` で `job.Container` と `job.Services.ServiceMap` を検査。`image` 文字列先頭要素（最初の `/` まで）が registry host と判定できる場合（`.` / `:` を含む、または `localhost`）のみ対象とし、`gcr.io` / `ghcr.io` / `docker.io` / `public.ecr.aws` / `quay.io` / `registry.k8s.io` / `mcr.microsoft.com` / `cgr.dev` / `nvcr.io` / `registry.access.redhat.com` は公開 registry として除外。これ以外の host で `credentials` が null のとき warning を報告。式値（`image.Expression` 非 null または `${{` を含む image）は静的判定不能としてスキップ。`RuleCatalog` に priority 14 で登録済み。`RuleInterfaceTests` に table-driven 回帰テスト（6 ケース）を追加し、公開 registry 通過・カスタム registry の credentials 未設定 warning を検証。
+
 ### Step 3.6: RuleCatalog に P2 ルールを登録
 
 **ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`
@@ -437,7 +440,7 @@ P4 --> P5B
 | 11 | `id-naming` | **実装済み** | actionlint | — |
 | 12 | `glob-pattern` | **実装済み** | actionlint | VisitEvent |
 | 13 | `deny-write-all` | **実装済み** | ghalint | — |
-| 14 | `credentials` | Phase 3 | actionlint | — |
+| 14 | `credentials` | **実装済み** | actionlint | — |
 | — | `template-injection` | Phase 5 | zizmor | 式 AST 連携 |
 | — | `expr-undefined-var` | Phase 5 | actionlint | 式 AST 連携 |
 
