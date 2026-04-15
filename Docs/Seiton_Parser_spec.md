@@ -36,6 +36,15 @@ Parse(utf8Yaml, filePath) -> ParseResult
 - Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null in that case
 - Errors during AST construction are accumulated, not immediately fatal
 
+### 1.1.1 Supported Scope and Reference Parity
+
+This document defines Seiton's formal parser/lint contract.
+
+- Behavior described in this document is **in scope** for Seiton and should be kept consistent with implementation and regression tests.
+- Language-specific documents may compare Seiton against reference implementations such as actionlint. Those comparisons are informational and may identify **reference parity gaps**, but they do not expand Seiton's formal contract by themselves.
+- A behavior is **out of scope** only when this specification or a companion spec explicitly marks it as a non-goal.
+- Features present in a reference implementation but absent from this document are not part of Seiton's supported contract until they are added here.
+
 ### 1.2 Reference Implementation Correspondence
 
 | actionlint (Go) | seiton |

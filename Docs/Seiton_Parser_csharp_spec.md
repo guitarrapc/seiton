@@ -12,6 +12,16 @@
 
 ### 0.1 Gap Analysis of Current C# Implementation
 
+#### 0.1.0 Current Contract vs Reference Parity Gap
+
+This document uses the following terms consistently:
+
+- **Current contract**: behavior that Seiton currently implements and treats as part of its supported C# parser/lint surface. This is the behavior that should be covered by regression tests and kept consistent with `Seiton_Parser_spec.md`.
+- **Reference parity gap**: behavior present in the reference implementation (`actionlint`) but not fully matched by Seiton yet. A parity gap is not automatically part of Seiton's current contract.
+- **Out of scope**: behavior intentionally excluded from this spec's completion criteria. Use this only for explicit non-goals, not as a synonym for "not yet parity-complete".
+
+The source of truth for Seiton's supported behavior is `Seiton_Parser_spec.md`. The actionlint comparison in this section is informational and is used only to highlight parity gaps, not to silently expand Seiton's contract.
+
 #### 0.1.1 Features Missing Compared to actionlint (Go)
 
 Differences between `.references/actionlint` implementation and `src/Seiton.Core/Parsing`.
@@ -20,7 +30,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 |---|---|---|
 | **AST Construction** | Parser returns typed AST (`Workflow`, `Job`, `Step`, …) | Implemented. `ParseResult.Workflow` returns typed `Workflow` AST (`WorkflowDocument` removed) |
 | **AST Range Coverage** | Major nodes carry source range suitable for tooling / diagnostics correlation | Implemented. Scalar nodes keep scalar ranges and mapping-based structural nodes build composite `TextRange` spans; covered by parser regression tests |
-| **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Implemented for `schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` as structured AST nodes. `schedule` keeps its mapping-only constraint, so scalar `on: schedule` is rejected as a parser diagnostic. `image_version` remains out-of-scope |
+| **Event Detail Parse** | Dedicated parsers for `schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version` | Current contract implements `schedule` / `workflow_dispatch` / `workflow_call` / `repository_dispatch` as structured AST nodes. `schedule` keeps its mapping-only constraint, so scalar `on: schedule` is rejected as a parser diagnostic. `image_version` is a reference parity gap and is not part of Seiton's current contract because it is absent from `Seiton_Parser_spec.md` |
 | **workflow_dispatch inputs** | `type` (string/number/boolean/choice/environment), `options`, `required`, `default` parsed individually | Implemented |
 | **workflow_call inputs/secrets/outputs** | Required validation for `type` on inputs, `required` on secrets, `value` on outputs | Implemented |
 | **schedule cron/timezone** | `cron` / `timezone` keys parsed individually in mapping | Implemented |
@@ -34,8 +44,8 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **YAML Alias Resolution** | Alias handling is owned by YAML adapter/library; when adapter throws, parser normalizes to fatal parse diagnostics | Implemented (adapter-owned + fatal diagnostic normalization in `WorkflowParser.Parse`) |
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | `Pass` interface → `WorkflowPre → JobPre → Step → JobPost → WorkflowPost` | Implemented (`IPass` + `WorkflowVisitor`) |
-| **Rule Engine** | `Rule` interface × multiple lint rules | Implemented for the current Seiton scope. The default rule pack is `job-structure`, `reusable-workflow`, `permissions`, and `popular-action-inputs`; `SyntaxRule` composes the same pack for visitor-facing aggregation. actionlint-parity rule count is intentionally out-of-scope for this spec |
-| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented for the current supported function/context set (`ExprType` hierarchy + bottom-up inference + typed function signatures + key-granularity context checks). Remaining gaps are limited to future actionlint parity work |
+| **Rule Engine** | `Rule` interface × multiple lint rules | Current contract implements the documented Seiton default rule pack: `job-structure`, `reusable-workflow`, `permissions`, and `popular-action-inputs`. `SyntaxRule` composes the same pack for visitor-facing aggregation. Matching actionlint's total rule count is a reference parity topic, not a Seiton contract requirement |
+| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Current contract implements `ExprType`, bottom-up inference, typed built-in signatures, and key-granularity context checks for the parser expression sites Seiton models today. Remaining differences are reference parity gaps, not current-contract omissions |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
 | **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
 
@@ -51,7 +61,7 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | Perspective | Details |
 |---|---|
 | `${{ }}` fenced extraction | Already implemented in C# (`ExpressionExtractor`) |
-| JSON Schema auxiliary validation | May be implemented later with vendored schema. Out of scope for this parser spec |
+| JSON Schema auxiliary validation | Explicit non-goal for this parser spec. This is out of scope rather than a parity gap |
 | Context risk table (`context-capabilities`) | Managed as generated data. Belongs to the rule layer, not the parser |
 
 ### 0.2 Design Principles
@@ -1049,6 +1059,8 @@ The current C# implementation validates built-in functions through typed overloa
 - diagnostics are emitted for unknown functions, arity mismatches, argument type mismatches, and `format()` placeholder/index mismatches
 - supported built-ins currently include `contains`, `startsWith`, `endsWith`, `format`, `join`, `toJson`, `fromJson`, `hashFiles`, `success`, `failure`, `cancelled`, and `always`
 
+This list defines the current C# contract. Additional actionlint built-ins that are not listed here should be treated as reference parity gaps until they are added to `Seiton_Parser_spec.md` and implemented here.
+
 ### 7.2 Context Availability (Spec §7.2)
 
 ```csharp
@@ -1066,7 +1078,7 @@ The current C# implementation uses `Availability.g.cs` together with the parser 
 - step-level expression sites use `ExpressionValidationContext.Step`
 - fixture coverage fixes the same root identifier producing different results depending on key position (`run-name`, workflow `env`, job `if`, job `env`, step `if`)
 
-This implements position-based root-context availability with key-level granularity for the currently modeled parser expression sites.
+This implements the current C# contract for position-based root-context availability with key-level granularity for the parser expression sites Seiton models today.
 
 ### 7.3 Type System (Spec §7.3)
 
@@ -1077,11 +1089,13 @@ The current C# implementation provides an `ExprType` hierarchy equivalent in sha
 
 Type inference is performed bottom-up in `ExpressionSemanticAnalyzer.InferType()` while traversing expressions.
 
-Implemented inference currently covers:
+Implemented inference currently covers the current C# contract:
 - literals, unary `!`, comparison/logical operators
 - member/index/wildcard access over inferred object/array types
 - built-in function return types
 - `fromJson('<literal-json>')` shape inference for object/array/property/index access
+
+Additional inference behavior from the reference implementation should be described as parity work, not as silently implied current scope.
 
 ---
 
@@ -1201,7 +1215,7 @@ Scope note:
 
 #### 9.2.1 Relationship with Current `OnEventSpecs`
 
-`OnEventSpecs` is a hand-implemented event name + activity types table. It can be replaced by `WebhookTypes.g.cs` in the future, but the hand-implementation is sufficient initially.
+`OnEventSpecs` is a hand-implemented event name + activity types table. It is an implementation detail that may later be replaced by `WebhookTypes.g.cs`; this migration does not change Seiton's current support contract by itself.
 
 ---
 
@@ -1420,7 +1434,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 | `LogicalOpNode` (§6.4) | `Binary (And/Or)` | ✓ |
 | arithmetic ops | — | Not supported (aligned with GHA spec) |
 | Expression Visitor (§6.5) | `ExprNodeVisitor` delegate + `VisitExprNode()` | ✓ Implemented |
-| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Implemented for current supported built-ins and parser expression sites |
+| Expression Semantic Checker (§7) | `ExpressionSemanticAnalyzer` | Implemented for the current Seiton contract (documented built-ins and parser expression sites) |
 | Built-in Function Signatures (§7.1) | `TryGetFunctionArity()` + typed overload metadata in `ExpressionSemanticAnalyzer` | Implemented (typed overloads and `format()` placeholder validation) |
 | Context Availability (§7.2) | `ExpressionSemanticAnalyzer` generated availability checks | Implemented (generated availability table + key-granularity parser fixtures) |
-| ExprType hierarchy (§7.3) | `ExprType` hierarchy + `InferType()` | Implemented for current supported expression/type inference paths |
+| ExprType hierarchy (§7.3) | `ExprType` hierarchy + `InferType()` | Implemented for the current Seiton contract's expression/type inference paths |
