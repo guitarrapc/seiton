@@ -614,6 +614,8 @@
 - fix 適用後に trailing spaces が新規導入されない
 - 曖昧ケースで `Fix` を出さないことを確認するテストがパスする
 
+**実装メモ**: 完了。`FixFormatting` に `TryInferIndentation(...)` を追加し、(1) target scope 内で child indentation が spaces/tabs 混在する場合、(2) parent が space-only かつ sibling 不在でグローバル推定 unit が tab になる場合を「曖昧」として `false` を返すようにした。`JobPermissionsRequiredRule` はこの推定 API を利用し、推定失敗時は仕様どおり no-fix（diagnostic のみ）へフォールバックする。`RuleInterfaceTests` には tab 導入抑止、whitespace churn 不発生、trailing spaces 不導入、曖昧時 no-fix の回帰テストを追加し、`FixEngineTests` には mixed indentation / global tab unit に対する推定失敗テストを追加した。
+
 ### Step 6.9: Auto-Fix Catalog 準拠テストを追加
 
 **ファイル**: `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`

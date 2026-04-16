@@ -105,6 +105,38 @@ public sealed class FixEngineTests
     }
 
     [Test]
+    public async Task TryInferIndentation_ReturnsFalse_ForMixedScopeIndentation()
+    {
+        var source = "jobs:\n  build:\n    runs-on: ubuntu-latest\n\tsteps:\n";
+
+        var ok = FixFormatting.TryInferIndentation(
+            source,
+            siblingLineNumber: null,
+            parentLineNumber: 2,
+            scopeStartLine: 3,
+            scopeEndLine: 4,
+            out _);
+
+        await Assert.That(ok).IsFalse();
+    }
+
+    [Test]
+    public async Task TryInferIndentation_ReturnsFalse_WhenSpaceParentWouldRequireGlobalTabUnit()
+    {
+        var source = "jobs:\n  build: {}\n\tnote: tab-leading\n";
+
+        var ok = FixFormatting.TryInferIndentation(
+            source,
+            siblingLineNumber: null,
+            parentLineNumber: 2,
+            scopeStartLine: 3,
+            scopeEndLine: 3,
+            out _);
+
+        await Assert.That(ok).IsFalse();
+    }
+
+    [Test]
     public async Task DetectQuoteStyle_UsesSourceBytesAroundRange()
     {
         var source = Encoding.UTF8.GetBytes("name: 'value'\n");

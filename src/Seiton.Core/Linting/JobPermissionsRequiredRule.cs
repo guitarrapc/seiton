@@ -46,15 +46,34 @@ public sealed class JobPermissionsRequiredRule : RuleBase
             return false;
         }
 
-        var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
-        var bodyIndent = FixFormatting.InferIndentation(sourceText, siblingLineNumber: null, parentLineNumber: jobLine);
-        var permissionsLine = bodyIndent + "permissions: {}" + lineEnding;
-
         var jobEndLine = job.Range.EndLine;
         if (jobEndLine < jobLine + 1)
         {
             jobEndLine = Math.Min(lines.Length, jobLine + 1);
         }
+
+        var parentIndent = FixFormatting.GetLineIndentation(sourceText, jobLine);
+        var firstChildLine = FindFirstChildLine(lines, jobLine + 1, jobEndLine, parentIndent);
+        if (firstChildLine < 0)
+        {
+            return false;
+        }
+
+        var scopeStartLine = Math.Min(Math.Max(1, jobLine + 1), lines.Length);
+        var scopeEndLine = Math.Min(lines.Length, Math.Max(scopeStartLine, jobEndLine));
+        if (!FixFormatting.TryInferIndentation(
+                sourceText,
+                firstChildLine,
+                parentLineNumber: jobLine,
+                scopeStartLine: scopeStartLine,
+                scopeEndLine: scopeEndLine,
+                out var bodyIndent))
+        {
+            return false;
+        }
+
+        var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
+        var permissionsLine = bodyIndent + "permissions: {}" + lineEnding;
 
         var anchorLine = FindKeyLine(lines, jobLine + 1, jobEndLine, bodyIndent, "runs-on:");
         if (anchorLine < 0)
@@ -143,6 +162,45 @@ public sealed class JobPermissionsRequiredRule : RuleBase
             }
 
             var rest = line[indent.Length..].TrimStart();
+            if (rest.Length == 0 || rest[0] == '#')
+            {
+                continue;
+            }
+
+            return lineNumber;
+        }
+
+        return -1;
+    }
+
+    static int FindFirstChildLine(string[] lines, int startLine, int endLine, string parentIndent)
+    {
+        var maxLine = Math.Min(lines.Length, endLine);
+        for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
+        {
+            var line = lines[lineNumber - 1];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            if (!line.StartsWith(parentIndent, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var tail = line[parentIndent.Length..];
+            if (tail.Length == 0)
+            {
+                continue;
+            }
+
+            if (tail[0] != ' ' && tail[0] != '\t')
+            {
+                continue;
+            }
+
+            var rest = tail.TrimStart();
             if (rest.Length == 0 || rest[0] == '#')
             {
                 continue;

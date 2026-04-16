@@ -54,6 +54,48 @@ public static class FixFormatting
         return GetLineIndentation(sourceText, parentLineNumber) + InferIndentationUnit(sourceText);
     }
 
+    public static bool TryInferIndentation(
+        string sourceText,
+        int? siblingLineNumber,
+        int parentLineNumber,
+        int scopeStartLine,
+        int scopeEndLine,
+        out string indentation)
+    {
+        ArgumentNullException.ThrowIfNull(sourceText);
+        ArgumentOutOfRangeException.ThrowIfLessThan(parentLineNumber, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(scopeStartLine, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(scopeEndLine, scopeStartLine);
+
+        var parentIndentation = GetLineIndentation(sourceText, parentLineNumber);
+        if (IsMixedIndentationInScope(sourceText, scopeStartLine, scopeEndLine, parentIndentation))
+        {
+            indentation = string.Empty;
+            return false;
+        }
+
+        if (siblingLineNumber is not null)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(siblingLineNumber.Value, 1);
+            var siblingIndentation = GetLineIndentation(sourceText, siblingLineNumber.Value);
+            if (siblingIndentation.Length > 0 || LineExists(sourceText, siblingLineNumber.Value))
+            {
+                indentation = siblingIndentation;
+                return true;
+            }
+        }
+
+        var indentationUnit = InferIndentationUnit(sourceText);
+        if (IsSpaceOnlyIndentation(parentIndentation) && indentationUnit == "\t")
+        {
+            indentation = string.Empty;
+            return false;
+        }
+
+        indentation = parentIndentation + indentationUnit;
+        return true;
+    }
+
     public static string GetLineIndentation(string sourceText, int lineNumber)
     {
         ArgumentNullException.ThrowIfNull(sourceText);
@@ -155,6 +197,74 @@ public static class FixFormatting
     {
         var lines = SplitLines(sourceText);
         return lineNumber >= 1 && lineNumber <= lines.Length;
+    }
+
+    static bool IsMixedIndentationInScope(string sourceText, int scopeStartLine, int scopeEndLine, string parentIndentation)
+    {
+        var lines = SplitLines(sourceText);
+        var maxLine = Math.Min(lines.Length, scopeEndLine);
+
+        var sawSpaceIndentedChild = false;
+        var sawTabIndentedChild = false;
+
+        for (var lineNumber = scopeStartLine; lineNumber <= maxLine; lineNumber++)
+        {
+            var line = lines[lineNumber - 1];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            if (line.AsSpan().TrimStart().StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!line.StartsWith(parentIndentation, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var tail = line[parentIndentation.Length..];
+            if (tail.Length == 0)
+            {
+                continue;
+            }
+
+            if (tail[0] == ' ')
+            {
+                sawSpaceIndentedChild = true;
+            }
+            else if (tail[0] == '\t')
+            {
+                sawTabIndentedChild = true;
+            }
+
+            if (sawSpaceIndentedChild && sawTabIndentedChild)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool IsSpaceOnlyIndentation(string indentation)
+    {
+        if (indentation.Length == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < indentation.Length; i++)
+        {
+            if (indentation[i] != ' ')
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     static string[] SplitLines(string sourceText)

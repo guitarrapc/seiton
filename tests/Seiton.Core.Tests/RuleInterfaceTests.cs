@@ -1904,6 +1904,32 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_DoesNotIntroduceTabIndentation_WhenTargetScopeUsesSpaces()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedText = Encoding.UTF8.GetString(FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var permissionsLine = fixedText.Split('\n').First(x => x.Contains("permissions: {}", StringComparison.Ordinal));
+
+        await Assert.That(permissionsLine.Contains('\t')).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_JobPermissionsRequired_Fix_InsertsPermissionsAfterUses()
     {
         var yaml = """
@@ -1930,6 +1956,77 @@ public sealed class RuleInterfaceTests
         await Assert.That(permissionsIndex > usesIndex).IsTrue();
         var relint = engine.Check(fixedBytes, "job-permissions-required-fix-uses.yml");
         await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_DoesNotChangeWhitespaceOutsideInsertion()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedText = Encoding.UTF8.GetString(FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var permissionsLine = fixedText.Split('\n').First(x => x.Contains("permissions: {}", StringComparison.Ordinal));
+        var withoutInsertedPermissions = fixedText.Replace(permissionsLine + "\n", string.Empty, StringComparison.Ordinal);
+        var original = yaml.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(withoutInsertedPermissions).IsEqualTo(original);
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_DoesNotIntroduceTrailingSpaces()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                uses: owner/repo/.github/workflows/reusable.yml@main
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedText = Encoding.UTF8.GetString(FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits));
+        var normalized = fixedText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var lines = normalized.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            await Assert.That(lines[i].EndsWith(" ", StringComparison.Ordinal)).IsFalse();
+            await Assert.That(lines[i].EndsWith("\t", StringComparison.Ordinal)).IsFalse();
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_DoesNotAttachFix_WhenIndentationInferenceIsAmbiguous()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build: {}
+        """;
+
+        var result = new LintEngine([new JobPermissionsRequiredRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "job-permissions-required-no-fix-ambiguous.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 
     [Test]
