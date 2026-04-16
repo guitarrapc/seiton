@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting.PinRemediation;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
@@ -17,6 +18,12 @@ public sealed class LintConfig
     public ExpressionContext ExprContext { get; init; } = ExpressionContext.Empty;
 
     public RuleSpecificAdditiveCustomization AdditiveCustomization { get; init; } = RuleSpecificAdditiveCustomization.Empty;
+
+    /// <summary>
+    /// Optional network-assisted pin remediation configuration (Seiton_Linter_spec.md §12).
+    /// When null or AllowNetwork is false, no network-assisted remediation is performed.
+    /// </summary>
+    public PinResolutionConfig? PinResolution { get; init; } = null;
 }
 
 public sealed record ExpressionContext(

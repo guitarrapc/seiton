@@ -665,7 +665,7 @@
 
 **完了条件**: 型が定義されビルドが通る
 
-**実装メモ**:
+**実装メモ**: 完了。`src/Seiton.Core/Linting/PinRemediation/PinResolutionConfig.cs` を新規作成し、`PinResolutionConfig` / `GitHubActionsResolutionConfig` / `ImageResolutionConfig` / `IgnoreActionEntry` の 4 record を定義した。`ImageResolutionConfig.ExcludeImages` の `init` アクセサで `EnforceScratch()` を呼び出し、ユーザーが `scratch` を省略しても常に付加される不変条件を実装（frizbee `MergeUserConfig` パターンに相当）。`LintConfig` に `PinResolution PinResolutionConfig? { get; init; }` を追加し、既存 `LintConfig.Empty` を壊さずに後方互換を維持した。`PinResolutionConfigTests` に 8 件の回帰テストを追加し（デフォルト値、scratch 強制付加、重複なし、`LintConfig` 連携）、全件パスを確認した。
 
 ### Step 7.2: `IActionShaResolver` / `IImageDigestResolver` インターフェースを追加
 
