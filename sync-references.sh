@@ -11,6 +11,9 @@ repos=(
   "suzuki-shunsuke/ghalint"
   "hadashiA/VYaml"
   "zizmorcore/zizmor"
+  "suzuki-shunsuke/pinact"
+  "azu/dockerfile-pin"
+  "stacklok/frizbee"
 )
 
 for repo in "${repos[@]}"; do
