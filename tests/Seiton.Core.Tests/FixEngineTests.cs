@@ -1,4 +1,4 @@
-using Seiton.Core.Linting.Fixing;
+﻿using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using System.Text;

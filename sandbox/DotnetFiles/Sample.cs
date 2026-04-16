@@ -1,8 +1,8 @@
 ﻿﻿#:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
 #:project ../../src/Seiton.Core/Seiton.Core.csproj
-using System;
 using System.Text;
+using Seiton.Core;
 using Seiton.Core.Linting;
 
 var withYaml = """
