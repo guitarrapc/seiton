@@ -247,7 +247,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 
 Shared contract reference:
 
-- `Seiton_Linter_spec.md` §5, §6.1, §8
+- `Seiton_Linter_spec.md` §5, §6.1, §11
 
 Go implementation must provide:
 
@@ -275,6 +275,72 @@ Mapping requirements:
 - Normalization uses ASCII lower-case matching for event names, runner labels, and registry hosts.
 - Invalid customization entries are configuration errors.
 - Additive customization never removes built-in defaults.
+
+### 4.2 Auto-Fix Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §8
+
+Go runtime mapping for fix-capable diagnostics:
+
+- diagnostic model carries optional fix payload
+- fix payload contains description and one-or-more text edits
+- text edits use UTF-8 byte offset/length (`TextRange.Start`/`Length` compatible semantics)
+
+Reference shape:
+
+```go
+type TextEdit struct {
+	Offset  int
+	Length  int
+	NewText string
+}
+
+type DiagnosticFix struct {
+	Description string
+	Edits       []TextEdit
+}
+```
+
+Implementation requirements:
+
+- Rules attach fixes only when remediation is deterministic and safe.
+- Edits inside one fix must be non-overlapping.
+- Overlaps across diagnostics are conflict cases handled by fix-application layer.
+- Fix application is separate from lint execution path.
+
+### 4.3 Fix Engine Formatting Preservation Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §9
+
+Go fix-engine implementation must enforce:
+
+- Indentation preservation based on sibling/parent structure.
+- Line-ending preservation (`LF`/`CRLF`) per file style.
+- Quote-style preservation for scalar replacement when valid.
+- YAML context safety (no implicit node-kind transition unless rule contract defines it).
+- Whitespace stability outside explicit edit ranges.
+- Fallback to no-fix when style-safe synthesis is ambiguous.
+
+Go implementation note:
+
+- Quote/range information comes from AST nodes.
+- Indentation and line-ending style are inferred from original source bytes/text.
+
+### 4.4 Fix Observability Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §10
+
+Go result model must support caller-side fix workflows:
+
+- enumerate fixable diagnostics
+- count fixable diagnostics
+- apply selected fixes without mutating original lint result object/value
 
 ---
 

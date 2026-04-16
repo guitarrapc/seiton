@@ -252,7 +252,7 @@ Scope notes:
 
 Shared contract reference:
 
-- `Seiton_Linter_spec.md` §5, §6.1, §8
+- `Seiton_Linter_spec.md` §5, §6.1, §11
 
 C# implementation must provide:
 
@@ -280,6 +280,67 @@ Mapping requirements:
 - Normalization uses ASCII lower-case matching for event names, runner labels, and registry hosts.
 - Invalid customization entries are configuration errors.
 - Additive customization never removes built-in defaults.
+
+### 4.2 Auto-Fix Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §8
+
+C# runtime mapping for fix-capable diagnostics:
+
+- `Diagnostic` carries optional fix payload (`DiagnosticFix?`)
+- `DiagnosticFix` carries human description and one-or-more `TextEdit`
+- `TextEdit` uses UTF-8 byte offset/length semantics aligned with `TextRange.Start`/`Length`
+
+Reference shape:
+
+```csharp
+public readonly record struct TextEdit(int Offset, int Length, string NewText);
+
+public readonly record struct DiagnosticFix(string Description, TextEdit[] Edits);
+```
+
+Implementation requirements:
+
+- Rules attach fix payload only when remediation is deterministic and safe.
+- A single diagnostic fix must not contain overlapping edits.
+- Cross-diagnostic overlapping edits are conflict cases and must be rejected by fix-application layer.
+- Fix application must be independent from `LintEngine.Check` (no in-place mutation during linting).
+
+### 4.3 Fix Engine Formatting Preservation Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §9
+
+C# fix-engine implementation must enforce the following preservation policies:
+
+- Indentation: infer from sibling keys in same mapping scope; fallback to parent + one YAML level.
+- Line endings: preserve dominant file style (`LF`/`CRLF`) and use it for inserted lines.
+- Quote style: preserve existing quote form for scalar-to-scalar replacement when valid.
+- YAML context safety: keep node kind unless rule contract explicitly defines a kind transition.
+- Whitespace stability: avoid churn outside edit ranges and never introduce trailing spaces.
+- Fallback: when style-safe edit synthesis is ambiguous, do not emit fix.
+
+C# implementation note:
+
+- Quote and range data come from AST (`StringNode.Quoted`, `TextRange`).
+- Indentation and line-ending style are recovered from original source bytes/text.
+
+### 4.4 Fix Observability Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §10
+
+C# result model must allow caller-side fix operations:
+
+- enumerate diagnostics that include fix payload
+- count fixable diagnostics
+- apply selected fixes (single or batch)
+
+`LintResult` remains immutable as lint output; fix application produces separate updated source content.
 
 ---
 
