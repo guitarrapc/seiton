@@ -57,6 +57,7 @@
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
 | G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | **解消済み（仕様同期済み）** | ✅ |
 | G7 | ルール固有の加算カスタマイズ（仕様 §5.8 / C# spec §4.1）が未実装 | `dangerous-triggers` / `runner-label` / `credentials` の追加エントリを config で拡張できず、仕様準拠にならない | 🟡 中 |
+| G8 | Auto-fix データモデル / Fix 適用器 / 再検証パスが未実装 | `DiagnosticFix` を返せず、fixable ルールの提案・適用・適用後の安全確認ができない | 🟡 中 |
 
 ---
 
@@ -475,6 +476,113 @@
 
 ---
 
+## Phase 6: Fix Engine（Auto-Fix 実装）
+
+**目標**: 仕様 `Seiton_Linter_spec.md` §8-§10 および `Seiton_Linter_csharp_spec.md` §4.2-§4.4 に沿って、fix データモデル、fixable ルール 3 件、適用器、適用後の再検証フローを実装する。
+
+> **初期スコープ**: 仕様上 fixable と定義した 3 ルールのみを対象とする。
+>
+> - `deny-write-all`
+> - `job-permissions-required`
+> - `run-env-context-direct-use`
+
+### Step 6.1: DiagnosticFix / TextEdit データモデルを追加
+
+**ファイル**: `src/Seiton.Core/Parsing/Diagnostics.cs`（または `src/Seiton.Core/Linting/` 配下の fix モデルファイル）, `src/Seiton.Core/Linting/LintResult.cs`
+
+- `TextEdit` を追加
+  - `Offset` (int)
+  - `Length` (int)
+  - `NewText` (string)
+- `DiagnosticFix` を追加
+  - `Description`
+  - `Edits`
+- `Diagnostic` に optional fix payload を追加
+- `LintResult` から fixable diagnostics を列挙・集計しやすい API を追加
+
+**完了条件**: fix を持つ `Diagnostic` を生成でき、既存ルール・既存テストを壊さずビルドが通る
+
+### Step 6.2: Fix Engine 共通ヘルパーを追加
+
+**ファイル**: `src/Seiton.Core/Linting/Fixing/FixEngine.cs`, `src/Seiton.Core/Linting/Fixing/FixFormatting.cs`（新規）
+
+- 元 UTF-8 YAML と `TextEdit[]` を受け取り、offset 降順で編集を適用する共通適用器を実装
+- fix 競合検出を実装
+  - 同一 fix 内の overlapping edits を拒否
+  - 複数 diagnostic から集めた edits の overlap も拒否
+- 改行コード（LF / CRLF）判定ヘルパーを追加
+- インデント推定ヘルパーを追加
+  - sibling key 優先
+  - fallback は parent + 1 level
+- quote 維持ヘルパーを追加
+  - scalar-to-scalar 置換時の quote 形式維持
+
+**完了条件**: 単体テストで edit 適用順・overlap reject・改行維持・インデント推定が検証できる
+
+### Step 6.3: `deny-write-all` に fix を追加
+
+**ファイル**: `src/Seiton.Core/Linting/DenyWriteAllRule.cs`
+
+- `permissions.All` が `write-all` のとき、`read-all` への scalar 置換 fix を付与
+- quote 付き/なしの両方で既存 style を維持
+- workflow / job 両方の `permissions` に対応
+
+**完了条件**: `write-all` 診断に fix が付き、適用結果が `read-all` になり再 lint で当該 rule が消えるテストがパスする
+
+### Step 6.4: `job-permissions-required` に fix を追加
+
+**ファイル**: `src/Seiton.Core/Linting/JobPermissionsRequiredRule.cs`
+
+- `permissions` 欄が未定義の job に対して `permissions: {}` を挿入する fix を付与
+- 挿入位置は次の順で決定
+  1. `runs-on:` の直後
+  2. `uses:` の直後（reusable workflow call job）
+  3. job mapping 先頭の既存 sibling key の直前/直後（fallback）
+- インデントと改行コードは surrounding block から推定
+
+**完了条件**: 通常 job / reusable workflow call job の両方で fix が付き、適用後 YAML が妥当で、再 lint で当該 warning が消える
+
+### Step 6.5: `run-env-context-direct-use` に fix を追加
+
+**ファイル**: `src/Seiton.Core/Linting/RunEnvContextDirectUseRule.cs`
+
+- `${{ env.NAME }}` / `${{ env['NAME'] }}` / `${{ env["NAME"] }}` を shell 変数へ置換する fix を付与
+- 初期スコープ:
+  - `NAME` が単純識別子 (`[A-Za-z_][A-Za-z0-9_]*`) のケースのみ auto-fix
+  - shell 判定不能時は POSIX 互換の `${NAME}` を使う
+  - `pwsh` / `powershell` が静的に分かる場合は `$env:NAME` を使う
+- 関数呼び出しや複合式を含む `env` 参照は fix を出さず診断のみ
+
+**完了条件**: 単純な `${{ env.VERSION }}` / bracket access に fix が付き、複合式には fix が付かないテストがパスする
+
+### Step 6.6: Fix Apply API を `LintEngine` 外部に公開
+
+**ファイル**: `src/Seiton.Core/Linting/Fixing/FixEngine.cs`, `src/Seiton.Core/Linting/LintResult.cs`
+
+- lint 実行と fix 適用を分離した API を公開
+  - 例: `FixEngine.Apply(byte[] utf8Yaml, IEnumerable<DiagnosticFix> fixes)`
+  - 例: `FixEngine.Apply(byte[] utf8Yaml, IEnumerable<Diagnostic> diagnosticsWithFix)`
+- `LintResult` 自体は immutable のまま維持
+- file 単位の fix 適用のみをサポート（multi-file fix はスコープ外）
+
+**完了条件**: caller が `LintResult.Diagnostics` から fix を選択し、更新済み UTF-8 YAML を取得できる
+
+### Step 6.7: 再検証（revalidation）ヘルパーを追加
+
+**ファイル**: `src/Seiton.Core/Linting/Fixing/FixEngine.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
+
+- fix 適用後に `LintEngine.Check` を再実行する helper を追加
+  - 例: `ApplyAndRelint(...)`
+- 再検証では少なくとも以下を確認
+  - YAML parse fatal error が増えていない
+  - 対象 rule の元診断が消えている
+  - overlap/invalid-fix は適用前に検出される
+- 3 ルール分の end-to-end 回帰テストを追加
+
+**完了条件**: `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix → 再 lint が green になる E2E テストがパスする
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
@@ -505,6 +613,14 @@ subgraph "Phase 5: 式ベース（長期）"
   P5B["expr-undefined-var"]
   P5C["run-env-context-direct-use"]
 end
+subgraph "Phase 6: Fix Engine"
+  P6A["fix data model"]
+  P6B["deny-write-all fix"]
+  P6C["job-permissions-required fix"]
+  P6D["run-env-context-direct-use fix"]
+  P6E["fix applier"]
+  P6F["revalidation"]
+end
 P1A --> P2B
 P1A --> P2F
 P1A --> P3C
@@ -514,6 +630,15 @@ P3D --> P4
 P4 --> P5A
 P4 --> P5B
 P4 --> P5C
+P4 --> P6A
+P5C --> P6D
+P6A --> P6B
+P6A --> P6C
+P6A --> P6D
+P6B --> P6E
+P6C --> P6E
+P6D --> P6E
+P6E --> P6F
 ```
 
 
