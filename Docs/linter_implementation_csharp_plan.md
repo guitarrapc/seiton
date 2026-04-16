@@ -752,7 +752,7 @@
 - `scratch` / `latest` が常に skip されるテストがパスする
 - `ExcludeImages` / `ExcludeTags` / `IgnoreImages` それぞれの skip ケースがパスする
 
-**実装メモ**:
+**実装メモ**: 完了。`src/Seiton.Core/Linting/PinRemediation/OciImageDigestResolver.cs` を追加し、`IHttpClientFactory` と `ImageResolutionConfig` を受け取る OCI Distribution API ベースの digest resolver を実装した。resolver は `docker://` prefix を正規化し、明示 registry と Docker Hub 既定 registry（`registry-1.docker.io`、single-segment image は `library/` 補完）を解決対象にする。`HEAD /v2/{name}/manifests/{reference}` に OCI/Docker manifest accept header 群を付与して `Docker-Content-Digest` を取得し、成功結果のみ `ConcurrentDictionary<string, string>` にキャッシュする。skip 判定は `ExcludeImages` / `ExcludeTags` / `IgnoreImages` を正規化して行い、`scratch` と `latest` / implicit latest は resolver 側で常に no-op になる。認証は初期スコープとして `~/.docker/config.json` の `auths` を読み取り、registry host に対する Basic auth を付与する形で実装した。`credHelpers` / `credsStore` は今後の拡張余地として残している。`tests/Seiton.Core.Tests/OciImageDigestResolverTests.cs` を追加し、digest 解決、`scratch` / `latest` skip、`ExcludeImages` / `ExcludeTags` / `IgnoreImages` skip、Docker auths、success cache の 5 ケースをモック HTTP で検証した。`dotnet build src/Seiton.Core/Seiton.Core.csproj --configuration Debug` 成功、`OciImageDigestResolverTests` 5 件全件パス。
 
 ### Step 7.6: pin fix フォーマット実装
 
