@@ -685,7 +685,7 @@
 
 **完了条件**: インターフェースが定義されビルドが通る。モック実装でテスト補助できる型が揃う。
 
-**実装メモ**:
+**実装メモ**: 完了。`src/Seiton.Core/Linting/PinRemediation/IActionShaResolver.cs` と `src/Seiton.Core/Linting/PinRemediation/IImageDigestResolver.cs` を追加し、`ResolveAsync(..., CancellationToken)` 契約を定義した（skip は `null` 戻り値で表現）。加えて `src/Seiton.Core/Linting/PinRemediation/RemediationResult.cs` を追加し、`Diagnostics` と `ResolvedCount` / `SkippedCount` / `FailedCount` を保持する結果モデルを定義した。`tests/Seiton.Core.Tests/PinRemediationContractsTests.cs` を新規追加し、2 つのフェイクリゾルバ実装でインターフェース契約がテスト補助に利用できること、`RemediationResult` のカウンタ保持が正しいことを回帰検証した。`dotnet build src/Seiton.Core/Seiton.Core.csproj --configuration Debug` は成功、新規テスト 3 件は全件パス。
 
 ### Step 7.3: `PinRemediationEngine` のコアを実装
 
