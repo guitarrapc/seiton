@@ -521,6 +521,8 @@
 
 **完了条件**: 単体テストで edit 適用順・overlap reject・改行維持・インデント推定が検証できる
 
+**実装メモ**: 完了。`Linting/Fixing/FixEngine.cs` に UTF-8 byte offset ベースの `TextEdit[]` 適用器を追加し、offset 降順適用と overlap/conflict 検出を実装。`Linting/Fixing/FixFormatting.cs` に改行コード判定、インデント推定、quote style 判定ヘルパーを追加した。`FixEngineTests` で edit 適用順、overlap reject、CRLF/LF 判定、sibling 優先 + parent fallback のインデント推定、source-text ベースの quote 判定を検証。
+
 ### Step 6.3: `deny-write-all` に fix を追加
 
 **ファイル**: `src/Seiton.Core/Linting/DenyWriteAllRule.cs`
