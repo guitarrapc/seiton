@@ -5,9 +5,17 @@ namespace Seiton.Core.Linting;
 
 public sealed class RunnerLabelRule : RuleBase
 {
+    HashSet<string>? additionalKnownHostedLabels;
+
     public override string Id => "runner-label";
 
     public override string Name => "Runner Label Rule";
+
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        additionalKnownHostedLabels = BuildNormalizedSet(config.AdditiveCustomization.AdditionalKnownHostedLabels);
+    }
 
     public override void VisitJobPre(Job job)
     {
@@ -32,7 +40,7 @@ public sealed class RunnerLabelRule : RuleBase
             }
 
             var labelUtf8 = label.Value.AsSpan(Config.Utf8Yaml);
-            if (labelUtf8.IsEmpty || RunnerLabels.IsKnownHostedLabel(labelUtf8))
+            if (labelUtf8.IsEmpty || RunnerLabels.IsKnownHostedLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
             {
                 continue;
             }
@@ -60,5 +68,47 @@ public sealed class RunnerLabelRule : RuleBase
         }
 
         return false;
+    }
+
+    bool IsAdditionalKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
+    {
+        if (additionalKnownHostedLabels is null || additionalKnownHostedLabels.Count == 0)
+        {
+            return false;
+        }
+
+        return additionalKnownHostedLabels.Contains(NormalizeAsciiLower(labelUtf8));
+    }
+
+    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        return new HashSet<string>(values, StringComparer.Ordinal);
+    }
+
+    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
+    {
+        if (value.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var buffer = new char[value.Length];
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = (char)value[i];
+            if (ch is >= 'A' and <= 'Z')
+            {
+                ch = (char)(ch + 32);
+            }
+
+            buffer[i] = ch;
+        }
+
+        return new string(buffer);
     }
 }

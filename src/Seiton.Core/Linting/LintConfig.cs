@@ -15,6 +15,8 @@ public sealed class LintConfig
     public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
 
     public ExpressionContext ExprContext { get; init; } = ExpressionContext.Empty;
+
+    public RuleSpecificAdditiveCustomization AdditiveCustomization { get; init; } = RuleSpecificAdditiveCustomization.Empty;
 }
 
 public sealed record ExpressionContext(
@@ -29,3 +31,11 @@ public sealed record LintExclusion(
     string FilePattern,
     IReadOnlyList<string> RuleIds,
     string? JobId = null);
+
+public sealed record RuleSpecificAdditiveCustomization(
+    IReadOnlyList<string>? AdditionalDangerousEvents = null,
+    IReadOnlyList<string>? AdditionalKnownHostedLabels = null,
+    IReadOnlyList<string>? AdditionalPublicRegistries = null)
+{
+    public static RuleSpecificAdditiveCustomization Empty { get; } = new();
+}

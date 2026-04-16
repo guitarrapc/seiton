@@ -58,6 +58,11 @@ public sealed class LintEngine
         var normalizedRuleOptions = NormalizeRuleOptions(config?.RuleOptions, filePath);
         diagnostics.AddRange(normalizedRuleOptions.ConfigurationDiagnostics);
 
+        var normalizedAdditiveCustomization = NormalizeAdditiveCustomization(
+            config?.AdditiveCustomization ?? RuleSpecificAdditiveCustomization.Empty,
+            filePath);
+        diagnostics.AddRange(normalizedAdditiveCustomization.ConfigurationDiagnostics);
+
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, parseResult.Workflow);
         diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
@@ -79,6 +84,7 @@ public sealed class LintEngine
             FilePath = filePath,
             RuleOptions = normalizedRuleOptions.RuleOptions,
             ExprContext = config?.ExprContext ?? ExpressionContext.Empty,
+            AdditiveCustomization = normalizedAdditiveCustomization.AdditiveCustomization,
         };
 
         var activeRules = new List<IRule>(rules.Count);
@@ -684,6 +690,172 @@ public sealed class LintEngine
         return new RuleOptionsNormalization(normalized, diagnostics.ToArray());
     }
 
+    static AdditiveCustomizationNormalization NormalizeAdditiveCustomization(RuleSpecificAdditiveCustomization customization, string filePath)
+    {
+        var diagnostics = new List<Diagnostic>();
+        var normalizedDangerousEvents = NormalizeAdditiveValues(
+            customization.AdditionalDangerousEvents,
+            "dangerous-triggers additional dangerous event must not be empty",
+            filePath,
+            diagnostics);
+        var normalizedKnownHostedLabels = NormalizeAdditiveValues(
+            customization.AdditionalKnownHostedLabels,
+            "runner-label additional known hosted label must not be empty",
+            filePath,
+            diagnostics);
+        var normalizedPublicRegistries = NormalizeRegistryHosts(
+            customization.AdditionalPublicRegistries,
+            filePath,
+            diagnostics);
+
+        return new AdditiveCustomizationNormalization(
+            new RuleSpecificAdditiveCustomization(
+                normalizedDangerousEvents,
+                normalizedKnownHostedLabels,
+                normalizedPublicRegistries),
+            diagnostics.ToArray());
+    }
+
+    static IReadOnlyList<string>? NormalizeAdditiveValues(
+        IReadOnlyList<string>? values,
+        string emptyMessage,
+        string filePath,
+        List<Diagnostic> diagnostics)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        var normalized = new List<string>(values.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < values.Count; i++)
+        {
+            var trimmed = values[i]?.Trim() ?? string.Empty;
+            if (trimmed.Length == 0)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    emptyMessage,
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
+            var normalizedValue = NormalizeAsciiLower(trimmed);
+            if (seen.Add(normalizedValue))
+            {
+                normalized.Add(normalizedValue);
+            }
+        }
+
+        return normalized.Count == 0 ? null : normalized;
+    }
+
+    static IReadOnlyList<string>? NormalizeRegistryHosts(
+        IReadOnlyList<string>? values,
+        string filePath,
+        List<Diagnostic> diagnostics)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        var normalized = new List<string>(values.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < values.Count; i++)
+        {
+            var trimmed = values[i]?.Trim() ?? string.Empty;
+            if (trimmed.Length == 0)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "credentials additional public registry host must not be empty",
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
+            if (!IsValidRegistryHost(trimmed))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"credentials additional public registry host '{trimmed}' is invalid",
+                    new TextRange(0, trimmed.Length, 1, 1, 1, 1 + trimmed.Length),
+                    FilePath: filePath));
+                continue;
+            }
+
+            var normalizedValue = NormalizeAsciiLower(trimmed);
+            if (seen.Add(normalizedValue))
+            {
+                normalized.Add(normalizedValue);
+            }
+        }
+
+        return normalized.Count == 0 ? null : normalized;
+    }
+
+    static bool IsValidRegistryHost(string value)
+    {
+        if (value.Contains("://", StringComparison.Ordinal)
+            || value.Contains('/')
+            || value.Contains('\\'))
+        {
+            return false;
+        }
+
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (char.IsWhiteSpace(value[i]))
+            {
+                return false;
+            }
+        }
+
+        var colonIndex = value.IndexOf(':');
+        if (colonIndex < 0)
+        {
+            return value.Length > 0;
+        }
+
+        if (value.LastIndexOf(':') != colonIndex || colonIndex == 0 || colonIndex == value.Length - 1)
+        {
+            return false;
+        }
+
+        for (var i = colonIndex + 1; i < value.Length; i++)
+        {
+            if (!char.IsAsciiDigit(value[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static string NormalizeAsciiLower(string value)
+    {
+        if (value.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var buffer = value.ToCharArray();
+        for (var i = 0; i < buffer.Length; i++)
+        {
+            var ch = buffer[i];
+            if (ch is >= 'A' and <= 'Z')
+            {
+                buffer[i] = (char)(ch + 32);
+            }
+        }
+
+        return new string(buffer);
+    }
+
     static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
     {
         var normalizedFilePath = NormalizePath(filePath);
@@ -970,6 +1142,13 @@ public sealed class LintEngine
         Diagnostic[] ConfigurationDiagnostics)
     {
         public static ExclusionsNormalization Empty { get; } = new([], string.Empty, []);
+    }
+
+    readonly record struct AdditiveCustomizationNormalization(
+        RuleSpecificAdditiveCustomization AdditiveCustomization,
+        Diagnostic[] ConfigurationDiagnostics)
+    {
+        public static AdditiveCustomizationNormalization Empty { get; } = new(RuleSpecificAdditiveCustomization.Empty, []);
     }
 
     readonly record struct NormalizedExclusion(

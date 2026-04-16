@@ -5,9 +5,17 @@ namespace Seiton.Core.Linting;
 
 public sealed class CredentialsRule : RuleBase
 {
+    HashSet<string>? additionalPublicRegistries;
+
     public override string Id => "credentials";
 
     public override string Name => "Credentials Rule";
+
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        additionalPublicRegistries = BuildNormalizedSet(config.AdditiveCustomization.AdditionalPublicRegistries);
+    }
 
     public override void VisitJobPre(Job job)
     {
@@ -51,7 +59,7 @@ public sealed class CredentialsRule : RuleBase
             return;
         }
 
-        if (!TryGetRegistryHost(image, out var host) || IsPublicRegistry(host))
+        if (!TryGetRegistryHost(image, out var host) || IsPublicRegistry(host) || IsAdditionalPublicRegistry(host))
         {
             return;
         }
@@ -125,5 +133,47 @@ public sealed class CredentialsRule : RuleBase
         }
 
         return true;
+    }
+
+    bool IsAdditionalPublicRegistry(ReadOnlySpan<byte> host)
+    {
+        if (additionalPublicRegistries is null || additionalPublicRegistries.Count == 0)
+        {
+            return false;
+        }
+
+        return additionalPublicRegistries.Contains(NormalizeAsciiLower(host));
+    }
+
+    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        return new HashSet<string>(values, StringComparer.Ordinal);
+    }
+
+    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
+    {
+        if (value.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var buffer = new char[value.Length];
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = (char)value[i];
+            if (ch is >= 'A' and <= 'Z')
+            {
+                ch = (char)(ch + 32);
+            }
+
+            buffer[i] = ch;
+        }
+
+        return new string(buffer);
     }
 }

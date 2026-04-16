@@ -2393,6 +2393,195 @@ public sealed class RuleInterfaceTests
         await Assert.That(configError.Message.Contains("Did you mean 'job-permissions-required'", StringComparison.Ordinal)).IsTrue();
     }
 
+    [Test]
+    public async Task LintEngine_AdditiveCustomization_IsPassedToRuleConfig()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var rule = new ConfigCaptureRule();
+        var config = new LintConfig
+        {
+            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                AdditionalDangerousEvents: ["issue_comment", "pull_request_review_comment"],
+                AdditionalKnownHostedLabels: ["ubuntu-24.04-arm", "windows-2025-vs2026"],
+                AdditionalPublicRegistries: ["registry.example.com", "mirror.example.net:5000"]),
+        };
+
+        _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization.yml", config);
+
+        await Assert.That(rule.LastConfig is not null).IsTrue();
+        await Assert.That(rule.LastConfig!.AdditiveCustomization.AdditionalDangerousEvents).IsEquivalentTo(new[] { "issue_comment", "pull_request_review_comment" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
+    }
+
+    [Test]
+    public async Task LintEngine_AdditiveCustomization_DefaultsToEmptyWhenConfigOmitsIt()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var rule = new ConfigCaptureRule();
+
+        _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-default.yml", new LintConfig());
+
+        await Assert.That(rule.LastConfig is not null).IsTrue();
+        await Assert.That(rule.LastConfig!.AdditiveCustomization).IsEqualTo(RuleSpecificAdditiveCustomization.Empty);
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalDangerousEvents).IsNull();
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsNull();
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_AdditiveCustomization_NormalizesToAsciiLowerAndDeduplicates()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var rule = new ConfigCaptureRule();
+        var config = new LintConfig
+        {
+            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                AdditionalDangerousEvents: ["Issue_Comment", "issue_comment"],
+                AdditionalKnownHostedLabels: ["Custom-Large", "custom-large"],
+                AdditionalPublicRegistries: ["Registry.Example.Com", "registry.example.com"]),
+        };
+
+        _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-normalized.yml", config);
+
+        await Assert.That(rule.LastConfig is not null).IsTrue();
+        await Assert.That(rule.LastConfig!.AdditiveCustomization.AdditionalDangerousEvents).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsEquivalentTo(new[] { "custom-large" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsEquivalentTo(new[] { "registry.example.com" });
+    }
+
+    [Test]
+    public async Task LintEngine_DangerousTriggers_AdditionalDangerousEvents_EmitWarning()
+    {
+        var yaml = """
+        on: issue_comment
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                permissions: {}
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                AdditionalDangerousEvents: ["issue_comment"]),
+        };
+
+        var result = new LintEngine([new DangerousTriggersRule()]).Check(Encoding.UTF8.GetBytes(yaml), "dangerous-trigger-custom.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "dangerous-triggers" && x.Message.Contains("issue_comment", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunnerLabel_AdditionalKnownHostedLabels_SuppressWarning()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: custom-large
+                permissions: {}
+                steps:
+                    - run: echo hello
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "runner-label-custom-without.yml");
+        var withConfig = engine.Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "runner-label-custom-with.yml",
+            new LintConfig
+            {
+                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                    AdditionalKnownHostedLabels: ["custom-large"]),
+            });
+
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "runner-label")).IsTrue();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "runner-label")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_Credentials_AdditionalPublicRegistries_SuppressWarning()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    image: registry.example.com/team/app:1.0.0
+                steps:
+                    - run: echo hello
+        """;
+
+        var engine = new LintEngine([new CredentialsRule()]);
+        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "credentials-custom-without.yml");
+        var withConfig = engine.Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "credentials-custom-with.yml",
+            new LintConfig
+            {
+                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                    AdditionalPublicRegistries: ["registry.example.com"]),
+            });
+
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "credentials")).IsTrue();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "credentials")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_AdditiveCustomization_InvalidValues_ReportConfigurationErrors()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                AdditionalDangerousEvents: ["   "],
+                AdditionalKnownHostedLabels: [""],
+                AdditionalPublicRegistries: ["https://registry.example.com/team/app"]),
+        };
+
+        var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("dangerous-triggers additional dangerous event must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("runner-label additional known hosted label must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("credentials additional public registry host 'https://registry.example.com/team/app' is invalid", StringComparison.Ordinal))).IsTrue();
+    }
+
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases)
     {
         for (var i = 0; i < cases.Length; i++)
@@ -2522,6 +2711,47 @@ public sealed class RuleInterfaceTests
                     "shared duplicate diagnostic",
                     new TextRange(0, 0, 1, 1, 1, 1),
                     RuleId: Id));
+        }
+
+        public void VisitWorkflowPost(Workflow workflow)
+        {
+        }
+
+        public void VisitEvent(Event ev)
+        {
+        }
+
+        public void VisitJobPre(Job job)
+        {
+        }
+
+        public void VisitJobPost(Job job)
+        {
+        }
+
+        public void VisitStep(Step step)
+        {
+        }
+    }
+
+    sealed class ConfigCaptureRule : IRule
+    {
+        public string Id => "config-capture";
+
+        public string Name => "Config Capture Rule";
+
+        public LintConfig? LastConfig { get; private set; }
+
+        public Diagnostic[] GetDiagnostics() => [];
+
+        public void SetConfig(LintConfig config)
+        {
+            ArgumentNullException.ThrowIfNull(config);
+            LastConfig = config;
+        }
+
+        public void VisitWorkflowPre(Workflow workflow)
+        {
         }
 
         public void VisitWorkflowPost(Workflow workflow)

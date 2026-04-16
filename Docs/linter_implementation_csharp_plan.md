@@ -14,7 +14,7 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` の 18 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
-| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約を実装済み |
+| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約を実装済み。ルール固有の加算カスタマイズ（仕様 §5.8）は未実装 |
 | 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
@@ -56,6 +56,7 @@
 | G4 | Job 横断ルール向けの共通状態管理ヘルパーがない | `needs` などで各ルールが ID 収集・集合管理を都度実装する必要があり、重複実装が発生する | 🟡 中 |
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
 | G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | **解消済み（仕様同期済み）** | ✅ |
+| G7 | ルール固有の加算カスタマイズ（仕様 §5.8 / C# spec §4.1）が未実装 | `dangerous-triggers` / `runner-label` / `credentials` の追加エントリを config で拡張できず、仕様準拠にならない | 🟡 中 |
 
 ---
 
@@ -381,6 +382,45 @@
 
 **実装メモ**: 完了。`RuleCatalog` に fail-safe ポリシー（`IsNonDisableable` / `TryGetMinimumSeverity`）を追加し、`deny-write-all` を non-disableable + minimum severity `Error` として定義。`LintEngine` では `RuleOptions` 正規化時に disable 不可/最低 severity 制約を検証し、違反設定は設定エラーとして報告して無効化する。inline (`seiton: disable-*`) と config exclusion (`LintConfig.Exclusions`) でも non-disableable rule の抑制要求を設定エラーとして拒否。`RuleInterfaceTests` に rule-options / inline / config exclusion の fail-safe 回帰テストを追加し、制約違反時にルール診断が抑制されないことを検証。
 
+### Step 4.6: ルール固有の加算カスタマイズ設定モデルを追加
+
+**ファイル**: `src/Seiton.Core/Linting/LintConfig.cs`
+
+- 仕様対応: `Seiton_Linter_spec.md` §5.8, `Seiton_Linter_csharp_spec.md` §4.1
+- `LintConfig` にルール固有の拡張設定を追加
+  - `dangerous-triggers.additionalDangerousEvents`
+  - `runner-label.additionalKnownHostedLabels`
+  - `credentials.additionalPublicRegistries`
+- 3 ルール分をまとめる設定 record を追加し、`LintConfig` から参照できるようにする
+- 入力値の正規化ポリシー（ASCII lower-case、空値/重複の扱い）を型・コメントで明示する
+
+**完了条件**: `LintConfig` で 3 種類の追加エントリを受け取れる型が定義され、既存 API 互換を維持したままビルドが通る
+
+**実装メモ**: 完了。`LintConfig` に `AdditiveCustomization`（`RuleSpecificAdditiveCustomization`）を追加し、`additionalDangerousEvents` / `additionalKnownHostedLabels` / `additionalPublicRegistries` を受け取れる設定モデルを定義。`RuleSpecificAdditiveCustomization.Empty` を既定値として持たせ、未指定時の後方互換を維持した。`LintEngine` の `effectiveConfig` 生成時にも `config.AdditiveCustomization` を引き継ぐよう更新し、Step 4.7 で各ルールが設定を参照できる受け口を整備した。
+
+### Step 4.7: 3 ルールに加算マージと設定検証を実装
+
+**ファイル**: `src/Seiton.Core/Linting/LintEngine.cs`, `src/Seiton.Core/Linting/DangerousTriggersRule.cs`, `src/Seiton.Core/Linting/RunnerLabelRule.cs`, `src/Seiton.Core/Linting/CredentialsRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 仕様対応: `effective = built-in U custom-added`（追加のみ、既定値は削除しない）
+- `SetConfig` で渡された設定を各ルールで解釈し、既定集合に対して決定的な union を構成
+- 正規化後の重複は無視（同値判定は ASCII lower-case）
+- 不正設定値は設定エラーを返す
+  - event 名/runner label の空値
+  - registry host として不正（scheme/path 含有など）
+- `credentials` は `host` または `host:port` 単位で照合し、追加 public registry に一致した場合は警告抑止
+- 既存の rule options / exclusion / fail-safe と競合しないことを確認
+
+**完了条件**: 以下を満たす table-driven 回帰テストがパスする
+
+- `additionalDangerousEvents` で追加した event が warning 対象になる
+- `additionalKnownHostedLabels` で追加した label が unknown-label warning から除外される
+- `additionalPublicRegistries` で追加した host が credentials warning から除外される
+- 重複エントリは安定的に 1 件扱いになる
+- 不正設定値は設定エラーとして報告される
+
+**実装メモ**: 完了。`LintEngine` に `NormalizeAdditiveCustomization()` を追加し、`additionalDangerousEvents` / `additionalKnownHostedLabels` / `additionalPublicRegistries` を ASCII lower-case に正規化しつつ入力順を保って重複排除するよう更新。空 event 名 / 空 runner label / scheme・path を含む registry host は設定エラーとして診断化する。`DangerousTriggersRule` / `RunnerLabelRule` / `CredentialsRule` は `SetConfig` で正規化済み追加集合を取り込み、既定集合に対する additive union として評価するよう変更。`RuleInterfaceTests` に追加 event の warning、追加 label / registry による warning 抑止、重複正規化、無効設定値エラーの回帰テストを追加して検証した。
+
 ---
 
 ## Phase 5: 式ベースルール（長期）
@@ -458,7 +498,7 @@ subgraph "Phase 3: P2ルール"
   P3E["credentials"]
 end
 subgraph "Phase 4: ルール制御"
-  P4["suppress / severity override"]
+  P4["suppress / severity override / additive customization"]
 end
 subgraph "Phase 5: 式ベース（長期）"
   P5A["template-injection"]
