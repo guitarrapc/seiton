@@ -1532,12 +1532,11 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
-        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsTrue();
-        var relint = engine.Check(fixedBytes, "deny-write-all-fix.yml");
-        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
 
     [Test]
@@ -1892,8 +1891,8 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
-        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "job-permissions-required-fix-runs-on.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var runsOnIndex = fixedText.IndexOf("runs-on: ubuntu-latest", StringComparison.Ordinal);
         var permissionsIndex = fixedText.IndexOf("permissions: {}", StringComparison.Ordinal);
@@ -1902,8 +1901,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(runsOnIndex >= 0).IsTrue();
         await Assert.That(permissionsIndex > runsOnIndex).IsTrue();
         await Assert.That(stepsIndex > permissionsIndex).IsTrue();
-        var relint = engine.Check(fixedBytes, "job-permissions-required-fix-runs-on.yml");
-        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
     }
 
     [Test]
@@ -1954,13 +1952,12 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
-        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "run-env-fix-posix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
         await Assert.That(fixedText.Contains("${{ env.VERSION }}", StringComparison.Ordinal)).IsFalse();
-        var relint = engine.Check(fixedBytes, "run-env-fix-posix.yml");
-        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-env-context-direct-use")).IsFalse();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "run-env-context-direct-use")).IsFalse();
     }
 
     [Test]

@@ -140,4 +140,66 @@ public sealed class FixEngineTests
         await Assert.That(result.Fixes.Length).IsEqualTo(1);
         await Assert.That(result.Fixes[0].Description).IsEqualTo("replace");
     }
+
+    [Test]
+    public async Task ApplyAndRelint_ClearsSelectedDiagnostics()
+    {
+        var yaml = """
+        on: push
+        permissions: write-all
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """;
+
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyWriteAllRule()]);
+        var before = engine.Check(source, "revalidate-deny.yml");
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, source, "revalidate-deny.yml", before.FixableDiagnostics);
+
+        await Assert.That(revalidated.Before.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
+        await Assert.That(revalidated.After.HasFatalError).IsFalse();
+    }
+
+    [Test]
+    public async Task ApplyAndRelint_ThrowsWhenFatalParseErrorIsIntroduced()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """;
+
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobStructureRule()]);
+        var fixes = new[]
+        {
+            new DiagnosticFix("break yaml", [new TextEdit(0, source.Length, "[]")]),
+        };
+
+        await Assert.That(() => FixEngine.ApplyAndRelint(engine, source, "revalidate-fatal.yml", fixes))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task ApplyAndRelint_ThrowsOnOverlappingEditsBeforeRelint()
+    {
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var engine = new LintEngine([new JobStructureRule()]);
+        var fixes = new[]
+        {
+            new DiagnosticFix("left", [new TextEdit(2, 4, "ABCD")]),
+            new DiagnosticFix("right", [new TextEdit(5, 2, "YZ")]),
+        };
+
+        await Assert.That(() => FixEngine.ApplyAndRelint(engine, source, "revalidate-overlap.yml", fixes))
+            .Throws<InvalidOperationException>();
+    }
 }

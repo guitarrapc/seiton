@@ -593,6 +593,8 @@
 
 **完了条件**: `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix → 再 lint が green になる E2E テストがパスする
 
+**実装メモ**: 完了。`FixEngine` に `ApplyAndRelint(...)` を追加し、fix 適用と再 lint を 1 API で実行できるようにした。helper は (1) 適用前後で fatal parse error が増えていないこと、(2) 選択して適用した診断が再 lint 後に残存しないことを検証し、違反時は `InvalidOperationException` を返す。`DiagnosticFix` 入力の overload では expected cleared rule-id を指定可能にし、rule 単位の再検証も行える。`FixEngineTests` に fatal 増加検出・overlap 事前検出・selected diagnostics 消失検証を追加し、`RuleInterfaceTests` では `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix E2E を `ApplyAndRelint` 経由で検証するよう更新した。
+
 ---
 
 ## ルール実装ロードマップ

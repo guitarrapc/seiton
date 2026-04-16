@@ -5,6 +5,80 @@ namespace Seiton.Core.Linting.Fixing;
 
 public static class FixEngine
 {
+    public static RevalidationResult ApplyAndRelint(
+        LintEngine lintEngine,
+        byte[] utf8Yaml,
+        string filePath,
+        IEnumerable<Diagnostic> diagnosticsWithFix,
+        LintConfig? config = null)
+    {
+        ArgumentNullException.ThrowIfNull(lintEngine);
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        ArgumentNullException.ThrowIfNull(diagnosticsWithFix);
+
+        var selectedDiagnostics = new List<Diagnostic>();
+        foreach (var diagnostic in diagnosticsWithFix)
+        {
+            if (diagnostic.Fix is null)
+            {
+                continue;
+            }
+
+            selectedDiagnostics.Add(diagnostic);
+        }
+
+        var before = lintEngine.Check(utf8Yaml, filePath, config);
+        var updatedUtf8Yaml = Apply(utf8Yaml, selectedDiagnostics);
+        var after = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+
+        ValidateRevalidation(before, after, selectedDiagnostics);
+        return new RevalidationResult(before, after, updatedUtf8Yaml);
+    }
+
+    public static RevalidationResult ApplyAndRelint(
+        LintEngine lintEngine,
+        byte[] utf8Yaml,
+        string filePath,
+        IEnumerable<DiagnosticFix> fixes,
+        IEnumerable<string>? expectedClearedRuleIds = null,
+        LintConfig? config = null)
+    {
+        ArgumentNullException.ThrowIfNull(lintEngine);
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        ArgumentNullException.ThrowIfNull(fixes);
+
+        var before = lintEngine.Check(utf8Yaml, filePath, config);
+        var updatedUtf8Yaml = Apply(utf8Yaml, fixes);
+        var after = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+
+        ValidateRevalidation(before, after, selectedDiagnostics: null);
+
+        if (expectedClearedRuleIds is not null)
+        {
+            var expected = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var ruleId in expectedClearedRuleIds)
+            {
+                if (!string.IsNullOrWhiteSpace(ruleId))
+                {
+                    expected.Add(ruleId);
+                }
+            }
+
+            for (var i = 0; i < after.Diagnostics.Length; i++)
+            {
+                var ruleId = after.Diagnostics[i].RuleId;
+                if (ruleId is not null && expected.Contains(ruleId))
+                {
+                    throw new InvalidOperationException($"revalidation failed: expected diagnostics for rule '{ruleId}' to be cleared after fix apply");
+                }
+            }
+        }
+
+        return new RevalidationResult(before, after, updatedUtf8Yaml);
+    }
+
     public static byte[] Apply(byte[] utf8Yaml, IEnumerable<DiagnosticFix> fixes)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -110,4 +184,63 @@ public static class FixEngine
             hasPrevious = true;
         }
     }
+
+    static void ValidateRevalidation(LintResult before, LintResult after, IReadOnlyList<Diagnostic>? selectedDiagnostics)
+    {
+        if (!before.HasFatalError && after.HasFatalError)
+        {
+            throw new InvalidOperationException("revalidation failed: fix application introduced fatal YAML parse errors");
+        }
+
+        if (selectedDiagnostics is null || selectedDiagnostics.Count == 0)
+        {
+            return;
+        }
+
+        var selectedIdentities = new HashSet<DiagnosticIdentity>();
+        for (var i = 0; i < selectedDiagnostics.Count; i++)
+        {
+            selectedIdentities.Add(new DiagnosticIdentity(selectedDiagnostics[i]));
+        }
+
+        for (var i = 0; i < after.Diagnostics.Length; i++)
+        {
+            if (selectedIdentities.Contains(new DiagnosticIdentity(after.Diagnostics[i])))
+            {
+                var diagnostic = after.Diagnostics[i];
+                throw new InvalidOperationException($"revalidation failed: selected diagnostic '{diagnostic.RuleId ?? "<unknown>"}' at {diagnostic.Location.StartLine}:{diagnostic.Location.StartColumn} still exists after fix apply");
+            }
+        }
+    }
+
+    readonly record struct DiagnosticIdentity(
+        DiagnosticSeverity Severity,
+        string Message,
+        string? RuleId,
+        int Start,
+        int Length,
+        int StartLine,
+        int StartColumn,
+        int EndLine,
+        int EndColumn)
+    {
+        public DiagnosticIdentity(Diagnostic diagnostic)
+            : this(
+                diagnostic.Severity,
+                diagnostic.Message,
+                diagnostic.RuleId,
+                diagnostic.Location.Start,
+                diagnostic.Location.Length,
+                diagnostic.Location.StartLine,
+                diagnostic.Location.StartColumn,
+                diagnostic.Location.EndLine,
+                diagnostic.Location.EndColumn)
+        {
+        }
+    }
 }
+
+public readonly record struct RevalidationResult(
+    LintResult Before,
+    LintResult After,
+    byte[] UpdatedUtf8Yaml);
