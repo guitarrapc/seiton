@@ -216,6 +216,31 @@ type LinterOptions struct {
 }
 ```
 
+### 3.4 Default Rule Catalog (Contract Mapping)
+
+Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the default rule catalog.
+
+| Rule ID | Required Behavior Summary |
+|---|---|
+| `job-structure` | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form (`uses`) or executable form (`runs-on` + `steps`). |
+| `reusable-workflow` | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, and reusable-call jobs must reject incompatible execution keys. |
+| `permissions` | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. |
+| `popular-action-inputs` | Validate known action input names against maintained popular-action metadata and emit diagnostics for unknown inputs. |
+| `unpinned-uses` | Warn when `uses:` references are not pinned to full commit SHA for remote actions/reusable workflows. |
+| `unpinned-image` | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
+| `dangerous-triggers` | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
+| `job-permissions-required` | Warn when a job omits explicit `permissions` configuration. |
+| `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
+| `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
+| `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
+| `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
+| `glob-pattern` | Error on invalid glob patterns in `on.<event>.branches/tags/paths` style filters. |
+| `deny-write-all` | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by `Seiton_Linter_spec.md` §5.7. |
+| `credentials` | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. |
+| `template-injection` | Error when untrusted `github.event`-origin data is directly interpolated into `run`/`env` sinks in unsafe ways. |
+| `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). |
+| `run-env-context-direct-use` | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
+
 ---
 
 ## 4. Exclusion and Suppression Mapping
@@ -231,6 +256,25 @@ Go implementation must provide:
 - unknown rule-id as configuration error
 - fail-safe checks (non-disableable, minimum severity)
 - suppression observability in lint result output
+
+### 4.1 Additive Rule Customization Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §5.8
+
+Go implementation must support additive merge (`effective = built-in U custom-added`) for:
+
+- `dangerous-triggers.additionalDangerousEvents`
+- `runner-label.additionalKnownHostedLabels`
+- `credentials.additionalPublicRegistries`
+
+Mapping requirements:
+
+- Use deterministic deduplication after normalization.
+- Normalization uses ASCII lower-case matching for event names, runner labels, and registry hosts.
+- Invalid customization entries are configuration errors.
+- Additive customization never removes built-in defaults.
 
 ---
 
