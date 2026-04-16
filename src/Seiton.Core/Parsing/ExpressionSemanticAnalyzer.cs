@@ -665,34 +665,34 @@ public static class ExpressionSemanticAnalyzer
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-            {
-                var properties = new Dictionary<Utf8String, ExprType>();
-                foreach (var property in element.EnumerateObject())
                 {
-                    properties[new Utf8String(Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
-                }
+                    var properties = new Dictionary<Utf8String, ExprType>();
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        properties[new Utf8String(Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
+                    }
 
-                return ExprType.Object(properties, dynamicPropertyType: ExprType.Any, strict: false);
-            }
+                    return ExprType.Object(properties, dynamicPropertyType: ExprType.Any, strict: false);
+                }
             case JsonValueKind.Array:
-            {
-                ExprType? elementType = null;
-                foreach (var child in element.EnumerateArray())
                 {
-                    var current = ConvertJsonType(child);
-                    if (elementType is null)
+                    ExprType? elementType = null;
+                    foreach (var child in element.EnumerateArray())
                     {
-                        elementType = current;
+                        var current = ConvertJsonType(child);
+                        if (elementType is null)
+                        {
+                            elementType = current;
+                        }
+                        else if (!current.IsAssignableTo(elementType) || !elementType.IsAssignableTo(current))
+                        {
+                            elementType = ExprType.Any;
+                            break;
+                        }
                     }
-                    else if (!current.IsAssignableTo(elementType) || !elementType.IsAssignableTo(current))
-                    {
-                        elementType = ExprType.Any;
-                        break;
-                    }
-                }
 
-                return ExprType.ArrayOf(elementType ?? ExprType.Any);
-            }
+                    return ExprType.ArrayOf(elementType ?? ExprType.Any);
+                }
             case JsonValueKind.String:
                 return ExprType.String;
             case JsonValueKind.Number:

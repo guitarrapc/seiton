@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using System.Linq;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Parsing;

@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using Seiton.Update;
 using Seiton.Update.Services;
 using Seiton.Update.Sources;
 
