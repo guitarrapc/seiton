@@ -773,7 +773,7 @@
 - image digest fix の TextEdit が正しい offset/length になるテストがパスする
 - 既ピン済みの場合 null 返却がパスする
 
-**実装メモ**:
+**実装メモ**: 完了。`src/Seiton.Core/Linting/PinRemediation/PinFixFormatter.cs` を追加し、`BuildActionsShaFix(...)` / `BuildImageDigestFix(...)` の 2 API で pin remediation 向け `DiagnosticFix` 生成を共通化した。actions 側は診断メッセージ内の quoted `uses` ref を抽出して `@<sha40> # <tagComment>` へ置換し、既に 40-hex SHA の場合は `null` を返す。image 側は quoted image ref を `@sha256:<hex>` 付きに置換し、既に `@sha256:` を含む場合は `null` を返す。offset 計算は `Diagnostic.Location` 範囲内検索を優先し、失敗時は file-wide fallback で `TextEdit` を確定する。`src/Seiton.Core/Linting/PinRemediation/PinRemediationEngine.cs` は fix 生成責務を `PinFixFormatter` へ移譲するよう更新し、既存の replace helper を削除した。`tests/Seiton.Core.Tests/PinFixFormatterTests.cs` を追加して actions/image の offset/length 検証と既ピン済み null 返却を回帰化。`dotnet build src/Seiton.Core/Seiton.Core.csproj --configuration Debug` 成功、`PinFixFormatterTests` 4 件全件パス、`PinRemediation*` 回帰 6 件全件パス。
 
 ### Step 7.7: `pin_resolution` 設定ファイルパース連携
 

@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
@@ -130,19 +129,13 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
         }
 
-        var at = usesRef.LastIndexOf('@');
-        if (at < 0)
+        var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, sha, tagComment, utf8Yaml);
+        if (!fix.HasValue)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
 
-        var replacement = usesRef[..(at + 1)] + sha + " # " + tagComment;
-        if (!TryBuildReplacementFix(diagnostic, usesRef, replacement, utf8Yaml, "Pin action reference to resolved SHA", out var fix))
-        {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
-        }
-
-        return new RemediationOutcome(diagnostic with { Fix = fix }, Resolved: true, Skipped: false, Failed: false);
+        return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
     async Task<RemediationOutcome> RemediateUnpinnedImageAsync(
@@ -166,16 +159,13 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
         }
 
-        var replacement = imageRef.Contains("@sha256:", StringComparison.OrdinalIgnoreCase)
-            ? imageRef
-            : $"{imageRef}@{digest}";
-
-        if (!TryBuildReplacementFix(diagnostic, imageRef, replacement, utf8Yaml, "Pin image reference to resolved digest", out var fix))
+        var fix = PinFixFormatter.BuildImageDigestFix(diagnostic, digest, utf8Yaml);
+        if (!fix.HasValue)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
 
-        return new RemediationOutcome(diagnostic with { Fix = fix }, Resolved: true, Skipped: false, Failed: false);
+        return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
     static bool TryExtractQuotedValue(string message, out string value)
@@ -224,44 +214,6 @@ public sealed class PinRemediationEngine(
         repo = slash2 < 0 ? actionPath[(slash1 + 1)..] : actionPath.Substring(slash1 + 1, slash2 - (slash1 + 1));
 
         return owner.Length > 0 && repo.Length > 0 && reference.Length > 0;
-    }
-
-    static bool TryBuildReplacementFix(
-        Diagnostic diagnostic,
-        string oldValue,
-        string newValue,
-        byte[] utf8Yaml,
-        string description,
-        out DiagnosticFix fix)
-    {
-        var oldBytes = Encoding.UTF8.GetBytes(oldValue);
-
-        var rangeStart = Math.Max(0, diagnostic.Location.Start);
-        var rangeLength = Math.Max(0, diagnostic.Location.Length);
-        var rangeEnd = Math.Min(utf8Yaml.Length, rangeStart + rangeLength);
-
-        if (rangeStart <= rangeEnd)
-        {
-            var segment = utf8Yaml.AsSpan(rangeStart, rangeEnd - rangeStart);
-            var local = segment.IndexOf(oldBytes);
-            if (local >= 0)
-            {
-                var offset = rangeStart + local;
-                fix = new DiagnosticFix(description, [new TextEdit(offset, oldBytes.Length, newValue)]);
-                return true;
-            }
-        }
-
-        // Fallback to file-wide search when diagnostic range is broader than the target scalar.
-        var global = utf8Yaml.AsSpan().IndexOf(oldBytes);
-        if (global >= 0)
-        {
-            fix = new DiagnosticFix(description, [new TextEdit(global, oldBytes.Length, newValue)]);
-            return true;
-        }
-
-        fix = default;
-        return false;
     }
 
     readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
