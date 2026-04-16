@@ -627,6 +627,8 @@
 
 **完了条件**: ルール別 table-driven 回帰で fixability catalog 準拠が担保される
 
+**実装メモ**: 完了。`RuleInterfaceTests` に 18 ルールを対象とした table-driven `AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` を追加し、各 rule の診断発生ケースで `Diagnostic.Fix` の有無を検証した。fix 付与を許可する rule-id は `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の 3 件のみであることを固定化し、他 15 ルールで fix が付かないことを回帰保証した。加えて `FixEngineTests` に mixed diagnostics を使った `AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds` を追加し、実運用形（複数ルール同時発火）でも付与済み fix の rule-id が catalog 3 件に限定されることを検証した。
+
 ---
 
 ## ルール実装ロードマップ

@@ -290,4 +290,43 @@ public sealed class FixEngineTests
                         expectedClearedRuleIds: ["deny-write-all"]))
                 .Throws<InvalidOperationException>();
     }
+
+    [Test]
+    public async Task AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds()
+    {
+        var yaml = """
+        on: pull_request_target
+        permissions: write-all
+        jobs:
+            "build job":
+                if: ${{ steps.prep.outcome == 'success' }}
+                runs-on: ubuntu-9999
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          fetch-depht: 1
+                    - shell: fish
+                      run: echo "${{ env.VERSION }}"
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "fixability-mixed.yml");
+        var expectedFixableRuleIds = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "deny-write-all",
+            "job-permissions-required",
+            "run-env-context-direct-use",
+        };
+
+        var attachedFixRuleIds = result.Diagnostics
+            .Where(static x => x.Fix is not null && x.RuleId is not null)
+            .Select(static x => x.RuleId!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        await Assert.That(attachedFixRuleIds.Length > 0).IsTrue();
+        for (var i = 0; i < attachedFixRuleIds.Length; i++)
+        {
+            await Assert.That(expectedFixableRuleIds.Contains(attachedFixRuleIds[i])).IsTrue();
+        }
+    }
 }

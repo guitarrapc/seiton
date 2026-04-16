@@ -2030,6 +2030,270 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven()
+    {
+        var cases = new[]
+        {
+            new FixabilityCase(
+                "job-structure",
+                new JobStructureRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        steps:
+                            - run: echo ng
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "reusable-workflow",
+                new ReusableWorkflowRule(),
+                """
+                on: push
+                jobs:
+                    reuse:
+                        uses: owner/repo/.github/workflows/reuse.yml@main
+                        container: node:20
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "permissions",
+                new PermissionsRule(),
+                """
+                on: push
+                permissions: admin-all
+                jobs: {}
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "popular-action-inputs",
+                new PopularActionInputsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: actions/checkout@v4
+                              with:
+                                  fetch-depht: 1
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "unpinned-uses",
+                new UnpinnedUsesRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: actions/checkout@v4
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "unpinned-image",
+                new UnpinnedImageRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        container:
+                            image: ghcr.io/example/app:latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "dangerous-triggers",
+                new DangerousTriggersRule(),
+                """
+                on: pull_request_target
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "job-permissions-required",
+                new JobPermissionsRequiredRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: true),
+            new FixabilityCase(
+                "needs-graph",
+                new NeedsGraphRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        needs: [missing]
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "shell-name",
+                new ShellNameRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - shell: fish
+                              run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "runner-label",
+                new RunnerLabelRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-9999
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "id-naming",
+                new IdNamingRule(),
+                """
+                on: push
+                jobs:
+                    "build job":
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "glob-pattern",
+                new GlobPatternRule(),
+                """
+                on:
+                    push:
+                        branches:
+                            - "***"
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "deny-write-all",
+                new DenyWriteAllRule(),
+                """
+                on: push
+                permissions: write-all
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: true),
+            new FixabilityCase(
+                "credentials",
+                new CredentialsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        container:
+                            image: registry.example.com/team/app:1.0.0
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "template-injection",
+                new TemplateInjectionRule(),
+                """
+                on: pull_request
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "${{ github.event.pull_request.title }}"
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "expr-undefined-var",
+                new ExprUndefinedVarRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        if: ${{ steps.prep.outcome == 'success' }}
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "run-env-context-direct-use",
+                new RunEnvContextDirectUseRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        env:
+                            VERSION: 1.2.3
+                        steps:
+                            - run: echo "${{ env.VERSION }}"
+                """,
+                ExpectsFix: true),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = new LintEngine([c.Rule]).Check(
+                Encoding.UTF8.GetBytes(NormalizeYaml(c.Yaml)),
+                $"fixability-{c.RuleId}.yml");
+            var diagnostics = result.Diagnostics.Where(x => x.RuleId == c.RuleId).ToArray();
+            if (diagnostics.Length == 0)
+            {
+                throw new InvalidOperationException($"fixability case '{c.RuleId}' produced no diagnostics");
+            }
+
+            if (c.ExpectsFix)
+            {
+                var hasFix = diagnostics.Any(x => x.Fix is not null);
+                if (!hasFix)
+                {
+                    throw new InvalidOperationException($"fixability case '{c.RuleId}' expected at least one attached fix");
+                }
+            }
+            else
+            {
+                var hasUnexpectedFix = diagnostics.Any(x => x.Fix is not null);
+                if (hasUnexpectedFix)
+                {
+                    throw new InvalidOperationException($"fixability case '{c.RuleId}' unexpectedly attached a fix");
+                }
+            }
+        }
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_Fix_ReplacesSimpleDotAccessWithPosixVariable()
     {
         var yaml = """
@@ -2943,6 +3207,8 @@ public sealed class RuleInterfaceTests
     }
 
     readonly record struct RuleCase(string Name, string Yaml, string[] ExpectedSubstrings);
+
+    readonly record struct FixabilityCase(string RuleId, IRule Rule, string Yaml, bool ExpectsFix);
 
     sealed class DuplicateDiagnosticRule : IRule
     {
