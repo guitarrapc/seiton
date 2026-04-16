@@ -801,7 +801,7 @@
 
 **完了条件**: 上記 5+ ケースが全件パスし、`dotnet test` が全パスする
 
-**実装メモ**:
+**実装メモ**: 完了。`tests/Seiton.Core.Tests/PinRemediationTests.cs` を新規追加し、`PinRemediationEngine` の E2E 統合テストを実装した。`LintEngine`（`UnpinnedUsesRule` + `UnpinnedImageRule`）で生成した実診断を入力に `RemediateAsync` を実行し、(1) actions SHA 解決で fix 付与、(2) image digest 解決で fix 付与、(3) `AllowNetwork: false` で resolver 未呼び出し + no-fix、(4) `FailOpen: true` で例外を握りつぶして `FailedCount` 加算、(5) `FailOpen: false` で例外伝播、をそれぞれ回帰化した。さらに `FixEngine.ApplyAndRelint(...)` と接続し、remediation で付与された fix を適用後に `unpinned-uses` / `unpinned-image` 診断が再 lint で消えること、および更新 YAML に SHA/digest pin が反映されることを検証した。
 
 ---
 
