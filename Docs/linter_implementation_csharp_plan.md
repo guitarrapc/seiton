@@ -577,6 +577,8 @@
 
 **完了条件**: caller が `LintResult.Diagnostics` から fix を選択し、更新済み UTF-8 YAML を取得できる
 
+**実装メモ**: 完了。`FixEngine` に `Apply(byte[] utf8Yaml, IEnumerable<DiagnosticFix> fixes)` と `Apply(byte[] utf8Yaml, IEnumerable<Diagnostic> diagnosticsWithFix)` を追加し、lint 実行と fix 適用を分離した外部 API を公開した。`diagnosticsWithFix` overload は `Diagnostic.Fix` がある要素のみを抽出して適用し、`Fix` なし診断は無視する。`LintResult` には `Fixes` プロパティを追加し、caller が `LintResult.Diagnostics` から選択・列挙した fix payload を簡潔に取得できるようにした。`FixEngineTests` に新 overload と `LintResult.Fixes` の回帰テストを追加して検証。
+
 ### Step 6.7: 再検証（revalidation）ヘルパーを追加
 
 **ファイル**: `src/Seiton.Core/Linting/Fixing/FixEngine.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`

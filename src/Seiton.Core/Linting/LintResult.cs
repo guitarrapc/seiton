@@ -58,6 +58,32 @@ public readonly record struct LintResult(
             return result;
         }
     }
+
+    public DiagnosticFix[] Fixes
+    {
+        get
+        {
+            if (Diagnostics.Length == 0)
+            {
+                return [];
+            }
+
+            var result = new DiagnosticFix[FixableDiagnosticCount];
+            var index = 0;
+            for (var i = 0; i < Diagnostics.Length; i++)
+            {
+                var fix = Diagnostics[i].Fix;
+                if (fix is null)
+                {
+                    continue;
+                }
+
+                result[index++] = fix.Value;
+            }
+
+            return result;
+        }
+    }
 }
 
 public readonly record struct SuppressionSummary(

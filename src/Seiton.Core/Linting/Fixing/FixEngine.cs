@@ -5,6 +5,42 @@ namespace Seiton.Core.Linting.Fixing;
 
 public static class FixEngine
 {
+    public static byte[] Apply(byte[] utf8Yaml, IEnumerable<DiagnosticFix> fixes)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentNullException.ThrowIfNull(fixes);
+
+        var edits = new List<TextEdit>();
+        foreach (var fix in fixes)
+        {
+            for (var i = 0; i < fix.Edits.Length; i++)
+            {
+                edits.Add(fix.Edits[i]);
+            }
+        }
+
+        return Apply(utf8Yaml, edits);
+    }
+
+    public static byte[] Apply(byte[] utf8Yaml, IEnumerable<Diagnostic> diagnosticsWithFix)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentNullException.ThrowIfNull(diagnosticsWithFix);
+
+        var fixes = new List<DiagnosticFix>();
+        foreach (var diagnostic in diagnosticsWithFix)
+        {
+            if (diagnostic.Fix is null)
+            {
+                continue;
+            }
+
+            fixes.Add(diagnostic.Fix.Value);
+        }
+
+        return Apply(utf8Yaml, fixes);
+    }
+
     public static byte[] Apply(byte[] utf8Yaml, IReadOnlyList<TextEdit> edits)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
