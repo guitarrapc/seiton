@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using System.Linq;
 using Seiton.Core.Linting;
+using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -1512,6 +1513,34 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_DenyWriteAll_Fix_ReplacesValueAndClearsDiagnostic()
+    {
+        var yaml = """
+        on: push
+        permissions: 'write-all'
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyWriteAllRule()]);
+        var result = engine.Check(sourceBytes, "deny-write-all-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-write-all");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsTrue();
+        var relint = engine.Check(fixedBytes, "deny-write-all-fix.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -1842,6 +1871,144 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new RunEnvContextDirectUseRule(), "run-env-context-direct-use", cases);
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_InsertsPermissionsAfterRunsOn()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var runsOnIndex = fixedText.IndexOf("runs-on: ubuntu-latest", StringComparison.Ordinal);
+        var permissionsIndex = fixedText.IndexOf("permissions: {}", StringComparison.Ordinal);
+        var stepsIndex = fixedText.IndexOf("steps:", StringComparison.Ordinal);
+
+        await Assert.That(runsOnIndex >= 0).IsTrue();
+        await Assert.That(permissionsIndex > runsOnIndex).IsTrue();
+        await Assert.That(stepsIndex > permissionsIndex).IsTrue();
+        var relint = engine.Check(fixedBytes, "job-permissions-required-fix-runs-on.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_InsertsPermissionsAfterUses()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            reuse:
+                uses: owner/repo/.github/workflows/reusable.yml@main
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var usesIndex = fixedText.IndexOf("uses: owner/repo/.github/workflows/reusable.yml@main", StringComparison.Ordinal);
+        var permissionsIndex = fixedText.IndexOf("permissions: {}", StringComparison.Ordinal);
+
+        await Assert.That(usesIndex >= 0).IsTrue();
+        await Assert.That(permissionsIndex > usesIndex).IsTrue();
+        var relint = engine.Check(fixedBytes, "job-permissions-required-fix-uses.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ReplacesSimpleDotAccessWithPosixVariable()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        var result = engine.Check(sourceBytes, "run-env-fix-posix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${{ env.VERSION }}", StringComparison.Ordinal)).IsFalse();
+        var relint = engine.Check(fixedBytes, "run-env-fix-posix.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-env-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ReplacesSimpleBracketAccessWithPowerShellVariable()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                steps:
+                    - shell: pwsh
+                      run: Write-Host "${{ env['VERSION'] }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        var result = engine.Check(sourceBytes, "run-env-fix-powershell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${{ env['VERSION'] }}", StringComparison.Ordinal)).IsFalse();
+        var relint = engine.Check(fixedBytes, "run-env-fix-powershell.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-env-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_ForCompositeExpression()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ format('{0}', env.VERSION) }}"
+        """;
+
+        var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 
     [Test]

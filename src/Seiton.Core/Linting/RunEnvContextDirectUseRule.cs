@@ -1,5 +1,6 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
+using System.Text;
 
 namespace Seiton.Core.Linting;
 
@@ -16,10 +17,10 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             return;
         }
 
-        CheckRunNode(step, run.Run);
+        CheckRunNode(step, run, run.Run);
     }
 
-    void CheckRunNode(Step step, StringNode runNode)
+    void CheckRunNode(Step step, ExecRun run, StringNode runNode)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -54,12 +55,230 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                 continue;
             }
 
-            AddStepError(
-                step,
-                "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
-                runNode.Range);
+            if (TryBuildFix(run, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
+            {
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
+                    runNode.Range,
+                    fix);
+            }
+            else
+            {
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
+                    runNode.Range);
+            }
+
             return;
         }
+    }
+
+    bool TryBuildFix(ExecRun run, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    {
+        fix = default;
+        if (Config.Utf8Yaml is null)
+        {
+            return false;
+        }
+
+        if (!TryParseSimpleEnvReference(expression, out var variableName))
+        {
+            return false;
+        }
+
+        var replacement = IsPowerShell(run.Shell, Config.Utf8Yaml)
+            ? "$env:" + variableName
+            : "${" + variableName + "}";
+
+        var absoluteOffset = runNode.Value.Offset + expressionBodyStart - 3;
+        fix = new DiagnosticFix(
+            "replace direct env context expansion with shell variable",
+            [new TextEdit(absoluteOffset, expressionLength, replacement)]);
+        return true;
+    }
+
+    static bool IsPowerShell(StringNode? shellNode, byte[] utf8Yaml)
+    {
+        if (shellNode is null || shellNode.Expression is not null)
+        {
+            return false;
+        }
+
+        var shell = Encoding.UTF8.GetString(shellNode.Value.AsSpan(utf8Yaml));
+        return string.Equals(shell, "pwsh", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(shell, "powershell", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static bool TryParseSimpleEnvReference(ReadOnlySpan<byte> expression, out string variableName)
+    {
+        variableName = string.Empty;
+        var index = 0;
+        if (!ConsumeWordIgnoreCase(expression, ref index, "env"u8))
+        {
+            return false;
+        }
+
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        if (expression[index] == (byte)'.')
+        {
+            index++;
+            if (!TryReadIdentifier(expression, ref index, out variableName))
+            {
+                return false;
+            }
+
+            SkipWhiteSpace(expression, ref index);
+            return index == expression.Length;
+        }
+
+        if (expression[index] != (byte)'[')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        var quote = expression[index];
+        if (quote is not ((byte)'\'' or (byte)'"'))
+        {
+            return false;
+        }
+
+        index++;
+        var start = index;
+        while (index < expression.Length && expression[index] != quote)
+        {
+            index++;
+        }
+
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        var nameBytes = expression[start..index];
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length || expression[index] != (byte)']')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index != expression.Length)
+        {
+            return false;
+        }
+
+        var name = Encoding.UTF8.GetString(nameBytes);
+        if (!IsSimpleIdentifier(name))
+        {
+            return false;
+        }
+
+        variableName = name;
+        return true;
+    }
+
+    static bool ConsumeWordIgnoreCase(ReadOnlySpan<byte> value, ref int index, ReadOnlySpan<byte> word)
+    {
+        if (index + word.Length > value.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < word.Length; i++)
+        {
+            var l = value[index + i];
+            var r = word[i];
+            if (l is >= (byte)'A' and <= (byte)'Z')
+            {
+                l = (byte)(l + 32);
+            }
+
+            if (l != r)
+            {
+                return false;
+            }
+        }
+
+        index += word.Length;
+        return true;
+    }
+
+    static void SkipWhiteSpace(ReadOnlySpan<byte> value, ref int index)
+    {
+        while (index < value.Length && IsWhiteSpace(value[index]))
+        {
+            index++;
+        }
+    }
+
+    static bool TryReadIdentifier(ReadOnlySpan<byte> value, ref int index, out string identifier)
+    {
+        identifier = string.Empty;
+        if (index >= value.Length || !IsIdentifierStart(value[index]))
+        {
+            return false;
+        }
+
+        var start = index;
+        index++;
+        while (index < value.Length && IsIdentifierPart(value[index]))
+        {
+            index++;
+        }
+
+        identifier = Encoding.UTF8.GetString(value[start..index]);
+        return true;
+    }
+
+    static bool IsSimpleIdentifier(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        if (!IsIdentifierStart((byte)value[0]))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < value.Length; i++)
+        {
+            if (!IsIdentifierPart((byte)value[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static bool IsIdentifierStart(byte b)
+    {
+        return (b >= (byte)'A' && b <= (byte)'Z')
+            || (b >= (byte)'a' && b <= (byte)'z')
+            || b == (byte)'_';
+    }
+
+    static bool IsIdentifierPart(byte b)
+    {
+        return IsIdentifierStart(b) || (b >= (byte)'0' && b <= (byte)'9');
     }
 
     static bool ContainsEnvRootReference(

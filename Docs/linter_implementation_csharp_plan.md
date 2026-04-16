@@ -533,6 +533,8 @@
 
 **完了条件**: `write-all` 診断に fix が付き、適用結果が `read-all` になり再 lint で当該 rule が消えるテストがパスする
 
+**実装メモ**: 完了。`DenyWriteAllRule` に `DiagnosticFix` を付与し、`permissions: write-all`（workflow/job）検出時に `TextEdit` で `read-all` へ置換できるようにした。置換は scalar slice offset を基準に行い、quote 付き値でも style を維持するよう source bytes 周辺を考慮する。`RuleInterfaceTests` に fix 付与・適用・再 lint で rule 診断が消える回帰テストを追加した。
+
 ### Step 6.4: `job-permissions-required` に fix を追加
 
 **ファイル**: `src/Seiton.Core/Linting/JobPermissionsRequiredRule.cs`
@@ -546,6 +548,8 @@
 
 **完了条件**: 通常 job / reusable workflow call job の両方で fix が付き、適用後 YAML が妥当で、再 lint で当該 warning が消える
 
+**実装メモ**: 完了。`JobPermissionsRequiredRule` に `permissions: {}` 挿入 fix を追加した。挿入位置は `runs-on:` 直後、次に `uses:` 直後、最後に job mapping の先頭 sibling key 前（fallback）で決定する。改行コードは `FixFormatting.DetectDominantLineEnding`、インデントは `FixFormatting.InferIndentation` で推定する。`RuleInterfaceTests` に通常 job / reusable workflow call job の fix 適用 + 再 lint 回帰テストを追加した。
+
 ### Step 6.5: `run-env-context-direct-use` に fix を追加
 
 **ファイル**: `src/Seiton.Core/Linting/RunEnvContextDirectUseRule.cs`
@@ -558,6 +562,8 @@
 - 関数呼び出しや複合式を含む `env` 参照は fix を出さず診断のみ
 
 **完了条件**: 単純な `${{ env.VERSION }}` / bracket access に fix が付き、複合式には fix が付かないテストがパスする
+
+**実装メモ**: 完了。`RunEnvContextDirectUseRule` は env 直接参照を検出した際、単純参照（`env.NAME` / `env['NAME']` / `env["NAME"]`）のみ `DiagnosticFix` を付与するよう更新した。shell が `pwsh`/`powershell` と静的判定できる場合は `$env:NAME`、それ以外は `${NAME}` を生成する。関数呼び出しなど複合式は診断のみ（no-fix）を維持。`RuleInterfaceTests` に dot/bracket の fix 適用 + 再 lint と composite no-fix の回帰を追加した。
 
 ### Step 6.6: Fix Apply API を `LintEngine` 外部に公開
 

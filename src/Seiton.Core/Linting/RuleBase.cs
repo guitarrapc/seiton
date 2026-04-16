@@ -61,6 +61,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
+    protected void AddStepError(Step step, string message, TextRange location, DiagnosticFix fix)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
+    }
+
     protected void AddJobWarning(Job job, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildJobLocation(job));
@@ -69,6 +74,11 @@ public abstract class RuleBase : IRule
     protected void AddJobWarning(Job job, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
+    }
+
+    protected void AddJobWarning(Job job, string message, TextRange location, DiagnosticFix fix)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
     }
 
     protected void AddEventWarning(Event ev, string message)
@@ -86,19 +96,30 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
+    protected void AddWorkflowError(Workflow workflow, string message, TextRange location, DiagnosticFix fix)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
+    }
+
     protected void AddJobError(Job job, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
-    void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location)
+    protected void AddJobError(Job job, string message, TextRange location, DiagnosticFix fix)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
+    }
+
+    void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location, DiagnosticFix? fix = null)
     {
         diagnostics.Add(new Diagnostic(
             severity,
             message,
             location,
             RuleId: Id,
-            FilePath: Config.FilePath));
+            FilePath: Config.FilePath,
+            Fix: fix));
     }
 
     protected string Decode(Utf8Slice slice)
