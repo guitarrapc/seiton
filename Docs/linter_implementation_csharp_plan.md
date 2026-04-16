@@ -502,6 +502,8 @@
 
 **完了条件**: fix を持つ `Diagnostic` を生成でき、既存ルール・既存テストを壊さずビルドが通る
 
+**実装メモ**: 完了。`Parsing/Diagnostics.cs` に `TextEdit` と `DiagnosticFix` を追加し、`Diagnostic` が optional な `Fix` payload を保持できるよう更新。`LintResult` には `HasFixableDiagnostics` / `FixableDiagnosticCount` / `FixableDiagnostics` を追加し、caller が fixable diagnostics を列挙・集計できるようにした。`FixModelTests` を追加して fix payload と集計 API の回帰を検証。
+
 ### Step 6.2: Fix Engine 共通ヘルパーを追加
 
 **ファイル**: `src/Seiton.Core/Linting/Fixing/FixEngine.cs`, `src/Seiton.Core/Linting/Fixing/FixFormatting.cs`（新規）

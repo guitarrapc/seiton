@@ -14,6 +14,50 @@ public readonly record struct LintResult(
     public bool HasFatalError => ParseResult.HasFatalError;
 
     public Diagnostic[] ParseDiagnostics => ParseResult.Diagnostics;
+
+    public bool HasFixableDiagnostics => FixableDiagnosticCount > 0;
+
+    public int FixableDiagnosticCount
+    {
+        get
+        {
+            var count = 0;
+            for (var i = 0; i < Diagnostics.Length; i++)
+            {
+                if (Diagnostics[i].Fix is not null)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    public Diagnostic[] FixableDiagnostics
+    {
+        get
+        {
+            if (Diagnostics.Length == 0)
+            {
+                return [];
+            }
+
+            var result = new Diagnostic[FixableDiagnosticCount];
+            var index = 0;
+            for (var i = 0; i < Diagnostics.Length; i++)
+            {
+                if (Diagnostics[i].Fix is null)
+                {
+                    continue;
+                }
+
+                result[index++] = Diagnostics[i];
+            }
+
+            return result;
+        }
+    }
 }
 
 public readonly record struct SuppressionSummary(
