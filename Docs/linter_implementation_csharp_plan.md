@@ -629,6 +629,22 @@
 
 **実装メモ**: 完了。`RuleInterfaceTests` に 18 ルールを対象とした table-driven `AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` を追加し、各 rule の診断発生ケースで `Diagnostic.Fix` の有無を検証した。fix 付与を許可する rule-id は `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の 3 件のみであることを固定化し、他 15 ルールで fix が付かないことを回帰保証した。加えて `FixEngineTests` に mixed diagnostics を使った `AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds` を追加し、実運用形（複数ルール同時発火）でも付与済み fix の rule-id が catalog 3 件に限定されることを検証した。
 
+### Step 6.10: Dry-Run diff プレビューを追加
+
+**ファイル**: `src/Seiton.Core/Linting/Fixing/FixEngine.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`
+
+- fix を適用せずに変更内容のみを unified diff 形式で確認できる dry-run API を追加
+  - `BuildUnifiedDiff(...)`（文字列返却）
+  - `WriteUnifiedDiff(...)`（`TextWriter` 出力）
+- 出力は変更ハンクのみを表示し、`@@ -a,b +c,d @@` ヘッダと `-` / `+` 行を含む
+- 前後コンテキスト行数を指定可能にし、既定値を 2 行に設定（1-3 行ユースケースを満たす）
+- 既存 `Apply(...)` と同一の fix 入力を受け取り、source bytes は不変（non-mutating）を保証
+- 置換編集・挿入編集の diff 表示回帰テストを追加
+
+**完了条件**: dry-run 実行で変更行中心の unified diff が得られ、source を更新しないことを確認できるテストがパスする
+
+**実装メモ**: 完了。`FixEngine` に `BuildUnifiedDiff(byte[], IEnumerable<DiagnosticFix>, string, int)` / `BuildUnifiedDiff(byte[], IEnumerable<Diagnostic>, string, int)` と、標準出力接続向けの `WriteUnifiedDiff(...)` overload を追加した。内部では適用後テキストとの差分を LCS ベースで算出し、変更ハンクのみを unified diff 形式で生成する。`tests/Seiton.Core.Tests/FixEngineTests.cs` に置換編集と挿入編集の 2 ケースを追加し、`---/+++` ヘッダ、`@@` ハンク、`-`/`+` 行、前後コンテキスト出力を回帰保証した。あわせて `Docs/Seiton_Linter_spec.md` §10 と `Docs/Seiton_Linter_csharp_spec.md` §4.4 に dry-run diff 観測契約を同期した。
+
 ---
 
 ## Phase 7: ネットワーク支援 Pin Remediation

@@ -1,10 +1,18 @@
 ﻿using Seiton.Core.Parsing;
 using System.Text;
+using System.IO;
 
 namespace Seiton.Core.Linting.Fixing;
 
 public static class FixEngine
 {
+    enum DiffKind
+    {
+        Equal,
+        Delete,
+        Insert,
+    }
+
     public static RevalidationResult ApplyAndRelint(
         LintEngine lintEngine,
         byte[] utf8Yaml,
@@ -34,6 +42,76 @@ public static class FixEngine
 
         ValidateRevalidation(before, after, selectedDiagnostics);
         return new RevalidationResult(before, after, updatedUtf8Yaml);
+    }
+
+    public static string BuildUnifiedDiff(
+        byte[] utf8Yaml,
+        IEnumerable<DiagnosticFix> fixes,
+        string filePath,
+        int contextLines = 2)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentNullException.ThrowIfNull(fixes);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        if (contextLines < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(contextLines), "contextLines must be non-negative");
+        }
+
+        var updatedUtf8Yaml = Apply(utf8Yaml, fixes);
+        return BuildUnifiedDiffCore(utf8Yaml, updatedUtf8Yaml, filePath, contextLines);
+    }
+
+    public static string BuildUnifiedDiff(
+        byte[] utf8Yaml,
+        IEnumerable<Diagnostic> diagnosticsWithFix,
+        string filePath,
+        int contextLines = 2)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentNullException.ThrowIfNull(diagnosticsWithFix);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        if (contextLines < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(contextLines), "contextLines must be non-negative");
+        }
+
+        var updatedUtf8Yaml = Apply(utf8Yaml, diagnosticsWithFix);
+        return BuildUnifiedDiffCore(utf8Yaml, updatedUtf8Yaml, filePath, contextLines);
+    }
+
+    public static void WriteUnifiedDiff(
+        TextWriter writer,
+        byte[] utf8Yaml,
+        IEnumerable<DiagnosticFix> fixes,
+        string filePath,
+        int contextLines = 2)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        var diff = BuildUnifiedDiff(utf8Yaml, fixes, filePath, contextLines);
+        if (diff.Length == 0)
+        {
+            return;
+        }
+
+        writer.Write(diff);
+    }
+
+    public static void WriteUnifiedDiff(
+        TextWriter writer,
+        byte[] utf8Yaml,
+        IEnumerable<Diagnostic> diagnosticsWithFix,
+        string filePath,
+        int contextLines = 2)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        var diff = BuildUnifiedDiff(utf8Yaml, diagnosticsWithFix, filePath, contextLines);
+        if (diff.Length == 0)
+        {
+            return;
+        }
+
+        writer.Write(diff);
     }
 
     public static RevalidationResult ApplyAndRelint(
@@ -213,6 +291,223 @@ public static class FixEngine
         }
     }
 
+    static string BuildUnifiedDiffCore(
+        byte[] originalUtf8Yaml,
+        byte[] updatedUtf8Yaml,
+        string filePath,
+        int contextLines)
+    {
+        var originalLines = SplitLines(Encoding.UTF8.GetString(originalUtf8Yaml));
+        var updatedLines = SplitLines(Encoding.UTF8.GetString(updatedUtf8Yaml));
+
+        if (AreSameLines(originalLines, updatedLines))
+        {
+            return string.Empty;
+        }
+
+        var ops = BuildDiffOperations(originalLines, updatedLines);
+        var hasDiff = false;
+        for (var i = 0; i < ops.Count; i++)
+        {
+            if (ops[i].Kind != DiffKind.Equal)
+            {
+                hasDiff = true;
+                break;
+            }
+        }
+
+        if (!hasDiff)
+        {
+            return string.Empty;
+        }
+
+        var oldPrefix = new int[ops.Count + 1];
+        var newPrefix = new int[ops.Count + 1];
+        for (var i = 0; i < ops.Count; i++)
+        {
+            oldPrefix[i + 1] = oldPrefix[i] + (ops[i].Kind == DiffKind.Insert ? 0 : 1);
+            newPrefix[i + 1] = newPrefix[i] + (ops[i].Kind == DiffKind.Delete ? 0 : 1);
+        }
+
+        var sb = new StringBuilder();
+        sb.Append("--- ");
+        sb.AppendLine(filePath);
+        sb.Append("+++ ");
+        sb.AppendLine(filePath);
+
+        var index = 0;
+        while (index < ops.Count)
+        {
+            while (index < ops.Count && ops[index].Kind == DiffKind.Equal)
+            {
+                index++;
+            }
+
+            if (index >= ops.Count)
+            {
+                break;
+            }
+
+            var firstDiff = index;
+            var hunkStart = Math.Max(0, firstDiff - contextLines);
+            var lastDiff = firstDiff;
+            index = firstDiff + 1;
+            while (index < ops.Count)
+            {
+                if (ops[index].Kind != DiffKind.Equal)
+                {
+                    lastDiff = index;
+                }
+                else if (index - lastDiff > contextLines)
+                {
+                    break;
+                }
+
+                index++;
+            }
+
+            var hunkEndExclusive = Math.Min(ops.Count, lastDiff + contextLines + 1);
+            var oldStart = oldPrefix[hunkStart] + 1;
+            var newStart = newPrefix[hunkStart] + 1;
+            var oldCount = oldPrefix[hunkEndExclusive] - oldPrefix[hunkStart];
+            var newCount = newPrefix[hunkEndExclusive] - newPrefix[hunkStart];
+
+            sb.Append("@@ -");
+            sb.Append(oldStart);
+            sb.Append(',');
+            sb.Append(oldCount);
+            sb.Append(" +");
+            sb.Append(newStart);
+            sb.Append(',');
+            sb.Append(newCount);
+            sb.AppendLine(" @@");
+
+            for (var i = hunkStart; i < hunkEndExclusive; i++)
+            {
+                var prefix = ops[i].Kind switch
+                {
+                    DiffKind.Equal => ' ',
+                    DiffKind.Delete => '-',
+                    DiffKind.Insert => '+',
+                    _ => ' ',
+                };
+
+                sb.Append(prefix);
+                sb.AppendLine(ops[i].Text);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    static bool AreSameLines(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!string.Equals(left[i], right[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static List<DiffOp> BuildDiffOperations(IReadOnlyList<string> oldLines, IReadOnlyList<string> newLines)
+    {
+        var oldCount = oldLines.Count;
+        var newCount = newLines.Count;
+        var lcs = new int[oldCount + 1, newCount + 1];
+
+        for (var i = oldCount - 1; i >= 0; i--)
+        {
+            for (var j = newCount - 1; j >= 0; j--)
+            {
+                if (string.Equals(oldLines[i], newLines[j], StringComparison.Ordinal))
+                {
+                    lcs[i, j] = lcs[i + 1, j + 1] + 1;
+                }
+                else
+                {
+                    lcs[i, j] = Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+                }
+            }
+        }
+
+        var ops = new List<DiffOp>(oldCount + newCount);
+        var oldIndex = 0;
+        var newIndex = 0;
+        while (oldIndex < oldCount && newIndex < newCount)
+        {
+            if (string.Equals(oldLines[oldIndex], newLines[newIndex], StringComparison.Ordinal))
+            {
+                ops.Add(new DiffOp(DiffKind.Equal, oldLines[oldIndex]));
+                oldIndex++;
+                newIndex++;
+                continue;
+            }
+
+            if (lcs[oldIndex + 1, newIndex] >= lcs[oldIndex, newIndex + 1])
+            {
+                ops.Add(new DiffOp(DiffKind.Delete, oldLines[oldIndex]));
+                oldIndex++;
+            }
+            else
+            {
+                ops.Add(new DiffOp(DiffKind.Insert, newLines[newIndex]));
+                newIndex++;
+            }
+        }
+
+        while (oldIndex < oldCount)
+        {
+            ops.Add(new DiffOp(DiffKind.Delete, oldLines[oldIndex]));
+            oldIndex++;
+        }
+
+        while (newIndex < newCount)
+        {
+            ops.Add(new DiffOp(DiffKind.Insert, newLines[newIndex]));
+            newIndex++;
+        }
+
+        return ops;
+    }
+
+    static string[] SplitLines(string text)
+    {
+        if (text.Length == 0)
+        {
+            return [];
+        }
+
+        var parts = text.Split('\n');
+        var count = parts.Length;
+        if (count > 0 && parts[count - 1].Length == 0)
+        {
+            count--;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var lines = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            var line = parts[i];
+            lines[i] = line.EndsWith('\r') ? line[..^1] : line;
+        }
+
+        return lines;
+    }
+
     readonly record struct DiagnosticIdentity(
         DiagnosticSeverity Severity,
         string Message,
@@ -238,6 +533,8 @@ public static class FixEngine
         {
         }
     }
+
+    readonly record struct DiffOp(DiffKind Kind, string Text);
 }
 
 public readonly record struct RevalidationResult(

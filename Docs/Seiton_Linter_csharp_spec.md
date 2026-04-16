@@ -342,6 +342,35 @@ C# result model must allow caller-side fix operations:
 
 `LintResult` remains immutable as lint output; fix application produces separate updated source content.
 
+Dry-run preview mapping:
+
+- `FixEngine` provides unified diff generation from source + selected fixes.
+- Preview APIs return diff text and support direct writer output (for CLI standard output use).
+- Preview operation does not mutate source bytes.
+
+Representative shape:
+
+```csharp
+public static string BuildUnifiedDiff(
+	byte[] utf8Yaml,
+	IEnumerable<Diagnostic> diagnosticsWithFix,
+	string filePath,
+	int contextLines = 2);
+
+public static void WriteUnifiedDiff(
+	TextWriter writer,
+	byte[] utf8Yaml,
+	IEnumerable<Diagnostic> diagnosticsWithFix,
+	string filePath,
+	int contextLines = 2);
+```
+
+Output contract:
+
+- Unified diff hunk format with `@@ -a,b +c,d @@`
+- Changed-line focused output with configurable context lines
+- Deterministic output for identical input bytes + fix selection
+
 ### 4.5 Network-Assisted Pin Remediation Mapping
 
 Shared contract reference:

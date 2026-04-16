@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using System.Text;
@@ -87,7 +87,12 @@ public sealed class FixEngineTests
     [Test]
     public async Task InferIndentation_PrefersSiblingIndentation()
     {
-        var source = "jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n";
+        var source = NormalizeYamlLiteral("""
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+        """);
 
         var indentation = FixFormatting.InferIndentation(source, siblingLineNumber: 3, parentLineNumber: 2);
 
@@ -97,7 +102,10 @@ public sealed class FixEngineTests
     [Test]
     public async Task InferIndentation_FallsBackToParentPlusIndentationUnit()
     {
-        var source = "jobs:\n  build:\n";
+        var source = NormalizeYamlLiteral("""
+        jobs:
+          build:
+        """);
 
         var indentation = FixFormatting.InferIndentation(source, siblingLineNumber: null, parentLineNumber: 2);
 
@@ -107,14 +115,18 @@ public sealed class FixEngineTests
     [Test]
     public async Task TryInferIndentation_ReturnsFalse_ForMixedScopeIndentation()
     {
-        var source = "jobs:\n  build:\n    runs-on: ubuntu-latest\n\tsteps:\n";
+        var source = NormalizeYamlLiteral("""
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+        """) + "  \tsteps:\n";
 
         var ok = FixFormatting.TryInferIndentation(
             source,
             siblingLineNumber: null,
-            parentLineNumber: 2,
-            scopeStartLine: 3,
-            scopeEndLine: 4,
+            parentLineNumber: 3,
+            scopeStartLine: 4,
+            scopeEndLine: 5,
             out _);
 
         await Assert.That(ok).IsFalse();
@@ -123,14 +135,17 @@ public sealed class FixEngineTests
     [Test]
     public async Task TryInferIndentation_ReturnsFalse_WhenSpaceParentWouldRequireGlobalTabUnit()
     {
-        var source = "jobs:\n  build: {}\n\tnote: tab-leading\n";
+        var source = NormalizeYamlLiteral("""
+        jobs:
+          build: {}
+        """) + "\tnote: tab-leading\n";
 
         var ok = FixFormatting.TryInferIndentation(
             source,
             siblingLineNumber: null,
-            parentLineNumber: 2,
-            scopeStartLine: 3,
-            scopeEndLine: 3,
+            parentLineNumber: 3,
+            scopeStartLine: 4,
+            scopeEndLine: 4,
             out _);
 
         await Assert.That(ok).IsFalse();
@@ -176,7 +191,7 @@ public sealed class FixEngineTests
     [Test]
     public async Task ApplyAndRelint_ClearsSelectedDiagnostics()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         permissions: write-all
         jobs:
@@ -184,7 +199,7 @@ public sealed class FixEngineTests
             runs-on: ubuntu-latest
             steps:
               - run: echo ok
-        """;
+        """);
 
         var source = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyWriteAllRule()]);
@@ -200,14 +215,14 @@ public sealed class FixEngineTests
     [Test]
     public async Task ApplyAndRelint_ThrowsWhenFatalParseErrorIsIntroduced()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
             runs-on: ubuntu-latest
             steps:
               - run: echo ok
-        """;
+        """);
 
         var source = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobStructureRule()]);
@@ -328,5 +343,160 @@ public sealed class FixEngineTests
         {
             await Assert.That(expectedFixableRuleIds.Contains(attachedFixRuleIds[i])).IsTrue();
         }
+    }
+
+    [Test]
+    public async Task BuildUnifiedDiff_ShowsChangedLinesAndContext_ForReplacementEdit()
+    {
+        var sourceText = NormalizeEol("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+            """);
+        var source = Encoding.UTF8.GetBytes(sourceText);
+        var offset = sourceText.IndexOf("push", StringComparison.Ordinal);
+        var fixes = new[]
+        {
+            new DiagnosticFix("replace trigger", [new TextEdit(offset, "push".Length, "pull_request")]),
+        };
+
+        var diff = FixEngine.BuildUnifiedDiff(source, fixes, "workflow.yml", contextLines: 1);
+
+        await Assert.That(diff.Contains("--- workflow.yml", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("+++ workflow.yml", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("@@", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("-on: push", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("+on: pull_request", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains(" jobs:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("runs-on: ubuntu-latest", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task BuildUnifiedDiff_ShowsInsertedLine_ForInsertionEdit()
+    {
+        var sourceText = NormalizeYamlLiteral("""
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """);
+        var source = Encoding.UTF8.GetBytes(sourceText);
+        var offset = sourceText.IndexOf("    steps:", StringComparison.Ordinal);
+        var fixes = new[]
+        {
+            new DiagnosticFix("insert permissions", [new TextEdit(offset, 0, "    permissions: {}\n")]),
+        };
+
+        var diff = FixEngine.BuildUnifiedDiff(source, fixes, "workflow.yml", contextLines: 1);
+
+        await Assert.That(diff.Contains("@@", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("+    permissions: {}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diff.Contains("-    steps:", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task JobPermissionsRequiredFix_AndDryRunDiff_PreserveIndentation_ForTwoSpaceYaml()
+    {
+        var sourceText = NormalizeYamlLiteral("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """);
+
+        var source = Encoding.UTF8.GetBytes(sourceText);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var lint = engine.Check(source, "indent-2.yml");
+
+        await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
+
+        var diff = NormalizeEol(FixEngine.BuildUnifiedDiff(source, lint.Diagnostics, "indent-2.yml", contextLines: 1));
+        await Assert.That(diff.Contains("+    permissions: {}", StringComparison.Ordinal)).IsTrue();
+
+        var updated = NormalizeEol(Encoding.UTF8.GetString(FixEngine.Apply(source, lint.Diagnostics)));
+        await Assert.That(updated.Contains("    runs-on: ubuntu-latest\n    permissions: {}\n    steps:", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task JobPermissionsRequiredFix_AndDryRunDiff_PreserveIndentation_ForFourSpaceYaml()
+    {
+        var sourceText = NormalizeYamlLiteral("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """);
+
+        var source = Encoding.UTF8.GetBytes(sourceText);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var lint = engine.Check(source, "indent-4.yml");
+
+        await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
+
+        var diff = NormalizeEol(FixEngine.BuildUnifiedDiff(source, lint.Diagnostics, "indent-4.yml", contextLines: 1));
+        await Assert.That(diff.Contains("+        permissions: {}", StringComparison.Ordinal)).IsTrue();
+
+        var updated = NormalizeEol(Encoding.UTF8.GetString(FixEngine.Apply(source, lint.Diagnostics)));
+        await Assert.That(updated.Contains("        runs-on: ubuntu-latest\n        permissions: {}\n        steps:", StringComparison.Ordinal)).IsTrue();
+    }
+
+    static string NormalizeEol(string value)
+    {
+        return value
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal);
+    }
+    static string NormalizeYamlLiteral(string value)
+    {
+        var normalized = NormalizeEol(value);
+        var lines = normalized.Split('\n');
+
+        var minIndent = int.MaxValue;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var indent = 0;
+            while (indent < line.Length && line[indent] == ' ')
+            {
+                indent++;
+            }
+
+            if (indent == line.Length)
+            {
+                continue;
+            }
+
+            if (indent < minIndent)
+            {
+                minIndent = indent;
+            }
+        }
+
+        if (minIndent == int.MaxValue || minIndent == 0)
+        {
+            return normalized;
+        }
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.Length >= minIndent)
+            {
+                lines[i] = line[minIndent..];
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 }

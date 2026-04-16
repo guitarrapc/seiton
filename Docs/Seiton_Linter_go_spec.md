@@ -342,6 +342,37 @@ Go result model must support caller-side fix workflows:
 - count fixable diagnostics
 - apply selected fixes without mutating original lint result object/value
 
+Dry-run preview mapping:
+
+- Fix engine provides unified diff generation from source + selected fixes.
+- Preview APIs should support both string-return and writer-target output (CLI standard output use).
+- Preview operation must not mutate source bytes.
+
+Reference shape:
+
+```go
+func BuildUnifiedDiff(
+    utf8YAML []byte,
+    diagnosticsWithFix []*Diagnostic,
+    filePath string,
+    contextLines int,
+) (string, error)
+
+func WriteUnifiedDiff(
+    w io.Writer,
+    utf8YAML []byte,
+    diagnosticsWithFix []*Diagnostic,
+    filePath string,
+    contextLines int,
+) error
+```
+
+Output contract:
+
+- Unified diff hunk format with `@@ -a,b +c,d @@`
+- changed-line focused output with configurable context lines
+- deterministic output for identical input bytes + selected fixes
+
 ### 4.5 Network-Assisted Pin Remediation Mapping
 
 Shared contract reference:

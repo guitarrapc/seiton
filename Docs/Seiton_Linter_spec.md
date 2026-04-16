@@ -528,8 +528,19 @@ When a lint result includes diagnostics with fixes, the caller must be able to:
 - Query which diagnostics in a `LintResult` have an associated `DiagnosticFix`.
 - Count total fixable diagnostics.
 - Apply fixes selectively (per-diagnostic or all-fixable).
+- Run a dry-run preview mode that emits patch-style diff output without mutating source.
 
 Fix application is a separate operation from linting and must not mutate the `LintResult` or the original source bytes.
+
+### 10.1 Dry-Run Diff Preview
+
+Dry-run preview is an output-only operation for fix review.
+
+- Dry-run must not modify source files.
+- Output format should be unified diff style with hunk headers (for example `@@ -a,b +c,d @@`) and `-` / `+` line markers.
+- Preview scope should be limited to changed hunks, not full-file dump.
+- Implementations should include configurable nearby context lines around each change (recommended default: 1-3 lines).
+- Output target is runtime-defined (for example standard output in CLI mode), but behavior must remain deterministic for identical inputs.
 
 ---
 
