@@ -545,3 +545,182 @@ Exclusion-aware lint evaluation sequence is fixed as follows.
 6. Sort and deduplicate diagnostics.
 7. Apply exclusion/suppression filtering using §5.2 precedence.
 8. Emit final diagnostics and suppression observability data (§6.1).
+
+---
+
+## 12. Network-Assisted Pin Remediation
+
+This section specifies the optional network-assisted remediation feature that enables `unpinned-uses` and `unpinned-image` diagnostics to carry auto-fix suggestions by resolving SHA/digest values at fix application time.
+
+### 12.1 Motivation and Scope
+
+§8.3 and §8.4 classify `unpinned-uses` and `unpinned-image` as not auto-fixable because fix generation must not perform I/O. Network-assisted pin remediation is a **separate, opt-in operation** that satisfies this constraint by deferring resolution to an explicit remediation phase distinct from lint execution.
+
+Comparison of reference tools:
+
+| Aspect | pinact | dockerfile-pin | frizbee |
+|---|---|---|---|
+| GitHub Actions SHA | GitHub REST API | — | GitHub REST API |
+| OCI image digest | — | OCI registry HEAD | OCI registry HEAD |
+| GitHub token source | `PINACT_GITHUB_TOKEN` → `GITHUB_TOKEN` → keyring → ghtkn → anon | — | `GITHUB_TOKEN` → anon |
+| GHES support | Yes (`ghes.api_url`, `ghes.fallback`) | No | No |
+| OCI auth | — | `authn.DefaultKeychain` (`~/.docker/config.json`) | `authn.DefaultKeychain` |
+| Default excludes | `ignore_actions` (regex) | `ignore-images` (glob, negation) | `exclude_branches: [main, master]`; `scratch` always; `latest` by default |
+| Separate command | `pinact run` | `dockerfile-pin run` | `frizbee actions` / `frizbee image` |
+| Skip sentinel | — | — | `ErrReferenceSkipped` |
+
+Design principles adopted for Seiton:
+- Resolution is injected via an interface — not embedded in lint rules.
+- Two separate resolver interfaces: one for GitHub Actions SHA, one for OCI image digest.
+- Resolution is never called during `Check(utf8Yaml, filePath)`; only during an explicit `Remediate()` operation.
+- Resolver caches results in-process to avoid redundant network calls across diagnostics.
+- Resolver failures leave the diagnostic without a fix (`failOpen: true` behavior).
+
+### 12.2 Resolver Interfaces
+
+#### 12.2.1 `IActionShaResolver`
+
+Resolves a GitHub Actions or Reusable Workflow reference to a pinned commit SHA.
+
+```
+Resolve(owner, repo, ref) -> (sha, tagComment, error)
+```
+
+- `owner`: repository owner (e.g. `actions`)
+- `repo`: repository name (e.g. `checkout`)
+- `ref`: tag, branch, or SHA string as it appears in the `uses:` value (e.g. `v4`, `main`)
+- Returns: 40-hex SHA, original ref as comment string (e.g. `v4`), error
+- Returns `(null, null, SkippedError)` when the ref is excluded by configuration (matches `ignore_actions` patterns).
+
+#### 12.2.2 `IImageDigestResolver`
+
+Resolves an OCI image reference to a pinned digest.
+
+```
+Resolve(imageRef) -> (digest, error)
+```
+
+- `imageRef`: fully-qualified image reference with tag (e.g. `node:20.11.1`, `ghcr.io/org/image:v1.2.3`)
+- Returns: `sha256:<hex>` digest string, error
+- Returns `(null, SkippedError)` when the image ref is excluded by configuration (matches `exclude_images` or `exclude_tags` patterns).
+
+### 12.3 Configuration
+
+Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the Seiton configuration file.
+
+```yaml
+pin_resolution:
+  allow_network: false             # must be true to enable remediation
+  github_actions:
+    token_env_vars:
+      - SEITON_GITHUB_TOKEN
+      - GITHUB_TOKEN
+    ghes_api_url: ""               # optional; empty = github.com only
+    ghes_fallback: false           # if true, fall back to github.com when repo not found on GHES
+    ignore_actions:
+      - name: "slsa-framework/.*"
+        ref: ".*"
+    exclude_branches:
+      - main
+      - master
+  images:
+    exclude_images:
+      - scratch
+    exclude_tags:
+      - latest
+    ignore_images:
+      - "mcr.microsoft.com/**"
+  fail_open: true                  # if true, resolution failures leave diagnostic without fix
+  request_timeout_sec: 30
+  max_concurrency: 4
+```
+
+#### 12.3.1 `allow_network`
+
+When `false` (the default), no resolver is instantiated and `unpinned-uses`/`unpinned-image` diagnostics carry no fix. When `true`, resolver implementations may be provided.
+
+#### 12.3.2 `github_actions.token_env_vars`
+
+Ordered list of environment variable names to check for a GitHub API token. The first non-empty value is used. If no variable yields a token, the GitHub API is called unauthenticated (lower rate limit). Rationale: tool-specific env var (`SEITON_GITHUB_TOKEN`) takes priority over the generic `GITHUB_TOKEN`, matching pinact's pattern.
+
+#### 12.3.3 `github_actions.ghes_api_url` and `github_actions.ghes_fallback`
+
+Optional support for GitHub Enterprise Server. When `ghes_api_url` is set, the resolver first queries the GHES instance. If `ghes_fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
+
+#### 12.3.4 `github_actions.ignore_actions`
+
+List of name/ref patterns (regex) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA.
+
+#### 12.3.5 `github_actions.exclude_branches`
+
+Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
+
+#### 12.3.6 `images.exclude_images` and `images.exclude_tags`
+
+Glob patterns for images and tags to skip during digest resolution.
+
+- `scratch` is always excluded regardless of configuration (enforced by resolver, matching frizbee's `MergeUserConfig` safety invariant).
+- `latest` is excluded by default (matches frizbee's default `ExcludeTags`). Rationale: pinning `latest` is semantically vacuous — it will drift immediately.
+
+#### 12.3.7 `fail_open`
+
+When `true` (the default), resolution failures (network error, auth failure, timeout) leave the diagnostic without a fix rather than causing the remediation call to fail. Callers may inspect which diagnostics received fixes and which did not. When `false`, any resolution failure causes the remediation call to return an error.
+
+### 12.4 Resolution Caching
+
+- Both resolvers must cache successful results in-process for the duration of a single remediation call.
+- Cache key for `IActionShaResolver`: `(owner, repo, ref)`.
+- Cache key for `IImageDigestResolver`: fully-qualified image reference string.
+- Error results (non-skip, non-success) must not be cached to prevent false-negative propagation across files.
+- Cache must be concurrency-safe.
+
+### 12.5 Pin Fix Format
+
+#### 12.5.1 Actions SHA Fix Format
+
+An `unpinned-uses` diagnostic fix replaces the `@ref` portion of the `uses:` value:
+
+- Before: `uses: actions/checkout@v4`
+- After: `uses: actions/checkout@<sha40> # v4`
+
+The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment preserves the original ref string verbatim.
+
+If the ref is already a 40-hex SHA, it is considered already pinned; no fix is generated.
+
+#### 12.5.2 OCI Digest Fix Format
+
+An `unpinned-image` diagnostic fix appends `@sha256:<hex>` to the image reference, preserving the tag:
+
+- Before: `image: node:20.11.1`
+- After: `image: node:20.11.1@sha256:<hex>`
+- Before: `uses: docker://ghcr.io/astral-sh/uv:latest`
+- After: `uses: docker://ghcr.io/astral-sh/uv:latest@sha256:<hex>`
+
+Tag is preserved (not replaced). This matches dockerfile-pin's output format. The digest is appended as `@sha256:...` so the image still references the same named tag, but is now content-addressed.
+
+If the image reference already contains `@sha256:`, it is considered already pinned; no fix is generated.
+
+### 12.6 Integration with Fix Catalog
+
+When `allow_network: true` and resolvers are injected:
+
+| Rule ID | Fix Feasibility (with network) | Notes |
+|---|---|---|
+| `unpinned-uses` | ✓ Fixable (network-assisted) | Via `IActionShaResolver` |
+| `unpinned-image` | ✓ Fixable (network-assisted) | Via `IImageDigestResolver` |
+
+When `allow_network: false` (default), these rules remain ✗ Not auto-fixable as specified in §8.4.
+
+### 12.7 Separation from Lint Contract
+
+- `Check()` never performs network I/O; §8.3 is unchanged.
+- `Remediate(diagnostics, resolvers)` is a separate entry point that accepts pre-collected diagnostics and resolver implementations.
+- Callers are responsible for constructing and injecting resolver implementations; lint rules do not hold resolver references.
+- The fix data model (§8.1) is unchanged — network-assisted fixes are `DiagnosticFix` values like any other.
+
+### 12.8 Observability
+
+When remediation is run:
+- Callers can count how many `unpinned-uses`/`unpinned-image` diagnostics received fixes vs. were left without fix (skipped or failed).
+- Skip reason (excluded by config) and failure reason (network error) must be distinguishable in the returned result.
+- Resolver implementations should log resolution attempts at debug level and failures at warning level.
