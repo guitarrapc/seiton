@@ -342,6 +342,126 @@ Go result model must support caller-side fix workflows:
 - count fixable diagnostics
 - apply selected fixes without mutating original lint result object/value
 
+### 4.5 Network-Assisted Pin Remediation Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §12
+
+Go implementation mapping for network-assisted pin remediation.
+
+#### 4.5.1 Resolver Interfaces
+
+```go
+// ActionShaResolver resolves a GitHub Actions / Reusable Workflow reference to a pinned commit SHA.
+type ActionShaResolver interface {
+    // Resolve resolves owner/repo@ref to (sha, tagComment, error).
+    // Returns ("", "", ErrReferenceSkipped) when the ref is excluded by configuration.
+    Resolve(ctx context.Context, owner, repo, ref string) (sha, tagComment string, err error)
+}
+
+// ImageDigestResolver resolves an OCI image reference to a pinned digest.
+type ImageDigestResolver interface {
+    // Resolve resolves imageRef to a sha256 digest string.
+    // Returns ("", ErrReferenceSkipped) when the image is excluded by configuration.
+    Resolve(ctx context.Context, imageRef string) (digest string, err error)
+}
+
+// ErrReferenceSkipped is returned when a resolver excludes a reference by configuration.
+var ErrReferenceSkipped = errors.New("reference skipped by configuration")
+```
+
+Go implementation notes:
+
+- Both interfaces accept `context.Context` for timeout/cancellation propagation.
+- `ErrReferenceSkipped` sentinel distinguishes config-based skip from resolution failure.
+- Implementations must be concurrency-safe and cache successful resolutions in-process.
+- Error results (non-skip failures) must not be cached.
+- Resolver implementations are injected by caller — not held by `Linter`.
+
+#### 4.5.2 Remediation Entry Point
+
+```go
+type PinRemediationEngine struct {
+    actionShaResolver   ActionShaResolver   // may be nil when AllowNetwork is false
+    imageDigestResolver ImageDigestResolver // may be nil when AllowNetwork is false
+    config              PinResolutionConfig
+}
+
+func NewPinRemediationEngine(
+    actionShaResolver ActionShaResolver,
+    imageDigestResolver ImageDigestResolver,
+    config PinResolutionConfig,
+) *PinRemediationEngine
+
+// Remediate attaches network-resolved fix payloads to unpinned-uses / unpinned-image diagnostics.
+// Returns a new slice where fixable diagnostics carry DiagnosticFix.
+// Does not mutate the input slice.
+func (e *PinRemediationEngine) Remediate(
+    ctx context.Context,
+    diagnostics []*Diagnostic,
+    utf8Yaml []byte,
+) (*RemediationResult, error)
+```
+
+#### 4.5.3 Configuration Mapping
+
+```go
+type PinResolutionConfig struct {
+    AllowNetwork bool
+
+    GitHubActions GitHubActionsResolutionConfig
+    Images        ImageResolutionConfig
+
+    FailOpen         bool          // default true
+    RequestTimeout   time.Duration // default 30s
+    MaxConcurrency   int           // default 4
+}
+
+type GitHubActionsResolutionConfig struct {
+    TokenEnvVars     []string             // default: ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]
+    GHESApiURL       string               // empty = github.com only
+    GHESFallback     bool
+    IgnoreActions    []IgnoreActionEntry
+    ExcludeBranches  []string             // default: ["main", "master"]
+}
+
+type ImageResolutionConfig struct {
+    ExcludeImages []string // default: ["scratch"] — always enforced
+    ExcludeTags   []string // default: ["latest"]
+    IgnoreImages  []string // doublestar glob patterns
+}
+
+type IgnoreActionEntry struct {
+    NamePattern string // regex
+    RefPattern  string // regex
+}
+```
+
+Safety invariants:
+
+- `scratch` is always appended to `ExcludeImages` even if omitted from user config (enforced in `NewPinRemediationEngine`).
+- `AllowNetwork: false` prevents any network call; `Remediate` must return input diagnostics unchanged.
+
+#### 4.5.4 Fix Format
+
+Actions SHA fix (§12.5.1): replace `@ref` in uses scalar with `@<sha40> # <originalRef>` using ` # ` separator.
+
+OCI digest fix (§12.5.2): append `@sha256:<hex>` to the image reference after the tag.
+
+Both match the output format of pinact (actions) and dockerfile-pin (images).
+
+#### 4.5.5 RemediationResult
+
+```go
+type RemediationResult struct {
+    Diagnostics    []*Diagnostic
+    ResolvedCount  int
+    SkippedCount   int
+    FailedCount    int
+}
+```
+
 ---
 
 ## 5. Cross-Document Consistency Rule

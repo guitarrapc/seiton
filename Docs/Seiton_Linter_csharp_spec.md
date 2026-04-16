@@ -342,6 +342,156 @@ C# result model must allow caller-side fix operations:
 
 `LintResult` remains immutable as lint output; fix application produces separate updated source content.
 
+### 4.5 Network-Assisted Pin Remediation Mapping
+
+Shared contract reference:
+
+- `Seiton_Linter_spec.md` §12
+
+C# implementation mapping for network-assisted pin remediation.
+
+#### 4.5.1 Resolver Interfaces
+
+```csharp
+/// <summary>
+/// Resolves a GitHub Actions / Reusable Workflow reference to a pinned commit SHA.
+/// </summary>
+public interface IActionShaResolver
+{
+    /// <summary>
+    /// Resolves owner/repo@ref to (sha40, originalRef).
+    /// Returns null for both when the ref is excluded by configuration.
+    /// </summary>
+    Task<(string? Sha, string? TagComment)> ResolveAsync(
+        string owner, string repo, string refStr,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Resolves an OCI image reference to a pinned digest.
+/// </summary>
+public interface IImageDigestResolver
+{
+    /// <summary>
+    /// Resolves imageRef (e.g. "node:20.11.1") to a sha256 digest string.
+    /// Returns null when the image is excluded by configuration.
+    /// </summary>
+    Task<string?> ResolveAsync(
+        string imageRef,
+        CancellationToken cancellationToken = default);
+}
+```
+
+C# implementation notes:
+
+- Both interfaces are `async`; resolution may perform network I/O.
+- `null` return indicates configuration-based skip (not an error).
+- Implementations must cache successful resolutions in-process for the duration of a single `RemediateAsync` call.
+- Error results (non-skip failures) must not be cached.
+- Resolver implementations are injected by caller — not instantiated by `LintEngine`.
+
+#### 4.5.2 Remediation Entry Point
+
+```csharp
+public sealed class PinRemediationEngine
+{
+    public PinRemediationEngine(
+        IActionShaResolver? actionShaResolver,
+        IImageDigestResolver? imageDigestResolver,
+        PinResolutionConfig config)
+    { }
+
+    /// <summary>
+    /// Attaches network-resolved fix payloads to unpinned-uses / unpinned-image diagnostics.
+    /// Returns a new collection where fixable diagnostics carry DiagnosticFix.
+    /// Does not mutate LintResult.
+    /// </summary>
+    public Task<IReadOnlyList<Diagnostic>> RemediateAsync(
+        IReadOnlyList<Diagnostic> diagnostics,
+        byte[] utf8Yaml,
+        CancellationToken cancellationToken = default);
+}
+```
+
+#### 4.5.3 Configuration Mapping
+
+`PinResolutionConfig` maps from `pin_resolution` in the configuration file (§12.3):
+
+```csharp
+public sealed record PinResolutionConfig
+{
+    public bool AllowNetwork { get; init; } = false;
+
+    public GitHubActionsResolutionConfig GitHubActions { get; init; } = new();
+    public ImageResolutionConfig Images { get; init; } = new();
+
+    public bool FailOpen { get; init; } = true;
+    public int RequestTimeoutSec { get; init; } = 30;
+    public int MaxConcurrency { get; init; } = 4;
+}
+
+public sealed record GitHubActionsResolutionConfig
+{
+    public IReadOnlyList<string> TokenEnvVars { get; init; } =
+        ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
+    public string? GhesApiUrl { get; init; } = null;
+    public bool GhesFallback { get; init; } = false;
+    public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
+    public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
+}
+
+public sealed record ImageResolutionConfig
+{
+    public IReadOnlyList<string> ExcludeImages { get; init; } = ["scratch"];
+    public IReadOnlyList<string> ExcludeTags { get; init; } = ["latest"];
+    public IReadOnlyList<string> IgnoreImages { get; init; } = [];
+}
+
+public sealed record IgnoreActionEntry(string NamePattern, string RefPattern);
+```
+
+Safety invariants:
+
+- `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.6).
+- `AllowNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `AllowNetwork: false` must not make any network calls even if resolver implementations are injected.
+
+#### 4.5.4 Fix Format
+
+Actions SHA fix (§12.5.1):
+- `TextEdit` replaces the `@ref` portion of the `uses:` scalar value.
+- Replacement: `@<sha40> # <originalRef>` using ` # ` separator.
+- If ref is already a 40-hex SHA, no fix is generated.
+
+OCI digest fix (§12.5.2):
+- `TextEdit` appends `@sha256:<hex>` immediately after the tag in the image reference.
+- Tag is preserved; digest is appended.
+- If image reference already contains `@sha256:`, no fix is generated.
+
+#### 4.5.5 Integration with LintEngine and Fix Catalog
+
+- `LintEngine.Check()` is unchanged — it never performs network I/O (§8.3 preserved).
+- `PinRemediationEngine.RemediateAsync()` is a separate operation, not called from `Check()`.
+- When `AllowNetwork: true`, `unpinned-uses` and `unpinned-image` diagnostics may receive fixes from `RemediateAsync()`; §8.4 catalog status changes to ✓ Fixable (network-assisted) for those rules.
+- Diagnostics without a resolver result (skip or fail-open) remain without fix payload.
+
+#### 4.5.6 Observability
+
+`RemediateAsync` must return enough information to distinguish:
+
+- Diagnostics that received a fix (resolved successfully)
+- Diagnostics skipped by configuration (excluded by `IgnoreActions`/`ExcludeImages`/`ExcludeBranches`)
+- Diagnostics where resolution failed and `FailOpen: true` left them without fix
+
+This maps to a `RemediationResult` wrapper:
+
+```csharp
+public sealed record RemediationResult(
+    IReadOnlyList<Diagnostic> Diagnostics,
+    int ResolvedCount,
+    int SkippedCount,
+    int FailedCount);
+```
+
 ---
 
 ## 5. Cross-Document Consistency Rule

@@ -631,6 +631,180 @@
 
 ---
 
+## Phase 7: ネットワーク支援 Pin Remediation
+
+**目標**: 仕様 `Seiton_Linter_spec.md` §12 および `Seiton_Linter_csharp_spec.md` §4.5 に沿って、`unpinned-uses` / `unpinned-image` 診断に対してネットワーク経由で SHA/digest を解決し、fix payload を付与する opt-in 機能を実装する。
+
+> **前提**: Phase 6 (Fix Engine) が完了していること。§8.3 の「fix 生成中は I/O 禁止」制約は維持され、本 Phase の機能は `LintEngine.Check()` とは独立した `PinRemediationEngine.RemediateAsync()` として実装する。
+
+> **初期スコープ**: `allow_network: true` のときのみ有効。デフォルト無効。GHES サポートは Phase 7 に含め、初期実装として提供する。
+
+### Step 7.1: `PinResolutionConfig` と設定モデルを追加
+
+**ファイル**: `src/Seiton.Core/Linting/PinRemediation/PinResolutionConfig.cs`（新規）
+
+- `PinResolutionConfig` record を追加
+  - `AllowNetwork` (bool, default false)
+  - `GitHubActions` (`GitHubActionsResolutionConfig`)
+  - `Images` (`ImageResolutionConfig`)
+  - `FailOpen` (bool, default true)
+  - `RequestTimeoutSec` (int, default 30)
+  - `MaxConcurrency` (int, default 4)
+- `GitHubActionsResolutionConfig` record を追加
+  - `TokenEnvVars` (`IReadOnlyList<string>`, default `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`)
+  - `GhesApiUrl` (string?, default null)
+  - `GhesFallback` (bool, default false)
+  - `IgnoreActions` (`IReadOnlyList<IgnoreActionEntry>`, default empty)
+  - `ExcludeBranches` (`IReadOnlyList<string>`, default `["main", "master"]`)
+- `ImageResolutionConfig` record を追加
+  - `ExcludeImages` (`IReadOnlyList<string>`, default `["scratch"]`)
+  - `ExcludeTags` (`IReadOnlyList<string>`, default `["latest"]`)
+  - `IgnoreImages` (`IReadOnlyList<string>`, default empty — doublestar glob)
+- `IgnoreActionEntry` record を追加 (`NamePattern` / `RefPattern` — regex)
+- `scratch` は `ExcludeImages` に常に強制付加（コンストラクション時に保証）
+
+**完了条件**: 型が定義されビルドが通る
+
+**実装メモ**:
+
+### Step 7.2: `IActionShaResolver` / `IImageDigestResolver` インターフェースを追加
+
+**ファイル**: `src/Seiton.Core/Linting/PinRemediation/IActionShaResolver.cs`, `src/Seiton.Core/Linting/PinRemediation/IImageDigestResolver.cs`（新規）
+
+- `IActionShaResolver` を追加
+  - `Task<(string? Sha, string? TagComment)> ResolveAsync(string owner, string repo, string refStr, CancellationToken ct)`
+  - `null` return = config による skip
+- `IImageDigestResolver` を追加
+  - `Task<string?> ResolveAsync(string imageRef, CancellationToken ct)`
+  - `null` return = config による skip
+- `RemediationResult` record を追加
+  - `IReadOnlyList<Diagnostic> Diagnostics`
+  - `int ResolvedCount`
+  - `int SkippedCount`
+  - `int FailedCount`
+
+**完了条件**: インターフェースが定義されビルドが通る。モック実装でテスト補助できる型が揃う。
+
+**実装メモ**:
+
+### Step 7.3: `PinRemediationEngine` のコアを実装
+
+**ファイル**: `src/Seiton.Core/Linting/PinRemediation/PinRemediationEngine.cs`（新規）
+
+- `PinRemediationEngine` を追加
+  - コンストラクタで `IActionShaResolver?` / `IImageDigestResolver?` / `PinResolutionConfig` を受け取る
+  - `AllowNetwork: false` かつ/または resolver が null の場合、`RemediateAsync` は入力を pass-through で返す（ネットワーク呼び出しゼロ）
+- `RemediateAsync(IReadOnlyList<Diagnostic>, byte[], CancellationToken)` を実装
+  - `unpinned-uses` 診断 → `IActionShaResolver` に解決依頼
+  - `unpinned-image` 診断 → `IImageDigestResolver` に解決依頼
+  - 解決成功 → `DiagnosticFix` を付与した `Diagnostic` に置き換え
+  - skip (resolver が null 返却) → fix なし、SkippedCount++
+  - 解決失敗 + `FailOpen: true` → fix なし、FailedCount++; 例外を飲み込む
+  - 解決失敗 + `FailOpen: false` → 例外を伝播
+  - `MaxConcurrency` を使って `SemaphoreSlim` で並列度を制限
+  - `RequestTimeoutSec` を CancellationToken に追加して per-request timeout を適用
+
+**完了条件**:
+- `AllowNetwork: false` かつ resolver null でも pass-through になるテストがパスする
+- モック resolver で resolve/skip/fail それぞれのパスが検証できる単体テストがパスする
+
+**実装メモ**:
+
+### Step 7.4: Actions SHA resolver 実装（GitHub API）
+
+**ファイル**: `src/Seiton.Core/Linting/PinRemediation/GitHubActionShaResolver.cs`（新規）
+
+- `GitHubActionShaResolver : IActionShaResolver` を追加
+- 実装要件:
+  - GitHub REST API `GET /repos/{owner}/{repo}/git/refs/tags/{ref}` で SHA 解決
+  - アノテーション付きタグの場合は `GET /repos/{owner}/{repo}/git/commits/{sha}` で commit SHA に追跡
+  - `GitHubActionsResolutionConfig.TokenEnvVars` 順で env var を探しトークンを設定（最初に非空の値を使用）
+  - GHES サポート: `GhesApiUrl` が設定されている場合は GHES API に向ける、`GhesFallback: true` の場合は 404 時に github.com にフォールバック
+  - `ExcludeBranches` に合致する ref は `(null, null)` を返す（skip）
+  - `IgnoreActions` 正規表現に合致する name/ref は skip
+  - 結果を in-process `ConcurrentDictionary` でキャッシュ（成功のみ）
+- HTTP クライアントは `IHttpClientFactory` 経由で取得（テスト可能性のため）
+
+**完了条件**:
+- 正常 SHA 解決（モック HTTP）でテストがパスする
+- アノテーション付きタグの追跡（2 段階 API 呼び出し）でテストがパスする
+- GHES フォールバック（404 → github.com 再試行、モック）でテストがパスする
+- `ExcludeBranches` と `IgnoreActions` の skip ケースがテストでパスする
+
+**実装メモ**:
+
+### Step 7.5: OCI image digest resolver 実装
+
+**ファイル**: `src/Seiton.Core/Linting/PinRemediation/OciImageDigestResolver.cs`（新規）
+
+- `OciImageDigestResolver : IImageDigestResolver` を追加
+- 実装要件:
+  - OCI Distribution API `HEAD /v2/{name}/manifests/{reference}` を呼び出す
+  - レスポンスの `Docker-Content-Digest` ヘッダーから `sha256:<hex>` を取得
+  - 認証: `~/.docker/config.json` から credential を読み取る（`credHelpers` / `auths` / `credsStore` を順にサポート。実装コストが高い場合は `auths` のみの単純実装を初期スコープとし、credential helper は TODO として残す）
+  - `ExcludeImages` に一致する image は skip（`scratch` は常に skip）
+  - `ExcludeTags` に一致する tag は skip（`latest` はデフォルト skip）
+  - `IgnoreImages` doublestar glob に一致する image は skip
+  - 結果を in-process `ConcurrentDictionary` でキャッシュ（成功のみ）
+
+**完了条件**:
+- 正常 digest 解決（モック HTTP）でテストがパスする
+- `scratch` / `latest` が常に skip されるテストがパスする
+- `ExcludeImages` / `ExcludeTags` / `IgnoreImages` それぞれの skip ケースがパスする
+
+**実装メモ**:
+
+### Step 7.6: pin fix フォーマット実装
+
+**ファイル**: `src/Seiton.Core/Linting/PinRemediation/PinFixFormatter.cs`（新規）
+
+- `PinFixFormatter` static class を追加
+- `BuildActionsShaFix(Diagnostic diagnostic, string sha40, string tagComment, byte[] utf8Yaml)` → `DiagnosticFix`
+  - `uses:` scalar の `@ref` 部分を `@<sha40> # <tagComment>` に置換する `TextEdit` を生成
+  - 既存が 40-hex SHA の場合は fix なし（`null` 返却）
+  - separator は ` # ` 固定（仕様 §12.5.1）
+- `BuildImageDigestFix(Diagnostic diagnostic, string digest, byte[] utf8Yaml)` → `DiagnosticFix`
+  - image reference の tag 直後に `@sha256:<hex>` を追記する `TextEdit` を生成
+  - 既存に `@sha256:` が含まれる場合は fix なし（`null` 返却）
+- 既存 `FixFormatting` ヘルパーと整合させる（offset 計算は `TextRange` から）
+
+**完了条件**:
+- actions SHA fix の TextEdit が正しい offset/length になるテストがパスする
+- image digest fix の TextEdit が正しい offset/length になるテストがパスする
+- 既ピン済みの場合 null 返却がパスする
+
+**実装メモ**:
+
+### Step 7.7: `pin_resolution` 設定ファイルパース連携
+
+**ファイル**: `src/Seiton.Core/Linting/LintConfig.cs`（更新）、またはコンフィグ読み込みレイヤー
+
+- `LintConfig` に `PinResolution PinResolutionConfig? { get; init; }` を追加
+- 設定ファイル（`.github/seiton.yaml`）の `pin_resolution:` セクションをパースして `PinResolutionConfig` に変換するロジックを追加
+- `scratch` 強制付加の不変条件をここに組み込む
+
+**完了条件**: `pin_resolution.allow_network: true` を含む設定ファイルを読み込んだとき、`LintConfig.PinResolution.AllowNetwork == true` になるテストがパスする
+
+**実装メモ**:
+
+### Step 7.8: E2E 統合テストを追加
+
+**ファイル**: `tests/Seiton.Core.Tests/PinRemediationTests.cs`（新規）
+
+- `PinRemediationEngine` の end-to-end テストを追加
+  - `unpinned-uses` 診断に対して mock resolver が SHA を返すケース → fix 付与の検証
+  - `unpinned-image` 診断に対して mock resolver が digest を返すケース → fix 付与の検証
+  - `AllowNetwork: false` のとき fix が付かないことの検証
+  - `FailOpen: true` で resolver が例外を投げたとき fix なし + FailedCount++ の検証
+  - `FailOpen: false` で resolver が例外を投げたとき `RemediateAsync` が例外を伝播することの検証
+  - fix 適用後に `LintEngine.Check()` で当該 rule 診断が消えることの E2E 検証（`ApplyAndRelint` 経由）
+
+**完了条件**: 上記 5+ ケースが全件パスし、`dotnet test` が全パスする
+
+**実装メモ**:
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
