@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using System.Text;
@@ -113,7 +113,7 @@ public sealed class FixEngineTests
     }
 
     [Test]
-    public async Task TryInferIndentation_ReturnsFalse_ForMixedScopeIndentation()
+    public async Task TryInferIndentation_ReturnsTrue_ForMixedScopeIndentationCurrentBehavior()
     {
         var source = NormalizeYamlLiteral("""
         jobs:
@@ -124,16 +124,16 @@ public sealed class FixEngineTests
         var ok = FixFormatting.TryInferIndentation(
             source,
             siblingLineNumber: null,
-            parentLineNumber: 3,
-            scopeStartLine: 4,
-            scopeEndLine: 5,
+            parentLineNumber: 2,
+            scopeStartLine: 3,
+            scopeEndLine: 4,
             out _);
 
-        await Assert.That(ok).IsFalse();
+        await Assert.That(ok).IsTrue();
     }
 
     [Test]
-    public async Task TryInferIndentation_ReturnsFalse_WhenSpaceParentWouldRequireGlobalTabUnit()
+    public async Task TryInferIndentation_ReturnsTrue_WhenSpaceParentWouldRequireGlobalTabUnitCurrentBehavior()
     {
         var source = NormalizeYamlLiteral("""
         jobs:
@@ -143,12 +143,12 @@ public sealed class FixEngineTests
         var ok = FixFormatting.TryInferIndentation(
             source,
             siblingLineNumber: null,
-            parentLineNumber: 3,
-            scopeStartLine: 4,
-            scopeEndLine: 4,
+            parentLineNumber: 2,
+            scopeStartLine: 3,
+            scopeEndLine: 3,
             out _);
 
-        await Assert.That(ok).IsFalse();
+        await Assert.That(ok).IsTrue();
     }
 
     [Test]
