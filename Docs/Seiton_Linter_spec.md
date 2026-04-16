@@ -307,6 +307,39 @@ Interpretation notes:
 - `exclusions[].ruleIds` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
 
+### 5.10 Recommended Config File Name and Location
+
+Because Seiton targets GitHub Actions workflow repositories, the recommended config file location is under `.github/`.
+
+Recommended file path (primary):
+
+- `.github/seiton.yaml`
+
+Accepted alternate file names:
+
+- `.github/seiton.yml`
+- `seiton.yaml`
+- `seiton.yml`
+
+Recommended discovery order (when no explicit config path is provided):
+
+1. `.github/seiton.yaml`
+2. `.github/seiton.yml`
+3. `seiton.yaml`
+4. `seiton.yml`
+
+Explicit-config precedence recommendation:
+
+- If runtime/CLI provides an explicit config path option (for example `--config <path>`), that file should be used as the only config source for that lint invocation.
+- If explicit config is not provided, runtimes may use the discovery order above.
+
+Rationale (non-normative):
+
+- actionlint uses `.github/actionlint.yaml` / `.github/actionlint.yml` as repository config locations.
+- zizmor discovers `.github/zizmor.yml` / `.github/zizmor.yaml` before root-level names.
+- ghalint accepts both root-level and `.github/` config names.
+- Prioritizing `.github/` keeps workflow-related policy close to workflow files and avoids ambiguity with other root-level YAML files.
+
 ---
 
 ## 6. Diagnostic Processing Contract
