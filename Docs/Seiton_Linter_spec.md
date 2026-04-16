@@ -382,7 +382,158 @@ When this specification is revised, also review and update:
 
 ---
 
-## 8. Normative Evaluation Sequence for Exclusion
+## 8. Auto-Fix Contract
+
+Seiton supports optional auto-fix suggestions attached to diagnostics.
+Fix application is separate from lint detection and must not be triggered automatically during normal lint runs.
+
+### 8.1 Fix Data Model
+
+A fix consists of a human-readable description and one or more text edits.
+
+**TextEdit**:
+
+| Field | Type | Description |
+|---|---|---|
+| Offset | int | UTF-8 byte offset into the original source (from `TextRange.Start`) |
+| Length | int | Number of bytes to replace (0 = pure insertion) |
+| NewText | string (UTF-8) | Replacement text (empty string = deletion) |
+
+**DiagnosticFix**:
+
+| Field | Type | Description |
+|---|---|---|
+| Description | string | Short human-readable description of the fix |
+| Edits | TextEdit[] | Ordered list of non-overlapping edits |
+
+Constraints:
+
+- A `Diagnostic` may carry zero or one `DiagnosticFix`. Optional; absence is valid for all rules.
+- A `DiagnosticFix` may contain one or more `TextEdit` entries.
+- Multiple `TextEdit` entries in a single fix must be non-overlapping.
+- A fix targets only the file that produced the diagnostic (single-file edits only).
+
+### 8.1.1 Parser Data Required for Fix Generation
+
+Auto-fix generation depends on parser output plus original source bytes.
+
+- Quote presence comes from AST scalar nodes (`StringNode.Quoted`).
+- YAML structural context (scalar/mapping/sequence position) comes from typed AST shape and node-specific types.
+- Edit anchor position comes from node `TextRange` (`Start`/`Length` and line/column fields).
+- Indentation and line-ending style are derived from original source text at fix application/generation time (not stored as dedicated parser fields).
+
+Design note:
+
+- Dedicated indentation fields in parser output are optional. They are not required by this contract because YAML indentation is recoverable from source lines and node ranges.
+
+### 8.2 Fix Application Contract
+
+When a caller applies fixes to source text:
+
+1. Collect all `DiagnosticFix` entries to apply.
+2. Sort edits in descending offset order (apply from end of file to start).
+3. Apply each edit: replace bytes `[Offset, Offset + Length)` with `NewText`.
+4. Applying fixes from multiple diagnostics that have overlapping edits is a conflict; overlapping fixes must not be applied together. Caller is responsible for conflict detection.
+5. After all edits are applied, re-lint the resulting file to verify no regressions.
+
+### 8.3 Rule Contract Extension for Fix
+
+Rules that support auto-fix must attach `DiagnosticFix` to each fixable `Diagnostic` at the point of diagnostic creation.
+
+- Fix generation must not perform I/O or make network requests.
+- Fix generation must be deterministic for identical inputs.
+- If a rule cannot guarantee a safe fix for a specific diagnostic instance, it must omit the `Fix` field rather than emit an unsafe fix.
+
+The existing `GetDiagnostics()` contract is unchanged; fixes are embedded within returned `Diagnostic` values.
+
+### 8.4 Fixable Rule Catalog
+
+The following table classifies each default rule by fix feasibility.
+
+| Rule ID | Fix Feasibility | Fix Description |
+|---|---|---|
+| `deny-write-all` | ✓ Fixable | Replace `write-all` scalar with `read-all` in the permissions node. |
+| `run-env-context-direct-use` | ✓ Fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text. |
+| `job-permissions-required` | ✓ Fixable | Insert `permissions: {}` as a new key immediately after `runs-on:` (or after job id key if `runs-on` is absent). |
+| `unpinned-uses` | ✗ Not auto-fixable | Requires resolving current SHA for the referenced action/workflow at fix time (external I/O). |
+| `unpinned-image` | ✗ Not auto-fixable | Requires resolving current digest for the referenced image at fix time (external I/O). |
+| `dangerous-triggers` | ✗ Not auto-fixable | Correct replacement is semantic (remove event, or restructure trigger) and context-dependent. |
+| `permissions` | △ Partial | For scalar form only: replace invalid scalar with `read-all`. Scope value corrections are ambiguous (correct value is context-dependent). |
+| `job-structure` | ✗ Not auto-fixable | Structural problems (missing `runs-on`, conflicting keys) require user intent to resolve. |
+| `reusable-workflow` | ✗ Not auto-fixable | Forbidden key removal requires user to confirm intent. |
+| `popular-action-inputs` | ✗ Not auto-fixable | Closest valid input name may be suggested in diagnostic message but must not be applied automatically. |
+| `needs-graph` | ✗ Not auto-fixable | Unknown dependency target or cycle requires user to determine correct dependency. |
+| `shell-name` | ✗ Not auto-fixable | Correct shell name is ambiguous; user must select. |
+| `runner-label` | ✗ Not auto-fixable | Closest known label may be suggested but apply is ambiguous. |
+| `id-naming` | △ Partial | Replace invalid characters with `-` for `job.id` and `step.id` only when single invalid character substitution is unambiguous. |
+| `glob-pattern` | ✗ Not auto-fixable | Glob correction requires understanding user intent. |
+| `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |
+| `template-injection` | ✗ Not auto-fixable | Safe remediation patterns (env variable indirection, `toJSON()`) are context-dependent. |
+| `expr-undefined-var` | ✗ Not auto-fixable | Correct context variable cannot be inferred automatically. |
+
+### 8.5 Fix Safety Policy
+
+- A fix must be semantically equivalent for the common case; it must not silently change runtime behavior in a way that is not obvious from its description.
+- Unsafe transformations (for example, template-injection remediation that alters data flow) must not be provided as auto-fix; they may only appear as diagnostic message guidance.
+- Fail-safe rules (§5.7) that are non-disableable must not offer fixes that would circumvent their enforcement (for example, `deny-write-all` fix replaces with `read-all`, not with suppression).
+
+---
+
+## 9. Fix Engine Formatting Preservation Policy
+
+This section defines implementation-level common rules for source-style preservation during auto-fix generation and application.
+
+### 9.1 Indentation Preservation
+
+- Fix engine must preserve existing indentation width/style of the surrounding block whenever inserting new lines.
+- For inserted mapping entries, indentation depth must be inferred from sibling keys in the same mapping scope.
+- If no sibling exists, indentation must be inferred from parent node indentation plus one YAML level.
+- Tabs must not be introduced unless tabs already exist in the target file and the target scope uses tabs.
+
+### 9.2 Line Ending Preservation
+
+- Fix engine must preserve the dominant line ending style of the target file (`LF` or `CRLF`).
+- New lines introduced by fixes must use the same dominant style.
+- If mixed line endings exist, fix engine should preserve line endings of the nearest surrounding lines.
+
+### 9.3 Quote Preservation
+
+- For scalar replacement where value style is unchanged (string-to-string replacement), fix engine should preserve existing quote style from the replaced node (`single`, `double`, or unquoted).
+- If preserving quote style would produce invalid YAML or invalid expression text, fix engine may switch quote style to a valid form.
+- For inserted scalar values, fix engine should default to unquoted form when YAML-safe and expression-safe; otherwise use double quotes.
+
+### 9.4 YAML Context Safety
+
+- Fix engine must only emit edits that remain valid in the target YAML context (mapping key value, sequence item, scalar value).
+- A fix that changes node kind (for example scalar to mapping) is allowed only when explicitly defined by that rule's fix contract.
+- When node-kind transition is not explicitly defined, fix engine must keep the original node kind.
+
+### 9.5 Whitespace Stability
+
+- Fix engine must minimize whitespace churn outside edited ranges.
+- Trailing spaces must not be introduced by fixes.
+- Existing blank-line grouping should be preserved unless the fix requires adding/removing exactly one logical block.
+
+### 9.6 Fallback Policy
+
+- If style-preserving edit generation fails (for example ambiguous indentation detection), the engine must not emit a potentially destructive fix.
+- In that case, diagnostic remains without fix and should include remediation guidance text.
+
+---
+
+## 10. Fix Observability Contract
+
+When a lint result includes diagnostics with fixes, the caller must be able to:
+
+- Query which diagnostics in a `LintResult` have an associated `DiagnosticFix`.
+- Count total fixable diagnostics.
+- Apply fixes selectively (per-diagnostic or all-fixable).
+
+Fix application is a separate operation from linting and must not mutate the `LintResult` or the original source bytes.
+
+---
+
+## 11. Normative Evaluation Sequence for Exclusion
 
 Exclusion-aware lint evaluation sequence is fixed as follows.
 
