@@ -785,7 +785,7 @@
 
 **完了条件**: `pin_resolution.allow_network: true` を含む設定ファイルを読み込んだとき、`LintConfig.PinResolution.AllowNetwork == true` になるテストがパスする
 
-**実装メモ**:
+**実装メモ**: 完了。`src/Seiton.Core/Linting/LintConfigLibrary.cs` に `pin_resolution` セクションのパースと正規化を追加し、`LintConfigValidationResult.Config.PinResolution` へ反映するよう実装した。`LintConfigLineParser` では top-level `pin_resolution`（互換として `pinResolution` も許容）を受理し、`allow_network` / `fail_open` / `request_timeout_sec` / `max_concurrency` に加え、`github_actions`（`token_env_vars` / `ghes_api_url` / `ghes_fallback` / `ignore_actions` / `exclude_branches`）と `images`（`exclude_images` / `exclude_tags` / `ignore_images`）の入れ子設定を解析する。`ignore_actions` は `name` と `ref` の両フィールド必須で検証し、`request_timeout_sec < 0` と `max_concurrency <= 0` は設定エラーとして診断化する。正規化段では空白トリム・重複除去を行い、`ImageResolutionConfig` 再構築経由で `scratch` 強制付加不変条件を保持する。`src/Seiton.Core/Linting/LintConfigLibrary.cs` のテンプレート生成にも `pin_resolution` セクションを追加した。`tests/Seiton.Core.Tests/LintConfigLibraryTests.cs` に Step 完了条件テスト（`allow_network: true` → `LintConfig.PinResolution.AllowNetwork == true`）を含む回帰を追加し、ネスト項目のマッピングと `scratch` 強制付加も検証した。`LintConfigLibraryTests` 7 件および `PinRemediation*` 回帰 6 件は全件パス。
 
 ### Step 7.8: E2E 統合テストを追加
 

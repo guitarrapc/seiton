@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
@@ -48,6 +49,32 @@ public static class LintConfigLibrary
           # Optional explicit event types for expression validation.
           eventTypes:
             # - workflow_dispatch
+
+        pin_resolution:
+            # Must be true to enable network-assisted pin remediation.
+            allow_network: false
+            github_actions:
+                token_env_vars:
+                    # - SEITON_GITHUB_TOKEN
+                    # - GITHUB_TOKEN
+                ghes_api_url: ""
+                ghes_fallback: false
+                ignore_actions:
+                    # - name: "slsa-framework/.*"
+                    #   ref: ".*"
+                exclude_branches:
+                    # - main
+                    # - master
+            images:
+                exclude_images:
+                    # - scratch
+                exclude_tags:
+                    # - latest
+                ignore_images:
+                    # - mcr.microsoft.com/**
+            fail_open: true
+            request_timeout_sec: 30
+            max_concurrency: 4
         """;
     }
 
@@ -105,6 +132,9 @@ public static class LintConfigLibrary
         var normalizedExclusions = NormalizeExclusions(parseResult.Exclusions, filePath);
         diagnostics.AddRange(normalizedExclusions.Diagnostics);
 
+        var normalizedPinResolution = NormalizePinResolution(parseResult.PinResolution, filePath);
+        diagnostics.AddRange(normalizedPinResolution.Diagnostics);
+
         var config = new LintConfig
         {
             Utf8Yaml = Encoding.UTF8.GetBytes(yamlText),
@@ -113,6 +143,7 @@ public static class LintConfigLibrary
             Exclusions = normalizedExclusions.Exclusions,
             ExprContext = parseResult.ExpressionContext,
             AdditiveCustomization = normalizedAdditive.AdditiveCustomization,
+            PinResolution = normalizedPinResolution.PinResolution,
         };
 
         return new LintConfigValidationResult(config, diagnostics.ToArray());
@@ -395,6 +426,116 @@ public static class LintConfigLibrary
         return new NormalizedExclusions(normalized, diagnostics.ToArray());
     }
 
+    static NormalizedPinResolution NormalizePinResolution(PinResolutionConfig? pinResolution, string filePath)
+    {
+        if (pinResolution is null)
+        {
+            return NormalizedPinResolution.Empty;
+        }
+
+        var diagnostics = new List<Diagnostic>();
+        var timeout = pinResolution.RequestTimeoutSec;
+        if (timeout < 0)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                "pin_resolution.request_timeout_sec must be >= 0",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            timeout = 30;
+        }
+
+        var maxConcurrency = pinResolution.MaxConcurrency;
+        if (maxConcurrency <= 0)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                "pin_resolution.max_concurrency must be > 0",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            maxConcurrency = 4;
+        }
+
+        var normalizedTokenEnvVars = NormalizeStringList(pinResolution.GitHubActions.TokenEnvVars);
+        var normalizedExcludeBranches = NormalizeStringList(pinResolution.GitHubActions.ExcludeBranches);
+        var normalizedExcludeImages = NormalizeStringList(pinResolution.Images.ExcludeImages);
+        var normalizedExcludeTags = NormalizeStringList(pinResolution.Images.ExcludeTags);
+        var normalizedIgnoreImages = NormalizeStringList(pinResolution.Images.IgnoreImages);
+
+        var normalizedIgnoreActions = new List<IgnoreActionEntry>(pinResolution.GitHubActions.IgnoreActions.Count);
+        for (var i = 0; i < pinResolution.GitHubActions.IgnoreActions.Count; i++)
+        {
+            var entry = pinResolution.GitHubActions.IgnoreActions[i];
+            if (string.IsNullOrWhiteSpace(entry.NamePattern) || string.IsNullOrWhiteSpace(entry.RefPattern))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "pin_resolution.github_actions.ignore_actions entries require non-empty name and ref",
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
+            normalizedIgnoreActions.Add(new IgnoreActionEntry(entry.NamePattern.Trim(), entry.RefPattern.Trim()));
+        }
+
+        var ghesApiUrl = pinResolution.GitHubActions.GhesApiUrl?.Trim();
+        if (string.IsNullOrEmpty(ghesApiUrl))
+        {
+            ghesApiUrl = null;
+        }
+
+        var normalized = new PinResolutionConfig
+        {
+            AllowNetwork = pinResolution.AllowNetwork,
+            GitHubActions = new GitHubActionsResolutionConfig
+            {
+                TokenEnvVars = normalizedTokenEnvVars,
+                GhesApiUrl = ghesApiUrl,
+                GhesFallback = pinResolution.GitHubActions.GhesFallback,
+                IgnoreActions = normalizedIgnoreActions,
+                ExcludeBranches = normalizedExcludeBranches,
+            },
+            Images = new ImageResolutionConfig
+            {
+                ExcludeImages = normalizedExcludeImages,
+                ExcludeTags = normalizedExcludeTags,
+                IgnoreImages = normalizedIgnoreImages,
+            },
+            FailOpen = pinResolution.FailOpen,
+            RequestTimeoutSec = timeout,
+            MaxConcurrency = maxConcurrency,
+        };
+
+        return new NormalizedPinResolution(normalized, diagnostics.ToArray());
+    }
+
+    static IReadOnlyList<string> NormalizeStringList(IReadOnlyList<string> values)
+    {
+        if (values.Count == 0)
+        {
+            return [];
+        }
+
+        var normalized = new List<string>(values.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < values.Count; i++)
+        {
+            var trimmed = values[i]?.Trim() ?? string.Empty;
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+
+            if (seen.Add(trimmed))
+            {
+                normalized.Add(trimmed);
+            }
+        }
+
+        return normalized;
+    }
+
     static string BuildUnknownRuleIdMessage(string input)
     {
         var suggestion = RuleCatalog.SuggestRuleId(input);
@@ -422,6 +563,13 @@ public static class LintConfigLibrary
         Diagnostic[] Diagnostics)
     {
         public static NormalizedExclusions Empty { get; } = new([], []);
+    }
+
+    readonly record struct NormalizedPinResolution(
+        PinResolutionConfig? PinResolution,
+        Diagnostic[] Diagnostics)
+    {
+        public static NormalizedPinResolution Empty { get; } = new(null, []);
     }
 }
 
@@ -458,6 +606,7 @@ internal sealed class LintConfigLineParser
     readonly List<Diagnostic> diagnostics = [];
     RuleSpecificAdditiveCustomization additiveCustomization = RuleSpecificAdditiveCustomization.Empty;
     ExpressionContext expressionContext = ExpressionContext.Empty;
+    PinResolutionConfig? pinResolution;
 
     public LintConfigLineParser(string yamlText, string filePath)
     {
@@ -520,6 +669,12 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            if (key is "pin_resolution" or "pinResolution")
+            {
+                ParsePinResolutionSection();
+                continue;
+            }
+
             diagnostics.Add(CreateError($"unknown top-level key '{key}'", lineNumber, 1, key.Length));
             SkipIndentedBlock(0);
         }
@@ -529,7 +684,462 @@ internal sealed class LintConfigLineParser
             additiveCustomization,
             exclusions.ToArray(),
             expressionContext,
+            pinResolution,
             diagnostics.ToArray());
+    }
+
+    void ParsePinResolutionSection()
+    {
+        var allowNetwork = false;
+        var failOpen = true;
+        var requestTimeoutSec = 30;
+        var maxConcurrency = 4;
+        var githubActions = new GitHubActionsResolutionConfig();
+        var images = new ImageResolutionConfig();
+
+        while (index < lines.Length)
+        {
+            var line = lines[index];
+            if (TrySkip(line))
+            {
+                index++;
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= 0)
+            {
+                break;
+            }
+
+            var lineNumber = index + 1;
+            if (indent != 2)
+            {
+                diagnostics.Add(CreateError("pin_resolution key must be indented by 2 spaces", lineNumber, indent + 1, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            if (!TryParseProperty(line, out var key, out var value))
+            {
+                if (!TryParseKey(line, out key))
+                {
+                    diagnostics.Add(CreateError("pin_resolution entry must be key or key: value", lineNumber, 3, line.Trim().Length));
+                    index++;
+                    continue;
+                }
+
+                index++;
+                if (key is "github_actions" or "githubActions")
+                {
+                    githubActions = ParseGitHubActionsSection();
+                    continue;
+                }
+
+                if (key == "images")
+                {
+                    images = ParseImagesSection();
+                    continue;
+                }
+
+                diagnostics.Add(CreateError($"unknown pin_resolution key '{key}'", lineNumber, 3, key.Length));
+                SkipIndentedBlock(2);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "github_actions" or "githubActions")
+            {
+                index++;
+                githubActions = ParseGitHubActionsSection();
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key == "images")
+            {
+                index++;
+                images = ParseImagesSection();
+                continue;
+            }
+
+            if (key is "allow_network" or "allowNetwork")
+            {
+                if (!TryParseBool(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.allow_network must be true or false", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    allowNetwork = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key is "fail_open" or "failOpen")
+            {
+                if (!TryParseBool(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.fail_open must be true or false", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    failOpen = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key is "request_timeout_sec" or "requestTimeoutSec")
+            {
+                if (!TryParseInt(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.request_timeout_sec must be an integer", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    requestTimeoutSec = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key is "max_concurrency" or "maxConcurrency")
+            {
+                if (!TryParseInt(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.max_concurrency must be an integer", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    maxConcurrency = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            diagnostics.Add(CreateError($"unknown pin_resolution key '{key}'", lineNumber, 3, key.Length));
+            index++;
+        }
+
+        pinResolution = new PinResolutionConfig
+        {
+            AllowNetwork = allowNetwork,
+            GitHubActions = githubActions,
+            Images = images,
+            FailOpen = failOpen,
+            RequestTimeoutSec = requestTimeoutSec,
+            MaxConcurrency = maxConcurrency,
+        };
+    }
+
+    GitHubActionsResolutionConfig ParseGitHubActionsSection()
+    {
+        IReadOnlyList<string>? tokenEnvVars = null;
+        string? ghesApiUrl = null;
+        var ghesFallback = false;
+        IReadOnlyList<IgnoreActionEntry>? ignoreActions = null;
+        IReadOnlyList<string>? excludeBranches = null;
+
+        while (index < lines.Length)
+        {
+            var line = lines[index];
+            if (TrySkip(line))
+            {
+                index++;
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= 2)
+            {
+                break;
+            }
+
+            var lineNumber = index + 1;
+            if (indent != 4)
+            {
+                diagnostics.Add(CreateError("pin_resolution.github_actions key must be indented by 4 spaces", lineNumber, indent + 1, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            if (!TryParseProperty(line, out var key, out var value))
+            {
+                if (!TryParseKey(line, out key))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.github_actions entry must be key or key: value", lineNumber, 5, line.Trim().Length));
+                    index++;
+                    continue;
+                }
+
+                index++;
+                if (key is "token_env_vars" or "tokenEnvVars")
+                {
+                    tokenEnvVars = ParseListBlock(4, "token_env_vars");
+                    continue;
+                }
+
+                if (key is "ignore_actions" or "ignoreActions")
+                {
+                    ignoreActions = ParseIgnoreActionsList(4);
+                    continue;
+                }
+
+                if (key is "exclude_branches" or "excludeBranches")
+                {
+                    excludeBranches = ParseListBlock(4, "exclude_branches");
+                    continue;
+                }
+
+                diagnostics.Add(CreateError($"unknown pin_resolution.github_actions key '{key}'", lineNumber, 5, key.Length));
+                SkipIndentedBlock(4);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "token_env_vars" or "tokenEnvVars")
+            {
+                index++;
+                tokenEnvVars = ParseListBlock(4, "token_env_vars");
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "ignore_actions" or "ignoreActions")
+            {
+                index++;
+                ignoreActions = ParseIgnoreActionsList(4);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "exclude_branches" or "excludeBranches")
+            {
+                index++;
+                excludeBranches = ParseListBlock(4, "exclude_branches");
+                continue;
+            }
+
+            if (key is "ghes_api_url" or "ghesApiUrl")
+            {
+                ghesApiUrl = Unquote(value);
+                index++;
+                continue;
+            }
+
+            if (key is "ghes_fallback" or "ghesFallback")
+            {
+                if (!TryParseBool(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.github_actions.ghes_fallback must be true or false", lineNumber, 5, line.Trim().Length));
+                }
+                else
+                {
+                    ghesFallback = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            diagnostics.Add(CreateError($"unknown pin_resolution.github_actions key '{key}'", lineNumber, 5, key.Length));
+            index++;
+        }
+
+        return new GitHubActionsResolutionConfig
+        {
+            TokenEnvVars = tokenEnvVars ?? new GitHubActionsResolutionConfig().TokenEnvVars,
+            GhesApiUrl = ghesApiUrl,
+            GhesFallback = ghesFallback,
+            IgnoreActions = ignoreActions ?? [],
+            ExcludeBranches = excludeBranches ?? new GitHubActionsResolutionConfig().ExcludeBranches,
+        };
+    }
+
+    ImageResolutionConfig ParseImagesSection()
+    {
+        IReadOnlyList<string>? excludeImages = null;
+        IReadOnlyList<string>? excludeTags = null;
+        IReadOnlyList<string>? ignoreImages = null;
+
+        while (index < lines.Length)
+        {
+            var line = lines[index];
+            if (TrySkip(line))
+            {
+                index++;
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= 2)
+            {
+                break;
+            }
+
+            var lineNumber = index + 1;
+            if (indent != 4)
+            {
+                diagnostics.Add(CreateError("pin_resolution.images key must be indented by 4 spaces", lineNumber, indent + 1, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            if (!TryParseKey(line, out var key))
+            {
+                diagnostics.Add(CreateError("pin_resolution.images entry must be a key", lineNumber, 5, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            index++;
+            if (key is "exclude_images" or "excludeImages")
+            {
+                excludeImages = ParseListBlock(4, "exclude_images");
+                continue;
+            }
+
+            if (key is "exclude_tags" or "excludeTags")
+            {
+                excludeTags = ParseListBlock(4, "exclude_tags");
+                continue;
+            }
+
+            if (key is "ignore_images" or "ignoreImages")
+            {
+                ignoreImages = ParseListBlock(4, "ignore_images");
+                continue;
+            }
+
+            diagnostics.Add(CreateError($"unknown pin_resolution.images key '{key}'", lineNumber, 5, key.Length));
+            SkipIndentedBlock(4);
+        }
+
+        return new ImageResolutionConfig
+        {
+            ExcludeImages = excludeImages ?? new ImageResolutionConfig().ExcludeImages,
+            ExcludeTags = excludeTags ?? new ImageResolutionConfig().ExcludeTags,
+            IgnoreImages = ignoreImages ?? [],
+        };
+    }
+
+    IReadOnlyList<IgnoreActionEntry> ParseIgnoreActionsList(int parentIndent)
+    {
+        var result = new List<IgnoreActionEntry>();
+
+        while (index < lines.Length)
+        {
+            var line = lines[index];
+            if (TrySkip(line))
+            {
+                index++;
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= parentIndent)
+            {
+                break;
+            }
+
+            var lineNumber = index + 1;
+            if (indent != parentIndent + 2)
+            {
+                diagnostics.Add(CreateError("ignore_actions list entry must be indented by 6 spaces", lineNumber, indent + 1, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith("-", StringComparison.Ordinal))
+            {
+                diagnostics.Add(CreateError("ignore_actions must be a YAML list", lineNumber, parentIndent + 3, trimmed.Length));
+                index++;
+                continue;
+            }
+
+            string? name = null;
+            string? reference = null;
+            var inline = trimmed[1..].Trim();
+            if (inline.Length > 0)
+            {
+                if (!TryParseProperty(inline, out var inlineKey, out var inlineValue))
+                {
+                    diagnostics.Add(CreateError("ignore_actions item must be 'name: ...' or 'ref: ...'", lineNumber, parentIndent + 3, trimmed.Length));
+                }
+                else if (inlineKey == "name")
+                {
+                    name = Unquote(inlineValue);
+                }
+                else if (inlineKey == "ref")
+                {
+                    reference = Unquote(inlineValue);
+                }
+                else
+                {
+                    diagnostics.Add(CreateError($"unknown ignore_actions inline key '{inlineKey}'", lineNumber, parentIndent + 3, inlineKey.Length));
+                }
+            }
+
+            index++;
+            while (index < lines.Length)
+            {
+                var subLine = lines[index];
+                if (TrySkip(subLine))
+                {
+                    index++;
+                    continue;
+                }
+
+                var subIndent = GetIndent(subLine);
+                if (subIndent <= parentIndent + 2)
+                {
+                    break;
+                }
+
+                if (subIndent != parentIndent + 4)
+                {
+                    diagnostics.Add(CreateError("ignore_actions fields must be indented by 8 spaces", index + 1, subIndent + 1, subLine.Trim().Length));
+                    index++;
+                    continue;
+                }
+
+                if (!TryParseProperty(subLine, out var key, out var value))
+                {
+                    diagnostics.Add(CreateError("ignore_actions field must be key: value", index + 1, parentIndent + 5, subLine.Trim().Length));
+                    index++;
+                    continue;
+                }
+
+                if (key == "name")
+                {
+                    name = Unquote(value);
+                    index++;
+                    continue;
+                }
+
+                if (key == "ref")
+                {
+                    reference = Unquote(value);
+                    index++;
+                    continue;
+                }
+
+                diagnostics.Add(CreateError($"unknown ignore_actions key '{key}'", index + 1, parentIndent + 5, key.Length));
+                index++;
+            }
+
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(reference))
+            {
+                diagnostics.Add(CreateError("ignore_actions requires both name and ref", lineNumber, parentIndent + 3, trimmed.Length));
+                continue;
+            }
+
+            result.Add(new IgnoreActionEntry(name, reference));
+        }
+
+        return result;
     }
 
     void ParseRulesSection()
@@ -1034,6 +1644,11 @@ internal sealed class LintConfigLineParser
         return false;
     }
 
+    static bool TryParseInt(string value, out int result)
+    {
+        return int.TryParse(value, out result);
+    }
+
     static string Unquote(string value)
     {
         if (value.Length >= 2)
@@ -1052,5 +1667,6 @@ internal sealed class LintConfigLineParser
         RuleSpecificAdditiveCustomization AdditiveCustomization,
         IReadOnlyList<LintExclusion> Exclusions,
         ExpressionContext ExpressionContext,
+        PinResolutionConfig? PinResolution,
         Diagnostic[] Diagnostics);
 }
