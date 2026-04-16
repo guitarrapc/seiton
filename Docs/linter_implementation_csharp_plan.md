@@ -708,7 +708,7 @@
 - `AllowNetwork: false` かつ resolver null でも pass-through になるテストがパスする
 - モック resolver で resolve/skip/fail それぞれのパスが検証できる単体テストがパスする
 
-**実装メモ**:
+**実装メモ**: 完了。`src/Seiton.Core/Linting/PinRemediation/PinRemediationEngine.cs` を追加し、`IActionShaResolver?` / `IImageDigestResolver?` / `PinResolutionConfig` を受け取るコア実装を導入した。`RemediateAsync(IReadOnlyList<Diagnostic>, byte[], CancellationToken)` では `unpinned-uses` / `unpinned-image` のみを対象にし、`AllowNetwork: false` または resolver 未注入時は pass-through を返す。実行時は `SemaphoreSlim` で `MaxConcurrency` を制限し、`RequestTimeoutSec` を linked token に適用。`FailOpen: true` では例外を握りつぶして `FailedCount` を加算、`FailOpen: false` では例外を再送出する。diagnostic message の引用値（`'...'`）から参照文字列を抽出し、resolver 成功時は `TextRange` 範囲内検索（fallback で file 全体検索）で `TextEdit` を生成して `DiagnosticFix` を付与する。`tests/Seiton.Core.Tests/PinRemediationEngineTests.cs` を追加し、pass-through、resolve/skip/fail のカウント検証、`FailOpen: false` の例外伝播を回帰テスト化。`dotnet build src/Seiton.Core/Seiton.Core.csproj --configuration Debug` 成功、`PinRemediationEngineTests` 3 件全件パス。
 
 ### Step 7.4: Actions SHA resolver 実装（GitHub API）
 
