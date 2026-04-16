@@ -50,7 +50,25 @@ Boundary policy:
 
 ---
 
-## 4. Normative Specifications
+## 4. Component Architecture
+
+Seiton is distributed as three separate components with distinct responsibilities.
+
+| Component | Type | Audience | Description |
+|---|---|---|---|
+| **Seiton.Core** | Library | Library consumers | Core parser and linter library. Exposes `WorkflowParser`, `LintEngine`, `LintConfigLibrary`, and related types. |
+| **Seiton.Update** | CLI (management) | Maintainers only | Data source updater. Fetches, parses, and syncs generated metadata (webhook types, runner labels, popular actions, availability). Not user-facing. |
+| **seiton** | CLI (user-facing) | End users | User-facing CLI. Wraps `Seiton.Core` and exposes user commands such as linting workflow files, validating config, and generating config templates. |
+
+Responsibilities that belong exclusively to each component:
+
+- **Seiton.Core**: All logic for parsing, linting, config normalization, and config validation. Must not reference CLI or I/O concerns.
+- **Seiton.Update**: Dataset fetch/sync/verify pipelines. Must not expose user-facing lint or config commands.
+- **seiton CLI**: Entry point for users. Delegates to `Seiton.Core` APIs.
+
+---
+
+## 5. Normative Specifications
 
 - Parser (language-agnostic): `Docs/Seiton_Parser_spec.md`
 - Parser C# companion: `Docs/Seiton_Parser_csharp_spec.md`
