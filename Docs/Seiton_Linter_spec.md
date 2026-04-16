@@ -258,7 +258,54 @@ rules:
 - Matching uses normalized host values (ASCII lower-case).
 - When image registry host matches this merged public-registry set, missing credentials does not produce `credentials` diagnostics.
 
----
+### 5.9 Complete Example Configuration File
+
+The following YAML shows a complete non-normative example of configuration-file based linter settings.
+
+```yaml
+rules:
+  job-permissions-required:
+    enabled: false
+
+  dangerous-triggers:
+    severity: error
+    additionalDangerousEvents:
+      - issue_comment
+      - pull_request_review_comment
+
+  runner-label:
+    additionalKnownHostedLabels:
+      - custom-large
+      - ubuntu-24.04-arm
+
+  credentials:
+    additionalPublicRegistries:
+      - registry.example.com
+      - mirror.example.net:5000
+
+  shell-name:
+    severity: warning
+
+exclusions:
+  - filePattern: ".github/workflows/legacy/*.yml"
+    ruleIds:
+      - dangerous-triggers
+      - job-permissions-required
+
+  - filePattern: ".github/workflows/release.yml"
+    jobId: publish
+    ruleIds:
+      - credentials
+```
+
+Interpretation notes:
+
+- `rules.<rule-id>.enabled` controls rule enable/disable, subject to fail-safe constraints in §5.7.
+- `rules.<rule-id>.severity` overrides diagnostic severity, subject to fail-safe constraints in §5.7.
+- `rules.dangerous-triggers.additionalDangerousEvents`, `rules.runner-label.additionalKnownHostedLabels`, and `rules.credentials.additionalPublicRegistries` are additive extensions defined in §5.8.
+- `exclusions[].filePattern` and optional `exclusions[].jobId` define config-based suppression scope.
+- `exclusions[].ruleIds` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
+- Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
 
 ---
 
