@@ -14,7 +14,8 @@
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` の 18 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
-| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約を実装済み。ルール固有の加算カスタマイズ（仕様 §5.8）は未実装 |
+| ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
+| Fix Engine | `DiagnosticFix` / `TextEdit`、3 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
 | 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
@@ -56,8 +57,9 @@
 | G4 | Job 横断ルール向けの共通状態管理ヘルパーがない | `needs` などで各ルールが ID 収集・集合管理を都度実装する必要があり、重複実装が発生する | 🟡 中 |
 | G5 | `VisitStep(ExecRun)` / `VisitStep(ExecAction)` の型別フックがない | 各ルールで `step.Exec is ExecRun` キャストが必要になり冗長 | 🟢 低 |
 | G6 | parser 仕様書（§8）に `VisitEvent` 拡張方針の注記がない | **解消済み（仕様同期済み）** | ✅ |
-| G7 | ルール固有の加算カスタマイズ（仕様 §5.8 / C# spec §4.1）が未実装 | `dangerous-triggers` / `runner-label` / `credentials` の追加エントリを config で拡張できず、仕様準拠にならない | 🟡 中 |
-| G8 | Auto-fix データモデル / Fix 適用器 / 再検証パスが未実装 | `DiagnosticFix` を返せず、fixable ルールの提案・適用・適用後の安全確認ができない | 🟡 中 |
+| G7 | ルール固有の加算カスタマイズ（仕様 §5.8 / C# spec §4.1）が未実装 | **解消済み（Step 4.6/4.7 実装）** | ✅ |
+| G8 | Auto-fix データモデル / Fix 適用器 / 再検証パスが未実装 | **解消済み（Phase 6.1-6.7 実装）** | ✅ |
+| G9 | Fix formatting preservation の MUST 項目の網羅テスト/安全化が未完 | 仕様 §9 / C# spec §4.3 の「タブ導入制御」「空白 churn 最小化」「曖昧時 no-fix fallback」の準拠を回帰で保証しきれない | 🟡 中 |
 
 ---
 
@@ -594,6 +596,34 @@
 **完了条件**: `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix → 再 lint が green になる E2E テストがパスする
 
 **実装メモ**: 完了。`FixEngine` に `ApplyAndRelint(...)` を追加し、fix 適用と再 lint を 1 API で実行できるようにした。helper は (1) 適用前後で fatal parse error が増えていないこと、(2) 選択して適用した診断が再 lint 後に残存しないことを検証し、違反時は `InvalidOperationException` を返す。`DiagnosticFix` 入力の overload では expected cleared rule-id を指定可能にし、rule 単位の再検証も行える。`FixEngineTests` に fatal 増加検出・overlap 事前検出・selected diagnostics 消失検証を追加し、`RuleInterfaceTests` では `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix E2E を `ApplyAndRelint` 経由で検証するよう更新した。
+
+### Step 6.8: Formatting Preservation MUST 準拠を補強
+
+**ファイル**: `src/Seiton.Core/Linting/Fixing/FixFormatting.cs`, `src/Seiton.Core/Linting/JobPermissionsRequiredRule.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 仕様対応: `Seiton_Linter_spec.md` §9, `Seiton_Linter_csharp_spec.md` §4.3
+- 次を実装/明文化する
+  - タブ導入制御: target scope が space インデントの場合は tab を導入しない
+  - whitespace churn 最小化: edit 範囲外の空白変更を行わないことを回帰で保証
+  - trailing spaces 不導入を回帰で保証
+  - インデント推定が曖昧な場合は no-fix fallback（diagnostic のみ）
+
+**完了条件**:
+
+- mixed indent（tabs+spaces）ケースで tab 不要導入が起きない
+- fix 適用後に trailing spaces が新規導入されない
+- 曖昧ケースで `Fix` を出さないことを確認するテストがパスする
+
+### Step 6.9: Auto-Fix Catalog 準拠テストを追加
+
+**ファイル**: `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
+
+- 仕様対応: `Seiton_Linter_spec.md` §8.4, `Seiton_Linter_csharp_spec.md` §4.2
+- 18 ルールのうち fixable 3 ルールのみが `Diagnostic.Fix` を付与することを検証
+  - fixable: `deny-write-all`, `job-permissions-required`, `run-env-context-direct-use`
+  - non-fixable ルール群は `Fix is null`
+
+**完了条件**: ルール別 table-driven 回帰で fixability catalog 準拠が担保される
 
 ---
 
