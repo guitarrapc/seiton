@@ -6,6 +6,7 @@
   <ItemGroup>
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.6" />
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageVersion Include="TUnit" Version="1.12.111" />
     <PackageVersion Include="VYaml" Version="1.2.0" />
   </ItemGroup>
