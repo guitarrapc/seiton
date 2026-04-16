@@ -202,4 +202,60 @@ public sealed class FixEngineTests
         await Assert.That(() => FixEngine.ApplyAndRelint(engine, source, "revalidate-overlap.yml", fixes))
             .Throws<InvalidOperationException>();
     }
+
+    [Test]
+    public async Task ApplyAndRelint_WithExpectedClearedRuleIds_PassesWhenRuleIsCleared()
+    {
+        var yaml = """
+                on: push
+                permissions: write-all
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """;
+
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyWriteAllRule()]);
+        var before = engine.Check(source, "revalidate-expected-pass.yml");
+
+        var revalidated = FixEngine.ApplyAndRelint(
+                engine,
+                source,
+                "revalidate-expected-pass.yml",
+                before.Fixes,
+                expectedClearedRuleIds: ["deny-write-all"]);
+
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
+    }
+
+    [Test]
+    public async Task ApplyAndRelint_WithExpectedClearedRuleIds_ThrowsWhenRuleRemains()
+    {
+        var yaml = """
+                on: push
+                permissions: write-all
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """;
+
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyWriteAllRule()]);
+        var noOpFixes = new[]
+        {
+                        new DiagnosticFix("noop", [new TextEdit(source.Length, 0, string.Empty)]),
+                };
+
+        await Assert.That(() => FixEngine.ApplyAndRelint(
+                        engine,
+                        source,
+                        "revalidate-expected-fail.yml",
+                        noOpFixes,
+                        expectedClearedRuleIds: ["deny-write-all"]))
+                .Throws<InvalidOperationException>();
+    }
 }
