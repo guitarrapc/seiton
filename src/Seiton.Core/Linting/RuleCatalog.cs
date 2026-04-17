@@ -34,6 +34,7 @@ internal static class RuleCatalog
         ("runner-no-latest", 18, static () => new RunnerNoLatestRule()),
         ("run-secrets-context-direct-use", 19, static () => new RunSecretsContextDirectUseRule()),
         ("run-inputs-context-direct-use", 20, static () => new RunInputsContextDirectUseRule()),
+        ("secrets-whole-context-access", 21, static () => new SecretsWholeContextAccessRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();

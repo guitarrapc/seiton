@@ -933,6 +933,46 @@
 
 ---
 
+## Phase 11: Secrets Whole Context Rule（secrets コンテキスト全体参照検出）
+
+**目標**: `${{ toJson(secrets) }}` のように `secrets` コンテキスト全体をオブジェクトとして参照する式を検出し、すべてのシークレットが一括で漏洩するリスクをブロックする。
+
+> **背景**: `run-secrets-context-direct-use` は `secrets.KEY` という特定シークレットの `run:` 直接展開を対象とするが、`toJson(secrets)` のような全コンテキスト参照はより危険で、`run:` 以外（`env:`、`with:`）にも出現しうる。個別ルールで別途カバーする必要がある。
+
+### Step 11.1: `secrets-whole-context-access` ルールを追加
+
+**ファイル**: `src/Seiton.Core/Linting/SecretsWholeContextAccessRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 対応: 独自（シークレット全体漏洩防止）
+- `VisitStep` で以下を走査し、`secrets` 識別子が特定キーアクセス（`secrets.KEY` / `secrets['KEY']`）以外で使われている場合に error を報告
+  - `run:` スクリプト内の埋め込み式
+  - `step.env:` 値の埋め込み式
+  - `step.with:` inputs の埋め込み式
+- `VisitJobPre` で以下を走査
+  - `job.env:` 値の埋め込み式
+  - `job.with:` (reusable workflow call) inputs の埋め込み式
+- 検出ロジック: `Identifier("secrets")` の親ノードが `MemberAccess` / `IndexAccess` / `WildcardAccess`（かつ left child）でない場合 → 全体参照
+- 代表的な検出パターン: `toJson(secrets)`, `format('{0}', secrets)`, 単体 `${{ secrets }}`
+- ルールは no-fix（自動置換は行わない）
+
+**完了条件**: `${{ toJson(secrets) }}` を含むケースで error、`${{ secrets.MY_KEY }}` を env に受けるケースで error なしの table-driven テストがパスする
+
+**実装メモ**: 完了。`SecretsWholeContextAccessRule` を追加し、`VisitStep`（run:, step env:, step with:）と `VisitJobPre`（job env:, job with:）を走査するよう実装した。検出ヘルパー `IsWholeContextAccess` は `secrets` 識別子の親が MemberAccess/IndexAccess/WildcardAccess の left child でない場合に whole-context access と判定する。これにより `toJson(secrets)` / `format('{0}', secrets)` / 単体 `secrets` は検出。`secrets.KEY` / `secrets['KEY']` はスルー（既存 `run-secrets-context-direct-use` のスコープ）。fix は付与せず no-fix を維持。`RuleInterfaceTests` に table-driven 回帰テスト（7 ケース：ok 2 + ng 5）を追加した。
+
+### Step 11.2: RuleCatalog と仕様同期を更新
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `RuleCatalog.DefaultRuleFactories` に `secrets-whole-context-access` を priority 21 で追加
+- `RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority 検証を更新
+- 3 仕様書の default rule catalog と共通 spec の fixability catalog を同期
+
+**完了条件**: `new LintEngine()` で `secrets-whole-context-access` が有効化され、仕様と実装テストの rule 一覧が一致する
+
+**実装メモ**: 完了。`RuleCatalog.DefaultRuleFactories` に `secrets-whole-context-access` を priority 21 で登録し、`RuleCatalog_DefaultRules_MatchDocumentedScope` のルール件数（22）および rule id / priority 検証を更新した。`AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` に `secrets-whole-context-access`（no-fix）ケースを追加し、fixability catalog 準拠も回帰保証した。
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
@@ -1019,6 +1059,7 @@ P6E --> P6F
 | 18 | `runner-no-latest` | **実装済み** | 独自 | `runner-label` 実装済み |
 | 19 | `run-secrets-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 20 | `run-inputs-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
+| 21 | `secrets-whole-context-access` | **実装済み** | 独自 | 式 AST 連携 |
 
 ## チェックリスト（全 Phase 共通）
 

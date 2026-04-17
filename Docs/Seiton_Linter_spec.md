@@ -120,6 +120,7 @@ The default linter profile must include the following rule IDs.
 | `run-env-context-direct-use` | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
 | `run-secrets-context-direct-use` | Error when `run:` script text directly references `${{ secrets.* }}`; secret values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
 | `run-inputs-context-direct-use` | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
+| `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
 
 Rule set compatibility policy:
 
@@ -476,6 +477,7 @@ The following table classifies each default rule by fix feasibility.
 | `expr-undefined-var` | ✗ Not auto-fixable | Correct context variable cannot be inferred automatically. |
 | `run-secrets-context-direct-use` | ✗ Not auto-fixable | Safe env variable name/scope selection requires user intent and repository conventions. |
 | `run-inputs-context-direct-use` | ✗ Not auto-fixable | Safe env variable name/scope selection requires user intent and repository conventions. |
+| `secrets-whole-context-access` | ✗ Not auto-fixable | Correct remediation (refactoring to specific key access) requires user intent about which secrets are needed. |
 
 ### 8.5 Fix Safety Policy
 

@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(21);
+        await Assert.That(rules.Length).IsEqualTo(22);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -304,6 +304,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[18].Id).IsEqualTo("runner-no-latest");
         await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
         await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
+        await Assert.That(rules[21].Id).IsEqualTo("secrets-whole-context-access");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -326,6 +327,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(18);
         await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
         await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
+        await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(21);
     }
 
     [Test]
@@ -2099,6 +2101,101 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_SecretsWholeContextAccessRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-specific-key-in-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        MY_SECRET: ${{ secrets.MY_TOKEN }}
+                    steps:
+                        - run: echo "$MY_SECRET"
+            """,
+            []),
+            new RuleCase(
+            "ok-no-secrets-reference",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.ref_name }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-run-tojson-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ toJson(secrets) }}"
+            """,
+            ["must not reference", "secrets", "context object"]),
+            new RuleCase(
+            "ng-step-env-tojson-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/some-action@v1
+                          env:
+                            ALL_SECRETS: ${{ toJson(secrets) }}
+            """,
+            ["must not reference", "secrets", "context object"]),
+            new RuleCase(
+            "ng-step-with-tojson-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/some-action@v1
+                          with:
+                            all-secrets: ${{ toJson(secrets) }}
+            """,
+            ["must not reference", "secrets", "context object"]),
+            new RuleCase(
+            "ng-job-env-tojson-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        ALL_SECRETS: ${{ toJson(secrets) }}
+                    steps:
+                        - run: echo ok
+            """,
+            ["must not reference", "secrets", "context object"]),
+            new RuleCase(
+            "ng-format-function-whole-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ format('{0}', secrets) }}"
+            """,
+            ["must not reference", "secrets", "context object"]),
+        };
+
+        await AssertRuleCases(new SecretsWholeContextAccessRule(), "secrets-whole-context-access", cases);
+    }
+
+    [Test]
     public async Task LintEngine_JobPermissionsRequired_Fix_InsertsPermissionsAfterRunsOn()
     {
         var yaml = """
@@ -2521,6 +2618,18 @@ public sealed class RuleInterfaceTests
                         runs-on: ubuntu-latest
                         steps:
                             - run: echo "${{ inputs.target }}"
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "secrets-whole-context-access",
+                new SecretsWholeContextAccessRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "${{ toJson(secrets) }}"
                 """,
                 ExpectsFix: false),
         };
