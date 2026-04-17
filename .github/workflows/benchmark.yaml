@@ -2,6 +2,11 @@ name: benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      benchmark:
+        description: "Benchmark filter"
+        required: true
+        default: "*"
 
 jobs:
   benchmark:
@@ -28,8 +33,10 @@ jobs:
       - name: benchmark
         id: benchmark
         run: |
-          dotnet run -c Release --no-build --no-launch-profile --project ./src/SortAlgorithm.Benchmark/SortAlgorithm.Benchmark.csproj -- --filter "${{ inputs.benchmark }}"
-          echo "result=success" >> $GITHUB_OUTPUT
+          dotnet run -c Release --no-build --no-launch-profile --project ./src/Seiton.Benchmark/Seiton.Benchmark.csproj -- --filter "${FILTER}"
+          echo "result=success" >> "$GITHUB_OUTPUT"
+        env:
+          FILTER: ${{ inputs.benchmark }}
       - name: Check benchmark result
         if: ${{ steps.benchmark.outputs.result != 'success' }}
         run: exit 1
