@@ -1,51 +1,51 @@
-# dockerfile-pin — Competitor Structure Details
+# dockerfile-pin — 競合ツール構造詳細
 
-> Reference: `.references/dockerfile-pin/`
-> Author: azu
-> Purpose: Add `@sha256:<digest>` to Docker image references in Dockerfiles, docker-compose.yml, and GitHub Actions files.
-
----
-
-## 1. Summary
-
-dockerfile-pin is a CLI tool that resolves OCI image digests and pins them directly into source files. It handles three file types: Dockerfiles (`FROM` lines), docker-compose.yml (`image:` fields), and GitHub Actions (container/service `image:` fields and `uses: docker://` references). It does **not** pin GitHub Actions `uses: owner/repo@ref` references.
-
-Core use cases:
-- `dockerfile-pin run` — dry-run by default; `--write` to apply
-- `dockerfile-pin check` — verify digests are present and exist in registry
-- `dockerfile-pin run --update` — refresh already-pinned digests
+> 参照: `.references/dockerfile-pin/`
+> 作者: azu
+> 目的: Dockerfile、docker-compose.yml、GitHub Actions ファイル内の Docker イメージ参照に `@sha256:<digest>` を付与する。
 
 ---
 
-## 2. Architecture
+## 1. 概要
+
+dockerfile-pin は、OCI イメージの digest を解決し、ソースファイルへ直接ピン留めする CLI ツールです。対象は 3 種類のファイルです: Dockerfile（`FROM` 行）、docker-compose.yml（`image:` フィールド）、GitHub Actions（container/service の `image:` フィールドと `uses: docker://` 参照）。GitHub Actions の `uses: owner/repo@ref` はピン留めしません。
+
+主なユースケース:
+- `dockerfile-pin run` — 既定は dry-run。適用は `--write`
+- `dockerfile-pin check` — digest の存在とレジストリ上の実在を検証
+- `dockerfile-pin run --update` — 既にピン済みの digest を更新
+
+---
+
+## 2. アーキテクチャ
 
 ```
 cmd/
-  root.go              Cobra root command, global flags
+  root.go              Cobra のルートコマンド、グローバルフラグ
 internal/
   resolver/
     resolver.go        CraneResolver + CachedResolver (go-containerregistry)
     resolver_test.go
   dockerfile/
-    parse.go           Dockerfile parser (FROM line extraction)
-    rewrite.go         Digest insertion into text
-  compose/             docker-compose.yml parser and rewriter
-  actions/             GitHub Actions YAML image field parser and rewriter
+    parse.go           Dockerfile パーサー（FROM 行抽出）
+    rewrite.go         テキストへの digest 挿入
+  compose/             docker-compose.yml のパースと書き換え
+  actions/             GitHub Actions YAML の image フィールドのパースと書き換え
 ```
 
 ---
 
-## 3. Resolution Strategy — OCI Image Digest
+## 3. 解決戦略 — OCI イメージ Digest
 
-### Library Used
-[`google/go-containerregistry`](https://github.com/google/go-containerregistry) (`crane` library pattern)
+### 使用ライブラリ
+[`google/go-containerregistry`](https://github.com/google/go-containerregistry)（`crane` ライブラリ系パターン）
 
-### API Used
+### 使用 API
 `remote.Head(ref, ...)` — OCI Distribution `HEAD /v2/{name}/manifests/{reference}`
 
-Returns the manifest digest as `sha256:<hex>` without downloading the full manifest body.
+マニフェスト本体を取得せずに、`sha256:<hex>` 形式の manifest digest を返します。
 
-### Resolver Interface
+### Resolver インターフェース
 ```go
 type DigestResolver interface {
     Resolve(ctx context.Context, imageRef string) (string, error)
@@ -53,7 +53,7 @@ type DigestResolver interface {
 }
 ```
 
-### `CraneResolver` Implementation
+### `CraneResolver` 実装
 ```go
 func (r *CraneResolver) Resolve(ctx context.Context, imageRef string) (string, error) {
     ref, _ := name.ParseReference(imageRef)
@@ -64,10 +64,10 @@ func (r *CraneResolver) Resolve(ctx context.Context, imageRef string) (string, e
 }
 ```
 
-- Per-request timeout: **30 seconds** (hardcoded constant `perRequestTimeout`)
-- Authentication: `authn.DefaultKeychain` (see §4)
+- リクエスト単位タイムアウト: **30 秒**（ハードコード定数 `perRequestTimeout`）
+- 認証: `authn.DefaultKeychain`（§4 参照）
 
-### `CachedResolver` Wrapping
+### `CachedResolver` ラッパー
 ```go
 type CachedResolver struct {
     inner        DigestResolver
@@ -77,89 +77,90 @@ type CachedResolver struct {
 }
 ```
 
-- In-process, in-memory cache per CLI invocation
-- Separate caches for `Resolve` and `Exists` results
-- Concurrency-safe via `sync.RWMutex`
-- Error results are **not** cached (only successful resolves are cached)
-- No TTL or size limit — cache is valid for the duration of the run
+- CLI 実行単位のプロセス内インメモリキャッシュ
+- `Resolve` と `Exists` の結果を別キャッシュで保持
+- `sync.RWMutex` により並行安全
+- エラー結果は **キャッシュしない**（成功した解決のみキャッシュ）
+- TTL やサイズ上限はなし。キャッシュ有効期間は実行中のみ
 
 ---
 
-## 4. Authentication — OCI Registry
+## 4. 認証 — OCI レジストリ
 
-### Mechanism
-`authn.DefaultKeychain` from `go-containerregistry`:
-1. Reads `~/.docker/config.json`
-2. Supports Docker credential helpers (`credHelpers`, `credsStore`)
-3. Supports Docker Hub, GHCR (`ghcr.io`), GCR (`gcr.io`), ECR, ACR, and any OCI-compliant registry
-4. No explicit token injection — relies entirely on the system Docker credential chain
+### 仕組み
+`go-containerregistry` の `authn.DefaultKeychain`:
+1. `~/.docker/config.json` を読み込む
+2. Docker credential helper（`credHelpers`, `credsStore`）をサポート
+3. Docker Hub、GHCR（`ghcr.io`）、GCR（`gcr.io`）、ECR、ACR、その他 OCI 準拠レジストリをサポート
+4. 明示的なトークン注入はなし。システムの Docker 認証チェーンに全面依存
 
-### No token environment variables
-dockerfile-pin has **no dedicated env var** for registry authentication. Users must `docker login` beforehand, or configure a credential helper.
+### トークン環境変数なし
+dockerfile-pin には、レジストリ認証専用の環境変数が **ありません**。事前に `docker login` を実行するか、credential helper を設定する必要があります。
 
-### Private Registry Access
-- Works for any registry where `docker login <registry>` has been run, or where a credential helper is configured.
-- Authenticated via `~/.docker/config.json` natively; `go-containerregistry` handles the credential lookup.
+### プライベートレジストリアクセス
+- `docker login <registry>` 実行済み、または credential helper 設定済みの任意レジストリで動作
+- `~/.docker/config.json` をネイティブに利用し、資格情報解決は `go-containerregistry` が担う
 
 ---
 
-## 5. Skip / Ignore Behavior
+## 5. スキップ / 無視挙動
 
-### Always Skipped (hardcoded)
-- `FROM scratch` — no registry, skip silently
-- Multi-stage references (`FROM <stage>`)
-- `ARG BASE` + `FROM ${BASE}` with no default — skip with warning
+### 常にスキップ（ハードコード）
+- `FROM scratch` — レジストリがないため黙ってスキップ
+- マルチステージ参照（`FROM <stage>`）
+- デフォルトなしの `ARG BASE` + `FROM ${BASE}` — 警告付きスキップ
 
-### Already Pinned
-- `FROM image:tag@sha256:...` — skipped unless `--update` flag is passed
+### 既にピン済み
+- `FROM image:tag@sha256:...` — `--update` 指定時を除きスキップ
 
-### User-Configured Ignores
-Config file (`.dockerfile-pin.yaml`) or CLI `--ignore-images` flag:
+### ユーザー設定による無視
+設定ファイル（`.dockerfile-pin.yaml`）または CLI の `--ignore-images`:
 ```yaml
 ignore-images:
-  - "ghcr.io/myorg/*"               # glob: ignore all images under myorg
-  - "!ghcr.io/myorg/public-*"        # negation: except public-*
-  - "*.dkr.ecr.*.amazonaws.com/**"   # ECR images
-  - "scratch"                         # exact match
+  - "ghcr.io/myorg/*"               # glob: myorg 配下をすべて無視
+  - "!ghcr.io/myorg/public-*"        # 否定: public-* は除外対象から外す
+  - "*.dkr.ecr.*.amazonaws.com/**"   # ECR イメージ
+  - "scratch"                         # 完全一致
 ```
 
-Pattern syntax: doublestar glob (`**` for multi-segment match). Negation patterns (`!`) override previous matches (last match wins). CLI flags are evaluated after config file patterns.
+パターン構文は doublestar glob（`**` は複数セグメント一致）。否定パターン（`!`）は以前の一致を上書き（後勝ち）。CLI フラグは設定ファイルパターンより後に評価されます。
 
 ---
 
-## 6. Error Handling
+## 6. エラーハンドリング
 
-- `resolve.Exists()` returning `false` with HTTP 404 → image genuinely not found; logged, not cached
-- Any other error (timeout, auth failure, network) → propagated to caller; **not cached** to prevent false-negative caching
-- `check` subcommand: exit code 1 when any check fails (configurable `--exit-code`)
+- `resolve.Exists()` が HTTP 404 で `false` を返した場合: イメージ未存在。ログ出力し、キャッシュしない
+- それ以外のエラー（タイムアウト、認証失敗、ネットワーク）: 呼び出し元へ伝播。誤った失敗を残さないため **キャッシュしない**
+- `check` サブコマンド: いずれかのチェック失敗で終了コード 1（`--exit-code` で調整可）
 
 ---
 
-## 7. Supported File Types
+## 7. サポート対象ファイル
 
-| File Type | Pinned Fields |
+| ファイル種別 | ピン対象フィールド |
 |---|---|
 | Dockerfile | `FROM image:tag` |
-| docker-compose.yml | `image: image:tag` (skips images with `build:` directive) |
+| docker-compose.yml | `image: image:tag`（`build:` 指定イメージはスキップ） |
 | GitHub Actions YAML | `container.image:`, `services.*.image:`, `uses: docker://image:tag` |
 
-**Not supported**: `uses: owner/repo@ref` (GitHub Actions SHA) — that is pinact's domain.
+**非対応**: `uses: owner/repo@ref`（GitHub Actions SHA）。これは pinact の担当領域です。
 
 ---
 
-## 8. Output Formats
+## 8. 出力形式
 
-- Diff to stdout (default dry-run)
-- `--write` flag for in-place modification
-- `--format json` for machine-readable output
-- `check` subcommand produces `FAIL / OK / SKIP` table output
+- stdout へ diff 出力（既定の dry-run）
+- インプレース変更は `--write`
+- 機械可読出力は `--format json`
+- `check` サブコマンドは `FAIL / OK / SKIP` テーブルを出力
 
 ---
 
-## 9. Lessons Learned / Design Notes
+## 9. 学び / 設計ノート
 
-- **`authn.DefaultKeychain` is the cleanest OCI auth pattern** — no token plumbing required in application code; delegates entirely to Docker credential chain. Suitable for CI (where `docker login` is usually already run) and developer machines.
-- **Separate `Resolve`/`Exists` cache entries** avoids a subtle bug: a cached successful `Resolve` should not suppress a later `Exists` check, and vice versa.
-- **30-second per-request timeout** avoids hanging on slow registries; for batch runs this should be user-configurable.
-- **HEAD request only** — far more efficient than GET manifest for digest resolution (no manifest body download).
-- **No GHES/GHCR-specific logic** — OCI is OCI; authentication is handled generically by credential chain.
+- **`authn.DefaultKeychain` は OCI 認証で最もクリーンなパターン**。アプリ側でトークン配線が不要で、Docker の credential chain に委譲できる。CI（多くは `docker login` 済み）でも開発環境でも適合する。
+- **`Resolve` / `Exists` のキャッシュ分離** は微妙な不具合を回避する。`Resolve` の成功キャッシュが後続の `Exists` チェックを抑止してはいけないし、その逆も同様。
+- **30 秒のリクエスト単位タイムアウト** により、遅いレジストリでハングしにくい。バッチ実行向けにはユーザー設定化が望ましい。
+- **HEAD リクエストのみ**。digest 解決では GET でマニフェスト本体を取るより大幅に効率的。
+- **GHES/GHCR 固有ロジックなし**。OCI は OCI として扱い、認証は credential chain で汎用的に処理している。
+- **`min-age` 相当の更新クールダウン機能はない**。`.references/dockerfile-pin/cmd/pin.go` の CLI オプションは `--write` / `--update` / `--ignore-images` が中心で、経過日数ベースの候補フィルタは提供されない。

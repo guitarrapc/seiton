@@ -1,89 +1,89 @@
-# pinact — Competitor Structure Details
+# pinact — 競合ツール構造詳細
 
-> Reference: `.references/pinact/`
-> Author: suzuki-shunsuke
-> Purpose: Pin GitHub Actions and Reusable Workflows to full commit SHA, with optional version update and annotation verify.
+> 参照: `.references/pinact/`
+> 作者: suzuki-shunsuke
+> 目的: GitHub Actions と Reusable Workflows を完全な commit SHA にピン留めし、必要に応じてバージョン更新と注釈検証を行う。
 
 ---
 
-## 1. Summary
+## 1. 概要
 
-pinact is a CLI tool that rewrites GitHub workflow and composite action files so that every `uses:` reference becomes pinned to a full 40-character commit SHA. It also adds a human-readable tag comment next to the SHA (e.g. `# v4.0.0`). It can additionally **update** already-pinned references to their latest SHA and **verify** that existing annotations match the real SHA.
+pinact は、GitHub workflow と composite action ファイルを書き換え、すべての `uses:` 参照を 40 文字の commit SHA にピン留めする CLI ツールです。SHA の横には人間可読のタグコメント（例: `# v4.0.0`）も追加します。さらに、既にピン済みの参照を最新 SHA へ **更新** したり、既存注釈が実 SHA と一致するかを **検証** したりできます。
 
-pinact also supports age-based update filtering via `--min-age` / `PINACT_MIN_AGE` (default `0` = disabled). This filter is applied when selecting the update target version (`-u` path), not as a post-resolution gate on a single input ref.
+pinact は `--min-age` / `PINACT_MIN_AGE`（既定 `0` = 無効）による経過日数ベースの更新フィルタもサポートします。このフィルタは、更新先バージョン選択時（`-u` 経路）に適用され、単一入力 ref の解決後ゲートとしては使われません。
 
-Core use cases:
+主なユースケース:
 - `pinact run` — pin/update
-- `pinact check` — verify only (no writes)
-- `pinact create-review` — post GitHub PR review comments for unpinned actions
+- `pinact check` — 検証のみ（書き込みなし）
+- `pinact create-review` — 未ピンの actions に対する GitHub PR review コメント投稿
 
 ---
 
-## 2. Architecture
+## 2. アーキテクチャ
 
 ```
 cmd/pinact/main.go
-  └─ pkg/cli/           App entrypoint, flag parsing, config loading
-  └─ pkg/di/            Dependency injection, env var wiring
-  └─ pkg/config/        Config file (.pinact.yaml) reading and validation
-  └─ pkg/github/        GitHub API clients
-  │   ├─ github.go      Client factory, OAuth2 setup
-  │   ├─ service.go     ClientResolver — GHES vs github.com routing
-  │   ├─ registry.go    Commit SHA resolver via Repositories API
-  │   └─ keyring.go     OS keyring token storage
-  └─ pkg/controller/    Core pin/check/review orchestration
-  └─ pkg/sarif/         SARIF output formatter
+  └─ pkg/cli/           アプリ入口、フラグ解析、設定読み込み
+  └─ pkg/di/            依存性注入、環境変数配線
+  └─ pkg/config/        設定ファイル（.pinact.yaml）読み込みと検証
+  └─ pkg/github/        GitHub API クライアント群
+  │   ├─ github.go      クライアント生成、OAuth2 設定
+  │   ├─ service.go     ClientResolver — GHES と github.com の振り分け
+  │   ├─ registry.go    Repositories API を使った commit SHA 解決
+  │   └─ keyring.go     OS keyring トークン保存
+  └─ pkg/controller/    pin/check/review の中核オーケストレーション
+  └─ pkg/sarif/         SARIF 出力フォーマッタ
 ```
 
 ---
 
-## 3. Resolution Strategy — GitHub Actions SHA
+## 3. 解決戦略 — GitHub Actions SHA
 
-### API Used
-- `GET /repos/{owner}/{repo}/git/refs/{ref}` (tags / branches)
+### 使用 API
+- `GET /repos/{owner}/{repo}/git/refs/{ref}`（tags / branches）
 - `GET /repos/{owner}/{repo}/releases`
 - `GET /repos/{owner}/{repo}/tags`
-- `GET /repos/{owner}/{repo}/commits/{sha}` — for tag cooldown (`--min-age`) checks
+- `GET /repos/{owner}/{repo}/commits/{sha}` — tag クールダウン（`--min-age`）判定用
 
-### Resolution Flow
-1. Parse `uses: owner/repo@ref` (or `owner/repo/.github/workflows/file.yml@ref`).
-2. Look up the ref via GitHub Repositories API.
-3. If the ref is an annotated tag, follow the `object.sha` to the commit object.
-4. Replace `@ref` with `@<commit-sha> # ref`.
+### 解決フロー
+1. `uses: owner/repo@ref`（または `owner/repo/.github/workflows/file.yml@ref`）を解析
+2. GitHub Repositories API で ref を解決
+3. ref が annotated tag の場合、`object.sha` を辿って commit object へ到達
+4. `@ref` を `@<commit-sha> # ref` に置換
 
-### Update Target Selection with `--min-age`
+### `--min-age` を用いた更新先選択
 
-`--min-age` affects only update flows (`pinact run -u ...`) where pinact chooses a newer tag/version:
+`--min-age` は、pinact が新しい tag/version を選ぶ更新フロー（`pinact run -u ...`）にのみ影響します。
 
-1. Compute `cutoff = now - minAgeDays` when `min-age > 0`.
-2. Query releases first and keep only candidates that pass cooldown:
-  - release prerelease is skipped when the current version is stable,
-  - `release.published_at > cutoff` is skipped.
-3. If no eligible release remains, query tags and keep only candidates that pass cooldown:
-  - tags already represented by releases are skipped,
-  - prerelease tags are skipped when current version is stable,
-  - for each tag, pinact fetches `commit.committer.date`; `date > cutoff` is skipped,
-  - if commit-date lookup fails, that tag is skipped conservatively.
-4. From remaining candidates, choose the highest version (semver first, string fallback).
+1. `min-age > 0` のとき `cutoff = now - minAgeDays` を計算
+2. まず releases を問い合わせ、クールダウン条件を満たす候補のみ保持:
+  - 現在バージョンが stable の場合、prerelease はスキップ
+  - `release.published_at > cutoff` はスキップ
+3. 適格 release がなければ tags を問い合わせ、クールダウン条件を満たす候補のみ保持:
+  - release に既出の tag はスキップ
+  - 現在バージョンが stable の場合、prerelease tag はスキップ
+  - 各 tag について `commit.committer.date` を取得し、`date > cutoff` はスキップ
+  - commit 日付取得に失敗した tag は保守的にスキップ
+4. 残った候補から最高バージョンを選択（semver 優先、次に文字列フォールバック）
 
-This is a candidate-selection model (release/tag enumeration + filtering), not a single-ref post-check.
+これは単一 ref の事後チェックではなく、「release/tag 候補を列挙してフィルタし、最適候補を選ぶ」モデルです。
 
-### Caching
-- In-process caches exist in wrapper services:
+### キャッシュ
+- プロセス内キャッシュが wrapper service に存在:
   - `RepositoriesServiceImpl.Commits` / `Tags` / `Releases`
   - `GitServiceImpl.Commits`
-- Repository host routing (GHES vs github.com) is also cached in-process via `ClientResolver.repoHosts`.
+- リポジトリホスト振り分け（GHES vs github.com）も `ClientResolver.repoHosts` でプロセス内キャッシュ
 
 ---
 
-## 4. Authentication
+## 4. 認証
 
-### Token Priority (GitHub.com)
+### トークン優先順位（GitHub.com）
 ```
 PINACT_GITHUB_TOKEN  →  GITHUB_TOKEN  →  OS Keyring  →  ghtkn App Token  →  unauthenticated
 ```
 
-Source: `pkg/di/env.go`
+出典: `pkg/di/env.go`
 ```go
 s.GitHubToken = getEnv("PINACT_GITHUB_TOKEN")
 if s.GitHubToken == "" {
@@ -91,48 +91,48 @@ if s.GitHubToken == "" {
 }
 ```
 
-### GHES Token Priority
+### GHES トークン優先順位
 ```
 PINACT_GHES_TOKEN  →  GHES_TOKEN  →  GITHUB_TOKEN_ENTERPRISE  →  GITHUB_ENTERPRISE_TOKEN
 ```
 
 ### OS Keyring
-- Enabled via `PINACT_KEYRING_ENABLED=true`
-- Uses Windows Credential Manager / macOS Keychain / GNOME Keyring
-- Managed by `pinact token set` / `pinact token get`
+- `PINACT_KEYRING_ENABLED=true` で有効化
+- Windows Credential Manager / macOS Keychain / GNOME Keyring を利用
+- `pinact token set` / `pinact token get` で管理
 
-### ghtkn Integration
-- Enabled via `PINACT_GHTKN=true`
-- Creates a GitHub App User Access Token on demand via `ghtkn` CLI
+### ghtkn 連携
+- `PINACT_GHTKN=true` で有効化
+- `ghtkn` CLI を介して GitHub App User Access Token をオンデマンド生成
 
-### Unauthenticated Fallback
-- If no token is available, GitHub REST API is called without authentication.
-- Rate limit is lower (60 req/hour vs 5000 req/hour authenticated).
+### 非認証フォールバック
+- トークンが無い場合、GitHub REST API は非認証で呼び出し
+- レート制限は低い（認証 5000 req/hour に対し、非認証 60 req/hour）
 
 ---
 
-## 5. GitHub Enterprise Server (GHES) Support
+## 5. GitHub Enterprise Server（GHES）対応
 
-`ClientResolver` (in `pkg/github/service.go`) routes API calls to either github.com or a GHES instance:
+`ClientResolver`（`pkg/github/service.go`）は、API 呼び出しを github.com または GHES インスタンスへ振り分けます。
 
 ```go
 type ClientResolver struct {
     defaultRepoService  RepositoriesService  // github.com
     ghesRepoService     RepositoriesService  // GHES
     repoHosts           map[string]repoHost  // cache
-    fallback            bool                 // fallback to github.com if not on GHES
+    fallback            bool                 // GHES 非該当時に github.com へフォールバック
 }
 ```
 
-- Config: `.pinact.yaml` → `ghes.api_url` + `ghes.fallback`
-- Env: `GHES_API_URL` overrides config
-- If `fallback: true`, repositories not found on GHES are resolved via github.com
+- 設定: `.pinact.yaml` → `ghes.api_url` + `ghes.fallback`
+- 環境変数: `GHES_API_URL` は設定を上書き
+- `fallback: true` の場合、GHES に見つからないリポジトリは github.com で解決
 
 ---
 
-## 6. Configuration File (`.pinact.yaml`)
+## 6. 設定ファイル（`.pinact.yaml`）
 
-Schema version 3 (v2 abandoned):
+スキーマ version 3（v2 は廃止）:
 
 ```yaml
 version: 3
@@ -149,61 +149,65 @@ ghes:
 separator: " # "
 ```
 
-- `files` — glob patterns for target files (overridden by CLI positional args)
-- `ignore_actions` — name/ref as regex patterns
-- `ghes` — GHES configuration
-- `separator` — string between SHA and tag comment; defaults to ` # `
+- `files` — 対象ファイルの glob パターン（CLI 位置引数で上書き可能）
+- `ignore_actions` — name/ref の regex パターン
+- `ghes` — GHES 設定
+- `separator` — SHA とタグコメント間の区切り文字（既定 ` # `）
 
-`min-age` is not part of `.pinact.yaml`; it is provided via CLI flag (`--min-age`) or env var (`PINACT_MIN_AGE`).
-
----
-
-## 7. Verification Mode (`pinact check`)
-
-- Reads existing `uses: owner/repo@sha # tag` annotations
-- Resolves the tag via GitHub API to confirm it matches the SHA
-- Reports mismatches as errors (without writing files)
-- Exit code 1 on any mismatch
-
-Error code `001`: version annotation mismatch — documented at `docs/codes/001.md`.
+`min-age` は `.pinact.yaml` には含まれず、CLI フラグ（`--min-age`）または環境変数（`PINACT_MIN_AGE`）で指定します。
 
 ---
 
-## 8. Reusable Workflow Support
+## 7. 検証モード（`pinact check`）
 
-pinact handles both:
+- 既存の `uses: owner/repo@sha # tag` 注釈を読み取る
+- GitHub API で tag を解決し、SHA と一致するか確認
+- 不一致をエラーとして報告（ファイルは書き換えない）
+- 不一致が 1 件でもあれば終了コード 1
+
+エラーコード `001`: バージョン注釈不一致（`docs/codes/001.md` に記載）。
+
+---
+
+## 8. Reusable Workflow 対応
+
+pinact は次の両方を扱います:
 - Actions: `owner/repo@ref`
 - Reusable Workflows: `owner/repo/.github/workflows/file.yml@ref`
 
-Both are resolved identically via the Repositories API; the path prefix does not change the SHA resolution mechanism.
+どちらも Repositories API で同一方式で解決され、パス接頭辞の有無で SHA 解決メカニズムは変わりません。
 
 ---
 
-## 9. Output Formats
+## 9. 出力形式
 
-- Diff output to stdout (default)
-- SARIF for CI integration: `--format sarif`
-- GitHub PR review comments: `pinact create-review`
-
----
-
-## 10. Lessons Learned / Design Notes
-
-- **Tool-specific env var** (`PINACT_GITHUB_TOKEN`) takes priority over the generic `GITHUB_TOKEN`, allowing different tokens for different tools in the same environment.
-- **No image pinning** — pinact is GitHub Actions-only. Docker image digest resolution is outside its scope.
-- **`--min-age` is update-target filtering** — it filters release/tag candidates before choosing a target version, then resolves that version to SHA.
-- **GHES fallback** is a deliberate design choice: some organizations host their own fork of common actions on GHES, but may also use public github.com actions. The fallback flag enables this hybrid.
-- **Regex-based ignore_actions** is more flexible than glob, at the cost of matching complexity.
+- stdout への diff 出力（既定）
+- CI 統合向け SARIF: `--format sarif`
+- GitHub PR review コメント: `pinact create-review`
 
 ---
 
-## 11. pinact vs Seiton (`min_age_days`)
+## 10. 学び / 設計ノート
 
-| Aspect | pinact (`--min-age`) | Seiton (`pin_resolution.github_actions.min_age_days`) |
+- **ツール専用環境変数**（`PINACT_GITHUB_TOKEN`）を汎用 `GITHUB_TOKEN` より優先するため、同一環境でツールごとに別トークンを使い分けられる。
+- **イメージピン留めなし**。pinact は GitHub Actions 専用であり、Docker イメージ digest 解決はスコープ外。
+- **`--min-age` は更新先候補のフィルタ**。release/tag 候補を先に絞り込んでから更新先バージョンを選び、その後で SHA 解決する。
+- **GHES フォールバック** は意図的設計。組織内で共通 action を GHES にホストしつつ、公開 github.com action も併用するハイブリッド運用を支える。
+- **regex ベース `ignore_actions`** は glob より柔軟だが、マッチング複雑性は上がる。
+
+---
+
+## 11. pinact と Seiton（`min_age_days`）比較
+
+| 観点 | pinact（`--min-age`） | Seiton（`pin_resolution.github_actions.min_age_days`） |
 |---|---|---|
-| Default | `0` (disabled) | `14` (enabled) |
-| Config surface | CLI/env only (`--min-age`, `PINACT_MIN_AGE`) | Config file key (`min_age_days`) |
-| Activation point | Update flow only (`run -u`) | Pin remediation resolution flow |
-| Selection model | Enumerate release/tag candidates, then filter by age and choose best | Enumerate release/tag candidates for version-like refs (`vN`, `vN.M`, `vN.M.P`) in the same version family, then choose best eligible; non-version refs use direct resolution |
-| If candidate/target is too new | Skip that candidate and continue searching older eligible candidates | Skip too-new candidates and continue; return skip (`null`) only when no eligible candidate remains |
-| `0` semantics | No cooldown filtering | No age constraint |
+| 既定値 | `0`（無効） | `14`（有効） |
+| 設定面 | CLI/環境変数のみ（`--min-age`, `PINACT_MIN_AGE`） | 設定ファイルキー（`min_age_days`） |
+| 発動ポイント | 更新フローのみ（`run -u`） | Pin remediation の解決フロー |
+| 選択モデル | release/tag 候補を列挙し、年齢でフィルタして最適を選択 | version 形式 ref（`vN`, `vN.M`, `vN.M.P`）に対して同一バージョン系列の release/tag 候補を列挙し、適格な最適候補を選択。非 version ref は直接解決 |
+| 候補/ターゲットが新しすぎる場合 | その候補をスキップして、より古い適格候補を探索継続 | 新しすぎる候補をスキップして継続。適格候補が尽きた場合のみ skip（`null`） |
+| `0` の意味 | クールダウンフィルタなし | 年齢制約なし |
+
+補足（競合比較）:
+- `.references/dockerfile-pin` と `.references/frizbee` には、pinact の `--min-age` のような「日数ベースで更新候補を絞る」機能は確認できない。
+- dockerfile-pin は `--update` と ignore パターン（`--ignore-images` / `.dockerfile-pin.yaml`）中心、frizbee は `exclude_branches` / `exclude_tags` などの除外設定中心で制御する。

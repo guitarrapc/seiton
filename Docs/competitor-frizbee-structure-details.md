@@ -1,106 +1,106 @@
-# frizbee — Competitor Structure Details
+# frizbee — 競合ツール構造詳細
 
-> Reference: `.references/frizbee/`
-> Author: Stacklok
-> Purpose: Unified tool for pinning both GitHub Actions references and container image references to checksums/SHAs.
-
----
-
-## 1. Summary
-
-frizbee is a CLI tool that provides a single interface for pinning two distinct reference types:
-- GitHub Actions `uses:` references (tag → commit SHA via GitHub API)
-- Container image references (tag → OCI digest via registry HEAD request)
-
-Unlike pinact (Actions-only) or dockerfile-pin (images-only), frizbee handles both in separate subcommands under one binary. It operates on workflow YAML files, docker-compose files, and arbitrary YAML files.
-
-Core use cases:
-- `frizbee actions [dir]` — pin all Actions refs in workflow files
-- `frizbee image [dir]` — pin all image refs in YAML files
-- `frizbee actions <owner/repo@tag>` — resolve a single reference inline
+> 参照: `.references/frizbee/`
+> 作者: Stacklok
+> 目的: GitHub Actions 参照とコンテナイメージ参照の両方を checksum/SHA にピン留めする統合ツール。
 
 ---
 
-## 2. Architecture
+## 1. 概要
+
+frizbee は、次の 2 種類の参照を 1 つのインターフェースでピン留めする CLI ツールです。
+- GitHub Actions の `uses:` 参照（tag → commit SHA、GitHub API で解決）
+- コンテナイメージ参照（tag → OCI digest、レジストリ HEAD リクエストで解決）
+
+pinact（Actions 専用）や dockerfile-pin（image 専用）と異なり、frizbee は 1 バイナリ内の別サブコマンドとして両方を扱います。対象は workflow YAML、docker-compose、任意 YAML ファイルです。
+
+主なユースケース:
+- `frizbee actions [dir]` — workflow ファイル内の Actions 参照を一括ピン留め
+- `frizbee image [dir]` — YAML ファイル内の image 参照を一括ピン留め
+- `frizbee actions <owner/repo@tag>` — 単一参照をその場で解決
+
+---
+
+## 2. アーキテクチャ
 
 ```
 cmd/
-  actions/actions.go     CmdGHActions — Actions subcommand
-  image/image.go         CmdContainerImage — Image subcommand
+  actions/actions.go     CmdGHActions — Actions サブコマンド
+  image/image.go         CmdContainerImage — Image サブコマンド
 internal/
-  cli/cli.go             Shared CLI helpers, GitHubTokenEnvKey, TokenHelpText
+  cli/cli.go             共通 CLI ヘルパー、GitHubTokenEnvKey、TokenHelpText
 pkg/
-  replacer/              Core replacer logic (GH actions + container images)
+  replacer/              中核置換ロジック（GH actions + container images）
   interfaces/            ErrReferenceSkipped
   utils/config/
-    config.go            Config struct, DefaultConfig(), MergeUserConfig()
+    config.go            Config 構造体、DefaultConfig()、MergeUserConfig()
 ```
 
 ---
 
-## 3. Resolution Strategy — GitHub Actions SHA
+## 3. 解決戦略 — GitHub Actions SHA
 
-### Library / API
-- GitHub REST API (via authenticated HTTP client)
-- Token injected via `os.Getenv(cli.GitHubTokenEnvKey)` = `os.Getenv("GITHUB_TOKEN")`
+### ライブラリ / API
+- GitHub REST API（認証付き HTTP クライアント経由）
+- トークン注入: `os.Getenv(cli.GitHubTokenEnvKey)` = `os.Getenv("GITHUB_TOKEN")`
 
-### Resolution Flow
+### 解決フロー
 ```go
 r := replacer.NewGitHubActionsReplacer(cfg).
     WithUserRegex(cliFlags.Regex).
     WithGitHubClientFromToken(os.Getenv(cli.GitHubTokenEnvKey))
 ```
 
-1. Parse `uses: owner/repo@tag` or `uses: owner/repo/.github/workflows/file.yml@tag`.
-2. Look up the tag's commit SHA via GitHub API.
-3. Replace `@tag` with `@<sha>`.
-4. Original tag is preserved as inline comment: `@sha # tag`.
+1. `uses: owner/repo@tag` または `uses: owner/repo/.github/workflows/file.yml@tag` を解析
+2. GitHub API で tag の commit SHA を取得
+3. `@tag` を `@<sha>` に置換
+4. 元 tag はインラインコメントとして保持: `@sha # tag`
 
-### Skip Behavior
-- References matching `ExcludeBranches` (default: `main`, `master`) are skipped.
-- References matching `Exclude` patterns in config are skipped.
-- References that fail resolution yield `ErrReferenceSkipped` (gracefully skipped, not fatal).
+### スキップ挙動
+- `ExcludeBranches`（既定: `main`, `master`）に一致する参照はスキップ
+- 設定の `Exclude` パターンに一致する参照はスキップ
+- 解決失敗参照は `ErrReferenceSkipped` を返す（致命エラーではなく穏当にスキップ）
 
 ---
 
-## 4. Resolution Strategy — Container Image Digest
+## 4. 解決戦略 — コンテナイメージ Digest
 
-### Library Used
-`go-containerregistry` (same as dockerfile-pin — the ecosystem standard)
+### 使用ライブラリ
+`go-containerregistry`（dockerfile-pin と同様、デファクト標準）
 
-### Resolution Flow
+### 解決フロー
 ```go
 r := replacer.NewContainerImagesReplacer(cfg).
     WithUserRegex(cliFlags.Regex)
 ```
 
-- Uses OCI registry `HEAD /v2/{name}/manifests/{reference}` — no full manifest download.
-- No explicit token for image resolution; relies on system credential chain (`~/.docker/config.json` via `authn.DefaultKeychain`).
+- OCI レジストリの `HEAD /v2/{name}/manifests/{reference}` を使用（マニフェスト本体は未取得）
+- イメージ解決用の明示トークンはなし。システム credential chain（`authn.DefaultKeychain` による `~/.docker/config.json`）に依存
 
-### Skip Behavior
-- Images matching `ExcludeImages` (default: `["scratch"]`) are skipped.
-- Tags matching `ExcludeTags` (default: `["latest"]`) are skipped.
-- `scratch` is **always** appended to `ExcludeImages` even if user config omits it (enforced in `MergeUserConfig`).
+### スキップ挙動
+- `ExcludeImages`（既定: `["scratch"]`）一致イメージをスキップ
+- `ExcludeTags`（既定: `["latest"]`）一致タグをスキップ
+- `scratch` はユーザー設定に無くても常に `ExcludeImages` へ追加（`MergeUserConfig` で強制）
 
 ---
 
-## 5. Authentication
+## 5. 認証
 
 ### GitHub Actions
-- Single env var: `GITHUB_TOKEN`
-- No tool-specific env var (unlike pinact's `PINACT_GITHUB_TOKEN`)
-- No OS keyring integration
-- No GHES support
+- 単一環境変数: `GITHUB_TOKEN`
+- ツール専用環境変数なし（pinact の `PINACT_GITHUB_TOKEN` とは対照的）
+- OS keyring 連携なし
+- GHES サポートなし
 - TokenHelpText: `"NOTE: It's recommended to set the GITHUB_TOKEN environment variable given that GitHub has tighter rate limits on anonymous calls."`
 
-### Container Images
-- No explicit token — uses `authn.DefaultKeychain` from `go-containerregistry`
-- Reads `~/.docker/config.json` automatically
-- Supports any registry where `docker login` has been run
+### コンテナイメージ
+- 明示トークンなし。`go-containerregistry` の `authn.DefaultKeychain` を使用
+- `~/.docker/config.json` を自動読み込み
+- `docker login` 済みの任意レジストリをサポート
 
 ---
 
-## 6. Configuration File (`.frizbee.yml`)
+## 6. 設定ファイル（`.frizbee.yml`）
 
 ```yaml
 ghactions:
@@ -116,7 +116,7 @@ images:
     - latest
 ```
 
-### Default Configuration (`DefaultConfig()`)
+### 既定設定（`DefaultConfig()`）
 ```go
 &Config{
     GHActions: GHActions{
@@ -133,43 +133,44 @@ images:
 }
 ```
 
-### `MergeUserConfig` Safety
-- `scratch` is **always** forced into `ExcludeImages` — cannot be overridden by user.
-- Other defaults are not enforced — user can clear `exclude_branches`, `exclude_tags`.
+### `MergeUserConfig` の安全性
+- `scratch` は常に `ExcludeImages` へ強制追加され、上書き不能
+- それ以外の既定値は強制されない。`exclude_branches`、`exclude_tags` はユーザーが空にできる
 
 ---
 
-## 7. Reference Skip Handling
+## 7. 参照スキップ処理
 
 ```go
 res, err := r.ParseString(cmd.Context(), pathOrRef)
 if errors.Is(err, interfaces.ErrReferenceSkipped) {
-    fmt.Fprintln(cmd.OutOrStdout(), pathOrRef)  // print as-is, no error
+    fmt.Fprintln(cmd.OutOrStdout(), pathOrRef)  // そのまま出力、エラー扱いしない
     return nil
 }
 ```
 
-Skip is not an error — it is a named sentinel (`ErrReferenceSkipped`). This enables callers to distinguish "I tried but this type of ref is not pinnable" from actual resolution failures.
+スキップはエラーではなく、名前付き sentinel（`ErrReferenceSkipped`）です。これにより呼び出し側は「この参照はピン不可だった」ケースと「実際の解決失敗」を区別できます。
 
 ---
 
-## 8. Supported File Types
+## 8. サポート対象ファイル
 
-| Subcommand | Supported Fields |
+| サブコマンド | 対象フィールド |
 |---|---|
-| `actions` | `uses:` in `.github/workflows/*.yml` |
-| `image` | `image:` in any YAML file (docker-compose, k8s manifests, etc.) |
+| `actions` | `.github/workflows/*.yml` 内の `uses:` |
+| `image` | 任意 YAML ファイル内の `image:`（docker-compose、k8s manifest など） |
 
-frizbee `image` is broader than dockerfile-pin: it targets any YAML file with `image:` fields, not just Dockerfiles or docker-compose.yml.
+frizbee の `image` は dockerfile-pin より広範囲で、Dockerfile や docker-compose.yml に限定せず `image:` フィールドを持つ任意 YAML を対象にします。
 
 ---
 
-## 9. Lessons Learned / Design Notes
+## 9. 学び / 設計ノート
 
-- **Single `GITHUB_TOKEN` env var** — simpler than pinact's multi-var cascade, but less flexible for multi-host scenarios (no GHES). Good default for OSS projects; insufficient for enterprise with GHES.
-- **`scratch` always excluded** — a safety invariant implemented in `MergeUserConfig`, not just a default. This is the right design: `scratch` has no registry, pinning it is nonsensical.
-- **`latest` excluded by default** — pinning `latest` is semantically useless (it moves). frizbee's default correctly avoids it; users can remove the default if desired.
-- **`exclude_branches: [main, master]`** — explicitly designed to avoid pinning reusable workflows on the caller's own default branches, where tag semantics do not apply.
-- **`ErrReferenceSkipped` sentinel** — cleaner pattern than boolean flags for communicating skip vs. error in resolution pipelines.
-- **Unified actions + image in one tool** — reduces tool sprawl, but also means one tool must carry both GitHub API and OCI registry dependencies. Seiton should keep them as separate resolver interfaces.
-- **No in-process cache visible in public API** — unlike dockerfile-pin's explicit `CachedResolver`, frizbee's caching (if any) is internal to the replacer. For linter integration, explicit injectable cache is preferable.
+- **`GITHUB_TOKEN` 単一環境変数** は pinact の多段優先順位より単純。ただしマルチホスト（GHES なし）では柔軟性が低い。OSS には良い既定だが、GHES 前提の企業用途には不足。
+- **`scratch` を常時除外** は単なる既定値ではなく、`MergeUserConfig` で実装された安全不変条件。`scratch` はレジストリ実体がないため、ピン留め不能という設計判断が妥当。
+- **`latest` 既定除外** は合理的。`latest` は可変であり、ピン留めの意味が薄い。必要ならユーザーが既定を解除できる。
+- **`exclude_branches: [main, master]`** は、呼び出し側自身のデフォルトブランチ上 reusable workflow を誤ってピンしないための明示設計。
+- **`ErrReferenceSkipped` sentinel** は、解決パイプラインにおけるスキップ通知として boolean よりクリーン。
+- **actions + image の単一ツール化** でツール分散を抑えられる一方、GitHub API と OCI 依存を同居させる必要がある。Seiton では resolver インターフェースを分離維持すべき。
+- **公開 API に明示的な in-process cache が見えない**。dockerfile-pin の `CachedResolver` と異なり、frizbee のキャッシュ（ある場合）は replacer 内部。linter 統合では注入可能な明示キャッシュの方が望ましい。
+- **`min-age` 相当の更新クールダウン機能はない**。`.references/frizbee/internal/cli/cli.go` の共通フラグは `dry-run` / `quiet` / `error` / `regex` / `platform` で、日数ベース更新フィルタは存在しない。制御は `.frizbee.yml` の `exclude_branches` / `exclude_tags` などの除外条件が中心。
