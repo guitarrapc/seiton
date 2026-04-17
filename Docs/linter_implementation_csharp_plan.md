@@ -1096,7 +1096,7 @@
 
 ### Step 14.1: ghalint parity ルール群（ローカルAST中心）
 
-**ファイル**: `src/Seiton.Core/Linting/DenyReadAllRule.cs`, `src/Seiton.Core/Linting/DenyInheritSecretsRule.cs`, `src/Seiton.Core/Linting/JobTimeoutMinutesRequiredRule.cs`, `src/Seiton.Core/Linting/GitHubAppTokenInputsRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+**ファイル**: `src/Seiton.Core/Linting/Rules/DenyReadAllRule.cs`, `src/Seiton.Core/Linting/Rules/DenyInheritSecretsRule.cs`, `src/Seiton.Core/Linting/Rules/JobTimeoutMinutesRequiredRule.cs`, `src/Seiton.Core/Linting/Rules/GitHubAppTokenInputsRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
 
 - `deny-read-all`
   - `permissions: read-all`（workflow/job）を error
@@ -1114,7 +1114,7 @@
 
 ### Step 14.2: zizmor parity online ルール群（network-assisted audit）
 
-**ファイル**: `src/Seiton.Core/Linting/OnlineAudit/ActionAdvisoryProvider.cs`, `src/Seiton.Core/Linting/OnlineAudit/ActionRefResolver.cs`, `src/Seiton.Core/Linting/KnownVulnerableActionsRule.cs`, `src/Seiton.Core/Linting/ImpostorCommitRule.cs`, `src/Seiton.Core/Linting/RefConfusionRule.cs`, `src/Seiton.Core/Linting/StaleActionRefsRule.cs`, `tests/Seiton.Core.Tests/*OnlineAudit*Tests.cs`
+**ファイル**: `src/Seiton.Core/Linting/OnlineAudit/ActionAdvisoryProvider.cs`, `src/Seiton.Core/Linting/OnlineAudit/ActionRefResolver.cs`, `src/Seiton.Core/Linting/Rules/KnownVulnerableActionsRule.cs`, `src/Seiton.Core/Linting/Rules/ImpostorCommitRule.cs`, `src/Seiton.Core/Linting/Rules/RefConfusionRule.cs`, `src/Seiton.Core/Linting/Rules/StaleActionRefsRule.cs`, `tests/Seiton.Core.Tests/*OnlineAudit*Tests.cs`
 
 - `known-vulnerable-actions`
   - advisory dataset/API に基づく脆弱 version/sha 検出
