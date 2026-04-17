@@ -231,6 +231,7 @@ The current default rule scope in C# is:
 | `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
 | `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
 | `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
+| `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
 | `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
 | `glob-pattern` | Error on invalid glob patterns in `on.<event>.branches/tags/paths` style filters. |
 | `deny-write-all` | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by `Seiton_Linter_spec.md` §5.7. |

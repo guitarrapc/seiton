@@ -821,6 +821,39 @@
 
 ---
 
+## Phase 8: Runner Stability Rule（latest ラベル検出）
+
+**目標**: `runs-on` の `*-latest` 指定（例: `ubuntu-latest`）を検出し、再現性の低い可変ラベル利用を警告する。
+
+> **背景**: `runner-label` は未知ラベル検出の責務を持つが、`*-latest` は既知かつ可変であり、別のポリシーとして明示警告が必要。
+
+### Step 8.1: `runner-no-latest` ルールを追加
+
+**ファイル**: `src/Seiton.Core/Linting/RunnerNoLatestRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 対応: 独自（再現性ポリシー）
+- `VisitJobPre` で `job.RunsOn.Labels` を走査し、以下の移動ラベルを warning 報告
+  - `ubuntu-latest`
+  - `windows-latest`
+  - `macos-latest`
+- 判定は UTF-8 span 比較で行う（ホットパスで文字列生成を避ける）
+- `self-hosted` を含むジョブは対象外（self-hosted ポリシーは別ルール責務）
+- `LabelsExpr`（式形式）は静的判定不能としてスキップ
+
+**完了条件**: `runs-on: ubuntu-latest` / `windows-latest` / `macos-latest` で warning、`ubuntu-24.04` 等の固定バージョンラベルで warning なしの table-driven テストがパスする
+
+### Step 8.2: RuleCatalog と仕様同期を更新
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `RuleCatalog.DefaultRuleFactories` に `runner-no-latest` を priority 18 で追加
+- `RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority 検証を更新
+- 3 仕様書の default rule catalog / fixability catalog（no-auto-fix）を同期
+
+**完了条件**: `new LintEngine()` で `runner-no-latest` が有効化され、仕様と実装テストの rule 一覧が一致する
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
@@ -904,6 +937,7 @@ P6E --> P6F
 | 15 | `template-injection` | **実装済み** | zizmor | 式 AST 連携 |
 | 16 | `expr-undefined-var` | **実装済み** | actionlint | 式 AST 連携 |
 | 17 | `run-env-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
+| 18 | `runner-no-latest` | Phase 8（予定） | 独自 | `runner-label` 実装済み |
 
 ## チェックリスト（全 Phase 共通）
 

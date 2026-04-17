@@ -110,6 +110,7 @@ The default linter profile must include the following rule IDs.
 | `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
 | `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
 | `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
+| `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
 | `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
 | `glob-pattern` | Error on invalid glob patterns in `on.<event>.branches/tags/paths` style filters. |
 | `deny-write-all` | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by §5.7. |
@@ -465,6 +466,7 @@ The following table classifies each default rule by fix feasibility.
 | `needs-graph` | ✗ Not auto-fixable | Unknown dependency target or cycle requires user to determine correct dependency. |
 | `shell-name` | ✗ Not auto-fixable | Correct shell name is ambiguous; user must select. |
 | `runner-label` | ✗ Not auto-fixable | Closest known label may be suggested but apply is ambiguous. |
+| `runner-no-latest` | ✗ Not auto-fixable | Replacing `*-latest` with a concrete runner version requires repository policy/compatibility intent. |
 | `id-naming` | △ Partial | Replace invalid characters with `-` for `job.id` and `step.id` only when single invalid character substitution is unambiguous. |
 | `glob-pattern` | ✗ Not auto-fixable | Glob correction requires understanding user intent. |
 | `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |
