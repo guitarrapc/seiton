@@ -1,0 +1,309 @@
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Linting.Rules;
+
+public sealed class JobSecretsRule : RuleBase
+{
+    public override string Id => "job_secrets";
+
+    public override string Name => "Job Secrets Rule";
+
+    public override void VisitJobPre(Job job)
+    {
+        if (Config.Utf8Yaml is null || job.Steps is null || job.Steps.Count < 2)
+        {
+            return;
+        }
+
+        CheckEnv(job.Env, job);
+    }
+
+    void CheckEnv(Env? env, Job job)
+    {
+        if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        foreach (var pair in env.Vars)
+        {
+            var envVar = pair.Value;
+            if (!ContainsSecretsOrGitHubTokenReference(envVar.Value))
+            {
+                continue;
+            }
+
+            var envName = Decode(envVar.Name.Value);
+            AddJobError(
+                job,
+                $"job env '{envName}' must not set secrets.* or github.token when job has multiple steps; move secret mapping to step env",
+                envVar.Value.Range);
+        }
+    }
+
+    bool ContainsSecretsOrGitHubTokenReference(StringNode node)
+    {
+        if (Config.Utf8Yaml is null)
+        {
+            return false;
+        }
+
+        if (ContainsReferenceInValue(node.Value.AsSpan(Config.Utf8Yaml)))
+        {
+            return true;
+        }
+
+        if (node.Expression is null)
+        {
+            return false;
+        }
+
+        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(Config.Utf8Yaml));
+        return ContainsReferenceInExpression(expression);
+    }
+
+    bool ContainsReferenceInValue(ReadOnlySpan<byte> value)
+    {
+        var searchStart = 0;
+        while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
+        {
+            searchStart = nextSearchStart;
+            var expression = TrimAsciiWhiteSpace(value.Slice(bodyStart, bodyLength));
+            if (ContainsReferenceInExpression(expression))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
+    {
+        if (expression.Length == 0)
+        {
+            return false;
+        }
+
+        var parseResult = ExpressionParser.Parse(expression);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return false;
+        }
+
+        return ContainsSecretsReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression)
+            || ContainsGitHubTokenReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+    }
+
+    static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind == ExpressionNodeKind.Identifier
+            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "secrets"u8))
+        {
+            return true;
+        }
+
+        return ContainsReferenceInChildren(node, nodes, arguments, expression, ContainsSecretsReference);
+    }
+
+    static bool ContainsGitHubTokenReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (IsGitHubTokenAccess(node, nodes, expression))
+        {
+            return true;
+        }
+
+        return ContainsReferenceInChildren(node, nodes, arguments, expression, ContainsGitHubTokenReference);
+    }
+
+    static bool IsGitHubTokenAccess(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    {
+        if (node.Kind == ExpressionNodeKind.MemberAccess)
+        {
+            if (node.Left >= 0
+                && node.Left < nodes.Length)
+            {
+                var left = nodes[node.Left];
+                if (left.Kind == ExpressionNodeKind.Identifier
+                    && EqualsAsciiIgnoreCase(left.Token.AsSpan(expression), "github"u8)
+                    && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "token"u8))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (node.Kind == ExpressionNodeKind.IndexAccess)
+        {
+            if (node.Left >= 0
+                && node.Left < nodes.Length
+                && node.Right >= 0
+                && node.Right < nodes.Length)
+            {
+                var left = nodes[node.Left];
+                var right = nodes[node.Right];
+                if (left.Kind == ExpressionNodeKind.Identifier
+                    && EqualsAsciiIgnoreCase(left.Token.AsSpan(expression), "github"u8)
+                    && right.Kind == ExpressionNodeKind.StringLiteral
+                    && EqualsAsciiIgnoreCase(right.Token.AsSpan(expression), "token"u8))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    delegate bool NodeMatcher(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression);
+
+    static bool ContainsReferenceInChildren(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression,
+        NodeMatcher matcher)
+    {
+        return node.Kind switch
+        {
+            ExpressionNodeKind.Unary => matcher(node.Left, nodes, arguments, expression),
+            ExpressionNodeKind.Binary => matcher(node.Left, nodes, arguments, expression)
+                || matcher(node.Right, nodes, arguments, expression),
+            ExpressionNodeKind.MemberAccess => matcher(node.Left, nodes, arguments, expression)
+                || matcher(node.Right, nodes, arguments, expression),
+            ExpressionNodeKind.WildcardAccess => matcher(node.Left, nodes, arguments, expression),
+            ExpressionNodeKind.IndexAccess => matcher(node.Left, nodes, arguments, expression)
+                || matcher(node.Right, nodes, arguments, expression),
+            ExpressionNodeKind.FunctionCall => ContainsReferenceInFunctionCall(node, nodes, arguments, expression, matcher),
+            _ => false,
+        };
+    }
+
+    static bool ContainsReferenceInFunctionCall(
+        ExpressionNode functionCallNode,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression,
+        NodeMatcher matcher)
+    {
+        if (matcher(functionCallNode.Left, nodes, arguments, expression))
+        {
+            return true;
+        }
+
+        for (var i = 0; i < functionCallNode.ArgCount; i++)
+        {
+            var argIndex = functionCallNode.ArgStart + i;
+            if (argIndex < 0 || argIndex >= arguments.Length)
+            {
+                continue;
+            }
+
+            if (matcher(arguments[argIndex], nodes, arguments, expression))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool TryFindExpression(
+        ReadOnlySpan<byte> value,
+        int searchStart,
+        out int bodyStart,
+        out int bodyLength,
+        out int nextSearchStart)
+    {
+        bodyStart = 0;
+        bodyLength = 0;
+        nextSearchStart = 0;
+
+        if ((uint)searchStart >= (uint)value.Length)
+        {
+            return false;
+        }
+
+        var start = value[searchStart..].IndexOf("${{"u8);
+        if (start < 0)
+        {
+            return false;
+        }
+
+        bodyStart = searchStart + start + 3;
+        var close = value[bodyStart..].IndexOf("}}"u8);
+        if (close < 0)
+        {
+            return false;
+        }
+
+        bodyLength = close;
+        nextSearchStart = bodyStart + close + 2;
+        return true;
+    }
+
+    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
+    {
+        var start = 0;
+        while (start < value.Length && IsAsciiWhiteSpace(value[start]))
+        {
+            start++;
+        }
+
+        var end = value.Length - 1;
+        while (end >= start && IsAsciiWhiteSpace(value[end]))
+        {
+            end--;
+        }
+
+        return end >= start ? value.Slice(start, end - start + 1) : [];
+    }
+
+    static bool IsAsciiWhiteSpace(byte ch)
+    {
+        return ch == (byte)' ' || ch == (byte)'\t' || ch == (byte)'\n' || ch == (byte)'\r';
+    }
+
+    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var l = left[i];
+            var r = right[i];
+            if (l >= 'A' && l <= 'Z')
+            {
+                l = (byte)(l + 32);
+            }
+
+            if (r >= 'A' && r <= 'Z')
+            {
+                r = (byte)(r + 32);
+            }
+
+            if (l != r)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}

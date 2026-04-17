@@ -41,6 +41,9 @@ internal static class RuleCatalog
         ("deny-inherit-secrets", 24, static () => new DenyInheritSecretsRule()),
         ("job-timeout-minutes-required", 25, static () => new JobTimeoutMinutesRequiredRule()),
         ("github-app-token-inputs", 26, static () => new GitHubAppTokenInputsRule()),
+        ("workflow_secrets", 35, static () => new WorkflowSecretsRule()),
+        ("job_secrets", 36, static () => new JobSecretsRule()),
+        ("action_shell_is_required", 37, static () => new ActionShellIsRequiredRule()),
     ];
 
     static readonly (string Id, int Priority)[] AdditionalRuleMetadata =

@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(27);
+        await Assert.That(rules.Length).IsEqualTo(30);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -311,6 +311,9 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[24].Id).IsEqualTo("deny-inherit-secrets");
         await Assert.That(rules[25].Id).IsEqualTo("job-timeout-minutes-required");
         await Assert.That(rules[26].Id).IsEqualTo("github-app-token-inputs");
+        await Assert.That(rules[27].Id).IsEqualTo("workflow_secrets");
+        await Assert.That(rules[28].Id).IsEqualTo("job_secrets");
+        await Assert.That(rules[29].Id).IsEqualTo("action_shell_is_required");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -339,6 +342,9 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(24);
         await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(25);
         await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(26);
+        await Assert.That(RuleCatalog.GetPriority("workflow_secrets")).IsEqualTo(35);
+        await Assert.That(RuleCatalog.GetPriority("job_secrets")).IsEqualTo(36);
+        await Assert.That(RuleCatalog.GetPriority("action_shell_is_required")).IsEqualTo(37);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
@@ -350,12 +356,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-028");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-031");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-029", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-032", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-030");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-031");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-033");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-034");
     }
 
     [Test]
@@ -2167,6 +2173,201 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_WorkflowSecretsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-single-job-workflow-exception",
+            """
+            on: push
+            env:
+                GITHUB_TOKEN: ${{ github.token }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-multi-job-non-secret-env",
+            """
+            on: push
+            env:
+                NORMAL_VALUE: plain
+            jobs:
+                a:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo a
+                b:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo b
+            """,
+            []),
+            new RuleCase(
+            "ng-multi-job-github-token-in-workflow-env",
+            """
+            on: push
+            env:
+                GITHUB_TOKEN: ${{ github.token }}
+            jobs:
+                a:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo a
+                b:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo b
+            """,
+            ["must not set secrets.* or github.token", "move secret mapping to job/step env"]),
+            new RuleCase(
+            "ng-multi-job-secrets-in-workflow-env",
+            """
+            on: push
+            env:
+                DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+            jobs:
+                a:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo a
+                b:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo b
+            """,
+            ["must not set secrets.* or github.token", "DATADOG_API_KEY"]),
+        };
+
+        await AssertRuleCases(new WorkflowSecretsRule(), "workflow_secrets", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_JobSecretsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-single-step-job-exception",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        GITHUB_TOKEN: ${{ github.token }}
+                    steps:
+                        - run: echo only-step
+            """,
+            []),
+            new RuleCase(
+            "ok-multi-step-non-secret-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        NORMAL_VALUE: plain
+                    steps:
+                        - run: echo first
+                        - run: echo second
+            """,
+            []),
+            new RuleCase(
+            "ng-multi-step-github-token-in-job-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        GITHUB_TOKEN: ${{ github.token }}
+                    steps:
+                        - run: echo first
+                        - run: echo second
+            """,
+            ["must not set secrets.* or github.token", "step env"]),
+            new RuleCase(
+            "ng-multi-step-secrets-in-job-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+                    steps:
+                        - run: echo first
+                        - run: echo second
+            """,
+            ["must not set secrets.* or github.token", "DATADOG_API_KEY"]),
+        };
+
+        await AssertRuleCases(new JobSecretsRule(), "job_secrets", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ActionShellIsRequiredRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-run-with-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hello
+                          shell: bash
+            """,
+            []),
+            new RuleCase(
+            "ok-action-step-no-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ng-run-without-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hello
+            """,
+            ["shell is required if run is set"]),
+            new RuleCase(
+            "ng-run-with-empty-shell",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hello
+                          shell: ""
+            """,
+            ["shell is required if run is set"]),
+        };
+
+        await AssertRuleCases(new ActionShellIsRequiredRule(), "action_shell_is_required", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -3238,6 +3439,51 @@ public sealed class RuleInterfaceTests
                         runs-on: ubuntu-latest
                         steps:
                             - uses: actions/create-github-app-token@v2
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "workflow_secrets",
+                new WorkflowSecretsRule(),
+                """
+                on: push
+                env:
+                    GITHUB_TOKEN: ${{ github.token }}
+                jobs:
+                    a:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo a
+                    b:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo b
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "job_secrets",
+                new JobSecretsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        env:
+                            GITHUB_TOKEN: ${{ github.token }}
+                        steps:
+                            - run: echo a
+                            - run: echo b
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "action_shell_is_required",
+                new ActionShellIsRequiredRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo hello
                 """,
                 ExpectsFix: false),
         };

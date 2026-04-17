@@ -130,6 +130,9 @@ The default linter profile must include the following rule IDs.
 | `deny-inherit-secrets` | Error when reusable-workflow call jobs use `secrets: inherit`; full secret inheritance is forbidden under strict policy profile. |
 | `job-timeout-minutes-required` | Error when executable jobs omit `timeout-minutes` (or equivalent compliant per-step timeout policy), to avoid unbounded runner execution. |
 | `github-app-token-inputs` | Error when known GitHub App token actions are missing repository/permission-limiting inputs (for example `repositories`, `permissions`, `permission-*`). |
+| `workflow_secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
+| `job_secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
+| `action_shell_is_required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
 
 Rule set compatibility policy:
 
@@ -179,6 +182,9 @@ This section provides operator-facing guidance for each default rule.
 | `deny-inherit-secrets` | Forbids `secrets: inherit` in reusable workflow calls. | Reusable call job declares `secrets: inherit`. | Prevents broad secret propagation across workflow boundaries. | Map only required secrets explicitly under `secrets:`. | ✗ | Explicit mapping can still overshare; periodically review call-site contracts. |
 | `job-timeout-minutes-required` | Requires timeout on executable jobs. | Job missing `timeout-minutes` and no equivalent policy exception. | Prevents runaway jobs and unexpected runner cost/exhaustion. | Add `timeout-minutes` per job or enforce approved per-step timeout policy. | △ Partial | Partial auto-fix applies only when `LintConfig.DefaultJobTimeoutMinutesForFix` is configured. Timeout values may still be mis-sized; monitor failures and tune thresholds. |
 | `github-app-token-inputs` | Requires scoped inputs for GitHub App token actions. | `actions/create-github-app-token` or `tibdex/github-app-token` without repo/permission limits. | Reduces over-broad app token issuance. | Add `repositories` and permission-limiting inputs (`permissions`, `permission-*`). | ✗ | Action interface changes may require metadata updates in rule dataset. |
+| `workflow_secrets` | Restricts workflow-wide env-level secret/token assignment when workflow scope is broad. | Workflow-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while workflow has multiple jobs. | Prevents secret propagation beyond required execution scope. | Move secret mapping from workflow-level env to job/step minimal scope. | ✗ | Scope reduction can break implicit dependencies; audit each job's required secret contract. |
+| `job_secrets` | Restricts job-wide env-level secret/token assignment when job scope is broad. | Job-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while job has multiple steps. | Prevents unnecessary intra-job secret propagation. | Move secret mapping from job-level env to step-level minimal scope. | ✗ | Step-level mapping still requires sink review; combine with run/direct-use protections. |
+| `action_shell_is_required` | Requires explicit shell declaration on run steps. | `run:` exists but `shell:` is missing or empty. | Improves execution determinism and shell-behavior clarity. | Declare `shell` explicitly and align script syntax with the selected shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across runner environments. |
 
 ---
 
@@ -901,9 +907,6 @@ Status and scope:
 | `self-hosted-runner` | Detect unsafe execution patterns on self-hosted runners (for example untrusted trigger paths without sufficient isolation/guarding controls). |
 | `unredacted-secrets` | Detect command or logging patterns where secret values may be emitted without redaction safeguards. |
 | `secrets-outside-env` | Detect secret context references in unsafe sinks outside approved environment-variable handoff patterns. |
-| `workflow_secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` under policy-defined conditions. |
-| `job_secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` under policy-defined conditions. |
-| `action_shell_is_required` | Error when an action definition includes `run` steps without explicit `shell` declaration where shell declaration is required by policy. |
 
 ### 13.2 Candidate Rule Guidance (Operational)
 
@@ -915,6 +918,3 @@ This subsection follows the same operator-facing style as §4.5 and is non-norma
 | `self-hosted-runner` | Flags risky use of self-hosted runners in workflows that process untrusted inputs. | Add strict trigger guards, isolate runner groups, and split trusted/untrusted execution paths. | ✗ | Runner hardening must include host lifecycle, credential isolation, and network egress controls. |
 | `unredacted-secrets` | Detects output paths where secrets may appear in logs without masking protections. | Route secrets through approved secret channels, avoid direct echo/print, and apply explicit masking controls. | ✗ | Redaction is not perfect against transformed values; avoid exposing secret-derived material in logs entirely. |
 | `secrets-outside-env` | Enforces secret handling via controlled handoff patterns instead of direct expression injection into unsafe sinks. | Move secret use to explicit `env` mapping and consume via shell-native variables in constrained scope. | ✗ | Even with `env` handoff, secrets can leak via arguments/process lists; prefer stdin/file-based passing where possible. |
-| `workflow_secrets` | Restricts workflow-wide env-level secret/token assignment to prevent broad propagation. | Remove workflow-level secret assignment and map only required secrets at narrower scope. | ✗ | Scope reduction can break implicit dependencies; audit all jobs for required secret contract. |
-| `job_secrets` | Restricts job-wide env-level secret/token assignment to prevent unnecessary intra-job propagation. | Move secret mapping from job-level env to step-level minimal scope where required. | ✗ | Step-level mapping still requires sink review; combine with `run-secrets-context-direct-use` controls. |
-| `action_shell_is_required` | Requires explicit shell on action `run` steps for deterministic execution semantics. | Declare `shell` explicitly per `run` step and align script syntax with declared shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across target runners and shell versions. |
