@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(22);
+        await Assert.That(rules.Length).IsEqualTo(23);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -305,6 +305,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
         await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
         await Assert.That(rules[21].Id).IsEqualTo("secrets-whole-context-access");
+        await Assert.That(rules[22].Id).IsEqualTo("reusable-workflow-secrets-inherit");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -328,6 +329,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
         await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
         await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(21);
+        await Assert.That(RuleCatalog.GetPriority("reusable-workflow-secrets-inherit")).IsEqualTo(22);
     }
 
     [Test]
@@ -418,6 +420,49 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ReusableWorkflowSecretsInheritRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-reusable-explicit-secrets",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+                    secrets:
+                        token: ${{ secrets.GITHUB_TOKEN }}
+            """,
+            []),
+            new RuleCase(
+            "ok-secrets-without-uses-is-not-target",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    secrets: inherit
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-reusable-secrets-inherit",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+                    secrets: inherit
+            """,
+            ["uses 'secrets: inherit'", "explicitly map only required secrets"]),
+        };
+
+        await AssertRuleCases(new ReusableWorkflowSecretsInheritRule(), "reusable-workflow-secrets-inherit", cases);
     }
 
     [Test]
@@ -2630,6 +2675,17 @@ public sealed class RuleInterfaceTests
                         runs-on: ubuntu-latest
                         steps:
                             - run: echo "${{ toJson(secrets) }}"
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "reusable-workflow-secrets-inherit",
+                new ReusableWorkflowSecretsInheritRule(),
+                """
+                on: push
+                jobs:
+                    reuse:
+                        uses: owner/repo/.github/workflows/reuse.yml@main
+                        secrets: inherit
                 """,
                 ExpectsFix: false),
         };
