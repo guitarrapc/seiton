@@ -339,6 +339,23 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(24);
         await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(25);
         await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(26);
+        await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
+        await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
+        await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
+        await Assert.That(RuleCatalog.GetPriority("stale-action-refs")).IsEqualTo(30);
+    }
+
+    [Test]
+    public async Task RuleCatalog_OnlineAuditRules_AreKnownForResolutionAndCanonicalIds()
+    {
+        await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
+        await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-028");
+
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-029", out var impostorCommit)).IsTrue();
+        await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-030");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-031");
     }
 
     [Test]

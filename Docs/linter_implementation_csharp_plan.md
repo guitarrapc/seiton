@@ -12,7 +12,8 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` の 27 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 31 ルール（default local 27 + online audit 4） |
+| Online audit | `OnlineAuditEngine` が opt-in の post-lint path として advisory / ref-confusion / impostor-commit / stale-pin 系の network-assisted 診断を生成。`LintEngine.Check()` の no-I/O 制約は維持 |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
 | Fix Engine | `DiagnosticFix` / `TextEdit`、6 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
@@ -51,6 +52,10 @@
 | `run-inputs-context-direct-use` | `RunInputsContextDirectUseRule` | `run:` 内 `${{ inputs.* }}` / `${{ github.event.inputs.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
 | `secrets-whole-context-access` | `SecretsWholeContextAccessRule` | `${{ toJson(secrets) }}` など `secrets` コンテキスト全体参照（`run:` / `env:` / `with:`）を検出して error | 独自 |
 | `checkout-persist-credentials` | `CheckoutPersistCredentialsRule` | `actions/checkout` で `with.persist-credentials: false` が未指定、式、または `false` 以外の場合に warning。単純な未指定/true は partial auto-fix 対象で、後続の認証付き git 操作見直しを促す | ghalint |
+| `known-vulnerable-actions` | `KnownVulnerableActionsRule` | advisory dataset/API で既知脆弱 action version/ref を検出して error（`OnlineAuditEngine` 経由） | zizmor |
+| `impostor-commit` | `ImpostorCommitRule` | SHA pin が参照 repo に存在しない ghost/impostor commit を検出して error（`OnlineAuditEngine` 経由） | zizmor |
+| `ref-confusion` | `RefConfusionRule` | 同名 branch/tag の曖昧 symbolic ref を検出して error（`OnlineAuditEngine` 経由） | zizmor |
+| `stale-action-refs` | `StaleActionRefsRule` | 現行 tag 系列と紐付かない SHA pin を検出して warning（`OnlineAuditEngine` 経由） | zizmor |
 
 ---
 
@@ -1144,11 +1149,13 @@
 
 **ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
 
-- `RuleCatalog.DefaultRuleFactories` へ新規 rule を priority 24-31 で追加
+- `RuleCatalog` に Phase 14 rule metadata を登録し、default local rule set（27件）と online audit rule set（4件）の priority / canonical rule-id / suggestion 解決を同期
 - `deny-read-all` を fail-safe（non-disableable + min severity Error）候補として評価・必要なら適用
 - default rule catalog / fixability catalog / priority テストを同期
 
 **完了条件**: `RuleCatalog_DefaultRules_MatchDocumentedScope` と fail-safe 回帰が green。
+
+**実装メモ**: 完了。`RuleCatalog.CreateDefaultRules()` は no-I/O 制約を維持して local `IRule` 27件のまま据え置きつつ、`known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` を metadata 側へ追加し、priority 27-30・canonical rule-id・rule-id suggestion/解決の対象に含めた。`deny-read-all` の fail-safe（non-disableable + minimum severity Error）は維持し、`RuleInterfaceTests` では default local rule 件数と online audit rule metadata を分離して回帰化した。`Seiton_Linter_spec.md` / `Seiton_Linter_csharp_spec.md` / `Seiton_Linter_go_spec.md` は、online 4 rule が shared catalog 上は正式 rule-id だが C# では `OnlineAuditEngine` から emit されること、Go 側は catalog 同期済みで runtime 実装は未着手であることが分かるように更新した。
 
 ### Step 14.4: Auto-fix 方針整理（限定）
 
@@ -1254,10 +1261,10 @@ P6E --> P6F
 | 24 | `deny-inherit-secrets` | **実装済み** | ghalint | `reusable-workflow` 実装済み |
 | 25 | `job-timeout-minutes-required` | **実装済み** | ghalint | job/step traversal |
 | 26 | `github-app-token-inputs` | **実装済み** | ghalint | `PopularActions.g.cs` / action metadata |
-| 27 | `known-vulnerable-actions` | **Phase 14（予定）** | zizmor | online advisory provider |
-| 28 | `impostor-commit` | **Phase 14（予定）** | zizmor | remote commit reachability check |
-| 29 | `ref-confusion` | **Phase 14（予定）** | zizmor | tag/branch namespace inspection |
-| 30 | `stale-action-refs` | **Phase 14（予定）** | zizmor | release/tag-to-sha freshness policy |
+| 27 | `known-vulnerable-actions` | **実装済み** | zizmor | online advisory provider |
+| 28 | `impostor-commit` | **実装済み** | zizmor | remote commit reachability check |
+| 29 | `ref-confusion` | **実装済み** | zizmor | tag/branch namespace inspection |
+| 30 | `stale-action-refs` | **実装済み** | zizmor | release/tag-to-sha freshness policy |
 
 ## チェックリスト（全 Phase 共通）
 

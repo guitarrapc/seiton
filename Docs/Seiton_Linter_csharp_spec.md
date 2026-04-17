@@ -249,11 +249,12 @@ Scope notes:
 - Parser diagnostics remain primary for YAML shape and required-key errors.
 - Rule diagnostics add policy and metadata checks over parsed AST.
 - `LintEngine` defaults to `RuleCatalog.CreateDefaultRules()`, applies priority sort, then deduplicates identical diagnostics.
+- Network-assisted rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are cataloged in `RuleCatalog` for rule-id resolution and priority ordering, but C# emits them through `OnlineAuditEngine` rather than the default local `IRule` pass set.
 - Rule ID stability and compatibility policy follow `Seiton_Linter_spec.md` §4.4.
 
-### 3.5 Planned Parity Additions (Not Yet Implemented)
+### 3.5 Phase 14 Catalog Additions
 
-The language-agnostic rule catalog includes the following additional rule IDs targeted by the next implementation wave in `Docs/linter_implementation_csharp_plan.md` Phase 14.
+The language-agnostic rule catalog includes the following Phase 14 rule IDs.
 
 - `known-vulnerable-actions`
 - `impostor-commit`
@@ -267,7 +268,7 @@ The language-agnostic rule catalog includes the following additional rule IDs ta
 Status contract:
 
 - These rule IDs are normative at the shared-spec level.
-- C# runtime integration is planned and tracked in the implementation plan until `RuleCatalog` and tests are updated.
+- C# runtime maps all eight IDs in `RuleCatalog`; `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` are default local rules, while the four network-assisted rules are emitted by `OnlineAuditEngine`.
 
 ---
 

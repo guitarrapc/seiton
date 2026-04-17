@@ -246,9 +246,10 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
 | `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
 
-### 3.5 Planned Parity Additions (Not Yet Implemented)
 
-The shared rule catalog additionally defines the following rule IDs for the next parity wave:
+### 3.5 Phase 14 Catalog Additions
+
+The shared rule catalog additionally defines the following Phase 14 rule IDs:
 
 - `known-vulnerable-actions`
 - `impostor-commit`
@@ -261,6 +262,7 @@ The shared rule catalog additionally defines the following rule IDs for the next
 
 Implementation status:
 
+- Shared-spec catalog status is fixed for these IDs.
 - Go runtime mapping for these IDs is planned and should follow the same sequencing as documented in `Docs/linter_implementation_csharp_plan.md` Phase 14 until Go-specific implementation plan items are added.
 
 ---

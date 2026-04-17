@@ -136,6 +136,7 @@ Rule set compatibility policy:
 - Existing rule IDs are stable once published.
 - Adding a new default rule requires this catalog to be updated in the same specification change.
 - Removing or renaming a published rule ID is a breaking change and requires explicit migration guidance.
+- Network-assisted rule IDs may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
 ### 4.5 Rule Guidance (Operational)
 

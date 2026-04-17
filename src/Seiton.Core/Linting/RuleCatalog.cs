@@ -43,6 +43,16 @@ internal static class RuleCatalog
         ("github-app-token-inputs", 26, static () => new GitHubAppTokenInputsRule()),
     ];
 
+    static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
+    [
+        ("known-vulnerable-actions", 27),
+        ("impostor-commit", 28),
+        ("ref-confusion", 29),
+        ("stale-action-refs", 30),
+    ];
+
+    static readonly (string Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
+
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
 
     static readonly IReadOnlyDictionary<string, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
@@ -69,11 +79,11 @@ internal static class RuleCatalog
             return int.MaxValue;
         }
 
-        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
-            if (string.Equals(DefaultRuleFactories[i].Id, ruleId, StringComparison.Ordinal))
+            if (string.Equals(AllRuleMetadata[i].Id, ruleId, StringComparison.Ordinal))
             {
-                return DefaultRuleFactories[i].Priority;
+                return AllRuleMetadata[i].Priority;
             }
         }
 
@@ -134,9 +144,9 @@ internal static class RuleCatalog
 
         var bestCandidate = string.Empty;
         var bestDistance = int.MaxValue;
-        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
-            var candidate = DefaultRuleFactories[i].Id;
+            var candidate = AllRuleMetadata[i].Id;
             var distance = ComputeEditDistanceIgnoreCase(input, candidate);
             if (distance >= bestDistance)
             {
@@ -182,9 +192,9 @@ internal static class RuleCatalog
     {
         resolvedRuleId = string.Empty;
 
-        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
-            var candidate = DefaultRuleFactories[i].Id;
+            var candidate = AllRuleMetadata[i].Id;
             if (!string.Equals(candidate, input, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -200,12 +210,28 @@ internal static class RuleCatalog
     static IReadOnlyDictionary<string, string> BuildCanonicalRuleIdMap()
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
-            map[$"{CanonicalPrefix}{(i + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}"] = DefaultRuleFactories[i].Id;
+            map[$"{CanonicalPrefix}{(i + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}"] = AllRuleMetadata[i].Id;
         }
 
         return map;
+    }
+
+    static (string Id, int Priority)[] BuildAllRuleMetadata()
+    {
+        var metadata = new (string Id, int Priority)[DefaultRuleFactories.Length + AdditionalRuleMetadata.Length];
+        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        {
+            metadata[i] = (DefaultRuleFactories[i].Id, DefaultRuleFactories[i].Priority);
+        }
+
+        for (var i = 0; i < AdditionalRuleMetadata.Length; i++)
+        {
+            metadata[DefaultRuleFactories.Length + i] = AdditionalRuleMetadata[i];
+        }
+
+        return metadata;
     }
 
     static IReadOnlyDictionary<string, string> BuildReverseCanonicalRuleIdMap()
