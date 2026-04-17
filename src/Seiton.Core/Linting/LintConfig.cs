@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting.OnlineAudit;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
@@ -24,6 +25,12 @@ public sealed class LintConfig
     /// When null or AllowNetwork is false, no network-assisted remediation is performed.
     /// </summary>
     public PinResolutionConfig? PinResolution { get; init; } = null;
+
+    /// <summary>
+    /// Optional network-assisted online audit configuration for advisory and ref checks.
+    /// When null or AllowNetwork is false, no online audit is performed.
+    /// </summary>
+    public OnlineAuditConfig? OnlineAudit { get; init; } = null;
 }
 
 public sealed record ExpressionContext(

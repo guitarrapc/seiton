@@ -1138,6 +1138,8 @@
 
 **完了条件**: network on/off、skip/fail-open、キャッシュ、GHES フォールバックを含む E2E テストが green。
 
+**実装メモ**: 完了。`OnlineAuditEngine` を追加し、`LintEngine.Check()` の no-I/O 制約を維持したまま opt-in の post-lint audit として `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` を実装した。`ActionRefResolver` は commit 到達性・branch/tag namespace 競合・tag 到達性を GitHub API / GHES fallback / in-memory cache で解決し、`known-vulnerable-actions` は `IActionAdvisoryProvider` 抽象経由で advisory source を差し替え可能にした。`LintConfig` / `LintConfigLibrary` に `online_audit` 設定（allow_network, fail_open, request_timeout_sec, max_concurrency, github_actions.token_env_vars / ghes_api_url / ghes_fallback / ignore_actions）を追加し、`OnlineAuditEngineTests` / `ActionRefResolverTests` / config tests を追加して focused test と `dotnet build` を green 確認した。
+
 ### Step 14.3: RuleCatalog / 仕様 / fail-safe 同期
 
 **ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`

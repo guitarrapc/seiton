@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Linting.OnlineAudit;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
@@ -77,6 +78,22 @@ public static class LintConfigLibrary
             max_concurrency: 4
             github_actions:
                 min_age_days: 14
+
+        online_audit:
+            # Must be true to enable network-assisted advisory/ref audit.
+            allow_network: false
+            github_actions:
+                token_env_vars:
+                    # - SEITON_GITHUB_TOKEN
+                    # - GITHUB_TOKEN
+                ghes_api_url: ""
+                ghes_fallback: false
+                ignore_actions:
+                    # - name: "slsa-framework/.*"
+                    #   ref: ".*"
+            fail_open: true
+            request_timeout_sec: 30
+            max_concurrency: 4
         """;
     }
 
@@ -137,6 +154,9 @@ public static class LintConfigLibrary
         var normalizedPinResolution = NormalizePinResolution(parseResult.PinResolution, filePath);
         diagnostics.AddRange(normalizedPinResolution.Diagnostics);
 
+        var normalizedOnlineAudit = NormalizeOnlineAudit(parseResult.OnlineAudit, filePath);
+        diagnostics.AddRange(normalizedOnlineAudit.Diagnostics);
+
         var config = new LintConfig
         {
             Utf8Yaml = Encoding.UTF8.GetBytes(yamlText),
@@ -146,6 +166,7 @@ public static class LintConfigLibrary
             ExprContext = parseResult.ExpressionContext,
             AdditiveCustomization = normalizedAdditive.AdditiveCustomization,
             PinResolution = normalizedPinResolution.PinResolution,
+            OnlineAudit = normalizedOnlineAudit.OnlineAudit,
         };
 
         return new LintConfigValidationResult(config, diagnostics.ToArray());
@@ -574,6 +595,85 @@ public static class LintConfigLibrary
     {
         public static NormalizedPinResolution Empty { get; } = new(null, []);
     }
+
+    static NormalizedOnlineAudit NormalizeOnlineAudit(OnlineAuditConfig? onlineAudit, string filePath)
+    {
+        if (onlineAudit is null)
+        {
+            return NormalizedOnlineAudit.Empty;
+        }
+
+        var diagnostics = new List<Diagnostic>();
+        var timeout = onlineAudit.RequestTimeoutSec;
+        if (timeout < 0)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                "online_audit.request_timeout_sec must be >= 0",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            timeout = 30;
+        }
+
+        var maxConcurrency = onlineAudit.MaxConcurrency;
+        if (maxConcurrency <= 0)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                "online_audit.max_concurrency must be > 0",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            maxConcurrency = 4;
+        }
+
+        var normalizedTokenEnvVars = NormalizeStringList(onlineAudit.GitHubActions.TokenEnvVars);
+        var normalizedIgnoreActions = new List<IgnoreActionEntry>(onlineAudit.GitHubActions.IgnoreActions.Count);
+        for (var i = 0; i < onlineAudit.GitHubActions.IgnoreActions.Count; i++)
+        {
+            var entry = onlineAudit.GitHubActions.IgnoreActions[i];
+            if (string.IsNullOrWhiteSpace(entry.NamePattern) || string.IsNullOrWhiteSpace(entry.RefPattern))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "online_audit.github_actions.ignore_actions entries require non-empty name and ref",
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
+            normalizedIgnoreActions.Add(new IgnoreActionEntry(entry.NamePattern.Trim(), entry.RefPattern.Trim()));
+        }
+
+        var ghesApiUrl = onlineAudit.GitHubActions.GhesApiUrl?.Trim();
+        if (string.IsNullOrEmpty(ghesApiUrl))
+        {
+            ghesApiUrl = null;
+        }
+
+        var normalized = new OnlineAuditConfig
+        {
+            AllowNetwork = onlineAudit.AllowNetwork,
+            GitHubActions = new OnlineAuditGitHubConfig
+            {
+                TokenEnvVars = normalizedTokenEnvVars,
+                GhesApiUrl = ghesApiUrl,
+                GhesFallback = onlineAudit.GitHubActions.GhesFallback,
+                IgnoreActions = normalizedIgnoreActions,
+            },
+            FailOpen = onlineAudit.FailOpen,
+            RequestTimeoutSec = timeout,
+            MaxConcurrency = maxConcurrency,
+        };
+
+        return new NormalizedOnlineAudit(normalized, diagnostics.ToArray());
+    }
+
+    readonly record struct NormalizedOnlineAudit(
+        OnlineAuditConfig? OnlineAudit,
+        Diagnostic[] Diagnostics)
+    {
+        public static NormalizedOnlineAudit Empty { get; } = new(null, []);
+    }
 }
 
 public readonly record struct LintConfigValidationResult(
@@ -610,6 +710,7 @@ internal sealed class LintConfigLineParser
     RuleSpecificAdditiveCustomization additiveCustomization = RuleSpecificAdditiveCustomization.Empty;
     ExpressionContext expressionContext = ExpressionContext.Empty;
     PinResolutionConfig? pinResolution;
+    OnlineAuditConfig? onlineAudit;
 
     public LintConfigLineParser(string yamlText, string filePath)
     {
@@ -678,6 +779,12 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            if (key is "online_audit" or "onlineAudit")
+            {
+                ParseOnlineAuditSection();
+                continue;
+            }
+
             diagnostics.Add(CreateError($"unknown top-level key '{key}'", lineNumber, 1, key.Length));
             SkipIndentedBlock(0);
         }
@@ -688,7 +795,247 @@ internal sealed class LintConfigLineParser
             exclusions.ToArray(),
             expressionContext,
             pinResolution,
+            onlineAudit,
             diagnostics.ToArray());
+    }
+
+    void ParseOnlineAuditSection()
+    {
+        var allowNetwork = false;
+        var failOpen = true;
+        var requestTimeoutSec = 30;
+        var maxConcurrency = 4;
+        var githubActions = new OnlineAuditGitHubConfig();
+
+        while (index < lines.Length)
+        {
+            var line = lines[index];
+            if (TrySkip(line))
+            {
+                index++;
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= 0)
+            {
+                break;
+            }
+
+            var lineNumber = index + 1;
+            if (indent != 2)
+            {
+                diagnostics.Add(CreateError("online_audit key must be indented by 2 spaces", lineNumber, indent + 1, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            if (!TryParseProperty(line, out var key, out var value))
+            {
+                if (!TryParseKey(line, out key))
+                {
+                    diagnostics.Add(CreateError("online_audit entry must be key or key: value", lineNumber, 3, line.Trim().Length));
+                    index++;
+                    continue;
+                }
+
+                index++;
+                if (key is "github_actions" or "githubActions")
+                {
+                    githubActions = ParseOnlineAuditGitHubActionsSection();
+                    continue;
+                }
+
+                diagnostics.Add(CreateError($"unknown online_audit key '{key}'", lineNumber, 3, key.Length));
+                SkipIndentedBlock(2);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "github_actions" or "githubActions")
+            {
+                index++;
+                githubActions = ParseOnlineAuditGitHubActionsSection();
+                continue;
+            }
+
+            if (key is "allow_network" or "allowNetwork")
+            {
+                if (!TryParseBool(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("online_audit.allow_network must be true or false", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    allowNetwork = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key is "fail_open" or "failOpen")
+            {
+                if (!TryParseBool(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("online_audit.fail_open must be true or false", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    failOpen = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key is "request_timeout_sec" or "requestTimeoutSec")
+            {
+                if (!TryParseInt(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("online_audit.request_timeout_sec must be an integer", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    requestTimeoutSec = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key is "max_concurrency" or "maxConcurrency")
+            {
+                if (!TryParseInt(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("online_audit.max_concurrency must be an integer", lineNumber, 3, line.Trim().Length));
+                }
+                else
+                {
+                    maxConcurrency = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            diagnostics.Add(CreateError($"unknown online_audit key '{key}'", lineNumber, 3, key.Length));
+            index++;
+        }
+
+        onlineAudit = new OnlineAuditConfig
+        {
+            AllowNetwork = allowNetwork,
+            GitHubActions = githubActions,
+            FailOpen = failOpen,
+            RequestTimeoutSec = requestTimeoutSec,
+            MaxConcurrency = maxConcurrency,
+        };
+    }
+
+    OnlineAuditGitHubConfig ParseOnlineAuditGitHubActionsSection()
+    {
+        IReadOnlyList<string>? tokenEnvVars = null;
+        string? ghesApiUrl = null;
+        var ghesFallback = false;
+        IReadOnlyList<IgnoreActionEntry>? ignoreActions = null;
+
+        while (index < lines.Length)
+        {
+            var line = lines[index];
+            if (TrySkip(line))
+            {
+                index++;
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= 2)
+            {
+                break;
+            }
+
+            var lineNumber = index + 1;
+            if (indent != 4)
+            {
+                diagnostics.Add(CreateError("online_audit.github_actions key must be indented by 4 spaces", lineNumber, indent + 1, line.Trim().Length));
+                index++;
+                continue;
+            }
+
+            if (!TryParseProperty(line, out var key, out var value))
+            {
+                if (!TryParseKey(line, out key))
+                {
+                    diagnostics.Add(CreateError("online_audit.github_actions entry must be key or key: value", lineNumber, 5, line.Trim().Length));
+                    index++;
+                    continue;
+                }
+
+                index++;
+                if (key is "token_env_vars" or "tokenEnvVars")
+                {
+                    tokenEnvVars = ParseListBlock(4, "token_env_vars");
+                    continue;
+                }
+
+                if (key is "ignore_actions" or "ignoreActions")
+                {
+                    ignoreActions = ParseIgnoreActionsList(4);
+                    continue;
+                }
+
+                diagnostics.Add(CreateError($"unknown online_audit.github_actions key '{key}'", lineNumber, 5, key.Length));
+                SkipIndentedBlock(4);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "token_env_vars" or "tokenEnvVars")
+            {
+                index++;
+                tokenEnvVars = ParseListBlock(4, "token_env_vars");
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value) && key is "ignore_actions" or "ignoreActions")
+            {
+                index++;
+                ignoreActions = ParseIgnoreActionsList(4);
+                continue;
+            }
+
+            if (key is "ghes_api_url" or "ghesApiUrl")
+            {
+                ghesApiUrl = Unquote(value);
+                index++;
+                continue;
+            }
+
+            if (key is "ghes_fallback" or "ghesFallback")
+            {
+                if (!TryParseBool(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("online_audit.github_actions.ghes_fallback must be true or false", lineNumber, 5, line.Trim().Length));
+                }
+                else
+                {
+                    ghesFallback = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
+            diagnostics.Add(CreateError($"unknown online_audit.github_actions key '{key}'", lineNumber, 5, key.Length));
+            index++;
+        }
+
+        return new OnlineAuditGitHubConfig
+        {
+            TokenEnvVars = tokenEnvVars ?? new OnlineAuditGitHubConfig().TokenEnvVars,
+            GhesApiUrl = ghesApiUrl,
+            GhesFallback = ghesFallback,
+            IgnoreActions = ignoreActions ?? [],
+        };
     }
 
     void ParsePinResolutionSection()
@@ -1688,5 +2035,6 @@ internal sealed class LintConfigLineParser
         IReadOnlyList<LintExclusion> Exclusions,
         ExpressionContext ExpressionContext,
         PinResolutionConfig? PinResolution,
+        OnlineAuditConfig? OnlineAudit,
         Diagnostic[] Diagnostics);
 }

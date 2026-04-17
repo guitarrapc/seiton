@@ -16,15 +16,20 @@ public sealed class LintConfigLibraryTests
         await Assert.That(yaml.Contains("exclusions:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("exprContext:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("pin_resolution:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("online_audit:", StringComparison.Ordinal)).IsTrue();
 
         var rulesLine = lines.FirstOrDefault(x => x.Trim() == "rules:");
         var pinResolutionLine = lines.FirstOrDefault(x => x.Trim() == "pin_resolution:");
+        var onlineAuditLine = lines.FirstOrDefault(x => x.Trim() == "online_audit:");
         await Assert.That(rulesLine).IsNotNull();
         await Assert.That(pinResolutionLine).IsNotNull();
+        await Assert.That(onlineAuditLine).IsNotNull();
 
         var rulesIndent = rulesLine!.Length - rulesLine.TrimStart().Length;
         var pinIndent = pinResolutionLine!.Length - pinResolutionLine.TrimStart().Length;
+        var onlineIndent = onlineAuditLine!.Length - onlineAuditLine.TrimStart().Length;
         await Assert.That(pinIndent).IsEqualTo(rulesIndent);
+        await Assert.That(onlineIndent).IsEqualTo(rulesIndent);
     }
 
     [Test]
@@ -220,5 +225,43 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config).IsNotNull();
         await Assert.That(result.Config!.PinResolution).IsNotNull();
         await Assert.That(result.Config.PinResolution!.AllowNetwork).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_OnlineAudit_MapsAllowNetworkAndNestedSections()
+    {
+        var yaml = """
+        online_audit:
+          allow_network: true
+          github_actions:
+            token_env_vars:
+              - MY_TOKEN
+            ghes_api_url: https://ghes.example.com/api/v3
+            ghes_fallback: true
+            ignore_actions:
+              - name: "slsa-framework/.*"
+                ref: ".*"
+          fail_open: false
+          request_timeout_sec: 12
+          max_concurrency: 3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.OnlineAudit).IsNotNull();
+
+        var audit = result.Config.OnlineAudit!;
+        await Assert.That(audit.AllowNetwork).IsTrue();
+        await Assert.That(audit.FailOpen).IsFalse();
+        await Assert.That(audit.RequestTimeoutSec).IsEqualTo(12);
+        await Assert.That(audit.MaxConcurrency).IsEqualTo(3);
+        await Assert.That(audit.GitHubActions.TokenEnvVars[0]).IsEqualTo("MY_TOKEN");
+        await Assert.That(audit.GitHubActions.GhesApiUrl).IsEqualTo("https://ghes.example.com/api/v3");
+        await Assert.That(audit.GitHubActions.GhesFallback).IsTrue();
+        await Assert.That(audit.GitHubActions.IgnoreActions.Count).IsEqualTo(1);
+        await Assert.That(audit.GitHubActions.IgnoreActions[0].NamePattern).IsEqualTo("slsa-framework/.*");
+        await Assert.That(audit.GitHubActions.IgnoreActions[0].RefPattern).IsEqualTo(".*");
     }
 }
