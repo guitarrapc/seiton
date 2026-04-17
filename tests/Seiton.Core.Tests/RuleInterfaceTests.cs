@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 

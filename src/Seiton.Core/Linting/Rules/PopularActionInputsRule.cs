@@ -2,7 +2,7 @@
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class PopularActionInputsRule : RuleBase
 {

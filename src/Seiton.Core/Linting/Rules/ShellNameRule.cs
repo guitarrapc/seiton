@@ -1,6 +1,6 @@
 ﻿using Seiton.Core.Parsing.Ast;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class ShellNameRule : RuleBase
 {
@@ -30,7 +30,7 @@ public sealed class ShellNameRule : RuleBase
 
         var shellSpan = run.Shell.Value.AsSpan(Config.Utf8Yaml);
 
-        // Skip expression values — cannot validate at static analysis time
+        // Skip expression values ? cannot validate at static analysis time
         if (run.Shell.Expression is not null || shellSpan.IndexOf("${{"u8) >= 0)
         {
             return;

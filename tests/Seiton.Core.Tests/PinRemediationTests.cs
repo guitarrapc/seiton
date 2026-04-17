@@ -1,6 +1,7 @@
 ﻿using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
+using Seiton.Core.Linting.Rules;
 using System.Text;
 
 namespace Seiton.Core.Tests;

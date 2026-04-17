@@ -1,7 +1,7 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 /// <summary>
 /// Detects expressions that reference the entire secrets context as an object (e.g. ${{ toJson(secrets) }},
@@ -265,7 +265,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
                     || parent.Kind == ExpressionNodeKind.IndexAccess
                     || parent.Kind == ExpressionNodeKind.WildcardAccess))
             {
-                // secrets.KEY or secrets['KEY'] — specific key access, not a whole-context reference
+                // secrets.KEY or secrets['KEY'] ? specific key access, not a whole-context reference
                 return false;
             }
         }

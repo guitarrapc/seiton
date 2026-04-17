@@ -2,7 +2,7 @@
 using Seiton.Core.Parsing.Ast;
 using System.Text;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunInputsContextDirectUseRule : RuleBase
 {
@@ -490,7 +490,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
 
         var node = nodes[nodeId];
 
-        // Case 1: root `inputs` identifier — covers ${{ inputs.* }} and ${{ inputs['*'] }}
+        // Case 1: root `inputs` identifier ? covers ${{ inputs.* }} and ${{ inputs['*'] }}
         if (node.Kind == ExpressionNodeKind.Identifier
             && IsContextRootIdentifier(nodeId, parentId, nodes)
             && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
@@ -498,7 +498,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
             return true;
         }
 
-        // Case 2: accessing a property or index of github.event.inputs — covers ${{ github.event.inputs.* }}
+        // Case 2: accessing a property or index of github.event.inputs ? covers ${{ github.event.inputs.* }}
         if (node.Kind is ExpressionNodeKind.MemberAccess
             or ExpressionNodeKind.IndexAccess
             or ExpressionNodeKind.WildcardAccess)

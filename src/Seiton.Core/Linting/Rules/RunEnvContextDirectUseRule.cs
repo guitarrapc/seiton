@@ -2,7 +2,7 @@
 using Seiton.Core.Parsing.Ast;
 using System.Text;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunEnvContextDirectUseRule : RuleBase
 {

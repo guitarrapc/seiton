@@ -1,7 +1,7 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class NeedsGraphRule : RuleBase
 {
@@ -92,7 +92,7 @@ public sealed class NeedsGraphRule : RuleBase
 
                 if (!color.TryGetValue(needKey, out var neighborColor))
                 {
-                    continue; // unknown job reference — already reported in VisitJobPre
+                    continue; // unknown job reference ? already reported in VisitJobPre
                 }
 
                 if (neighborColor == 1) // gray: back-edge = cycle

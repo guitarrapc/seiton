@@ -1,5 +1,6 @@
-﻿using Seiton.Core.Linting.Fixing;
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 using System.Text;
 

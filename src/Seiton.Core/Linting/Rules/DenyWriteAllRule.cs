@@ -2,7 +2,7 @@
 using Seiton.Core.Parsing.Ast;
 using Seiton.Core.Linting.Fixing;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class DenyWriteAllRule : RuleBase
 {

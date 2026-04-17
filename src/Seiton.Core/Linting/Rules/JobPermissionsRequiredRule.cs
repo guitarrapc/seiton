@@ -3,7 +3,7 @@ using Seiton.Core.Parsing;
 using Seiton.Core.Linting.Fixing;
 using System.Text;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Linting.Rules;
 
 public sealed class JobPermissionsRequiredRule : RuleBase
 {

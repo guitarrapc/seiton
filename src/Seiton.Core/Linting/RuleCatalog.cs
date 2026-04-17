@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting.Rules;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
