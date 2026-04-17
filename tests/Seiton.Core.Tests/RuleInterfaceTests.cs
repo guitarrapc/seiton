@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(18);
+        await Assert.That(rules.Length).IsEqualTo(19);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -301,6 +301,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[15].Id).IsEqualTo("template-injection");
         await Assert.That(rules[16].Id).IsEqualTo("expr-undefined-var");
         await Assert.That(rules[17].Id).IsEqualTo("run-env-context-direct-use");
+        await Assert.That(rules[18].Id).IsEqualTo("runner-no-latest");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -320,6 +321,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(15);
         await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(16);
         await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(17);
+        await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(18);
     }
 
     [Test]
@@ -1297,6 +1299,82 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_RunnerNoLatestRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-ubuntu-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["moving latest label"]),
+            new RuleCase(
+            "ng-windows-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["moving latest label"]),
+            new RuleCase(
+            "ng-macos-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: macos-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["moving latest label"]),
+            new RuleCase(
+            "ok-version-pinned-label",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-24.04
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-self-hosted-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [self-hosted, linux, x64]
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-runs-on-expression-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerNoLatestRule(), "runner-no-latest", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_IdNamingRule_TableDriven()
     {
         var cases = new[]
@@ -2163,6 +2241,18 @@ public sealed class RuleInterfaceTests
                 jobs:
                     build:
                         runs-on: ubuntu-9999
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "runner-no-latest",
+                new RunnerNoLatestRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
                         steps:
                             - run: echo ok
                 """,

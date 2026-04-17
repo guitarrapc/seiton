@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` の 18 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` の 19 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
 | Fix Engine | `DiagnosticFix` / `TextEdit`、3 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
@@ -35,6 +35,7 @@
 | `needs-graph` | `NeedsGraphRule` | `needs` で存在しない job ID を参照している場合に error。循環参照を DFS で検出して error | actionlint |
 | `shell-name` | `ShellNameRule` | `run:` step の `shell:` 値、`workflow.defaults.run.shell`、`job.defaults.run.shell` が有効値（bash / sh / pwsh / powershell / cmd / python）以外の場合に error | actionlint |
 | `runner-label` | `RunnerLabelRule` | GitHub-hosted 既知 runner label 以外（`self-hosted` 含有・式は除外）の `runs-on` を warning | actionlint |
+| `runner-no-latest` | `RunnerNoLatestRule` | `runs-on` の `ubuntu-latest` / `windows-latest` / `macos-latest` を warning（可変ラベル回避） | 独自 |
 | `id-naming` | `IdNamingRule` | `job.id` / `step.id` が `[a-zA-Z0-9_-]` 以外の文字を含む場合に error | actionlint |
 | `glob-pattern` | `GlobPatternRule` | `on.<event>.branches/tags/paths` 系フィルタ値の glob 構文（`***` / 未閉鎖 `[` / 余剰 `]`）を検査し、不正を error | actionlint |
 | `deny-write-all` | `DenyWriteAllRule` | `permissions: write-all`（workflow / job）を検出して error | ghalint |
@@ -842,6 +843,8 @@
 
 **完了条件**: `runs-on: ubuntu-latest` / `windows-latest` / `macos-latest` で warning、`ubuntu-24.04` 等の固定バージョンラベルで warning なしの table-driven テストがパスする
 
+**実装メモ**: 完了。`RunnerNoLatestRule` を追加し、`VisitJobPre` で `runs-on` ラベルを走査して `ubuntu-latest` / `windows-latest` / `macos-latest` を warning 報告するよう実装。判定は UTF-8 span 比較を使用し、`LabelsExpr` と `self-hosted` 含有ジョブはスキップ。`RuleInterfaceTests` に table-driven 回帰テスト（6 ケース）を追加して検証した。
+
 ### Step 8.2: RuleCatalog と仕様同期を更新
 
 **ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
@@ -851,6 +854,8 @@
 - 3 仕様書の default rule catalog / fixability catalog（no-auto-fix）を同期
 
 **完了条件**: `new LintEngine()` で `runner-no-latest` が有効化され、仕様と実装テストの rule 一覧が一致する
+
+**実装メモ**: 完了。`RuleCatalog.DefaultRuleFactories` に `runner-no-latest` を priority 18 で登録し、`RuleCatalog_DefaultRules_MatchDocumentedScope` のルール件数と priority 検証を更新した。`Docs/Seiton_Linter_spec.md` / `Docs/Seiton_Linter_csharp_spec.md` / `Docs/Seiton_Linter_go_spec.md` の default rule catalog（および共通 spec の fixability catalog）を同期済み。
 
 ---
 
@@ -937,7 +942,7 @@ P6E --> P6F
 | 15 | `template-injection` | **実装済み** | zizmor | 式 AST 連携 |
 | 16 | `expr-undefined-var` | **実装済み** | actionlint | 式 AST 連携 |
 | 17 | `run-env-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
-| 18 | `runner-no-latest` | Phase 8（予定） | 独自 | `runner-label` 実装済み |
+| 18 | `runner-no-latest` | **実装済み** | 独自 | `runner-label` 実装済み |
 
 ## チェックリスト（全 Phase 共通）
 

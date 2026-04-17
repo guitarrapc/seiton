@@ -31,6 +31,7 @@ internal static class RuleCatalog
         ("template-injection", 15, static () => new TemplateInjectionRule()),
         ("expr-undefined-var", 16, static () => new ExprUndefinedVarRule()),
         ("run-env-context-direct-use", 17, static () => new RunEnvContextDirectUseRule()),
+        ("runner-no-latest", 18, static () => new RunnerNoLatestRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
