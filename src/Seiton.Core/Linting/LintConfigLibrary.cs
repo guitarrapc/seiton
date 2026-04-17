@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting.OnlineAudit;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
@@ -51,49 +51,52 @@ public static class LintConfigLibrary
           eventTypes:
             # - workflow_dispatch
 
+        # Optional default timeout used by job-timeout-minutes-required partial auto-fix.
+        # <= 0 disables fix attachment for that rule.
+        default_job_timeout_minutes_for_fix: 15
+
         pin_resolution:
-            # Must be true to enable network-assisted pin remediation.
-            allow_network: false
-            github_actions:
-                token_env_vars:
-                    # - SEITON_GITHUB_TOKEN
-                    # - GITHUB_TOKEN
-                ghes_api_url: ""
-                ghes_fallback: false
-                ignore_actions:
-                    # - name: "slsa-framework/.*"
-                    #   ref: ".*"
-                exclude_branches:
-                    # - main
-                    # - master
-            images:
-                exclude_images:
-                    # - scratch
-                exclude_tags:
-                    # - latest
-                ignore_images:
-                    # - mcr.microsoft.com/**
-            fail_open: true
-            request_timeout_sec: 30
-            max_concurrency: 4
-            github_actions:
-                min_age_days: 14
+          # Must be true to enable network-assisted pin remediation.
+          allow_network: false
+          github_actions:
+            token_env_vars:
+              # - SEITON_GITHUB_TOKEN
+              # - GITHUB_TOKEN
+            ghes_api_url: ""
+            ghes_fallback: false
+            ignore_actions:
+              # - name: "slsa-framework/.*"
+              #   ref: ".*"
+            exclude_branches:
+              # - main
+              # - master
+            min_age_days: 14
+          images:
+            exclude_images:
+              # - scratch
+            exclude_tags:
+              # - latest
+            ignore_images:
+              # - mcr.microsoft.com/**
+          fail_open: true
+          request_timeout_sec: 30
+          max_concurrency: 4
 
         online_audit:
-            # Must be true to enable network-assisted advisory/ref audit.
-            allow_network: false
-            github_actions:
-                token_env_vars:
-                    # - SEITON_GITHUB_TOKEN
-                    # - GITHUB_TOKEN
-                ghes_api_url: ""
-                ghes_fallback: false
-                ignore_actions:
-                    # - name: "slsa-framework/.*"
-                    #   ref: ".*"
-            fail_open: true
-            request_timeout_sec: 30
-            max_concurrency: 4
+          # Must be true to enable network-assisted advisory/ref audit.
+          allow_network: false
+          github_actions:
+            token_env_vars:
+              # - SEITON_GITHUB_TOKEN
+              # - GITHUB_TOKEN
+            ghes_api_url: ""
+            ghes_fallback: false
+            ignore_actions:
+              # - name: "slsa-framework/.*"
+              #   ref: ".*"
+          fail_open: true
+          request_timeout_sec: 30
+          max_concurrency: 4
         """;
     }
 
@@ -165,6 +168,7 @@ public static class LintConfigLibrary
             Exclusions = normalizedExclusions.Exclusions,
             ExprContext = parseResult.ExpressionContext,
             AdditiveCustomization = normalizedAdditive.AdditiveCustomization,
+            DefaultJobTimeoutMinutesForFix = parseResult.DefaultJobTimeoutMinutesForFix,
             PinResolution = normalizedPinResolution.PinResolution,
             OnlineAudit = normalizedOnlineAudit.OnlineAudit,
         };
@@ -709,6 +713,7 @@ internal sealed class LintConfigLineParser
     readonly List<Diagnostic> diagnostics = [];
     RuleSpecificAdditiveCustomization additiveCustomization = RuleSpecificAdditiveCustomization.Empty;
     ExpressionContext expressionContext = ExpressionContext.Empty;
+    int? defaultJobTimeoutMinutesForFix;
     PinResolutionConfig? pinResolution;
     OnlineAuditConfig? onlineAudit;
 
@@ -741,7 +746,7 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
-            if (!TryParseKey(line, out var key))
+            if (!TryParseProperty(line, out var key, out var value))
             {
                 diagnostics.Add(CreateError("expected mapping key", lineNumber, indent + 1, line.Trim().Length));
                 index++;
@@ -749,44 +754,97 @@ internal sealed class LintConfigLineParser
             }
 
             index++;
+            if (key is "default_job_timeout_minutes_for_fix" or "defaultJobTimeoutMinutesForFix")
+            {
+                if (!TryParseInt(value, out var parsedDefaultTimeout))
+                {
+                    diagnostics.Add(CreateError("default_job_timeout_minutes_for_fix must be an integer", lineNumber, 1, line.Trim().Length));
+                }
+                else
+                {
+                    defaultJobTimeoutMinutesForFix = parsedDefaultTimeout;
+                }
+
+                continue;
+            }
+
             if (key == "rules")
             {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    diagnostics.Add(CreateError("rules must be a mapping section", lineNumber, 1, line.Trim().Length));
+                    continue;
+                }
+
                 ParseRulesSection();
                 continue;
             }
 
             if (key == "additiveCustomization")
             {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    diagnostics.Add(CreateError("additiveCustomization must be a mapping section", lineNumber, 1, line.Trim().Length));
+                    continue;
+                }
+
                 ParseAdditiveSection();
                 continue;
             }
 
             if (key == "exclusions")
             {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    diagnostics.Add(CreateError("exclusions must be a sequence section", lineNumber, 1, line.Trim().Length));
+                    continue;
+                }
+
                 ParseExclusionsSection();
                 continue;
             }
 
             if (key == "exprContext")
             {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    diagnostics.Add(CreateError("exprContext must be a mapping section", lineNumber, 1, line.Trim().Length));
+                    continue;
+                }
+
                 ParseExpressionContextSection();
                 continue;
             }
 
             if (key is "pin_resolution" or "pinResolution")
             {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    diagnostics.Add(CreateError("pin_resolution must be a mapping section", lineNumber, 1, line.Trim().Length));
+                    continue;
+                }
+
                 ParsePinResolutionSection();
                 continue;
             }
 
             if (key is "online_audit" or "onlineAudit")
             {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    diagnostics.Add(CreateError("online_audit must be a mapping section", lineNumber, 1, line.Trim().Length));
+                    continue;
+                }
+
                 ParseOnlineAuditSection();
                 continue;
             }
 
             diagnostics.Add(CreateError($"unknown top-level key '{key}'", lineNumber, 1, key.Length));
-            SkipIndentedBlock(0);
+            if (string.IsNullOrEmpty(value))
+            {
+                SkipIndentedBlock(0);
+            }
         }
 
         return new ParseResult(
@@ -794,6 +852,7 @@ internal sealed class LintConfigLineParser
             additiveCustomization,
             exclusions.ToArray(),
             expressionContext,
+            defaultJobTimeoutMinutesForFix,
             pinResolution,
             onlineAudit,
             diagnostics.ToArray());
@@ -2034,6 +2093,7 @@ internal sealed class LintConfigLineParser
         RuleSpecificAdditiveCustomization AdditiveCustomization,
         IReadOnlyList<LintExclusion> Exclusions,
         ExpressionContext ExpressionContext,
+        int? DefaultJobTimeoutMinutesForFix,
         PinResolutionConfig? PinResolution,
         OnlineAuditConfig? OnlineAudit,
         Diagnostic[] Diagnostics);

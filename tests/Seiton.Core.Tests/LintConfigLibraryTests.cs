@@ -15,21 +15,34 @@ public sealed class LintConfigLibraryTests
         await Assert.That(yaml.Contains("additiveCustomization:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("exclusions:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("exprContext:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("default_job_timeout_minutes_for_fix:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("pin_resolution:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("online_audit:", StringComparison.Ordinal)).IsTrue();
 
         var rulesLine = lines.FirstOrDefault(x => x.Trim() == "rules:");
+        var defaultJobTimeoutLine = lines.FirstOrDefault(x => x.Trim().StartsWith("default_job_timeout_minutes_for_fix:", StringComparison.Ordinal));
         var pinResolutionLine = lines.FirstOrDefault(x => x.Trim() == "pin_resolution:");
+        var pinAllowNetworkLine = lines.FirstOrDefault(x => x.Trim().StartsWith("allow_network:", StringComparison.Ordinal));
         var onlineAuditLine = lines.FirstOrDefault(x => x.Trim() == "online_audit:");
+        var onlineAllowNetworkLine = lines.SkipWhile(x => x.Trim() != "online_audit:").Skip(1).FirstOrDefault(x => x.Trim().StartsWith("allow_network:", StringComparison.Ordinal));
         await Assert.That(rulesLine).IsNotNull();
+        await Assert.That(defaultJobTimeoutLine).IsNotNull();
         await Assert.That(pinResolutionLine).IsNotNull();
+        await Assert.That(pinAllowNetworkLine).IsNotNull();
         await Assert.That(onlineAuditLine).IsNotNull();
+        await Assert.That(onlineAllowNetworkLine).IsNotNull();
 
         var rulesIndent = rulesLine!.Length - rulesLine.TrimStart().Length;
+        var defaultTimeoutIndent = defaultJobTimeoutLine!.Length - defaultJobTimeoutLine.TrimStart().Length;
         var pinIndent = pinResolutionLine!.Length - pinResolutionLine.TrimStart().Length;
+        var pinAllowNetworkIndent = pinAllowNetworkLine!.Length - pinAllowNetworkLine.TrimStart().Length;
         var onlineIndent = onlineAuditLine!.Length - onlineAuditLine.TrimStart().Length;
+        var onlineAllowNetworkIndent = onlineAllowNetworkLine!.Length - onlineAllowNetworkLine.TrimStart().Length;
+        await Assert.That(defaultTimeoutIndent).IsEqualTo(rulesIndent);
         await Assert.That(pinIndent).IsEqualTo(rulesIndent);
+        await Assert.That(pinAllowNetworkIndent).IsEqualTo(pinIndent + 2);
         await Assert.That(onlineIndent).IsEqualTo(rulesIndent);
+        await Assert.That(onlineAllowNetworkIndent).IsEqualTo(onlineIndent + 2);
     }
 
     [Test]
@@ -226,6 +239,33 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config!.PinResolution).IsNotNull();
         await Assert.That(result.Config.PinResolution!.AllowNetwork).IsTrue();
     }
+
+      [Test]
+      public async Task Validate_DefaultJobTimeoutMinutesForFix_MapsValue()
+      {
+        var yaml = """
+        default_job_timeout_minutes_for_fix: 25
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.DefaultJobTimeoutMinutesForFix).IsEqualTo(25);
+      }
+
+      [Test]
+      public async Task Validate_DefaultJobTimeoutMinutesForFix_InvalidValue_ReturnsError()
+      {
+        var yaml = """
+        default_job_timeout_minutes_for_fix: abc
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("default_job_timeout_minutes_for_fix must be an integer", StringComparison.Ordinal))).IsTrue();
+      }
 
     [Test]
     public async Task Validate_OnlineAudit_MapsAllowNetworkAndNestedSections()
