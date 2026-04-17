@@ -36,8 +36,11 @@ internal static class RuleCatalog
         ("run-secrets-context-direct-use", 19, static () => new RunSecretsContextDirectUseRule()),
         ("run-inputs-context-direct-use", 20, static () => new RunInputsContextDirectUseRule()),
         ("secrets-whole-context-access", 21, static () => new SecretsWholeContextAccessRule()),
-        ("reusable-workflow-secrets-inherit", 22, static () => new ReusableWorkflowSecretsInheritRule()),
-        ("checkout-persist-credentials", 23, static () => new CheckoutPersistCredentialsRule()),
+        ("checkout-persist-credentials", 22, static () => new CheckoutPersistCredentialsRule()),
+        ("deny-read-all", 23, static () => new DenyReadAllRule()),
+        ("deny-inherit-secrets", 24, static () => new DenyInheritSecretsRule()),
+        ("job-timeout-minutes-required", 25, static () => new JobTimeoutMinutesRequiredRule()),
+        ("github-app-token-inputs", 26, static () => new GitHubAppTokenInputsRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
@@ -221,6 +224,7 @@ internal static class RuleCatalog
         return new HashSet<string>(StringComparer.Ordinal)
         {
             "deny-write-all",
+            "deny-read-all",
         };
     }
 
@@ -229,6 +233,7 @@ internal static class RuleCatalog
         return new Dictionary<string, DiagnosticSeverity>(StringComparer.Ordinal)
         {
             ["deny-write-all"] = DiagnosticSeverity.Error,
+            ["deny-read-all"] = DiagnosticSeverity.Error,
         };
     }
 

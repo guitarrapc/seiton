@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `reusable-workflow-secrets-inherit` / `checkout-persist-credentials` の 24 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` の 27 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
 | Fix Engine | `DiagnosticFix` / `TextEdit`、6 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
@@ -39,6 +39,10 @@
 | `id-naming` | `IdNamingRule` | `job.id` / `step.id` が `[a-zA-Z0-9_-]` 以外の文字を含む場合に error | actionlint |
 | `glob-pattern` | `GlobPatternRule` | `on.<event>.branches/tags/paths` 系フィルタ値の glob 構文（`***` / 未閉鎖 `[` / 余剰 `]`）を検査し、不正を error | actionlint |
 | `deny-write-all` | `DenyWriteAllRule` | `permissions: write-all`（workflow / job）を検出して error | ghalint |
+| `deny-read-all` | `DenyReadAllRule` | `permissions: read-all`（workflow / job）を検出して error（least-privilege の明示を強制） | ghalint |
+| `deny-inherit-secrets` | `DenyInheritSecretsRule` | reusable workflow 呼び出し (`uses`) で `secrets: inherit` を検出して error | ghalint |
+| `job-timeout-minutes-required` | `JobTimeoutMinutesRequiredRule` | executable job で `timeout-minutes` 未指定を error。例外として全 step timeout 指定を許容 | ghalint |
+| `github-app-token-inputs` | `GitHubAppTokenInputsRule` | `actions/create-github-app-token` / `tibdex/github-app-token` の `with` に repository/permission 制約入力がない場合に error | ghalint |
 | `credentials` | `CredentialsRule` | `job.container` / `job.services.*` の image がカスタムレジストリで credentials 未設定の場合に warning | actionlint |
 | `template-injection` | `TemplateInjectionRule` | `run:` / `step.env` の式に `github.event` 由来データを直接展開している場合に error | zizmor |
 | `expr-undefined-var` | `ExprUndefinedVarRule` | `job/step` の `if` / `env` / `with` における使用不可コンテキスト参照（例: `steps` in job）を error | actionlint |
@@ -46,7 +50,6 @@
 | `run-secrets-context-direct-use` | `RunSecretsContextDirectUseRule` | `run:` 内 `${{ secrets.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
 | `run-inputs-context-direct-use` | `RunInputsContextDirectUseRule` | `run:` 内 `${{ inputs.* }}` / `${{ github.event.inputs.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
 | `secrets-whole-context-access` | `SecretsWholeContextAccessRule` | `${{ toJson(secrets) }}` など `secrets` コンテキスト全体参照（`run:` / `env:` / `with:`）を検出して error | 独自 |
-| `reusable-workflow-secrets-inherit` | `ReusableWorkflowSecretsInheritRule` | reusable workflow 呼び出し (`uses`) で `secrets: inherit` を使っている場合に warning。必要な secrets の明示マッピングを促す | 独自 |
 | `checkout-persist-credentials` | `CheckoutPersistCredentialsRule` | `actions/checkout` で `with.persist-credentials: false` が未指定、式、または `false` 以外の場合に warning。単純な未指定/true は partial auto-fix 対象で、後続の認証付き git 操作見直しを促す | ghalint |
 
 ---
@@ -1103,7 +1106,7 @@
   - `deny-write-all` と同じ fail-safe ポリシーに載せる
 - `deny-inherit-secrets`
   - reusable workflow call job の `secrets: inherit` を error
-  - 既存 `reusable-workflow-secrets-inherit`（warning）との優先順位/重複を整理
+  - 旧 `reusable-workflow-secrets-inherit` は削除し、`deny-inherit-secrets` へ一本化
 - `job-timeout-minutes-required`
   - executable job に `timeout-minutes` がない場合を error
   - 仕様上の例外（全 step timeout 明示など）を選択可能にする
@@ -1111,6 +1114,8 @@
   - `actions/create-github-app-token` / `tibdex/github-app-token` の `with` に対し、repository/permission 制約 input を必須化
 
 **完了条件**: 4 ルールで table-driven 回帰テスト（正常/異常/境界）が green、既存 rule との二重報告方針が明文化されている。
+
+**実装メモ**: 完了。`DenyReadAllRule` / `DenyInheritSecretsRule` / `JobTimeoutMinutesRequiredRule` / `GitHubAppTokenInputsRule` を追加し、`RuleCatalog` に priority 23-26 で登録。`deny-read-all` は `deny-write-all` と同じ fail-safe（non-disableable + minimum severity Error）へ追加した。`reusable-workflow-secrets-inherit` は重複のため削除し、`deny-inherit-secrets` へ一本化した。`RuleInterfaceTests` に table-driven 回帰、RuleCatalog 件数/priority 更新、auto-fix catalog（4 ルール no-fix）および `deny-read-all` fail-safe 回帰を追加し、`dotnet run --project tests/Seiton.Core.Tests -- --treenode-filter "/*/*/RuleInterfaceTests/*"` と `dotnet build` が green。
 
 ### Step 14.2: zizmor parity online ルール群（network-assisted audit）
 
@@ -1242,16 +1247,15 @@ P6E --> P6F
 | 19 | `run-secrets-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 20 | `run-inputs-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 21 | `secrets-whole-context-access` | **実装済み** | 独自 | 式 AST 連携 |
-| 22 | `reusable-workflow-secrets-inherit` | **実装済み** | 独自 | — |
-| 23 | `checkout-persist-credentials` | **実装済み** | ghalint | `PopularActions.g.cs` |
-| 24 | `deny-read-all` | **Phase 14（予定）** | ghalint | `permissions` / `deny-write-all` 実装済み |
-| 25 | `deny-inherit-secrets` | **Phase 14（予定）** | ghalint | `reusable-workflow` 実装済み |
-| 26 | `job-timeout-minutes-required` | **Phase 14（予定）** | ghalint | job/step traversal |
-| 27 | `github-app-token-inputs` | **Phase 14（予定）** | ghalint | `PopularActions.g.cs` / action metadata |
-| 28 | `known-vulnerable-actions` | **Phase 14（予定）** | zizmor | online advisory provider |
-| 29 | `impostor-commit` | **Phase 14（予定）** | zizmor | remote commit reachability check |
-| 30 | `ref-confusion` | **Phase 14（予定）** | zizmor | tag/branch namespace inspection |
-| 31 | `stale-action-refs` | **Phase 14（予定）** | zizmor | release/tag-to-sha freshness policy |
+| 22 | `checkout-persist-credentials` | **実装済み** | ghalint | `PopularActions.g.cs` |
+| 23 | `deny-read-all` | **実装済み** | ghalint | `permissions` / `deny-write-all` 実装済み |
+| 24 | `deny-inherit-secrets` | **実装済み** | ghalint | `reusable-workflow` 実装済み |
+| 25 | `job-timeout-minutes-required` | **実装済み** | ghalint | job/step traversal |
+| 26 | `github-app-token-inputs` | **実装済み** | ghalint | `PopularActions.g.cs` / action metadata |
+| 27 | `known-vulnerable-actions` | **Phase 14（予定）** | zizmor | online advisory provider |
+| 28 | `impostor-commit` | **Phase 14（予定）** | zizmor | remote commit reachability check |
+| 29 | `ref-confusion` | **Phase 14（予定）** | zizmor | tag/branch namespace inspection |
+| 30 | `stale-action-refs` | **Phase 14（予定）** | zizmor | release/tag-to-sha freshness policy |
 
 ## チェックリスト（全 Phase 共通）
 

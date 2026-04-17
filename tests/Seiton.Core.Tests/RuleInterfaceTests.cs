@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(24);
+        await Assert.That(rules.Length).IsEqualTo(27);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -306,8 +306,11 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
         await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
         await Assert.That(rules[21].Id).IsEqualTo("secrets-whole-context-access");
-        await Assert.That(rules[22].Id).IsEqualTo("reusable-workflow-secrets-inherit");
-        await Assert.That(rules[23].Id).IsEqualTo("checkout-persist-credentials");
+        await Assert.That(rules[22].Id).IsEqualTo("checkout-persist-credentials");
+        await Assert.That(rules[23].Id).IsEqualTo("deny-read-all");
+        await Assert.That(rules[24].Id).IsEqualTo("deny-inherit-secrets");
+        await Assert.That(rules[25].Id).IsEqualTo("job-timeout-minutes-required");
+        await Assert.That(rules[26].Id).IsEqualTo("github-app-token-inputs");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -331,8 +334,11 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
         await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
         await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(21);
-        await Assert.That(RuleCatalog.GetPriority("reusable-workflow-secrets-inherit")).IsEqualTo(22);
-        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(23);
+        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(22);
+        await Assert.That(RuleCatalog.GetPriority("deny-read-all")).IsEqualTo(23);
+        await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(24);
+        await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(25);
+        await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(26);
     }
 
     [Test]
@@ -426,7 +432,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task RuleRegression_ReusableWorkflowSecretsInheritRule_TableDriven()
+    public async Task RuleRegression_DenyInheritSecretsRule_TableDriven()
     {
         var cases = new[]
         {
@@ -442,13 +448,12 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-secrets-without-uses-is-not-target",
+            "ok-normal-job-not-target",
             """
             on: push
             jobs:
                 build:
                     runs-on: ubuntu-latest
-                    secrets: inherit
                     steps:
                         - run: echo ok
             """,
@@ -465,7 +470,7 @@ public sealed class RuleInterfaceTests
             ["uses 'secrets: inherit'", "explicitly map only required secrets"]),
         };
 
-        await AssertRuleCases(new ReusableWorkflowSecretsInheritRule(), "reusable-workflow-secrets-inherit", cases);
+        await AssertRuleCases(new DenyInheritSecretsRule(), "deny-inherit-secrets", cases);
     }
 
     [Test]
@@ -1867,6 +1872,209 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_DenyReadAllRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-workflow-explicit-scopes",
+            """
+            on: push
+            permissions:
+                contents: read
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-job-write-all-not-target",
+            """
+            on: push
+            jobs:
+                build:
+                    permissions: write-all
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-read-all",
+            """
+            on: push
+            permissions: read-all
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'read-all' is forbidden"]),
+            new RuleCase(
+            "ng-job-read-all",
+            """
+            on: push
+            jobs:
+                build:
+                    permissions: read-all
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'read-all' is forbidden"]),
+        };
+
+        await AssertRuleCases(new DenyReadAllRule(), "deny-read-all", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_JobTimeoutMinutesRequiredRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-job-timeout-present",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    timeout-minutes: 15
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-step-timeout-on-all-steps",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - timeout-minutes: 3
+                          run: echo ok
+                        - timeout-minutes: 5
+                          uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ok-reusable-workflow-call-not-target",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+            """,
+            []),
+            new RuleCase(
+            "ng-missing-job-and-step-timeouts",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+                        - uses: actions/checkout@v4
+            """,
+            ["must define timeout-minutes", "set timeout-minutes on every step"]),
+        };
+
+        await AssertRuleCases(new JobTimeoutMinutesRequiredRule(), "job-timeout-minutes-required", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_GitHubAppTokenInputsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-non-target-action",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ok-actions-create-token-with-repositories-and-permission-prefix",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/create-github-app-token@v2
+                          with:
+                              repositories: repo-a,repo-b
+                              permission-contents: read
+            """,
+            []),
+            new RuleCase(
+            "ok-tibdex-with-repository-and-permissions",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: tibdex/github-app-token@v2
+                          with:
+                              repository: owner/repo
+                              permissions: >-
+                                  {"contents":"read"}
+            """,
+            []),
+            new RuleCase(
+            "ng-missing-both-constraints",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/create-github-app-token@v2
+            """,
+            ["repository and permission constraints"]),
+            new RuleCase(
+            "ng-missing-repository-constraint",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/create-github-app-token@v2
+                          with:
+                              permission-issues: write
+            """,
+            ["repository constraints"]),
+            new RuleCase(
+            "ng-missing-permission-constraint",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: tibdex/github-app-token@v2
+                          with:
+                              repositories: repo-a
+            """,
+            ["permission constraints"]),
+        };
+
+        await AssertRuleCases(new GitHubAppTokenInputsRule(), "github-app-token-inputs", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -2881,17 +3089,6 @@ public sealed class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "reusable-workflow-secrets-inherit",
-                new ReusableWorkflowSecretsInheritRule(),
-                """
-                on: push
-                jobs:
-                    reuse:
-                        uses: owner/repo/.github/workflows/reuse.yml@main
-                        secrets: inherit
-                """,
-                ExpectsFix: false),
-            new FixabilityCase(
                 "checkout-persist-credentials",
                 new CheckoutPersistCredentialsRule(),
                 """
@@ -2903,6 +3100,54 @@ public sealed class RuleInterfaceTests
                             - uses: actions/checkout@v4
                 """,
                 ExpectsFix: true),
+            new FixabilityCase(
+                "deny-read-all",
+                new DenyReadAllRule(),
+                """
+                on: push
+                permissions: read-all
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "deny-inherit-secrets",
+                new DenyInheritSecretsRule(),
+                """
+                on: push
+                jobs:
+                    reuse:
+                        uses: owner/repo/.github/workflows/reuse.yml@main
+                        secrets: inherit
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "job-timeout-minutes-required",
+                new JobTimeoutMinutesRequiredRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "github-app-token-inputs",
+                new GitHubAppTokenInputsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: actions/create-github-app-token@v2
+                """,
+                ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -3581,6 +3826,64 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_NonDisableableRule_DenyReadAll_InRuleOptions_ReportsConfigurationErrorAndKeepsRuleEnabled()
+    {
+        var yaml = """
+        on: push
+        permissions: read-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["deny-read-all"] = new RuleOption(Enabled: false),
+            },
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options-deny-read-all.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_MinimumSeverity_DenyReadAll_InRuleOptions_ReportsConfigurationErrorAndKeepsEffectiveSeverity()
+    {
+        var yaml = """
+        on: push
+        permissions: read-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            RuleOptions = new Dictionary<string, RuleOption>
+            {
+                ["deny-read-all"] = new RuleOption(Severity: DiagnosticSeverity.Warning),
+            },
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity-deny-read-all.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
+        var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-read-all");
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
+        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
     public async Task LintEngine_NonDisableableRule_InlineSuppression_ReportsConfigurationErrorAndDoesNotSuppress()
     {
         var yaml = """
@@ -3848,13 +4151,15 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("credentials additional public registry host 'https://registry.example.com/team/app' is invalid", StringComparison.Ordinal))).IsTrue();
     }
 
-    static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases)
+    static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)
         {
             var c = cases[i];
             var yaml = NormalizeYaml(c.Yaml);
-            var result = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml");
+            var result = config is null
+                ? new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml")
+                : new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml", config);
             var diagnostics = result.Diagnostics.Where(x => x.RuleId == ruleId).ToArray();
 
             if (c.ExpectedSubstrings.Length == 0)

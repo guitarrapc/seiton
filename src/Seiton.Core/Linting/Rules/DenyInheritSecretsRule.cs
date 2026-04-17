@@ -2,11 +2,11 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ReusableWorkflowSecretsInheritRule : RuleBase
+public sealed class DenyInheritSecretsRule : RuleBase
 {
-    public override string Id => "reusable-workflow-secrets-inherit";
+    public override string Id => "deny-inherit-secrets";
 
-    public override string Name => "Reusable Workflow Secrets Inherit Rule";
+    public override string Name => "Deny Inherit Secrets Rule";
 
     public override void VisitJobPre(Job job)
     {
@@ -17,8 +17,9 @@ public sealed class ReusableWorkflowSecretsInheritRule : RuleBase
         }
 
         var jobId = Decode(job.Id.Value);
-        AddJobWarning(
+        AddJobError(
             job,
-            $"job '{jobId}' uses 'secrets: inherit' when calling reusable workflow; explicitly map only required secrets via 'secrets:'");
+            $"job '{jobId}' uses 'secrets: inherit' when calling reusable workflow; explicitly map only required secrets via 'secrets:'",
+            BuildJobLocation(job));
     }
 }

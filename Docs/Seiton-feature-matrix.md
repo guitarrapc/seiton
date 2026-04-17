@@ -113,7 +113,7 @@
 | id | ✅ | `id-naming` |
 | glob | ✅ | `glob-pattern` |
 | permissions | ✅ | `permissions` + `deny-write-all` |
-| workflow-call | 🟡 | `reusable-workflow` + `reusable-workflow-secrets-inherit` で一部吸収 |
+| workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収 |
 | expression | ✅ | `expr-undefined-var`（+式ベース系） |
 | deprecated-commands | ❌ | `::set-output` など deprecated command 検出未実装 |
 | if-cond | ❌ | if 条件の定数判定・不正判定専用ルール未実装 |
@@ -127,7 +127,7 @@
 | job_permissions | ✅ | `job-permissions-required` |
 | deny_read_all_permission | ❌ | read-all 禁止ルール未実装 |
 | deny_write_all_permission | ✅ | `deny-write-all` |
-| deny_inherit_secrets | ✅ | `reusable-workflow-secrets-inherit` |
+| deny_inherit_secrets | ✅ | `deny-inherit-secrets` |
 | workflow_secrets | ❌ | workflow env の secrets/github.token 禁止未実装 |
 | job_secrets | ❌ | job env の secrets/github.token 禁止未実装 |
 | deny_job_container_latest_image | ❌ | `:latest` 専用禁止は未実装（`unpinned-image` はより広いが同等ではない） |
