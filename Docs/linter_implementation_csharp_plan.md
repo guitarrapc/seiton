@@ -1037,6 +1037,48 @@
 
 ---
 
+## Phase 13: Checkout Credential Persistence Rule（actions/checkout hardening）
+
+**目標**: `actions/checkout` で `with.persist-credentials: false` の明示を促し、`.git/config` への認証情報残留リスクを warning と partial auto-fix で抑制する。
+
+> **背景**: `actions/checkout` は既定で認証情報を Git 設定へ保持しうるため、その後の step でワークツリーや `.git` ディレクトリを再利用・アーカイブ・解析するフローでは資格情報露出面が広がる。安全側の既定として `persist-credentials: false` を明示し、必要な git 認証は後続 step で明示的に再構成する方針を取る。
+
+### Step 13.1: `checkout-persist-credentials` ルールを追加
+
+**ファイル**: `src/Seiton.Core/Linting/CheckoutPersistCredentialsRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 対応: ghalint 系 hardening ルール
+- `VisitStep` で `actions/checkout` 呼び出しを検出し、`with.persist-credentials` を評価
+- 次のケースを warning 対象とする
+  - `persist-credentials` 未指定
+  - `persist-credentials: true`
+  - `persist-credentials` が式値
+  - `persist-credentials` が `false` 以外の静的値
+- 診断メッセージでは、後続の認証付き git 操作を行う場合は明示的な認証設定へ切り替えるよう案内する
+
+**完了条件**: `actions/checkout` で `persist-credentials: false` がないケースは warning、`false` 明示時は warning なしの table-driven テストがパスする。
+
+**実装メモ**: 完了。`CheckoutPersistCredentialsRule` を追加し、`actions/checkout` の `with.persist-credentials` が未指定・式・`false` 以外の静的値である場合に warning を報告するよう実装した。`RuleInterfaceTests` に table-driven 回帰テストを追加し、`false` 明示時の許容と各 warning ケースを検証した。
+
+### Step 13.2: partial auto-fix と caution message を追加
+
+**ファイル**: `src/Seiton.Core/Linting/CheckoutPersistCredentialsRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`, `Docs/Seiton_Linter_spec.md`
+
+- 安全に決定できる場合のみ partial auto-fix を付与
+  - `persist-credentials` 未指定で、通常 mapping への挿入位置が一意に決まる
+  - `persist-credentials: true` など単純 scalar の `false` 置換
+- 次のケースは no-fix を維持
+  - 式値
+  - flow mapping など style-safe な挿入/置換が曖昧なケース
+- fix 説明と診断メッセージに、`git push` など後続の認証付き git 操作では明示的な認証設定が必要になる可能性を含める
+- fixability catalog と mixed diagnostics テストを同期する
+
+**完了条件**: 単純な未指定/`true` ケースで fix が付き、適用後に当該 rule 診断が消える。式値/曖昧ケースでは fix が付かないテストがパスする。
+
+**実装メモ**: 完了。`CheckoutPersistCredentialsRule` に partial auto-fix を追加し、deterministic な挿入/置換ケースにのみ fix を付与するよう更新した。fix 説明には downstream の認証付き git 操作見直しを含め、`RuleInterfaceTests` と `FixEngineTests` に fix 成功・no-fix・catalog 同期の回帰を追加した。`Seiton_Linter_spec.md` の rule guidance / fixability catalog も partial auto-fix 方針へ同期済み。
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
