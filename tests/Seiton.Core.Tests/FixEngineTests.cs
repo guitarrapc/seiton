@@ -330,6 +330,8 @@ public sealed class FixEngineTests
             "deny-write-all",
             "job-permissions-required",
             "run-env-context-direct-use",
+            "run-secrets-context-direct-use",
+            "run-inputs-context-direct-use",
             "checkout-persist-credentials",
         };
 

@@ -15,7 +15,7 @@
 | 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `reusable-workflow-secrets-inherit` / `checkout-persist-credentials` の 24 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
-| Fix Engine | `DiagnosticFix` / `TextEdit`、4 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
+| Fix Engine | `DiagnosticFix` / `TextEdit`、6 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
 | 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
@@ -628,13 +628,13 @@
 **ファイル**: `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
 
 - 仕様対応: `Seiton_Linter_spec.md` §8.4, `Seiton_Linter_csharp_spec.md` §4.2
-- 24 ルールのうち fixable 4 ルールのみが `Diagnostic.Fix` を付与することを検証
-  - fixable: `deny-write-all`, `job-permissions-required`, `run-env-context-direct-use`, `checkout-persist-credentials`
+- 24 ルールのうち fixable 6 ルールのみが `Diagnostic.Fix` を付与することを検証
+  - fixable: `deny-write-all`, `job-permissions-required`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `checkout-persist-credentials`
   - non-fixable ルール群は `Fix is null`
 
 **完了条件**: ルール別 table-driven 回帰で fixability catalog 準拠が担保される
 
-**実装メモ**: 完了。`RuleInterfaceTests` に 24 ルールを対象とした table-driven `AutoFixCatalog_OnlyFourRulesAttachFix_TableDriven` を追加し、各 rule の診断発生ケースで `Diagnostic.Fix` の有無を検証した。fix 付与を許可する rule-id は `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` / `checkout-persist-credentials` の 4 件のみであることを固定化し、他ルールで fix が付かないことを回帰保証した。加えて `FixEngineTests` に mixed diagnostics を使った `AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds` を追加し、実運用形（複数ルール同時発火）でも付与済み fix の rule-id が catalog 4 件に限定されることを検証した。
+**実装メモ**: 完了。`RuleInterfaceTests` に 24 ルールを対象とした table-driven `AutoFixCatalog_OnlySixRulesAttachFix_TableDriven` を追加し、各 rule の診断発生ケースで `Diagnostic.Fix` の有無を検証した。fix 付与を許可する rule-id は `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `checkout-persist-credentials` の 6 件のみであることを固定化し、他ルールで fix が付かないことを回帰保証した。加えて `FixEngineTests` に mixed diagnostics を使った `AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds` を追加し、実運用形（複数ルール同時発火）でも付与済み fix の rule-id が catalog 6 件に限定されることを検証した。
 
 ### Step 6.10: Dry-Run diff プレビューを追加
 
@@ -976,6 +976,64 @@
 **完了条件**: `new LintEngine()` で `secrets-whole-context-access` が有効化され、仕様と実装テストの rule 一覧が一致する
 
 **実装メモ**: 完了。`RuleCatalog.DefaultRuleFactories` に `secrets-whole-context-access` を priority 21 で登録し、`RuleCatalog_DefaultRules_MatchDocumentedScope` のルール件数（22）および rule id / priority 検証を更新した。`AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` に `secrets-whole-context-access`（no-fix）ケースを追加し、fixability catalog 準拠も回帰保証した。
+
+---
+
+## Phase 12: Run Context Partial Auto-Fix（secrets/inputs）
+
+**目標**: `run-secrets-context-direct-use` と `run-inputs-context-direct-use` に対して、安全境界付き partial auto-fix を導入し、既存の no-fix ポリシーを「曖昧時 no-fix」に進化させる。
+
+> **安全境界**: 次の条件をすべて満たす場合のみ fix を付与する。
+>
+> - `run:` 側の参照が単純参照（dot/bracket）である
+> - 同一キーに対応する既存 `env` マッピング（step/job/workflow のいずれか）を静的に 1 件だけ特定できる
+> - 複合式・複数候補・マッピング未検出は no-fix
+
+### Step 12.1: `run-secrets-context-direct-use` の partial auto-fix
+
+**ファイル**: `src/Seiton.Core/Linting/RunSecretsContextDirectUseRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `VisitWorkflowPre` / `VisitJobPre` で現在スコープを保持し、`run` 検査時に step→job→workflow の `env` を参照できるようにする
+- `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` の単純参照を解析し、同一 secret key を参照する既存 `env` 変数名を探索
+- 一意に決定できる場合のみ置換 fix を付与
+  - POSIX 系: `${VAR}`
+  - PowerShell: `$env:VAR`
+- それ以外（複合式、候補なし、候補複数）は診断のみ
+
+**完了条件**: 単純参照 + 一意マッピングで fix が付き、適用後に同 rule 診断が消える。曖昧/未解決ケースでは fix が付かないテストがパスする。
+
+**実装メモ**: 完了。`RunSecretsContextDirectUseRule` に safe partial auto-fix を実装し、既存 `env` マッピングが一意に解決できるケースでのみ fix を付与するよう更新した。`RuleInterfaceTests` に fix 成功ケースと no-fix ケース（曖昧マッピング）を追加して検証した。
+
+### Step 12.2: `run-inputs-context-direct-use` の partial auto-fix
+
+**ファイル**: `src/Seiton.Core/Linting/RunInputsContextDirectUseRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}`（dot/bracket）の単純参照を解析
+- 既存 `env` から同一 input key へのマッピングを探索し、一意に決定できる場合のみ shell 変数置換 fix を付与
+- `pwsh` / `powershell` は `$env:VAR`、それ以外は `${VAR}` を生成
+- 複合式・複数候補・未検出は no-fix
+
+**完了条件**: 単純参照 + 一意マッピングで fix が付き、適用後に同 rule 診断が消える。曖昧/未解決ケースでは fix が付かないテストがパスする。
+
+**実装メモ**: 完了。`RunInputsContextDirectUseRule` に safe partial auto-fix を実装し、`inputs.*` / `github.event.inputs.*` の単純参照に対して一意マッピング時のみ fix を付与するよう更新した。PowerShell 置換パスを含む fix テストと no-fix テスト（曖昧マッピング）を追加して検証した。
+
+### Step 12.3: Auto-fix catalog 回帰の更新
+
+**ファイル**: `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`, `Docs/Seiton_Linter_spec.md`
+
+- fixable ルール集合を 6 件へ更新
+  - `deny-write-all`
+  - `job-permissions-required`
+  - `run-env-context-direct-use`
+  - `run-secrets-context-direct-use`
+  - `run-inputs-context-direct-use`
+  - `checkout-persist-credentials`
+- mixed diagnostics テストの許可 rule-id 集合を同期
+- 共通仕様の §4.5 / §8.4 を partial auto-fix 方針に同期
+
+**完了条件**: fixability catalog 回帰テストが green で、仕様と実装の fixable rule-id が一致する。
+
+**実装メモ**: 完了。`AutoFixCatalog_OnlySixRulesAttachFix_TableDriven` に更新し、`FixEngineTests` の fixable rule-id 集合を 6 件へ同期した。`Seiton_Linter_spec.md` では `run-secrets-context-direct-use` / `run-inputs-context-direct-use` を `△ Partial` に更新した。
 
 ---
 

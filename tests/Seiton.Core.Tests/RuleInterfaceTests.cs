@@ -2597,7 +2597,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task AutoFixCatalog_OnlyFourRulesAttachFix_TableDriven()
+    public async Task AutoFixCatalog_OnlySixRulesAttachFix_TableDriven()
     {
         var cases = new[]
         {
@@ -2847,10 +2847,12 @@ public sealed class RuleInterfaceTests
                 jobs:
                     build:
                         runs-on: ubuntu-latest
+                        env:
+                            TOKEN: ${{ secrets.MY_TOKEN }}
                         steps:
                             - run: echo "${{ secrets.MY_TOKEN }}"
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "run-inputs-context-direct-use",
                 new RunInputsContextDirectUseRule(),
@@ -2859,10 +2861,12 @@ public sealed class RuleInterfaceTests
                 jobs:
                     build:
                         runs-on: ubuntu-latest
+                        env:
+                            TARGET: ${{ inputs.target }}
                         steps:
                             - run: echo "${{ inputs.target }}"
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "secrets-whole-context-access",
                 new SecretsWholeContextAccessRule(),
@@ -3002,6 +3006,105 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine([new RunEnvContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-composite.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.MY_TOKEN }}
+                steps:
+                    - run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
+        var result = engine.Check(sourceBytes, "run-secrets-fix-posix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("run: echo \"${TOKEN}\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_DoesNotAttachFix_WithoutUniqueMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN_A: ${{ secrets.MY_TOKEN }}
+                    TOKEN_B: ${{ secrets.MY_TOKEN }}
+                steps:
+                    - run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+
+        var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-fix-ambiguous.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: windows-latest
+                env:
+                    TARGET: ${{ github.event.inputs.target }}
+                steps:
+                    - shell: pwsh
+                      run: Write-Host "${{ github.event.inputs.target }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        var result = engine.Check(sourceBytes, "run-inputs-fix-powershell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("run: Write-Host \"$env:TARGET\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotAttachFix_WithoutUniqueMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TARGET_A: ${{ inputs.target }}
+                    TARGET_B: ${{ github.event.inputs.target }}
+                steps:
+                    - run: echo "${{ inputs.target }}"
+        """;
+
+        var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-ambiguous.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
