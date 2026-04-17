@@ -326,22 +326,72 @@ rules:
 
   dangerous-triggers:
     severity: error
-    additionalDangerousEvents:
-      - issue_comment
-      - pull_request_review_comment
-
-  runner-label:
-    additionalKnownHostedLabels:
-      - custom-large
-      - ubuntu-24.04-arm
-
-  credentials:
-    additionalPublicRegistries:
-      - registry.example.com
-      - mirror.example.net:5000
 
   shell-name:
     severity: warning
+
+additiveCustomization:
+  additionalDangerousEvents:
+    - issue_comment
+    - pull_request_review_comment
+
+  additionalKnownHostedLabels:
+    - custom-large
+    - ubuntu-24.04-arm
+
+  additionalPublicRegistries:
+    - registry.example.com
+    - mirror.example.net:5000
+
+exprContext:
+  eventTypes:
+    - workflow_dispatch
+    - repository_dispatch
+
+# Optional default timeout for partial auto-fix of job-timeout-minutes-required.
+# <= 0 disables fix attachment for that rule.
+default_job_timeout_minutes_for_fix: 15
+
+pin_resolution:
+  allow_network: false
+  github_actions:
+    token_env_vars:
+      - SEITON_GITHUB_TOKEN
+      - GITHUB_TOKEN
+    ghes_api_url: ""
+    ghes_fallback: false
+    ignore_actions:
+      - name: "slsa-framework/.*"
+        ref: ".*"
+    exclude_branches:
+      - main
+      - master
+    min_age_days: 14
+  images:
+    exclude_images:
+      - scratch
+    exclude_tags:
+      - latest
+    ignore_images:
+      - mcr.microsoft.com/**
+  fail_open: true
+  request_timeout_sec: 30
+  max_concurrency: 4
+
+online_audit:
+  allow_network: false
+  github_actions:
+    token_env_vars:
+      - SEITON_GITHUB_TOKEN
+      - GITHUB_TOKEN
+    ghes_api_url: ""
+    ghes_fallback: false
+    ignore_actions:
+      - name: "slsa-framework/.*"
+        ref: ".*"
+  fail_open: true
+  request_timeout_sec: 30
+  max_concurrency: 4
 
 exclusions:
   - filePattern: ".github/workflows/legacy/*.yml"
@@ -359,7 +409,11 @@ Interpretation notes:
 
 - `rules.<rule-id>.enabled` controls rule enable/disable, subject to fail-safe constraints in §5.7.
 - `rules.<rule-id>.severity` overrides diagnostic severity, subject to fail-safe constraints in §5.7.
-- `rules.dangerous-triggers.additionalDangerousEvents`, `rules.runner-label.additionalKnownHostedLabels`, and `rules.credentials.additionalPublicRegistries` are additive extensions defined in §5.8.
+- `additiveCustomization.additionalDangerousEvents`, `additiveCustomization.additionalKnownHostedLabels`, and `additiveCustomization.additionalPublicRegistries` are additive extensions defined in §5.8.
+- `exprContext.eventTypes` provides optional explicit event-type context for expression validation.
+- `default_job_timeout_minutes_for_fix` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
+- `pin_resolution` configures network-assisted pin remediation policy and resolver behavior.
+- `online_audit` configures opt-in network-assisted advisory/ref audit policy.
 - `exclusions[].filePattern` and optional `exclusions[].jobId` define config-based suppression scope.
 - `exclusions[].ruleIds` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.

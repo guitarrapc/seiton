@@ -1,7 +1,7 @@
 # 競合ツール比較判定表（Seiton）
 
 > 目的: actionlint / ghalint / zizmor / pinact / dockerfile-pin / frizbee と Seiton の機能差分を明確化し、採用検討の優先度を決める。
-> 更新日: 2026-04-17
+> 更新日: 2026-04-18
 
 ---
 
@@ -35,8 +35,8 @@
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（24 rules） | ✅ | 継続強化 |
-| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 一部実装 | 🟡 | P0 |
+| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（31 rules: default local 27 + online audit 4） | ✅ | 継続強化 |
+| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（高優先度 online 4 + local hardening） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
 | Network-assisted pin fix | なし | なし | 部分 | 強い | 強い | 強い | 実装済み | ✅ | 維持 |
@@ -47,7 +47,7 @@
 | Dockerfile FROM pin | なし | なし | なし | なし | あり | なし | 未対応 | ❌ | P1 |
 | docker-compose image pin | なし | なし | なし | なし | あり | あり | 未対応 | ❌ | P1 |
 | 任意YAML image pin | なし | なし | なし | なし | 限定 | あり | 未対応 | ❌ | P1 |
-| Online vulnerability / advisory audit | なし | 実験的 | あり | なし | なし | なし | 未対応 | ❌ | P0 |
+| Online vulnerability / advisory audit | なし | 実験的 | あり | なし | なし | なし | 実装済み（opt-in online_audit） | ✅ | 維持 |
 
 ---
 
@@ -55,12 +55,12 @@
 
 ### P0（最優先）
 
-1. zizmor系オンライン監査
-- 例: known-vulnerable-actions, impostor-commit, ref-confusion, stale-action-refs
-- 理由: 現代的なセキュリティツールとしての差別化に直結
+1. 残存 zizmor high-value audits
+- 例: unredacted-secrets, cache-poisoning
+- 理由: online_audit 実装後の残差分を埋め、監査網羅性を引き上げる
 
 2. ghalint未吸収の高価値ルール
-- 例: deny-read-all, deny-inherit-secrets, timeout-minutes必須, GitHub App token action入力制約
+- 例: workflow_secrets, job_secrets, action_shell_is_required
 - 理由: 実運用での事故予防効果が高い
 
 ### P1（次点）
@@ -85,9 +85,9 @@
 
 ## 5. 結論
 
-- Seiton は既に「Lint + 安全なFix + Network-assisted pin remediation + 追従更新」の統合基盤を持ち、競合の中核機能の多くを満たしている。
+- Seiton は既に「Lint + 安全なFix + Network-assisted pin remediation + opt-in online audit + 追従更新」の統合基盤を持ち、競合の中核機能の多くを満たしている。
 - 競合を完全に上回るには、次の2点が鍵。
-  - zizmor級オンライン監査の取り込み（P0）
+  - 残存 zizmor/ghalint 監査差分の吸収（P0）
   - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P1）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
@@ -125,26 +125,26 @@
 | ghalint policy | Seiton 対応状況 | 備考 |
 |---|---|---|
 | job_permissions | ✅ | `job-permissions-required` |
-| deny_read_all_permission | ❌ | read-all 禁止ルール未実装 |
+| deny_read_all_permission | ✅ | `deny-read-all` |
 | deny_write_all_permission | ✅ | `deny-write-all` |
 | deny_inherit_secrets | ✅ | `deny-inherit-secrets` |
 | workflow_secrets | ❌ | workflow env の secrets/github.token 禁止未実装 |
 | job_secrets | ❌ | job env の secrets/github.token 禁止未実装 |
 | deny_job_container_latest_image | ❌ | `:latest` 専用禁止は未実装（`unpinned-image` はより広いが同等ではない） |
 | action_ref_should_be_full_length_commit_sha | ✅ | `unpinned-uses` + `unpinned-image` |
-| github_app_should_limit_repositories | ❌ | GitHub App token action 入力制約未実装 |
-| github_app_should_limit_permissions | ❌ | GitHub App token action 権限制約未実装 |
+| github_app_should_limit_repositories | ✅ | `github-app-token-inputs` |
+| github_app_should_limit_permissions | ✅ | `github-app-token-inputs` |
 | action_shell_is_required | ❌ | composite action 向け shell 必須未実装 |
-| job_timeout_minutes_is_required | ❌ | timeout-minutes 必須未実装 |
+| job_timeout_minutes_is_required | ✅ | `job-timeout-minutes-required` |
 | checkout_persist_credentials_should_be_false | ✅ | `checkout-persist-credentials` |
 
 ### 6.3 zizmor 監査対応サマリー（34件）
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 6 | `dangerous-triggers`, `template-injection`, `unpinned-uses`, `unpinned-images` 相当, `secrets-inherit` 相当, `excessive-permissions` 部分 |
+| 直接対応済み | 10 | `dangerous-triggers`, `template-injection`, `unpinned-uses`, `unpinned-images` 相当, `secrets-inherit` 相当, `excessive-permissions` 部分, `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs` |
 | 部分対応 | 4 | `excessive-permissions`（`deny-write-all`中心）, `ref-version-mismatch`（pin comment check 未実装）, `concurrency-limits`（部分）, `forbidden-uses`（config deny list 未実装） |
-| 未対応 | 24 | online audit・高度セキュリティ監査群 |
+| 未対応 | 20 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID一覧（実装確認ベース）:
 
@@ -204,13 +204,9 @@ zizmor 監査ID一覧（実装確認ベース）:
 - `if-cond`
 
 2. ghalint 未対応ポリシー
-- `deny_read_all_permission`
 - `workflow_secrets`
 - `job_secrets`
-- `github_app_should_limit_repositories`
-- `github_app_should_limit_permissions`
 - `action_shell_is_required`
-- `job_timeout_minutes_is_required`
 
 3. zizmor online/high-value audits
 - `known-vulnerable-actions`
