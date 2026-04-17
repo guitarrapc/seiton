@@ -12,10 +12,10 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `reusable-workflow-secrets-inherit` の 23 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `reusable-workflow-secrets-inherit` / `checkout-persist-credentials` の 24 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
-| Fix Engine | `DiagnosticFix` / `TextEdit`、3 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
+| Fix Engine | `DiagnosticFix` / `TextEdit`、4 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
 | 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
@@ -47,6 +47,7 @@
 | `run-inputs-context-direct-use` | `RunInputsContextDirectUseRule` | `run:` 内 `${{ inputs.* }}` / `${{ github.event.inputs.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
 | `secrets-whole-context-access` | `SecretsWholeContextAccessRule` | `${{ toJson(secrets) }}` など `secrets` コンテキスト全体参照（`run:` / `env:` / `with:`）を検出して error | 独自 |
 | `reusable-workflow-secrets-inherit` | `ReusableWorkflowSecretsInheritRule` | reusable workflow 呼び出し (`uses`) で `secrets: inherit` を使っている場合に warning。必要な secrets の明示マッピングを促す | 独自 |
+| `checkout-persist-credentials` | `CheckoutPersistCredentialsRule` | `actions/checkout` で `with.persist-credentials: false` が未指定、式、または `false` 以外の場合に warning。単純な未指定/true は partial auto-fix 対象で、後続の認証付き git 操作見直しを促す | ghalint |
 
 ---
 
@@ -485,13 +486,14 @@
 
 ## Phase 6: Fix Engine（Auto-Fix 実装）
 
-**目標**: 仕様 `Seiton_Linter_spec.md` §8-§10 および `Seiton_Linter_csharp_spec.md` §4.2-§4.4 に沿って、fix データモデル、fixable ルール 3 件、適用器、適用後の再検証フローを実装する。
+**目標**: 仕様 `Seiton_Linter_spec.md` §8-§10 および `Seiton_Linter_csharp_spec.md` §4.2-§4.4 に沿って、fix データモデル、fixable ルール 4 件、適用器、適用後の再検証フローを実装する。
 
-> **初期スコープ**: 仕様上 fixable と定義した 3 ルールのみを対象とする。
+> **初期スコープ**: 仕様上 fixable と定義した 4 ルールのみを対象とする。
 >
 > - `deny-write-all`
 > - `job-permissions-required`
 > - `run-env-context-direct-use`
+> - `checkout-persist-credentials`
 
 ### Step 6.1: DiagnosticFix / TextEdit データモデルを追加
 
@@ -596,11 +598,11 @@
   - YAML parse fatal error が増えていない
   - 対象 rule の元診断が消えている
   - overlap/invalid-fix は適用前に検出される
-- 3 ルール分の end-to-end 回帰テストを追加
+- 4 ルール分の end-to-end 回帰テストを追加
 
-**完了条件**: `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix → 再 lint が green になる E2E テストがパスする
+**完了条件**: `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` / `checkout-persist-credentials` の fix → 再 lint が green になる E2E テストがパスする
 
-**実装メモ**: 完了。`FixEngine` に `ApplyAndRelint(...)` を追加し、fix 適用と再 lint を 1 API で実行できるようにした。helper は (1) 適用前後で fatal parse error が増えていないこと、(2) 選択して適用した診断が再 lint 後に残存しないことを検証し、違反時は `InvalidOperationException` を返す。`DiagnosticFix` 入力の overload では expected cleared rule-id を指定可能にし、rule 単位の再検証も行える。`FixEngineTests` に fatal 増加検出・overlap 事前検出・selected diagnostics 消失検証を追加し、`RuleInterfaceTests` では `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の fix E2E を `ApplyAndRelint` 経由で検証するよう更新した。
+**実装メモ**: 完了。`FixEngine` に `ApplyAndRelint(...)` を追加し、fix 適用と再 lint を 1 API で実行できるようにした。helper は (1) 適用前後で fatal parse error が増えていないこと、(2) 選択して適用した診断が再 lint 後に残存しないことを検証し、違反時は `InvalidOperationException` を返す。`DiagnosticFix` 入力の overload では expected cleared rule-id を指定可能にし、rule 単位の再検証も行える。`FixEngineTests` に fatal 増加検出・overlap 事前検出・selected diagnostics 消失検証を追加し、`RuleInterfaceTests` では `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` / `checkout-persist-credentials` の fix E2E を `ApplyAndRelint` 経由で検証するよう更新した。
 
 ### Step 6.8: Formatting Preservation MUST 準拠を補強
 
@@ -626,13 +628,13 @@
 **ファイル**: `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
 
 - 仕様対応: `Seiton_Linter_spec.md` §8.4, `Seiton_Linter_csharp_spec.md` §4.2
-- 18 ルールのうち fixable 3 ルールのみが `Diagnostic.Fix` を付与することを検証
-  - fixable: `deny-write-all`, `job-permissions-required`, `run-env-context-direct-use`
+- 24 ルールのうち fixable 4 ルールのみが `Diagnostic.Fix` を付与することを検証
+  - fixable: `deny-write-all`, `job-permissions-required`, `run-env-context-direct-use`, `checkout-persist-credentials`
   - non-fixable ルール群は `Fix is null`
 
 **完了条件**: ルール別 table-driven 回帰で fixability catalog 準拠が担保される
 
-**実装メモ**: 完了。`RuleInterfaceTests` に 18 ルールを対象とした table-driven `AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` を追加し、各 rule の診断発生ケースで `Diagnostic.Fix` の有無を検証した。fix 付与を許可する rule-id は `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` の 3 件のみであることを固定化し、他 15 ルールで fix が付かないことを回帰保証した。加えて `FixEngineTests` に mixed diagnostics を使った `AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds` を追加し、実運用形（複数ルール同時発火）でも付与済み fix の rule-id が catalog 3 件に限定されることを検証した。
+**実装メモ**: 完了。`RuleInterfaceTests` に 24 ルールを対象とした table-driven `AutoFixCatalog_OnlyFourRulesAttachFix_TableDriven` を追加し、各 rule の診断発生ケースで `Diagnostic.Fix` の有無を検証した。fix 付与を許可する rule-id は `deny-write-all` / `job-permissions-required` / `run-env-context-direct-use` / `checkout-persist-credentials` の 4 件のみであることを固定化し、他ルールで fix が付かないことを回帰保証した。加えて `FixEngineTests` に mixed diagnostics を使った `AutoFixCatalog_MixedDiagnostics_AttachFixesOnlyForDocumentedRuleIds` を追加し、実運用形（複数ルール同時発火）でも付与済み fix の rule-id が catalog 4 件に限定されることを検証した。
 
 ### Step 6.10: Dry-Run diff プレビューを追加
 
@@ -1064,6 +1066,8 @@ P6E --> P6F
 | 19 | `run-secrets-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 20 | `run-inputs-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 21 | `secrets-whole-context-access` | **実装済み** | 独自 | 式 AST 連携 |
+| 22 | `reusable-workflow-secrets-inherit` | **実装済み** | 独自 | — |
+| 23 | `checkout-persist-credentials` | **実装済み** | ghalint | `PopularActions.g.cs` |
 
 ## チェックリスト（全 Phase 共通）
 

@@ -330,6 +330,7 @@ public sealed class FixEngineTests
             "deny-write-all",
             "job-permissions-required",
             "run-env-context-direct-use",
+            "checkout-persist-credentials",
         };
 
         var attachedFixRuleIds = result.Diagnostics

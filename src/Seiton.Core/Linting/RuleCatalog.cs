@@ -36,6 +36,7 @@ internal static class RuleCatalog
         ("run-inputs-context-direct-use", 20, static () => new RunInputsContextDirectUseRule()),
         ("secrets-whole-context-access", 21, static () => new SecretsWholeContextAccessRule()),
         ("reusable-workflow-secrets-inherit", 22, static () => new ReusableWorkflowSecretsInheritRule()),
+        ("checkout-persist-credentials", 23, static () => new CheckoutPersistCredentialsRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();

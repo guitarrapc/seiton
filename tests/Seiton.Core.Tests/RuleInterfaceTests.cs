@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(23);
+        await Assert.That(rules.Length).IsEqualTo(24);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -306,6 +306,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
         await Assert.That(rules[21].Id).IsEqualTo("secrets-whole-context-access");
         await Assert.That(rules[22].Id).IsEqualTo("reusable-workflow-secrets-inherit");
+        await Assert.That(rules[23].Id).IsEqualTo("checkout-persist-credentials");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -330,6 +331,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
         await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(21);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow-secrets-inherit")).IsEqualTo(22);
+        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(23);
     }
 
     [Test]
@@ -557,6 +559,202 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_CheckoutPersistCredentialsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-checkout-persist-credentials-false",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+            """,
+            []),
+            new RuleCase(
+            "ok-non-checkout-action",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/setup-node@v4
+                          with:
+                              persist-credentials: false
+            """,
+            []),
+            new RuleCase(
+            "ng-checkout-persist-credentials-missing",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            ["should set with.persist-credentials to false"]),
+            new RuleCase(
+            "ng-checkout-persist-credentials-true",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: true
+            """,
+            ["should set with.persist-credentials to false"]),
+            new RuleCase(
+            "ng-checkout-persist-credentials-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: ${{ inputs.persist_credentials }}
+            """,
+            ["should set with.persist-credentials to false"]),
+        };
+
+        await AssertRuleCases(new CheckoutPersistCredentialsRule(), "checkout-persist-credentials", cases);
+    }
+
+    [Test]
+    public async Task LintEngine_CheckoutPersistCredentials_Fix_InsertsWithBlockAfterUses()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        await Assert.That(diagnostic.Message.Contains("git remote set-url origin", StringComparison.Ordinal)).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-insert-with.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var withIndex = fixedText.IndexOf("with:", StringComparison.Ordinal);
+        var persistIndex = fixedText.IndexOf("persist-credentials: false", StringComparison.Ordinal);
+        await Assert.That(withIndex >= 0).IsTrue();
+        await Assert.That(persistIndex > withIndex).IsTrue();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "checkout-persist-credentials")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_CheckoutPersistCredentials_Fix_InsertsMissingInputIntoExistingWithBlock()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          fetch-depth: 1
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-existing-with.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var persistIndex = fixedText.IndexOf("persist-credentials: false", StringComparison.Ordinal);
+        var fetchDepthIndex = fixedText.IndexOf("fetch-depth: 1", StringComparison.Ordinal);
+        await Assert.That(persistIndex >= 0).IsTrue();
+        await Assert.That(fetchDepthIndex > persistIndex).IsTrue();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "checkout-persist-credentials")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_CheckoutPersistCredentials_Fix_ReplacesTrueWithFalse()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          persist-credentials: true
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        await Assert.That(diagnostic.Fix!.Value.Description.Contains("git push", StringComparison.Ordinal)).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-replace.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("persist-credentials: false", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("persist-credentials: true", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "checkout-persist-credentials")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_CheckoutPersistCredentials_DoesNotAttachFix_ForExpressionOrFlowMapping()
+    {
+        var expressionYaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          persist-credentials: ${{ inputs.persist_credentials }}
+        """;
+
+        var flowYaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with: { fetch-depth: 1 }
+        """;
+
+        var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
+        var expressionResult = engine.Check(Encoding.UTF8.GetBytes(expressionYaml), "checkout-persist-no-fix-expression.yml");
+        var flowResult = engine.Check(Encoding.UTF8.GetBytes(flowYaml), "checkout-persist-no-fix-flow.yml");
+
+        await Assert.That(expressionResult.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials").Fix is null).IsTrue();
+        await Assert.That(flowResult.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials").Fix is null).IsTrue();
     }
 
     [Test]
@@ -2399,7 +2597,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven()
+    public async Task AutoFixCatalog_OnlyFourRulesAttachFix_TableDriven()
     {
         var cases = new[]
         {
@@ -2688,6 +2886,18 @@ public sealed class RuleInterfaceTests
                         secrets: inherit
                 """,
                 ExpectsFix: false),
+            new FixabilityCase(
+                "checkout-persist-credentials",
+                new CheckoutPersistCredentialsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: actions/checkout@v4
+                """,
+                ExpectsFix: true),
         };
 
         for (var i = 0; i < cases.Length; i++)
