@@ -1159,13 +1159,15 @@
 
 ### Step 14.4: Auto-fix 方針整理（限定）
 
-**ファイル**: `Docs/Seiton_Linter_spec.md`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
+**ファイル**: `src/Seiton.Core/Linting/Rules/DenyReadAllRule.cs`, `src/Seiton.Core/Linting/Rules/JobTimeoutMinutesRequiredRule.cs`, `src/Seiton.Core/Linting/LintConfig.cs`, `src/Seiton.Core/Linting/LintEngine.cs`, `Docs/Seiton_Linter_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
 
 - `deny-read-all`: deterministic fix を許可（`read-all` -> 明示マッピング雛形 or `{}`）
 - `job-timeout-minutes-required`: `LintConfig` に default timeout がある場合のみ partial fix
 - 他 6 ルールは no-fix を維持
 
 **完了条件**: fixability catalog と実装テストが一致し、unsafe 自動置換が存在しない。
+
+**実装メモ**: 完了。`deny-read-all` は `permissions: read-all` を検出した際に deterministic fix（`{}` への置換）を付与するよう更新した。`job-timeout-minutes-required` は partial auto-fix とし、`LintConfig.DefaultJobTimeoutMinutesForFix` が正の値で設定された場合に限り `timeout-minutes: <default>` を挿入する fix を付与する。未設定時は従来どおり diagnostic のみ（no-fix）を維持する。`RuleInterfaceTests` には `deny-read-all` fix の re-lint 消失回帰と、`job-timeout-minutes-required` の config あり/なし両ケースを追加した。`FixEngineTests` の fixable allow-list は Step 14.4 反映として `deny-read-all` / `job-timeout-minutes-required` を許可集合に含め、catalog と実装の整合を維持した。
 
 ---
 

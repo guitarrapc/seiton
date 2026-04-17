@@ -334,6 +334,8 @@ public sealed class FixEngineTests
             "run-secrets-context-direct-use",
             "run-inputs-context-direct-use",
             "checkout-persist-credentials",
+            "deny-read-all",
+            "job-timeout-minutes-required",
         };
 
         var attachedFixRuleIds = result.Diagnostics

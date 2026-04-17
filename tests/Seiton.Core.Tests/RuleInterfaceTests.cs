@@ -1948,6 +1948,30 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_DenyReadAll_Fix_ReplacesReadAllWithExplicitMappingBaseline()
+    {
+        var yaml = """
+        on: push
+        permissions: 'read-all'
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyReadAllRule()]);
+        var result = engine.Check(sourceBytes, "deny-read-all-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-read-all");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-fix.yml", [diagnostic]);
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsFalse();
+    }
+
+    [Test]
     public async Task RuleRegression_JobTimeoutMinutesRequiredRule_TableDriven()
     {
         var cases = new[]
@@ -2002,6 +2026,57 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new JobTimeoutMinutesRequiredRule(), "job-timeout-minutes-required", cases);
+    }
+
+    [Test]
+    public async Task LintEngine_JobTimeoutMinutesRequired_Fix_AttachesWhenDefaultTimeoutConfigured()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobTimeoutMinutesRequiredRule()]);
+        var config = new LintConfig
+        {
+            DefaultJobTimeoutMinutesForFix = 15,
+        };
+
+        var result = engine.Check(sourceBytes, "job-timeout-minutes-required-fix.yml", config);
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-timeout-minutes-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "job-timeout-minutes-required-fix.yml", [diagnostic], config);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("timeout-minutes: 15", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "job-timeout-minutes-required")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_JobTimeoutMinutesRequired_Fix_DoesNotAttachWhenDefaultTimeoutMissing()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobTimeoutMinutesRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-timeout-minutes-required-no-fix.yml", new LintConfig());
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-timeout-minutes-required");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 
     [Test]
@@ -2823,7 +2898,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task AutoFixCatalog_OnlySixRulesAttachFix_TableDriven()
+    public async Task AutoFixCatalog_OnlySevenRulesAttachFix_TableDriven()
     {
         var cases = new[]
         {
@@ -3129,7 +3204,7 @@ public sealed class RuleInterfaceTests
                         steps:
                             - run: echo ok
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "deny-inherit-secrets",
                 new DenyInheritSecretsRule(),

@@ -177,7 +177,7 @@ This section provides operator-facing guidance for each default rule.
 | `stale-action-refs` | Detects stale SHA pins against maintained release/tag mapping. | Pinned SHA no longer corresponds to expected maintained tag line. | Keeps pinned dependencies current while preserving deterministic refs. | Move pin to current approved SHA for intended release family. | ✗ | Aggressive update cadence can cause churn; use policy thresholds/min-age controls. |
 | `deny-read-all` | Forbids `read-all` permissions baseline. | Workflow/job uses `permissions: read-all`. | Enforces strict least privilege and explicit scope declaration. | Replace with explicit scope map (`contents: read` etc.). | ✓ | Over-tightening may break workflows; validate required read scopes explicitly. |
 | `deny-inherit-secrets` | Forbids `secrets: inherit` in reusable workflow calls. | Reusable call job declares `secrets: inherit`. | Prevents broad secret propagation across workflow boundaries. | Map only required secrets explicitly under `secrets:`. | ✗ | Explicit mapping can still overshare; periodically review call-site contracts. |
-| `job-timeout-minutes-required` | Requires timeout on executable jobs. | Job missing `timeout-minutes` and no equivalent policy exception. | Prevents runaway jobs and unexpected runner cost/exhaustion. | Add `timeout-minutes` per job or enforce approved per-step timeout policy. | ✓ | Timeout values may be mis-sized; monitor failures and tune thresholds. |
+| `job-timeout-minutes-required` | Requires timeout on executable jobs. | Job missing `timeout-minutes` and no equivalent policy exception. | Prevents runaway jobs and unexpected runner cost/exhaustion. | Add `timeout-minutes` per job or enforce approved per-step timeout policy. | △ Partial | Partial auto-fix applies only when `LintConfig.DefaultJobTimeoutMinutesForFix` is configured. Timeout values may still be mis-sized; monitor failures and tune thresholds. |
 | `github-app-token-inputs` | Requires scoped inputs for GitHub App token actions. | `actions/create-github-app-token` or `tibdex/github-app-token` without repo/permission limits. | Reduces over-broad app token issuance. | Add `repositories` and permission-limiting inputs (`permissions`, `permission-*`). | ✗ | Action interface changes may require metadata updates in rule dataset. |
 
 ---
@@ -538,7 +538,7 @@ The following table classifies each default rule by fix feasibility.
 | `stale-action-refs` | ✗ Not auto-fixable | Updating stale pins requires repository/version policy and may change runtime behavior. |
 | `deny-read-all` | ✓ Fixable | Replace `read-all` scalar with an explicit empty mapping baseline (`{}`) or configured least-privilege template when deterministic. |
 | `deny-inherit-secrets` | ✗ Not auto-fixable | Determining exact secret pass-through list requires user intent and callee contract knowledge. |
-| `job-timeout-minutes-required` | ✓ Fixable | Insert `timeout-minutes: <default>` at job level when deterministic default is configured. |
+| `job-timeout-minutes-required` | △ Partial | Insert `timeout-minutes: <default>` at job level only when `LintConfig.DefaultJobTimeoutMinutesForFix` is configured. |
 | `github-app-token-inputs` | ✗ Not auto-fixable | Required repository/permission scopes cannot be inferred safely without repository policy context. |
 
 ### 8.5 Fix Safety Policy

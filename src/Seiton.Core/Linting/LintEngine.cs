@@ -85,6 +85,7 @@ public sealed class LintEngine
             RuleOptions = normalizedRuleOptions.RuleOptions,
             ExprContext = config?.ExprContext ?? ExpressionContext.Empty,
             AdditiveCustomization = normalizedAdditiveCustomization.AdditiveCustomization,
+            DefaultJobTimeoutMinutesForFix = config?.DefaultJobTimeoutMinutesForFix,
         };
 
         var activeRules = new List<IRule>(rules.Count);

@@ -21,6 +21,12 @@ public sealed class LintConfig
     public RuleSpecificAdditiveCustomization AdditiveCustomization { get; init; } = RuleSpecificAdditiveCustomization.Empty;
 
     /// <summary>
+    /// Optional default timeout-minutes used by partial auto-fix for job-timeout-minutes-required.
+    /// When null or <= 0, the rule reports diagnostics without attaching a fix.
+    /// </summary>
+    public int? DefaultJobTimeoutMinutesForFix { get; init; } = null;
+
+    /// <summary>
     /// Optional network-assisted pin remediation configuration (Seiton_Linter_spec.md §12).
     /// When null or AllowNetwork is false, no network-assisted remediation is performed.
     /// </summary>
