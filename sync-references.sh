@@ -14,6 +14,8 @@ repos=(
   "suzuki-shunsuke/pinact"
   "azu/dockerfile-pin"
   "stacklok/frizbee"
+  "praetorian-inc/trajan"
+  "AdnaneKhan/Gato-X"
 )
 
 for repo in "${repos[@]}"; do
