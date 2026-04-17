@@ -474,6 +474,9 @@ public sealed record GitHubActionsResolutionConfig
     /// <summary>
     /// Minimum age in days a tag must have before it is eligible for SHA pinning.
     /// 0 disables the age constraint. Default: 14.
+	/// For version-like refs (vN / vN.M / vN.M.P), resolver enumerates releases first,
+	/// then tags as fallback, filters by cutoff, and chooses the best eligible candidate
+	/// in the same version family before resolving to SHA.
     /// </summary>
     public int MinAgeDays { get; init; } = 14;
 }

@@ -583,6 +583,7 @@ Comparison of reference tools:
 | OCI image digest | — | OCI registry HEAD | OCI registry HEAD |
 | GitHub token source | `PINACT_GITHUB_TOKEN` → `GITHUB_TOKEN` → keyring → ghtkn → anon | — | `GITHUB_TOKEN` → anon |
 | GHES support | Yes (`ghes.api_url`, `ghes.fallback`) | No | No |
+| Age filtering for updates | `--min-age` / `PINACT_MIN_AGE` (default 0; update target candidate filtering) | — | — |
 | OCI auth | — | `authn.DefaultKeychain` (`~/.docker/config.json`) | `authn.DefaultKeychain` |
 | Default excludes | `ignore_actions` (regex) | `ignore-images` (glob, negation) | `exclude_branches: [main, master]`; `scratch` always; `latest` by default |
 | Separate command | `pinact run` | `dockerfile-pin run` | `frizbee actions` / `frizbee image` |
@@ -688,6 +689,16 @@ Rationale: a tag that was pushed very recently may be subject to a supply-chain 
 When `min_age_days: 0`, the age constraint is disabled entirely and all tags are eligible regardless of creation time.
 
 Age is computed from the later of the tag creation date (`tagger.date` for annotated tags; `commit.committer.date` for lightweight tags) and the current UTC time at resolution time.
+
+Current implementation behavior:
+
+1. If the requested ref is version-like (`vN`, `vN.M`, `vN.M.P`), resolver builds a candidate set from GitHub Releases first, then Tags as fallback.
+2. Candidates are restricted to the same version family as the requested ref (for example `v4` -> `v4.*`, `v4.1` -> `v4.1.*`).
+3. Candidates newer than cutoff are excluded (`published_at` for releases, `commit.committer.date` for tags).
+4. Resolver selects the highest eligible candidate (semver-first ordering with deterministic string fallback), then resolves that candidate tag to SHA.
+5. If no eligible candidate exists, remediation returns skip (no fix).
+
+When the requested ref is not version-like, resolver keeps direct ref resolution and applies age gate to that resolved target.
 
 #### 12.3.8 `images.exclude_images` and `images.exclude_tags`
 

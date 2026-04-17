@@ -1,7 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-
-namespace Seiton.Core.Linting.PinRemediation;
+﻿namespace Seiton.Core.Linting.PinRemediation;
 
 /// <summary>
 /// Resolves an OCI image reference to a pinned digest.

@@ -12,7 +12,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
 
     readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     readonly GitHubActionsResolutionConfig _config = config;
-    readonly ConcurrentDictionary<string, string> _successCache = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
     readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(config.ExcludeBranches);
     readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(config.IgnoreActions);
 
@@ -28,25 +28,267 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         }
 
         var cacheKey = string.Concat(owner, "/", repo, "@", refStr);
-        if (_successCache.TryGetValue(cacheKey, out var cachedSha))
+        if (_successCache.TryGetValue(cacheKey, out var cached))
         {
-            return (cachedSha, refStr);
+            return (cached.Sha, cached.TagComment);
         }
 
         var token = ResolveToken();
-        var result = await ResolveShaWithFallbackAsync(owner, repo, refStr, token, cancellationToken);
+        var resolvedRef = refStr;
 
-        if (_config.MinAgeDays > 0 && result.TagDate.HasValue)
+        if (_config.MinAgeDays > 0 && TryBuildVersionFamily(refStr, out var family))
         {
-            var age = DateTimeOffset.UtcNow - result.TagDate.Value;
-            if (age.TotalDays < _config.MinAgeDays)
+            var selectedTag = await SelectBestEligibleTagAsync(owner, repo, family, token, cancellationToken);
+            if (string.IsNullOrWhiteSpace(selectedTag))
             {
                 return (null, null);
             }
+
+            resolvedRef = selectedTag;
         }
 
-        _successCache.TryAdd(cacheKey, result.Sha!);
-        return (result.Sha, refStr);
+        var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
+        if (_config.MinAgeDays > 0 && !TryBuildVersionFamily(refStr, out _))
+        {
+            if (result.TagDate.HasValue)
+            {
+                var age = DateTimeOffset.UtcNow - result.TagDate.Value;
+                if (age.TotalDays < _config.MinAgeDays)
+                {
+                    return (null, null);
+                }
+            }
+        }
+
+        var cacheValue = new CachedResolution(result.Sha!, resolvedRef);
+        _successCache.TryAdd(cacheKey, cacheValue);
+        return (cacheValue.Sha, cacheValue.TagComment);
+    }
+
+    async Task<string?> SelectBestEligibleTagAsync(
+        string owner,
+        string repo,
+        VersionFamily family,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-_config.MinAgeDays);
+        var releaseCandidates = await TryGetReleaseCandidatesAsync(owner, repo, family, cutoff, token, cancellationToken);
+        if (releaseCandidates.Count > 0)
+        {
+            return PickBestTag(releaseCandidates);
+        }
+
+        var tagCandidates = await TryGetTagCandidatesAsync(owner, repo, family, cutoff, token, cancellationToken);
+        if (tagCandidates.Count > 0)
+        {
+            return PickBestTag(tagCandidates);
+        }
+
+        return null;
+    }
+
+    async Task<List<string>> TryGetReleaseCandidatesAsync(
+        string owner,
+        string repo,
+        VersionFamily family,
+        DateTimeOffset cutoff,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var candidates = new List<string>();
+        var path = $"repos/{owner}/{repo}/releases?per_page=100";
+
+        var response = await SendGetWithFallbackAsync(owner, repo, path, token, cancellationToken);
+        if (response is null)
+        {
+            return candidates;
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                return candidates;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return candidates;
+            }
+
+            var root = document.RootElement;
+            for (var i = 0; i < root.GetArrayLength(); i++)
+            {
+                var release = root[i];
+                if (!release.TryGetProperty("tag_name", out var tagNameNode))
+                {
+                    continue;
+                }
+
+                var tagName = tagNameNode.GetString();
+                if (string.IsNullOrWhiteSpace(tagName) || !family.IsMatch(tagName))
+                {
+                    continue;
+                }
+
+                if (!release.TryGetProperty("published_at", out var publishedNode) ||
+                    !publishedNode.TryGetDateTimeOffset(out var publishedAt) ||
+                    publishedAt > cutoff)
+                {
+                    continue;
+                }
+
+                candidates.Add(tagName);
+            }
+        }
+
+        return candidates;
+    }
+
+    async Task<List<string>> TryGetTagCandidatesAsync(
+        string owner,
+        string repo,
+        VersionFamily family,
+        DateTimeOffset cutoff,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var candidates = new List<string>();
+        var path = $"repos/{owner}/{repo}/tags?per_page=100";
+
+        var response = await SendGetWithFallbackAsync(owner, repo, path, token, cancellationToken);
+        if (response is null)
+        {
+            return candidates;
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                return candidates;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return candidates;
+            }
+
+            var root = document.RootElement;
+            for (var i = 0; i < root.GetArrayLength(); i++)
+            {
+                var tag = root[i];
+                if (!tag.TryGetProperty("name", out var tagNameNode))
+                {
+                    continue;
+                }
+
+                var tagName = tagNameNode.GetString();
+                if (string.IsNullOrWhiteSpace(tagName) || !family.IsMatch(tagName))
+                {
+                    continue;
+                }
+
+                if (!tag.TryGetProperty("commit", out var commitNode) ||
+                    !commitNode.TryGetProperty("sha", out var shaNode))
+                {
+                    continue;
+                }
+
+                var commitSha = shaNode.GetString();
+                if (string.IsNullOrWhiteSpace(commitSha))
+                {
+                    continue;
+                }
+
+                var commitDate = await TryGetCommitDateWithFallbackAsync(owner, repo, commitSha, token, cancellationToken);
+                if (!commitDate.HasValue || commitDate.Value > cutoff)
+                {
+                    continue;
+                }
+
+                candidates.Add(tagName);
+            }
+        }
+
+        return candidates;
+    }
+
+    static string? PickBestTag(List<string> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var best = candidates[0];
+        for (var i = 1; i < candidates.Count; i++)
+        {
+            var current = candidates[i];
+            if (CompareVersionTag(current, best) > 0)
+            {
+                best = current;
+            }
+        }
+
+        return best;
+    }
+
+    async Task<HttpResponseMessage?> SendGetWithFallbackAsync(
+        string owner,
+        string repo,
+        string relativePath,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(_config.GhesApiUrl))
+        {
+            var ghesBaseUri = NormalizeApiBaseUri(_config.GhesApiUrl!);
+            var ghesResponse = await SendGetAsync(ghesBaseUri, relativePath, token, cancellationToken);
+            if (ghesResponse.IsSuccessStatusCode)
+            {
+                return ghesResponse;
+            }
+
+            if (!_config.GhesFallback || ghesResponse.StatusCode != HttpStatusCode.NotFound)
+            {
+                return ghesResponse;
+            }
+
+            ghesResponse.Dispose();
+        }
+
+        return await SendGetAsync(PublicApiBaseUri, relativePath, token, cancellationToken);
+    }
+
+    async Task<DateTimeOffset?> TryGetCommitDateWithFallbackAsync(
+        string owner,
+        string repo,
+        string commitSha,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(_config.GhesApiUrl))
+        {
+            var ghesBaseUri = NormalizeApiBaseUri(_config.GhesApiUrl!);
+            var ghesDate = await TryGetCommitDateAsync(ghesBaseUri, owner, repo, commitSha, token, cancellationToken);
+            if (ghesDate.HasValue)
+            {
+                return ghesDate;
+            }
+
+            if (!_config.GhesFallback)
+            {
+                return null;
+            }
+        }
+
+        return await TryGetCommitDateAsync(PublicApiBaseUri, owner, repo, commitSha, token, cancellationToken);
     }
 
     bool ShouldSkip(string owner, string repo, string refStr)
@@ -301,6 +543,133 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
     {
         public bool Success => !string.IsNullOrWhiteSpace(Sha);
     }
+
+    readonly record struct CachedResolution(string Sha, string TagComment);
+
+    readonly record struct VersionFamily(bool HasVPrefix, int[] Parts)
+    {
+        public bool IsMatch(string candidate)
+        {
+            if (!TryParseVersionTag(candidate, out var parsed))
+            {
+                return false;
+            }
+
+            if (HasVPrefix != parsed.HasVPrefix || parsed.Parts.Length < Parts.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < Parts.Length; i++)
+            {
+                if (parsed.Parts[i] != Parts[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    static bool TryBuildVersionFamily(string refStr, out VersionFamily family)
+    {
+        family = default;
+        if (!TryParseVersionTag(refStr, out var parsed))
+        {
+            return false;
+        }
+
+        family = new VersionFamily(parsed.HasVPrefix, parsed.Parts);
+        return true;
+    }
+
+    static int CompareVersionTag(string left, string right)
+    {
+        var leftParsed = TryParseVersionTag(left, out var l);
+        var rightParsed = TryParseVersionTag(right, out var r);
+
+        if (leftParsed && rightParsed)
+        {
+            var maxParts = Math.Max(l.Parts.Length, r.Parts.Length);
+            for (var i = 0; i < maxParts; i++)
+            {
+                var lv = i < l.Parts.Length ? l.Parts[i] : 0;
+                var rv = i < r.Parts.Length ? r.Parts[i] : 0;
+                if (lv != rv)
+                {
+                    return lv.CompareTo(rv);
+                }
+            }
+
+            if (l.IsPrerelease != r.IsPrerelease)
+            {
+                return l.IsPrerelease ? -1 : 1;
+            }
+
+            return string.CompareOrdinal(left, right);
+        }
+
+        if (leftParsed != rightParsed)
+        {
+            return leftParsed ? 1 : -1;
+        }
+
+        return string.CompareOrdinal(left, right);
+    }
+
+    static bool TryParseVersionTag(string value, out ParsedVersionTag parsed)
+    {
+        parsed = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var span = value.AsSpan();
+        var hasVPrefix = false;
+        if (span.Length > 1 && (span[0] == 'v' || span[0] == 'V'))
+        {
+            hasVPrefix = true;
+            span = span[1..];
+        }
+
+        var dashIndex = span.IndexOf('-');
+        var isPrerelease = false;
+        if (dashIndex >= 0)
+        {
+            isPrerelease = true;
+            span = span[..dashIndex];
+        }
+
+        if (span.IsEmpty)
+        {
+            return false;
+        }
+
+        var text = span.ToString();
+        var segments = text.Split('.');
+        if (segments.Length is < 1 or > 3)
+        {
+            return false;
+        }
+
+        var parts = new int[segments.Length];
+        for (var i = 0; i < segments.Length; i++)
+        {
+            if (!int.TryParse(segments[i], out var number) || number < 0)
+            {
+                return false;
+            }
+
+            parts[i] = number;
+        }
+
+        parsed = new ParsedVersionTag(hasVPrefix, parts, isPrerelease);
+        return true;
+    }
+
+    readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
 
     readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
 }

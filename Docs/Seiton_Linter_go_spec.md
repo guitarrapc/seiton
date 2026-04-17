@@ -460,6 +460,8 @@ type GitHubActionsResolutionConfig struct {
     IgnoreActions    []IgnoreActionEntry
     ExcludeBranches  []string             // default: ["main", "master"]
     MinAgeDays       int                  // default: 14; 0 = no constraint
+                                          // version-like refs use release/tag candidate selection
+                                          // within same version family before SHA resolution
 }
 
 type ImageResolutionConfig struct {

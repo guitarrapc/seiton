@@ -9,7 +9,7 @@ public sealed class LintConfigLibraryTests
     public async Task GenerateTemplateYaml_IncludesExpectedSections()
     {
         var yaml = LintConfigLibrary.GenerateTemplateYaml();
-      var lines = yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var lines = yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
 
         await Assert.That(yaml.Contains("rules:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("additiveCustomization:", StringComparison.Ordinal)).IsTrue();

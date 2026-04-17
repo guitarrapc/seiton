@@ -10,6 +10,8 @@
 
 pinact is a CLI tool that rewrites GitHub workflow and composite action files so that every `uses:` reference becomes pinned to a full 40-character commit SHA. It also adds a human-readable tag comment next to the SHA (e.g. `# v4.0.0`). It can additionally **update** already-pinned references to their latest SHA and **verify** that existing annotations match the real SHA.
 
+pinact also supports age-based update filtering via `--min-age` / `PINACT_MIN_AGE` (default `0` = disabled). This filter is applied when selecting the update target version (`-u` path), not as a post-resolution gate on a single input ref.
+
 Core use cases:
 - `pinact run` — pin/update
 - `pinact check` — verify only (no writes)
@@ -39,7 +41,9 @@ cmd/pinact/main.go
 
 ### API Used
 - `GET /repos/{owner}/{repo}/git/refs/{ref}` (tags / branches)
-- `GET /repos/{owner}/{repo}/commits/{ref}` — to resolve annotated tag objects to commit SHA
+- `GET /repos/{owner}/{repo}/releases`
+- `GET /repos/{owner}/{repo}/tags`
+- `GET /repos/{owner}/{repo}/commits/{sha}` — for tag cooldown (`--min-age`) checks
 
 ### Resolution Flow
 1. Parse `uses: owner/repo@ref` (or `owner/repo/.github/workflows/file.yml@ref`).
@@ -47,9 +51,28 @@ cmd/pinact/main.go
 3. If the ref is an annotated tag, follow the `object.sha` to the commit object.
 4. Replace `@ref` with `@<commit-sha> # ref`.
 
+### Update Target Selection with `--min-age`
+
+`--min-age` affects only update flows (`pinact run -u ...`) where pinact chooses a newer tag/version:
+
+1. Compute `cutoff = now - minAgeDays` when `min-age > 0`.
+2. Query releases first and keep only candidates that pass cooldown:
+  - release prerelease is skipped when the current version is stable,
+  - `release.published_at > cutoff` is skipped.
+3. If no eligible release remains, query tags and keep only candidates that pass cooldown:
+  - tags already represented by releases are skipped,
+  - prerelease tags are skipped when current version is stable,
+  - for each tag, pinact fetches `commit.committer.date`; `date > cutoff` is skipped,
+  - if commit-date lookup fails, that tag is skipped conservatively.
+4. From remaining candidates, choose the highest version (semver first, string fallback).
+
+This is a candidate-selection model (release/tag enumeration + filtering), not a single-ref post-check.
+
 ### Caching
-- No in-process HTTP cache; each run makes fresh API calls.
-- Repository host routing (GHES vs github.com) is cached in-process via `ClientResolver.repoHosts` map.
+- In-process caches exist in wrapper services:
+  - `RepositoriesServiceImpl.Commits` / `Tags` / `Releases`
+  - `GitServiceImpl.Commits`
+- Repository host routing (GHES vs github.com) is also cached in-process via `ClientResolver.repoHosts`.
 
 ---
 
@@ -131,6 +154,8 @@ separator: " # "
 - `ghes` — GHES configuration
 - `separator` — string between SHA and tag comment; defaults to ` # `
 
+`min-age` is not part of `.pinact.yaml`; it is provided via CLI flag (`--min-age`) or env var (`PINACT_MIN_AGE`).
+
 ---
 
 ## 7. Verification Mode (`pinact check`)
@@ -166,6 +191,19 @@ Both are resolved identically via the Repositories API; the path prefix does not
 
 - **Tool-specific env var** (`PINACT_GITHUB_TOKEN`) takes priority over the generic `GITHUB_TOKEN`, allowing different tokens for different tools in the same environment.
 - **No image pinning** — pinact is GitHub Actions-only. Docker image digest resolution is outside its scope.
-- **No in-process cache for SHA resolution** — callers are expected to run pinact once per file set, not per diagnostic.
+- **`--min-age` is update-target filtering** — it filters release/tag candidates before choosing a target version, then resolves that version to SHA.
 - **GHES fallback** is a deliberate design choice: some organizations host their own fork of common actions on GHES, but may also use public github.com actions. The fallback flag enables this hybrid.
 - **Regex-based ignore_actions** is more flexible than glob, at the cost of matching complexity.
+
+---
+
+## 11. pinact vs Seiton (`min_age_days`)
+
+| Aspect | pinact (`--min-age`) | Seiton (`pin_resolution.github_actions.min_age_days`) |
+|---|---|---|
+| Default | `0` (disabled) | `14` (enabled) |
+| Config surface | CLI/env only (`--min-age`, `PINACT_MIN_AGE`) | Config file key (`min_age_days`) |
+| Activation point | Update flow only (`run -u`) | Pin remediation resolution flow |
+| Selection model | Enumerate release/tag candidates, then filter by age and choose best | Enumerate release/tag candidates for version-like refs (`vN`, `vN.M`, `vN.M.P`) in the same version family, then choose best eligible; non-version refs use direct resolution |
+| If candidate/target is too new | Skip that candidate and continue searching older eligible candidates | Skip too-new candidates and continue; return skip (`null`) only when no eligible candidate remains |
+| `0` semantics | No cooldown filtering | No age constraint |

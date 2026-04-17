@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Net.Http;
 using System.Text;
 using Seiton.Core.Linting.PinRemediation;
 
@@ -22,7 +21,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler);
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
 
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
@@ -55,7 +54,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler);
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
 
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
 
@@ -85,6 +84,7 @@ public sealed class GitHubActionShaResolverTests
             {
                 GhesApiUrl = "https://ghes.example.com/api/v3",
                 GhesFallback = true,
+                MinAgeDays = 0,
             });
 
         var (sha, _) = await resolver.ResolveAsync("actions", "setup-go", "v5");
@@ -122,27 +122,16 @@ public sealed class GitHubActionShaResolverTests
         var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
         var handler = new StubHttpMessageHandler();
         handler.AddJson(
-            "https://api.github.com/repos/actions/checkout/git/ref/tags/v4",
+            "https://api.github.com/repos/actions/checkout/releases?per_page=100",
             $$"""
-            {
-              "object": {
-                "type": "commit",
-                "sha": "0123456789abcdef0123456789abcdef01234567"
+            [
+              {
+                "tag_name": "v4",
+                "published_at": "{{recentDate}}"
               }
-            }
+            ]
             """);
-        handler.AddJson(
-            "https://api.github.com/repos/actions/checkout/commits/0123456789abcdef0123456789abcdef01234567",
-            $$"""
-            {
-              "sha": "0123456789abcdef0123456789abcdef01234567",
-              "commit": {
-                "committer": {
-                  "date": "{{recentDate}}"
-                }
-              }
-            }
-            """);
+        handler.AddJson("https://api.github.com/repos/actions/checkout/tags?per_page=100", "[]");
 
         var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
@@ -157,28 +146,16 @@ public sealed class GitHubActionShaResolverTests
         var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
         var handler = new StubHttpMessageHandler();
         handler.AddJson(
-            "https://api.github.com/repos/actions/cache/git/ref/tags/v3.3.1",
-            """
-            {
-              "object": {
-                "type": "tag",
-                "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-              }
-            }
-            """);
-        handler.AddJson(
-            "https://api.github.com/repos/actions/cache/git/tags/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "https://api.github.com/repos/actions/cache/releases?per_page=100",
             $$"""
-            {
-              "tagger": {
-                "date": "{{recentDate}}"
-              },
-              "object": {
-                "type": "commit",
-                "sha": "fedcba9876543210fedcba9876543210fedcba98"
+            [
+              {
+                "tag_name": "v3.3.1",
+                "published_at": "{{recentDate}}"
               }
-            }
+            ]
             """);
+        handler.AddJson("https://api.github.com/repos/actions/cache/tags?per_page=100", "[]");
 
         var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
@@ -193,6 +170,16 @@ public sealed class GitHubActionShaResolverTests
         var oldDate = DateTimeOffset.UtcNow.AddDays(-30).ToString("o");
         var handler = new StubHttpMessageHandler();
         handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/releases?per_page=100",
+            $$"""
+            [
+              {
+                "tag_name": "v4",
+                "published_at": "{{oldDate}}"
+              }
+            ]
+            """);
+        handler.AddJson(
             "https://api.github.com/repos/actions/checkout/git/ref/tags/v4",
             """
             {
@@ -202,6 +189,7 @@ public sealed class GitHubActionShaResolverTests
               }
             }
             """);
+        handler.AddJson("https://api.github.com/repos/actions/checkout/tags?per_page=100", "[]");
         handler.AddJson(
             "https://api.github.com/repos/actions/checkout/commits/0123456789abcdef0123456789abcdef01234567",
             $$"""
@@ -258,6 +246,121 @@ public sealed class GitHubActionShaResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_SelectsOlderEligibleReleaseCandidate_WhenNewestReleaseIsTooNew()
+    {
+        var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
+        var oldDate = DateTimeOffset.UtcNow.AddDays(-30).ToString("o");
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/releases?per_page=100",
+            $$"""
+            [
+              {
+                "tag_name": "v4.2.0",
+                "published_at": "{{recentDate}}"
+              },
+              {
+                "tag_name": "v4.1.0",
+                "published_at": "{{oldDate}}"
+              }
+            ]
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/git/ref/tags/v4.1.0",
+            """
+            {
+              "object": {
+                "type": "commit",
+                "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+
+        await Assert.That(sha).IsEqualTo("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        await Assert.That(tagComment).IsEqualTo("v4.1.0");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/actions/checkout/git/ref/tags/v4.1.0");
+        await Assert.That(handler.RequestedUris.Count(uri => uri == "https://api.github.com/repos/actions/checkout/git/ref/tags/v4.2.0"))
+          .IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ResolveAsync_FallsBackToTags_WhenNoEligibleReleaseCandidates()
+    {
+        var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
+        var oldDate = DateTimeOffset.UtcNow.AddDays(-30).ToString("o");
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/releases?per_page=100",
+            $$"""
+            [
+              {
+                "tag_name": "v4.2.0",
+                "published_at": "{{recentDate}}"
+              }
+            ]
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/tags?per_page=100",
+            """
+            [
+              {
+                "name": "v4.2.0",
+                "commit": {
+                  "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                }
+              },
+              {
+                "name": "v4.1.0",
+                "commit": {
+                  "sha": "cccccccccccccccccccccccccccccccccccccccc"
+                }
+              }
+            ]
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/commits/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            $$"""
+            {
+              "commit": {
+                "committer": {
+                  "date": "{{recentDate}}"
+                }
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/commits/cccccccccccccccccccccccccccccccccccccccc",
+            $$"""
+            {
+              "commit": {
+                "committer": {
+                  "date": "{{oldDate}}"
+                }
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/git/ref/tags/v4.1.0",
+            """
+            {
+              "object": {
+                "type": "commit",
+                "sha": "dddddddddddddddddddddddddddddddddddddddd"
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+
+        await Assert.That(sha).IsEqualTo("dddddddddddddddddddddddddddddddddddddddd");
+        await Assert.That(tagComment).IsEqualTo("v4.1.0");
+    }
+
+    [Test]
     public async Task ResolveAsync_CachesSuccessfulResolution()
     {
         var handler = new StubHttpMessageHandler();
@@ -272,7 +375,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler);
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
 
         var first = await resolver.ResolveAsync("actions", "checkout", "v4");
         var second = await resolver.ResolveAsync("actions", "checkout", "v4");

@@ -1,7 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-
-namespace Seiton.Core.Linting.PinRemediation;
+﻿namespace Seiton.Core.Linting.PinRemediation;
 
 /// <summary>
 /// Resolves a GitHub Actions or reusable-workflow reference to a pinned commit SHA.

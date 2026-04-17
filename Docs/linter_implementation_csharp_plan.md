@@ -752,6 +752,8 @@
 
 **実装メモ**: 完了。`src/Seiton.Core/Linting/PinRemediation/GitHubActionShaResolver.cs` を追加し、`IHttpClientFactory` と `GitHubActionsResolutionConfig` を受け取る GitHub API ベースの SHA resolver を実装した。public API は `https://api.github.com/`、GHES は `GhesApiUrl` を正規化して利用し、`GhesFallback: true` の場合に GHES の 404 のみ github.com へフォールバックする。`GET /repos/{owner}/{repo}/git/ref/tags/{ref}` で ref を取得し、annotated tag (`object.type == tag`) の場合は `GET /repos/{owner}/{repo}/git/tags/{sha}` を追加で辿って最終 commit SHA を解決する。`TokenEnvVars` を順に見て Bearer token を付与し、`ExcludeBranches` と `IgnoreActions` は constructor で regex/compiled matcher 化して skip を先行判定する。成功結果のみ `ConcurrentDictionary<string, string>` にキャッシュする。`tests/Seiton.Core.Tests/GitHubActionShaResolverTests.cs` を追加し、direct tag、annotated tag、GHES fallback、skip、success cache の 5 ケースをモック HTTP で検証した。`Directory.Packages.props` と `src/Seiton.Core/Seiton.Core.csproj` には `Microsoft.Extensions.Http` を追加。`dotnet build src/Seiton.Core/Seiton.Core.csproj --configuration Debug` 成功、`GitHubActionShaResolverTests` 5 件全件パス。
 
+**追記（2026-04-17）**: `min_age_days` は単一 ref の post-check ではなく、pinact 方式に合わせて version-like ref（`vN` / `vN.M` / `vN.M.P`）を対象に `releases` → `tags` の候補集合を age で絞り、同一バージョンファミリ内で最適候補を選択してから SHA 解決する方式へ更新した。候補が尽きた場合のみ skip（no-fix）とする。
+
 ### Step 7.5: OCI image digest resolver 実装
 
 **ファイル**: `src/Seiton.Core/Linting/PinRemediation/OciImageDigestResolver.cs`（新規）
