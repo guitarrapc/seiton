@@ -123,6 +123,14 @@ The default linter profile must include the following rule IDs.
 | `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
 | `reusable-workflow-secrets-inherit` | Warn when reusable-workflow call jobs use `secrets: inherit`; callers should explicitly map only the required secrets via `secrets:`. |
 | `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
+| `known-vulnerable-actions` | Error when `uses:` references resolve to known vulnerable action versions (for example via GitHub Security Advisory metadata or curated vulnerability dataset). |
+| `impostor-commit` | Error when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's graph for the intended ref semantics. |
+| `ref-confusion` | Error when a symbolic ref in `uses:` (tag/branch) is ambiguous or confusion-prone (for example same name present in both tag and branch namespaces) under resolution policy. |
+| `stale-action-refs` | Warn when SHA-pinned `uses:` references are stale relative to maintained release/tag mapping policy. |
+| `deny-read-all` | Error when workflow/job permissions use `read-all`; callers must use explicit least-privilege scope mapping instead of blanket read grants. |
+| `deny-inherit-secrets` | Error when reusable-workflow call jobs use `secrets: inherit`; full secret inheritance is forbidden under strict policy profile. |
+| `job-timeout-minutes-required` | Error when executable jobs omit `timeout-minutes` (or equivalent compliant per-step timeout policy), to avoid unbounded runner execution. |
+| `github-app-token-inputs` | Error when known GitHub App token actions are missing repository/permission-limiting inputs (for example `repositories`, `permissions`, `permission-*`). |
 
 Rule set compatibility policy:
 
@@ -164,6 +172,14 @@ This section provides operator-facing guidance for each default rule.
 | `secrets-whole-context-access` | Detects whole-object access to secrets context. | `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`. | Prevents bulk secret exfiltration through single expression sink. | Replace with explicit key-level access to only required secrets. | ✗ | Key-level access can still leak if routed to unsafe sinks. Review sinks and masking behavior. |
 | `reusable-workflow-secrets-inherit` | Warns on `secrets: inherit` for reusable workflow calls. | Call job uses `uses` plus `secrets: inherit`. | Enforces explicit secret boundary between caller and callee workflows. | Pass only required secrets explicitly in `secrets:` mapping. | ✗ | Explicit mapping can still overshare. Periodically audit callee-required secrets and revoke extras. |
 | `checkout-persist-credentials` | Requires explicit `with.persist-credentials: false` for checkout hardening. | Missing key, `persist-credentials: true`, or non-deterministic expression value. | Prevents leaving checkout token credentials in `.git/config` during later workflow steps. | Set `with.persist-credentials: false`; configure explicit auth only where later git operations need it. | △ Partial | After fix, downstream authenticated git operations may fail. For `git push`, configure explicit auth (for example set remote URL with token or use dedicated credential helper step), then validate push path safely. |
+| `known-vulnerable-actions` | Detects action versions with known vulnerabilities. | `uses: owner/repo@vX` where `vX` is listed in advisory dataset. | Prevents introducing known-compromised versions into CI/CD path. | Upgrade/pin to non-vulnerable commit or fixed release line. | ✗ | Advisory feeds can lag; combine with pinning and provenance verification. |
+| `impostor-commit` | Detects SHA pins that are not valid commits for the referenced repository lineage. | `uses: owner/repo@<sha>` where `<sha>` is not reachable as expected. | Mitigates ghost/impostor commit supply-chain abuse. | Replace with verified commit from trusted tag/release mapping. | ✗ | Network/offline data freshness affects certainty; treat as high-severity policy signal. |
+| `ref-confusion` | Detects ambiguous branch/tag symbolic references in `uses:`. | Same symbolic name exists in both refs/tags and refs/heads. | Prevents ref namespace confusion and unexpected resolution targets. | Use explicit full SHA pin, or enforce ref-namespace disambiguation policy. | ✗ | Ambiguity may be intentional in rare repos; allow explicit suppression with justification. |
+| `stale-action-refs` | Detects stale SHA pins against maintained release/tag mapping. | Pinned SHA no longer corresponds to expected maintained tag line. | Keeps pinned dependencies current while preserving deterministic refs. | Move pin to current approved SHA for intended release family. | ✗ | Aggressive update cadence can cause churn; use policy thresholds/min-age controls. |
+| `deny-read-all` | Forbids `read-all` permissions baseline. | Workflow/job uses `permissions: read-all`. | Enforces strict least privilege and explicit scope declaration. | Replace with explicit scope map (`contents: read` etc.). | ✓ | Over-tightening may break workflows; validate required read scopes explicitly. |
+| `deny-inherit-secrets` | Forbids `secrets: inherit` in reusable workflow calls. | Reusable call job declares `secrets: inherit`. | Prevents broad secret propagation across workflow boundaries. | Map only required secrets explicitly under `secrets:`. | ✗ | Explicit mapping can still overshare; periodically review call-site contracts. |
+| `job-timeout-minutes-required` | Requires timeout on executable jobs. | Job missing `timeout-minutes` and no equivalent policy exception. | Prevents runaway jobs and unexpected runner cost/exhaustion. | Add `timeout-minutes` per job or enforce approved per-step timeout policy. | ✓ | Timeout values may be mis-sized; monitor failures and tune thresholds. |
+| `github-app-token-inputs` | Requires scoped inputs for GitHub App token actions. | `actions/create-github-app-token` or `tibdex/github-app-token` without repo/permission limits. | Reduces over-broad app token issuance. | Add `repositories` and permission-limiting inputs (`permissions`, `permission-*`). | ✗ | Action interface changes may require metadata updates in rule dataset. |
 
 ---
 
@@ -517,6 +533,14 @@ The following table classifies each default rule by fix feasibility.
 | `secrets-whole-context-access` | ✗ Not auto-fixable | Correct remediation (refactoring to specific key access) requires user intent about which secrets are needed. |
 | `reusable-workflow-secrets-inherit` | ✗ Not auto-fixable | Determining which exact secrets to pass through reusable workflow boundaries requires user intent. |
 | `checkout-persist-credentials` | △ Partial | For deterministic cases, insert or replace `with.persist-credentials: false`. Expression-valued cases remain no-fix. Review downstream authenticated git commands such as `git push`, which may need explicit auth setup (for example `git remote set-url origin ...`). |
+| `known-vulnerable-actions` | ✗ Not auto-fixable | Selecting a safe replacement version/commit requires advisory-aware upgrade policy and user intent. |
+| `impostor-commit` | ✗ Not auto-fixable | Safe replacement SHA requires trusted repository graph/advisory resolution outside deterministic local edit. |
+| `ref-confusion` | ✗ Not auto-fixable | Correct disambiguation (tag vs branch vs SHA) depends on project policy and intent. |
+| `stale-action-refs` | ✗ Not auto-fixable | Updating stale pins requires repository/version policy and may change runtime behavior. |
+| `deny-read-all` | ✓ Fixable | Replace `read-all` scalar with an explicit empty mapping baseline (`{}`) or configured least-privilege template when deterministic. |
+| `deny-inherit-secrets` | ✗ Not auto-fixable | Determining exact secret pass-through list requires user intent and callee contract knowledge. |
+| `job-timeout-minutes-required` | ✓ Fixable | Insert `timeout-minutes: <default>` at job level when deterministic default is configured. |
+| `github-app-token-inputs` | ✗ Not auto-fixable | Required repository/permission scopes cannot be inferred safely without repository policy context. |
 
 ### 8.5 Fix Safety Policy
 

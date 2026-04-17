@@ -247,6 +247,23 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `reusable-workflow-secrets-inherit` | Warn when reusable-workflow call jobs use `secrets: inherit`; callers should explicitly map only the required secrets via `secrets:`. |
 | `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
 
+### 3.5 Planned Parity Additions (Not Yet Implemented)
+
+The shared rule catalog additionally defines the following rule IDs for the next parity wave:
+
+- `known-vulnerable-actions`
+- `impostor-commit`
+- `ref-confusion`
+- `stale-action-refs`
+- `deny-read-all`
+- `deny-inherit-secrets`
+- `job-timeout-minutes-required`
+- `github-app-token-inputs`
+
+Implementation status:
+
+- Go runtime mapping for these IDs is planned and should follow the same sequencing as documented in `Docs/linter_implementation_csharp_plan.md` Phase 14 until Go-specific implementation plan items are added.
+
 ---
 
 ## 4. Exclusion and Suppression Mapping

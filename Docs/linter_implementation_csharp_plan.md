@@ -1079,6 +1079,82 @@
 
 ---
 
+## Phase 14: Competitor Parity Security Rules（P0）
+
+**目標**: 競合精査で未カバーと判明した high-value ルールを追加し、actionlint / ghalint / zizmor の P0 ギャップを埋める。
+
+対象ルール（本 Phase）:
+
+- `known-vulnerable-actions`
+- `impostor-commit`
+- `ref-confusion`
+- `stale-action-refs`
+- `deny-read-all`
+- `deny-inherit-secrets`
+- `job-timeout-minutes-required`
+- `github-app-token-inputs`
+
+### Step 14.1: ghalint parity ルール群（ローカルAST中心）
+
+**ファイル**: `src/Seiton.Core/Linting/DenyReadAllRule.cs`, `src/Seiton.Core/Linting/DenyInheritSecretsRule.cs`, `src/Seiton.Core/Linting/JobTimeoutMinutesRequiredRule.cs`, `src/Seiton.Core/Linting/GitHubAppTokenInputsRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `deny-read-all`
+  - `permissions: read-all`（workflow/job）を error
+  - `deny-write-all` と同じ fail-safe ポリシーに載せる
+- `deny-inherit-secrets`
+  - reusable workflow call job の `secrets: inherit` を error
+  - 既存 `reusable-workflow-secrets-inherit`（warning）との優先順位/重複を整理
+- `job-timeout-minutes-required`
+  - executable job に `timeout-minutes` がない場合を error
+  - 仕様上の例外（全 step timeout 明示など）を選択可能にする
+- `github-app-token-inputs`
+  - `actions/create-github-app-token` / `tibdex/github-app-token` の `with` に対し、repository/permission 制約 input を必須化
+
+**完了条件**: 4 ルールで table-driven 回帰テスト（正常/異常/境界）が green、既存 rule との二重報告方針が明文化されている。
+
+### Step 14.2: zizmor parity online ルール群（network-assisted audit）
+
+**ファイル**: `src/Seiton.Core/Linting/OnlineAudit/ActionAdvisoryProvider.cs`, `src/Seiton.Core/Linting/OnlineAudit/ActionRefResolver.cs`, `src/Seiton.Core/Linting/KnownVulnerableActionsRule.cs`, `src/Seiton.Core/Linting/ImpostorCommitRule.cs`, `src/Seiton.Core/Linting/RefConfusionRule.cs`, `src/Seiton.Core/Linting/StaleActionRefsRule.cs`, `tests/Seiton.Core.Tests/*OnlineAudit*Tests.cs`
+
+- `known-vulnerable-actions`
+  - advisory dataset/API に基づく脆弱 version/sha 検出
+- `impostor-commit`
+  - pin SHA が参照 repo の妥当な commit 到達性を満たすか検証
+- `ref-confusion`
+  - 同名 tag/branch 競合や曖昧 ref の検出
+- `stale-action-refs`
+  - pin SHA と release/tag 系列の乖離検出
+
+設計方針:
+
+- `LintEngine.Check()` では I/O しない
+- `PinRemediationEngine` と同様に opt-in online audit entrypoint を用意
+- `AllowNetwork: false` 既定で pass-through
+
+**完了条件**: network on/off、skip/fail-open、キャッシュ、GHES フォールバックを含む E2E テストが green。
+
+### Step 14.3: RuleCatalog / 仕様 / fail-safe 同期
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `RuleCatalog.DefaultRuleFactories` へ新規 rule を priority 24-31 で追加
+- `deny-read-all` を fail-safe（non-disableable + min severity Error）候補として評価・必要なら適用
+- default rule catalog / fixability catalog / priority テストを同期
+
+**完了条件**: `RuleCatalog_DefaultRules_MatchDocumentedScope` と fail-safe 回帰が green。
+
+### Step 14.4: Auto-fix 方針整理（限定）
+
+**ファイル**: `Docs/Seiton_Linter_spec.md`, `tests/Seiton.Core.Tests/FixEngineTests.cs`
+
+- `deny-read-all`: deterministic fix を許可（`read-all` -> 明示マッピング雛形 or `{}`）
+- `job-timeout-minutes-required`: `LintConfig` に default timeout がある場合のみ partial fix
+- 他 6 ルールは no-fix を維持
+
+**完了条件**: fixability catalog と実装テストが一致し、unsafe 自動置換が存在しない。
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
@@ -1168,6 +1244,14 @@ P6E --> P6F
 | 21 | `secrets-whole-context-access` | **実装済み** | 独自 | 式 AST 連携 |
 | 22 | `reusable-workflow-secrets-inherit` | **実装済み** | 独自 | — |
 | 23 | `checkout-persist-credentials` | **実装済み** | ghalint | `PopularActions.g.cs` |
+| 24 | `deny-read-all` | **Phase 14（予定）** | ghalint | `permissions` / `deny-write-all` 実装済み |
+| 25 | `deny-inherit-secrets` | **Phase 14（予定）** | ghalint | `reusable-workflow` 実装済み |
+| 26 | `job-timeout-minutes-required` | **Phase 14（予定）** | ghalint | job/step traversal |
+| 27 | `github-app-token-inputs` | **Phase 14（予定）** | ghalint | `PopularActions.g.cs` / action metadata |
+| 28 | `known-vulnerable-actions` | **Phase 14（予定）** | zizmor | online advisory provider |
+| 29 | `impostor-commit` | **Phase 14（予定）** | zizmor | remote commit reachability check |
+| 30 | `ref-confusion` | **Phase 14（予定）** | zizmor | tag/branch namespace inspection |
+| 31 | `stale-action-refs` | **Phase 14（予定）** | zizmor | release/tag-to-sha freshness policy |
 
 ## チェックリスト（全 Phase 共通）
 

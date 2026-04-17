@@ -252,6 +252,24 @@ Scope notes:
 - `LintEngine` defaults to `RuleCatalog.CreateDefaultRules()`, applies priority sort, then deduplicates identical diagnostics.
 - Rule ID stability and compatibility policy follow `Seiton_Linter_spec.md` §4.4.
 
+### 3.5 Planned Parity Additions (Not Yet Implemented)
+
+The language-agnostic rule catalog includes the following additional rule IDs targeted by the next implementation wave in `Docs/linter_implementation_csharp_plan.md` Phase 14.
+
+- `known-vulnerable-actions`
+- `impostor-commit`
+- `ref-confusion`
+- `stale-action-refs`
+- `deny-read-all`
+- `deny-inherit-secrets`
+- `job-timeout-minutes-required`
+- `github-app-token-inputs`
+
+Status contract:
+
+- These rule IDs are normative at the shared-spec level.
+- C# runtime integration is planned and tracked in the implementation plan until `RuleCatalog` and tests are updated.
+
 ---
 
 ## 4. Exclusion and Suppression Mapping
