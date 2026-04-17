@@ -119,6 +119,7 @@ The default linter profile must include the following rule IDs.
 | `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). |
 | `run-env-context-direct-use` | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
 | `run-secrets-context-direct-use` | Error when `run:` script text directly references `${{ secrets.* }}`; secret values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
+| `run-inputs-context-direct-use` | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
 
 Rule set compatibility policy:
 
@@ -474,6 +475,7 @@ The following table classifies each default rule by fix feasibility.
 | `template-injection` | ✗ Not auto-fixable | Safe remediation patterns (env variable indirection, `toJSON()`) are context-dependent. |
 | `expr-undefined-var` | ✗ Not auto-fixable | Correct context variable cannot be inferred automatically. |
 | `run-secrets-context-direct-use` | ✗ Not auto-fixable | Safe env variable name/scope selection requires user intent and repository conventions. |
+| `run-inputs-context-direct-use` | ✗ Not auto-fixable | Safe env variable name/scope selection requires user intent and repository conventions. |
 
 ### 8.5 Fix Safety Policy
 

@@ -12,11 +12,11 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` の 20 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` の 21 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
 | Fix Engine | `DiagnosticFix` / `TextEdit`、3 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
-| 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `run-secrets-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
+| 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
 
@@ -44,6 +44,7 @@
 | `expr-undefined-var` | `ExprUndefinedVarRule` | `job/step` の `if` / `env` / `with` における使用不可コンテキスト参照（例: `steps` in job）を error | actionlint |
 | `run-env-context-direct-use` | `RunEnvContextDirectUseRule` | `run:` 内 `${{ env.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。shell 変数利用を促す | 独自 |
 | `run-secrets-context-direct-use` | `RunSecretsContextDirectUseRule` | `run:` 内 `${{ secrets.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
+| `run-inputs-context-direct-use` | `RunInputsContextDirectUseRule` | `run:` 内 `${{ inputs.* }}` / `${{ github.event.inputs.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
 
 ---
 
@@ -896,6 +897,42 @@
 
 ---
 
+## Phase 10: Inputs Handling Rule（run 内 inputs 直接参照検出）
+
+**目標**: `run:` 文字列内の `${{ inputs.* }}` と `${{ github.event.inputs.* }}` 直接参照を検出し、`env` 経由で受け渡したシェル変数（`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`）の利用を促す。
+
+> **背景**: `run-env-context-direct-use` と `run-secrets-context-direct-use` はそれぞれ `env.*` / `secrets.*` の直接展開を対象としているが、`workflow_call` / `workflow_dispatch` 起点の入力値（`inputs.*` / `github.event.inputs.*`）も同様に run スクリプト評価境界での取り扱いを明示する必要がある。
+
+### Step 10.1: `run-inputs-context-direct-use` ルールを追加
+
+**ファイル**: `src/Seiton.Core/Linting/RunInputsContextDirectUseRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 対応: 独自（inputs 取り扱い強化）
+- `VisitStep` で `ExecRun.Run` の埋め込み式 `${{ ... }}` を解析し、以下のルート参照を検出したら error を報告
+  - `inputs.*`
+  - `github.event.inputs.*`
+  - 上記の関数引数経由参照
+- 診断メッセージでは `env` に受けてから run 側はシェル変数を参照する運用を案内
+- ルールは no-fix（自動置換は行わない）
+
+**完了条件**: run 内で `${{ inputs.* }}` / `${{ github.event.inputs.* }}` を含むケースは error、`env:` で入力値を受けて run 側が `${NAME}` / `$NAME` / `$env:NAME` を使うケースは error なしの table-driven テストがパスする
+
+**実装メモ**: 完了。`RunInputsContextDirectUseRule` を追加し、`VisitStep` で `ExecRun.Run` の埋め込み式を `ExpressionParser` で解析するよう実装した。検出パスは 2 つ: (1) ルート `inputs` 識別子（`inputs.*` / `inputs['*']`）、(2) `IsGithubEventInputsChain` ヘルパーで `github.event.inputs` MemberAccess チェーンを判定して `github.event.inputs.*` を検出。関数引数経由も含めて再帰的にトラバースする。fix は付与せず no-fix を維持。`RuleInterfaceTests` に table-driven 回帰テスト（6 ケース）を追加し、`inputs.x` / `inputs['x']` / `github.event.inputs.x` / 関数経由の検出と env 経由 + shell 変数利用の許容を検証した。
+
+### Step 10.2: RuleCatalog と仕様同期を更新
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `RuleCatalog.DefaultRuleFactories` に `run-inputs-context-direct-use` を priority 20 で追加
+- `RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority 検証を更新
+- 3 仕様書の default rule catalog と共通 spec の fixability catalog を同期
+
+**完了条件**: `new LintEngine()` で `run-inputs-context-direct-use` が有効化され、仕様と実装テストの rule 一覧が一致する
+
+**実装メモ**: 完了。`RuleCatalog.DefaultRuleFactories` に `run-inputs-context-direct-use` を priority 20 で登録し、`RuleCatalog_DefaultRules_MatchDocumentedScope` のルール件数（21）および rule id / priority 検証を更新した。`AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` に `run-inputs-context-direct-use`（no-fix）ケースを追加し、fixability catalog 準拠も回帰保証した。
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
@@ -981,6 +1018,7 @@ P6E --> P6F
 | 17 | `run-env-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 18 | `runner-no-latest` | **実装済み** | 独自 | `runner-label` 実装済み |
 | 19 | `run-secrets-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
+| 20 | `run-inputs-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 
 ## チェックリスト（全 Phase 共通）
 

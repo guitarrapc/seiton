@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(20);
+        await Assert.That(rules.Length).IsEqualTo(21);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -303,6 +303,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[17].Id).IsEqualTo("run-env-context-direct-use");
         await Assert.That(rules[18].Id).IsEqualTo("runner-no-latest");
         await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
+        await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -324,6 +325,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(17);
         await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(18);
         await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
+        await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
     }
 
     [Test]
@@ -2019,6 +2021,84 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_RunInputsContextDirectUseRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-run-uses-shell-variable-only",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        TARGET: ${{ inputs.target }}
+                    steps:
+                        - run: echo "$TARGET"
+            """,
+            []),
+            new RuleCase(
+            "ok-run-uses-non-inputs-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.ref_name }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-run-uses-inputs-dot-access",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ inputs.target }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-inputs-bracket-access",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ inputs['target'] }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-github-event-inputs-dot-access",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.inputs.target }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-inputs-in-function",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ format('{0}', inputs.target) }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+        };
+
+        await AssertRuleCases(new RunInputsContextDirectUseRule(), "run-inputs-context-direct-use", cases);
+    }
+
+    [Test]
     public async Task LintEngine_JobPermissionsRequired_Fix_InsertsPermissionsAfterRunsOn()
     {
         var yaml = """
@@ -2429,6 +2509,18 @@ public sealed class RuleInterfaceTests
                         runs-on: ubuntu-latest
                         steps:
                             - run: echo "${{ secrets.MY_TOKEN }}"
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "run-inputs-context-direct-use",
+                new RunInputsContextDirectUseRule(),
+                """
+                on: workflow_dispatch
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "${{ inputs.target }}"
                 """,
                 ExpectsFix: false),
         };
