@@ -32,6 +32,7 @@ internal static class RuleCatalog
         ("expr-undefined-var", 16, static () => new ExprUndefinedVarRule()),
         ("run-env-context-direct-use", 17, static () => new RunEnvContextDirectUseRule()),
         ("runner-no-latest", 18, static () => new RunnerNoLatestRule()),
+        ("run-secrets-context-direct-use", 19, static () => new RunSecretsContextDirectUseRule()),
     ];
 
     static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();

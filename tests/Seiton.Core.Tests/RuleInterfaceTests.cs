@@ -282,7 +282,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(19);
+        await Assert.That(rules.Length).IsEqualTo(20);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -302,6 +302,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[16].Id).IsEqualTo("expr-undefined-var");
         await Assert.That(rules[17].Id).IsEqualTo("run-env-context-direct-use");
         await Assert.That(rules[18].Id).IsEqualTo("runner-no-latest");
+        await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -322,6 +323,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(16);
         await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(17);
         await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(18);
+        await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
     }
 
     [Test]
@@ -1950,6 +1952,73 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_RunSecretsContextDirectUseRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-run-uses-shell-variable-only",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        TOKEN: ${{ secrets.MY_TOKEN }}
+                    steps:
+                        - run: echo "$TOKEN"
+            """,
+            []),
+            new RuleCase(
+            "ok-run-uses-non-secrets-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.ref_name }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-run-uses-secrets-dot-access",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ secrets.MY_TOKEN }}"
+            """,
+            ["must not reference", "secrets.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-secrets-bracket-access",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ secrets['MY_TOKEN'] }}"
+            """,
+            ["must not reference", "secrets.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-secrets-in-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ format('{0}', secrets.MY_TOKEN) }}"
+            """,
+            ["must not reference", "secrets.*", "shell variables"]),
+        };
+
+        await AssertRuleCases(new RunSecretsContextDirectUseRule(), "run-secrets-context-direct-use", cases);
+    }
+
+    [Test]
     public async Task LintEngine_JobPermissionsRequired_Fix_InsertsPermissionsAfterRunsOn()
     {
         var yaml = """
@@ -2350,6 +2419,18 @@ public sealed class RuleInterfaceTests
                             - run: echo "${{ env.VERSION }}"
                 """,
                 ExpectsFix: true),
+            new FixabilityCase(
+                "run-secrets-context-direct-use",
+                new RunSecretsContextDirectUseRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "${{ secrets.MY_TOKEN }}"
+                """,
+                ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)

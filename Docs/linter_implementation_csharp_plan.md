@@ -12,11 +12,11 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` の 19 ルール |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` の 20 ルール |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
 | Fix Engine | `DiagnosticFix` / `TextEdit`、3 ルールの fix 生成、`FixEngine.Apply(...)`、`ApplyAndRelint(...)` による再検証ヘルパーを実装済み。仕様 §9 の formatting preservation MUST 項目（タブ導入制御・空白 churn 制御・曖昧時 no-fix）の網羅テストは追加余地あり |
-| 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
+| 式ベースルール | `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `run-secrets-context-direct-use` を実装済み。式 AST を linter ルールで活用開始 |
 
 ---
 
@@ -43,6 +43,7 @@
 | `template-injection` | `TemplateInjectionRule` | `run:` / `step.env` の式に `github.event` 由来データを直接展開している場合に error | zizmor |
 | `expr-undefined-var` | `ExprUndefinedVarRule` | `job/step` の `if` / `env` / `with` における使用不可コンテキスト参照（例: `steps` in job）を error | actionlint |
 | `run-env-context-direct-use` | `RunEnvContextDirectUseRule` | `run:` 内 `${{ env.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。shell 変数利用を促す | 独自 |
+| `run-secrets-context-direct-use` | `RunSecretsContextDirectUseRule` | `run:` 内 `${{ secrets.* }}`（dot/bracket/function 経由を含む）の直接展開を検出して error。`env` 経由 + shell 変数利用を促す | 独自 |
 
 ---
 
@@ -859,6 +860,42 @@
 
 ---
 
+## Phase 9: Secret Handling Rule（run 内 secrets 直接参照検出）
+
+**目標**: `run:` 文字列内の `${{ secrets.* }}` 直接参照を検出し、`env` 経由で受け渡したシェル変数（`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`）の利用を促す。
+
+> **背景**: `run-env-context-direct-use` は `env.*` の直接展開を対象としているが、`secrets.*` の直接展開も同様に run スクリプト評価境界での取り扱いを明示する必要がある。
+
+### Step 9.1: `run-secrets-context-direct-use` ルールを追加
+
+**ファイル**: `src/Seiton.Core/Linting/RunSecretsContextDirectUseRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- 対応: 独自（secret 取り扱い強化）
+- `VisitStep` で `ExecRun.Run` の埋め込み式 `${{ ... }}` を解析し、`secrets` ルート参照を検出したら error を報告
+  - 例: `${{ secrets.MY_TOKEN }}`
+  - 例: `${{ secrets['MY_TOKEN'] }}`
+  - 例: 関数引数経由での `secrets.*` 参照
+- 診断メッセージでは `env` に受けてから run 側はシェル変数を参照する運用を案内
+- ルールは no-fix（自動置換は行わない）
+
+**完了条件**: run 内で `${{ secrets.* }}` を含むケースは error、`env:` で secrets を受けて run 側が `${TOKEN}` / `$TOKEN` / `$env:TOKEN` を使うケースは error なしの table-driven テストがパスする
+
+**実装メモ**: 完了。`RunSecretsContextDirectUseRule` を追加し、`VisitStep` で `ExecRun.Run` の埋め込み式 `${{ ... }}` を `ExpressionParser` で解析、AST 走査で `secrets` ルート参照（dot / bracket / function 引数経由）を検出した場合に error を報告するよう実装した。fix は付与せず no-fix を維持。`RuleInterfaceTests` に table-driven 回帰テスト（5 ケース）を追加し、`run` 内 direct 参照の検出と `env` 経由 + shell 変数利用の許容を検証した。
+
+### Step 9.2: RuleCatalog と仕様同期を更新
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/Seiton_Linter_go_spec.md`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `RuleCatalog.DefaultRuleFactories` に `run-secrets-context-direct-use` を priority 19 で追加
+- `RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority 検証を更新
+- 3 仕様書の default rule catalog と共通 spec の fixability catalog を同期
+
+**完了条件**: `new LintEngine()` で `run-secrets-context-direct-use` が有効化され、仕様と実装テストの rule 一覧が一致する
+
+**実装メモ**: 完了。`RuleCatalog.DefaultRuleFactories` に `run-secrets-context-direct-use` を priority 19 で登録し、`RuleCatalog_DefaultRules_MatchDocumentedScope` のルール件数（20）および rule id / priority 検証を更新した。`AutoFixCatalog_OnlyThreeRulesAttachFix_TableDriven` に `run-secrets-context-direct-use`（no-fix）ケースを追加し、fixability catalog 準拠も回帰保証した。
+
+---
+
 ## ルール実装ロードマップ
 
 ```mermaid
@@ -943,6 +980,7 @@ P6E --> P6F
 | 16 | `expr-undefined-var` | **実装済み** | actionlint | 式 AST 連携 |
 | 17 | `run-env-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 | 18 | `runner-no-latest` | **実装済み** | 独自 | `runner-label` 実装済み |
+| 19 | `run-secrets-context-direct-use` | **実装済み** | 独自 | 式 AST 連携 |
 
 ## チェックリスト（全 Phase 共通）
 
