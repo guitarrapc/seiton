@@ -470,6 +470,11 @@ public sealed record GitHubActionsResolutionConfig
     public bool GhesFallback { get; init; } = false;
     public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
     public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
+    /// <summary>
+    /// Minimum age in days a tag must have before it is eligible for SHA pinning.
+    /// 0 disables the age constraint. Default: 14.
+    /// </summary>
+    public int MinAgeDays { get; init; } = 14;
 }
 
 public sealed record ImageResolutionConfig

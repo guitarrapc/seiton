@@ -640,6 +640,7 @@ pin_resolution:
     exclude_branches:
       - main
       - master
+    min_age_days: 14               # skip pinning tags created fewer than N days ago; 0 = no constraint
   images:
     exclude_images:
       - scratch
@@ -672,14 +673,28 @@ List of name/ref patterns (regex) to skip during Actions SHA resolution. Equival
 
 Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
-#### 12.3.6 `images.exclude_images` and `images.exclude_tags`
+#### 12.3.5 `github_actions.exclude_branches`
+
+Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
+
+#### 12.3.6 `github_actions.min_age_days`
+
+Minimum age in days a tag must have before it is considered eligible for SHA pinning. Default: `14`.
+
+Rationale: a tag that was pushed very recently may be subject to a supply-chain compromise or rollback and should not be immediately trusted for pinning. Requiring a minimum age gives the community time to detect anomalies before a tool pins to a potentially malicious SHA.
+
+When `min_age_days: 0`, the age constraint is disabled entirely and all tags are eligible regardless of creation time.
+
+Age is computed from the later of the tag creation date (`tagger.date` for annotated tags; `commit.committer.date` for lightweight tags) and the current UTC time at resolution time.
+
+#### 12.3.8 `images.exclude_images` and `images.exclude_tags`
 
 Glob patterns for images and tags to skip during digest resolution.
 
 - `scratch` is always excluded regardless of configuration (enforced by resolver, matching frizbee's `MergeUserConfig` safety invariant).
 - `latest` is excluded by default (matches frizbee's default `ExcludeTags`). Rationale: pinning `latest` is semantically vacuous — it will drift immediately.
 
-#### 12.3.7 `fail_open`
+#### 12.3.9 `fail_open`
 
 When `true` (the default), resolution failures (network error, auth failure, timeout) leave the diagnostic without a fix rather than causing the remediation call to fail. Callers may inspect which diagnostics received fixes and which did not. When `false`, any resolution failure causes the remediation call to return an error.
 

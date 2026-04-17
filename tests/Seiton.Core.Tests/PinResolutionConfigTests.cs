@@ -26,6 +26,7 @@ public sealed class PinResolutionConfigTests
         await Assert.That(config.GhesFallback).IsEqualTo(false);
         await Assert.That(config.IgnoreActions).IsEmpty();
         await Assert.That(config.ExcludeBranches).IsEquivalentTo(["main", "master"]);
+        await Assert.That(config.MinAgeDays).IsEqualTo(14);
     }
 
     [Test]

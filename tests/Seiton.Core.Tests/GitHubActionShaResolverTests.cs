@@ -117,6 +117,147 @@ public sealed class GitHubActionShaResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_ReturnsNull_WhenTagIsTooNew_ForLightweightTag()
+    {
+        var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/git/ref/tags/v4",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "0123456789abcdef0123456789abcdef01234567"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/commits/0123456789abcdef0123456789abcdef01234567",
+            $$"""
+            {
+              "sha": "0123456789abcdef0123456789abcdef01234567",
+              "commit": {
+                "committer": {
+                  "date": "{{recentDate}}"
+                }
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+
+        await Assert.That(sha).IsNull();
+        await Assert.That(tagComment).IsNull();
+    }
+
+    [Test]
+    public async Task ResolveAsync_ReturnsNull_WhenTagIsTooNew_ForAnnotatedTag()
+    {
+        var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/actions/cache/git/ref/tags/v3.3.1",
+            """
+            {
+              "object": {
+                "type": "tag",
+                "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/cache/git/tags/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            $$"""
+            {
+              "tagger": {
+                "date": "{{recentDate}}"
+              },
+              "object": {
+                "type": "commit",
+                "sha": "fedcba9876543210fedcba9876543210fedcba98"
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
+
+        await Assert.That(sha).IsNull();
+        await Assert.That(tagComment).IsNull();
+    }
+
+    [Test]
+    public async Task ResolveAsync_ReturnsSha_WhenTagIsOldEnough()
+    {
+        var oldDate = DateTimeOffset.UtcNow.AddDays(-30).ToString("o");
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/git/ref/tags/v4",
+            """
+            {
+              "object": {
+                "type": "commit",
+                "sha": "0123456789abcdef0123456789abcdef01234567"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/commits/0123456789abcdef0123456789abcdef01234567",
+            $$"""
+            {
+              "sha": "0123456789abcdef0123456789abcdef01234567",
+              "commit": {
+                "committer": {
+                  "date": "{{oldDate}}"
+                }
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+
+        await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
+        await Assert.That(tagComment).IsEqualTo("v4");
+    }
+
+    [Test]
+    public async Task ResolveAsync_ReturnsSha_WhenMinAgeDaysIsZero_DisablesAgeCheck()
+    {
+        var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/git/ref/tags/v4",
+            """
+            {
+              "object": {
+                "type": "commit",
+                "sha": "0123456789abcdef0123456789abcdef01234567"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/actions/checkout/commits/0123456789abcdef0123456789abcdef01234567",
+            $$"""
+            {
+              "sha": "0123456789abcdef0123456789abcdef01234567",
+              "commit": {
+                "committer": {
+                  "date": "{{recentDate}}"
+                }
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
+        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+
+        await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
+        await Assert.That(tagComment).IsEqualTo("v4");
+    }
+
+    [Test]
     public async Task ResolveAsync_CachesSuccessfulResolution()
     {
         var handler = new StubHttpMessageHandler();

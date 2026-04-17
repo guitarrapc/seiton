@@ -458,6 +458,7 @@ type GitHubActionsResolutionConfig struct {
     GHESFallback     bool
     IgnoreActions    []IgnoreActionEntry
     ExcludeBranches  []string             // default: ["main", "master"]
+    MinAgeDays       int                  // default: 14; 0 = no constraint
 }
 
 type ImageResolutionConfig struct {

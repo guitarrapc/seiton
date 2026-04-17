@@ -34,9 +34,19 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         }
 
         var token = ResolveToken();
-        var sha = await ResolveShaWithFallbackAsync(owner, repo, refStr, token, cancellationToken);
-        _successCache.TryAdd(cacheKey, sha);
-        return (sha, refStr);
+        var result = await ResolveShaWithFallbackAsync(owner, repo, refStr, token, cancellationToken);
+
+        if (_config.MinAgeDays > 0 && result.TagDate.HasValue)
+        {
+            var age = DateTimeOffset.UtcNow - result.TagDate.Value;
+            if (age.TotalDays < _config.MinAgeDays)
+            {
+                return (null, null);
+            }
+        }
+
+        _successCache.TryAdd(cacheKey, result.Sha!);
+        return (result.Sha, refStr);
     }
 
     bool ShouldSkip(string owner, string repo, string refStr)
@@ -91,7 +101,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         return string.Empty;
     }
 
-    async Task<string> ResolveShaWithFallbackAsync(
+    async Task<ResolveAttemptResult> ResolveShaWithFallbackAsync(
         string owner,
         string repo,
         string refStr,
@@ -104,7 +114,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
             var ghesResult = await TryResolveShaAsync(ghesBaseUri, owner, repo, refStr, token, cancellationToken);
             if (ghesResult.Success)
             {
-                return ghesResult.Sha!;
+                return ghesResult;
             }
 
             if (!_config.GhesFallback || ghesResult.StatusCode != HttpStatusCode.NotFound)
@@ -116,11 +126,12 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         var publicResult = await TryResolveShaAsync(PublicApiBaseUri, owner, repo, refStr, token, cancellationToken);
         if (publicResult.Success)
         {
-            return publicResult.Sha!;
+            return publicResult;
         }
 
         throw CreateResolutionException(owner, repo, refStr, publicResult.StatusCode, PublicApiBaseUri);
     }
+
 
     async Task<ResolveAttemptResult> TryResolveShaAsync(
         Uri apiBaseUri,
@@ -146,7 +157,8 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
 
         if (string.Equals(objectType, "commit", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(objectSha))
         {
-            return new ResolveAttemptResult(objectSha, HttpStatusCode.OK);
+            var commitDate = await TryGetCommitDateAsync(apiBaseUri, owner, repo, objectSha, token, cancellationToken);
+            return new ResolveAttemptResult(objectSha, HttpStatusCode.OK, commitDate);
         }
 
         if (!string.Equals(objectType, "tag", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(objectSha))
@@ -163,6 +175,13 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
 
         await using var tagStream = await tagResponse.Content.ReadAsStreamAsync(cancellationToken);
         using var tagDocument = await JsonDocument.ParseAsync(tagStream, cancellationToken: cancellationToken);
+        DateTimeOffset? taggerDate = null;
+        if (tagDocument.RootElement.TryGetProperty("tagger", out var taggerNode) &&
+            taggerNode.TryGetProperty("date", out var taggerDateNode) &&
+            taggerDateNode.TryGetDateTimeOffset(out var parsedTaggerDate))
+        {
+            taggerDate = parsedTaggerDate;
+        }
         var targetNode = tagDocument.RootElement.GetProperty("object");
         var targetType = targetNode.GetProperty("type").GetString();
         var targetSha = targetNode.GetProperty("sha").GetString();
@@ -171,7 +190,35 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
             return new ResolveAttemptResult(null, HttpStatusCode.UnprocessableEntity);
         }
 
-        return new ResolveAttemptResult(targetSha, HttpStatusCode.OK);
+        return new ResolveAttemptResult(targetSha, HttpStatusCode.OK, taggerDate);
+    }
+
+    async Task<DateTimeOffset?> TryGetCommitDateAsync(
+        Uri apiBaseUri,
+        string owner,
+        string repo,
+        string commitSha,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var commitPath = $"repos/{owner}/{repo}/commits/{commitSha}";
+        using var response = await SendGetAsync(apiBaseUri, commitPath, token, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (document.RootElement.TryGetProperty("commit", out var commitNode) &&
+            commitNode.TryGetProperty("committer", out var committerNode) &&
+            committerNode.TryGetProperty("date", out var dateNode) &&
+            dateNode.TryGetDateTimeOffset(out var date))
+        {
+            return date;
+        }
+
+        return null;
     }
 
     async Task<HttpResponseMessage> SendGetAsync(
@@ -250,7 +297,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
             $"Failed to resolve GitHub action SHA for '{owner}/{repo}@{refStr}' via '{apiBaseUri}' (status {(int)statusCode}).");
     }
 
-    readonly record struct ResolveAttemptResult(string? Sha, HttpStatusCode StatusCode)
+    readonly record struct ResolveAttemptResult(string? Sha, HttpStatusCode StatusCode, DateTimeOffset? TagDate = null)
     {
         public bool Success => !string.IsNullOrWhiteSpace(Sha);
     }

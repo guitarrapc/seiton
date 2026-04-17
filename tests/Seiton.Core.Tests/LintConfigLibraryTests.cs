@@ -175,6 +175,38 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_PinResolution_MapsMinAgeDays()
+    {
+        var yaml = """
+        pin_resolution:
+          allow_network: true
+          github_actions:
+            min_age_days: 30
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.PinResolution!.GitHubActions.MinAgeDays).IsEqualTo(30);
+    }
+
+    [Test]
+    public async Task Validate_PinResolution_MinAgeDaysZero_DisablesAgeCheck()
+    {
+        var yaml = """
+        pin_resolution:
+          allow_network: true
+          github_actions:
+            min_age_days: 0
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.PinResolution!.GitHubActions.MinAgeDays).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task Validate_PinResolution_AllowNetworkTrue_MatchesStepCompletionCondition()
     {
         var yaml = """

@@ -75,6 +75,8 @@ public static class LintConfigLibrary
             fail_open: true
             request_timeout_sec: 30
             max_concurrency: 4
+            github_actions:
+                min_age_days: 14
         """;
     }
 
@@ -495,6 +497,7 @@ public static class LintConfigLibrary
                 GhesFallback = pinResolution.GitHubActions.GhesFallback,
                 IgnoreActions = normalizedIgnoreActions,
                 ExcludeBranches = normalizedExcludeBranches,
+                MinAgeDays = pinResolution.GitHubActions.MinAgeDays,
             },
             Images = new ImageResolutionConfig
             {
@@ -843,6 +846,7 @@ internal sealed class LintConfigLineParser
         var ghesFallback = false;
         IReadOnlyList<IgnoreActionEntry>? ignoreActions = null;
         IReadOnlyList<string>? excludeBranches = null;
+        var minAgeDays = new GitHubActionsResolutionConfig().MinAgeDays;
 
         while (index < lines.Length)
         {
@@ -943,6 +947,21 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            if (key is "min_age_days" or "minAgeDays")
+            {
+                if (!TryParseInt(value, out var parsed))
+                {
+                    diagnostics.Add(CreateError("pin_resolution.github_actions.min_age_days must be an integer", lineNumber, 5, line.Trim().Length));
+                }
+                else
+                {
+                    minAgeDays = parsed;
+                }
+
+                index++;
+                continue;
+            }
+
             diagnostics.Add(CreateError($"unknown pin_resolution.github_actions key '{key}'", lineNumber, 5, key.Length));
             index++;
         }
@@ -954,6 +973,7 @@ internal sealed class LintConfigLineParser
             GhesFallback = ghesFallback,
             IgnoreActions = ignoreActions ?? [],
             ExcludeBranches = excludeBranches ?? new GitHubActionsResolutionConfig().ExcludeBranches,
+            MinAgeDays = minAgeDays,
         };
     }
 

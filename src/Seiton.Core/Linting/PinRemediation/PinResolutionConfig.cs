@@ -65,6 +65,14 @@ public sealed record GitHubActionsResolutionConfig
     /// Pinning a branch reference to its current SHA is semantically incorrect (§12.3.5).
     /// </summary>
     public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
+
+    /// <summary>
+    /// Minimum age in days a tag must have before it is eligible for SHA pinning.
+    /// Prevents pinning to tags that were pushed very recently and may still be subject to rollback or compromise.
+    /// 0 disables the age constraint entirely.
+    /// Default: 14.
+    /// </summary>
+    public int MinAgeDays { get; init; } = 14;
 }
 
 /// <summary>
