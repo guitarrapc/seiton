@@ -265,6 +265,23 @@ Implementation status:
 - Shared-spec catalog status is fixed for these IDs.
 - Go runtime mapping for these IDs is planned and should follow the same sequencing as documented in `Docs/linter_implementation_csharp_plan.md` Phase 14 until Go-specific implementation plan items are added.
 
+### 3.6 Planned High-Priority Candidate Rules
+
+The shared spec (§13) additionally defines the following high-priority candidate rule IDs.
+
+- `cache-poisoning`
+- `self-hosted-runner`
+- `unredacted-secrets`
+- `secrets-outside-env`
+- `workflow_secrets`
+- `job_secrets`
+- `action_shell_is_required`
+
+Status contract:
+
+- These IDs are specification-defined candidates and are not part of the current Go default rule catalog mapping.
+- Go runtime implementation planning for these IDs should be tracked explicitly when Go-side rule implementation work starts.
+
 ---
 
 ## 4. Exclusion and Suppression Mapping

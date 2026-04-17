@@ -1169,6 +1169,37 @@
 
 **実装メモ**: 完了。`deny-read-all` は `permissions: read-all` を検出した際に deterministic fix（`{}` への置換）を付与するよう更新した。`job-timeout-minutes-required` は partial auto-fix とし、`LintConfig.DefaultJobTimeoutMinutesForFix` が正の値で設定された場合に限り `timeout-minutes: <default>` を挿入する fix を付与する。未設定時は従来どおり diagnostic のみ（no-fix）を維持する。`RuleInterfaceTests` には `deny-read-all` fix の re-lint 消失回帰と、`job-timeout-minutes-required` の config あり/なし両ケースを追加した。`FixEngineTests` の fixable allow-list は Step 14.4 反映として `deny-read-all` / `job-timeout-minutes-required` を許可集合に含め、catalog と実装の整合を維持した。
 
+### Step 15.1: zizmor 高価値監査（残課題）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/*`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
+
+対象:
+- `cache-poisoning`
+- `self-hosted-runner`
+- `unredacted-secrets`
+- `secrets-outside-env`
+
+方針:
+- 高リスク（サプライチェーン侵害/secret 漏えい）を優先し、local で判定可能な部分をまず実装する。
+- 既存 rule との責務境界を明確化し、重複報告は canonical rule-id 側に寄せる。
+
+**完了条件**: 各 rule に対して正常系/異常系/誤検知回避ケースを含む回帰テストを追加し、`RuleCatalog` / 仕様 / ルール一覧が同期している。
+
+### Step 15.2: ghalint 高価値ポリシー（残課題）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/*`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
+
+対象:
+- `workflow_secrets`
+- `job_secrets`
+- `action_shell_is_required`
+
+方針:
+- `workflow_secrets` / `job_secrets` は既存 `run-secrets-context-direct-use` / `secrets-whole-context-access` と分離し、env-scope secret 設定制約として実装する。
+- `action_shell_is_required` は `shell-name` との整合を取りつつ、実行再現性を強化する。
+
+**完了条件**: ghalint 互換の許容/禁止/例外ケースをテストで固定化し、既存 rule との誤重複がない。
+
 ---
 
 ## ルール実装ロードマップ
@@ -1267,6 +1298,13 @@ P6E --> P6F
 | 28 | `impostor-commit` | **実装済み** | zizmor | remote commit reachability check |
 | 29 | `ref-confusion` | **実装済み** | zizmor | tag/branch namespace inspection |
 | 30 | `stale-action-refs` | **実装済み** | zizmor | release/tag-to-sha freshness policy |
+| 31 | `cache-poisoning` | 未実装 | zizmor | cache key 信頼境界と復元キー悪用検出 |
+| 32 | `self-hosted-runner` | 未実装 | zizmor | self-hosted 利用時のガード不足検出 |
+| 33 | `unredacted-secrets` | 未実装 | zizmor | ログ出力における secret 露出検出 |
+| 34 | `secrets-outside-env` | 未実装 | zizmor | secret 参照シンク制約 |
+| 35 | `workflow_secrets` | 未実装 | ghalint | workflow-level env での secret 設定制約 |
+| 36 | `job_secrets` | 未実装 | ghalint | job-level env での secret 設定制約 |
+| 37 | `action_shell_is_required` | 未実装 | ghalint | run step の shell 明示必須化 |
 
 ## チェックリスト（全 Phase 共通）
 

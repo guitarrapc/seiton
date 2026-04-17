@@ -270,6 +270,23 @@ Status contract:
 - These rule IDs are normative at the shared-spec level.
 - C# runtime maps all eight IDs in `RuleCatalog`; `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` are default local rules, while the four network-assisted rules are emitted by `OnlineAuditEngine`.
 
+### 3.6 Planned High-Priority Candidate Rules
+
+The shared spec (§13) additionally defines the following high-priority candidate rule IDs.
+
+- `cache-poisoning`
+- `self-hosted-runner`
+- `unredacted-secrets`
+- `secrets-outside-env`
+- `workflow_secrets`
+- `job_secrets`
+- `action_shell_is_required`
+
+Status contract:
+
+- These IDs are specification-defined candidates and are not part of the current C# default local rule pack.
+- C# runtime implementation and default-catalog promotion must be synchronized with `Docs/linter_implementation_csharp_plan.md` and shared-spec catalog updates.
+
 ---
 
 ## 4. Exclusion and Suppression Mapping

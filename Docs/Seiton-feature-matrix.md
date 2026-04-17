@@ -55,31 +55,53 @@
 
 ### P0（最優先）
 
-1. 残存 zizmor high-value audits
-- 例: unredacted-secrets, cache-poisoning
-- 理由: online_audit 実装後の残差分を埋め、監査網羅性を引き上げる
+1. 残存 zizmor high-value audits（具体監査ID優先）
+- `cache-poisoning`
+- `self-hosted-runner`
+- `unredacted-secrets`
+- `secrets-outside-env`
+- 理由: いずれもサプライチェーン侵害・機密漏えいの直結リスクが高く、online_audit 実装後の残差分として優先吸収する価値が大きい
 
 2. ghalint未吸収の高価値ルール
-- 例: workflow_secrets, job_secrets, action_shell_is_required
-- 理由: 実運用での事故予防効果が高い
+- `workflow_secrets`
+- `job_secrets`
+- `action_shell_is_required`
+- 理由: secrets の露出面積削減と実行再現性の改善に直結し、事故予防効果が高い
+
+3. pin対象のファイル範囲拡張（P1→P0へ昇格）
+- Dockerfile（`FROM`）
+- docker-compose（`image`）
+- 任意YAML（`image`）
+- 理由: `.references/dockerfile-pin` / `.references/frizbee` で実用機能が成熟しており、Actions外の供給網ギャップを早期に埋める効果が大きい
 
 ### P1（次点）
 
-1. pin対象のファイル範囲拡張
-- Dockerfile（FROM）
-- docker-compose（image）
-- 任意YAML（image）
-- 理由: dockerfile-pin/frizbee の適用領域を吸収
-
-2. pin運用機能の補強
-- comment整合チェックモード
+1. pin運用機能の補強
+- comment整合チェックモード（version annotation整合）
 - PRレビュー向け出力
-- 理由: pinact の運用導線を吸収
+- 理由: `.references/pinact` の verify/review 導線を吸収し、実運用の継続改善を回しやすくする
+
+2. actionlint未吸収の高頻度ルール
+- `matrix`
+- `env-var`
+- `deprecated-commands`
+- `if-cond`
+- 理由: CI失敗予防と保守性向上に寄与し、ASTのみで段階導入しやすい
 
 ### P2（中長期）
 
 1. 監査プロファイル（regular/pedantic/auditor相当）
 - 理由: 導入時ノイズ制御、組織内ロール別運用をしやすくする
+
+2. 高度監査ポリシーの拡張
+- `forbidden-uses`（allow/deny 許可アクション制御）
+- `unsound-condition`
+- `unsound-contains`
+- 理由: 組織統制と高度検知には有効だが、初期導入コストが高いため中長期で段階導入する
+
+3. 実験機能系ポリシーの取り込み
+- `validate-input` 相当（ghalint experimental）
+- 理由: 効果はあるが安定運用観点で優先度は低め
 
 ---
 
@@ -88,7 +110,7 @@
 - Seiton は既に「Lint + 安全なFix + Network-assisted pin remediation + opt-in online audit + 追従更新」の統合基盤を持ち、競合の中核機能の多くを満たしている。
 - 競合を完全に上回るには、次の2点が鍵。
   - 残存 zizmor/ghalint 監査差分の吸収（P0）
-  - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P1）
+  - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P0）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
 

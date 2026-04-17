@@ -792,10 +792,6 @@ List of name/ref patterns (regex) to skip during Actions SHA resolution. Equival
 
 Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
-#### 12.3.5 `github_actions.exclude_branches`
-
-Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
-
 #### 12.3.6 `github_actions.min_age_days`
 
 Minimum age in days a tag must have before it is considered eligible for SHA pinning. Default: `14`.
@@ -885,3 +881,40 @@ When remediation is run:
 - Callers can count how many `unpinned-uses`/`unpinned-image` diagnostics received fixes vs. were left without fix (skipped or failed).
 - Skip reason (excluded by config) and failure reason (network error) must be distinguishable in the returned result.
 - Resolver implementations should log resolution attempts at debug level and failures at warning level.
+
+---
+
+## 13. Planned High-Priority Rule Specifications
+
+This section specifies high-priority candidate rules discovered by competitor re-audit.
+
+Status and scope:
+
+- These rule IDs are specification-defined candidates and are not part of the current default rule catalog in §4.4.
+- Runtime behavior for these rule IDs becomes active only when corresponding implementations are added to each runtime and promoted into the default catalog.
+
+### 13.1 Candidate Rule Catalog
+
+| Rule ID | Required Behavior Summary |
+|---|---|
+| `cache-poisoning` | Detect cache usage patterns that allow untrusted input to influence cache keys, restore keys, or cache read/write boundaries in ways that can poison subsequent trusted jobs. |
+| `self-hosted-runner` | Detect unsafe execution patterns on self-hosted runners (for example untrusted trigger paths without sufficient isolation/guarding controls). |
+| `unredacted-secrets` | Detect command or logging patterns where secret values may be emitted without redaction safeguards. |
+| `secrets-outside-env` | Detect secret context references in unsafe sinks outside approved environment-variable handoff patterns. |
+| `workflow_secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` under policy-defined conditions. |
+| `job_secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` under policy-defined conditions. |
+| `action_shell_is_required` | Error when an action definition includes `run` steps without explicit `shell` declaration where shell declaration is required by policy. |
+
+### 13.2 Candidate Rule Guidance (Operational)
+
+This subsection follows the same operator-facing style as §4.5 and is non-normative guidance for rollout.
+
+| Rule ID | Rule Overview | Preferred Remediation | Auto-Fix | Residual Risk and Recommended Response |
+|---|---|---|---|---|
+| `cache-poisoning` | Prevents cache trust-boundary violations that let untrusted contexts influence artifacts consumed by trusted contexts. | Partition cache scope by trust boundary, harden keys, and avoid broad restore-key fallback in privileged jobs. | ✗ | Cache isolation mistakes can survive syntax fixes; validate with threat-model-driven job separation tests. |
+| `self-hosted-runner` | Flags risky use of self-hosted runners in workflows that process untrusted inputs. | Add strict trigger guards, isolate runner groups, and split trusted/untrusted execution paths. | ✗ | Runner hardening must include host lifecycle, credential isolation, and network egress controls. |
+| `unredacted-secrets` | Detects output paths where secrets may appear in logs without masking protections. | Route secrets through approved secret channels, avoid direct echo/print, and apply explicit masking controls. | ✗ | Redaction is not perfect against transformed values; avoid exposing secret-derived material in logs entirely. |
+| `secrets-outside-env` | Enforces secret handling via controlled handoff patterns instead of direct expression injection into unsafe sinks. | Move secret use to explicit `env` mapping and consume via shell-native variables in constrained scope. | ✗ | Even with `env` handoff, secrets can leak via arguments/process lists; prefer stdin/file-based passing where possible. |
+| `workflow_secrets` | Restricts workflow-wide env-level secret/token assignment to prevent broad propagation. | Remove workflow-level secret assignment and map only required secrets at narrower scope. | ✗ | Scope reduction can break implicit dependencies; audit all jobs for required secret contract. |
+| `job_secrets` | Restricts job-wide env-level secret/token assignment to prevent unnecessary intra-job propagation. | Move secret mapping from job-level env to step-level minimal scope where required. | ✗ | Step-level mapping still requires sink review; combine with `run-secrets-context-direct-use` controls. |
+| `action_shell_is_required` | Requires explicit shell on action `run` steps for deterministic execution semantics. | Declare `shell` explicitly per `run` step and align script syntax with declared shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across target runners and shell versions. |
