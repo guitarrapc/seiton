@@ -569,4 +569,32 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Diagnostics.Count(x => x.Message.Contains("does not accept", StringComparison.Ordinal))).IsEqualTo(2);
     }
+
+    [Test]
+    public async Task Validate_RuleSpecificConfig_ProjectsTypedSpecificPayload()
+    {
+        var yaml = """
+        rules:
+          dangerous-triggers:
+            events:
+              extend:
+                - issue_comment
+          forbidden-uses:
+            allow:
+              - actions/*
+            deny:
+              - bad-org/*
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+
+        var dangerous = result.Config!.Rules!["dangerous-triggers"];
+        await Assert.That(dangerous.Specific).IsTypeOf<DangerousTriggersSpecificConfig>();
+
+        var forbidden = result.Config.Rules["forbidden-uses"];
+        await Assert.That(forbidden.Specific).IsTypeOf<ForbiddenUsesSpecificConfig>();
+    }
 }

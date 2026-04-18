@@ -222,6 +222,7 @@ public static class LintConfigLibrary
 
             config = ValidateRuleSpecificKeys(config, resolvedRuleId, filePath, diagnostics);
             config = NormalizeRuleExtendLists(config, filePath, diagnostics);
+            config = RuleSpecificConfigProjector.Apply(resolvedRuleId, config);
 
             normalized[resolvedRuleId] = config;
         }

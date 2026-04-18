@@ -17,6 +17,15 @@ public sealed class ForbiddenUsesRule : RuleBase
     {
         base.SetConfig(config);
         var ruleConfig = config.GetRuleConfig(Id);
+        if (ruleConfig?.Specific is ForbiddenUsesSpecificConfig specific)
+        {
+            allowPatterns = specific.Allow;
+            denyPatterns = specific.Deny is { Count: > 0 }
+                ? specific.Deny
+                : DefaultDenyPatterns;
+            return;
+        }
+
         allowPatterns = ruleConfig?.Allow;
         denyPatterns = ruleConfig?.Deny is { Count: > 0 }
             ? ruleConfig.Deny

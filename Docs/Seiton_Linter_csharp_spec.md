@@ -355,6 +355,50 @@ Mapping requirements:
 - Extension never removes built-in defaults.
 - Unknown rule-specific keys for a given rule ID are configuration errors (validated via `RuleCatalog` field mapping).
 
+### 4.1.1 Security Analysis: Current Model vs Discriminated Union
+
+Current model (`RuleConfig` with nullable per-rule fields + runtime allow-list validation) is simple and fast, but has the following security-relevant weaknesses:
+
+- It permits representationally invalid intermediate states in memory (for example, `runner-label` carrying `events`).
+- Correctness depends on every call path invoking validation/normalization before rule execution.
+- Future code paths that construct `LintConfig` directly can accidentally bypass parser-level key rejection.
+
+Discriminated-union style projection reduces these risks by making post-normalization state rule-shaped:
+
+- Each rule receives a typed payload (`RuleSpecificConfig` derived type) or `None`.
+- Mismatch between rule ID and customization shape is rejected during projection.
+- Rule implementations can pattern-match on typed payloads instead of reading unrelated nullable fields.
+
+Adopted direction in C# runtime:
+
+- Keep the shared envelope (`Enabled`, `Severity`) in `RuleConfig`.
+- Add `RuleConfig.Specific: RuleSpecificConfig` as the authoritative typed payload after normalization.
+- Preserve legacy nullable fields temporarily for compatibility and migration safety.
+
+### 4.1.2 Implemented Typed Payload Contract
+
+The C# runtime defines a discriminated-union style payload hierarchy:
+
+- `DangerousTriggersSpecificConfig`
+- `RunnerLabelSpecificConfig`
+- `CredentialsSpecificConfig`
+- `UntrustedTriggersSpecificConfig`
+- `UnredactedSecretsSpecificConfig`
+- `ExprUndefinedVarSpecificConfig`
+- `ForbiddenUsesSpecificConfig`
+- `RuleSpecificConfig.None`
+
+Projection contract:
+
+- `LintConfigLibrary.NormalizeRules` MUST set `RuleConfig.Specific` via projector after field validation and normalization.
+- `LintEngine.NormalizeRules` MUST perform the same projection for directly supplied in-memory configs.
+- Rule implementations SHOULD consume `RuleConfig.Specific` first; legacy field fallback is allowed during migration.
+
+Security outcome:
+
+- The normalized runtime config consumed by rules is now rule-ID aligned and strongly typed.
+- Attack surface from malformed cross-rule customization payloads is reduced to parser diagnostics.
+
 ### 4.2 Auto-Fix Mapping
 
 Shared contract reference:

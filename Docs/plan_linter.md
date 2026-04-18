@@ -525,6 +525,14 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 3. `competitor-pinact-structure-details.md` の `pin_resolution` 参照を `fix.pinning` に更新
 4. README には config 例が存在しないため変更不要
 
+### Phase 7: 型安全ハードニング（Discriminated Union） ✅
+
+1. 脅威分析を実施し、`rules` 多様性に対する型安全要件を `Seiton_Linter_csharp_spec.md` に反映
+2. `RuleConfig.Specific`（`RuleSpecificConfig` DU payload）を追加
+3. `LintConfigLibrary` / `LintEngine` の両経路で `RuleSpecificConfigProjector` による投影を実装
+4. 主要ルールの `SetConfig()` を `Specific` の型パターンマッチ優先に移行
+5. DU投影を検証するテストを追加
+
 ---
 
 ## 7. 検証基準
@@ -532,7 +540,7 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 各フェーズ完了時に以下を確認する:
 
 - [x] `dotnet build` が通る
-- [x] `dotnet test` が全テスト pass（414 tests）
+- [x] `dotnet test` が全テスト pass（415 tests）
 - [x] 新形式の config で lint 実行が正常動作する
 - [x] 旧形式は `unknown top-level key` エラーとして処理される（後方互換は削除済み）
 - [x] config テンプレート生成が新形式を出力する
@@ -545,7 +553,11 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 
 `rules.<rule-id>` の値が `enabled` / `severity` の共通フィールドに加え、ルール固有フィールド（`events.extend`, `deny` 等）を持つ。YAML パーサーでルール ID ごとに許可されるフィールドを検証する必要がある。
 
-**対策:** ルール ID → 許可フィールドのマッピングテーブルを `RuleCatalog` に持たせ、バリデーション時に参照する。未知のフィールドは config エラーにする。
+**対策:**
+
+- ルール ID → 許可フィールドのマッピングテーブルを `RuleCatalog` に持たせ、バリデーション時に参照する。未知のフィールドは config エラーにする。
+- 正規化後に `RuleSpecificConfigProjector` で rule-id ごとの DU payload (`RuleConfig.Specific`) へ投影する。
+- ルール実装は `Specific` の型パターンマッチを優先し、cross-rule payload 混入リスクを低減する。
 
 ### 8.2 `network` セクションの粒度
 

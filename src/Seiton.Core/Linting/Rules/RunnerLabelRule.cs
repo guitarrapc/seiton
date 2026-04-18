@@ -14,7 +14,9 @@ public sealed class RunnerLabelRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalKnownHostedLabels = BuildNormalizedSet(config.GetRuleConfig(Id)?.KnownHostedLabels?.Extend);
+        additionalKnownHostedLabels = config.GetRuleConfig(Id)?.Specific is RunnerLabelSpecificConfig specific
+            ? BuildNormalizedSet(specific.KnownHostedLabels)
+            : BuildNormalizedSet(config.GetRuleConfig(Id)?.KnownHostedLabels?.Extend);
     }
 
     public override void VisitJobPre(Job job)

@@ -682,6 +682,7 @@ public sealed class LintEngine
                 }
 
                 config = NormalizeRuleExtendLists(config, filePath, diagnostics);
+                config = RuleSpecificConfigProjector.Apply(resolvedRuleId, config);
 
                 normalized[resolvedRuleId] = config;
                 continue;

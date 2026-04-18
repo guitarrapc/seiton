@@ -16,7 +16,9 @@ public sealed class UnredactedSecretsRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalOutputCommands = BuildNormalizedSet(config.GetRuleConfig(Id)?.OutputCommands?.Extend);
+        additionalOutputCommands = config.GetRuleConfig(Id)?.Specific is UnredactedSecretsSpecificConfig specific
+            ? BuildNormalizedSet(specific.OutputCommands)
+            : BuildNormalizedSet(config.GetRuleConfig(Id)?.OutputCommands?.Extend);
     }
 
     public override void VisitWorkflowPre(Workflow workflow)

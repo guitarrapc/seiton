@@ -15,7 +15,9 @@ public sealed class SelfHostedRunnerRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalUntrustedTriggers = BuildNormalizedSet(config.GetRuleConfig(Id)?.UntrustedTriggers?.Extend);
+        additionalUntrustedTriggers = config.GetRuleConfig(Id)?.Specific is UntrustedTriggersSpecificConfig specific
+            ? BuildNormalizedSet(specific.UntrustedTriggers)
+            : BuildNormalizedSet(config.GetRuleConfig(Id)?.UntrustedTriggers?.Extend);
     }
 
     public override void VisitWorkflowPre(Workflow workflow)

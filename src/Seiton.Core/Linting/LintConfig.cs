@@ -37,6 +37,10 @@ public sealed record RuleConfig
     public bool Enabled { get; init; } = true;
     public DiagnosticSeverity? Severity { get; init; }
 
+    // Discriminated-union style, typed rule-specific payload.
+    // This is the authoritative per-rule customization shape after normalization.
+    public RuleSpecificConfig Specific { get; init; } = RuleSpecificConfig.None;
+
     // rule-specific extend keys
     public ExtendableList? Events { get; init; }                   // dangerous-triggers
     public ExtendableList? KnownHostedLabels { get; init; }        // runner-label
@@ -51,6 +55,27 @@ public sealed record RuleConfig
 }
 
 public sealed record ExtendableList(IReadOnlyList<string> Extend);
+
+public abstract record RuleSpecificConfig
+{
+    sealed record NoneRuleSpecificConfig : RuleSpecificConfig;
+
+    public static RuleSpecificConfig None { get; } = new NoneRuleSpecificConfig();
+}
+
+public sealed record DangerousTriggersSpecificConfig(IReadOnlyList<string> Events) : RuleSpecificConfig;
+
+public sealed record RunnerLabelSpecificConfig(IReadOnlyList<string> KnownHostedLabels) : RuleSpecificConfig;
+
+public sealed record CredentialsSpecificConfig(IReadOnlyList<string> PublicRegistries) : RuleSpecificConfig;
+
+public sealed record UntrustedTriggersSpecificConfig(IReadOnlyList<string> UntrustedTriggers) : RuleSpecificConfig;
+
+public sealed record UnredactedSecretsSpecificConfig(IReadOnlyList<string> OutputCommands) : RuleSpecificConfig;
+
+public sealed record ExprUndefinedVarSpecificConfig(IReadOnlyList<string> AssumeEvents) : RuleSpecificConfig;
+
+public sealed record ForbiddenUsesSpecificConfig(IReadOnlyList<string>? Allow, IReadOnlyList<string>? Deny) : RuleSpecificConfig;
 
 public sealed record LintExclusion(
     string Files,
