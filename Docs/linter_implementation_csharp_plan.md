@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 42 ルール（default local 38 + online audit 4） |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `fake-ternary` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 43 ルール（default local 39 + online audit 4） |
 | Online audit | `OnlineAuditEngine` が opt-in の post-lint path として advisory / ref-confusion / impostor-commit / stale-pin 系の network-assisted 診断を生成。`LintEngine.Check()` の no-I/O 制約は維持 |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
@@ -1236,6 +1236,23 @@
 
 **実装メモ**: 完了。`MatrixRule` / `EnvVarRule` / `DeprecatedCommandsRule` / `IfCondRule` を追加し、`RuleCatalog` に priority 38-41 で登録した。`MatrixRule` は空軸、`include/exclude` の未知軸参照、過剰 fan-out（256 超）を warning。`EnvVarRule` は `workflow/job/step env` の key に portable 命名（`[A-Z_][A-Z0-9_]*`）を適用して warning。`DeprecatedCommandsRule` は `run` script から `::set-output` / `::save-state` / `::add-path` / `::set-env` を検出して置換先を案内。`IfCondRule` は `job.if` / `step.if` を式として解析し、構文エラーと constant bool 条件（常時 true/false）を warning として報告する。`RuleInterfaceTests` には 4 ルール分の table-driven 回帰、`RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority・canonical ID 期待値更新、`AutoFixCatalog_OnlySevenRulesAttachFix_TableDriven` への no-fix ケース追加を反映し、`dotnet run --project tests/Seiton.Core.Tests -- --treenode-filter "/*/*/RuleInterfaceTests/*"` および `dotnet test` が green を確認した。
 
+### Step 15.4: fake ternary 禁止ルール（ポリシー追加）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/FakeTernaryRule.cs`, `src/Seiton.Core/Linting/RuleCatalog.cs`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
+
+対象:
+- `fake-ternary`
+
+方針:
+- `cond && a || b` 形のいわゆる fake ternary を expression-bearing fields から検出して warning（段階導入）または error（最終方針）として報告する。
+- 初期スコープは `job.if` / `step.if` を最優先とし、必要に応じて `env` / `with` など他 sink に拡張する。
+- remediation は「case 式（またはそれに準じる明示分岐）」を必須方針とし、現時点では fake ternary を採用するべきシーンを認めない。
+- 既存 `if-cond` とは責務分離し、`if-cond` は式健全性（構文/constant）中心、`fake-ternary` は分岐記法ポリシー中心とする。
+
+**完了条件**: fake ternary の検出・非検出（誤検知回避）・case 式への誘導メッセージを含む table-driven 回帰が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
+
+**実装メモ**: 完了。`FakeTernaryRule` を追加し、`job.if` / `step.if` を式解析して `cond && a || b` 形（`||` の左辺が `&&`）を検出する。誤検知回避として true/false 分岐の両 arm が `bool` 推論できる通常の boolean 合成（例: `(a && success()) || failure()`）は除外し、非 bool arm を含む fake ternary を warning で報告して case 式（または明示分岐）への修正を案内する。`RuleCatalog` には priority 42 で `fake-ternary` を追加。`RuleInterfaceTests` には table-driven 回帰（正常/異常）と catalog 件数・priority・canonical ID 更新、auto-fix no-fix ケース追加を反映した。
+
 ---
 
 ## ルール実装ロードマップ
@@ -1345,6 +1362,7 @@ P6E --> P6F
 | 39 | `env-var` | **実装済み** | actionlint | env key 命名/互換性検証 |
 | 40 | `deprecated-commands` | **実装済み** | actionlint | 旧 workflow command 検出 |
 | 41 | `if-cond` | **実装済み** | actionlint | unsound/constant 条件検出 |
+| 42 | `fake-ternary` | **実装済み** | policy | `cond && a || b` の fake ternary を禁止し、case 式へ誘導 |
 
 ## チェックリスト（全 Phase 共通）
 

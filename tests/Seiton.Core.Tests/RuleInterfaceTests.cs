@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(38);
+        await Assert.That(rules.Length).IsEqualTo(39);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -322,6 +322,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[35].Id).IsEqualTo("env-var");
         await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
         await Assert.That(rules[37].Id).IsEqualTo("if-cond");
+        await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -361,6 +362,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(39);
         await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
         await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
+        await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
@@ -372,12 +374,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-039");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-040");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-040", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-041", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-041");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-042");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-042");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-043");
     }
 
     [Test]
@@ -2777,6 +2779,52 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_FakeTernaryRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-boolean-short-circuit",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ (github.event_name == 'push' && success()) || failure() }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-job-if-fake-ternary",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["avoid fake ternary pattern 'cond && a || b'", "case expression"]),
+            new RuleCase(
+            "ng-step-if-fake-ternary",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.deploy && 'yes' || 'no' }}
+                          run: echo ng
+            """,
+            ["avoid fake ternary pattern 'cond && a || b'", "explicit branching"]),
+        };
+
+        await AssertRuleCases(new FakeTernaryRule(), "fake-ternary", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -4003,6 +4051,19 @@ public sealed class RuleInterfaceTests
                             - run: echo ng
                 """,
                 ExpectsFix: false),
+                new FixabilityCase(
+                    "fake-ternary",
+                    new FakeTernaryRule(),
+                    """
+                    on: push
+                    jobs:
+                        build:
+                            if: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+                            runs-on: ubuntu-latest
+                            steps:
+                                - run: echo ng
+                    """,
+                    ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)

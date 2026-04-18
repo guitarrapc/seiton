@@ -52,6 +52,7 @@ internal static class RuleCatalog
         ("env-var", 39, static () => new EnvVarRule()),
         ("deprecated-commands", 40, static () => new DeprecatedCommandsRule()),
         ("if-cond", 41, static () => new IfCondRule()),
+        ("fake-ternary", 42, static () => new FakeTernaryRule()),
     ];
 
     static readonly (string Id, int Priority)[] AdditionalRuleMetadata =

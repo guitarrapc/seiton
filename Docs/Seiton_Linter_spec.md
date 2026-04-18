@@ -906,7 +906,8 @@ Status and scope:
 
 - This section includes both implemented and pending high-priority parity rules.
 - `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, and `secrets-outside-env` are already part of the default C# rule catalog in §4.4.
-- `matrix`, `env-var`, `deprecated-commands`, and `if-cond` are pending actionlint parity candidates and are not part of the current default catalog.
+- `matrix`, `env-var`, `deprecated-commands`, and `if-cond` are already part of the default C# rule catalog in §4.4.
+- `fake-ternary` is a pending policy candidate and is not part of the current default catalog.
 - This section remains as implementation guidance for parity across other runtimes and future refinements.
 
 ### 13.1 Candidate Rule Catalog
@@ -921,6 +922,7 @@ Status and scope:
 | `env-var` | Detect invalid environment variable declarations (naming and mapping quality) that reduce portability or cause runtime ambiguity across shells/runners. |
 | `deprecated-commands` | Detect deprecated workflow command usage in `run` scripts (for example `::set-output`, `::save-state`, `::add-path`, `::set-env`) and require environment-file based alternatives. |
 | `if-cond` | Detect malformed, constant, or unsound `if` conditions that indicate dead branches, always-true gates, or likely expression misuse. |
+| `fake-ternary` | Detect fake ternary idioms such as `cond && 'A' || 'B'` in expression-bearing fields (especially `if`) and prohibit their use in favor of explicit case-style branching. |
 
 ### 13.2 Candidate Rule Guidance (Operational)
 
@@ -936,3 +938,4 @@ This subsection follows the same operator-facing style as §4.5 and is non-norma
 | `env-var` | Validates environment variable declaration quality for cross-shell and cross-runner portability. | Use stable uppercase snake-case keys, avoid ambiguous/reserved names, and keep scope minimal (workflow/job/step). | ✗ | Naming correctness does not guarantee safe value handling; combine with secret handling and quoting rules. |
 | `deprecated-commands` | Prevents use of deprecated workflow commands that are blocked or unsafe on modern runners. | Replace command syntax with environment-file mechanisms (`GITHUB_OUTPUT`, `GITHUB_STATE`, `GITHUB_PATH`, `GITHUB_ENV`). | ✗ | Migration can still break downstream consumers; validate output/state/path behavior after conversion. |
 | `if-cond` | Detects unsound conditional expressions that are always true/false or syntactically misuse expression context. | Rewrite conditions with explicit boolean intent and scope-valid context references. | ✗ | Condition semantics can still drift with event payload shape; add table-driven condition tests for key events. |
+| `fake-ternary` | Detects fake ternary expression idioms (`cond && a || b`) that are prone to coercion hazards, readability loss, and branch intent drift. | Replace with explicit case-style branching and boolean-safe flow (for example split steps/jobs with direct `if` predicates or shell `case` in `run`). | ✗ | Expression rewrites can still change behavior at edge cases; keep before/after fixture tests for representative event payloads. |
