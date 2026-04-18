@@ -280,10 +280,19 @@ The shared spec (§13) additionally defines the following high-priority candidat
 - `env-var`
 - `deprecated-commands`
 - `if-cond`
+- `deny_job_container_latest_image`
+- `archived-uses`
+- `insecure-commands`
+- `overprovisioned-secrets`
+- `forbidden-uses`
+- `ref-version-mismatch`
+- `use-trusted-publishing`
 
 Status contract:
 
 - These IDs are specification-defined high-priority parity candidates and are not part of the current Go default rule catalog mapping.
+- `deny_job_container_latest_image` is tracked as a ghalint parity candidate in addition to actionlint/zizmor-derived candidates.
+- `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` are tracked as zizmor parity candidates.
 - Go runtime implementation planning for these IDs should be tracked explicitly when Go-side rule implementation work starts.
 
 ---

@@ -1253,6 +1253,43 @@
 
 **実装メモ**: 完了。`FakeTernaryRule` を追加し、`job.if` / `step.if` を式解析して `cond && a || b` 形（`||` の左辺が `&&`）を検出する。誤検知回避として true/false 分岐の両 arm が `bool` 推論できる通常の boolean 合成（例: `(a && success()) || failure()`）は除外し、非 bool arm を含む fake ternary を warning で報告して case 式（または明示分岐）への修正を案内する。`RuleCatalog` には priority 42 で `fake-ternary` を追加。`RuleInterfaceTests` には table-driven 回帰（正常/異常）と catalog 件数・priority・canonical ID 更新、auto-fix no-fix ケース追加を反映した。
 
+### Step 15.5: ghalint 未対応ポリシー（deny_job_container_latest_image）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/DenyJobContainerLatestImageRule.cs`, `src/Seiton.Core/Linting/RuleCatalog.cs`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
+
+対象:
+- `deny_job_container_latest_image`
+
+方針:
+- `job.container.image` の `:latest`（明示）および tag/digest 未指定（implicit latest）を error として報告する。
+- `unpinned-image` との責務を分離し、`unpinned-image` は一般 pin hygiene（warning）を担い、本ルールは ghalint 互換の厳格ポリシー（error）を担う。
+- `@sha256:<64-hex>` で pin された image は許可し、将来的な auto-fix は安全性を再検討するまで no-fix とする。
+
+**完了条件**: `job.container.image` の許容/禁止（`:latest` / implicit latest / digest pin）を固定する table-driven 回帰が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
+
+**実装メモ**: 未着手。
+
+### Step 15.6: zizmor 残差分 high-value audits
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/*`, `src/Seiton.Core/Linting/RuleCatalog.cs`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
+
+対象:
+- `archived-uses`
+- `insecure-commands`
+- `overprovisioned-secrets`
+- `forbidden-uses`
+- `ref-version-mismatch`
+- `use-trusted-publishing`
+
+方針:
+- 6 監査は段階導入し、まず local AST/metadata で検出可能な部分を実装し、network 依存が必要な要素は opt-in online audit 経路へ分離する。
+- 既存ルール（`unpinned-uses` / `template-injection` / `run-*` / `job-secrets` 系）との責務境界を明確化し、同一事象の重複報告は canonical rule-id 側に寄せる。
+- `forbidden-uses` は allow/deny ポリシーの設定面を含むため、最低限の deterministic マッチ（owner/repo + wildcard）から開始する。
+
+**完了条件**: 6 監査それぞれで正常/異常/誤検知回避を含む table-driven 回帰が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
+
+**実装メモ**: 未着手。
+
 ---
 
 ## ルール実装ロードマップ
@@ -1363,6 +1400,13 @@ P6E --> P6F
 | 40 | `deprecated-commands` | **実装済み** | actionlint | 旧 workflow command 検出 |
 | 41 | `if-cond` | **実装済み** | actionlint | unsound/constant 条件検出 |
 | 42 | `fake-ternary` | **実装済み** | policy | `cond && a || b` の fake ternary を禁止し、case 式へ誘導 |
+| 43 | `deny_job_container_latest_image` | 未実装（Step 15.5） | ghalint | `job.container.image` の `:latest`（明示/暗黙）を禁止 |
+| 44 | `archived-uses` | 未実装（Step 15.6） | zizmor | archived repository の `uses` 参照を検出 |
+| 45 | `insecure-commands` | 未実装（Step 15.6） | zizmor | `run` 内の危険な command 構築/実行パターンを検出 |
+| 46 | `overprovisioned-secrets` | 未実装（Step 15.6） | zizmor | secret 受け渡しの過剰権限/過剰配布を検出 |
+| 47 | `forbidden-uses` | 未実装（Step 15.6） | zizmor | `uses` の allow/deny ポリシー違反を検出 |
+| 48 | `ref-version-mismatch` | 未実装（Step 15.6） | zizmor | symbolic ref 意図と pin SHA 系譜の不一致を検出 |
+| 49 | `use-trusted-publishing` | 未実装（Step 15.6） | zizmor | trusted publishing 未使用の publish flow を検出 |
 
 ## チェックリスト（全 Phase 共通）
 
