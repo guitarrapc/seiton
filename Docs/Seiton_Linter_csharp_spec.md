@@ -243,9 +243,9 @@ The current default rule scope in C# is:
 | `run-inputs-context-direct-use` | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
 | `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Checked in `run:`, `env:`, and `with:` sinks at step and job level. |
 | `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
-| `workflow_secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
-| `job_secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
-| `action_shell_is_required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
+| `workflow-secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
+| `job-secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
+| `action-shell-is-required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
 
 Scope notes:
 
@@ -373,7 +373,6 @@ Adopted direction in C# runtime:
 
 - Keep the shared envelope (`Enabled`, `Severity`) in `RuleConfig`.
 - Add `RuleConfig.Specific: RuleSpecificConfig` as the authoritative typed payload after normalization.
-- Preserve legacy nullable fields temporarily for compatibility and migration safety.
 
 ### 4.1.2 Implemented Typed Payload Contract
 
