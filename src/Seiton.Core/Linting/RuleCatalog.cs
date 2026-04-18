@@ -54,6 +54,12 @@ internal static class RuleCatalog
         ("if-cond", 41, static () => new IfCondRule()),
         ("fake-ternary", 42, static () => new FakeTernaryRule()),
         ("deny_job_container_latest_image", 43, static () => new DenyJobContainerLatestImageRule()),
+        ("archived-uses", 44, static () => new ArchivedUsesRule()),
+        ("insecure-commands", 45, static () => new InsecureCommandsRule()),
+        ("overprovisioned-secrets", 46, static () => new OverprovisionedSecretsRule()),
+        ("forbidden-uses", 47, static () => new ForbiddenUsesRule()),
+        ("ref-version-mismatch", 48, static () => new RefVersionMismatchRule()),
+        ("use-trusted-publishing", 49, static () => new UseTrustedPublishingRule()),
     ];
 
     static readonly (string Id, int Priority)[] AdditionalRuleMetadata =

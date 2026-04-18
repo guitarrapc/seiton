@@ -1,0 +1,130 @@
+﻿using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Linting.Rules;
+
+public sealed class UseTrustedPublishingRule : RuleBase
+{
+    bool workflowHasIdTokenWrite;
+    bool currentJobHasIdTokenWrite;
+
+    public override string Id => "use-trusted-publishing";
+
+    public override string Name => "Use Trusted Publishing Rule";
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        workflowHasIdTokenWrite = HasIdTokenWrite(workflow.Permissions);
+        currentJobHasIdTokenWrite = workflowHasIdTokenWrite;
+    }
+
+    public override void VisitJobPre(Job job)
+    {
+        currentJobHasIdTokenWrite = job.Permissions is null
+            ? workflowHasIdTokenWrite
+            : HasIdTokenWrite(job.Permissions);
+    }
+
+    public override void VisitStep(Step step)
+    {
+        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        {
+            return;
+        }
+
+        var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
+        if (!ContainsPublishCommand(runText) || currentJobHasIdTokenWrite)
+        {
+            return;
+        }
+
+        AddStepWarning(
+            step,
+            "publish-like command detected without id-token: write permission; use trusted publishing (OIDC) instead of long-lived registry secrets",
+            run.Run.Range);
+    }
+
+    bool HasIdTokenWrite(Permissions? permissions)
+    {
+        if (permissions is null)
+        {
+            return false;
+        }
+
+        if (permissions.All is not null)
+        {
+            var scalar = Decode(permissions.All.Value);
+            if (string.Equals(scalar, "write-all", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        if (permissions.Scopes is null || permissions.Scopes.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var pair in permissions.Scopes)
+        {
+            var key = Decode(pair.Key);
+            if (!string.Equals(key, "id-token", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var value = Decode(pair.Value.ValueText);
+            return string.Equals(value, "write", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    static bool ContainsPublishCommand(ReadOnlySpan<byte> runText)
+    {
+        return ContainsAsciiIgnoreCase(runText, "npm publish"u8)
+            || ContainsAsciiIgnoreCase(runText, "twine upload"u8)
+            || ContainsAsciiIgnoreCase(runText, "gem push"u8)
+            || ContainsAsciiIgnoreCase(runText, "poetry publish"u8);
+    }
+
+    static bool ContainsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> token)
+    {
+        if (token.Length == 0 || value.Length < token.Length)
+        {
+            return false;
+        }
+
+        for (var start = 0; start <= value.Length - token.Length; start++)
+        {
+            var matched = true;
+            for (var i = 0; i < token.Length; i++)
+            {
+                var l = value[start + i];
+                var r = token[i];
+                if (l is >= (byte)'A' and <= (byte)'Z')
+                {
+                    l = (byte)(l + 32);
+                }
+
+                if (r is >= (byte)'A' and <= (byte)'Z')
+                {
+                    r = (byte)(r + 32);
+                }
+
+                if (l != r)
+                {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

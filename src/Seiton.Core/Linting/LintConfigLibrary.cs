@@ -48,6 +48,13 @@ public static class LintConfigLibrary
           additionalOutputCommands:
             # - tee
 
+          # Policy patterns used by forbidden-uses rule.
+          forbiddenUsesAllowPatterns:
+            # - actions/*
+
+          forbiddenUsesDenyPatterns:
+            # - some-org/*
+
         exclusions:
           # - filePattern: .github/workflows/legacy-*.yml
           #   ruleIds:
@@ -262,9 +269,26 @@ public static class LintConfigLibrary
             "unredacted-secrets additional output command must not be empty",
             filePath,
             diagnostics);
+        var forbiddenUsesAllowPatterns = NormalizeAdditiveValues(
+            customization.ForbiddenUsesAllowPatterns,
+            "forbidden-uses additional allow pattern must not be empty",
+            filePath,
+            diagnostics);
+        var forbiddenUsesDenyPatterns = NormalizeAdditiveValues(
+            customization.ForbiddenUsesDenyPatterns,
+            "forbidden-uses additional deny pattern must not be empty",
+            filePath,
+            diagnostics);
 
         return new NormalizedAdditiveCustomization(
-            new RuleSpecificAdditiveCustomization(dangerousEvents, knownLabels, registries, untrustedTriggers, outputCommands),
+            new RuleSpecificAdditiveCustomization(
+                dangerousEvents,
+                knownLabels,
+                registries,
+                untrustedTriggers,
+                outputCommands,
+                forbiddenUsesAllowPatterns,
+                forbiddenUsesDenyPatterns),
             diagnostics.ToArray());
     }
 
@@ -1705,6 +1729,8 @@ internal sealed class LintConfigLineParser
         List<string>? registries = null;
         List<string>? untrustedTriggers = null;
         List<string>? outputCommands = null;
+        List<string>? forbiddenUsesAllowPatterns = null;
+        List<string>? forbiddenUsesDenyPatterns = null;
 
         while (index < lines.Length)
         {
@@ -1768,10 +1794,29 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            if (key == "forbiddenUsesAllowPatterns")
+            {
+                forbiddenUsesAllowPatterns = values;
+                continue;
+            }
+
+            if (key == "forbiddenUsesDenyPatterns")
+            {
+                forbiddenUsesDenyPatterns = values;
+                continue;
+            }
+
             diagnostics.Add(CreateError($"unknown additive customization key '{key}'", lineNumber, 3, key.Length));
         }
 
-        additiveCustomization = new RuleSpecificAdditiveCustomization(dangerousEvents, knownLabels, registries, untrustedTriggers, outputCommands);
+        additiveCustomization = new RuleSpecificAdditiveCustomization(
+            dangerousEvents,
+            knownLabels,
+            registries,
+            untrustedTriggers,
+            outputCommands,
+            forbiddenUsesAllowPatterns,
+            forbiddenUsesDenyPatterns);
     }
 
     List<string> ParseListBlock(int parentIndent, string keyName)

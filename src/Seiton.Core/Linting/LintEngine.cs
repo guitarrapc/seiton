@@ -718,6 +718,16 @@ public sealed class LintEngine
             "unredacted-secrets additional output command must not be empty",
             filePath,
             diagnostics);
+        var normalizedForbiddenUsesAllowPatterns = NormalizeAdditiveValues(
+            customization.ForbiddenUsesAllowPatterns,
+            "forbidden-uses additional allow pattern must not be empty",
+            filePath,
+            diagnostics);
+        var normalizedForbiddenUsesDenyPatterns = NormalizeAdditiveValues(
+            customization.ForbiddenUsesDenyPatterns,
+            "forbidden-uses additional deny pattern must not be empty",
+            filePath,
+            diagnostics);
 
         return new AdditiveCustomizationNormalization(
             new RuleSpecificAdditiveCustomization(
@@ -725,7 +735,9 @@ public sealed class LintEngine
                 normalizedKnownHostedLabels,
                 normalizedPublicRegistries,
                 normalizedUntrustedTriggers,
-                normalizedOutputCommands),
+                normalizedOutputCommands,
+                normalizedForbiddenUsesAllowPatterns,
+                normalizedForbiddenUsesDenyPatterns),
             diagnostics.ToArray());
     }
 

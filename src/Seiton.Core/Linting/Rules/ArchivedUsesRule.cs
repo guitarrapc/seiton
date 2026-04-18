@@ -1,0 +1,120 @@
+﻿using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Linting.Rules;
+
+public sealed class ArchivedUsesRule : RuleBase
+{
+    static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)
+    {
+        "actions-rs/toolchain",
+        "actions-rs/cargo",
+        "actions-rs/audit-check",
+        "actions-rs/clippy-check",
+    };
+
+    public override string Id => "archived-uses";
+
+    public override string Name => "Archived Uses Rule";
+
+    public override void VisitJobPre(Job job)
+    {
+        if (Config.Utf8Yaml is null || job.WorkflowCall is null)
+        {
+            return;
+        }
+
+        if (!TryGetOwnerRepo(job.WorkflowCall.Uses.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        {
+            return;
+        }
+
+        if (!ArchivedRepositories.Contains(ownerRepo))
+        {
+            return;
+        }
+
+        AddJobWarning(
+            job,
+            $"reusable workflow uses archived repository '{ownerRepo}'; replace with actively maintained alternative",
+            job.WorkflowCall.Uses.Range);
+    }
+
+    public override void VisitStep(Step step)
+    {
+        if (Config.Utf8Yaml is null || step.Exec is not ExecAction action)
+        {
+            return;
+        }
+
+        if (!TryGetOwnerRepo(action.Uses.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        {
+            return;
+        }
+
+        if (!ArchivedRepositories.Contains(ownerRepo))
+        {
+            return;
+        }
+
+        AddStepWarning(
+            step,
+            $"action uses archived repository '{ownerRepo}'; replace with actively maintained alternative",
+            action.Uses.Range);
+    }
+
+    static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
+    {
+        ownerRepo = string.Empty;
+        if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))
+        {
+            return false;
+        }
+
+        var at = uses.LastIndexOf((byte)'@');
+        if (at <= 0 || at + 1 >= uses.Length)
+        {
+            return false;
+        }
+
+        var path = uses[..at];
+        var slash1 = path.IndexOf((byte)'/');
+        if (slash1 <= 0 || slash1 + 1 >= path.Length)
+        {
+            return false;
+        }
+
+        var rest = path[(slash1 + 1)..];
+        var slash2 = rest.IndexOf((byte)'/');
+        if (slash2 == 0)
+        {
+            return false;
+        }
+
+        var owner = path[..slash1];
+        var repo = slash2 < 0 ? rest : rest[..slash2];
+        if (owner.Length == 0 || repo.Length == 0)
+        {
+            return false;
+        }
+
+        ownerRepo = string.Concat(NormalizeAsciiLower(owner), "/", NormalizeAsciiLower(repo));
+        return true;
+    }
+
+    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
+    {
+        if (value.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var chars = new char[value.Length];
+        for (var i = 0; i < value.Length; i++)
+        {
+            var b = value[i];
+            chars[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
+        }
+
+        return new string(chars);
+    }
+}

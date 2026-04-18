@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(40);
+        await Assert.That(rules.Length).IsEqualTo(46);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -324,6 +324,12 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[37].Id).IsEqualTo("if-cond");
         await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
         await Assert.That(rules[39].Id).IsEqualTo("deny_job_container_latest_image");
+        await Assert.That(rules[40].Id).IsEqualTo("archived-uses");
+        await Assert.That(rules[41].Id).IsEqualTo("insecure-commands");
+        await Assert.That(rules[42].Id).IsEqualTo("overprovisioned-secrets");
+        await Assert.That(rules[43].Id).IsEqualTo("forbidden-uses");
+        await Assert.That(rules[44].Id).IsEqualTo("ref-version-mismatch");
+        await Assert.That(rules[45].Id).IsEqualTo("use-trusted-publishing");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -365,6 +371,12 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
         await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
         await Assert.That(RuleCatalog.GetPriority("deny_job_container_latest_image")).IsEqualTo(43);
+        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(44);
+        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(45);
+        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(46);
+        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(47);
+        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(48);
+        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(49);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
@@ -376,12 +388,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-041");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-047");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-042", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-048", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-043");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-044");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-050");
     }
 
     [Test]
@@ -2903,6 +2915,279 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArchivedUsesRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-active-action",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ng-archived-action-repo",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions-rs/toolchain@v1
+            """,
+            ["archived repository", "actions-rs/toolchain"]),
+            new RuleCase(
+            "ng-archived-reusable-workflow-repo",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: actions-rs/cargo/.github/workflows/reuse.yml@v1
+            """,
+            ["archived repository", "actions-rs/cargo"]),
+        };
+
+        await AssertRuleCases(new ArchivedUsesRule(), "archived-uses", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_InsecureCommandsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-unrelated-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        LOG_LEVEL: debug
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-job-env-unsecure-commands",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+                    steps:
+                        - run: echo ng
+            """,
+            ["ACTIONS_ALLOW_UNSECURE_COMMANDS", "migrate to environment files"]),
+            new RuleCase(
+            "ng-step-env-unsecure-commands",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            ACTIONS_ALLOW_UNSECURE_COMMANDS: "yes"
+                          run: echo ng
+            """,
+            ["ACTIONS_ALLOW_UNSECURE_COMMANDS", "migrate to environment files"]),
+        };
+
+        await AssertRuleCases(new InsecureCommandsRule(), "insecure-commands", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_OverprovisionedSecretsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-single-secret-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-multiple-step-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                            API_KEY: ${{ secrets.API_KEY }}
+                          run: echo ng
+            """,
+            ["multiple secret values", "minimum required"]),
+            new RuleCase(
+            "ng-reusable-call-many-secrets",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@v1
+                    secrets:
+                        token: ${{ secrets.GITHUB_TOKEN }}
+                        api_key: ${{ secrets.API_KEY }}
+            """,
+            ["passes 2 explicit secrets", "minimum required secrets"]),
+        };
+
+        await AssertRuleCases(new OverprovisionedSecretsRule(), "overprovisioned-secrets", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ForbiddenUsesRule_TableDriven()
+    {
+        var config = new LintConfig
+        {
+            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                ForbiddenUsesDenyPatterns: ["bad-org/*"],
+                ForbiddenUsesAllowPatterns: ["bad-org/safe-action"]),
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-allowed-by-exception",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: bad-org/safe-action@v1
+            """,
+            []),
+            new RuleCase(
+            "ng-deny-policy-hit",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: bad-org/unsafe-action@v1
+            """,
+            ["denied by forbidden-uses policy", "bad-org/unsafe-action"]),
+            new RuleCase(
+            "ng-reusable-workflow-deny",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: bad-org/reusable/.github/workflows/reuse.yml@v1
+            """,
+            ["denied by forbidden-uses policy", "bad-org/reusable"]),
+        };
+
+        await AssertRuleCases(new ForbiddenUsesRule(), "forbidden-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_RefVersionMismatchRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-matching-major",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: owner/action-v2@v2.1.0
+            """,
+            []),
+            new RuleCase(
+            "ng-repo-major-mismatch",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: owner/action-v1@v2.0.0
+            """,
+            ["major version 'v2' mismatches", "path version hint 'v1'"]),
+            new RuleCase(
+            "ng-workflow-path-major-mismatch",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/release-v1.yml@v3
+            """,
+            ["major version 'v3' mismatches", "path version hint 'v1'"]),
+        };
+
+        await AssertRuleCases(new RefVersionMismatchRule(), "ref-version-mismatch", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_UseTrustedPublishingRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-publish-with-id-token-write",
+            """
+            on: push
+            jobs:
+                publish:
+                    permissions:
+                        id-token: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: npm publish
+            """,
+            []),
+            new RuleCase(
+            "ng-npm-publish-without-id-token",
+            """
+            on: push
+            jobs:
+                publish:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: npm publish
+            """,
+            ["publish-like command detected", "trusted publishing"]),
+            new RuleCase(
+            "ng-twine-upload-without-id-token",
+            """
+            on: push
+            jobs:
+                publish:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: twine upload dist/*
+            """,
+            ["publish-like command detected", "id-token: write"]),
+        };
+
+        await AssertRuleCases(new UseTrustedPublishingRule(), "use-trusted-publishing", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -4156,6 +4441,83 @@ public sealed class RuleInterfaceTests
                             - run: echo ng
                 """,
                 ExpectsFix: false),
+            new FixabilityCase(
+                "archived-uses",
+                new ArchivedUsesRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: actions-rs/toolchain@v1
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "insecure-commands",
+                new InsecureCommandsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        env:
+                            ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+                        steps:
+                            - run: echo ng
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "overprovisioned-secrets",
+                new OverprovisionedSecretsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - env:
+                                A: ${{ secrets.A }}
+                                B: ${{ secrets.B }}
+                              run: echo ng
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "forbidden-uses",
+                new ForbiddenUsesRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: bad-org/unsafe-action@v1
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "ref-version-mismatch",
+                new RefVersionMismatchRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: owner/action-v1@v2.0.0
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "use-trusted-publishing",
+                new UseTrustedPublishingRule(),
+                """
+                on: push
+                jobs:
+                    publish:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: npm publish
+                """,
+                ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -5247,7 +5609,9 @@ public sealed class RuleInterfaceTests
                 AdditionalKnownHostedLabels: [""],
                 AdditionalPublicRegistries: ["https://registry.example.com/team/app"],
                 AdditionalUntrustedTriggers: [""],
-                AdditionalOutputCommands: ["   "]),
+                AdditionalOutputCommands: ["   "],
+                ForbiddenUsesAllowPatterns: ["   "],
+                ForbiddenUsesDenyPatterns: ["   "]),
         };
 
         var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
@@ -5257,6 +5621,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("credentials additional public registry host 'https://registry.example.com/team/app' is invalid", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("cache-poisoning/self-hosted-runner additional untrusted trigger must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("unredacted-secrets additional output command must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("forbidden-uses additional allow pattern must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("forbidden-uses additional deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

@@ -57,7 +57,9 @@ public sealed record RuleSpecificAdditiveCustomization(
     IReadOnlyList<string>? AdditionalKnownHostedLabels = null,
     IReadOnlyList<string>? AdditionalPublicRegistries = null,
     IReadOnlyList<string>? AdditionalUntrustedTriggers = null,
-    IReadOnlyList<string>? AdditionalOutputCommands = null)
+    IReadOnlyList<string>? AdditionalOutputCommands = null,
+    IReadOnlyList<string>? ForbiddenUsesAllowPatterns = null,
+    IReadOnlyList<string>? ForbiddenUsesDenyPatterns = null)
 {
     public static RuleSpecificAdditiveCustomization Empty { get; } = new();
 }

@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `fake-ternary` / `deny_job_container_latest_image` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 44 ルール（default local 40 + online audit 4） |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `fake-ternary` / `deny_job_container_latest_image` / `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 50 ルール（default local 46 + online audit 4） |
 | Online audit | `OnlineAuditEngine` が opt-in の post-lint path として advisory / ref-confusion / impostor-commit / stale-pin 系の network-assisted 診断を生成。`LintEngine.Check()` の no-I/O 制約は維持 |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
@@ -1288,7 +1288,7 @@
 
 **完了条件**: 6 監査それぞれで正常/異常/誤検知回避を含む table-driven 回帰が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
 
-**実装メモ**: 未着手。
+**実装メモ**: 完了。`ArchivedUsesRule` / `InsecureCommandsRule` / `OverprovisionedSecretsRule` / `ForbiddenUsesRule` / `RefVersionMismatchRule` / `UseTrustedPublishingRule` を追加し、`RuleCatalog` に priority 44-49 で登録した。`forbidden-uses` は owner/repo 単位の wildcard allow/deny ポリシー（`additiveCustomization.forbiddenUsesAllowPatterns` / `forbiddenUsesDenyPatterns`）を導入し、default deny パターンで deterministic 検出を有効化した。`RuleInterfaceTests` に 6 ルール分の table-driven 回帰（正常/異常/誤検知回避）を追加し、catalog 件数・priority・canonical ID 期待値を同期、auto-fix catalog に 6 ルール no-fix ケースを追加した。
 
 ---
 
@@ -1401,12 +1401,12 @@ P6E --> P6F
 | 41 | `if-cond` | **実装済み** | actionlint | unsound/constant 条件検出 |
 | 42 | `fake-ternary` | **実装済み** | policy | `cond && a || b` の fake ternary を禁止し、case 式へ誘導 |
 | 43 | `deny_job_container_latest_image` | **実装済み** | ghalint | `job.container.image` の `:latest`（明示/暗黙）を禁止 |
-| 44 | `archived-uses` | 未実装（Step 15.6） | zizmor | archived repository の `uses` 参照を検出 |
-| 45 | `insecure-commands` | 未実装（Step 15.6） | zizmor | `run` 内の危険な command 構築/実行パターンを検出 |
-| 46 | `overprovisioned-secrets` | 未実装（Step 15.6） | zizmor | secret 受け渡しの過剰権限/過剰配布を検出 |
-| 47 | `forbidden-uses` | 未実装（Step 15.6） | zizmor | `uses` の allow/deny ポリシー違反を検出 |
-| 48 | `ref-version-mismatch` | 未実装（Step 15.6） | zizmor | symbolic ref 意図と pin SHA 系譜の不一致を検出 |
-| 49 | `use-trusted-publishing` | 未実装（Step 15.6） | zizmor | trusted publishing 未使用の publish flow を検出 |
+| 44 | `archived-uses` | **実装済み** | zizmor | archived repository の `uses` 参照を検出 |
+| 45 | `insecure-commands` | **実装済み** | zizmor | `ACTIONS_ALLOW_UNSECURE_COMMANDS` の有効化を検出 |
+| 46 | `overprovisioned-secrets` | **実装済み** | zizmor | step/reusable-call での過剰 secret マッピングを検出 |
+| 47 | `forbidden-uses` | **実装済み** | zizmor | `uses` の allow/deny ポリシー違反を検出 |
+| 48 | `ref-version-mismatch` | **実装済み** | zizmor | uses ref major と action path version hint の不一致を検出 |
+| 49 | `use-trusted-publishing` | **実装済み** | zizmor | publish command 実行時の trusted publishing 前提（`id-token: write`）不足を検出 |
 
 ## チェックリスト（全 Phase 共通）
 
