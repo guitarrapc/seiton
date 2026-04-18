@@ -79,6 +79,8 @@ internal static class RuleCatalog
 
     static readonly IReadOnlyDictionary<string, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
 
+    static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
+
     public static IRule[] CreateDefaultRules()
     {
         var rules = new IRule[DefaultRuleFactories.Length];
@@ -206,6 +208,11 @@ internal static class RuleCatalog
         return MinimumSeverities.TryGetValue(resolvedRuleId, out minimumSeverity);
     }
 
+    public static bool TryGetAllowedConfigKeys(string ruleId, out IReadOnlySet<string> allowedKeys)
+    {
+        return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys!);
+    }
+
     static bool TryFindRuleIdBySemanticId(string input, out string resolvedRuleId)
     {
         resolvedRuleId = string.Empty;
@@ -279,6 +286,40 @@ internal static class RuleCatalog
             ["deny-write-all"] = DiagnosticSeverity.Error,
             ["deny-read-all"] = DiagnosticSeverity.Error,
         };
+    }
+
+    static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildAllowedRuleConfigKeys()
+    {
+        var empty = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal);
+        var map = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+
+        // Pre-build named sets for rules that have specific config keys
+        var events = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "events" };
+        var knownHostedLabels = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "known-hosted-labels" };
+        var publicRegistries = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "public-registries" };
+        var untrustedTriggers = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "untrusted-triggers" };
+        var outputCommands = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "output-commands" };
+        var assumeEvents = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "assume-events" };
+        var allowDeny = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "allow", "deny" };
+
+        for (var i = 0; i < AllRuleMetadata.Length; i++)
+        {
+            var id = AllRuleMetadata[i].Id;
+            map[id] = id switch
+            {
+                "dangerous-triggers" => events,
+                "runner-label" => knownHostedLabels,
+                "credentials" => publicRegistries,
+                "cache-poisoning" => untrustedTriggers,
+                "self-hosted-runner" => untrustedTriggers,
+                "unredacted-secrets" => outputCommands,
+                "expr-undefined-var" => assumeEvents,
+                "forbidden-uses" => allowDeny,
+                _ => empty,
+            };
+        }
+
+        return map;
     }
 
     static int ComputeEditDistanceIgnoreCase(string left, string right)

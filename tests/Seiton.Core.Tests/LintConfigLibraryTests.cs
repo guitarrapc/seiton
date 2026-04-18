@@ -323,4 +323,250 @@ public sealed class LintConfigLibraryTests
         await Assert.That(excl.Jobs[0]).IsEqualTo("publish");
         await Assert.That(excl.Jobs[1]).IsEqualTo("deploy");
     }
+
+    [Test]
+    public async Task Validate_Exclusions_InlineFormat_ParsesCorrectly()
+    {
+        var yaml = """
+        exclusions:
+          - files: ".github/workflows/legacy-*.yml"
+            rules:
+              - runner-no-latest
+              - job-permissions-required
+          - files: ".github/workflows/release.yml"
+            jobs:
+              - publish
+            rules:
+              - credentials
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(2);
+
+        var excl0 = result.Config.Exclusions![0];
+        await Assert.That(excl0.Files).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl0.Rules).Contains("runner-no-latest");
+        await Assert.That(excl0.Rules).Contains("job-permissions-required");
+
+        var excl1 = result.Config.Exclusions![1];
+        await Assert.That(excl1.Files).IsEqualTo(".github/workflows/release.yml");
+        await Assert.That(excl1.Rules).Contains("credentials");
+        await Assert.That(excl1.Jobs).IsNotNull();
+        await Assert.That(excl1.Jobs![0]).IsEqualTo("publish");
+    }
+
+    [Test]
+    public async Task Validate_RuleSpecificKey_WrongRule_ReturnsError()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            events:
+              extend:
+                - issue_comment
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not accept 'events'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_RuleSpecificKey_CorrectRule_Accepted()
+    {
+        var yaml = """
+        rules:
+          dangerous-triggers:
+            events:
+              extend:
+                - issue_comment
+          runner-label:
+            known-hosted-labels:
+              extend:
+                - ubuntu-24.04-large
+          credentials:
+            public-registries:
+              extend:
+                - ghcr.io
+          cache-poisoning:
+            untrusted-triggers:
+              extend:
+                - issue_comment
+          self-hosted-runner:
+            untrusted-triggers:
+              extend:
+                - issue_comment
+          unredacted-secrets:
+            output-commands:
+              extend:
+                - tee
+          expr-undefined-var:
+            assume-events:
+              - workflow_dispatch
+          forbidden-uses:
+            allow:
+              - actions/*
+            deny:
+              - some-org/*
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Validate_FullTargetConfig_ParsesAllSections()
+    {
+        var yaml = """
+        rules:
+          job-permissions-required:
+            enabled: false
+          deny-write-all:
+            severity: error
+          dangerous-triggers:
+            severity: error
+            events:
+              extend:
+                - issue_comment
+          runner-label:
+            known-hosted-labels:
+              extend:
+                - ubuntu-24.04-large
+          credentials:
+            public-registries:
+              extend:
+                - registry.example.com
+          cache-poisoning:
+            untrusted-triggers:
+              extend:
+                - issue_comment
+          unredacted-secrets:
+            output-commands:
+              extend:
+                - tee
+          forbidden-uses:
+            deny:
+              - some-untrusted-org/*
+          expr-undefined-var:
+            assume-events:
+              - workflow_dispatch
+              - repository_dispatch
+          known-vulnerable-actions:
+            enabled: true
+          impostor-commit:
+            enabled: true
+
+        exclusions:
+          - files: ".github/workflows/legacy-*.yml"
+            rules:
+              - runner-no-latest
+              - job-permissions-required
+          - files: ".github/workflows/release.yml"
+            jobs:
+              - publish
+            rules:
+              - credentials
+
+        fix:
+          defaults:
+            job-timeout-minutes: 15
+          pinning:
+            enable-network: true
+            min-age-days: 14
+            exclude-branches:
+              - main
+              - master
+            ignore-actions:
+              - uses: "slsa-framework/.*"
+                ref: ".*"
+          images:
+            enable-network: true
+            exclude-images:
+              - scratch
+            exclude-tags:
+              - latest
+
+        network:
+          on-error: skip
+          timeout-seconds: 30
+          max-concurrency: 4
+          github:
+            ghes-api-url: ""
+            ghes-fallback: false
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+
+        // rules
+        await Assert.That(result.Config!.Rules!["job-permissions-required"].Enabled).IsFalse();
+        await Assert.That(result.Config.Rules["deny-write-all"].Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(result.Config.Rules["dangerous-triggers"].Events!.Extend[0]).IsEqualTo("issue_comment");
+        await Assert.That(result.Config.Rules["runner-label"].KnownHostedLabels!.Extend[0]).IsEqualTo("ubuntu-24.04-large");
+        await Assert.That(result.Config.Rules["credentials"].PublicRegistries!.Extend[0]).IsEqualTo("registry.example.com");
+        await Assert.That(result.Config.Rules["cache-poisoning"].UntrustedTriggers!.Extend[0]).IsEqualTo("issue_comment");
+        await Assert.That(result.Config.Rules["unredacted-secrets"].OutputCommands!.Extend[0]).IsEqualTo("tee");
+        await Assert.That(result.Config.Rules["forbidden-uses"].Deny![0]).IsEqualTo("some-untrusted-org/*");
+        await Assert.That(result.Config.Rules["expr-undefined-var"].AssumeEvents!.Count).IsEqualTo(2);
+        await Assert.That(result.Config.Rules["known-vulnerable-actions"].Enabled).IsTrue();
+        await Assert.That(result.Config.Rules["impostor-commit"].Enabled).IsTrue();
+
+        // exclusions (inline format)
+        await Assert.That(result.Config.Exclusions!.Count).IsEqualTo(2);
+        await Assert.That(result.Config.Exclusions[0].Files).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(result.Config.Exclusions[1].Jobs![0]).IsEqualTo("publish");
+
+        // fix
+        await Assert.That(result.Config.Fix.Defaults.JobTimeoutMinutes).IsEqualTo(15);
+        await Assert.That(result.Config.Fix.Pinning.EnableNetwork).IsTrue();
+        await Assert.That(result.Config.Fix.Pinning.MinAgeDays).IsEqualTo(14);
+        await Assert.That(result.Config.Fix.Images.EnableNetwork).IsTrue();
+
+        // network
+        await Assert.That(result.Config.Network.OnError).IsEqualTo(NetworkErrorMode.Skip);
+        await Assert.That(result.Config.Network.TimeoutSeconds).IsEqualTo(30);
+        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(4);
+    }
+
+    [Test]
+    public async Task Validate_OldTopLevelKeys_ReturnsUnknownKeyError()
+    {
+        var yaml = """
+        additiveCustomization:
+          additionalDangerousEvents:
+            - issue_comment
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown top-level key 'additiveCustomization'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_MultipleInvalidRuleKeys_ReportsAllErrors()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            events:
+              extend:
+                - issue_comment
+            deny:
+              - some-org/*
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Count(x => x.Message.Contains("does not accept", StringComparison.Ordinal))).IsEqualTo(2);
+    }
 }

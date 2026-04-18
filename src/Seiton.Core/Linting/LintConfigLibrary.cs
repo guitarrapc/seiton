@@ -220,12 +220,71 @@ public static class LintConfigLibrary
                 config = config with { Severity = null };
             }
 
+            config = ValidateRuleSpecificKeys(config, resolvedRuleId, filePath, diagnostics);
             config = NormalizeRuleExtendLists(config, filePath, diagnostics);
 
             normalized[resolvedRuleId] = config;
         }
 
         return new NormalizedRules(normalized, diagnostics.ToArray());
+    }
+
+    static RuleConfig ValidateRuleSpecificKeys(RuleConfig config, string ruleId, string filePath, List<Diagnostic> diagnostics)
+    {
+        if (!RuleCatalog.TryGetAllowedConfigKeys(ruleId, out var allowed))
+        {
+            return config;
+        }
+
+        if (config.Events is not null && !allowed.Contains("events"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'events' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { Events = null };
+        }
+
+        if (config.KnownHostedLabels is not null && !allowed.Contains("known-hosted-labels"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'known-hosted-labels' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { KnownHostedLabels = null };
+        }
+
+        if (config.PublicRegistries is not null && !allowed.Contains("public-registries"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'public-registries' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { PublicRegistries = null };
+        }
+
+        if (config.UntrustedTriggers is not null && !allowed.Contains("untrusted-triggers"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'untrusted-triggers' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { UntrustedTriggers = null };
+        }
+
+        if (config.OutputCommands is not null && !allowed.Contains("output-commands"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'output-commands' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { OutputCommands = null };
+        }
+
+        if (config.AssumeEvents is not null && !allowed.Contains("assume-events"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'assume-events' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { AssumeEvents = null };
+        }
+
+        if (config.Allow is not null && !allowed.Contains("allow"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'allow' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { Allow = null };
+        }
+
+        if (config.Deny is not null && !allowed.Contains("deny"))
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'deny' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
+            config = config with { Deny = null };
+        }
+
+        return config;
     }
 
     static RuleConfig NormalizeRuleExtendLists(RuleConfig config, string filePath, List<Diagnostic> diagnostics)
@@ -1792,16 +1851,39 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            // Handle inline content after "- " (e.g. "- files: .github/workflows/*.yml")
+            string? inlineKey = null;
+            string? inlineValue = null;
+            var inlineContent = trimmed[1..].Trim();
+            if (inlineContent.Length > 0 && TryParseProperty(inlineContent, out var ik, out var iv))
+            {
+                inlineKey = ik;
+                inlineValue = iv;
+            }
+
             index++;
-            ParseExclusionItem(lineNumber);
+            ParseExclusionItem(lineNumber, inlineKey, inlineValue);
         }
     }
 
-    void ParseExclusionItem(int lineNumber)
+    void ParseExclusionItem(int lineNumber, string? inlineKey = null, string? inlineValue = null)
     {
         string? files = null;
         List<string>? rulesList = null;
         List<string>? jobsList = null;
+
+        // Apply inline key-value from the "- key: value" line
+        if (inlineKey is not null)
+        {
+            if (inlineKey == "files")
+            {
+                files = Unquote(inlineValue ?? string.Empty);
+            }
+            else
+            {
+                diagnostics.Add(CreateError($"unknown exclusion field '{inlineKey}'", lineNumber, 3, inlineKey.Length));
+            }
+        }
 
         while (index < lines.Length)
         {
