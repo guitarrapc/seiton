@@ -97,66 +97,69 @@ Rules collect diagnostics internally during traversal and return them after trav
 
 The default C# local-AST linter profile must include the following rule IDs.
 
-Online-audit-only rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
+Column definitions:
 
-| Rule ID | Required Behavior Summary |
-|---|---|
-| `job-structure` | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form (`uses`) or executable form (`runs-on` + `steps`). |
-| `reusable-workflow` | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs must reject incompatible execution keys, and local reusable calls should validate caller `with`/`secrets` against called workflow `on.workflow_call` contracts when statically resolvable. |
-| `permissions` | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. |
-| `popular-action-inputs` | Validate known action input names against maintained popular-action metadata and emit diagnostics for unknown inputs. |
-| `unpinned-uses` | Warn when `uses:` references are not pinned to full commit SHA for remote actions/reusable workflows; additionally validate `uses` reference format and local action reference sanity where statically resolvable. |
-| `unpinned-image` | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
-| `dangerous-triggers` | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
-| `job-permissions-required` | Warn when a job omits explicit `permissions` configuration. |
-| `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
-| `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
-| `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
-| `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
-| `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
-| `glob-pattern` | Error on invalid event filter configuration, including invalid glob syntax, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |
-| `deny-write-all` | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by §5.7. |
-| `credentials` | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. |
-| `template-injection` | Error when untrusted `github.event`-origin data is directly interpolated into `run`/`env` sinks in unsafe ways. |
-| `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). |
-| `run-env-context-direct-use` | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
-| `run-secrets-context-direct-use` | Error when `run:` script text directly references `${{ secrets.* }}`; secret values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
-| `run-inputs-context-direct-use` | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
-| `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
-| `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
-| `known-vulnerable-actions` | Error when `uses:` references resolve to known vulnerable action versions (for example via GitHub Security Advisory metadata or curated vulnerability dataset). |
-| `impostor-commit` | Error when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's graph for the intended ref semantics. |
-| `ref-confusion` | Error when a symbolic ref in `uses:` (tag/branch) is ambiguous or confusion-prone (for example same name present in both tag and branch namespaces) under resolution policy. |
-| `stale-action-refs` | Warn when SHA-pinned `uses:` references are stale relative to maintained release/tag mapping policy. |
-| `deny-read-all` | Error when workflow/job permissions use `read-all`; callers must use explicit least-privilege scope mapping instead of blanket read grants. |
-| `deny-inherit-secrets` | Error when reusable-workflow call jobs use `secrets: inherit`; full secret inheritance is forbidden under strict policy profile. |
-| `job-timeout-minutes-required` | Error when executable jobs omit `timeout-minutes` (or equivalent compliant per-step timeout policy), to avoid unbounded runner execution. |
-| `github-app-token-inputs` | Error when known GitHub App token actions are missing repository/permission-limiting inputs (for example `repositories`, `permissions`, `permission-*`). |
-| `workflow-secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
-| `job-secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
-| `action-shell-is-required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
-| `cache-poisoning` | Warn when cache actions are used in workflows with untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`) unless trust boundaries are explicitly isolated. |
-| `self-hosted-runner` | Warn when self-hosted runners are used in workflows with untrusted triggers, because host isolation/guard failures can become repository compromise. |
-| `unredacted-secrets` | Warn when secret-derived environment variables are printed by output commands (for example `echo`, `printf`, `Write-Host`) without redaction-safe handling. |
-| `secrets-outside-env` | Warn when `secrets.*` is referenced in non-`env` sinks (`if`, action `with`, reusable call inputs, etc.) rather than controlled env handoff. |
-| `matrix` | Warn when matrix strategy configuration is malformed or suspicious (invalid shape, include/exclude mismatch, or expression misuse). |
-| `env-var` | Warn when environment variable naming/usage patterns are risky or ambiguous across workflow/job/step scopes. |
-| `deprecated-commands` | Warn when deprecated workflow commands are used (for example `::set-output`, `::save-state`, `::add-path`, `::set-env`) instead of environment-file mechanisms. |
-| `if-cond` | Warn on malformed, constant, or unsound `if` conditions that likely indicate expression misuse or dead branches. |
-| `fake-ternary` | Warn when fake ternary idioms (`cond && a || b`) are used in expression-bearing fields. |
-| `archived-uses` | Warn when `uses:` references point to archived upstream repositories. |
-| `insecure-commands` | Warn on unsafe command construction/invocation patterns in `run` scripts. |
-| `overprovisioned-secrets` | Warn when secret distribution scope is broader than required at workflow/job/step boundaries. |
-| `forbidden-uses` | Warn/Error per policy when `uses:` references violate configured allow/deny patterns. |
-| `ref-version-mismatch` | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
-| `use-trusted-publishing` | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
+- **Default**: `✓` = active with no config (local-AST); `✗` = opt-in only, requires `online_audit.allow_network: true`.
+- **Network**: `—` = local-AST rule, no network access required; `online_audit` = requires network access via `online_audit.allow_network: true`.
+
+| Rule ID | Default | Network | Required Behavior Summary |
+|---|---|---|---|
+| `job-structure` | ✓ | — | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form (`uses`) or executable form (`runs-on` + `steps`). |
+| `reusable-workflow` | ✓ | — | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs must reject incompatible execution keys, and local reusable calls should validate caller `with`/`secrets` against called workflow `on.workflow_call` contracts when statically resolvable. |
+| `permissions` | ✓ | — | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. |
+| `popular-action-inputs` | ✓ | — | Validate known action input names against maintained popular-action metadata and emit diagnostics for unknown inputs. |
+| `unpinned-uses` | ✓ | — | Warn when `uses:` references are not pinned to full commit SHA for remote actions/reusable workflows; additionally validate `uses` reference format and local action reference sanity where statically resolvable. |
+| `unpinned-image` | ✓ | — | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
+| `dangerous-triggers` | ✓ | — | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
+| `job-permissions-required` | ✓ | — | Warn when a job omits explicit `permissions` configuration. |
+| `needs-graph` | ✓ | — | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
+| `shell-name` | ✓ | — | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
+| `runner-label` | ✓ | — | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
+| `runner-no-latest` | ✓ | — | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
+| `id-naming` | ✓ | — | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
+| `glob-pattern` | ✓ | — | Error on invalid event filter configuration, including invalid glob syntax, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |
+| `deny-write-all` | ✓ | — | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by §5.7. |
+| `credentials` | ✓ | — | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. |
+| `template-injection` | ✓ | — | Error when untrusted `github.event`-origin data is directly interpolated into `run`/`env` sinks in unsafe ways. |
+| `expr-undefined-var` | ✓ | — | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). |
+| `run-env-context-direct-use` | ✓ | — | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
+| `run-secrets-context-direct-use` | ✓ | — | Error when `run:` script text directly references `${{ secrets.* }}`; secret values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
+| `run-inputs-context-direct-use` | ✓ | — | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
+| `secrets-whole-context-access` | ✓ | — | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
+| `checkout-persist-credentials` | ✓ | — | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
+| `known-vulnerable-actions` | ✗ | `online_audit` | Error when `uses:` references resolve to known vulnerable action versions (for example via GitHub Security Advisory metadata or curated vulnerability dataset). |
+| `impostor-commit` | ✗ | `online_audit` | Error when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's graph for the intended ref semantics. |
+| `ref-confusion` | ✗ | `online_audit` | Error when a symbolic ref in `uses:` (tag/branch) is ambiguous or confusion-prone (for example same name present in both tag and branch namespaces) under resolution policy. |
+| `stale-action-refs` | ✗ | `online_audit` | Warn when SHA-pinned `uses:` references are stale relative to maintained release/tag mapping policy. |
+| `deny-read-all` | ✓ | — | Error when workflow/job permissions use `read-all`; callers must use explicit least-privilege scope mapping instead of blanket read grants. |
+| `deny-inherit-secrets` | ✓ | — | Error when reusable-workflow call jobs use `secrets: inherit`; full secret inheritance is forbidden under strict policy profile. |
+| `job-timeout-minutes-required` | ✓ | — | Error when executable jobs omit `timeout-minutes` (or equivalent compliant per-step timeout policy), to avoid unbounded runner execution. |
+| `github-app-token-inputs` | ✓ | — | Error when known GitHub App token actions are missing repository/permission-limiting inputs (for example `repositories`, `permissions`, `permission-*`). |
+| `workflow-secrets` | ✓ | — | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
+| `job-secrets` | ✓ | — | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
+| `action-shell-is-required` | ✓ | — | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
+| `cache-poisoning` | ✓ | — | Warn when cache actions are used in workflows with untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`) unless trust boundaries are explicitly isolated. |
+| `self-hosted-runner` | ✓ | — | Warn when self-hosted runners are used in workflows with untrusted triggers, because host isolation/guard failures can become repository compromise. |
+| `unredacted-secrets` | ✓ | — | Warn when secret-derived environment variables are printed by output commands (for example `echo`, `printf`, `Write-Host`) without redaction-safe handling. |
+| `secrets-outside-env` | ✓ | — | Warn when `secrets.*` is referenced in non-`env` sinks (`if`, action `with`, reusable call inputs, etc.) rather than controlled env handoff. |
+| `matrix` | ✓ | — | Warn when matrix strategy configuration is malformed or suspicious (invalid shape, include/exclude mismatch, or expression misuse). |
+| `env-var` | ✓ | — | Warn when environment variable naming/usage patterns are risky or ambiguous across workflow/job/step scopes. |
+| `deprecated-commands` | ✓ | — | Warn when deprecated workflow commands are used (for example `::set-output`, `::save-state`, `::add-path`, `::set-env`) instead of environment-file mechanisms. |
+| `if-cond` | ✓ | — | Warn on malformed, constant, or unsound `if` conditions that likely indicate expression misuse or dead branches. |
+| `fake-ternary` | ✓ | — | Warn when fake ternary idioms (`cond && a || b`) are used in expression-bearing fields. |
+| `archived-uses` | ✓ | — | Warn when `uses:` references point to archived upstream repositories. |
+| `insecure-commands` | ✓ | — | Warn on unsafe command construction/invocation patterns in `run` scripts. |
+| `overprovisioned-secrets` | ✓ | — | Warn when secret distribution scope is broader than required at workflow/job/step boundaries. |
+| `forbidden-uses` | ✓ | — | Warn/Error per policy when `uses:` references violate configured allow/deny patterns. |
+| `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
+| `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
 
 Rule set compatibility policy:
 
 - Existing rule IDs are stable once published.
 - Adding a new default rule requires this catalog to be updated in the same specification change.
 - Removing or renaming a published rule ID is a breaking change and requires explicit migration guidance.
-- Online-audit-only rule IDs may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
+- `online_audit` rules may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
 ### 4.5 Rule Guidance (Operational)
 
