@@ -529,9 +529,10 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 
 1. 脅威分析を実施し、`rules` 多様性に対する型安全要件を `Seiton_Linter_csharp_spec.md` に反映
 2. `RuleConfig.Specific`（`RuleSpecificConfig` DU payload）を追加
-3. `LintConfigLibrary` / `LintEngine` の両経路で `RuleSpecificConfigProjector` による投影を実装
-4. 主要ルールの `SetConfig()` を `Specific` の型パターンマッチ優先に移行
-5. DU投影を検証するテストを追加
+3. `LintConfigLibrary` / `LintEngine` の両経路で `Specific` 正規化を実装
+4. 主要ルールの `SetConfig()` を `Specific` 専用参照に移行（フォールバック削除）
+5. `RuleConfig` 旧フィールド（`Events` など）を一括削除
+6. DU投影を検証するテストを追加
 
 ---
 
@@ -556,8 +557,9 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 **対策:**
 
 - ルール ID → 許可フィールドのマッピングテーブルを `RuleCatalog` に持たせ、バリデーション時に参照する。未知のフィールドは config エラーにする。
-- 正規化後に `RuleSpecificConfigProjector` で rule-id ごとの DU payload (`RuleConfig.Specific`) へ投影する。
-- ルール実装は `Specific` の型パターンマッチを優先し、cross-rule payload 混入リスクを低減する。
+- 正規化後に `RuleConfig.Specific` を rule-id ごとに検証・正規化する。
+- ルール実装は `Specific` のみを参照し、cross-rule payload 混入リスクを低減する。
+- 外部で `rule.SetConfig` を直接呼ぶ場合は、`LintEngine` または同等の projector/normalizer 経路を必須とする。
 
 ### 8.2 `network` セクションの粒度
 

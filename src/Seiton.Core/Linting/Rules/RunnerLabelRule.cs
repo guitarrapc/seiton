@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunnerLabelRule : RuleBase
 {
-    HashSet<string>? additionalKnownHostedLabels;
+    HashSet<string> additionalKnownHostedLabels = [];
 
     public override string Id => "runner-label";
 
@@ -16,7 +16,7 @@ public sealed class RunnerLabelRule : RuleBase
         base.SetConfig(config);
         additionalKnownHostedLabels = config.GetRuleConfig(Id)?.Specific is RunnerLabelSpecificConfig specific
             ? BuildNormalizedSet(specific.KnownHostedLabels)
-            : BuildNormalizedSet(config.GetRuleConfig(Id)?.KnownHostedLabels?.Extend);
+            : [];
     }
 
     public override void VisitJobPre(Job job)
@@ -74,7 +74,7 @@ public sealed class RunnerLabelRule : RuleBase
 
     bool IsAdditionalKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
-        if (additionalKnownHostedLabels is null || additionalKnownHostedLabels.Count == 0)
+        if (additionalKnownHostedLabels.Count == 0)
         {
             return false;
         }
@@ -82,11 +82,11 @@ public sealed class RunnerLabelRule : RuleBase
         return additionalKnownHostedLabels.Contains(NormalizeAsciiLower(labelUtf8));
     }
 
-    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         return new HashSet<string>(values, StringComparer.Ordinal);

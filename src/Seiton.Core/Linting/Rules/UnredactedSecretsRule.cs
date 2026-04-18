@@ -7,7 +7,7 @@ public sealed class UnredactedSecretsRule : RuleBase
 {
     Workflow? currentWorkflow;
     Job? currentJob;
-    HashSet<string>? additionalOutputCommands;
+    HashSet<string> additionalOutputCommands = [];
 
     public override string Id => "unredacted-secrets";
 
@@ -18,7 +18,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         base.SetConfig(config);
         additionalOutputCommands = config.GetRuleConfig(Id)?.Specific is UnredactedSecretsSpecificConfig specific
             ? BuildNormalizedSet(specific.OutputCommands)
-            : BuildNormalizedSet(config.GetRuleConfig(Id)?.OutputCommands?.Extend);
+            : [];
     }
 
     public override void VisitWorkflowPre(Workflow workflow)
@@ -131,7 +131,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return ContainsSecretsReferenceInExpression(expression);
     }
 
-    static bool ContainsOutputOfVariable(ReadOnlySpan<byte> runText, ReadOnlySpan<char> variableName, HashSet<string>? additionalOutputCommands)
+    static bool ContainsOutputOfVariable(ReadOnlySpan<byte> runText, ReadOnlySpan<char> variableName, HashSet<string> additionalOutputCommands)
     {
         if (runText.Length == 0 || variableName.Length == 0)
         {
@@ -161,7 +161,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string>? additionalOutputCommands)
+    static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string> additionalOutputCommands)
     {
         if (ContainsAsciiIgnoreCase(line, "echo"u8)
             || ContainsAsciiIgnoreCase(line, "printf"u8)
@@ -171,7 +171,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             return true;
         }
 
-        if (additionalOutputCommands is null || additionalOutputCommands.Count == 0)
+        if (additionalOutputCommands.Count == 0)
         {
             return false;
         }
@@ -438,11 +438,11 @@ public sealed class UnredactedSecretsRule : RuleBase
         return true;
     }
 
-    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);

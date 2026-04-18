@@ -6,8 +6,8 @@ public sealed class ForbiddenUsesRule : RuleBase
 {
     static readonly string[] DefaultDenyPatterns = ["bad-org/*"];
 
-    IReadOnlyList<string>? allowPatterns;
-    IReadOnlyList<string>? denyPatterns;
+    IReadOnlyList<string> allowPatterns = [];
+    IReadOnlyList<string> denyPatterns = DefaultDenyPatterns;
 
     public override string Id => "forbidden-uses";
 
@@ -19,17 +19,15 @@ public sealed class ForbiddenUsesRule : RuleBase
         var ruleConfig = config.GetRuleConfig(Id);
         if (ruleConfig?.Specific is ForbiddenUsesSpecificConfig specific)
         {
-            allowPatterns = specific.Allow;
+            allowPatterns = specific.Allow ?? [];
             denyPatterns = specific.Deny is { Count: > 0 }
                 ? specific.Deny
                 : DefaultDenyPatterns;
             return;
         }
 
-        allowPatterns = ruleConfig?.Allow;
-        denyPatterns = ruleConfig?.Deny is { Count: > 0 }
-            ? ruleConfig.Deny
-            : DefaultDenyPatterns;
+        allowPatterns = [];
+        denyPatterns = DefaultDenyPatterns;
     }
 
     public override void VisitJobPre(Job job)
@@ -67,7 +65,7 @@ public sealed class ForbiddenUsesRule : RuleBase
         var matchedDeny = MatchAny(ownerRepo, denyPatterns);
         var matchedAllow = MatchAny(ownerRepo, allowPatterns);
 
-        if (denyPatterns is not null && denyPatterns.Count > 0)
+        if (denyPatterns.Count > 0)
         {
             if (!matchedDeny || matchedAllow)
             {
@@ -87,7 +85,7 @@ public sealed class ForbiddenUsesRule : RuleBase
             return;
         }
 
-        if (allowPatterns is not null && allowPatterns.Count > 0 && !matchedAllow)
+        if (allowPatterns.Count > 0 && !matchedAllow)
         {
             var message = $"uses reference '{ownerRepo}' is not in forbidden-uses allow policy";
             if (step is not null)
@@ -103,13 +101,12 @@ public sealed class ForbiddenUsesRule : RuleBase
 
     bool HasPolicy()
     {
-        return (allowPatterns is not null && allowPatterns.Count > 0)
-            || (denyPatterns is not null && denyPatterns.Count > 0);
+        return allowPatterns.Count > 0 || denyPatterns.Count > 0;
     }
 
-    static bool MatchAny(string ownerRepo, IReadOnlyList<string>? patterns)
+    static bool MatchAny(string ownerRepo, IReadOnlyList<string> patterns)
     {
-        if (patterns is null || patterns.Count == 0)
+        if (patterns.Count == 0)
         {
             return false;
         }

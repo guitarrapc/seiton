@@ -390,9 +390,10 @@ The C# runtime defines a discriminated-union style payload hierarchy:
 
 Projection contract:
 
-- `LintConfigLibrary.NormalizeRules` MUST set `RuleConfig.Specific` via projector after field validation and normalization.
-- `LintEngine.NormalizeRules` MUST perform the same projection for directly supplied in-memory configs.
-- Rule implementations SHOULD consume `RuleConfig.Specific` first; legacy field fallback is allowed during migration.
+- `LintConfigLibrary.NormalizeRules` MUST normalize and validate `RuleConfig.Specific` after field validation.
+- `LintEngine.NormalizeRules` MUST perform the same normalization for directly supplied in-memory configs.
+- Rule implementations MUST consume `RuleConfig.Specific` only (no legacy field fallback).
+- External callers that invoke `IRule.SetConfig` directly MUST pass configs produced by `LintEngine` or an equivalent projector/normalizer path; passing raw, unnormalized `RuleConfig` is out of contract.
 
 Security outcome:
 

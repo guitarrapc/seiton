@@ -72,23 +72,27 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Config!.Rules).ContainsKey("dangerous-triggers");
         var dtConfig = result.Config.Rules!["dangerous-triggers"];
-        await Assert.That(dtConfig.Events).IsNotNull();
-        await Assert.That(dtConfig.Events!.Extend).HasSingleItem();
-        await Assert.That(dtConfig.Events.Extend[0]).IsEqualTo("workflow_run");
+        await Assert.That(dtConfig.Specific).IsTypeOf<DangerousTriggersSpecificConfig>();
+        var dtSpecific = (DangerousTriggersSpecificConfig)dtConfig.Specific;
+        await Assert.That(dtSpecific.Events).HasSingleItem();
+        await Assert.That(dtSpecific.Events[0]).IsEqualTo("workflow_run");
 
         var credConfig = result.Config.Rules["credentials"];
-        await Assert.That(credConfig.PublicRegistries).IsNotNull();
-        await Assert.That(credConfig.PublicRegistries!.Extend[0]).IsEqualTo("ghcr.io");
+        await Assert.That(credConfig.Specific).IsTypeOf<CredentialsSpecificConfig>();
+        var credSpecific = (CredentialsSpecificConfig)credConfig.Specific;
+        await Assert.That(credSpecific.PublicRegistries[0]).IsEqualTo("ghcr.io");
 
         var cpConfig = result.Config.Rules["cache-poisoning"];
-        await Assert.That(cpConfig.UntrustedTriggers).IsNotNull();
-        await Assert.That(cpConfig.UntrustedTriggers!.Extend).HasSingleItem();
-        await Assert.That(cpConfig.UntrustedTriggers.Extend[0]).IsEqualTo("issue_comment");
+        await Assert.That(cpConfig.Specific).IsTypeOf<UntrustedTriggersSpecificConfig>();
+        var cpSpecific = (UntrustedTriggersSpecificConfig)cpConfig.Specific;
+        await Assert.That(cpSpecific.UntrustedTriggers).HasSingleItem();
+        await Assert.That(cpSpecific.UntrustedTriggers[0]).IsEqualTo("issue_comment");
 
         var usConfig = result.Config.Rules["unredacted-secrets"];
-        await Assert.That(usConfig.OutputCommands).IsNotNull();
-        await Assert.That(usConfig.OutputCommands!.Extend).HasSingleItem();
-        await Assert.That(usConfig.OutputCommands.Extend[0]).IsEqualTo("tee");
+        await Assert.That(usConfig.Specific).IsTypeOf<UnredactedSecretsSpecificConfig>();
+        var usSpecific = (UnredactedSecretsSpecificConfig)usConfig.Specific;
+        await Assert.That(usSpecific.OutputCommands).HasSingleItem();
+        await Assert.That(usSpecific.OutputCommands[0]).IsEqualTo("tee");
     }
 
     [Test]
@@ -285,14 +289,17 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config).IsNotNull();
 
         var exprConfig = result.Config!.Rules!["expr-undefined-var"];
-        await Assert.That(exprConfig.AssumeEvents).IsNotNull();
-        await Assert.That(exprConfig.AssumeEvents![0]).IsEqualTo("workflow_dispatch");
+        await Assert.That(exprConfig.Specific).IsTypeOf<ExprUndefinedVarSpecificConfig>();
+        var exprSpecific = (ExprUndefinedVarSpecificConfig)exprConfig.Specific;
+        await Assert.That(exprSpecific.AssumeEvents[0]).IsEqualTo("workflow_dispatch");
 
         var forbiddenConfig = result.Config.Rules["forbidden-uses"];
-        await Assert.That(forbiddenConfig.Allow).IsNotNull();
-        await Assert.That(forbiddenConfig.Allow![0]).IsEqualTo("actions/*");
-        await Assert.That(forbiddenConfig.Deny).IsNotNull();
-        await Assert.That(forbiddenConfig.Deny![0]).IsEqualTo("some-org/*");
+        await Assert.That(forbiddenConfig.Specific).IsTypeOf<ForbiddenUsesSpecificConfig>();
+        var forbiddenSpecific = (ForbiddenUsesSpecificConfig)forbiddenConfig.Specific;
+        await Assert.That(forbiddenSpecific.Allow).IsNotNull();
+        await Assert.That(forbiddenSpecific.Allow![0]).IsEqualTo("actions/*");
+        await Assert.That(forbiddenSpecific.Deny).IsNotNull();
+        await Assert.That(forbiddenSpecific.Deny![0]).IsEqualTo("some-org/*");
     }
 
     [Test]
@@ -509,13 +516,13 @@ public sealed class LintConfigLibraryTests
         // rules
         await Assert.That(result.Config!.Rules!["job-permissions-required"].Enabled).IsFalse();
         await Assert.That(result.Config.Rules["deny-write-all"].Severity).IsEqualTo(DiagnosticSeverity.Error);
-        await Assert.That(result.Config.Rules["dangerous-triggers"].Events!.Extend[0]).IsEqualTo("issue_comment");
-        await Assert.That(result.Config.Rules["runner-label"].KnownHostedLabels!.Extend[0]).IsEqualTo("ubuntu-24.04-large");
-        await Assert.That(result.Config.Rules["credentials"].PublicRegistries!.Extend[0]).IsEqualTo("registry.example.com");
-        await Assert.That(result.Config.Rules["cache-poisoning"].UntrustedTriggers!.Extend[0]).IsEqualTo("issue_comment");
-        await Assert.That(result.Config.Rules["unredacted-secrets"].OutputCommands!.Extend[0]).IsEqualTo("tee");
-        await Assert.That(result.Config.Rules["forbidden-uses"].Deny![0]).IsEqualTo("some-untrusted-org/*");
-        await Assert.That(result.Config.Rules["expr-undefined-var"].AssumeEvents!.Count).IsEqualTo(2);
+        await Assert.That(((DangerousTriggersSpecificConfig)result.Config.Rules["dangerous-triggers"].Specific).Events[0]).IsEqualTo("issue_comment");
+        await Assert.That(((RunnerLabelSpecificConfig)result.Config.Rules["runner-label"].Specific).KnownHostedLabels[0]).IsEqualTo("ubuntu-24.04-large");
+        await Assert.That(((CredentialsSpecificConfig)result.Config.Rules["credentials"].Specific).PublicRegistries[0]).IsEqualTo("registry.example.com");
+        await Assert.That(((UntrustedTriggersSpecificConfig)result.Config.Rules["cache-poisoning"].Specific).UntrustedTriggers[0]).IsEqualTo("issue_comment");
+        await Assert.That(((UnredactedSecretsSpecificConfig)result.Config.Rules["unredacted-secrets"].Specific).OutputCommands[0]).IsEqualTo("tee");
+        await Assert.That(((ForbiddenUsesSpecificConfig)result.Config.Rules["forbidden-uses"].Specific).Deny![0]).IsEqualTo("some-untrusted-org/*");
+        await Assert.That(((ExprUndefinedVarSpecificConfig)result.Config.Rules["expr-undefined-var"].Specific).AssumeEvents.Count).IsEqualTo(2);
         await Assert.That(result.Config.Rules["known-vulnerable-actions"].Enabled).IsTrue();
         await Assert.That(result.Config.Rules["impostor-commit"].Enabled).IsTrue();
 

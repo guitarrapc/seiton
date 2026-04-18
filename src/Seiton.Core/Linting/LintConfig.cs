@@ -40,21 +40,7 @@ public sealed record RuleConfig
     // Discriminated-union style, typed rule-specific payload.
     // This is the authoritative per-rule customization shape after normalization.
     public RuleSpecificConfig Specific { get; init; } = RuleSpecificConfig.None;
-
-    // rule-specific extend keys
-    public ExtendableList? Events { get; init; }                   // dangerous-triggers
-    public ExtendableList? KnownHostedLabels { get; init; }        // runner-label
-    public ExtendableList? PublicRegistries { get; init; }          // credentials
-    public ExtendableList? UntrustedTriggers { get; init; }        // cache-poisoning, self-hosted-runner
-    public ExtendableList? OutputCommands { get; init; }            // unredacted-secrets
-
-    // rule-specific direct keys
-    public IReadOnlyList<string>? AssumeEvents { get; init; }      // expr-undefined-var
-    public IReadOnlyList<string>? Allow { get; init; }             // forbidden-uses
-    public IReadOnlyList<string>? Deny { get; init; }              // forbidden-uses
 }
-
-public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
 public abstract record RuleSpecificConfig
 {

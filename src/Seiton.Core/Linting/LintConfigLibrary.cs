@@ -220,264 +220,12 @@ public static class LintConfigLibrary
                 config = config with { Severity = null };
             }
 
-            config = ValidateRuleSpecificKeys(config, resolvedRuleId, filePath, diagnostics);
-            config = NormalizeRuleExtendLists(config, filePath, diagnostics);
-            config = RuleSpecificConfigProjector.Apply(resolvedRuleId, config);
+            config = RuleSpecificConfigNormalizer.Normalize(config, resolvedRuleId, filePath, diagnostics);
 
             normalized[resolvedRuleId] = config;
         }
 
         return new NormalizedRules(normalized, diagnostics.ToArray());
-    }
-
-    static RuleConfig ValidateRuleSpecificKeys(RuleConfig config, string ruleId, string filePath, List<Diagnostic> diagnostics)
-    {
-        if (!RuleCatalog.TryGetAllowedConfigKeys(ruleId, out var allowed))
-        {
-            return config;
-        }
-
-        if (config.Events is not null && !allowed.Contains("events"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'events' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { Events = null };
-        }
-
-        if (config.KnownHostedLabels is not null && !allowed.Contains("known-hosted-labels"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'known-hosted-labels' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { KnownHostedLabels = null };
-        }
-
-        if (config.PublicRegistries is not null && !allowed.Contains("public-registries"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'public-registries' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { PublicRegistries = null };
-        }
-
-        if (config.UntrustedTriggers is not null && !allowed.Contains("untrusted-triggers"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'untrusted-triggers' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { UntrustedTriggers = null };
-        }
-
-        if (config.OutputCommands is not null && !allowed.Contains("output-commands"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'output-commands' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { OutputCommands = null };
-        }
-
-        if (config.AssumeEvents is not null && !allowed.Contains("assume-events"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'assume-events' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { AssumeEvents = null };
-        }
-
-        if (config.Allow is not null && !allowed.Contains("allow"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'allow' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { Allow = null };
-        }
-
-        if (config.Deny is not null && !allowed.Contains("deny"))
-        {
-            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, $"rule '{ruleId}' does not accept 'deny' config key", new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length), FilePath: filePath));
-            config = config with { Deny = null };
-        }
-
-        return config;
-    }
-
-    static RuleConfig NormalizeRuleExtendLists(RuleConfig config, string filePath, List<Diagnostic> diagnostics)
-    {
-        if (config.Events?.Extend is not null)
-        {
-            var normalizedExtend = NormalizeAdditiveValues(config.Events.Extend, "events extend entry must not be empty", filePath, diagnostics);
-            config = config with { Events = normalizedExtend is null ? null : new ExtendableList(normalizedExtend) };
-        }
-
-        if (config.KnownHostedLabels?.Extend is not null)
-        {
-            var normalizedExtend = NormalizeAdditiveValues(config.KnownHostedLabels.Extend, "known-hosted-labels extend entry must not be empty", filePath, diagnostics);
-            config = config with { KnownHostedLabels = normalizedExtend is null ? null : new ExtendableList(normalizedExtend) };
-        }
-
-        if (config.PublicRegistries?.Extend is not null)
-        {
-            var normalizedExtend = NormalizeRegistryHosts(config.PublicRegistries.Extend, filePath, diagnostics);
-            config = config with { PublicRegistries = normalizedExtend is null ? null : new ExtendableList(normalizedExtend) };
-        }
-
-        if (config.UntrustedTriggers?.Extend is not null)
-        {
-            var normalizedExtend = NormalizeAdditiveValues(config.UntrustedTriggers.Extend, "untrusted-triggers extend entry must not be empty", filePath, diagnostics);
-            config = config with { UntrustedTriggers = normalizedExtend is null ? null : new ExtendableList(normalizedExtend) };
-        }
-
-        if (config.OutputCommands?.Extend is not null)
-        {
-            var normalizedExtend = NormalizeAdditiveValues(config.OutputCommands.Extend, "output-commands extend entry must not be empty", filePath, diagnostics);
-            config = config with { OutputCommands = normalizedExtend is null ? null : new ExtendableList(normalizedExtend) };
-        }
-
-        if (config.AssumeEvents is not null)
-        {
-            config = config with { AssumeEvents = NormalizeAdditiveValues(config.AssumeEvents, "assume-events entry must not be empty", filePath, diagnostics) };
-        }
-
-        if (config.Allow is not null)
-        {
-            config = config with { Allow = NormalizeAdditiveValues(config.Allow, "allow pattern must not be empty", filePath, diagnostics) };
-        }
-
-        if (config.Deny is not null)
-        {
-            config = config with { Deny = NormalizeAdditiveValues(config.Deny, "deny pattern must not be empty", filePath, diagnostics) };
-        }
-
-        return config;
-    }
-
-    static IReadOnlyList<string>? NormalizeAdditiveValues(
-        IReadOnlyList<string>? values,
-        string emptyMessage,
-        string filePath,
-        List<Diagnostic> diagnostics)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return null;
-        }
-
-        var normalized = new List<string>(values.Count);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
-        for (var i = 0; i < values.Count; i++)
-        {
-            var trimmed = values[i]?.Trim() ?? string.Empty;
-            if (trimmed.Length == 0)
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    emptyMessage,
-                    new TextRange(0, 1, 1, 1, 1, 2),
-                    FilePath: filePath));
-                continue;
-            }
-
-            var normalizedValue = NormalizeAsciiLower(trimmed);
-            if (seen.Add(normalizedValue))
-            {
-                normalized.Add(normalizedValue);
-            }
-        }
-
-        return normalized.Count == 0 ? null : normalized;
-    }
-
-    static IReadOnlyList<string>? NormalizeRegistryHosts(
-        IReadOnlyList<string>? values,
-        string filePath,
-        List<Diagnostic> diagnostics)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return null;
-        }
-
-        var normalized = new List<string>(values.Count);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
-        for (var i = 0; i < values.Count; i++)
-        {
-            var trimmed = values[i]?.Trim() ?? string.Empty;
-            if (trimmed.Length == 0)
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    "credentials additional public registry host must not be empty",
-                    new TextRange(0, 1, 1, 1, 1, 2),
-                    FilePath: filePath));
-                continue;
-            }
-
-            if (!IsValidRegistryHost(trimmed))
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"credentials additional public registry host '{trimmed}' is invalid",
-                    new TextRange(0, trimmed.Length, 1, 1, 1, 1 + trimmed.Length),
-                    FilePath: filePath));
-                continue;
-            }
-
-            var normalizedValue = NormalizeAsciiLower(trimmed);
-            if (seen.Add(normalizedValue))
-            {
-                normalized.Add(normalizedValue);
-            }
-        }
-
-        return normalized.Count == 0 ? null : normalized;
-    }
-
-    static bool IsValidRegistryHost(string value)
-    {
-        if (value.Contains("://", StringComparison.Ordinal)
-            || value.Contains('/')
-            || value.Contains('\\'))
-        {
-            return false;
-        }
-
-        for (var i = 0; i < value.Length; i++)
-        {
-            if (char.IsWhiteSpace(value[i]))
-            {
-                return false;
-            }
-        }
-
-        var colonIndex = value.IndexOf(':');
-        if (colonIndex < 0)
-        {
-            return value.Length > 0;
-        }
-
-        if (value.LastIndexOf(':') != colonIndex || colonIndex == 0 || colonIndex == value.Length - 1)
-        {
-            return false;
-        }
-
-        for (var i = colonIndex + 1; i < value.Length; i++)
-        {
-            if (!char.IsAsciiDigit(value[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static string NormalizeAsciiLower(string value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var buffer = value.ToCharArray();
-        for (var i = 0; i < buffer.Length; i++)
-        {
-            var ch = buffer[i];
-            if (ch is >= 'A' and <= 'Z')
-            {
-                buffer[i] = (char)(ch + 32);
-            }
-        }
-
-        return new string(buffer);
     }
 
     static NormalizedExclusions NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath)
@@ -878,14 +626,15 @@ internal sealed class LintConfigLineParser
     {
         var enabled = true;
         DiagnosticSeverity? severity = null;
-        ExtendableList? events = null;
-        ExtendableList? knownHostedLabels = null;
-        ExtendableList? publicRegistries = null;
-        ExtendableList? untrustedTriggers = null;
-        ExtendableList? outputCommands = null;
+        IReadOnlyList<string>? events = null;
+        IReadOnlyList<string>? knownHostedLabels = null;
+        IReadOnlyList<string>? publicRegistries = null;
+        IReadOnlyList<string>? untrustedTriggers = null;
+        IReadOnlyList<string>? outputCommands = null;
         IReadOnlyList<string>? assumeEvents = null;
         IReadOnlyList<string>? allow = null;
         IReadOnlyList<string>? deny = null;
+        var seenRuleSpecificKeys = new HashSet<string>(StringComparer.Ordinal);
 
         while (index < lines.Length)
         {
@@ -923,27 +672,35 @@ internal sealed class LintConfigLineParser
                 switch (key)
                 {
                     case "events":
+                        seenRuleSpecificKeys.Add("events");
                         events = ParseExtendableList(4);
                         break;
                     case "known-hosted-labels":
+                        seenRuleSpecificKeys.Add("known-hosted-labels");
                         knownHostedLabels = ParseExtendableList(4);
                         break;
                     case "public-registries":
+                        seenRuleSpecificKeys.Add("public-registries");
                         publicRegistries = ParseExtendableList(4);
                         break;
                     case "untrusted-triggers":
+                        seenRuleSpecificKeys.Add("untrusted-triggers");
                         untrustedTriggers = ParseExtendableList(4);
                         break;
                     case "output-commands":
+                        seenRuleSpecificKeys.Add("output-commands");
                         outputCommands = ParseExtendableList(4);
                         break;
                     case "assume-events":
+                        seenRuleSpecificKeys.Add("assume-events");
                         assumeEvents = ParseListBlock(4, "assume-events");
                         break;
                     case "allow":
+                        seenRuleSpecificKeys.Add("allow");
                         allow = ParseListBlock(4, "allow");
                         break;
                     case "deny":
+                        seenRuleSpecificKeys.Add("deny");
                         deny = ParseListBlock(4, "deny");
                         break;
                     default:
@@ -961,27 +718,35 @@ internal sealed class LintConfigLineParser
                 switch (key)
                 {
                     case "events":
+                        seenRuleSpecificKeys.Add("events");
                         events = ParseExtendableList(4);
                         break;
                     case "known-hosted-labels":
+                        seenRuleSpecificKeys.Add("known-hosted-labels");
                         knownHostedLabels = ParseExtendableList(4);
                         break;
                     case "public-registries":
+                        seenRuleSpecificKeys.Add("public-registries");
                         publicRegistries = ParseExtendableList(4);
                         break;
                     case "untrusted-triggers":
+                        seenRuleSpecificKeys.Add("untrusted-triggers");
                         untrustedTriggers = ParseExtendableList(4);
                         break;
                     case "output-commands":
+                        seenRuleSpecificKeys.Add("output-commands");
                         outputCommands = ParseExtendableList(4);
                         break;
                     case "assume-events":
+                        seenRuleSpecificKeys.Add("assume-events");
                         assumeEvents = ParseListBlock(4, "assume-events");
                         break;
                     case "allow":
+                        seenRuleSpecificKeys.Add("allow");
                         allow = ParseListBlock(4, "allow");
                         break;
                     case "deny":
+                        seenRuleSpecificKeys.Add("deny");
                         deny = ParseListBlock(4, "deny");
                         break;
                     default:
@@ -1031,14 +796,18 @@ internal sealed class LintConfigLineParser
         {
             Enabled = enabled,
             Severity = severity,
-            Events = events,
-            KnownHostedLabels = knownHostedLabels,
-            PublicRegistries = publicRegistries,
-            UntrustedTriggers = untrustedTriggers,
-            OutputCommands = outputCommands,
-            AssumeEvents = assumeEvents,
-            Allow = allow,
-            Deny = deny,
+            Specific = BuildSpecificFromParsedRuleOptions(
+                ruleId,
+                seenRuleSpecificKeys,
+                events,
+                knownHostedLabels,
+                publicRegistries,
+                untrustedTriggers,
+                outputCommands,
+                assumeEvents,
+                allow,
+                deny,
+                ruleLineNumber),
         };
 
         if (!rules.TryAdd(ruleId, config))
@@ -1047,7 +816,7 @@ internal sealed class LintConfigLineParser
         }
     }
 
-    ExtendableList? ParseExtendableList(int parentIndent)
+    IReadOnlyList<string>? ParseExtendableList(int parentIndent)
     {
         IReadOnlyList<string>? values = null;
 
@@ -1100,7 +869,49 @@ internal sealed class LintConfigLineParser
             values = ParseListBlock(parentIndent + 2, "extend");
         }
 
-        return values is { Count: > 0 } ? new ExtendableList(values) : null;
+        return values is { Count: > 0 } ? values : null;
+    }
+
+    RuleSpecificConfig BuildSpecificFromParsedRuleOptions(
+        string ruleId,
+        IReadOnlySet<string> seenRuleSpecificKeys,
+        IReadOnlyList<string>? events,
+        IReadOnlyList<string>? knownHostedLabels,
+        IReadOnlyList<string>? publicRegistries,
+        IReadOnlyList<string>? untrustedTriggers,
+        IReadOnlyList<string>? outputCommands,
+        IReadOnlyList<string>? assumeEvents,
+        IReadOnlyList<string>? allow,
+        IReadOnlyList<string>? deny,
+        int ruleLineNumber)
+    {
+        if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
+        {
+            return RuleSpecificConfig.None;
+        }
+
+        if (RuleCatalog.TryGetAllowedConfigKeys(resolvedRuleId, out var allowed))
+        {
+            foreach (var key in seenRuleSpecificKeys)
+            {
+                if (!allowed.Contains(key))
+                {
+                    diagnostics.Add(CreateError($"rule '{resolvedRuleId}' does not accept '{key}' config key", ruleLineNumber, 3, key.Length));
+                }
+            }
+        }
+
+        return resolvedRuleId switch
+        {
+            "dangerous-triggers" when events is { Count: > 0 } => new DangerousTriggersSpecificConfig(events),
+            "runner-label" when knownHostedLabels is { Count: > 0 } => new RunnerLabelSpecificConfig(knownHostedLabels),
+            "credentials" when publicRegistries is { Count: > 0 } => new CredentialsSpecificConfig(publicRegistries),
+            "cache-poisoning" or "self-hosted-runner" when untrustedTriggers is { Count: > 0 } => new UntrustedTriggersSpecificConfig(untrustedTriggers),
+            "unredacted-secrets" when outputCommands is { Count: > 0 } => new UnredactedSecretsSpecificConfig(outputCommands),
+            "expr-undefined-var" when assumeEvents is { Count: > 0 } => new ExprUndefinedVarSpecificConfig(assumeEvents),
+            "forbidden-uses" when allow is not null || deny is not null => new ForbiddenUsesSpecificConfig(allow, deny),
+            _ => RuleSpecificConfig.None,
+        };
     }
 
     void ParseFixSection()

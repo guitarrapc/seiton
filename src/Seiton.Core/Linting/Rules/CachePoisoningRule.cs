@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting.Rules;
 public sealed class CachePoisoningRule : RuleBase
 {
     bool hasUntrustedTrigger;
-    HashSet<string>? additionalUntrustedTriggers;
+    HashSet<string> additionalUntrustedTriggers = [];
 
     public override string Id => "cache-poisoning";
 
@@ -17,7 +17,7 @@ public sealed class CachePoisoningRule : RuleBase
         base.SetConfig(config);
         additionalUntrustedTriggers = config.GetRuleConfig(Id)?.Specific is UntrustedTriggersSpecificConfig specific
             ? BuildNormalizedSet(specific.UntrustedTriggers)
-            : BuildNormalizedSet(config.GetRuleConfig(Id)?.UntrustedTriggers?.Extend);
+            : [];
     }
 
     public override void VisitWorkflowPre(Workflow workflow)
@@ -46,7 +46,7 @@ public sealed class CachePoisoningRule : RuleBase
             action.Uses.Range);
     }
 
-    static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string>? additionalUntrustedTriggers)
+    static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -73,9 +73,9 @@ public sealed class CachePoisoningRule : RuleBase
         return false;
     }
 
-    static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string>? additionalUntrustedTriggers)
+    static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
     {
-        if (additionalUntrustedTriggers is null || additionalUntrustedTriggers.Count == 0)
+        if (additionalUntrustedTriggers.Count == 0)
         {
             return false;
         }
@@ -83,11 +83,11 @@ public sealed class CachePoisoningRule : RuleBase
         return additionalUntrustedTriggers.Contains(NormalizeAsciiLower(hook));
     }
 
-    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         return new HashSet<string>(values, StringComparer.Ordinal);

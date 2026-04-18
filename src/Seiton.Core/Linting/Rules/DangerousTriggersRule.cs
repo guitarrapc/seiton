@@ -11,7 +11,7 @@ public sealed class DangerousTriggersRule : RuleBase
         WebhookTypes.EventId.WorkflowRun,
     ];
 
-    HashSet<string>? additionalDangerousEvents;
+    HashSet<string> additionalDangerousEvents = [];
 
     public override string Id => "dangerous-triggers";
 
@@ -22,7 +22,7 @@ public sealed class DangerousTriggersRule : RuleBase
         base.SetConfig(config);
         additionalDangerousEvents = config.GetRuleConfig(Id)?.Specific is DangerousTriggersSpecificConfig specific
             ? BuildNormalizedSet(specific.Events)
-            : BuildNormalizedSet(config.GetRuleConfig(Id)?.Events?.Extend);
+            : [];
     }
 
     public override void VisitEvent(Event ev)
@@ -60,7 +60,7 @@ public sealed class DangerousTriggersRule : RuleBase
 
     bool IsAdditionalDangerousEvent(ReadOnlySpan<byte> eventNameSpan)
     {
-        if (additionalDangerousEvents is null || additionalDangerousEvents.Count == 0)
+        if (additionalDangerousEvents.Count == 0)
         {
             return false;
         }
@@ -68,11 +68,11 @@ public sealed class DangerousTriggersRule : RuleBase
         return additionalDangerousEvents.Contains(NormalizeAsciiLower(eventNameSpan));
     }
 
-    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         return new HashSet<string>(values, StringComparer.Ordinal);

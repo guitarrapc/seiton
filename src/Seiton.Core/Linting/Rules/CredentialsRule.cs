@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class CredentialsRule : RuleBase
 {
-    HashSet<string>? additionalPublicRegistries;
+    HashSet<string> additionalPublicRegistries = [];
 
     public override string Id => "credentials";
 
@@ -16,7 +16,7 @@ public sealed class CredentialsRule : RuleBase
         base.SetConfig(config);
         additionalPublicRegistries = config.GetRuleConfig(Id)?.Specific is CredentialsSpecificConfig specific
             ? BuildNormalizedSet(specific.PublicRegistries)
-            : BuildNormalizedSet(config.GetRuleConfig(Id)?.PublicRegistries?.Extend);
+            : [];
     }
 
     public override void VisitJobPre(Job job)
@@ -139,7 +139,7 @@ public sealed class CredentialsRule : RuleBase
 
     bool IsAdditionalPublicRegistry(ReadOnlySpan<byte> host)
     {
-        if (additionalPublicRegistries is null || additionalPublicRegistries.Count == 0)
+        if (additionalPublicRegistries.Count == 0)
         {
             return false;
         }
@@ -147,11 +147,11 @@ public sealed class CredentialsRule : RuleBase
         return additionalPublicRegistries.Contains(NormalizeAsciiLower(host));
     }
 
-    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
     {
         if (values is null || values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         return new HashSet<string>(values, StringComparer.Ordinal);
