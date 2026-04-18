@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using Seiton.Core.Linting;
 using Seiton.Core.Linting.PinRemediation;
 
 namespace Seiton.Core.Tests;
@@ -43,7 +44,7 @@ public sealed class OciImageDigestResolverTests
         var handler = new StubHttpMessageHandler();
         var resolver = CreateResolver(
             handler,
-            new ImageResolutionConfig
+            new FixImagesConfig
             {
                 ExcludeImages = ["ghcr.io/internal/runner"],
                 ExcludeTags = ["edge"],
@@ -113,12 +114,12 @@ public sealed class OciImageDigestResolverTests
 
     static OciImageDigestResolver CreateResolver(
         StubHttpMessageHandler handler,
-        ImageResolutionConfig? config = null,
+        FixImagesConfig? config = null,
         string? dockerConfigPath = null)
     {
         var client = new HttpClient(handler);
         var factory = new StubHttpClientFactory(client);
-        return new OciImageDigestResolver(factory, config ?? new ImageResolutionConfig(), dockerConfigPath);
+        return new OciImageDigestResolver(factory, config ?? new FixImagesConfig(), dockerConfigPath);
     }
 
     private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory

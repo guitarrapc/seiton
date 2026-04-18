@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
 
 namespace Seiton.Core.Tests;
@@ -75,7 +76,7 @@ public sealed class ActionRefResolverTests
         handler.AddStatus("https://ghes.example.com/api/v3/repos/actions/setup-go/git/ref/tags/release", HttpStatusCode.NotFound);
         handler.AddStatus("https://api.github.com/repos/actions/setup-go/git/ref/tags/release", HttpStatusCode.NotFound);
 
-        var resolver = CreateResolver(handler, new OnlineAuditGitHubConfig
+        var resolver = CreateResolver(handler, new GitHubNetworkConfig
         {
             GhesApiUrl = "https://ghes.example.com/api/v3",
             GhesFallback = true,
@@ -109,9 +110,9 @@ public sealed class ActionRefResolverTests
 
     static ActionRefResolver CreateResolver(
         StubHttpMessageHandler handler,
-        OnlineAuditGitHubConfig? config = null)
+        GitHubNetworkConfig? config = null)
     {
-        return new ActionRefResolver(new StubHttpClientFactory(handler), config ?? new OnlineAuditGitHubConfig());
+        return new ActionRefResolver(new StubHttpClientFactory(handler), config ?? new GitHubNetworkConfig());
     }
 
     private sealed class StubHttpClientFactory(StubHttpMessageHandler handler) : IHttpClientFactory

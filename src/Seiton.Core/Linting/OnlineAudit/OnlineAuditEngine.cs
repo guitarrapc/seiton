@@ -10,16 +10,16 @@ namespace Seiton.Core.Linting.OnlineAudit;
 public sealed class OnlineAuditEngine(
     IActionAdvisoryProvider? actionAdvisoryProvider,
     IActionRefResolver? actionRefResolver,
-    OnlineAuditConfig config)
+    NetworkConfig networkConfig)
 {
     readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
     readonly IActionRefResolver? refResolver = actionRefResolver;
-    readonly OnlineAuditConfig config = config ?? OnlineAuditConfig.Default;
+    readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
     readonly KnownVulnerableActionsRule knownVulnerableActionsRule = new();
     readonly ImpostorCommitRule impostorCommitRule = new();
     readonly RefConfusionRule refConfusionRule = new();
     readonly StaleActionRefsRule staleActionRefsRule = new();
-    readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = CompileIgnoreActions(config?.GitHubActions.IgnoreActions ?? []);
+    readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
 
     public async Task<OnlineAuditResult> AuditAsync(
         LintResult lintResult,
@@ -35,7 +35,7 @@ public sealed class OnlineAuditEngine(
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        if (!config.AllowNetwork || (advisoryProvider is null && refResolver is null))
+        if (advisoryProvider is null && refResolver is null)
         {
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
@@ -46,7 +46,7 @@ public sealed class OnlineAuditEngine(
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        var maxConcurrency = Math.Max(1, config.MaxConcurrency);
+        var maxConcurrency = Math.Max(1, networkConfig.MaxConcurrency);
         using var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
         var outcomes = new AuditOutcome[targets.Count];
         var tasks = new Task[targets.Count];
@@ -100,8 +100,8 @@ public sealed class OnlineAuditEngine(
             return new AuditOutcome([], Skipped: true, Failed: false);
         }
 
-        var timeout = config.RequestTimeoutSec > 0
-            ? TimeSpan.FromSeconds(config.RequestTimeoutSec)
+        var timeout = networkConfig.TimeoutSeconds > 0
+            ? TimeSpan.FromSeconds(networkConfig.TimeoutSeconds)
             : Timeout.InfiniteTimeSpan;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -154,7 +154,7 @@ public sealed class OnlineAuditEngine(
 
             return new AuditOutcome(diagnostics.ToArray(), Skipped: false, Failed: false);
         }
-        catch when (config.FailOpen)
+        catch when (networkConfig.OnError == NetworkErrorMode.Skip)
         {
             return new AuditOutcome([], Skipped: false, Failed: true);
         }

@@ -1,5 +1,4 @@
-﻿using Seiton.Core.Linting;
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -17,7 +16,7 @@ public sealed class UnredactedSecretsRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalOutputCommands = BuildNormalizedSet(config.AdditiveCustomization.AdditionalOutputCommands);
+        additionalOutputCommands = BuildNormalizedSet(config.GetRuleConfig(Id)?.OutputCommands?.Extend);
     }
 
     public override void VisitWorkflowPre(Workflow workflow)

@@ -26,9 +26,9 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         var jobId = Decode(job.Id.Value);
         var message = $"job '{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
         if (Config.Utf8Yaml is null
-            || Config.DefaultJobTimeoutMinutesForFix is null
-            || Config.DefaultJobTimeoutMinutesForFix.Value <= 0
-            || !TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.DefaultJobTimeoutMinutesForFix.Value, out var fix))
+            || Config.Fix.Defaults.JobTimeoutMinutes is null
+            || Config.Fix.Defaults.JobTimeoutMinutes.Value <= 0
+            || !TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
         {
             AddJobError(job, message, BuildJobLocation(job));
             return;

@@ -1,6 +1,5 @@
 ﻿using Seiton.Core.Parsing.Ast;
 using Seiton.Core.Parsing;
-using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 

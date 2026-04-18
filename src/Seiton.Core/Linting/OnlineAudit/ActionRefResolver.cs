@@ -20,12 +20,13 @@ public readonly record struct ActionRefResolution(
     bool HasTagReference,
     bool IsTaggedCommit);
 
-public sealed class ActionRefResolver(IHttpClientFactory httpClientFactory, OnlineAuditGitHubConfig config) : IActionRefResolver
+public sealed class ActionRefResolver(IHttpClientFactory httpClientFactory, GitHubNetworkConfig githubConfig) : IActionRefResolver
 {
     static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
+    static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
     readonly IHttpClientFactory httpClientFactory = httpClientFactory;
-    readonly OnlineAuditGitHubConfig config = config;
+    readonly GitHubNetworkConfig githubConfig = githubConfig;
     readonly ConcurrentDictionary<string, ActionRefResolution> cache = new(StringComparer.Ordinal);
 
     public async Task<ActionRefResolution> ResolveAsync(
@@ -198,16 +199,16 @@ public sealed class ActionRefResolver(IHttpClientFactory httpClientFactory, Onli
         string token,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(config.GhesApiUrl))
+        if (!string.IsNullOrWhiteSpace(githubConfig.GhesApiUrl))
         {
-            var ghesBaseUri = NormalizeApiBaseUri(config.GhesApiUrl!);
+            var ghesBaseUri = NormalizeApiBaseUri(githubConfig.GhesApiUrl!);
             var ghesResponse = await SendGetAsync(ghesBaseUri, relativePath, token, cancellationToken);
             if (ghesResponse.IsSuccessStatusCode)
             {
                 return ghesResponse;
             }
 
-            if (!config.GhesFallback || ghesResponse.StatusCode != HttpStatusCode.NotFound)
+            if (!githubConfig.GhesFallback || ghesResponse.StatusCode != HttpStatusCode.NotFound)
             {
                 return ghesResponse;
             }
@@ -238,9 +239,9 @@ public sealed class ActionRefResolver(IHttpClientFactory httpClientFactory, Onli
 
     string ResolveToken()
     {
-        for (var i = 0; i < config.TokenEnvVars.Count; i++)
+        for (var i = 0; i < TokenEnvVars.Length; i++)
         {
-            var envVar = config.TokenEnvVars[i];
+            var envVar = TokenEnvVars[i];
             if (string.IsNullOrWhiteSpace(envVar))
             {
                 continue;

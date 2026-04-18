@@ -1,5 +1,4 @@
 ﻿using Seiton.Core.Generated;
-using Seiton.Core.Linting;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -16,7 +15,7 @@ public sealed class SelfHostedRunnerRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalUntrustedTriggers = BuildNormalizedSet(config.AdditiveCustomization.AdditionalUntrustedTriggers);
+        additionalUntrustedTriggers = BuildNormalizedSet(config.GetRuleConfig(Id)?.UntrustedTriggers?.Extend);
     }
 
     public override void VisitWorkflowPre(Workflow workflow)

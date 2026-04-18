@@ -6,15 +6,17 @@ using System.Text.RegularExpressions;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
-public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory, GitHubActionsResolutionConfig config) : IActionShaResolver
+public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory, FixPinningConfig pinningConfig, GitHubNetworkConfig githubConfig) : IActionShaResolver
 {
     static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
+    static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
     readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
-    readonly GitHubActionsResolutionConfig _config = config;
+    readonly FixPinningConfig _pinningConfig = pinningConfig;
+    readonly GitHubNetworkConfig _githubConfig = githubConfig;
     readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
-    readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(config.ExcludeBranches);
-    readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(config.IgnoreActions);
+    readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(pinningConfig.ExcludeBranches);
+    readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
     public async Task<(string? Sha, string? TagComment)> ResolveAsync(
         string owner,
@@ -36,7 +38,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         var token = ResolveToken();
         var resolvedRef = refStr;
 
-        if (_config.MinAgeDays > 0 && TryBuildVersionFamily(refStr, out var family))
+        if (_pinningConfig.MinAgeDays > 0 && TryBuildVersionFamily(refStr, out var family))
         {
             var selectedTag = await SelectBestEligibleTagAsync(owner, repo, family, token, cancellationToken);
             if (string.IsNullOrWhiteSpace(selectedTag))
@@ -48,12 +50,12 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         }
 
         var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
-        if (_config.MinAgeDays > 0 && !TryBuildVersionFamily(refStr, out _))
+        if (_pinningConfig.MinAgeDays > 0 && !TryBuildVersionFamily(refStr, out _))
         {
             if (result.TagDate.HasValue)
             {
                 var age = DateTimeOffset.UtcNow - result.TagDate.Value;
-                if (age.TotalDays < _config.MinAgeDays)
+                if (age.TotalDays < _pinningConfig.MinAgeDays)
                 {
                     return (null, null);
                 }
@@ -72,7 +74,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         string token,
         CancellationToken cancellationToken)
     {
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-_config.MinAgeDays);
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-_pinningConfig.MinAgeDays);
         var releaseCandidates = await TryGetReleaseCandidatesAsync(owner, repo, family, cutoff, token, cancellationToken);
         if (releaseCandidates.Count > 0)
         {
@@ -246,16 +248,16 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         string token,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_config.GhesApiUrl))
+        if (!string.IsNullOrWhiteSpace(_githubConfig.GhesApiUrl))
         {
-            var ghesBaseUri = NormalizeApiBaseUri(_config.GhesApiUrl!);
+            var ghesBaseUri = NormalizeApiBaseUri(_githubConfig.GhesApiUrl!);
             var ghesResponse = await SendGetAsync(ghesBaseUri, relativePath, token, cancellationToken);
             if (ghesResponse.IsSuccessStatusCode)
             {
                 return ghesResponse;
             }
 
-            if (!_config.GhesFallback || ghesResponse.StatusCode != HttpStatusCode.NotFound)
+            if (!_githubConfig.GhesFallback || ghesResponse.StatusCode != HttpStatusCode.NotFound)
             {
                 return ghesResponse;
             }
@@ -273,16 +275,16 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         string token,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_config.GhesApiUrl))
+        if (!string.IsNullOrWhiteSpace(_githubConfig.GhesApiUrl))
         {
-            var ghesBaseUri = NormalizeApiBaseUri(_config.GhesApiUrl!);
+            var ghesBaseUri = NormalizeApiBaseUri(_githubConfig.GhesApiUrl!);
             var ghesDate = await TryGetCommitDateAsync(ghesBaseUri, owner, repo, commitSha, token, cancellationToken);
             if (ghesDate.HasValue)
             {
                 return ghesDate;
             }
 
-            if (!_config.GhesFallback)
+            if (!_githubConfig.GhesFallback)
             {
                 return null;
             }
@@ -326,7 +328,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
 
     string ResolveToken()
     {
-        foreach (var envVar in _config.TokenEnvVars)
+        foreach (var envVar in TokenEnvVars)
         {
             if (string.IsNullOrWhiteSpace(envVar))
             {
@@ -350,16 +352,16 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         string token,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_config.GhesApiUrl))
+        if (!string.IsNullOrWhiteSpace(_githubConfig.GhesApiUrl))
         {
-            var ghesBaseUri = NormalizeApiBaseUri(_config.GhesApiUrl!);
+            var ghesBaseUri = NormalizeApiBaseUri(_githubConfig.GhesApiUrl!);
             var ghesResult = await TryResolveShaAsync(ghesBaseUri, owner, repo, refStr, token, cancellationToken);
             if (ghesResult.Success)
             {
                 return ghesResult;
             }
 
-            if (!_config.GhesFallback || ghesResult.StatusCode != HttpStatusCode.NotFound)
+            if (!_githubConfig.GhesFallback || ghesResult.StatusCode != HttpStatusCode.NotFound)
             {
                 throw CreateResolutionException(owner, repo, refStr, ghesResult.StatusCode, ghesBaseUri);
             }

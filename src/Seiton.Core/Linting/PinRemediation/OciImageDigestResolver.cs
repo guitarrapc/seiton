@@ -15,7 +15,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     ];
 
     readonly IHttpClientFactory _httpClientFactory;
-    readonly ImageResolutionConfig _config;
+    readonly FixImagesConfig _config;
     readonly string? _dockerConfigPath;
     readonly ConcurrentDictionary<string, string> _successCache = new(StringComparer.Ordinal);
     readonly string[] _normalizedExcludeImages;
@@ -23,12 +23,12 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     readonly string[] _normalizedIgnoreImages;
     volatile DockerAuthConfig? _dockerAuthConfig;
 
-    public OciImageDigestResolver(IHttpClientFactory httpClientFactory, ImageResolutionConfig config)
+    public OciImageDigestResolver(IHttpClientFactory httpClientFactory, FixImagesConfig config)
         : this(httpClientFactory, config, dockerConfigPath: null)
     {
     }
 
-    internal OciImageDigestResolver(IHttpClientFactory httpClientFactory, ImageResolutionConfig config, string? dockerConfigPath)
+    internal OciImageDigestResolver(IHttpClientFactory httpClientFactory, FixImagesConfig config, string? dockerConfigPath)
     {
         _httpClientFactory = httpClientFactory;
         _config = config;

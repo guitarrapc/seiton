@@ -55,13 +55,8 @@ public sealed class LintEngine
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 8);
         diagnostics.AddRange(parseResult.Diagnostics);
 
-        var normalizedRuleOptions = NormalizeRuleOptions(config?.RuleOptions, filePath);
-        diagnostics.AddRange(normalizedRuleOptions.ConfigurationDiagnostics);
-
-        var normalizedAdditiveCustomization = NormalizeAdditiveCustomization(
-            config?.AdditiveCustomization ?? RuleSpecificAdditiveCustomization.Empty,
-            filePath);
-        diagnostics.AddRange(normalizedAdditiveCustomization.ConfigurationDiagnostics);
+        var normalizedRules = NormalizeRules(config?.Rules, filePath);
+        diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, parseResult.Workflow);
         diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
@@ -82,17 +77,16 @@ public sealed class LintEngine
         {
             Utf8Yaml = utf8Yaml,
             FilePath = filePath,
-            RuleOptions = normalizedRuleOptions.RuleOptions,
-            ExprContext = config?.ExprContext ?? ExpressionContext.Empty,
-            AdditiveCustomization = normalizedAdditiveCustomization.AdditiveCustomization,
-            DefaultJobTimeoutMinutesForFix = config?.DefaultJobTimeoutMinutesForFix,
+            Rules = normalizedRules.Rules,
+            Fix = config?.Fix ?? new FixConfig(),
+            Network = config?.Network ?? new NetworkConfig(),
         };
 
         var activeRules = new List<IRule>(rules.Count);
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
-            if (!IsRuleEnabled(rule.Id, effectiveConfig.RuleOptions))
+            if (!IsRuleEnabled(rule.Id, effectiveConfig.Rules))
             {
                 continue;
             }
@@ -119,7 +113,7 @@ public sealed class LintEngine
             for (var j = 0; j < currentRuleDiagnostics.Length; j++)
             {
                 var current = currentRuleDiagnostics[j];
-                if (TryGetSeverityOverride(current.RuleId, effectiveConfig.RuleOptions, out var severityOverride))
+                if (TryGetSeverityOverride(current.RuleId, effectiveConfig.Rules, out var severityOverride))
                 {
                     current = current with { Severity = severityOverride };
                 }
@@ -166,21 +160,21 @@ public sealed class LintEngine
         };
     }
 
-    static bool IsRuleEnabled(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options)
+    static bool IsRuleEnabled(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules)
     {
-        if (!TryGetRuleOption(ruleId, options, out var ruleOption))
+        if (!TryGetRuleConfig(ruleId, rules, out var ruleConfig))
         {
             return true;
         }
 
-        return ruleOption!.Enabled;
+        return ruleConfig!.Enabled;
     }
 
-    static bool TryGetSeverityOverride(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options, out DiagnosticSeverity severity)
+    static bool TryGetSeverityOverride(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules, out DiagnosticSeverity severity)
     {
-        if (TryGetRuleOption(ruleId, options, out var ruleOption) && ruleOption?.Severity is not null)
+        if (TryGetRuleConfig(ruleId, rules, out var ruleConfig) && ruleConfig?.Severity is not null)
         {
-            severity = ruleOption.Severity.Value;
+            severity = ruleConfig.Severity.Value;
             return true;
         }
 
@@ -188,15 +182,15 @@ public sealed class LintEngine
         return false;
     }
 
-    static bool TryGetRuleOption(string? ruleId, IReadOnlyDictionary<string, RuleOption>? options, out RuleOption? option)
+    static bool TryGetRuleConfig(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules, out RuleConfig? config)
     {
-        option = null;
-        if (string.IsNullOrEmpty(ruleId) || options is null || options.Count == 0)
+        config = null;
+        if (string.IsNullOrEmpty(ruleId) || rules is null || rules.Count == 0)
         {
             return false;
         }
 
-        if (options.TryGetValue(ruleId, out option))
+        if (rules.TryGetValue(ruleId, out config))
         {
             return true;
         }
@@ -206,7 +200,7 @@ public sealed class LintEngine
             return false;
         }
 
-        return options.TryGetValue(resolvedRuleId, out option);
+        return rules.TryGetValue(resolvedRuleId, out config);
     }
 
     static bool TryGetSuppressionRecord(
@@ -302,17 +296,17 @@ public sealed class LintEngine
         for (var i = 0; i < normalizedExclusions.Count; i++)
         {
             var exclusion = normalizedExclusions[i];
-            if (!GlobMatch(exclusion.FilePattern, normalizedFilePath))
+            if (!GlobMatch(exclusion.Files, normalizedFilePath))
             {
                 continue;
             }
 
-            if (!exclusion.RuleIds.Contains(diagnostic.RuleId))
+            if (!exclusion.Rules.Contains(diagnostic.RuleId))
             {
                 continue;
             }
 
-            if (string.IsNullOrEmpty(exclusion.JobId))
+            if (exclusion.Jobs is null || exclusion.Jobs.Count == 0)
             {
                 suppressionRecord = new SuppressionRecord(
                     diagnostic.RuleId,
@@ -329,7 +323,17 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (!string.Equals(jobId, exclusion.JobId, StringComparison.OrdinalIgnoreCase))
+            var jobMatched = false;
+            for (var j = 0; j < exclusion.Jobs.Count; j++)
+            {
+                if (string.Equals(jobId, exclusion.Jobs[j], StringComparison.OrdinalIgnoreCase))
+                {
+                    jobMatched = true;
+                    break;
+                }
+            }
+
+            if (!jobMatched)
             {
                 continue;
             }
@@ -640,44 +644,46 @@ public sealed class LintEngine
         return tokenStart >= 0 ? tokenStart + 1 : fallbackStart + 2;
     }
 
-    static RuleOptionsNormalization NormalizeRuleOptions(IReadOnlyDictionary<string, RuleOption>? options, string filePath)
+    static RulesNormalization NormalizeRules(IReadOnlyDictionary<string, RuleConfig>? rules, string filePath)
     {
-        if (options is null || options.Count == 0)
+        if (rules is null || rules.Count == 0)
         {
-            return RuleOptionsNormalization.Empty;
+            return RulesNormalization.Empty;
         }
 
-        var normalized = new Dictionary<string, RuleOption>(StringComparer.Ordinal);
+        var normalized = new Dictionary<string, RuleConfig>(StringComparer.Ordinal);
         var diagnostics = new List<Diagnostic>();
-        foreach (var pair in options)
+        foreach (var pair in rules)
         {
             if (RuleCatalog.TryResolveRuleId(pair.Key, out var resolvedRuleId))
             {
-                var option = pair.Value;
+                var config = pair.Value;
 
-                if (!option.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
+                if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
                 {
                     diagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Error,
                         $"rule '{resolvedRuleId}' is non-disableable",
                         new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
                         FilePath: filePath));
-                    option = option with { Enabled = true };
+                    config = config with { Enabled = true };
                 }
 
-                if (option.Severity is not null
+                if (config.Severity is not null
                     && RuleCatalog.TryGetMinimumSeverity(resolvedRuleId, out var minimumSeverity)
-                    && option.Severity.Value < minimumSeverity)
+                    && config.Severity.Value < minimumSeverity)
                 {
                     diagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Error,
-                        $"rule '{resolvedRuleId}' minimum severity is '{minimumSeverity}', but '{option.Severity.Value}' was specified",
+                        $"rule '{resolvedRuleId}' minimum severity is '{minimumSeverity}', but '{config.Severity.Value}' was specified",
                         new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
                         FilePath: filePath));
-                    option = option with { Severity = null };
+                    config = config with { Severity = null };
                 }
 
-                normalized[resolvedRuleId] = option;
+                config = NormalizeRuleExtendLists(config, filePath, diagnostics);
+
+                normalized[resolvedRuleId] = config;
                 continue;
             }
 
@@ -688,57 +694,57 @@ public sealed class LintEngine
                 FilePath: filePath));
         }
 
-        return new RuleOptionsNormalization(normalized, diagnostics.ToArray());
+        return new RulesNormalization(normalized, diagnostics.ToArray());
     }
 
-    static AdditiveCustomizationNormalization NormalizeAdditiveCustomization(RuleSpecificAdditiveCustomization customization, string filePath)
+    static RuleConfig NormalizeRuleExtendLists(RuleConfig config, string filePath, List<Diagnostic> diagnostics)
     {
-        var diagnostics = new List<Diagnostic>();
-        var normalizedDangerousEvents = NormalizeAdditiveValues(
-            customization.AdditionalDangerousEvents,
-            "dangerous-triggers additional dangerous event must not be empty",
-            filePath,
-            diagnostics);
-        var normalizedKnownHostedLabels = NormalizeAdditiveValues(
-            customization.AdditionalKnownHostedLabels,
-            "runner-label additional known hosted label must not be empty",
-            filePath,
-            diagnostics);
-        var normalizedPublicRegistries = NormalizeRegistryHosts(
-            customization.AdditionalPublicRegistries,
-            filePath,
-            diagnostics);
-        var normalizedUntrustedTriggers = NormalizeAdditiveValues(
-            customization.AdditionalUntrustedTriggers,
-            "cache-poisoning/self-hosted-runner additional untrusted trigger must not be empty",
-            filePath,
-            diagnostics);
-        var normalizedOutputCommands = NormalizeAdditiveValues(
-            customization.AdditionalOutputCommands,
-            "unredacted-secrets additional output command must not be empty",
-            filePath,
-            diagnostics);
-        var normalizedForbiddenUsesAllowPatterns = NormalizeAdditiveValues(
-            customization.ForbiddenUsesAllowPatterns,
-            "forbidden-uses additional allow pattern must not be empty",
-            filePath,
-            diagnostics);
-        var normalizedForbiddenUsesDenyPatterns = NormalizeAdditiveValues(
-            customization.ForbiddenUsesDenyPatterns,
-            "forbidden-uses additional deny pattern must not be empty",
-            filePath,
-            diagnostics);
+        if (config.Events?.Extend is not null)
+        {
+            var ext = NormalizeAdditiveValues(config.Events.Extend, "events extend entry must not be empty", filePath, diagnostics);
+            config = config with { Events = ext is null ? null : new ExtendableList(ext) };
+        }
 
-        return new AdditiveCustomizationNormalization(
-            new RuleSpecificAdditiveCustomization(
-                normalizedDangerousEvents,
-                normalizedKnownHostedLabels,
-                normalizedPublicRegistries,
-                normalizedUntrustedTriggers,
-                normalizedOutputCommands,
-                normalizedForbiddenUsesAllowPatterns,
-                normalizedForbiddenUsesDenyPatterns),
-            diagnostics.ToArray());
+        if (config.KnownHostedLabels?.Extend is not null)
+        {
+            var ext = NormalizeAdditiveValues(config.KnownHostedLabels.Extend, "known-hosted-labels extend entry must not be empty", filePath, diagnostics);
+            config = config with { KnownHostedLabels = ext is null ? null : new ExtendableList(ext) };
+        }
+
+        if (config.PublicRegistries?.Extend is not null)
+        {
+            var ext = NormalizeRegistryHosts(config.PublicRegistries.Extend, filePath, diagnostics);
+            config = config with { PublicRegistries = ext is null ? null : new ExtendableList(ext) };
+        }
+
+        if (config.UntrustedTriggers?.Extend is not null)
+        {
+            var ext = NormalizeAdditiveValues(config.UntrustedTriggers.Extend, "untrusted-triggers extend entry must not be empty", filePath, diagnostics);
+            config = config with { UntrustedTriggers = ext is null ? null : new ExtendableList(ext) };
+        }
+
+        if (config.OutputCommands?.Extend is not null)
+        {
+            var ext = NormalizeAdditiveValues(config.OutputCommands.Extend, "output-commands extend entry must not be empty", filePath, diagnostics);
+            config = config with { OutputCommands = ext is null ? null : new ExtendableList(ext) };
+        }
+
+        if (config.AssumeEvents is not null)
+        {
+            config = config with { AssumeEvents = NormalizeAdditiveValues(config.AssumeEvents, "assume-events entry must not be empty", filePath, diagnostics) };
+        }
+
+        if (config.Allow is not null)
+        {
+            config = config with { Allow = NormalizeAdditiveValues(config.Allow, "allow pattern must not be empty", filePath, diagnostics) };
+        }
+
+        if (config.Deny is not null)
+        {
+            config = config with { Deny = NormalizeAdditiveValues(config.Deny, "deny pattern must not be empty", filePath, diagnostics) };
+        }
+
+        return config;
     }
 
     static IReadOnlyList<string>? NormalizeAdditiveValues(
@@ -896,18 +902,18 @@ public sealed class LintEngine
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
-            if (string.IsNullOrWhiteSpace(exclusion.FilePattern))
+            if (string.IsNullOrWhiteSpace(exclusion.Files))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    "exclusion file pattern must not be empty",
+                    "exclusion files pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
                     FilePath: filePath));
                 continue;
             }
 
             var normalizedRuleIds = new HashSet<string>(StringComparer.Ordinal);
-            var ruleIds = exclusion.RuleIds;
+            var ruleIds = exclusion.Rules;
             for (var j = 0; j < ruleIds.Count; j++)
             {
                 var ruleId = ruleIds[j];
@@ -939,17 +945,23 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(exclusion.JobId) && !knownJobIds.Contains(exclusion.JobId))
+            if (exclusion.Jobs is not null)
             {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"unknown job-id '{exclusion.JobId}' in exclusion configuration",
-                    new TextRange(0, exclusion.JobId.Length, 1, 1, 1, 1 + exclusion.JobId.Length),
-                    FilePath: filePath));
-                continue;
+                for (var j = 0; j < exclusion.Jobs.Count; j++)
+                {
+                    var jobId = exclusion.Jobs[j];
+                    if (!string.IsNullOrEmpty(jobId) && !knownJobIds.Contains(jobId))
+                    {
+                        diagnostics.Add(new Diagnostic(
+                            DiagnosticSeverity.Error,
+                            $"unknown job-id '{jobId}' in exclusion configuration",
+                            new TextRange(0, jobId.Length, 1, 1, 1, 1 + jobId.Length),
+                            FilePath: filePath));
+                    }
+                }
             }
 
-            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.FilePattern), normalizedRuleIds, exclusion.JobId));
+            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.Files), normalizedRuleIds, exclusion.Jobs));
         }
 
         return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
@@ -1154,11 +1166,11 @@ public sealed class LintEngine
 
     readonly record struct SuppressionAnchor(int Line, int Column);
 
-    readonly record struct RuleOptionsNormalization(
-        IReadOnlyDictionary<string, RuleOption>? RuleOptions,
+    readonly record struct RulesNormalization(
+        IReadOnlyDictionary<string, RuleConfig>? Rules,
         Diagnostic[] ConfigurationDiagnostics)
     {
-        public static RuleOptionsNormalization Empty { get; } = new(null, []);
+        public static RulesNormalization Empty { get; } = new(null, []);
     }
 
     readonly record struct ExclusionsNormalization(
@@ -1169,15 +1181,8 @@ public sealed class LintEngine
         public static ExclusionsNormalization Empty { get; } = new([], string.Empty, []);
     }
 
-    readonly record struct AdditiveCustomizationNormalization(
-        RuleSpecificAdditiveCustomization AdditiveCustomization,
-        Diagnostic[] ConfigurationDiagnostics)
-    {
-        public static AdditiveCustomizationNormalization Empty { get; } = new(RuleSpecificAdditiveCustomization.Empty, []);
-    }
-
     readonly record struct NormalizedExclusion(
-        string FilePattern,
-        IReadOnlySet<string> RuleIds,
-        string? JobId);
+        string Files,
+        IReadOnlySet<string> Rules,
+        IReadOnlyList<string>? Jobs);
 }

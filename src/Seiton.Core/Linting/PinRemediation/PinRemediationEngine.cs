@@ -5,14 +5,18 @@ namespace Seiton.Core.Linting.PinRemediation;
 public sealed class PinRemediationEngine(
     IActionShaResolver? actionShaResolver,
     IImageDigestResolver? imageDigestResolver,
-    PinResolutionConfig config)
+    FixPinningConfig pinningConfig,
+    FixImagesConfig imagesConfig,
+    NetworkConfig networkConfig)
 {
     const string UsesRuleId = "unpinned-uses";
     const string ImageRuleId = "unpinned-image";
 
     readonly IActionShaResolver? _actionShaResolver = actionShaResolver;
     readonly IImageDigestResolver? _imageDigestResolver = imageDigestResolver;
-    readonly PinResolutionConfig _config = config ?? PinResolutionConfig.Default;
+    readonly FixPinningConfig _pinningConfig = pinningConfig ?? new FixPinningConfig();
+    readonly FixImagesConfig _imagesConfig = imagesConfig ?? new FixImagesConfig();
+    readonly NetworkConfig _networkConfig = networkConfig ?? new NetworkConfig();
 
     public async Task<RemediationResult> RemediateAsync(
         IReadOnlyList<Diagnostic> diagnostics,
@@ -24,7 +28,8 @@ public sealed class PinRemediationEngine(
             return new RemediationResult(diagnostics, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        if (!_config.AllowNetwork || (_actionShaResolver is null && _imageDigestResolver is null))
+        var hasNetwork = _pinningConfig.EnableNetwork || _imagesConfig.EnableNetwork;
+        if (!hasNetwork || (_actionShaResolver is null && _imageDigestResolver is null))
         {
             return new RemediationResult(diagnostics, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
@@ -33,7 +38,7 @@ public sealed class PinRemediationEngine(
         var resolvedCount = 0;
         var skippedCount = 0;
         var failedCount = 0;
-        var maxConcurrency = Math.Max(1, _config.MaxConcurrency);
+        var maxConcurrency = Math.Max(1, _networkConfig.MaxConcurrency);
         using var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
 
         var tasks = new Task[diagnostics.Count];
@@ -82,8 +87,8 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: false);
         }
 
-        var timeout = _config.RequestTimeoutSec > 0
-            ? TimeSpan.FromSeconds(_config.RequestTimeoutSec)
+        var timeout = _networkConfig.TimeoutSeconds > 0
+            ? TimeSpan.FromSeconds(_networkConfig.TimeoutSeconds)
             : Timeout.InfiniteTimeSpan;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -101,7 +106,7 @@ public sealed class PinRemediationEngine(
 
             return await RemediateUnpinnedImageAsync(diagnostic, utf8Yaml, cts.Token);
         }
-        catch when (_config.FailOpen)
+        catch when (_networkConfig.OnError == NetworkErrorMode.Skip)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }

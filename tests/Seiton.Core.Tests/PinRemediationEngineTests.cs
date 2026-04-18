@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using System.Text;
 
@@ -19,7 +20,7 @@ public sealed class PinRemediationEngineTests
                 RuleId: "unpinned-uses"),
         };
 
-        var engine = new PinRemediationEngine(null, null, new PinResolutionConfig { AllowNetwork = false });
+        var engine = new PinRemediationEngine(null, null, new FixPinningConfig(), new FixImagesConfig(), new NetworkConfig());
 
         var result = await engine.RemediateAsync(diagnostics, source);
 
@@ -68,7 +69,9 @@ public sealed class PinRemediationEngineTests
         var engine = new PinRemediationEngine(
             actionResolver,
             imageResolver,
-            new PinResolutionConfig { AllowNetwork = true, FailOpen = true });
+            new FixPinningConfig { EnableNetwork = true },
+            new FixImagesConfig { EnableNetwork = true },
+            new NetworkConfig());
 
         var result = await engine.RemediateAsync(diagnostics, source);
 
@@ -99,7 +102,9 @@ public sealed class PinRemediationEngineTests
         var engine = new PinRemediationEngine(
             actionResolver,
             null,
-            new PinResolutionConfig { AllowNetwork = true, FailOpen = false });
+            new FixPinningConfig { EnableNetwork = true },
+            new FixImagesConfig { EnableNetwork = true },
+            new NetworkConfig { OnError = NetworkErrorMode.Fail });
 
         await Assert.That(async () => await engine.RemediateAsync(diagnostics, source))
             .Throws<InvalidOperationException>();

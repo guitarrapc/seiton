@@ -16,9 +16,10 @@ public sealed class ForbiddenUsesRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        allowPatterns = config.AdditiveCustomization.ForbiddenUsesAllowPatterns;
-        denyPatterns = config.AdditiveCustomization.ForbiddenUsesDenyPatterns is { Count: > 0 }
-            ? config.AdditiveCustomization.ForbiddenUsesDenyPatterns
+        var ruleConfig = config.GetRuleConfig(Id);
+        allowPatterns = ruleConfig?.Allow;
+        denyPatterns = ruleConfig?.Deny is { Count: > 0 }
+            ? ruleConfig.Deny
             : DefaultDenyPatterns;
     }
 

@@ -1295,7 +1295,6 @@ internal sealed class LintConfigLineParser
 
     FixImagesConfig ParseFixImagesSection()
     {
-        var enableNetwork = false;
         IReadOnlyList<string>? excludeImages = null;
         IReadOnlyList<string>? excludeTags = null;
         IReadOnlyList<string>? ignoreImages = null;
@@ -1323,87 +1322,45 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
-            if (!TryParseProperty(line, out var key, out var value))
+            if (!TryParseKey(line, out var key))
             {
-                if (!TryParseKey(line, out key))
+                if (TryParseProperty(line, out key, out var propValue) && string.IsNullOrEmpty(propValue))
                 {
-                    diagnostics.Add(CreateError("fix.images entry must be key or key: value", lineNumber, 5, line.Trim().Length));
-                    index++;
-                    continue;
-                }
-
-                index++;
-                if (key == "exclude-images")
-                {
-                    excludeImages = ParseListBlock(4, "exclude-images");
-                    continue;
-                }
-
-                if (key == "exclude-tags")
-                {
-                    excludeTags = ParseListBlock(4, "exclude-tags");
-                    continue;
-                }
-
-                if (key == "ignore-images")
-                {
-                    ignoreImages = ParseListBlock(4, "ignore-images");
-                    continue;
-                }
-
-                diagnostics.Add(CreateError($"unknown fix.images key '{key}'", lineNumber, 5, key.Length));
-                SkipIndentedBlock(4);
-                continue;
-            }
-
-            if (string.IsNullOrEmpty(value))
-            {
-                index++;
-                if (key == "exclude-images")
-                {
-                    excludeImages = ParseListBlock(4, "exclude-images");
-                    continue;
-                }
-
-                if (key == "exclude-tags")
-                {
-                    excludeTags = ParseListBlock(4, "exclude-tags");
-                    continue;
-                }
-
-                if (key == "ignore-images")
-                {
-                    ignoreImages = ParseListBlock(4, "ignore-images");
-                    continue;
-                }
-
-                diagnostics.Add(CreateError($"unknown fix.images key '{key}'", lineNumber, 5, key.Length));
-                SkipIndentedBlock(4);
-                continue;
-            }
-
-            if (key == "enable-network")
-            {
-                if (!TryParseBool(value, out var parsed))
-                {
-                    diagnostics.Add(CreateError("fix.images.enable-network must be true or false", lineNumber, 5, line.Trim().Length));
+                    // key: with empty value
                 }
                 else
                 {
-                    enableNetwork = parsed;
+                    diagnostics.Add(CreateError("fix.images entry must be a key", lineNumber, 5, line.Trim().Length));
+                    index++;
+                    continue;
                 }
+            }
 
-                index++;
+            index++;
+            if (key == "exclude-images")
+            {
+                excludeImages = ParseListBlock(4, "exclude-images");
+                continue;
+            }
+
+            if (key == "exclude-tags")
+            {
+                excludeTags = ParseListBlock(4, "exclude-tags");
+                continue;
+            }
+
+            if (key == "ignore-images")
+            {
+                ignoreImages = ParseListBlock(4, "ignore-images");
                 continue;
             }
 
             diagnostics.Add(CreateError($"unknown fix.images key '{key}'", lineNumber, 5, key.Length));
-            index++;
+            SkipIndentedBlock(4);
         }
 
         return new FixImagesConfig
         {
-            EnableNetwork = enableNetwork,
             ExcludeImages = excludeImages ?? new FixImagesConfig().ExcludeImages,
             ExcludeTags = excludeTags ?? new FixImagesConfig().ExcludeTags,
             IgnoreImages = ignoreImages ?? [],

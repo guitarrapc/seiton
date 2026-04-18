@@ -21,7 +21,7 @@ public sealed class PinRemediationTests
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => Task.FromResult<(string?, string?)>((ActionSha, "v4"))),
             new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
-            new PinResolutionConfig { AllowNetwork = true, FailOpen = true });
+            new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await engine.RemediateAsync(lintResult.Diagnostics, source);
 
@@ -52,7 +52,7 @@ public sealed class PinRemediationTests
                 imageCalls++;
                 return Task.FromResult<string?>(ImageDigest);
             }),
-            new PinResolutionConfig { AllowNetwork = false, FailOpen = true });
+            new FixPinningConfig(), new FixImagesConfig(), new NetworkConfig());
 
         var remediation = await engine.RemediateAsync(lintResult.Diagnostics, source);
 
@@ -74,7 +74,7 @@ public sealed class PinRemediationTests
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => throw new InvalidOperationException("action resolver failed")),
             new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
-            new PinResolutionConfig { AllowNetwork = true, FailOpen = true });
+            new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await engine.RemediateAsync(lintResult.Diagnostics, source);
 
@@ -95,7 +95,7 @@ public sealed class PinRemediationTests
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => throw new InvalidOperationException("action resolver failed")),
             new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
-            new PinResolutionConfig { AllowNetwork = true, FailOpen = false });
+            new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig { OnError = NetworkErrorMode.Fail });
 
         await Assert.That(async () => await engine.RemediateAsync(lintResult.Diagnostics, source))
             .Throws<InvalidOperationException>();
@@ -111,7 +111,7 @@ public sealed class PinRemediationTests
         var remediationEngine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => Task.FromResult<(string?, string?)>((ActionSha, "v4"))),
             new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
-            new PinResolutionConfig { AllowNetwork = true, FailOpen = true });
+            new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await remediationEngine.RemediateAsync(lintResult.Diagnostics, source);
         var revalidated = FixEngine.ApplyAndRelint(

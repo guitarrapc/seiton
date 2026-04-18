@@ -20,7 +20,7 @@ public sealed class DangerousTriggersRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalDangerousEvents = BuildNormalizedSet(config.AdditiveCustomization.AdditionalDangerousEvents);
+        additionalDangerousEvents = BuildNormalizedSet(config.GetRuleConfig(Id)?.Events?.Extend);
     }
 
     public override void VisitEvent(Event ev)

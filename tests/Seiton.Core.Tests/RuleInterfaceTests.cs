@@ -2290,7 +2290,7 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobTimeoutMinutesRequiredRule()]);
         var config = new LintConfig
         {
-            DefaultJobTimeoutMinutesForFix = 15,
+            Fix = new FixConfig { Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 15 } },
         };
 
         var result = engine.Check(sourceBytes, "job-timeout-minutes-required-fix.yml", config);
@@ -3190,9 +3190,14 @@ public sealed class RuleInterfaceTests
     {
         var config = new LintConfig
         {
-            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                ForbiddenUsesDenyPatterns: ["bad-org/*"],
-                ForbiddenUsesAllowPatterns: ["bad-org/safe-action"]),
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["forbidden-uses"] = new RuleConfig
+                {
+                    Deny = ["bad-org/*"],
+                    Allow = ["bad-org/safe-action"],
+                },
+            },
         };
 
         var cases = new[]
@@ -4881,9 +4886,9 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var disabledConfig = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["job-permissions-required"] = new RuleOption(Enabled: false),
+                ["job-permissions-required"] = new RuleConfig { Enabled = false },
             },
         };
 
@@ -4909,9 +4914,9 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var disabledConfig = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["seiton-lint-rule-008"] = new RuleOption(Enabled: false),
+                ["seiton-lint-rule-008"] = new RuleConfig { Enabled = false },
             },
         };
 
@@ -4934,9 +4939,9 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var overrideConfig = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["job-permissions-required"] = new RuleOption(Severity: DiagnosticSeverity.Error),
+                ["job-permissions-required"] = new RuleConfig { Severity = DiagnosticSeverity.Error },
             },
         };
 
@@ -5182,7 +5187,7 @@ public sealed class RuleInterfaceTests
         {
             Exclusions =
             [
-                new LintExclusion("**/*.yml", ["job-permissions-required"], JobId: "build"),
+                new LintExclusion("**/*.yml", ["job-permissions-required"], Jobs: ["build"]),
             ],
         };
 
@@ -5242,7 +5247,7 @@ public sealed class RuleInterfaceTests
         {
             Exclusions =
             [
-                new LintExclusion("**/*.yml", ["job-permissions-required"], JobId: "buid"),
+                new LintExclusion("**/*.yml", ["job-permissions-required"], Jobs: ["buid"]),
             ],
         };
 
@@ -5270,9 +5275,9 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["deny-write-all"] = new RuleOption(Enabled: false),
+                ["deny-write-all"] = new RuleConfig { Enabled = false },
             },
         };
 
@@ -5298,9 +5303,9 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["deny-write-all"] = new RuleOption(Severity: DiagnosticSeverity.Warning),
+                ["deny-write-all"] = new RuleConfig { Severity = DiagnosticSeverity.Warning },
             },
         };
 
@@ -5328,9 +5333,9 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["deny-read-all"] = new RuleOption(Enabled: false),
+                ["deny-read-all"] = new RuleConfig { Enabled = false },
             },
         };
 
@@ -5356,9 +5361,9 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["deny-read-all"] = new RuleOption(Severity: DiagnosticSeverity.Warning),
+                ["deny-read-all"] = new RuleConfig { Severity = DiagnosticSeverity.Warning },
             },
         };
 
@@ -5435,9 +5440,9 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            RuleOptions = new Dictionary<string, RuleOption>
+            Rules = new Dictionary<string, RuleConfig>
             {
-                ["job-permissions-requred"] = new RuleOption(Enabled: false),
+                ["job-permissions-requred"] = new RuleConfig { Enabled = false },
             },
         };
 
@@ -5465,22 +5470,29 @@ public sealed class RuleInterfaceTests
         var rule = new ConfigCaptureRule();
         var config = new LintConfig
         {
-            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                AdditionalDangerousEvents: ["issue_comment", "pull_request_review_comment"],
-                AdditionalKnownHostedLabels: ["ubuntu-24.04-arm", "windows-2025-vs2026"],
-                AdditionalPublicRegistries: ["registry.example.com", "mirror.example.net:5000"],
-                AdditionalUntrustedTriggers: ["issue_comment"],
-                AdditionalOutputCommands: ["tee"]),
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["issue_comment", "pull_request_review_comment"]) },
+                ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["ubuntu-24.04-arm", "windows-2025-vs2026"]) },
+                ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["registry.example.com", "mirror.example.net:5000"]) },
+                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["issue_comment"]) },
+                ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["tee"]) },
+            },
         };
 
         _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization.yml", config);
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
-        await Assert.That(rule.LastConfig!.AdditiveCustomization.AdditionalDangerousEvents).IsEquivalentTo(new[] { "issue_comment", "pull_request_review_comment" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalUntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalOutputCommands).IsEquivalentTo(new[] { "tee" });
+        var dtRule = rule.LastConfig!.GetRuleConfig("dangerous-triggers");
+        await Assert.That(dtRule?.Events?.Extend).IsEquivalentTo(new[] { "issue_comment", "pull_request_review_comment" });
+        var rlRule = rule.LastConfig.GetRuleConfig("runner-label");
+        await Assert.That(rlRule?.KnownHostedLabels?.Extend).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
+        var crRule = rule.LastConfig.GetRuleConfig("credentials");
+        await Assert.That(crRule?.PublicRegistries?.Extend).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
+        var cpRule = rule.LastConfig.GetRuleConfig("cache-poisoning");
+        await Assert.That(cpRule?.UntrustedTriggers?.Extend).IsEquivalentTo(new[] { "issue_comment" });
+        var usRule = rule.LastConfig.GetRuleConfig("unredacted-secrets");
+        await Assert.That(usRule?.OutputCommands?.Extend).IsEquivalentTo(new[] { "tee" });
     }
 
     [Test]
@@ -5500,12 +5512,7 @@ public sealed class RuleInterfaceTests
         _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-default.yml", new LintConfig());
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
-        await Assert.That(rule.LastConfig!.AdditiveCustomization).IsEqualTo(RuleSpecificAdditiveCustomization.Empty);
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalDangerousEvents).IsNull();
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsNull();
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsNull();
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalUntrustedTriggers).IsNull();
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalOutputCommands).IsNull();
+        await Assert.That(rule.LastConfig!.Rules).IsNull();
     }
 
     [Test]
@@ -5523,22 +5530,24 @@ public sealed class RuleInterfaceTests
         var rule = new ConfigCaptureRule();
         var config = new LintConfig
         {
-            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                AdditionalDangerousEvents: ["Issue_Comment", "issue_comment"],
-                AdditionalKnownHostedLabels: ["Custom-Large", "custom-large"],
-                AdditionalPublicRegistries: ["Registry.Example.Com", "registry.example.com"],
-                AdditionalUntrustedTriggers: ["Issue_Comment", "issue_comment"],
-                AdditionalOutputCommands: ["TEE", "tee"]),
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["Issue_Comment", "issue_comment"]) },
+                ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["Custom-Large", "custom-large"]) },
+                ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["Registry.Example.Com", "registry.example.com"]) },
+                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["Issue_Comment", "issue_comment"]) },
+                ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["TEE", "tee"]) },
+            },
         };
 
         _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-normalized.yml", config);
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
-        await Assert.That(rule.LastConfig!.AdditiveCustomization.AdditionalDangerousEvents).IsEquivalentTo(new[] { "issue_comment" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsEquivalentTo(new[] { "custom-large" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsEquivalentTo(new[] { "registry.example.com" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalUntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
-        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalOutputCommands).IsEquivalentTo(new[] { "tee" });
+        await Assert.That(rule.LastConfig!.GetRuleConfig("dangerous-triggers")?.Events?.Extend).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("runner-label")?.KnownHostedLabels?.Extend).IsEquivalentTo(new[] { "custom-large" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("credentials")?.PublicRegistries?.Extend).IsEquivalentTo(new[] { "registry.example.com" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("cache-poisoning")?.UntrustedTriggers?.Extend).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("unredacted-secrets")?.OutputCommands?.Extend).IsEquivalentTo(new[] { "tee" });
     }
 
     [Test]
@@ -5556,8 +5565,10 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                AdditionalDangerousEvents: ["issue_comment"]),
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["issue_comment"]) },
+            },
         };
 
         var result = new LintEngine([new DangerousTriggersRule()]).Check(Encoding.UTF8.GetBytes(yaml), "dangerous-trigger-custom.yml", config);
@@ -5587,8 +5598,10 @@ public sealed class RuleInterfaceTests
             "cache-poisoning-custom-with.yml",
             new LintConfig
             {
-                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                    AdditionalUntrustedTriggers: ["issue_comment"]),
+                Rules = new Dictionary<string, RuleConfig>
+                {
+                    ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["issue_comment"]) },
+                },
             });
 
         await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning")).IsFalse();
@@ -5614,8 +5627,10 @@ public sealed class RuleInterfaceTests
             "self-hosted-runner-custom-with.yml",
             new LintConfig
             {
-                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                    AdditionalUntrustedTriggers: ["issue_comment"]),
+                Rules = new Dictionary<string, RuleConfig>
+                {
+                    ["self-hosted-runner"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["issue_comment"]) },
+                },
             });
 
         await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner")).IsFalse();
@@ -5643,8 +5658,10 @@ public sealed class RuleInterfaceTests
             "unredacted-secrets-custom-with.yml",
             new LintConfig
             {
-                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                    AdditionalOutputCommands: ["tee"]),
+                Rules = new Dictionary<string, RuleConfig>
+                {
+                    ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["tee"]) },
+                },
             });
 
         await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "unredacted-secrets")).IsFalse();
@@ -5671,8 +5688,10 @@ public sealed class RuleInterfaceTests
             "runner-label-custom-with.yml",
             new LintConfig
             {
-                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                    AdditionalKnownHostedLabels: ["custom-large"]),
+                Rules = new Dictionary<string, RuleConfig>
+                {
+                    ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["custom-large"]) },
+                },
             });
 
         await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "runner-label")).IsTrue();
@@ -5700,8 +5719,10 @@ public sealed class RuleInterfaceTests
             "credentials-custom-with.yml",
             new LintConfig
             {
-                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                    AdditionalPublicRegistries: ["registry.example.com"]),
+                Rules = new Dictionary<string, RuleConfig>
+                {
+                    ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["registry.example.com"]) },
+                },
             });
 
         await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "credentials")).IsTrue();
@@ -5722,25 +5743,26 @@ public sealed class RuleInterfaceTests
 
         var config = new LintConfig
         {
-            AdditiveCustomization = new RuleSpecificAdditiveCustomization(
-                AdditionalDangerousEvents: ["   "],
-                AdditionalKnownHostedLabels: [""],
-                AdditionalPublicRegistries: ["https://registry.example.com/team/app"],
-                AdditionalUntrustedTriggers: [""],
-                AdditionalOutputCommands: ["   "],
-                ForbiddenUsesAllowPatterns: ["   "],
-                ForbiddenUsesDenyPatterns: ["   "]),
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["   "]) },
+                ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList([""]) },
+                ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["https://registry.example.com/team/app"]) },
+                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList([""]) },
+                ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["   "]) },
+                ["forbidden-uses"] = new RuleConfig { Allow = ["   "], Deny = ["   "] },
+            },
         };
 
         var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
 
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("dangerous-triggers additional dangerous event must not be empty", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("runner-label additional known hosted label must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("events extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("known-hosted-labels extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("credentials additional public registry host 'https://registry.example.com/team/app' is invalid", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("cache-poisoning/self-hosted-runner additional untrusted trigger must not be empty", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("unredacted-secrets additional output command must not be empty", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("forbidden-uses additional allow pattern must not be empty", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("forbidden-uses additional deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("untrusted-triggers extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("output-commands extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("allow pattern must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

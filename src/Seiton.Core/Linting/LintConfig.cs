@@ -1,5 +1,4 @@
-﻿using Seiton.Core.Linting.OnlineAudit;
-using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
@@ -12,54 +11,111 @@ public sealed class LintConfig
 
     public string? FilePath { get; init; }
 
-    public IReadOnlyDictionary<string, RuleOption>? RuleOptions { get; init; }
+    // rules section: rule-id -> RuleConfig
+    public IReadOnlyDictionary<string, RuleConfig>? Rules { get; init; }
 
+    // exclusions section
     public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
 
-    public ExpressionContext ExprContext { get; init; } = ExpressionContext.Empty;
+    // fix section
+    public FixConfig Fix { get; init; } = new();
 
-    public RuleSpecificAdditiveCustomization AdditiveCustomization { get; init; } = RuleSpecificAdditiveCustomization.Empty;
+    // network section
+    public NetworkConfig Network { get; init; } = new();
 
-    /// <summary>
-    /// Optional default timeout-minutes used by partial auto-fix for job-timeout-minutes-required.
-    /// When null or <= 0, the rule reports diagnostics without attaching a fix.
-    /// </summary>
-    public int? DefaultJobTimeoutMinutesForFix { get; init; } = null;
-
-    /// <summary>
-    /// Optional network-assisted pin remediation configuration (Seiton_Linter_spec.md §12).
-    /// When null or AllowNetwork is false, no network-assisted remediation is performed.
-    /// </summary>
-    public PinResolutionConfig? PinResolution { get; init; } = null;
-
-    /// <summary>
-    /// Optional network-assisted online audit configuration for advisory and ref checks.
-    /// When null or AllowNetwork is false, no online audit is performed.
-    /// </summary>
-    public OnlineAuditConfig? OnlineAudit { get; init; } = null;
+    public RuleConfig? GetRuleConfig(string ruleId)
+    {
+        if (Rules is null || !Rules.TryGetValue(ruleId, out var config))
+            return null;
+        return config;
+    }
 }
 
-public sealed record ExpressionContext(
-    IReadOnlyList<string>? EventTypes = null)
+public sealed record RuleConfig
 {
-    public static ExpressionContext Empty { get; } = new();
+    // Shared keys (formerly RuleOption)
+    public bool Enabled { get; init; } = true;
+    public DiagnosticSeverity? Severity { get; init; }
+
+    // rule-specific extend keys
+    public ExtendableList? Events { get; init; }                   // dangerous-triggers
+    public ExtendableList? KnownHostedLabels { get; init; }        // runner-label
+    public ExtendableList? PublicRegistries { get; init; }          // credentials
+    public ExtendableList? UntrustedTriggers { get; init; }        // cache-poisoning, self-hosted-runner
+    public ExtendableList? OutputCommands { get; init; }            // unredacted-secrets
+
+    // rule-specific direct keys
+    public IReadOnlyList<string>? AssumeEvents { get; init; }      // expr-undefined-var
+    public IReadOnlyList<string>? Allow { get; init; }             // forbidden-uses
+    public IReadOnlyList<string>? Deny { get; init; }              // forbidden-uses
 }
 
-public sealed record RuleOption(bool Enabled = true, DiagnosticSeverity? Severity = null);
+public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
 public sealed record LintExclusion(
-    string FilePattern,
-    IReadOnlyList<string> RuleIds,
-    string? JobId = null);
+    string Files,
+    IReadOnlyList<string> Rules,
+    IReadOnlyList<string>? Jobs = null);
 
-public sealed record RuleSpecificAdditiveCustomization(
-    IReadOnlyList<string>? AdditionalDangerousEvents = null,
-    IReadOnlyList<string>? AdditionalKnownHostedLabels = null,
-    IReadOnlyList<string>? AdditionalPublicRegistries = null,
-    IReadOnlyList<string>? AdditionalUntrustedTriggers = null,
-    IReadOnlyList<string>? AdditionalOutputCommands = null,
-    IReadOnlyList<string>? ForbiddenUsesAllowPatterns = null,
-    IReadOnlyList<string>? ForbiddenUsesDenyPatterns = null)
+public sealed record FixConfig
 {
-    public static RuleSpecificAdditiveCustomization Empty { get; } = new();
+    public FixDefaultsConfig Defaults { get; init; } = new();
+    public FixPinningConfig Pinning { get; init; } = new();
+    public FixImagesConfig Images { get; init; } = new();
+}
+
+public sealed record FixDefaultsConfig
+{
+    public int? JobTimeoutMinutes { get; init; }
+}
+
+public sealed record FixPinningConfig
+{
+    public bool EnableNetwork { get; init; } = false;
+    public int MinAgeDays { get; init; } = 14;
+    public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
+    public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
+}
+
+public sealed record FixImagesConfig
+{
+    private static readonly IReadOnlyList<string> DefaultExcludeImages = ["scratch"];
+    private static readonly IReadOnlyList<string> DefaultExcludeTags = ["latest"];
+
+    public bool EnableNetwork { get; init; } = false;
+
+    private IReadOnlyList<string> _excludeImages = DefaultExcludeImages;
+
+    public IReadOnlyList<string> ExcludeImages
+    {
+        get => _excludeImages;
+        init => _excludeImages = EnforceScratch(value);
+    }
+
+    public IReadOnlyList<string> ExcludeTags { get; init; } = DefaultExcludeTags;
+    public IReadOnlyList<string> IgnoreImages { get; init; } = [];
+
+    private static IReadOnlyList<string> EnforceScratch(IReadOnlyList<string> values)
+    {
+        if (values.Contains("scratch"))
+            return values;
+        var list = new List<string>(values) { "scratch" };
+        return list.AsReadOnly();
+    }
+}
+
+public sealed record NetworkConfig
+{
+    public NetworkErrorMode OnError { get; init; } = NetworkErrorMode.Skip;
+    public int TimeoutSeconds { get; init; } = 30;
+    public int MaxConcurrency { get; init; } = 4;
+    public GitHubNetworkConfig GitHub { get; init; } = new();
+}
+
+public enum NetworkErrorMode { Skip, Fail }
+
+public sealed record GitHubNetworkConfig
+{
+    public string? GhesApiUrl { get; init; } = null;
+    public bool GhesFallback { get; init; } = false;
 }

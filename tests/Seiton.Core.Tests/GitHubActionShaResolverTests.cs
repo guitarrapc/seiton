@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Linting.PinRemediation;
 
 namespace Seiton.Core.Tests;
@@ -21,7 +22,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
 
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
@@ -54,7 +55,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
 
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
 
@@ -80,11 +81,11 @@ public sealed class GitHubActionShaResolverTests
 
         var resolver = CreateResolver(
             handler,
-            new GitHubActionsResolutionConfig
+            new FixPinningConfig { MinAgeDays = 0 },
+            new GitHubNetworkConfig
             {
                 GhesApiUrl = "https://ghes.example.com/api/v3",
                 GhesFallback = true,
-                MinAgeDays = 0,
             });
 
         var (sha, _) = await resolver.ResolveAsync("actions", "setup-go", "v5");
@@ -100,7 +101,7 @@ public sealed class GitHubActionShaResolverTests
         var handler = new StubHttpMessageHandler();
         var resolver = CreateResolver(
             handler,
-            new GitHubActionsResolutionConfig
+            new FixPinningConfig
             {
                 ExcludeBranches = ["main"],
                 IgnoreActions = [new IgnoreActionEntry("actions/checkout", ".*")],
@@ -133,7 +134,7 @@ public sealed class GitHubActionShaResolverTests
             """);
         handler.AddJson("https://api.github.com/repos/actions/checkout/tags?per_page=100", "[]");
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
         await Assert.That(sha).IsNull();
@@ -157,7 +158,7 @@ public sealed class GitHubActionShaResolverTests
             """);
         handler.AddJson("https://api.github.com/repos/actions/cache/tags?per_page=100", "[]");
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
 
         await Assert.That(sha).IsNull();
@@ -203,7 +204,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
         await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
@@ -238,7 +239,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
         await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
@@ -276,7 +277,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
         await Assert.That(sha).IsEqualTo("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -353,7 +354,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 14 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
         var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
 
         await Assert.That(sha).IsEqualTo("dddddddddddddddddddddddddddddddddddddddd");
@@ -375,7 +376,7 @@ public sealed class GitHubActionShaResolverTests
             }
             """);
 
-        var resolver = CreateResolver(handler, new GitHubActionsResolutionConfig { MinAgeDays = 0 });
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
 
         var first = await resolver.ResolveAsync("actions", "checkout", "v4");
         var second = await resolver.ResolveAsync("actions", "checkout", "v4");
@@ -387,11 +388,12 @@ public sealed class GitHubActionShaResolverTests
 
     static GitHubActionShaResolver CreateResolver(
         StubHttpMessageHandler handler,
-        GitHubActionsResolutionConfig? config = null)
+        FixPinningConfig? pinningConfig = null,
+        GitHubNetworkConfig? githubConfig = null)
     {
         var client = new HttpClient(handler);
         var factory = new StubHttpClientFactory(client);
-        return new GitHubActionShaResolver(factory, config ?? new GitHubActionsResolutionConfig());
+        return new GitHubActionShaResolver(factory, pinningConfig ?? new FixPinningConfig(), githubConfig ?? new GitHubNetworkConfig());
     }
 
     private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory

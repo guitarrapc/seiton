@@ -14,7 +14,7 @@ public sealed class CredentialsRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalPublicRegistries = BuildNormalizedSet(config.AdditiveCustomization.AdditionalPublicRegistries);
+        additionalPublicRegistries = BuildNormalizedSet(config.GetRuleConfig(Id)?.PublicRegistries?.Extend);
     }
 
     public override void VisitJobPre(Job job)
