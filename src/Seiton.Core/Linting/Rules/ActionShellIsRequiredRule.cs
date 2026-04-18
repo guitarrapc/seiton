@@ -4,7 +4,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class ActionShellIsRequiredRule : RuleBase
 {
-    public override string Id => "action_shell_is_required";
+    public override string Id => "action-shell-is-required";
 
     public override string Name => "Action Shell Is Required Rule";
 

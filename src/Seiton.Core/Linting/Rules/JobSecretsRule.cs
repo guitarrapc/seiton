@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class JobSecretsRule : RuleBase
 {
-    public override string Id => "job_secrets";
+    public override string Id => "job-secrets";
 
     public override string Name => "Job Secrets Rule";
 

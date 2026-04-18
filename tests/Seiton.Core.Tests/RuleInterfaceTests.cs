@@ -315,15 +315,15 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[28].Id).IsEqualTo("self-hosted-runner");
         await Assert.That(rules[29].Id).IsEqualTo("unredacted-secrets");
         await Assert.That(rules[30].Id).IsEqualTo("secrets-outside-env");
-        await Assert.That(rules[31].Id).IsEqualTo("workflow_secrets");
-        await Assert.That(rules[32].Id).IsEqualTo("job_secrets");
-        await Assert.That(rules[33].Id).IsEqualTo("action_shell_is_required");
+        await Assert.That(rules[31].Id).IsEqualTo("workflow-secrets");
+        await Assert.That(rules[32].Id).IsEqualTo("job-secrets");
+        await Assert.That(rules[33].Id).IsEqualTo("action-shell-is-required");
         await Assert.That(rules[34].Id).IsEqualTo("matrix");
         await Assert.That(rules[35].Id).IsEqualTo("env-var");
         await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
         await Assert.That(rules[37].Id).IsEqualTo("if-cond");
         await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
-        await Assert.That(rules[39].Id).IsEqualTo("deny_job_container_latest_image");
+        await Assert.That(rules[39].Id).IsEqualTo("deny-job-container-latest-image");
         await Assert.That(rules[40].Id).IsEqualTo("archived-uses");
         await Assert.That(rules[41].Id).IsEqualTo("insecure-commands");
         await Assert.That(rules[42].Id).IsEqualTo("overprovisioned-secrets");
@@ -362,15 +362,15 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(32);
         await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(33);
         await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(34);
-        await Assert.That(RuleCatalog.GetPriority("workflow_secrets")).IsEqualTo(35);
-        await Assert.That(RuleCatalog.GetPriority("job_secrets")).IsEqualTo(36);
-        await Assert.That(RuleCatalog.GetPriority("action_shell_is_required")).IsEqualTo(37);
+        await Assert.That(RuleCatalog.GetPriority("workflow-secrets")).IsEqualTo(35);
+        await Assert.That(RuleCatalog.GetPriority("job-secrets")).IsEqualTo(36);
+        await Assert.That(RuleCatalog.GetPriority("action-shell-is-required")).IsEqualTo(37);
         await Assert.That(RuleCatalog.GetPriority("matrix")).IsEqualTo(38);
         await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(39);
         await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
         await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
         await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
-        await Assert.That(RuleCatalog.GetPriority("deny_job_container_latest_image")).IsEqualTo(43);
+        await Assert.That(RuleCatalog.GetPriority("deny-job-container-latest-image")).IsEqualTo(43);
         await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(44);
         await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(45);
         await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(46);
@@ -2485,7 +2485,7 @@ public sealed class RuleInterfaceTests
             ["must not set secrets.* or github.token", "DATADOG_API_KEY"]),
         };
 
-        await AssertRuleCases(new WorkflowSecretsRule(), "workflow_secrets", cases);
+        await AssertRuleCases(new WorkflowSecretsRule(), "workflow-secrets", cases);
     }
 
     [Test]
@@ -2550,7 +2550,7 @@ public sealed class RuleInterfaceTests
             ["must not set secrets.* or github.token", "DATADOG_API_KEY"]),
         };
 
-        await AssertRuleCases(new JobSecretsRule(), "job_secrets", cases);
+        await AssertRuleCases(new JobSecretsRule(), "job-secrets", cases);
     }
 
     [Test]
@@ -2606,7 +2606,7 @@ public sealed class RuleInterfaceTests
             ["shell is required if run is set"]),
         };
 
-        await AssertRuleCases(new ActionShellIsRequiredRule(), "action_shell_is_required", cases);
+        await AssertRuleCases(new ActionShellIsRequiredRule(), "action-shell-is-required", cases);
     }
 
     [Test]
@@ -3121,7 +3121,7 @@ public sealed class RuleInterfaceTests
             []),
         };
 
-        await AssertRuleCases(new DenyJobContainerLatestImageRule(), "deny_job_container_latest_image", cases);
+        await AssertRuleCases(new DenyJobContainerLatestImageRule(), "deny-job-container-latest-image", cases);
     }
 
     [Test]
@@ -4526,7 +4526,7 @@ public sealed class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "workflow_secrets",
+                "workflow-secrets",
                 new WorkflowSecretsRule(),
                 """
                 on: push
@@ -4544,7 +4544,7 @@ public sealed class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "job_secrets",
+                "job-secrets",
                 new JobSecretsRule(),
                 """
                 on: push
@@ -4559,7 +4559,7 @@ public sealed class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "action_shell_is_required",
+                "action-shell-is-required",
                 new ActionShellIsRequiredRule(),
                 """
                 on: push
@@ -4638,7 +4638,7 @@ public sealed class RuleInterfaceTests
                     """,
                     ExpectsFix: false),
             new FixabilityCase(
-                "deny_job_container_latest_image",
+                "deny-job-container-latest-image",
                 new DenyJobContainerLatestImageRule(),
                 """
                 on: push

@@ -192,4 +192,79 @@ public abstract class RuleBase : IRule
     {
         return node is not null && node.Value.Length > 0;
     }
+
+    protected static bool IsSha256DigestPinned(ReadOnlySpan<byte> image)
+    {
+        var at = image.LastIndexOf((byte)'@');
+        if (at < 0 || at + 1 >= image.Length)
+        {
+            return false;
+        }
+
+        var digest = image[(at + 1)..];
+        if (!digest.StartsWith("sha256:"u8))
+        {
+            return false;
+        }
+
+        var hash = digest["sha256:"u8.Length..];
+        if (hash.Length != 64)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < hash.Length; i++)
+        {
+            var b = hash[i];
+            var isDigit = b is >= (byte)'0' and <= (byte)'9';
+            var isLowerHex = b is >= (byte)'a' and <= (byte)'f';
+            var isUpperHex = b is >= (byte)'A' and <= (byte)'F';
+            if (!isDigit && !isLowerHex && !isUpperHex)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected static bool ContainsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> token)
+    {
+        if (token.Length == 0 || value.Length < token.Length)
+        {
+            return false;
+        }
+
+        for (var start = 0; start <= value.Length - token.Length; start++)
+        {
+            var matched = true;
+            for (var i = 0; i < token.Length; i++)
+            {
+                var l = value[start + i];
+                var r = token[i];
+                if (l is >= (byte)'A' and <= (byte)'Z')
+                {
+                    l = (byte)(l + 32);
+                }
+
+                if (r is >= (byte)'A' and <= (byte)'Z')
+                {
+                    r = (byte)(r + 32);
+                }
+
+                if (l != r)
+                {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

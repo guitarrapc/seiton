@@ -75,39 +75,4 @@ public sealed class UnpinnedImageRule : RuleBase
         var imageText = Decode(imageNode.Value);
         AddJobWarning(job, $"{locationName} image '{imageText}' is not pinned by digest (expected @sha256:<64-hex>)", imageNode.Range);
     }
-
-    static bool IsSha256DigestPinned(ReadOnlySpan<byte> image)
-    {
-        var at = image.LastIndexOf((byte)'@');
-        if (at < 0 || at + 1 >= image.Length)
-        {
-            return false;
-        }
-
-        var digest = image[(at + 1)..];
-        if (!digest.StartsWith("sha256:"u8))
-        {
-            return false;
-        }
-
-        var hash = digest["sha256:"u8.Length..];
-        if (hash.Length != 64)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < hash.Length; i++)
-        {
-            var b = hash[i];
-            var isDigit = b is >= (byte)'0' and <= (byte)'9';
-            var isLowerHex = b is >= (byte)'a' and <= (byte)'f';
-            var isUpperHex = b is >= (byte)'A' and <= (byte)'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }

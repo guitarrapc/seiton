@@ -4,7 +4,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class DenyJobContainerLatestImageRule : RuleBase
 {
-    public override string Id => "deny_job_container_latest_image";
+    public override string Id => "deny-job-container-latest-image";
 
     public override string Name => "Deny Job Container Latest Image Rule";
 
@@ -74,41 +74,6 @@ public sealed class DenyJobContainerLatestImageRule : RuleBase
         var lastSlash = image.LastIndexOf((byte)'/');
         var lastColon = image.LastIndexOf((byte)':');
         return lastColon < 0 || lastColon < lastSlash;
-    }
-
-    static bool IsSha256DigestPinned(ReadOnlySpan<byte> image)
-    {
-        var at = image.LastIndexOf((byte)'@');
-        if (at < 0 || at + 1 >= image.Length)
-        {
-            return false;
-        }
-
-        var digest = image[(at + 1)..];
-        if (!digest.StartsWith("sha256:"u8))
-        {
-            return false;
-        }
-
-        var hash = digest["sha256:"u8.Length..];
-        if (hash.Length != 64)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < hash.Length; i++)
-        {
-            var b = hash[i];
-            var isDigit = b is >= (byte)'0' and <= (byte)'9';
-            var isLowerHex = b is >= (byte)'a' and <= (byte)'f';
-            var isUpperHex = b is >= (byte)'A' and <= (byte)'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

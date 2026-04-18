@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `fake-ternary` / `deny_job_container_latest_image` / `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 50 ルール（default local 46 + online audit 4） |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow-secrets` / `job-secrets` / `action-shell-is-required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `fake-ternary` / `deny-job-container-latest-image` / `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 50 ルール（default local 46 + online audit 4） |
 | Online audit | `OnlineAuditEngine` が opt-in の post-lint path として advisory / ref-confusion / impostor-commit / stale-pin 系の network-assisted 診断を生成。`LintEngine.Check()` の no-I/O 制約は維持 |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
@@ -48,9 +48,9 @@
 | `self-hosted-runner` | `SelfHostedRunnerRule` | untrusted trigger を持つ workflow で `runs-on: self-hosted` を使う job を warning（self-hosted 実行境界のガード不足） | zizmor |
 | `unredacted-secrets` | `UnredactedSecretsRule` | `secrets.*` 由来 `env` 変数を `echo` / `printf` / `Write-Host` 等で出力する `run` を warning（ログ露出リスク） | zizmor |
 | `secrets-outside-env` | `SecretsOutsideEnvRule` | `if:` / action `with:` / reusable call `with:` など env handoff 以外の sink で `secrets.*` を直接参照するケースを warning | zizmor |
-| `workflow_secrets` | `WorkflowSecretsRule` | workflow-level `env` の `secrets.*` / `github.token` 設定を error（workflow が 2 job 以上の場合） | ghalint |
-| `job_secrets` | `JobSecretsRule` | job-level `env` の `secrets.*` / `github.token` 設定を error（job が 2 step 以上の場合） | ghalint |
-| `action_shell_is_required` | `ActionShellIsRequiredRule` | `run:` を持つ step で `shell:` 未指定（空含む）を error | ghalint |
+| `workflow-secrets` | `WorkflowSecretsRule` | workflow-level `env` の `secrets.*` / `github.token` 設定を error（workflow が 2 job 以上の場合） | ghalint |
+| `job-secrets` | `JobSecretsRule` | job-level `env` の `secrets.*` / `github.token` 設定を error（job が 2 step 以上の場合） | ghalint |
+| `action-shell-is-required` | `ActionShellIsRequiredRule` | `run:` を持つ step で `shell:` 未指定（空含む）を error | ghalint |
 | `matrix` | `MatrixRule` | `strategy.matrix` の空軸・include/exclude の未知軸参照・過剰 fan-out（>256）を warning | actionlint |
 | `env-var` | `EnvVarRule` | `workflow/job/step env` の key が portable 命名（`[A-Z_][A-Z0-9_]*`）に反する場合を warning | actionlint |
 | `deprecated-commands` | `DeprecatedCommandsRule` | `run` script 内の `::set-output` / `::save-state` / `::add-path` / `::set-env` を warning | actionlint |
@@ -1120,6 +1120,118 @@
 - `deny-read-all`
   - `permissions: read-all`（workflow/job）を error
   - `deny-write-all` と同じ fail-safe ポリシーに載せる
+
+---
+
+## Phase 15: Rule コード品質・整合性修正
+
+**目標**: 既存 Rules ディレクトリのコードレビューで発見された、ルール ID の命名不統一と private ヘルパーの重複実装を解消する。外部 API（診断の `RuleId`、設定ファイルの rule-id 指定、suppression directive）に直接影響する ID 命名の修正を最優先とし、コード重複の解消をその後に行う。
+
+> **影響範囲の評価**
+>
+> - Rule ID 変更は `LintConfig.RuleOptions` のキー、inline suppression の `# seiton: disable-*` 指示子、`SuppressionRecord.RuleId`、`Diagnostic.RuleId` 出力に波及する。
+> - 既存の設定ファイルやコメントで旧 ID（アンダースコア）を使っているユーザーは更新が必要になる。ただし現時点では外部公開 API が安定化していないため、このタイミングで統一する。
+> - ヘルパーメソッドの共通化は内部実装のリファクタリングであり、外部 API に影響しない。
+
+---
+
+### 発見された問題一覧
+
+#### 問題 A: Rule ID の命名規則不統一（アンダースコア vs ハイフン）
+
+全 50 ルール中、以下の **4 ルール** のみがハイフンではなくアンダースコアを使用している。
+
+| ファイル | 現在の `Id` | 修正後 |
+|---|---|---|
+| `ActionShellIsRequiredRule.cs` | `"action_shell_is_required"` | `"action-shell-is-required"` |
+| `DenyJobContainerLatestImageRule.cs` | `"deny_job_container_latest_image"` | `"deny-job-container-latest-image"` |
+| `JobSecretsRule.cs` | `"job_secrets"` | `"job-secrets"` |
+| `WorkflowSecretsRule.cs` | `"workflow_secrets"` | `"workflow-secrets"` |
+
+影響: `LintEngine.IsRuleEnabled`、`TryGetSeverityOverride`、inline suppression の ID マッチング、`SuppressionRecord.RuleId`、`Diagnostic.RuleId` 出力すべてがこの `Id` プロパティを参照する。アンダースコア ID のままでは設定ファイルでの無効化・severity override が意図どおり機能しない。
+
+#### 問題 B: `IsSha256DigestPinned` の完全重複
+
+`DenyJobContainerLatestImageRule` と `UnpinnedImageRule` の両ファイルに、全く同一の `static bool IsSha256DigestPinned(ReadOnlySpan<byte>)` が定義されている。`RuleBase` に `protected static` メソッドとして昇格させることで重複を解消できる。
+
+#### 問題 C: `ContainsAsciiIgnoreCase` の重複定義
+
+以下の 4 ファイルにそれぞれ独立した `static bool ContainsAsciiIgnoreCase(ReadOnlySpan<byte>, ReadOnlySpan<byte>)` が定義されている。
+
+- `DeprecatedCommandsRule.cs`
+- `OverprovisionedSecretsRule.cs`
+- `UnredactedSecretsRule.cs`
+- `UseTrustedPublishingRule.cs`
+
+`RuleBase` に `protected static` として一元化することで重複を排除できる。
+
+#### 問題 D: `DenyJobContainerLatestImageRule` と `UnpinnedImageRule` の検査範囲の非対称
+
+| ルール | job.container | job.services | docker:// uses |
+|---|---|---|---|
+| `DenyJobContainerLatestImageRule` | ✅（`:latest` / implicit latest を error） | ❌ | ❌ |
+| `UnpinnedImageRule` | ✅（SHA256 未ピンを warning） | ✅ | ✅ |
+
+`job.container.image` に `:latest` タグを使うと両ルールが同時発火する（error + warning）。これは意図的な重複報告になる。また `DenyJobContainerLatestImageRule` は `job.services` と `docker://` uses をカバーしておらず、`UnpinnedImageRule` と比べて検査範囲が非対称である。本 Phase では「`:latest` 明示 / implicit latest を error 格上げする」機能は維持しつつ、両ルールの役割を以下のように整理する方針とする。
+
+- `UnpinnedImageRule`: SHA256 digest でピン留めされていない場合の **warning**（`job.container` / `job.services` / `docker://` 全対象）
+- `DenyJobContainerLatestImageRule`: `:latest` / implicit latest を明示的に禁止する **error**（全対象に拡張）
+
+この整理後も両ルールが同一イメージに対して発火しうるが、severity と診断メッセージが異なるため意図的な二段階警告（warning + error）として機能する。本 Phase では DenyJobContainerLatestImageRule の対象を `job.services` と `docker://` uses に拡張し、検査範囲の非対称を解消する。
+
+---
+
+### Step 15.1: Rule ID アンダースコア → ハイフン修正（4 ルール）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/ActionShellIsRequiredRule.cs`, `src/Seiton.Core/Linting/Rules/DenyJobContainerLatestImageRule.cs`, `src/Seiton.Core/Linting/Rules/JobSecretsRule.cs`, `src/Seiton.Core/Linting/Rules/WorkflowSecretsRule.cs`
+
+- 各ファイルの `Id` プロパティを以下のとおり修正する
+  - `"action_shell_is_required"` → `"action-shell-is-required"`
+  - `"deny_job_container_latest_image"` → `"deny-job-container-latest-image"`
+  - `"job_secrets"` → `"job-secrets"`
+  - `"workflow_secrets"` → `"workflow-secrets"`
+
+**完了条件**: 4 ファイルの `Id` プロパティがハイフン区切りになり、既存テストが全件パスする
+
+### Step 15.2: `IsSha256DigestPinned` を `RuleBase` に昇格
+
+**ファイル**: `src/Seiton.Core/Linting/RuleBase.cs`, `src/Seiton.Core/Linting/Rules/DenyJobContainerLatestImageRule.cs`, `src/Seiton.Core/Linting/Rules/UnpinnedImageRule.cs`
+
+- `RuleBase` に `protected static bool IsSha256DigestPinned(ReadOnlySpan<byte> image)` を追加
+- `DenyJobContainerLatestImageRule` と `UnpinnedImageRule` からそれぞれの private 定義を削除し、`RuleBase` のメソッドを使用するよう変更
+
+**完了条件**: 2 ファイルから重複定義が消え、ビルドが通りテストがパスする
+
+### Step 15.3: `ContainsAsciiIgnoreCase` を `RuleBase` に昇格
+
+**ファイル**: `src/Seiton.Core/Linting/RuleBase.cs`, `src/Seiton.Core/Linting/Rules/DeprecatedCommandsRule.cs`, `src/Seiton.Core/Linting/Rules/OverprovisionedSecretsRule.cs`, `src/Seiton.Core/Linting/Rules/UnredactedSecretsRule.cs`, `src/Seiton.Core/Linting/Rules/UseTrustedPublishingRule.cs`
+
+- `RuleBase` に `protected static bool ContainsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> token)` を追加
+- 4 ファイルからそれぞれの private/static 定義を削除し、`RuleBase` のメソッドを使用するよう変更
+- `OverprovisionedSecretsRule` は独自の `ContainsSecretsReference(StringNode)` ヘルパー内で `ContainsAsciiIgnoreCase` を呼んでいるため、そのヘルパーは残す
+
+**完了条件**: 4 ファイルから重複定義が消え、ビルドが通りテストがパスする
+
+### Step 15.4: `DenyJobContainerLatestImageRule` の検査範囲を `job.services` と `docker://` uses に拡張
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/DenyJobContainerLatestImageRule.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`
+
+- `VisitJobPre` に `job.Services` の各 `service.Container.Image` も検査するよう追加（`UnpinnedImageRule` の `VisitJobPre` と同様のサービス走査）
+- `VisitStep` を追加し、`docker://` uses で `:latest` タグまたは implicit latest を error 報告するよう実装
+- テストに `job.services` と `docker://` uses の検出ケースを追加
+
+**完了条件**: `job.services` の `:latest` / implicit latest で error、`docker://image:latest` で error になるテストがパスする
+
+### Step 15.5: RuleCatalog / テスト / 仕様書の同期
+
+**ファイル**: `src/Seiton.Core/Linting/RuleCatalog.cs`, `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`, `Docs/linter_implementation_csharp_plan.md`
+
+- `RuleCatalog` 内のルール ID 文字列（アンダースコア）をハイフンに修正
+- `RuleCatalog_DefaultRules_MatchDocumentedScope` および inline suppression テストの rule-id を修正
+- 実装済みルール一覧表（本計画 §現状サマリー）の ID を修正
+- `Seiton_Linter_spec.md` / `Seiton_Linter_csharp_spec.md` の rule catalog テーブルを修正
+
+**完了条件**: `dotnet test` が全件パスし、仕様書の rule-id が実装と一致する
 - `deny-inherit-secrets`
   - reusable workflow call job の `secrets: inherit` を error
   - 旧 `reusable-workflow-secrets-inherit` は削除し、`deny-inherit-secrets` へ一本化
@@ -1203,17 +1315,17 @@
 **ファイル**: `src/Seiton.Core/Linting/Rules/*`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
 
 対象:
-- `workflow_secrets`
-- `job_secrets`
-- `action_shell_is_required`
+- `workflow-secrets`
+- `job-secrets`
+- `action-shell-is-required`
 
 方針:
-- `workflow_secrets` / `job_secrets` は既存 `run-secrets-context-direct-use` / `secrets-whole-context-access` と分離し、env-scope secret 設定制約として実装する。
-- `action_shell_is_required` は `shell-name` との整合を取りつつ、実行再現性を強化する。
+- `workflow-secrets` / `job-secrets` は既存 `run-secrets-context-direct-use` / `secrets-whole-context-access` と分離し、env-scope secret 設定制約として実装する。
+- `action-shell-is-required` は `shell-name` との整合を取りつつ、実行再現性を強化する。
 
 **完了条件**: ghalint 互換の許容/禁止/例外ケースをテストで固定化し、既存 rule との誤重複がない。
 
-**実装メモ**: 完了。`WorkflowSecretsRule` / `JobSecretsRule` / `ActionShellIsRequiredRule` を追加し、`RuleCatalog` へ `workflow_secrets`（priority 35）/ `job_secrets`（36）/ `action_shell_is_required`（37）として登録した。`workflow_secrets` は workflow が 2 job 以上のときに workflow-level `env` の `secrets.*` / `github.token` 参照を error とし、`job_secrets` は job が 2 step 以上のときに job-level `env` の同参照を error とする。`action_shell_is_required` は `run` step の `shell` 未指定（空文字含む）を error とする。`RuleInterfaceTests` に table-driven 回帰（許容/禁止/例外）を追加し、`RuleCatalog` 件数・priority・canonical ID 回帰を更新、`dotnet run --project tests/Seiton.Core.Tests` が green を確認した。
+**実装メモ**: 完了。`WorkflowSecretsRule` / `JobSecretsRule` / `ActionShellIsRequiredRule` を追加し、`RuleCatalog` へ `workflow-secrets`（priority 35）/ `job-secrets`（36）/ `action-shell-is-required`（37）として登録した。`workflow-secrets` は workflow が 2 job 以上のときに workflow-level `env` の `secrets.*` / `github.token` 参照を error とし、`job-secrets` は job が 2 step 以上のときに job-level `env` の同参照を error とする。`action-shell-is-required` は `run` step の `shell` 未指定（空文字含む）を error とする。`RuleInterfaceTests` に table-driven 回帰（許容/禁止/例外）を追加し、`RuleCatalog` 件数・priority・canonical ID 回帰を更新、`dotnet run --project tests/Seiton.Core.Tests` が green を確認した。
 
 ### Step 15.3: actionlint 未対応ルール（次段）
 
@@ -1253,12 +1365,12 @@
 
 **実装メモ**: 完了。`FakeTernaryRule` を追加し、`job.if` / `step.if` を式解析して `cond && a || b` 形（`||` の左辺が `&&`）を検出する。誤検知回避として true/false 分岐の両 arm が `bool` 推論できる通常の boolean 合成（例: `(a && success()) || failure()`）は除外し、非 bool arm を含む fake ternary を warning で報告して case 式（または明示分岐）への修正を案内する。`RuleCatalog` には priority 42 で `fake-ternary` を追加。`RuleInterfaceTests` には table-driven 回帰（正常/異常）と catalog 件数・priority・canonical ID 更新、auto-fix no-fix ケース追加を反映した。
 
-### Step 15.5: ghalint 未対応ポリシー（deny_job_container_latest_image）
+### Step 15.5: ghalint 未対応ポリシー（deny-job-container-latest-image）
 
 **ファイル**: `src/Seiton.Core/Linting/Rules/DenyJobContainerLatestImageRule.cs`, `src/Seiton.Core/Linting/RuleCatalog.cs`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
 
 対象:
-- `deny_job_container_latest_image`
+- `deny-job-container-latest-image`
 
 方針:
 - `job.container.image` の `:latest`（明示）および tag/digest 未指定（implicit latest）を error として報告する。
@@ -1267,7 +1379,7 @@
 
 **完了条件**: `job.container.image` の許容/禁止（`:latest` / implicit latest / digest pin）を固定する table-driven 回帰が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
 
-**実装メモ**: 完了。`DenyJobContainerLatestImageRule` を追加し、`VisitJobPre` で `job.container.image` を検査して `:latest`（明示）と tag/digest 未指定（implicit latest）を error として報告するよう実装した。`@sha256:<64-hex>` で pin された image は許可し、`image: repo/app:latest@sha256:...` のような digest pin 付き表現も許可する。`RuleCatalog` には priority 43 で `deny_job_container_latest_image` を登録し、`RuleInterfaceTests` には table-driven 回帰（許容/禁止/スコープ外）と catalog 件数・priority・canonical ID 更新、auto-fix no-fix ケース追加を反映した。
+**実装メモ**: 完了。`DenyJobContainerLatestImageRule` を追加し、`VisitJobPre` で `job.container.image` を検査して `:latest`（明示）と tag/digest 未指定（implicit latest）を error として報告するよう実装した。`@sha256:<64-hex>` で pin された image は許可し、`image: repo/app:latest@sha256:...` のような digest pin 付き表現も許可する。`RuleCatalog` には priority 43 で `deny-job-container-latest-image` を登録し、`RuleInterfaceTests` には table-driven 回帰（許容/禁止/スコープ外）と catalog 件数・priority・canonical ID 更新、auto-fix no-fix ケース追加を反映した。
 
 ### Step 15.6: zizmor 残差分 high-value audits
 
@@ -1410,15 +1522,15 @@ P6E --> P6F
 | 32 | `self-hosted-runner` | **実装済み** | zizmor | self-hosted 利用時のガード不足検出 |
 | 33 | `unredacted-secrets` | **実装済み** | zizmor | ログ出力における secret 露出検出 |
 | 34 | `secrets-outside-env` | **実装済み** | zizmor | secret 参照シンク制約 |
-| 35 | `workflow_secrets` | **実装済み** | ghalint | workflow-level env での secret 設定制約 |
-| 36 | `job_secrets` | **実装済み** | ghalint | job-level env での secret 設定制約 |
-| 37 | `action_shell_is_required` | **実装済み** | ghalint | run step の shell 明示必須化 |
+| 35 | `workflow-secrets` | **実装済み** | ghalint | workflow-level env での secret 設定制約 |
+| 36 | `job-secrets` | **実装済み** | ghalint | job-level env での secret 設定制約 |
+| 37 | `action-shell-is-required` | **実装済み** | ghalint | run step の shell 明示必須化 |
 | 38 | `matrix` | **実装済み** | actionlint | strategy.matrix の整合検証 |
 | 39 | `env-var` | **実装済み** | actionlint | env key 命名/互換性検証 |
 | 40 | `deprecated-commands` | **実装済み** | actionlint | 旧 workflow command 検出 |
 | 41 | `if-cond` | **実装済み** | actionlint | unsound/constant 条件検出 |
 | 42 | `fake-ternary` | **実装済み** | policy | `cond && a || b` の fake ternary を禁止し、case 式へ誘導 |
-| 43 | `deny_job_container_latest_image` | **実装済み** | ghalint | `job.container.image` の `:latest`（明示/暗黙）を禁止 |
+| 43 | `deny-job-container-latest-image` | **実装済み** | ghalint | `job.container.image` の `:latest`（明示/暗黙）を禁止 |
 | 44 | `archived-uses` | **実装済み** | zizmor | archived repository の `uses` 参照を検出 |
 | 45 | `insecure-commands` | **実装済み** | zizmor | `ACTIONS_ALLOW_UNSECURE_COMMANDS` の有効化を検出 |
 | 46 | `overprovisioned-secrets` | **実装済み** | zizmor | step/reusable-call での過剰 secret マッピングを検出 |

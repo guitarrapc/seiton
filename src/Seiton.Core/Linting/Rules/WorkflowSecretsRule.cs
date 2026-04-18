@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class WorkflowSecretsRule : RuleBase
 {
-    public override string Id => "workflow_secrets";
+    public override string Id => "workflow-secrets";
 
     public override string Name => "Workflow Secrets Rule";
 
