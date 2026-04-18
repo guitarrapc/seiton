@@ -133,6 +133,10 @@ The default linter profile must include the following rule IDs.
 | `workflow_secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
 | `job_secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
 | `action_shell_is_required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
+| `cache-poisoning` | Warn when cache actions are used in workflows with untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`) unless trust boundaries are explicitly isolated. |
+| `self-hosted-runner` | Warn when self-hosted runners are used in workflows with untrusted triggers, because host isolation/guard failures can become repository compromise. |
+| `unredacted-secrets` | Warn when secret-derived environment variables are printed by output commands (for example `echo`, `printf`, `Write-Host`) without redaction-safe handling. |
+| `secrets-outside-env` | Warn when `secrets.*` is referenced in non-`env` sinks (`if`, action `with`, reusable call inputs, etc.) rather than controlled env handoff. |
 
 Rule set compatibility policy:
 
@@ -185,6 +189,10 @@ This section provides operator-facing guidance for each default rule.
 | `workflow_secrets` | Restricts workflow-wide env-level secret/token assignment when workflow scope is broad. | Workflow-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while workflow has multiple jobs. | Prevents secret propagation beyond required execution scope. | Move secret mapping from workflow-level env to job/step minimal scope. | ✗ | Scope reduction can break implicit dependencies; audit each job's required secret contract. |
 | `job_secrets` | Restricts job-wide env-level secret/token assignment when job scope is broad. | Job-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while job has multiple steps. | Prevents unnecessary intra-job secret propagation. | Move secret mapping from job-level env to step-level minimal scope. | ✗ | Step-level mapping still requires sink review; combine with run/direct-use protections. |
 | `action_shell_is_required` | Requires explicit shell declaration on run steps. | `run:` exists but `shell:` is missing or empty. | Improves execution determinism and shell-behavior clarity. | Declare `shell` explicitly and align script syntax with the selected shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across runner environments. |
+| `cache-poisoning` | Flags cache action usage under untrusted trigger paths. | `actions/cache*` used in workflows triggered by `pull_request`, `pull_request_target`, or `workflow_run`. | Prevents trust-boundary cache contamination that can affect later privileged runs. | Split trusted/untrusted jobs, namespace cache keys by trust boundary, and avoid broad restore-key fallback. | ✗ | Cache hardening must be validated with end-to-end artifact flow tests across jobs and branches. |
+| `self-hosted-runner` | Flags self-hosted execution under untrusted trigger paths. | Job uses `runs-on: self-hosted` while workflow accepts untrusted triggers. | Self-hosted hosts can expose long-lived credentials, filesystem state, and network reachability to attacker-controlled inputs. | Add strict job guards, isolate runner groups, and route untrusted paths to hosted ephemeral runners. | ✗ | Trigger guards alone are insufficient without host lifecycle hardening and credential isolation controls. |
+| `unredacted-secrets` | Detects likely secret emission in logs from secret-derived env vars. | Secret-derived env var is printed by `echo` / `printf` / `Write-Host` / `Write-Output`. | GitHub masking is not guaranteed for transformed or partially derived secret output patterns. | Avoid printing secret material; pass secrets via scoped environment/STDIN and use explicit masking controls where unavoidable. | ✗ | Even masked logs can leak via truncation, transformations, or side channels; review downstream log sinks. |
+| `secrets-outside-env` | Restricts `secrets.*` references to controlled env handoff boundaries. | `secrets.*` appears in `if`, action `with`, `uses`, or reusable call inputs. | Direct secret injection into non-env sinks expands leak surfaces and complicates auditability. | Move secret access into explicit env mapping at minimal scope and consume via shell/runtime-native variables. | ✗ | Env handoff still requires sink review (arguments, process list, artifacts); apply least-exposure patterns. |
 
 ---
 
@@ -896,8 +904,8 @@ This section specifies high-priority candidate rules discovered by competitor re
 
 Status and scope:
 
-- These rule IDs are specification-defined candidates and are not part of the current default rule catalog in §4.4.
-- Runtime behavior for these rule IDs becomes active only when corresponding implementations are added to each runtime and promoted into the default catalog.
+- These rule IDs are now part of the default C# rule catalog in §4.4.
+- This section remains as implementation guidance for parity across other runtimes and future refinements.
 
 ### 13.1 Candidate Rule Catalog
 

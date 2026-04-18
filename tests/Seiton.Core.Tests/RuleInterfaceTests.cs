@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(30);
+        await Assert.That(rules.Length).IsEqualTo(34);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -311,9 +311,13 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[24].Id).IsEqualTo("deny-inherit-secrets");
         await Assert.That(rules[25].Id).IsEqualTo("job-timeout-minutes-required");
         await Assert.That(rules[26].Id).IsEqualTo("github-app-token-inputs");
-        await Assert.That(rules[27].Id).IsEqualTo("workflow_secrets");
-        await Assert.That(rules[28].Id).IsEqualTo("job_secrets");
-        await Assert.That(rules[29].Id).IsEqualTo("action_shell_is_required");
+        await Assert.That(rules[27].Id).IsEqualTo("cache-poisoning");
+        await Assert.That(rules[28].Id).IsEqualTo("self-hosted-runner");
+        await Assert.That(rules[29].Id).IsEqualTo("unredacted-secrets");
+        await Assert.That(rules[30].Id).IsEqualTo("secrets-outside-env");
+        await Assert.That(rules[31].Id).IsEqualTo("workflow_secrets");
+        await Assert.That(rules[32].Id).IsEqualTo("job_secrets");
+        await Assert.That(rules[33].Id).IsEqualTo("action_shell_is_required");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -342,6 +346,10 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(24);
         await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(25);
         await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(26);
+        await Assert.That(RuleCatalog.GetPriority("cache-poisoning")).IsEqualTo(31);
+        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(32);
+        await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(33);
+        await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(34);
         await Assert.That(RuleCatalog.GetPriority("workflow_secrets")).IsEqualTo(35);
         await Assert.That(RuleCatalog.GetPriority("job_secrets")).IsEqualTo(36);
         await Assert.That(RuleCatalog.GetPriority("action_shell_is_required")).IsEqualTo(37);
@@ -356,12 +364,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-031");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-035");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-032", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-036", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-033");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-034");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-037");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-038");
     }
 
     [Test]
@@ -2368,6 +2376,201 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_CachePoisoningRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-cache-on-trusted-trigger",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                              path: ~/.npm
+                              key: npm-${{ runner.os }}
+            """,
+            []),
+            new RuleCase(
+            "ng-cache-on-pull-request",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                              path: ~/.npm
+                              key: npm-${{ runner.os }}
+            """,
+            ["cache action", "untrusted triggers"]),
+            new RuleCase(
+            "ng-cache-restore-on-workflow-run",
+            """
+            on: workflow_run
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache/restore@v4
+                          with:
+                              path: ~/.npm
+                              key: npm-${{ runner.os }}
+            """,
+            ["cache action", "untrusted triggers"]),
+        };
+
+        await AssertRuleCases(new CachePoisoningRule(), "cache-poisoning", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_SelfHostedRunnerRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-self-hosted-on-push",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: self-hosted
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-self-hosted-on-pull-request",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: self-hosted
+                    steps:
+                        - run: echo ok
+            """,
+            ["self-hosted runner", "untrusted triggers"]),
+            new RuleCase(
+            "ng-self-hosted-on-workflow-run",
+            """
+            on: workflow_run
+            jobs:
+                build:
+                    runs-on:
+                        - self-hosted
+                        - linux
+                    steps:
+                        - run: echo ok
+            """,
+            ["self-hosted runner", "untrusted triggers"]),
+        };
+
+        await AssertRuleCases(new SelfHostedRunnerRule(), "self-hosted-runner", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnredactedSecretsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-non-secret-env-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: echo "${VERSION}"
+            """,
+            []),
+            new RuleCase(
+            "ng-secret-derived-env-echo",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                    steps:
+                        - run: echo "${TOKEN}"
+            """,
+            ["secret-derived variable", "without masking"]),
+            new RuleCase(
+            "ng-secret-derived-env-write-host",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    env:
+                        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                    steps:
+                        - shell: pwsh
+                          run: Write-Host "$env:TOKEN"
+            """,
+            ["secret-derived variable", "without masking"]),
+        };
+
+        await AssertRuleCases(new UnredactedSecretsRule(), "unredacted-secrets", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_SecretsOutsideEnvRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-secret-in-env-handoff",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-secret-in-step-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ secrets.GITHUB_TOKEN != '' }}
+                          run: echo ng
+            """,
+            ["step.if", "secrets context"]),
+            new RuleCase(
+            "ng-secret-in-action-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                              script: ${{ secrets.GITHUB_TOKEN }}
+            """,
+            ["action input", "outside env handoff"]),
+        };
+
+        await AssertRuleCases(new SecretsOutsideEnvRule(), "secrets-outside-env", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -3439,6 +3642,60 @@ public sealed class RuleInterfaceTests
                         runs-on: ubuntu-latest
                         steps:
                             - uses: actions/create-github-app-token@v2
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "cache-poisoning",
+                new CachePoisoningRule(),
+                """
+                on: pull_request
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: actions/cache@v4
+                              with:
+                                  path: ~/.npm
+                                  key: npm-${{ runner.os }}
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "self-hosted-runner",
+                new SelfHostedRunnerRule(),
+                """
+                on: pull_request
+                jobs:
+                    build:
+                        runs-on: self-hosted
+                        steps:
+                            - run: echo ok
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "unredacted-secrets",
+                new UnredactedSecretsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        env:
+                            TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                        steps:
+                            - run: echo "${TOKEN}"
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "secrets-outside-env",
+                new SecretsOutsideEnvRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - if: ${{ secrets.GITHUB_TOKEN != '' }}
+                              run: echo ng
                 """,
                 ExpectsFix: false),
             new FixabilityCase(

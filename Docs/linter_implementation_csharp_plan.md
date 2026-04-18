@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 34 ルール（default local 30 + online audit 4） |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 38 ルール（default local 34 + online audit 4） |
 | Online audit | `OnlineAuditEngine` が opt-in の post-lint path として advisory / ref-confusion / impostor-commit / stale-pin 系の network-assisted 診断を生成。`LintEngine.Check()` の no-I/O 制約は維持 |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
@@ -44,6 +44,10 @@
 | `deny-inherit-secrets` | `DenyInheritSecretsRule` | reusable workflow 呼び出し (`uses`) で `secrets: inherit` を検出して error | ghalint |
 | `job-timeout-minutes-required` | `JobTimeoutMinutesRequiredRule` | executable job で `timeout-minutes` 未指定を error。例外として全 step timeout 指定を許容 | ghalint |
 | `github-app-token-inputs` | `GitHubAppTokenInputsRule` | `actions/create-github-app-token` / `tibdex/github-app-token` の `with` に repository/permission 制約入力がない場合に error | ghalint |
+| `cache-poisoning` | `CachePoisoningRule` | `pull_request` / `pull_request_target` / `workflow_run` など untrusted trigger を持つ workflow で `actions/cache*` を使う step を warning（cache trust boundary 汚染リスク） | zizmor |
+| `self-hosted-runner` | `SelfHostedRunnerRule` | untrusted trigger を持つ workflow で `runs-on: self-hosted` を使う job を warning（self-hosted 実行境界のガード不足） | zizmor |
+| `unredacted-secrets` | `UnredactedSecretsRule` | `secrets.*` 由来 `env` 変数を `echo` / `printf` / `Write-Host` 等で出力する `run` を warning（ログ露出リスク） | zizmor |
+| `secrets-outside-env` | `SecretsOutsideEnvRule` | `if:` / action `with:` / reusable call `with:` など env handoff 以外の sink で `secrets.*` を直接参照するケースを warning | zizmor |
 | `workflow_secrets` | `WorkflowSecretsRule` | workflow-level `env` の `secrets.*` / `github.token` 設定を error（workflow が 2 job 以上の場合） | ghalint |
 | `job_secrets` | `JobSecretsRule` | job-level `env` の `secrets.*` / `github.token` 設定を error（job が 2 step 以上の場合） | ghalint |
 | `action_shell_is_required` | `ActionShellIsRequiredRule` | `run:` を持つ step で `shell:` 未指定（空含む）を error | ghalint |
@@ -1188,6 +1192,8 @@
 
 **完了条件**: 各 rule に対して正常系/異常系/誤検知回避ケースを含む回帰テストを追加し、`RuleCatalog` / 仕様 / ルール一覧が同期している。
 
+**実装メモ**: 完了。`CachePoisoningRule` / `SelfHostedRunnerRule` / `UnredactedSecretsRule` / `SecretsOutsideEnvRule` を追加し、`RuleCatalog` へ priority 31-34 で登録した。`RuleInterfaceTests` に 4 ルール分の table-driven 回帰（正常/異常/誤検知回避）を追加し、`RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority・canonical ID 期待値を同期した。fixability catalog には 4 ルールとも no-fix として追加し、`AutoFixCatalog_OnlySevenRulesAttachFix_TableDriven` で回帰保証した。
+
 ### Step 15.2: ghalint 高価値ポリシー
 
 **ファイル**: `src/Seiton.Core/Linting/Rules/*`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
@@ -1303,10 +1309,10 @@ P6E --> P6F
 | 28 | `impostor-commit` | **実装済み** | zizmor | remote commit reachability check |
 | 29 | `ref-confusion` | **実装済み** | zizmor | tag/branch namespace inspection |
 | 30 | `stale-action-refs` | **実装済み** | zizmor | release/tag-to-sha freshness policy |
-| 31 | `cache-poisoning` | 未実装 | zizmor | cache key 信頼境界と復元キー悪用検出 |
-| 32 | `self-hosted-runner` | 未実装 | zizmor | self-hosted 利用時のガード不足検出 |
-| 33 | `unredacted-secrets` | 未実装 | zizmor | ログ出力における secret 露出検出 |
-| 34 | `secrets-outside-env` | 未実装 | zizmor | secret 参照シンク制約 |
+| 31 | `cache-poisoning` | **実装済み** | zizmor | cache key 信頼境界と復元キー悪用検出 |
+| 32 | `self-hosted-runner` | **実装済み** | zizmor | self-hosted 利用時のガード不足検出 |
+| 33 | `unredacted-secrets` | **実装済み** | zizmor | ログ出力における secret 露出検出 |
+| 34 | `secrets-outside-env` | **実装済み** | zizmor | secret 参照シンク制約 |
 | 35 | `workflow_secrets` | **実装済み** | ghalint | workflow-level env での secret 設定制約 |
 | 36 | `job_secrets` | **実装済み** | ghalint | job-level env での secret 設定制約 |
 | 37 | `action_shell_is_required` | **実装済み** | ghalint | run step の shell 明示必須化 |
