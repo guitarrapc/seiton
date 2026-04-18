@@ -53,13 +53,12 @@ internal static class RuleCatalog
         ("deprecated-commands", 40, static () => new DeprecatedCommandsRule()),
         ("if-cond", 41, static () => new IfCondRule()),
         ("fake-ternary", 42, static () => new FakeTernaryRule()),
-        ("deny-job-container-latest-image", 43, static () => new DenyJobContainerLatestImageRule()),
-        ("archived-uses", 44, static () => new ArchivedUsesRule()),
-        ("insecure-commands", 45, static () => new InsecureCommandsRule()),
-        ("overprovisioned-secrets", 46, static () => new OverprovisionedSecretsRule()),
-        ("forbidden-uses", 47, static () => new ForbiddenUsesRule()),
-        ("ref-version-mismatch", 48, static () => new RefVersionMismatchRule()),
-        ("use-trusted-publishing", 49, static () => new UseTrustedPublishingRule()),
+        ("archived-uses", 43, static () => new ArchivedUsesRule()),
+        ("insecure-commands", 44, static () => new InsecureCommandsRule()),
+        ("overprovisioned-secrets", 45, static () => new OverprovisionedSecretsRule()),
+        ("forbidden-uses", 46, static () => new ForbiddenUsesRule()),
+        ("ref-version-mismatch", 47, static () => new RefVersionMismatchRule()),
+        ("use-trusted-publishing", 48, static () => new UseTrustedPublishingRule()),
     ];
 
     static readonly (string Id, int Priority)[] AdditionalRuleMetadata =

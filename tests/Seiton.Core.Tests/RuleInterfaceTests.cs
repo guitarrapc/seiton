@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(46);
+        await Assert.That(rules.Length).IsEqualTo(45);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -323,13 +323,12 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
         await Assert.That(rules[37].Id).IsEqualTo("if-cond");
         await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
-        await Assert.That(rules[39].Id).IsEqualTo("deny-job-container-latest-image");
-        await Assert.That(rules[40].Id).IsEqualTo("archived-uses");
-        await Assert.That(rules[41].Id).IsEqualTo("insecure-commands");
-        await Assert.That(rules[42].Id).IsEqualTo("overprovisioned-secrets");
-        await Assert.That(rules[43].Id).IsEqualTo("forbidden-uses");
-        await Assert.That(rules[44].Id).IsEqualTo("ref-version-mismatch");
-        await Assert.That(rules[45].Id).IsEqualTo("use-trusted-publishing");
+        await Assert.That(rules[39].Id).IsEqualTo("archived-uses");
+        await Assert.That(rules[40].Id).IsEqualTo("insecure-commands");
+        await Assert.That(rules[41].Id).IsEqualTo("overprovisioned-secrets");
+        await Assert.That(rules[42].Id).IsEqualTo("forbidden-uses");
+        await Assert.That(rules[43].Id).IsEqualTo("ref-version-mismatch");
+        await Assert.That(rules[44].Id).IsEqualTo("use-trusted-publishing");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -370,13 +369,12 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
         await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
         await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
-        await Assert.That(RuleCatalog.GetPriority("deny-job-container-latest-image")).IsEqualTo(43);
-        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(44);
-        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(45);
-        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(46);
-        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(47);
-        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(48);
-        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(49);
+        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(43);
+        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(44);
+        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(45);
+        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(46);
+        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(47);
+        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(48);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
@@ -388,12 +386,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-047");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-046");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-048", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-047", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-049");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-050");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-048");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-049");
     }
 
     [Test]
@@ -3049,82 +3047,6 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task RuleRegression_DenyJobContainerLatestImageRule_TableDriven()
-    {
-        var cases = new[]
-        {
-            new RuleCase(
-            "ok-job-container-version-tag",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    container:
-                        image: ghcr.io/example/app:1.2.3
-                    steps:
-                        - run: echo ok
-            """,
-            []),
-            new RuleCase(
-            "ok-job-container-latest-with-digest",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    container:
-                        image: ghcr.io/example/app:latest@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-                    steps:
-                        - run: echo ok
-            """,
-            []),
-            new RuleCase(
-            "ng-job-container-explicit-latest",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    container:
-                        image: ghcr.io/example/app:latest
-                    steps:
-                        - run: echo ng
-            """,
-            ["must not use mutable ':latest'", "@sha256:<64-hex>"]),
-            new RuleCase(
-            "ng-job-container-implicit-latest",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    container:
-                        image: ghcr.io/example/app
-                    steps:
-                        - run: echo ng
-            """,
-            ["has implicit latest tag", "@sha256:<64-hex>"]),
-            new RuleCase(
-            "ok-service-latest-is-out-of-scope",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    services:
-                        db:
-                            image: postgres:latest
-                    steps:
-                        - run: echo ok
-            """,
-            []),
-        };
-
-        await AssertRuleCases(new DenyJobContainerLatestImageRule(), "deny-job-container-latest-image", cases);
-    }
-
-    [Test]
     public async Task RuleRegression_ArchivedUsesRule_TableDriven()
     {
         var cases = new[]
@@ -4637,20 +4559,6 @@ public sealed class RuleInterfaceTests
                                 - run: echo ng
                     """,
                     ExpectsFix: false),
-            new FixabilityCase(
-                "deny-job-container-latest-image",
-                new DenyJobContainerLatestImageRule(),
-                """
-                on: push
-                jobs:
-                    build:
-                        runs-on: ubuntu-latest
-                        container:
-                            image: ghcr.io/example/app:latest
-                        steps:
-                            - run: echo ng
-                """,
-                ExpectsFix: false),
             new FixabilityCase(
                 "archived-uses",
                 new ArchivedUsesRule(),

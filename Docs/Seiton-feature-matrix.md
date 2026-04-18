@@ -27,12 +27,12 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 50（default local 46 + online audit 4、`RuleCatalog` 基準）まで拡張済み。
+- ルール総数は 49（default local 45 + online audit 4、`RuleCatalog` 基準）まで拡張済み。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
 ### 2.1 現在の実装済みルール一覧（最新）
 
-default local rules（46）:
+default local rules（45）:
 
 - `job-structure`
 - `reusable-workflow`
@@ -73,7 +73,6 @@ default local rules（46）:
 - `deprecated-commands`
 - `if-cond`
 - `fake-ternary`
-- `deny_job_container_latest_image`
 - `archived-uses`
 - `insecure-commands`
 - `overprovisioned-secrets`
@@ -94,7 +93,7 @@ online audit rules（4）:
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（50 rules: default local 46 + online audit 4） | ✅ | 継続強化 |
+実装済み（49 rules: default local 45 + online audit 4）
 | セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（zizmor 監査 14件対応 + 8件部分対応） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
@@ -199,13 +198,12 @@ online audit rules（4）:
 | deny_read_all_permission | ✅ | `deny-read-all` |
 | deny_write_all_permission | ✅ | `deny-write-all` |
 | deny_inherit_secrets | ✅ | `deny-inherit-secrets` |
-| workflow_secrets | ✅ | `workflow_secrets` |
-| job_secrets | ✅ | `job_secrets` |
-| deny_job_container_latest_image | ✅ | `deny_job_container_latest_image` |
+| workflow_secrets | ✅ | `workflow-secrets` |
+| job_secrets | ✅ | `job-secrets` |
 | action_ref_should_be_full_length_commit_sha | ✅ | `unpinned-uses` + `unpinned-image` |
 | github_app_should_limit_repositories | ✅ | `github-app-token-inputs` |
 | github_app_should_limit_permissions | ✅ | `github-app-token-inputs` |
-| action_shell_is_required | ✅ | `action_shell_is_required` |
+| action_shell_is_required | ✅ | `action-shell-is-required` |
 | job_timeout_minutes_is_required | ✅ | `job-timeout-minutes-required` |
 | checkout_persist_credentials_should_be_false | ✅ | `checkout-persist-credentials` |
 
@@ -280,8 +278,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 補足（完了）:
 - actionlint parity: `matrix` / `env-var` / `deprecated-commands` / `if-cond`
-- ghalint parity: `deny_job_container_latest_image`
-- zizmor high-value (Step 15.6): `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing`
+- zizmor high-value (Step 15.6):
 
 ### P1（適用範囲拡張）
 

@@ -285,7 +285,6 @@ The shared spec (§13) additionally defines the following high-priority candidat
 - `env-var`
 - `deprecated-commands`
 - `if-cond`
-- `deny_job_container_latest_image`
 - `archived-uses`
 - `insecure-commands`
 - `overprovisioned-secrets`
@@ -297,7 +296,6 @@ Status contract:
 
 - `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` are already in the current C# default local rule pack.
 - `matrix` / `env-var` / `deprecated-commands` / `if-cond` are already in the current C# default local rule pack.
-- `deny_job_container_latest_image` is already in the current C# default local rule pack.
 - `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` are already in the current C# default local rule pack.
 - C# runtime implementation and default-catalog promotion must be synchronized with `Docs/linter_implementation_csharp_plan.md` and shared-spec catalog updates.
 
