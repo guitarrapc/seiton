@@ -11,78 +11,80 @@ static class RuleSpecificConfigNormalizer
         switch (config.Specific)
         {
             case DangerousTriggersSpecificConfig specific when ruleId == "dangerous-triggers":
-            {
-                var values = NormalizeAdditiveValues(specific.Events, "events extend entry must not be empty", filePath, diagnostics);
-                normalized = values is null ? RuleSpecificConfig.None : new DangerousTriggersSpecificConfig(values);
-                break;
-            }
-            case RunnerLabelSpecificConfig specific when ruleId == "runner-label":
-            {
-                var values = NormalizeAdditiveValues(specific.KnownHostedLabels, "known-hosted-labels extend entry must not be empty", filePath, diagnostics);
-                normalized = values is null ? RuleSpecificConfig.None : new RunnerLabelSpecificConfig(values);
-                break;
-            }
-            case CredentialsSpecificConfig specific when ruleId == "credentials":
-            {
-                var values = NormalizeRegistryHosts(specific.PublicRegistries, filePath, diagnostics);
-                normalized = values is null ? RuleSpecificConfig.None : new CredentialsSpecificConfig(values);
-                break;
-            }
-            case UntrustedTriggersSpecificConfig specific when ruleId is "cache-poisoning" or "self-hosted-runner":
-            {
-                var values = NormalizeAdditiveValues(specific.UntrustedTriggers, "untrusted-triggers extend entry must not be empty", filePath, diagnostics);
-                normalized = values is null ? RuleSpecificConfig.None : new UntrustedTriggersSpecificConfig(values);
-                break;
-            }
-            case UnredactedSecretsSpecificConfig specific when ruleId == "unredacted-secrets":
-            {
-                var values = NormalizeAdditiveValues(specific.OutputCommands, "output-commands extend entry must not be empty", filePath, diagnostics);
-                normalized = values is null ? RuleSpecificConfig.None : new UnredactedSecretsSpecificConfig(values);
-                break;
-            }
-            case ExprUndefinedVarSpecificConfig specific when ruleId == "expr-undefined-var":
-            {
-                var values = NormalizeAdditiveValues(specific.AssumeEvents, "assume-events entry must not be empty", filePath, diagnostics);
-                normalized = values is null ? RuleSpecificConfig.None : new ExprUndefinedVarSpecificConfig(values);
-                break;
-            }
-            case ForbiddenUsesSpecificConfig specific when ruleId == "forbidden-uses":
-            {
-                var allow = NormalizeAdditiveValues(specific.Allow, "allow pattern must not be empty", filePath, diagnostics);
-                var deny = NormalizeAdditiveValues(specific.Deny, "deny pattern must not be empty", filePath, diagnostics);
-                normalized = allow is null && deny is null ? RuleSpecificConfig.None : new ForbiddenUsesSpecificConfig(allow, deny);
-                break;
-            }
-            default:
-            {
-                if (ReferenceEquals(config.Specific, RuleSpecificConfig.None))
                 {
+                    var values = NormalizeAdditiveValues(specific.Events ?? [], "events extend entry must not be empty", filePath, diagnostics);
+                    normalized = values.Count == 0 ? RuleSpecificConfig.None : new DangerousTriggersSpecificConfig(values);
+                    break;
+                }
+            case RunnerLabelSpecificConfig specific when ruleId == "runner-label":
+                {
+                    var values = NormalizeAdditiveValues(specific.KnownHostedLabels ?? [], "known-hosted-labels extend entry must not be empty", filePath, diagnostics);
+                    normalized = values.Count == 0 ? RuleSpecificConfig.None : new RunnerLabelSpecificConfig(values);
+                    break;
+                }
+            case CredentialsSpecificConfig specific when ruleId == "credentials":
+                {
+                    var values = NormalizeRegistryHosts(specific.PublicRegistries ?? [], filePath, diagnostics);
+                    normalized = values.Count == 0 ? RuleSpecificConfig.None : new CredentialsSpecificConfig(values);
+                    break;
+                }
+            case UntrustedTriggersSpecificConfig specific when ruleId is "cache-poisoning" or "self-hosted-runner":
+                {
+                    var values = NormalizeAdditiveValues(specific.UntrustedTriggers ?? [], "untrusted-triggers extend entry must not be empty", filePath, diagnostics);
+                    normalized = values.Count == 0 ? RuleSpecificConfig.None : new UntrustedTriggersSpecificConfig(values);
+                    break;
+                }
+            case UnredactedSecretsSpecificConfig specific when ruleId == "unredacted-secrets":
+                {
+                    var values = NormalizeAdditiveValues(specific.OutputCommands ?? [], "output-commands extend entry must not be empty", filePath, diagnostics);
+                    normalized = values.Count == 0 ? RuleSpecificConfig.None : new UnredactedSecretsSpecificConfig(values);
+                    break;
+                }
+            case ExprUndefinedVarSpecificConfig specific when ruleId == "expr-undefined-var":
+                {
+                    var values = NormalizeAdditiveValues(specific.AssumeEvents ?? [], "assume-events entry must not be empty", filePath, diagnostics);
+                    normalized = values.Count == 0 ? RuleSpecificConfig.None : new ExprUndefinedVarSpecificConfig(values);
+                    break;
+                }
+            case ForbiddenUsesSpecificConfig specific when ruleId == "forbidden-uses":
+                {
+                    var allow = NormalizeAdditiveValues(specific.Allow ?? [], "allow pattern must not be empty", filePath, diagnostics);
+                    var deny = NormalizeAdditiveValues(specific.Deny ?? [], "deny pattern must not be empty", filePath, diagnostics);
+                    normalized = allow.Count == 0 && deny.Count == 0
+                        ? RuleSpecificConfig.None
+                        : new ForbiddenUsesSpecificConfig(allow.Count > 0 ? allow : null, deny.Count > 0 ? deny : null);
+                    break;
+                }
+            default:
+                {
+                    if (ReferenceEquals(config.Specific, RuleSpecificConfig.None))
+                    {
+                        normalized = RuleSpecificConfig.None;
+                        break;
+                    }
+
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        $"rule '{ruleId}' received mismatched specific config payload '{config.Specific.GetType().Name}'",
+                        new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
+                        FilePath: filePath));
                     normalized = RuleSpecificConfig.None;
                     break;
                 }
-
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"rule '{ruleId}' received mismatched specific config payload '{config.Specific.GetType().Name}'",
-                    new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
-                    FilePath: filePath));
-                normalized = RuleSpecificConfig.None;
-                break;
-            }
         }
 
         return config with { Specific = normalized };
     }
 
-    static IReadOnlyList<string>? NormalizeAdditiveValues(
-        IReadOnlyList<string>? values,
+    static IReadOnlyList<string> NormalizeAdditiveValues(
+        IReadOnlyList<string> values,
         string emptyMessage,
         string filePath,
         List<Diagnostic> diagnostics)
     {
-        if (values is null || values.Count == 0)
+        if (values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         var normalized = new List<string>(values.Count);
@@ -108,17 +110,17 @@ static class RuleSpecificConfigNormalizer
             }
         }
 
-        return normalized.Count == 0 ? null : normalized;
+        return normalized;
     }
 
-    static IReadOnlyList<string>? NormalizeRegistryHosts(
-        IReadOnlyList<string>? values,
+    static IReadOnlyList<string> NormalizeRegistryHosts(
+        IReadOnlyList<string> values,
         string filePath,
         List<Diagnostic> diagnostics)
     {
-        if (values is null || values.Count == 0)
+        if (values.Count == 0)
         {
-            return null;
+            return [];
         }
 
         var normalized = new List<string>(values.Count);
@@ -154,7 +156,7 @@ static class RuleSpecificConfigNormalizer
             }
         }
 
-        return normalized.Count == 0 ? null : normalized;
+        return normalized;
     }
 
     static bool IsValidRegistryHost(string value)

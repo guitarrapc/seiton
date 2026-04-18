@@ -283,7 +283,7 @@ public static class LintConfigLibrary
                 continue;
             }
 
-            IReadOnlyList<string>? jobs = null;
+            IReadOnlyList<string> jobs = [];
             if (exclusion.Jobs is { Count: > 0 })
             {
                 var normalizedJobs = new List<string>();
@@ -296,10 +296,10 @@ public static class LintConfigLibrary
                     }
                 }
 
-                jobs = normalizedJobs.Count > 0 ? normalizedJobs : null;
+                jobs = normalizedJobs;
             }
 
-            normalized.Add(new LintExclusion(exclusion.Files.Trim(), [.. ruleIds], jobs));
+            normalized.Add(new LintExclusion(exclusion.Files.Trim(), [.. ruleIds], jobs.Count > 0 ? jobs : null));
         }
 
         return new NormalizedExclusions(normalized, diagnostics.ToArray());
@@ -626,14 +626,14 @@ internal sealed class LintConfigLineParser
     {
         var enabled = true;
         DiagnosticSeverity? severity = null;
-        IReadOnlyList<string>? events = null;
-        IReadOnlyList<string>? knownHostedLabels = null;
-        IReadOnlyList<string>? publicRegistries = null;
-        IReadOnlyList<string>? untrustedTriggers = null;
-        IReadOnlyList<string>? outputCommands = null;
-        IReadOnlyList<string>? assumeEvents = null;
-        IReadOnlyList<string>? allow = null;
-        IReadOnlyList<string>? deny = null;
+        IReadOnlyList<string> events = [];
+        IReadOnlyList<string> knownHostedLabels = [];
+        IReadOnlyList<string> publicRegistries = [];
+        IReadOnlyList<string> untrustedTriggers = [];
+        IReadOnlyList<string> outputCommands = [];
+        IReadOnlyList<string> assumeEvents = [];
+        IReadOnlyList<string> allow = [];
+        IReadOnlyList<string> deny = [];
         var seenRuleSpecificKeys = new HashSet<string>(StringComparer.Ordinal);
 
         while (index < lines.Length)
@@ -816,9 +816,9 @@ internal sealed class LintConfigLineParser
         }
     }
 
-    IReadOnlyList<string>? ParseExtendableList(int parentIndent)
+    IReadOnlyList<string> ParseExtendableList(int parentIndent)
     {
-        IReadOnlyList<string>? values = null;
+        IReadOnlyList<string> values = [];
 
         while (index < lines.Length)
         {
@@ -869,20 +869,20 @@ internal sealed class LintConfigLineParser
             values = ParseListBlock(parentIndent + 2, "extend");
         }
 
-        return values is { Count: > 0 } ? values : null;
+        return values;
     }
 
     RuleSpecificConfig BuildSpecificFromParsedRuleOptions(
         string ruleId,
         IReadOnlySet<string> seenRuleSpecificKeys,
-        IReadOnlyList<string>? events,
-        IReadOnlyList<string>? knownHostedLabels,
-        IReadOnlyList<string>? publicRegistries,
-        IReadOnlyList<string>? untrustedTriggers,
-        IReadOnlyList<string>? outputCommands,
-        IReadOnlyList<string>? assumeEvents,
-        IReadOnlyList<string>? allow,
-        IReadOnlyList<string>? deny,
+        IReadOnlyList<string> events,
+        IReadOnlyList<string> knownHostedLabels,
+        IReadOnlyList<string> publicRegistries,
+        IReadOnlyList<string> untrustedTriggers,
+        IReadOnlyList<string> outputCommands,
+        IReadOnlyList<string> assumeEvents,
+        IReadOnlyList<string> allow,
+        IReadOnlyList<string> deny,
         int ruleLineNumber)
     {
         if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
@@ -909,7 +909,7 @@ internal sealed class LintConfigLineParser
             "cache-poisoning" or "self-hosted-runner" when untrustedTriggers is { Count: > 0 } => new UntrustedTriggersSpecificConfig(untrustedTriggers),
             "unredacted-secrets" when outputCommands is { Count: > 0 } => new UnredactedSecretsSpecificConfig(outputCommands),
             "expr-undefined-var" when assumeEvents is { Count: > 0 } => new ExprUndefinedVarSpecificConfig(assumeEvents),
-            "forbidden-uses" when allow is not null || deny is not null => new ForbiddenUsesSpecificConfig(allow, deny),
+            "forbidden-uses" when allow.Count > 0 || deny.Count > 0 => new ForbiddenUsesSpecificConfig(allow.Count > 0 ? allow : null, deny.Count > 0 ? deny : null),
             _ => RuleSpecificConfig.None,
         };
     }
@@ -1048,8 +1048,8 @@ internal sealed class LintConfigLineParser
     {
         var enableNetwork = false;
         var minAgeDays = 14;
-        IReadOnlyList<string>? excludeBranches = null;
-        IReadOnlyList<IgnoreActionEntry>? ignoreActions = null;
+        IReadOnlyList<string> excludeBranches = [];
+        IReadOnlyList<IgnoreActionEntry> ignoreActions = [];
 
         while (index < lines.Length)
         {
@@ -1159,17 +1159,17 @@ internal sealed class LintConfigLineParser
         {
             EnableNetwork = enableNetwork,
             MinAgeDays = minAgeDays,
-            ExcludeBranches = excludeBranches ?? new FixPinningConfig().ExcludeBranches,
-            IgnoreActions = ignoreActions ?? [],
+            ExcludeBranches = excludeBranches.Count > 0 ? excludeBranches : new FixPinningConfig().ExcludeBranches,
+            IgnoreActions = ignoreActions,
         };
     }
 
     FixImagesConfig ParseFixImagesSection()
     {
         var enableNetwork = false;
-        IReadOnlyList<string>? excludeImages = null;
-        IReadOnlyList<string>? excludeTags = null;
-        IReadOnlyList<string>? ignoreImages = null;
+        IReadOnlyList<string> excludeImages = [];
+        IReadOnlyList<string> excludeTags = [];
+        IReadOnlyList<string> ignoreImages = [];
 
         while (index < lines.Length)
         {
@@ -1275,9 +1275,9 @@ internal sealed class LintConfigLineParser
         return new FixImagesConfig
         {
             EnableNetwork = enableNetwork,
-            ExcludeImages = excludeImages ?? new FixImagesConfig().ExcludeImages,
-            ExcludeTags = excludeTags ?? new FixImagesConfig().ExcludeTags,
-            IgnoreImages = ignoreImages ?? [],
+            ExcludeImages = excludeImages.Count > 0 ? excludeImages : new FixImagesConfig().ExcludeImages,
+            ExcludeTags = excludeTags.Count > 0 ? excludeTags : new FixImagesConfig().ExcludeTags,
+            IgnoreImages = ignoreImages,
         };
     }
 
@@ -1681,8 +1681,8 @@ internal sealed class LintConfigLineParser
     void ParseExclusionItem(int lineNumber, string? inlineKey = null, string? inlineValue = null)
     {
         string? files = null;
-        List<string>? rulesList = null;
-        List<string>? jobsList = null;
+        IReadOnlyList<string> rulesList = [];
+        IReadOnlyList<string> jobsList = [];
 
         // Apply inline key-value from the "- key: value" line
         if (inlineKey is not null)
@@ -1757,13 +1757,13 @@ internal sealed class LintConfigLineParser
             return;
         }
 
-        if (rulesList is null || rulesList.Count == 0)
+        if (rulesList.Count == 0)
         {
             diagnostics.Add(CreateError("exclusion rules is required", lineNumber, 3, 1));
             return;
         }
 
-        exclusions.Add(new LintExclusion(files, rulesList, jobsList is { Count: > 0 } ? jobsList : null));
+        exclusions.Add(new LintExclusion(files, rulesList, jobsList.Count > 0 ? jobsList : null));
     }
 
     void SkipIndentedBlock(int parentIndent)
