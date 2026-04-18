@@ -95,7 +95,9 @@ Rules collect diagnostics internally during traversal and return them after trav
 
 ### 4.4 Normative Rule Catalog
 
-The default linter profile must include the following rule IDs.
+The default C# local-AST linter profile must include the following rule IDs.
+
+Online-audit-only rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
 | Rule ID | Required Behavior Summary |
 |---|---|
@@ -130,20 +132,31 @@ The default linter profile must include the following rule IDs.
 | `deny-inherit-secrets` | Error when reusable-workflow call jobs use `secrets: inherit`; full secret inheritance is forbidden under strict policy profile. |
 | `job-timeout-minutes-required` | Error when executable jobs omit `timeout-minutes` (or equivalent compliant per-step timeout policy), to avoid unbounded runner execution. |
 | `github-app-token-inputs` | Error when known GitHub App token actions are missing repository/permission-limiting inputs (for example `repositories`, `permissions`, `permission-*`). |
-| `workflow_secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
-| `job_secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
-| `action_shell_is_required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
+| `workflow-secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
+| `job-secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
+| `action-shell-is-required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
 | `cache-poisoning` | Warn when cache actions are used in workflows with untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`) unless trust boundaries are explicitly isolated. |
 | `self-hosted-runner` | Warn when self-hosted runners are used in workflows with untrusted triggers, because host isolation/guard failures can become repository compromise. |
 | `unredacted-secrets` | Warn when secret-derived environment variables are printed by output commands (for example `echo`, `printf`, `Write-Host`) without redaction-safe handling. |
 | `secrets-outside-env` | Warn when `secrets.*` is referenced in non-`env` sinks (`if`, action `with`, reusable call inputs, etc.) rather than controlled env handoff. |
+| `matrix` | Warn when matrix strategy configuration is malformed or suspicious (invalid shape, include/exclude mismatch, or expression misuse). |
+| `env-var` | Warn when environment variable naming/usage patterns are risky or ambiguous across workflow/job/step scopes. |
+| `deprecated-commands` | Warn when deprecated workflow commands are used (for example `::set-output`, `::save-state`, `::add-path`, `::set-env`) instead of environment-file mechanisms. |
+| `if-cond` | Warn on malformed, constant, or unsound `if` conditions that likely indicate expression misuse or dead branches. |
+| `fake-ternary` | Warn when fake ternary idioms (`cond && a || b`) are used in expression-bearing fields. |
+| `archived-uses` | Warn when `uses:` references point to archived upstream repositories. |
+| `insecure-commands` | Warn on unsafe command construction/invocation patterns in `run` scripts. |
+| `overprovisioned-secrets` | Warn when secret distribution scope is broader than required at workflow/job/step boundaries. |
+| `forbidden-uses` | Warn/Error per policy when `uses:` references violate configured allow/deny patterns. |
+| `ref-version-mismatch` | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
+| `use-trusted-publishing` | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
 
 Rule set compatibility policy:
 
 - Existing rule IDs are stable once published.
 - Adding a new default rule requires this catalog to be updated in the same specification change.
 - Removing or renaming a published rule ID is a breaking change and requires explicit migration guidance.
-- Network-assisted rule IDs may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
+- Online-audit-only rule IDs may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
 ### 4.5 Rule Guidance (Operational)
 
@@ -196,13 +209,24 @@ These gaps are tracked as parity-hardening work items in the C# implementation p
 | `deny-inherit-secrets` | Forbids `secrets: inherit` in reusable workflow calls. | Reusable call job declares `secrets: inherit`. | Prevents broad secret propagation across workflow boundaries. | Map only required secrets explicitly under `secrets:`. | ✗ | Explicit mapping can still overshare; periodically review call-site contracts. |
 | `job-timeout-minutes-required` | Requires timeout on executable jobs. | Job missing `timeout-minutes` and no equivalent policy exception. | Prevents runaway jobs and unexpected runner cost/exhaustion. | Add `timeout-minutes` per job or enforce approved per-step timeout policy. | △ Partial | Partial auto-fix applies only when `LintConfig.DefaultJobTimeoutMinutesForFix` is configured. Timeout values may still be mis-sized; monitor failures and tune thresholds. |
 | `github-app-token-inputs` | Requires scoped inputs for GitHub App token actions. | `actions/create-github-app-token` or `tibdex/github-app-token` without repo/permission limits. | Reduces over-broad app token issuance. | Add `repositories` and permission-limiting inputs (`permissions`, `permission-*`). | ✗ | Action interface changes may require metadata updates in rule dataset. |
-| `workflow_secrets` | Restricts workflow-wide env-level secret/token assignment when workflow scope is broad. | Workflow-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while workflow has multiple jobs. | Prevents secret propagation beyond required execution scope. | Move secret mapping from workflow-level env to job/step minimal scope. | ✗ | Scope reduction can break implicit dependencies; audit each job's required secret contract. |
-| `job_secrets` | Restricts job-wide env-level secret/token assignment when job scope is broad. | Job-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while job has multiple steps. | Prevents unnecessary intra-job secret propagation. | Move secret mapping from job-level env to step-level minimal scope. | ✗ | Step-level mapping still requires sink review; combine with run/direct-use protections. |
-| `action_shell_is_required` | Requires explicit shell declaration on run steps. | `run:` exists but `shell:` is missing or empty. | Improves execution determinism and shell-behavior clarity. | Declare `shell` explicitly and align script syntax with the selected shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across runner environments. |
+| `workflow-secrets` | Restricts workflow-wide env-level secret/token assignment when workflow scope is broad. | Workflow-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while workflow has multiple jobs. | Prevents secret propagation beyond required execution scope. | Move secret mapping from workflow-level env to job/step minimal scope. | ✗ | Scope reduction can break implicit dependencies; audit each job's required secret contract. |
+| `job-secrets` | Restricts job-wide env-level secret/token assignment when job scope is broad. | Job-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while job has multiple steps. | Prevents unnecessary intra-job secret propagation. | Move secret mapping from job-level env to step-level minimal scope. | ✗ | Step-level mapping still requires sink review; combine with run/direct-use protections. |
+| `action-shell-is-required` | Requires explicit shell declaration on run steps. | `run:` exists but `shell:` is missing or empty. | Improves execution determinism and shell-behavior clarity. | Declare `shell` explicitly and align script syntax with the selected shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across runner environments. |
 | `cache-poisoning` | Flags cache action usage under untrusted trigger paths. | `actions/cache*` used in workflows triggered by `pull_request`, `pull_request_target`, or `workflow_run`. | Prevents trust-boundary cache contamination that can affect later privileged runs. | Split trusted/untrusted jobs, namespace cache keys by trust boundary, and avoid broad restore-key fallback. | ✗ | Cache hardening must be validated with end-to-end artifact flow tests across jobs and branches. |
 | `self-hosted-runner` | Flags self-hosted execution under untrusted trigger paths. | Job uses `runs-on: self-hosted` while workflow accepts untrusted triggers. | Self-hosted hosts can expose long-lived credentials, filesystem state, and network reachability to attacker-controlled inputs. | Add strict job guards, isolate runner groups, and route untrusted paths to hosted ephemeral runners. | ✗ | Trigger guards alone are insufficient without host lifecycle hardening and credential isolation controls. |
 | `unredacted-secrets` | Detects likely secret emission in logs from secret-derived env vars. | Secret-derived env var is printed by `echo` / `printf` / `Write-Host` / `Write-Output`. | GitHub masking is not guaranteed for transformed or partially derived secret output patterns. | Avoid printing secret material; pass secrets via scoped environment/STDIN and use explicit masking controls where unavoidable. | ✗ | Even masked logs can leak via truncation, transformations, or side channels; review downstream log sinks. |
 | `secrets-outside-env` | Restricts `secrets.*` references to controlled env handoff boundaries. | `secrets.*` appears in `if`, action `with`, `uses`, or reusable call inputs. | Direct secret injection into non-env sinks expands leak surfaces and complicates auditability. | Move secret access into explicit env mapping at minimal scope and consume via shell/runtime-native variables. | ✗ | Env handoff still requires sink review (arguments, process list, artifacts); apply least-exposure patterns. |
+| `matrix` | Validates matrix definitions to prevent invalid include/exclude combinations and accidental fan-out mistakes. | `strategy.matrix` with inconsistent keys, invalid include/exclude payloads, or suspicious expansion shape. | Prevents execution drift and unintended matrix explosion/failure. | Normalize matrix axes and include/exclude rules; test expected expansion set. | ✗ | Matrix semantics can still drift by event/input values; keep fixture-based expansion tests. |
+| `env-var` | Validates environment variable declarations and references for safer portability. | Ambiguous env naming or risky scope usage across workflow/job/step contexts. | Reduces cross-shell ambiguity and accidental variable shadowing mistakes. | Use stable uppercase snake-case names and scope env values minimally. | ✗ | Naming cleanup alone does not secure value handling; combine with quoting and secret rules. |
+| `deprecated-commands` | Detects deprecated workflow command syntax in scripts. | `::set-output`, `::save-state`, `::add-path`, `::set-env` appears in `run` scripts. | Deprecated commands are blocked/unsafe on modern runners. | Replace with `GITHUB_OUTPUT`, `GITHUB_STATE`, `GITHUB_PATH`, `GITHUB_ENV` mechanisms. | ✗ | Migration can break downstream expectations; validate output/state/path behavior. |
+| `if-cond` | Detects malformed or unsound conditional expressions. | Always-true/always-false style `if` expressions or context misuse in `if:` fields. | Prevents dead branches and hidden logic drift. | Rewrite condition with explicit boolean intent and scope-valid contexts. | ✗ | Condition behavior may still vary by event payload shape; add table-driven tests. |
+| `fake-ternary` | Detects `cond && a || b` fake ternary idioms in expressions. | Expression-bearing fields rely on short-circuit ternary emulation. | Prevents coercion pitfalls and unreadable branching logic. | Use explicit branch structure (`if` split, case-style logic) instead. | ✗ | Refactoring can alter edge behavior if truthiness assumptions were implicit. |
+| `archived-uses` | Detects `uses:` references to archived repositories. | Action/workflow dependency points to archived upstream repository. | Archived repositories are higher maintenance/supply-chain risk. | Replace with maintained dependency or governed fork with explicit policy. | ✗ | Fork migration can introduce divergence risk; enforce ownership/update controls. |
+| `insecure-commands` | Detects unsafe command construction from untrusted inputs. | `run` command builds shell fragments via untrusted interpolation. | Mitigates shell injection and command confusion risks. | Move to argument-safe invocation, strict quoting, and allowlist validation. | ✗ | Hardening is shell-specific; validate with multi-shell hostile-input tests. |
+| `overprovisioned-secrets` | Detects broader-than-needed secret exposure scope. | Secrets mapped at workflow/job scope though only small step scope is required. | Enforces least-privilege secret handoff boundaries. | Restrict secret mapping to minimum required execution unit. | ✗ | Scope can regress over time; run periodic secret-usage review checks. |
+| `forbidden-uses` | Enforces policy deny/allow rules for `uses:` references. | `uses:` target matches deny patterns or fails allow policy constraints. | Enforces organization dependency governance and review posture. | Replace with approved references and pin to reviewed commits. | ✗ | Policy churn can cause friction; maintain audited exception process. |
+| `ref-version-mismatch` | Detects mismatch between version intent and pinned lineage. | Version/tag annotation or comment does not match resolved SHA lineage expectation. | Prevents misleading provenance narratives for pinned dependencies. | Align version intent and resolved commit, or update annotation to match reality. | ✗ | Upstream tag/release metadata may still be manipulated; combine with provenance verification. |
+| `use-trusted-publishing` | Detects publishing paths that bypass trusted publishing controls. | Release/publish job relies on long-lived secrets without trusted OIDC/provenance flow. | Strengthens release trust posture and secret minimization. | Adopt trusted publishing flow and remove long-lived publish secrets where possible. | ✗ | Registry ecosystem support differs; keep explicit exceptions with audit trail. |
 
 ---
 
@@ -219,6 +243,40 @@ Exclusion/suppression contract:
   - configuration file rules
   - inline comment directives
 - CLI-based exclusion is not part of Seiton's linter contract.
+
+Default behavior and simplicity requirements:
+
+- Full config is never required. All top-level config sections are optional.
+- A minimal config containing only keys users want to change must be accepted.
+- Omitted keys use built-in defaults.
+- Unknown top-level keys/unknown rule IDs are configuration errors.
+- Empty config file is valid and equivalent to default behavior.
+
+Default values (current C# runtime):
+
+| Setting | Default |
+|---|---|
+| `rules.<rule-id>.enabled` | `true` |
+| `rules.<rule-id>.severity` | rule-defined default |
+| `additiveCustomization.*` | empty / no additions |
+| `exclusions` | empty |
+| `exprContext.eventTypes` | empty |
+| `default_job_timeout_minutes_for_fix` | `null` (no timeout auto-fix attachment) |
+| `pin_resolution` | disabled (`null` unless provided, `allow_network: false` default) |
+| `pin_resolution.fail_open` | `true` |
+| `pin_resolution.request_timeout_sec` | `30` |
+| `pin_resolution.max_concurrency` | `4` |
+| `pin_resolution.github_actions.token_env_vars` | `SEITON_GITHUB_TOKEN`, `GITHUB_TOKEN` |
+| `pin_resolution.github_actions.ghes_fallback` | `false` |
+| `pin_resolution.github_actions.exclude_branches` | `main`, `master` |
+| `pin_resolution.github_actions.min_age_days` | `14` |
+| `pin_resolution.images.exclude_images` | includes `scratch` |
+| `pin_resolution.images.exclude_tags` | `latest` |
+| `online_audit` | disabled (`null` unless provided, `allow_network: false` default) |
+| `online_audit.fail_open` | `true` |
+| `online_audit.request_timeout_sec` | `30` |
+| `online_audit.max_concurrency` | `4` |
+| `online_audit.github_actions.token_env_vars` | `SEITON_GITHUB_TOKEN`, `GITHUB_TOKEN` |
 
 ### 5.1 Rule Identifier Contract
 
@@ -303,21 +361,30 @@ Linter contract supports additive rule customization for selected rules.
 Non-normative example configuration shape:
 
 ```yaml
-rules:
-  dangerous-triggers:
-    additionalDangerousEvents:
-      - issue_comment
-      - pull_request_review_comment
+additiveCustomization:
+  additionalDangerousEvents:
+    - issue_comment
+    - pull_request_review_comment
 
-  runner-label:
-    additionalKnownHostedLabels:
-      - ubuntu-24.04-arm
-      - windows-2025-vs2026
+  additionalKnownHostedLabels:
+    - ubuntu-24.04-arm
+    - windows-2025-vs2026
 
-  credentials:
-    additionalPublicRegistries:
-      - registry.example.com
-      - mirror.example.net:5000
+  additionalPublicRegistries:
+    - registry.example.com
+    - mirror.example.net:5000
+
+  additionalUntrustedTriggers:
+    - issue_comment
+
+  additionalOutputCommands:
+    - tee
+
+  forbiddenUsesAllowPatterns:
+    - actions/*
+
+  forbiddenUsesDenyPatterns:
+    - some-org/*
 ```
 
 #### 5.8.1 `dangerous-triggers` Additional Events
@@ -339,9 +406,37 @@ rules:
 - Matching uses normalized host values (ASCII lower-case).
 - When image registry host matches this merged public-registry set, missing credentials does not produce `credentials` diagnostics.
 
-### 5.9 Complete Example Configuration File
+#### 5.8.4 `cache-poisoning` / `self-hosted-runner` Additional Untrusted Triggers
 
-The following YAML shows a complete non-normative example of configuration-file based linter settings.
+- `additionalUntrustedTriggers` allows users to add trigger event names treated as untrusted for both `cache-poisoning` and `self-hosted-runner` evaluation.
+- Matching uses normalized event names (ASCII lower-case).
+- Added trigger names extend, and never replace, the built-in untrusted trigger set.
+
+#### 5.8.5 `unredacted-secrets` Additional Output Commands
+
+- `additionalOutputCommands` allows users to add command names treated as output sinks by `unredacted-secrets`.
+- Matching uses normalized command names (ASCII lower-case).
+- Added command names extend, and never replace, the built-in sink command set.
+
+#### 5.8.6 `forbidden-uses` Policy Patterns
+
+- `forbiddenUsesAllowPatterns` defines additive allow patterns for `forbidden-uses` policy evaluation.
+- `forbiddenUsesDenyPatterns` defines additive deny patterns for `forbidden-uses` policy evaluation.
+- Matching and precedence are runtime-defined by the `forbidden-uses` rule implementation; this contract requires deterministic matching for identical input and config.
+
+### 5.9 Minimal and Advanced Example Configuration File
+
+Minimal example (recommended default authoring style):
+
+```yaml
+rules:
+  dangerous-triggers:
+    severity: error
+```
+
+Advanced example (non-normative):
+
+The following YAML shows a larger non-normative example with optional sections.
 
 ```yaml
 rules:
@@ -474,6 +569,238 @@ Rationale (non-normative):
 - zizmor discovers `.github/zizmor.yml` / `.github/zizmor.yaml` before root-level names.
 - ghalint accepts both root-level and `.github/` config names.
 - Prioritizing `.github/` keeps workflow-related policy close to workflow files and avoids ambiguity with other root-level YAML files.
+
+### 5.11 Configuration Profile Reference
+
+This section describes four canonical usage profiles. Each profile states which rules are active, what capabilities are available, and what config is required.
+
+---
+
+#### Profile 1: No Config (Default Behavior)
+
+Config file is absent or empty. No configuration is required.
+
+**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online-audit-only rules.
+
+Specifically, the following are **active** without any config:
+
+`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`
+
+The following are **not active** (online-audit-only; require `online_audit.allow_network: true`):
+
+`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`
+
+**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `run-env-context-direct-use`, `job-permissions-required`, `deny-read-all`, `permissions` (partial), `id-naming` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `checkout-persist-credentials` (partial). `unpinned-uses` / `unpinned-image` do **not** carry fixes.
+
+---
+
+#### Profile 2: Minimal Config
+
+Minimal config overrides only the settings users want to change. All omitted settings use built-in defaults. Profile 1 rule activation is unchanged unless `rules.<id>.enabled: false` or `rules.<id>.severity` is specified.
+
+**Typical use cases:**
+
+- Silence a rule that generates too much noise during migration
+- Raise severity of a rule to error for organization policy
+- Exclude a specific legacy workflow file from certain rules
+- Add custom runner labels or registry hosts
+
+**Example — disable a noisy rule and raise severity on a critical rule:**
+
+```yaml
+rules:
+  action-shell-is-required:
+    enabled: false
+  deny-write-all:
+    severity: error
+```
+
+Active rules: same as Profile 1 minus `action-shell-is-required`
+
+**Example — suppress rules in a scoped legacy file:**
+
+```yaml
+exclusions:
+  - filePattern: ".github/workflows/legacy-release.yml"
+    ruleIds:
+      - runner-no-latest
+      - job-permissions-required
+```
+
+Active rules: same as Profile 1; `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for that file.
+
+**Example — add custom runner labels and extend dangerous triggers:**
+
+```yaml
+additiveCustomization:
+  additionalKnownHostedLabels:
+    - ubuntu-24.04-large
+  additionalDangerousEvents:
+    - issue_comment
+```
+
+Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large` without diagnostic; `dangerous-triggers` now treats `issue_comment` as dangerous.
+
+**Constraints:**
+- `deny-write-all` and `deny-read-all` cannot be disabled (fail-safe; §5.7).
+- Severity cannot be lowered below `error` for fail-safe rules.
+
+---
+
+#### Profile 3: Network Access Enabled
+
+Network access must be explicitly opted in. It enables two distinct network-backed capabilities:
+
+**3a — Pin remediation** (`pin_resolution.allow_network: true`):
+
+Adds auto-fix suggestions to `unpinned-uses` and `unpinned-image` by resolving SHAs and digests at remediation time.
+
+```yaml
+pin_resolution:
+  allow_network: true
+```
+
+Active rules: same as Profile 1. **Additionally**, `unpinned-uses` and `unpinned-image` now carry auto-fix data.
+
+**3b — Online audit** (`online_audit.allow_network: true`):
+
+Activates the four online-audit-only rules that require network access to complete their analysis:
+
+```yaml
+online_audit:
+  allow_network: true
+```
+
+Active rules: all of Profile 1 **plus** the four rules that are inactive without network:
+
+| Rule | Requires |
+|---|---|
+| `known-vulnerable-actions` | Advisory dataset lookup via GitHub API |
+| `impostor-commit` | Commit reachability check via GitHub API |
+| `ref-confusion` | Branch/tag namespace query via GitHub API |
+| `stale-action-refs` | Release/tag mapping check via GitHub API |
+
+**3a + 3b combined:**
+
+```yaml
+pin_resolution:
+  allow_network: true
+online_audit:
+  allow_network: true
+```
+
+Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` carry auto-fixes.
+
+---
+
+#### Profile 4: Advanced / Full Config
+
+All sections are populated. Provides maximum control over every aspect of linting, additive customization, suppression scope, and network-assisted behavior.
+
+**Active rules:** identical to Profile 3a + 3b combined when both `allow_network: true` are set. Active rule set is still determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
+
+**Full config example (non-normative):**
+
+```yaml
+rules:
+  # Per-rule severity/enable override. Omitted rules use defaults.
+  job-permissions-required:
+    enabled: false
+  deny-write-all:
+    severity: error            # already error by default; shown for clarity
+  dangerous-triggers:
+    severity: error
+  action-shell-is-required:
+    severity: warning
+
+additiveCustomization:
+  additionalDangerousEvents:
+    - issue_comment
+  additionalKnownHostedLabels:
+    - ubuntu-24.04-large
+  additionalPublicRegistries:
+    - registry.example.com
+  additionalUntrustedTriggers:
+    - issue_comment
+  additionalOutputCommands:
+    - tee
+  forbiddenUsesDenyPatterns:
+    - some-untrusted-org/*
+
+exclusions:
+  - filePattern: ".github/workflows/legacy-*.yml"
+    ruleIds:
+      - runner-no-latest
+      - job-permissions-required
+  - filePattern: ".github/workflows/release.yml"
+    jobId: publish
+    ruleIds:
+      - credentials
+
+exprContext:
+  eventTypes:
+    - workflow_dispatch
+    - repository_dispatch
+
+default_job_timeout_minutes_for_fix: 15
+
+pin_resolution:
+  allow_network: true          # enables SHA/digest fix suggestions on unpinned-uses / unpinned-image
+  github_actions:
+    token_env_vars:
+      - SEITON_GITHUB_TOKEN
+      - GITHUB_TOKEN
+    min_age_days: 14
+    exclude_branches:
+      - main
+      - master
+    ignore_actions:
+      - name: "slsa-framework/.*"
+        ref: ".*"
+  images:
+    exclude_images:
+      - scratch
+    exclude_tags:
+      - latest
+  fail_open: true
+  request_timeout_sec: 30
+  max_concurrency: 4
+
+online_audit:
+  allow_network: true          # enables known-vulnerable-actions, impostor-commit, ref-confusion, stale-action-refs
+  github_actions:
+    token_env_vars:
+      - SEITON_GITHUB_TOKEN
+      - GITHUB_TOKEN
+  fail_open: true
+  request_timeout_sec: 30
+  max_concurrency: 4
+```
+
+**Active rules under this config:**
+
+All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus all four online-audit rules. `unpinned-uses` and `unpinned-image` carry network-assisted auto-fix data. `job-permissions-required` is disabled. `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for `legacy-*.yml`. `credentials` diagnostics are suppressed for the `publish` job in `release.yml`.
+
+---
+
+#### Profile Summary Table
+
+| Profile | Config required | Local-AST rules active | Online-audit rules active | `unpinned-*` carry fixes |
+|---|---|---|---|---|
+| 1 No config | None | All §4.4 local-AST (~45 rules) | ✗ | ✗ |
+| 2 Minimal | Partial (only changed keys) | Same as Profile 1 ± per-rule overrides | ✗ | ✗ |
+| 3a Pin remediation | `pin_resolution.allow_network: true` | Same as Profile 1 | ✗ | ✓ |
+| 3b Online audit | `online_audit.allow_network: true` | Same as Profile 1 | ✓ (4 rules) | ✗ |
+| 3a+3b | Both `allow_network: true` | Same as Profile 1 | ✓ (4 rules) | ✓ |
+| 4 Full config | All sections populated | Profiles 3a+3b ± per-rule overrides | ✓ (4 rules) | ✓ |
+
+Non-normative guidance for progressive adoption:
+
+1. Start with Profile 1 (no config). Review diagnostics.
+2. Apply Profile 2 to silence known migration debt or raise policy-critical rule severity.
+3. Enable Profile 3a when ready to auto-fix pinning issues at remediation time.
+4. Enable Profile 3b when advisory and ref-confusion audit coverage is needed.
+5. Graduate to Profile 4 only when the full control surface is required.
 
 ---
 
@@ -618,6 +945,24 @@ The following table classifies each default rule by fix feasibility.
 | `deny-inherit-secrets` | ✗ Not auto-fixable | Determining exact secret pass-through list requires user intent and callee contract knowledge. |
 | `job-timeout-minutes-required` | △ Partial | Insert `timeout-minutes: <default>` at job level only when `LintConfig.DefaultJobTimeoutMinutesForFix` is configured. |
 | `github-app-token-inputs` | ✗ Not auto-fixable | Required repository/permission scopes cannot be inferred safely without repository policy context. |
+| `workflow-secrets` | ✗ Not auto-fixable | Correct scope-minimized secret mapping requires repository-specific intent. |
+| `job-secrets` | ✗ Not auto-fixable | Step-level secret scoping cannot be inferred safely in general. |
+| `action-shell-is-required` | ✗ Not auto-fixable | Explicit shell choice is runtime/policy dependent. |
+| `cache-poisoning` | ✗ Not auto-fixable | Trust-boundary-safe cache remediation is topology-dependent and cannot be inferred safely. |
+| `self-hosted-runner` | ✗ Not auto-fixable | Runner isolation/guard strategy is environment/policy dependent. |
+| `unredacted-secrets` | ✗ Not auto-fixable | Safe remediation requires sink-specific intent and may alter runtime behavior. |
+| `secrets-outside-env` | ✗ Not auto-fixable | Correct env handoff placement is context and policy dependent. |
+| `matrix` | ✗ Not auto-fixable | Matrix shape correction requires workflow-specific intent. |
+| `env-var` | ✗ Not auto-fixable | Name/scope normalization can be policy- and runtime-specific. |
+| `deprecated-commands` | ✗ Not auto-fixable | Migration to env files is command-context dependent and may require script restructuring. |
+| `if-cond` | ✗ Not auto-fixable | Correct condition semantics cannot be inferred reliably. |
+| `fake-ternary` | ✗ Not auto-fixable | Safe rewrite depends on desired branch semantics and value coercion behavior. |
+| `archived-uses` | ✗ Not auto-fixable | Replacement dependency requires security and compatibility intent. |
+| `insecure-commands` | ✗ Not auto-fixable | Safe command hardening is shell- and command-specific. |
+| `overprovisioned-secrets` | ✗ Not auto-fixable | Minimum required secret set needs repository-specific knowledge. |
+| `forbidden-uses` | ✗ Not auto-fixable | Allow/deny policy remediation requires governance intent. |
+| `ref-version-mismatch` | ✗ Not auto-fixable | Correct lineage/version intent resolution is policy dependent. |
+| `use-trusted-publishing` | ✗ Not auto-fixable | Trusted publishing migration depends on registry ecosystem and release architecture. |
 
 ### 8.5 Fix Safety Policy
 
@@ -908,19 +1253,19 @@ When remediation is run:
 
 ---
 
-## 13. Planned High-Priority Rule Specifications
+## 13. Extended Rule Guidance
 
-This section specifies high-priority candidate rules discovered by competitor re-audit.
+This section provides additional implementation guidance for the extended rule set discovered by competitor re-audit.
 
 Status and scope:
 
-- This section includes both implemented and pending high-priority parity rules.
+- This section covers already-implemented default rules and rollout guidance for parity in other runtimes.
 - `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, and `secrets-outside-env` are already part of the default C# rule catalog in §4.4.
 - `matrix`, `env-var`, `deprecated-commands`, and `if-cond` are already part of the default C# rule catalog in §4.4.
-- `fake-ternary` is a pending policy candidate and is not part of the current default catalog.
+- `fake-ternary` is part of the current default C# rule catalog.
 - This section remains as implementation guidance for parity across other runtimes and future refinements.
 
-### 13.1 Candidate Rule Catalog
+### 13.1 Extended Rule Catalog
 
 | Rule ID | Required Behavior Summary |
 |---|---|
@@ -940,7 +1285,7 @@ Status and scope:
 | `ref-version-mismatch` | Detect mismatches between symbolic tag intent and pinned SHA lineage (for example annotated version comments not matching resolved commit ancestry). |
 | `use-trusted-publishing` | Detect package publishing workflows that do not use trusted publishing/OIDC-based provenance paths and require stronger release trust posture. |
 
-### 13.2 Candidate Rule Guidance (Operational)
+### 13.2 Extended Rule Guidance (Operational)
 
 This subsection follows the same operator-facing style as §4.5 and is non-normative guidance for rollout.
 
