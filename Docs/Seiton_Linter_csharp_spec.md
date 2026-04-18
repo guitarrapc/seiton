@@ -281,10 +281,15 @@ The shared spec (§13) additionally defines the following high-priority candidat
 - `self-hosted-runner`
 - `unredacted-secrets`
 - `secrets-outside-env`
+- `matrix`
+- `env-var`
+- `deprecated-commands`
+- `if-cond`
 
 Status contract:
 
-- These IDs are specification-defined candidates and are not part of the current C# default local rule pack.
+- `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` are already in the current C# default local rule pack.
+- `matrix` / `env-var` / `deprecated-commands` / `if-cond` are planned actionlint parity candidates and are not yet in the current C# default local rule pack.
 - C# runtime implementation and default-catalog promotion must be synchronized with `Docs/linter_implementation_csharp_plan.md` and shared-spec catalog updates.
 
 ---

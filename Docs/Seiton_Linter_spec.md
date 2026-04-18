@@ -904,7 +904,9 @@ This section specifies high-priority candidate rules discovered by competitor re
 
 Status and scope:
 
-- These rule IDs are now part of the default C# rule catalog in §4.4.
+- This section includes both implemented and pending high-priority parity rules.
+- `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, and `secrets-outside-env` are already part of the default C# rule catalog in §4.4.
+- `matrix`, `env-var`, `deprecated-commands`, and `if-cond` are pending actionlint parity candidates and are not part of the current default catalog.
 - This section remains as implementation guidance for parity across other runtimes and future refinements.
 
 ### 13.1 Candidate Rule Catalog
@@ -915,6 +917,10 @@ Status and scope:
 | `self-hosted-runner` | Detect unsafe execution patterns on self-hosted runners (for example untrusted trigger paths without sufficient isolation/guarding controls). |
 | `unredacted-secrets` | Detect command or logging patterns where secret values may be emitted without redaction safeguards. |
 | `secrets-outside-env` | Detect secret context references in unsafe sinks outside approved environment-variable handoff patterns. |
+| `matrix` | Detect invalid or unsafe matrix strategy definitions (axis shape, include/exclude consistency, and unsupported key/value patterns) that can cause unintended fan-out or execution failures. |
+| `env-var` | Detect invalid environment variable declarations (naming and mapping quality) that reduce portability or cause runtime ambiguity across shells/runners. |
+| `deprecated-commands` | Detect deprecated workflow command usage in `run` scripts (for example `::set-output`, `::save-state`, `::add-path`, `::set-env`) and require environment-file based alternatives. |
+| `if-cond` | Detect malformed, constant, or unsound `if` conditions that indicate dead branches, always-true gates, or likely expression misuse. |
 
 ### 13.2 Candidate Rule Guidance (Operational)
 
@@ -926,3 +932,7 @@ This subsection follows the same operator-facing style as §4.5 and is non-norma
 | `self-hosted-runner` | Flags risky use of self-hosted runners in workflows that process untrusted inputs. | Add strict trigger guards, isolate runner groups, and split trusted/untrusted execution paths. | ✗ | Runner hardening must include host lifecycle, credential isolation, and network egress controls. |
 | `unredacted-secrets` | Detects output paths where secrets may appear in logs without masking protections. | Route secrets through approved secret channels, avoid direct echo/print, and apply explicit masking controls. | ✗ | Redaction is not perfect against transformed values; avoid exposing secret-derived material in logs entirely. |
 | `secrets-outside-env` | Enforces secret handling via controlled handoff patterns instead of direct expression injection into unsafe sinks. | Move secret use to explicit `env` mapping and consume via shell-native variables in constrained scope. | ✗ | Even with `env` handoff, secrets can leak via arguments/process lists; prefer stdin/file-based passing where possible. |
+| `matrix` | Validates matrix expansion definitions to prevent invalid include/exclude combinations and accidental fan-out mistakes. | Normalize matrix axis definitions, verify include/exclude keys against declared axes, and constrain expansion cardinality where needed. | ✗ | Matrix correctness depends on repository conventions; add CI tests that assert expected job expansion set. |
+| `env-var` | Validates environment variable declaration quality for cross-shell and cross-runner portability. | Use stable uppercase snake-case keys, avoid ambiguous/reserved names, and keep scope minimal (workflow/job/step). | ✗ | Naming correctness does not guarantee safe value handling; combine with secret handling and quoting rules. |
+| `deprecated-commands` | Prevents use of deprecated workflow commands that are blocked or unsafe on modern runners. | Replace command syntax with environment-file mechanisms (`GITHUB_OUTPUT`, `GITHUB_STATE`, `GITHUB_PATH`, `GITHUB_ENV`). | ✗ | Migration can still break downstream consumers; validate output/state/path behavior after conversion. |
+| `if-cond` | Detects unsound conditional expressions that are always true/false or syntactically misuse expression context. | Rewrite conditions with explicit boolean intent and scope-valid context references. | ✗ | Condition semantics can still drift with event payload shape; add table-driven condition tests for key events. |

@@ -1211,6 +1211,27 @@
 
 **実装メモ**: 完了。`WorkflowSecretsRule` / `JobSecretsRule` / `ActionShellIsRequiredRule` を追加し、`RuleCatalog` へ `workflow_secrets`（priority 35）/ `job_secrets`（36）/ `action_shell_is_required`（37）として登録した。`workflow_secrets` は workflow が 2 job 以上のときに workflow-level `env` の `secrets.*` / `github.token` 参照を error とし、`job_secrets` は job が 2 step 以上のときに job-level `env` の同参照を error とする。`action_shell_is_required` は `run` step の `shell` 未指定（空文字含む）を error とする。`RuleInterfaceTests` に table-driven 回帰（許容/禁止/例外）を追加し、`RuleCatalog` 件数・priority・canonical ID 回帰を更新、`dotnet run --project tests/Seiton.Core.Tests` が green を確認した。
 
+### Step 15.3: actionlint 未対応ルール（次段）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/*`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`
+
+対象:
+- `matrix`
+- `env-var`
+- `deprecated-commands`
+- `if-cond`
+
+方針:
+- 4 ルールとも default local rule として実装し、`RuleCatalog` の優先度を 38-41 へ拡張する。
+- `matrix` は `strategy.matrix` の軸定義・include/exclude 整合・過剰 fan-out 抑止を段階導入する。
+- `env-var` は env key の命名・互換性重視ルール（portable naming）を導入し、誤検知を抑えるため初期は warning 中心にする。
+- `deprecated-commands` は `::set-output` / `::save-state` / `::add-path` / `::set-env` を `run` script から検出する。
+- `if-cond` は構文上有効でも常時 true/false になる条件や不正コンテキスト利用を検出し、既存 `expr-undefined-var` と責務を分離する。
+
+**完了条件**: 各 rule で table-driven 回帰（正常/異常/誤検知回避）が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
+
+**実装メモ**: 未着手。
+
 ---
 
 ## ルール実装ロードマップ
@@ -1316,6 +1337,10 @@ P6E --> P6F
 | 35 | `workflow_secrets` | **実装済み** | ghalint | workflow-level env での secret 設定制約 |
 | 36 | `job_secrets` | **実装済み** | ghalint | job-level env での secret 設定制約 |
 | 37 | `action_shell_is_required` | **実装済み** | ghalint | run step の shell 明示必須化 |
+| 38 | `matrix` | 未実装（Step 15.3） | actionlint | strategy.matrix の整合検証 |
+| 39 | `env-var` | 未実装（Step 15.3） | actionlint | env key 命名/互換性検証 |
+| 40 | `deprecated-commands` | 未実装（Step 15.3） | actionlint | 旧 workflow command 検出 |
+| 41 | `if-cond` | 未実装（Step 15.3） | actionlint | unsound/constant 条件検出 |
 
 ## チェックリスト（全 Phase 共通）
 

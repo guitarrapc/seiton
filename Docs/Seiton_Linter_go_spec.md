@@ -276,10 +276,14 @@ The shared spec (§13) additionally defines the following high-priority candidat
 - `self-hosted-runner`
 - `unredacted-secrets`
 - `secrets-outside-env`
+- `matrix`
+- `env-var`
+- `deprecated-commands`
+- `if-cond`
 
 Status contract:
 
-- These IDs are specification-defined candidates and are not part of the current Go default rule catalog mapping.
+- These IDs are specification-defined high-priority parity candidates and are not part of the current Go default rule catalog mapping.
 - Go runtime implementation planning for these IDs should be tracked explicitly when Go-side rule implementation work starts.
 
 ---
