@@ -301,6 +301,16 @@ Status contract:
 - `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` are already in the current C# default local rule pack.
 - C# runtime implementation and default-catalog promotion must be synchronized with `Docs/linter_implementation_csharp_plan.md` and shared-spec catalog updates.
 
+### 3.7 Known Partial Parity Areas (actionlint)
+
+Current C# default local rules are intentionally partial for the following domains.
+
+- `events`: partially covered by `dangerous-triggers` and `glob-pattern`; still missing webhook-specific activity type validation, filter cross-constraint validation, and payload-shape semantic checks.
+- `action`: partially covered by `popular-action-inputs` / `unpinned-uses`; still missing full uses-format validation breadth, local/Docker action resolution depth, and metadata contract-level validation.
+- `workflow-call`: partially covered by `reusable-workflow` / `deny-inherit-secrets`; still missing called-workflow contract validation (`inputs`/`secrets` required/type/default consistency and caller conformance).
+
+These are tracked as next-step parity-hardening items in `Docs/linter_implementation_csharp_plan.md`.
+
 ---
 
 ## 4. Exclusion and Suppression Mapping

@@ -1290,6 +1290,24 @@
 
 **実装メモ**: 完了。`ArchivedUsesRule` / `InsecureCommandsRule` / `OverprovisionedSecretsRule` / `ForbiddenUsesRule` / `RefVersionMismatchRule` / `UseTrustedPublishingRule` を追加し、`RuleCatalog` に priority 44-49 で登録した。`forbidden-uses` は owner/repo 単位の wildcard allow/deny ポリシー（`additiveCustomization.forbiddenUsesAllowPatterns` / `forbiddenUsesDenyPatterns`）を導入し、default deny パターンで deterministic 検出を有効化した。`RuleInterfaceTests` に 6 ルール分の table-driven 回帰（正常/異常/誤検知回避）を追加し、catalog 件数・priority・canonical ID 期待値を同期、auto-fix catalog に 6 ルール no-fix ケースを追加した。
 
+### Step 15.7: actionlint parity 深掘り（events / action / workflow-call）
+
+**ファイル**: `src/Seiton.Core/Linting/Rules/*`, `src/Seiton.Core/Linting/RuleCatalog.cs`, `tests/Seiton.Core.Tests/*Rule*Tests.cs`, `Docs/Seiton_Linter_spec.md`, `Docs/Seiton_Linter_csharp_spec.md`
+
+対象:
+- `events`（部分対応の不足補完）
+- `action`（部分対応の不足補完）
+- `workflow-call`（部分対応の不足補完）
+
+方針:
+- `events`: `dangerous-triggers` / `glob-pattern` の既存責務を維持しつつ、webhook ごとの activity type 制約、`branches`/`tags`/`paths` の相互制約、event payload 形状に依存する検証を追加する。
+- `action`: `popular-action-inputs` / `unpinned-uses` との責務衝突を避けつつ、uses 文字列フォーマットの厳格検証、local/Docker action 解決、metadata 契約レベル検証を段階導入する。
+- `workflow-call`: `reusable-workflow` / `deny-inherit-secrets` の責務を維持しつつ、呼び出し先 workflow の `inputs`/`secrets` 契約（required/type/default）と caller 側 `with`/`secrets` の整合チェックを導入する。
+
+**完了条件**: 3 領域それぞれで正常/異常/誤検知回避を含む table-driven 回帰が green になり、`Seiton-feature-matrix.md` の actionlint 行（`events` / `action` / `workflow-call`）の備考不足点と実装内容が一致する。
+
+**実装メモ**: 未着手。
+
 ---
 
 ## ルール実装ロードマップ

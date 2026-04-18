@@ -153,6 +153,16 @@ This section provides operator-facing guidance for each default rule.
 - Relationship to §4.4: §4.4 remains the normative source of rule IDs and required behavior. This section is explanatory and operational.
 - Auto-fix status here follows §8.4 (including partial-fix boundaries).
 
+### 4.6 Known Partial Parity (actionlint)
+
+Current Seiton default rules intentionally cover only part of the following actionlint domains.
+
+- `events`: current coverage is centered on dangerous trigger detection and glob syntax validation, but does not yet fully validate per-webhook activity types, filter-cross constraints (`branches`/`tags`/`paths` combinations), and payload-shape-driven semantics.
+- `action`: current coverage includes popular action input checks and pinning hygiene, but does not yet provide full uses-format validation breadth, local/Docker action resolution parity, and action metadata contract-level validation depth.
+- `workflow-call`: current coverage includes reusable-job key compatibility and `secrets: inherit` denial, but does not yet provide full called-workflow contract validation for `inputs`/`secrets` (required/type/default consistency and caller-side `with`/`secrets` conformance).
+
+These gaps are tracked as parity-hardening work items in the C# implementation plan.
+
 | Rule ID | Rule Overview | Effective Pattern Examples | Why This Rule Is Needed | Preferred Remediation | Auto-Fix | Residual Risk and Recommended Response |
 |---|---|---|---|---|---|---|
 | `job-structure` | Enforces valid job shape (`uses` vs executable job keys). | Job contains both `uses` and `steps`; executable job missing `runs-on` or `steps`. | Prevents invalid workflow topology and ambiguous execution intent. | Split reusable-call jobs from executable jobs; ensure each executable job has `runs-on` and `steps`. | ✗ | Even after structural repair, re-check permissions and dependency flow (`needs`) for least privilege. |

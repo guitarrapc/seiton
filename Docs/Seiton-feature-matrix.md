@@ -119,14 +119,14 @@
 | credentials | ✅ | `credentials` |
 | shell-name | ✅ | `shell-name` |
 | runner-label | ✅ | `runner-label` |
-| events | 🟡 | `dangerous-triggers` + `glob-pattern` で一部吸収 |
+| events | 🟡 | `dangerous-triggers` + `glob-pattern` で一部吸収（不足: webhook ごとの activity type 制約、branches/tags/paths フィルタ相互制約、event payload 形状検証） |
 | job-needs | ✅ | `needs-graph` |
-| action | 🟡 | `popular-action-inputs` + `unpinned-uses` 等で一部吸収 |
+| action | 🟡 | `popular-action-inputs` + `unpinned-uses` 等で一部吸収（不足: uses 文字列フォーマットの厳格検証、local/Docker action 解決、metadata 起点の総合検証） |
 | env-var | ✅ | `env-var` |
 | id | ✅ | `id-naming` |
 | glob | ✅ | `glob-pattern` |
 | permissions | ✅ | `permissions` + `deny-write-all` |
-| workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収 |
+| workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収（不足: 呼び出し先 workflow の inputs/secrets 契約検証、required/type/default 整合、呼び出し側 with/secrets の型・必須整合） |
 | expression | ✅ | `expr-undefined-var`（+式ベース系） |
 | deprecated-commands | ✅ | `deprecated-commands` |
 | if-cond | ✅ | `if-cond` |
