@@ -119,14 +119,14 @@
 | credentials | ✅ | `credentials` |
 | shell-name | ✅ | `shell-name` |
 | runner-label | ✅ | `runner-label` |
-| events | 🟡 | `dangerous-triggers` + `glob-pattern` で一部吸収（不足: webhook ごとの activity type 制約、branches/tags/paths フィルタ相互制約、event payload 形状検証） |
+| events | 🟡 | `dangerous-triggers` + `glob-pattern` で一部吸収（Step 15.7 で activity type 制約と branches/tags/paths 相互制約を追加。残: event payload 形状検証の深掘り） |
 | job-needs | ✅ | `needs-graph` |
-| action | 🟡 | `popular-action-inputs` + `unpinned-uses` 等で一部吸収（不足: uses 文字列フォーマットの厳格検証、local/Docker action 解決、metadata 起点の総合検証） |
+| action | 🟡 | `popular-action-inputs` + `unpinned-uses` 等で一部吸収（Step 15.7 で uses 形式厳格化と local action 解決を追加。残: metadata 起点の総合検証拡張） |
 | env-var | ✅ | `env-var` |
 | id | ✅ | `id-naming` |
 | glob | ✅ | `glob-pattern` |
 | permissions | ✅ | `permissions` + `deny-write-all` |
-| workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収（不足: 呼び出し先 workflow の inputs/secrets 契約検証、required/type/default 整合、呼び出し側 with/secrets の型・必須整合） |
+| workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収（Step 15.7 で local reusable call の inputs/secrets 契約検証を追加。残: remote 呼び出し先を含む契約検証範囲拡張） |
 | expression | ✅ | `expr-undefined-var`（+式ベース系） |
 | deprecated-commands | ✅ | `deprecated-commands` |
 | if-cond | ✅ | `if-cond` |

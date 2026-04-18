@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -17,7 +18,32 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
 
         var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
-        if (ShouldSkip(uses) || IsFullLengthCommitShaPinned(uses))
+        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        {
+            if (uses.IndexOf((byte)'@') >= 0)
+            {
+                var localJobId = Decode(job.Id.Value);
+                AddJobWarning(
+                    job,
+                    $"job '{localJobId}' local reusable workflow uses must not contain '@ref'",
+                    workflowCall.Uses.Range);
+            }
+
+            return;
+        }
+
+        if (!HasRemoteActionUsesFormat(uses))
+        {
+            var formatJobId = Decode(job.Id.Value);
+            var invalidUsesText = Decode(workflowCall.Uses.Value);
+            AddJobWarning(
+                job,
+                $"job '{formatJobId}' reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
+                workflowCall.Uses.Range);
+            return;
+        }
+
+        if (IsFullLengthCommitShaPinned(uses))
         {
             return;
         }
@@ -35,7 +61,39 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
 
         var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
-        if (ShouldSkip(uses) || IsFullLengthCommitShaPinned(uses))
+        if (uses.StartsWith("docker://"u8))
+        {
+            if (uses.Length <= "docker://"u8.Length)
+            {
+                AddStepWarning(step, "action uses 'docker://' must include an image reference", actionExec.Uses.Range);
+            }
+
+            return;
+        }
+
+        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        {
+            if (uses.IndexOf((byte)'@') >= 0)
+            {
+                AddStepWarning(step, "local action uses must not contain '@ref'", actionExec.Uses.Range);
+                return;
+            }
+
+            ValidateLocalActionResolution(step, uses, actionExec.Uses.Range);
+            return;
+        }
+
+        if (!HasRemoteActionUsesFormat(uses))
+        {
+            var invalidUsesText = Decode(actionExec.Uses.Value);
+            AddStepWarning(
+                step,
+                $"action uses '{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
+                actionExec.Uses.Range);
+            return;
+        }
+
+        if (IsFullLengthCommitShaPinned(uses))
         {
             return;
         }
@@ -44,15 +102,76 @@ public sealed class UnpinnedUsesRule : RuleBase
         AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA");
     }
 
-    static bool ShouldSkip(ReadOnlySpan<byte> uses)
+    void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
     {
-        if (uses.IsEmpty)
+        if (string.IsNullOrEmpty(Config.FilePath)
+            || !Path.IsPathFullyQualified(Config.FilePath)
+            || !File.Exists(Config.FilePath))
         {
-            return true;
+            return;
         }
 
-        return uses.StartsWith("./"u8)
-            || uses.StartsWith("docker://"u8);
+        var relativePath = DecodeAscii(uses);
+        var localPath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(Config.FilePath, localPath);
+        if (string.IsNullOrEmpty(baseDirectory))
+        {
+            return;
+        }
+
+        string resolvedPath;
+        try
+        {
+            resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(localPath)));
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!Directory.Exists(resolvedPath))
+        {
+            AddStepWarning(step, $"local action path '{relativePath}' does not exist", location);
+            return;
+        }
+
+        var hasMetadata = File.Exists(Path.Combine(resolvedPath, "action.yml"))
+            || File.Exists(Path.Combine(resolvedPath, "action.yaml"));
+
+        if (!hasMetadata)
+        {
+            AddStepWarning(step, $"local action path '{relativePath}' is missing action.yml or action.yaml", location);
+        }
+    }
+
+    static bool HasRemoteActionUsesFormat(ReadOnlySpan<byte> uses)
+    {
+        var at = uses.LastIndexOf((byte)'@');
+        if (at <= 0 || at + 1 >= uses.Length)
+        {
+            return false;
+        }
+
+        var left = uses[..at];
+        var firstSlash = left.IndexOf((byte)'/');
+        if (firstSlash <= 0 || firstSlash + 1 >= left.Length)
+        {
+            return false;
+        }
+
+        var secondSegment = left[(firstSlash + 1)..];
+        if (secondSegment.IsEmpty)
+        {
+            return false;
+        }
+
+        var nextSlash = secondSegment.IndexOf((byte)'/');
+        if (nextSlash == 0)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     static bool IsFullLengthCommitShaPinned(ReadOnlySpan<byte> uses)
@@ -82,5 +201,65 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
 
         return true;
+    }
+
+    static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    {
+        var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
+        if (string.IsNullOrEmpty(workflowDirectory))
+        {
+            return string.Empty;
+        }
+
+        if (localPath.StartsWith($".{Path.DirectorySeparatorChar}.github{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
+        {
+            return repositoryRoot;
+        }
+
+        return workflowDirectory;
+    }
+
+    static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    {
+        var separator = Path.DirectorySeparatorChar;
+        var marker = $"{separator}.github{separator}workflows{separator}";
+        var index = workflowFilePath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index >= 0)
+        {
+            repositoryRoot = workflowFilePath[..index];
+            return true;
+        }
+
+        var markerAtEnd = $"{separator}.github{separator}workflows";
+        if (workflowFilePath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
+        {
+            repositoryRoot = workflowFilePath[..^markerAtEnd.Length];
+            return true;
+        }
+
+        repositoryRoot = string.Empty;
+        return false;
+    }
+
+    static string TrimCurrentDirectoryPrefix(string path)
+    {
+        if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return path.Substring(2);
+        }
+
+        return path;
+    }
+
+    static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    {
+        var chars = new char[utf8.Length];
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            chars[i] = (char)utf8[i];
+        }
+
+        return new string(chars);
     }
 }

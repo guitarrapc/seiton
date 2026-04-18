@@ -487,6 +487,127 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ReusableWorkflowRule_LocalWorkflowContractValidation_ReportsMismatches()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-reuse-contract-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var calleePath = Path.Combine(workflowsDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var calleeYaml = """
+            on:
+                workflow_call:
+                    inputs:
+                        target:
+                            required: true
+                            type: string
+                        dry_run:
+                            required: false
+                            type: boolean
+                    secrets:
+                        token:
+                            required: true
+            jobs:
+                noop:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo callee
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                deploy:
+                    uses: ./.github/workflows/reusable.yml
+                    with:
+                        extra: test
+                        dry_run: maybe
+            """;
+
+            File.WriteAllText(calleePath, NormalizeYaml(calleeYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new ReusableWorkflowRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            var ruleDiagnostics = result.Diagnostics.Where(x => x.RuleId == "reusable-workflow").Select(x => x.Message).ToArray();
+
+            await Assert.That(ruleDiagnostics.Any(m => m.Contains("unknown reusable workflow input 'extra'", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(ruleDiagnostics.Any(m => m.Contains("missing required reusable workflow input 'target'", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(ruleDiagnostics.Any(m => m.Contains("expects boolean but got 'maybe'", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(ruleDiagnostics.Any(m => m.Contains("missing required reusable workflow secret 'token'", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_ReusableWorkflowRule_LocalWorkflowContractValidation_AllowsValidCallerContract()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-reuse-contract-ok-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var calleePath = Path.Combine(workflowsDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var calleeYaml = """
+            on:
+                workflow_call:
+                    inputs:
+                        retries:
+                            required: true
+                            type: number
+                    secrets:
+                        token:
+                            required: true
+            jobs:
+                noop:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo callee
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                deploy:
+                    uses: ./.github/workflows/reusable.yml
+                    with:
+                        retries: 3
+                    secrets:
+                        token: ${{ secrets.GITHUB_TOKEN }}
+            """;
+
+            File.WriteAllText(calleePath, NormalizeYaml(calleeYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new ReusableWorkflowRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "reusable-workflow")).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
     public async Task RuleRegression_DenyInheritSecretsRule_TableDriven()
     {
         var cases = new[]
@@ -846,6 +967,17 @@ public sealed class RuleInterfaceTests
             """,
             ["not pinned to a full-length commit SHA"]),
             new RuleCase(
+            "ng-action-missing-ref-format",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout
+            """,
+            ["invalid reference format", "owner/repo[/path]@ref"]),
+            new RuleCase(
             "ok-local-action-reference",
             """
             on: push
@@ -856,6 +988,17 @@ public sealed class RuleInterfaceTests
                         - uses: ./.github/actions/setup
             """,
             []),
+            new RuleCase(
+            "ng-local-action-with-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/setup@v1
+            """,
+            ["local action uses must not contain '@ref'"]),
             new RuleCase(
             "ok-docker-action-reference",
             """
@@ -888,6 +1031,44 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases);
+    }
+
+    [Test]
+    public async Task LintEngine_UnpinnedUsesRule_LocalActionResolution_ReportsMissingMetadata()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionDir = Path.Combine(rootDir, ".github", "actions", "setup");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionDir);
+
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/setup
+            """;
+
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new UnpinnedUsesRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "unpinned-uses" && x.Message.Contains("missing action.yml or action.yaml", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
     }
 
     [Test]
@@ -1834,6 +2015,35 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["invalid glob pattern", "not closed"]),
+            new RuleCase(
+            "ng-invalid-activity-type",
+            """
+            on:
+                pull_request:
+                    types: [bogus]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["unsupported activity type 'bogus'"]),
+            new RuleCase(
+            "ng-filter-mutual-exclusion",
+            """
+            on:
+                pull_request:
+                    branches: [main]
+                    branches-ignore: ['release/**']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["cannot be used together"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);

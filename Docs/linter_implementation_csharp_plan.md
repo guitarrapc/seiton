@@ -1306,7 +1306,7 @@
 
 **完了条件**: 3 領域それぞれで正常/異常/誤検知回避を含む table-driven 回帰が green になり、`Seiton-feature-matrix.md` の actionlint 行（`events` / `action` / `workflow-call`）の備考不足点と実装内容が一致する。
 
-**実装メモ**: 未着手。
+**実装メモ**: 完了。`GlobPatternRule` を拡張し、`WebhookTypes` 仕様データを用いた event option 許可判定（event ごとの `types` / `paths` 等の許可制約）、activity type 値検証、`branches` vs `branches-ignore` / `tags` vs `tags-ignore` / `paths` vs `paths-ignore` の相互排他チェックを追加した。`UnpinnedUsesRule` は `uses` 文字列フォーマットの厳格検証（remote: `owner/repo[/path]@ref`、local 参照の `@ref` 禁止、`docker://` 形式健全性）を追加し、ローカル action 参照については caller ファイルが実在する場合に限って path 解決と `action.yml` / `action.yaml` 存在チェックを行うようにした。`ReusableWorkflowRule` はローカル reusable workflow（`./` / `../`）を対象に、呼び出し先 `on.workflow_call` 契約の静的検証（unknown/missing input、required input/secret 未指定、boolean/number 入力の型不一致、unknown secret）を追加した。`RuleInterfaceTests` に table-driven 回帰と file-based 統合回帰（local reusable contract / local action resolution）を追加し、誤検知回避ケースを含めて固定化した。
 
 ---
 
