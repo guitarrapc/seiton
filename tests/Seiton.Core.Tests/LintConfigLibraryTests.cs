@@ -61,6 +61,10 @@ public sealed class LintConfigLibraryTests
             - Ubuntu-24.04-Large
           additionalPublicRegistries:
             - GHCR.IO
+          additionalUntrustedTriggers:
+            - Issue_Comment
+          additionalOutputCommands:
+            - tee
         exclusions:
           -
             filePattern: .github/workflows/legacy-*.yml
@@ -80,6 +84,10 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config.AdditiveCustomization.AdditionalDangerousEvents).HasSingleItem();
         await Assert.That(result.Config.AdditiveCustomization.AdditionalDangerousEvents![0]).IsEqualTo("workflow_run");
         await Assert.That(result.Config.AdditiveCustomization.AdditionalPublicRegistries![0]).IsEqualTo("ghcr.io");
+        await Assert.That(result.Config.AdditiveCustomization.AdditionalUntrustedTriggers).HasSingleItem();
+        await Assert.That(result.Config.AdditiveCustomization.AdditionalUntrustedTriggers![0]).IsEqualTo("issue_comment");
+        await Assert.That(result.Config.AdditiveCustomization.AdditionalOutputCommands).HasSingleItem();
+        await Assert.That(result.Config.AdditiveCustomization.AdditionalOutputCommands![0]).IsEqualTo("tee");
     }
 
     [Test]

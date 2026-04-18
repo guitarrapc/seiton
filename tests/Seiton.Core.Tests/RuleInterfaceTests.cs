@@ -4575,7 +4575,9 @@ public sealed class RuleInterfaceTests
             AdditiveCustomization = new RuleSpecificAdditiveCustomization(
                 AdditionalDangerousEvents: ["issue_comment", "pull_request_review_comment"],
                 AdditionalKnownHostedLabels: ["ubuntu-24.04-arm", "windows-2025-vs2026"],
-                AdditionalPublicRegistries: ["registry.example.com", "mirror.example.net:5000"]),
+                AdditionalPublicRegistries: ["registry.example.com", "mirror.example.net:5000"],
+                AdditionalUntrustedTriggers: ["issue_comment"],
+                AdditionalOutputCommands: ["tee"]),
         };
 
         _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization.yml", config);
@@ -4584,6 +4586,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(rule.LastConfig!.AdditiveCustomization.AdditionalDangerousEvents).IsEquivalentTo(new[] { "issue_comment", "pull_request_review_comment" });
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalUntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalOutputCommands).IsEquivalentTo(new[] { "tee" });
     }
 
     [Test]
@@ -4607,6 +4611,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalDangerousEvents).IsNull();
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsNull();
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsNull();
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalUntrustedTriggers).IsNull();
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalOutputCommands).IsNull();
     }
 
     [Test]
@@ -4627,7 +4633,9 @@ public sealed class RuleInterfaceTests
             AdditiveCustomization = new RuleSpecificAdditiveCustomization(
                 AdditionalDangerousEvents: ["Issue_Comment", "issue_comment"],
                 AdditionalKnownHostedLabels: ["Custom-Large", "custom-large"],
-                AdditionalPublicRegistries: ["Registry.Example.Com", "registry.example.com"]),
+                AdditionalPublicRegistries: ["Registry.Example.Com", "registry.example.com"],
+                AdditionalUntrustedTriggers: ["Issue_Comment", "issue_comment"],
+                AdditionalOutputCommands: ["TEE", "tee"]),
         };
 
         _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-normalized.yml", config);
@@ -4636,6 +4644,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(rule.LastConfig!.AdditiveCustomization.AdditionalDangerousEvents).IsEquivalentTo(new[] { "issue_comment" });
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalKnownHostedLabels).IsEquivalentTo(new[] { "custom-large" });
         await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalPublicRegistries).IsEquivalentTo(new[] { "registry.example.com" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalUntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.AdditiveCustomization.AdditionalOutputCommands).IsEquivalentTo(new[] { "tee" });
     }
 
     [Test]
@@ -4660,6 +4670,92 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine([new DangerousTriggersRule()]).Check(Encoding.UTF8.GetBytes(yaml), "dangerous-trigger-custom.yml", config);
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "dangerous-triggers" && x.Message.Contains("issue_comment", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_CachePoisoning_AdditionalUntrustedTriggers_EmitWarning()
+    {
+        var yaml = """
+        on: issue_comment
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/cache@v4
+                      with:
+                          path: ~/.npm
+                          key: npm-${{ runner.os }}
+        """;
+
+        var engine = new LintEngine([new CachePoisoningRule()]);
+        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "cache-poisoning-custom-without.yml");
+        var withConfig = engine.Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "cache-poisoning-custom-with.yml",
+            new LintConfig
+            {
+                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                    AdditionalUntrustedTriggers: ["issue_comment"]),
+            });
+
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning")).IsFalse();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_SelfHostedRunner_AdditionalUntrustedTriggers_EmitWarning()
+    {
+        var yaml = """
+        on: issue_comment
+        jobs:
+            build:
+                runs-on: self-hosted
+                steps:
+                    - run: echo ok
+        """;
+
+        var engine = new LintEngine([new SelfHostedRunnerRule()]);
+        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "self-hosted-runner-custom-without.yml");
+        var withConfig = engine.Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "self-hosted-runner-custom-with.yml",
+            new LintConfig
+            {
+                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                    AdditionalUntrustedTriggers: ["issue_comment"]),
+            });
+
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner")).IsFalse();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_UnredactedSecrets_AdditionalOutputCommands_EmitWarning()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                steps:
+                    - run: tee /dev/null <<< "${TOKEN}"
+        """;
+
+        var engine = new LintEngine([new UnredactedSecretsRule()]);
+        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "unredacted-secrets-custom-without.yml");
+        var withConfig = engine.Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "unredacted-secrets-custom-with.yml",
+            new LintConfig
+            {
+                AdditiveCustomization = new RuleSpecificAdditiveCustomization(
+                    AdditionalOutputCommands: ["tee"]),
+            });
+
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "unredacted-secrets")).IsFalse();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "unredacted-secrets" && x.Message.Contains("without masking", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4736,7 +4832,9 @@ public sealed class RuleInterfaceTests
             AdditiveCustomization = new RuleSpecificAdditiveCustomization(
                 AdditionalDangerousEvents: ["   "],
                 AdditionalKnownHostedLabels: [""],
-                AdditionalPublicRegistries: ["https://registry.example.com/team/app"]),
+                AdditionalPublicRegistries: ["https://registry.example.com/team/app"],
+                AdditionalUntrustedTriggers: [""],
+                AdditionalOutputCommands: ["   "]),
         };
 
         var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
@@ -4744,6 +4842,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("dangerous-triggers additional dangerous event must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("runner-label additional known hosted label must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("credentials additional public registry host 'https://registry.example.com/team/app' is invalid", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("cache-poisoning/self-hosted-runner additional untrusted trigger must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("unredacted-secrets additional output command must not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
     static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

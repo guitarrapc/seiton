@@ -55,7 +55,9 @@ public sealed record LintExclusion(
 public sealed record RuleSpecificAdditiveCustomization(
     IReadOnlyList<string>? AdditionalDangerousEvents = null,
     IReadOnlyList<string>? AdditionalKnownHostedLabels = null,
-    IReadOnlyList<string>? AdditionalPublicRegistries = null)
+    IReadOnlyList<string>? AdditionalPublicRegistries = null,
+    IReadOnlyList<string>? AdditionalUntrustedTriggers = null,
+    IReadOnlyList<string>? AdditionalOutputCommands = null)
 {
     public static RuleSpecificAdditiveCustomization Empty { get; } = new();
 }

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Linting.OnlineAudit;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
@@ -39,6 +39,14 @@ public static class LintConfigLibrary
           # Merged with built-in public container registry hosts.
           additionalPublicRegistries:
             # - ghcr.io
+
+          # Merged with built-in untrusted triggers for cache-poisoning and self-hosted-runner rules.
+          additionalUntrustedTriggers:
+            # - issue_comment
+
+          # Merged with built-in output sink commands for unredacted-secrets rule.
+          additionalOutputCommands:
+            # - tee
 
         exclusions:
           # - filePattern: .github/workflows/legacy-*.yml
@@ -244,9 +252,19 @@ public static class LintConfigLibrary
             customization.AdditionalPublicRegistries,
             filePath,
             diagnostics);
+        var untrustedTriggers = NormalizeAdditiveValues(
+            customization.AdditionalUntrustedTriggers,
+            "cache-poisoning/self-hosted-runner additional untrusted trigger must not be empty",
+            filePath,
+            diagnostics);
+        var outputCommands = NormalizeAdditiveValues(
+            customization.AdditionalOutputCommands,
+            "unredacted-secrets additional output command must not be empty",
+            filePath,
+            diagnostics);
 
         return new NormalizedAdditiveCustomization(
-            new RuleSpecificAdditiveCustomization(dangerousEvents, knownLabels, registries),
+            new RuleSpecificAdditiveCustomization(dangerousEvents, knownLabels, registries, untrustedTriggers, outputCommands),
             diagnostics.ToArray());
     }
 
@@ -1685,6 +1703,8 @@ internal sealed class LintConfigLineParser
         List<string>? dangerousEvents = null;
         List<string>? knownLabels = null;
         List<string>? registries = null;
+        List<string>? untrustedTriggers = null;
+        List<string>? outputCommands = null;
 
         while (index < lines.Length)
         {
@@ -1736,10 +1756,22 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            if (key == "additionalUntrustedTriggers")
+            {
+                untrustedTriggers = values;
+                continue;
+            }
+
+            if (key == "additionalOutputCommands")
+            {
+                outputCommands = values;
+                continue;
+            }
+
             diagnostics.Add(CreateError($"unknown additive customization key '{key}'", lineNumber, 3, key.Length));
         }
 
-        additiveCustomization = new RuleSpecificAdditiveCustomization(dangerousEvents, knownLabels, registries);
+        additiveCustomization = new RuleSpecificAdditiveCustomization(dangerousEvents, knownLabels, registries, untrustedTriggers, outputCommands);
     }
 
     List<string> ParseListBlock(int parentIndent, string keyName)

@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -7,10 +8,17 @@ public sealed class UnredactedSecretsRule : RuleBase
 {
     Workflow? currentWorkflow;
     Job? currentJob;
+    HashSet<string>? additionalOutputCommands;
 
     public override string Id => "unredacted-secrets";
 
     public override string Name => "Unredacted Secrets Rule";
+
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        additionalOutputCommands = BuildNormalizedSet(config.AdditiveCustomization.AdditionalOutputCommands);
+    }
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -51,7 +59,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
         foreach (var name in secretVars)
         {
-            if (!ContainsOutputOfVariable(runText, name.AsSpan()))
+            if (!ContainsOutputOfVariable(runText, name.AsSpan(), additionalOutputCommands))
             {
                 continue;
             }
@@ -122,7 +130,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return ContainsSecretsReferenceInExpression(expression);
     }
 
-    static bool ContainsOutputOfVariable(ReadOnlySpan<byte> runText, ReadOnlySpan<char> variableName)
+    static bool ContainsOutputOfVariable(ReadOnlySpan<byte> runText, ReadOnlySpan<char> variableName, HashSet<string>? additionalOutputCommands)
     {
         if (runText.Length == 0 || variableName.Length == 0)
         {
@@ -139,7 +147,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             }
 
             var line = runText[lineStart..lineEnd];
-            if (ContainsOutputCommand(line)
+            if (ContainsOutputCommand(line, additionalOutputCommands)
                 && (ContainsPosixVariableReference(line, variableName)
                     || ContainsPowerShellVariableReference(line, variableName)))
             {
@@ -152,12 +160,31 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsOutputCommand(ReadOnlySpan<byte> line)
+    static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string>? additionalOutputCommands)
     {
-        return ContainsAsciiIgnoreCase(line, "echo"u8)
+        if (ContainsAsciiIgnoreCase(line, "echo"u8)
             || ContainsAsciiIgnoreCase(line, "printf"u8)
             || ContainsAsciiIgnoreCase(line, "write-host"u8)
-            || ContainsAsciiIgnoreCase(line, "write-output"u8);
+            || ContainsAsciiIgnoreCase(line, "write-output"u8))
+        {
+            return true;
+        }
+
+        if (additionalOutputCommands is null || additionalOutputCommands.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var cmd in additionalOutputCommands)
+        {
+            var cmdBytes = System.Text.Encoding.UTF8.GetBytes(cmd);
+            if (ContainsAsciiIgnoreCase(line, cmdBytes))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     static bool ContainsPosixVariableReference(ReadOnlySpan<byte> line, ReadOnlySpan<char> variableName)
@@ -448,5 +475,15 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
 
         return true;
+    }
+
+    static HashSet<string>? BuildNormalizedSet(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
     }
 }

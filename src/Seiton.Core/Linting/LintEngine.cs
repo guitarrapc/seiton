@@ -708,12 +708,24 @@ public sealed class LintEngine
             customization.AdditionalPublicRegistries,
             filePath,
             diagnostics);
+        var normalizedUntrustedTriggers = NormalizeAdditiveValues(
+            customization.AdditionalUntrustedTriggers,
+            "cache-poisoning/self-hosted-runner additional untrusted trigger must not be empty",
+            filePath,
+            diagnostics);
+        var normalizedOutputCommands = NormalizeAdditiveValues(
+            customization.AdditionalOutputCommands,
+            "unredacted-secrets additional output command must not be empty",
+            filePath,
+            diagnostics);
 
         return new AdditiveCustomizationNormalization(
             new RuleSpecificAdditiveCustomization(
                 normalizedDangerousEvents,
                 normalizedKnownHostedLabels,
-                normalizedPublicRegistries),
+                normalizedPublicRegistries,
+                normalizedUntrustedTriggers,
+                normalizedOutputCommands),
             diagnostics.ToArray());
     }
 
