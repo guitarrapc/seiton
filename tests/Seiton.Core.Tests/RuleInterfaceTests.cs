@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(39);
+        await Assert.That(rules.Length).IsEqualTo(40);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -323,6 +323,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
         await Assert.That(rules[37].Id).IsEqualTo("if-cond");
         await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
+        await Assert.That(rules[39].Id).IsEqualTo("deny_job_container_latest_image");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -363,6 +364,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
         await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
         await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
+        await Assert.That(RuleCatalog.GetPriority("deny_job_container_latest_image")).IsEqualTo(43);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
@@ -374,12 +376,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-040");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-041");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-041", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-042", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-042");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-043");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-043");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-044");
     }
 
     [Test]
@@ -2825,6 +2827,82 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_DenyJobContainerLatestImageRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-job-container-version-tag",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app:1.2.3
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-job-container-latest-with-digest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app:latest@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-job-container-explicit-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app:latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["must not use mutable ':latest'", "@sha256:<64-hex>"]),
+            new RuleCase(
+            "ng-job-container-implicit-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ghcr.io/example/app
+                    steps:
+                        - run: echo ng
+            """,
+            ["has implicit latest tag", "@sha256:<64-hex>"]),
+            new RuleCase(
+            "ok-service-latest-is-out-of-scope",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        db:
+                            image: postgres:latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new DenyJobContainerLatestImageRule(), "deny_job_container_latest_image", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -4064,6 +4142,20 @@ public sealed class RuleInterfaceTests
                                 - run: echo ng
                     """,
                     ExpectsFix: false),
+            new FixabilityCase(
+                "deny_job_container_latest_image",
+                new DenyJobContainerLatestImageRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        container:
+                            image: ghcr.io/example/app:latest
+                        steps:
+                            - run: echo ng
+                """,
+                ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)

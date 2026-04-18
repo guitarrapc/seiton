@@ -53,6 +53,7 @@ internal static class RuleCatalog
         ("deprecated-commands", 40, static () => new DeprecatedCommandsRule()),
         ("if-cond", 41, static () => new IfCondRule()),
         ("fake-ternary", 42, static () => new FakeTernaryRule()),
+        ("deny_job_container_latest_image", 43, static () => new DenyJobContainerLatestImageRule()),
     ];
 
     static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
