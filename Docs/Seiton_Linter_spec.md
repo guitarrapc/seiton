@@ -287,7 +287,6 @@ Default values (current C# runtime):
 - Stable canonical IDs (`seiton-lint-rule-001`, `seiton-lint-rule-002`, ...) are accepted for backward compatibility.
 - Canonical IDs are immutable once published.
 - If a human-readable rule name changes, canonical ID must remain unchanged.
-- Breaking-change migration note: `reusable-workflow-secrets-inherit` has been removed and replaced by `deny-inherit-secrets`. Suppressions/config using the removed ID must migrate to `deny-inherit-secrets`.
 - Unknown rule IDs in config or inline directives are configuration errors.
 
 ### 5.2 Priority and Precedence
