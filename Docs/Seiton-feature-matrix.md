@@ -27,8 +27,66 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 50（default local 46 + online audit 4）まで拡張済み。
+- ルール総数は 50（default local 46 + online audit 4、`RuleCatalog` 基準）まで拡張済み。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
+
+### 2.1 現在の実装済みルール一覧（最新）
+
+default local rules（46）:
+
+- `job-structure`
+- `reusable-workflow`
+- `permissions`
+- `popular-action-inputs`
+- `unpinned-uses`
+- `unpinned-image`
+- `dangerous-triggers`
+- `job-permissions-required`
+- `needs-graph`
+- `shell-name`
+- `runner-label`
+- `id-naming`
+- `glob-pattern`
+- `deny-write-all`
+- `credentials`
+- `template-injection`
+- `expr-undefined-var`
+- `run-env-context-direct-use`
+- `runner-no-latest`
+- `run-secrets-context-direct-use`
+- `run-inputs-context-direct-use`
+- `secrets-whole-context-access`
+- `checkout-persist-credentials`
+- `deny-read-all`
+- `deny-inherit-secrets`
+- `job-timeout-minutes-required`
+- `github-app-token-inputs`
+- `cache-poisoning`
+- `self-hosted-runner`
+- `unredacted-secrets`
+- `secrets-outside-env`
+- `workflow_secrets`
+- `job_secrets`
+- `action_shell_is_required`
+- `matrix`
+- `env-var`
+- `deprecated-commands`
+- `if-cond`
+- `fake-ternary`
+- `deny_job_container_latest_image`
+- `archived-uses`
+- `insecure-commands`
+- `overprovisioned-secrets`
+- `forbidden-uses`
+- `ref-version-mismatch`
+- `use-trusted-publishing`
+
+online audit rules（4）:
+
+- `known-vulnerable-actions`
+- `impostor-commit`
+- `ref-confusion`
+- `stale-action-refs`
 
 ---
 
