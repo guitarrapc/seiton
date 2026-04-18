@@ -48,6 +48,10 @@ internal static class RuleCatalog
         ("workflow_secrets", 35, static () => new WorkflowSecretsRule()),
         ("job_secrets", 36, static () => new JobSecretsRule()),
         ("action_shell_is_required", 37, static () => new ActionShellIsRequiredRule()),
+        ("matrix", 38, static () => new MatrixRule()),
+        ("env-var", 39, static () => new EnvVarRule()),
+        ("deprecated-commands", 40, static () => new DeprecatedCommandsRule()),
+        ("if-cond", 41, static () => new IfCondRule()),
     ];
 
     static readonly (string Id, int Priority)[] AdditionalRuleMetadata =

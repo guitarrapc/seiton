@@ -106,6 +106,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
+    protected void AddWorkflowWarning(Workflow workflow, string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location);
+    }
+
     protected void AddWorkflowError(Workflow workflow, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);

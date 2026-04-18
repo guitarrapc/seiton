@@ -12,7 +12,7 @@
 | Visitor | `WorkflowVisitor` が `WorkflowPre → VisitEvent* → JobPre → Step → JobPost → WorkflowPost` の順で巡回 |
 | IRule / IPass | `IRule : IPass` を定義。`RuleBase` が診断収集・`LintConfig` 注入・位置情報構築の共通実装を提供 |
 | SyntaxRule | `RuleCatalog` の全ルールを束ねるファサード。`LintEngine` のデフォルトエントリポイント |
-| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 38 ルール（default local 34 + online audit 4） |
+| 実装済みルール | `job-structure` / `reusable-workflow` / `permissions` / `popular-action-inputs` / `unpinned-uses` / `unpinned-image` / `dangerous-triggers` / `job-permissions-required` / `needs-graph` / `shell-name` / `runner-label` / `id-naming` / `glob-pattern` / `deny-write-all` / `credentials` / `template-injection` / `expr-undefined-var` / `run-env-context-direct-use` / `runner-no-latest` / `run-secrets-context-direct-use` / `run-inputs-context-direct-use` / `secrets-whole-context-access` / `checkout-persist-credentials` / `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` / `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` / `workflow_secrets` / `job_secrets` / `action_shell_is_required` / `matrix` / `env-var` / `deprecated-commands` / `if-cond` / `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` の 42 ルール（default local 38 + online audit 4） |
 | Online audit | `OnlineAuditEngine` が opt-in の post-lint path として advisory / ref-confusion / impostor-commit / stale-pin 系の network-assisted 診断を生成。`LintEngine.Check()` の no-I/O 制約は維持 |
 | 生成データ | `WebhookTypes.g.cs`（イベント名・種別）/ `PopularActions.g.cs`（アクション入力名）/ `RunnerLabels.g.cs`（hosted runner label）が利用可能 |
 | ルール設定 | `LintConfig.RuleOptions` による rule 有効化/無効化（`Enabled`）と severity override（`Severity`）に加え、inline/config exclusion と suppression 可観測性、fail-safe 制約、ルール固有の加算カスタマイズ（仕様 §5.8）を実装済み |
@@ -51,6 +51,10 @@
 | `workflow_secrets` | `WorkflowSecretsRule` | workflow-level `env` の `secrets.*` / `github.token` 設定を error（workflow が 2 job 以上の場合） | ghalint |
 | `job_secrets` | `JobSecretsRule` | job-level `env` の `secrets.*` / `github.token` 設定を error（job が 2 step 以上の場合） | ghalint |
 | `action_shell_is_required` | `ActionShellIsRequiredRule` | `run:` を持つ step で `shell:` 未指定（空含む）を error | ghalint |
+| `matrix` | `MatrixRule` | `strategy.matrix` の空軸・include/exclude の未知軸参照・過剰 fan-out（>256）を warning | actionlint |
+| `env-var` | `EnvVarRule` | `workflow/job/step env` の key が portable 命名（`[A-Z_][A-Z0-9_]*`）に反する場合を warning | actionlint |
+| `deprecated-commands` | `DeprecatedCommandsRule` | `run` script 内の `::set-output` / `::save-state` / `::add-path` / `::set-env` を warning | actionlint |
+| `if-cond` | `IfCondRule` | `job.if` / `step.if` の構文エラーと constant bool 条件（常時 true/false）を warning | actionlint |
 | `credentials` | `CredentialsRule` | `job.container` / `job.services.*` の image がカスタムレジストリで credentials 未設定の場合に warning | actionlint |
 | `template-injection` | `TemplateInjectionRule` | `run:` / `step.env` の式に `github.event` 由来データを直接展開している場合に error | zizmor |
 | `expr-undefined-var` | `ExprUndefinedVarRule` | `job/step` の `if` / `env` / `with` における使用不可コンテキスト参照（例: `steps` in job）を error | actionlint |
@@ -1230,7 +1234,7 @@
 
 **完了条件**: 各 rule で table-driven 回帰（正常/異常/誤検知回避）が green、`RuleCatalog` / 仕様 / 優先度一覧が同期している。
 
-**実装メモ**: 未着手。
+**実装メモ**: 完了。`MatrixRule` / `EnvVarRule` / `DeprecatedCommandsRule` / `IfCondRule` を追加し、`RuleCatalog` に priority 38-41 で登録した。`MatrixRule` は空軸、`include/exclude` の未知軸参照、過剰 fan-out（256 超）を warning。`EnvVarRule` は `workflow/job/step env` の key に portable 命名（`[A-Z_][A-Z0-9_]*`）を適用して warning。`DeprecatedCommandsRule` は `run` script から `::set-output` / `::save-state` / `::add-path` / `::set-env` を検出して置換先を案内。`IfCondRule` は `job.if` / `step.if` を式として解析し、構文エラーと constant bool 条件（常時 true/false）を warning として報告する。`RuleInterfaceTests` には 4 ルール分の table-driven 回帰、`RuleCatalog_DefaultRules_MatchDocumentedScope` の件数・priority・canonical ID 期待値更新、`AutoFixCatalog_OnlySevenRulesAttachFix_TableDriven` への no-fix ケース追加を反映し、`dotnet run --project tests/Seiton.Core.Tests -- --treenode-filter "/*/*/RuleInterfaceTests/*"` および `dotnet test` が green を確認した。
 
 ---
 
@@ -1337,10 +1341,10 @@ P6E --> P6F
 | 35 | `workflow_secrets` | **実装済み** | ghalint | workflow-level env での secret 設定制約 |
 | 36 | `job_secrets` | **実装済み** | ghalint | job-level env での secret 設定制約 |
 | 37 | `action_shell_is_required` | **実装済み** | ghalint | run step の shell 明示必須化 |
-| 38 | `matrix` | 未実装（Step 15.3） | actionlint | strategy.matrix の整合検証 |
-| 39 | `env-var` | 未実装（Step 15.3） | actionlint | env key 命名/互換性検証 |
-| 40 | `deprecated-commands` | 未実装（Step 15.3） | actionlint | 旧 workflow command 検出 |
-| 41 | `if-cond` | 未実装（Step 15.3） | actionlint | unsound/constant 条件検出 |
+| 38 | `matrix` | **実装済み** | actionlint | strategy.matrix の整合検証 |
+| 39 | `env-var` | **実装済み** | actionlint | env key 命名/互換性検証 |
+| 40 | `deprecated-commands` | **実装済み** | actionlint | 旧 workflow command 検出 |
+| 41 | `if-cond` | **実装済み** | actionlint | unsound/constant 条件検出 |
 
 ## チェックリスト（全 Phase 共通）
 

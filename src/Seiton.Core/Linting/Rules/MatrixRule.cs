@@ -1,0 +1,118 @@
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Linting.Rules;
+
+public sealed class MatrixRule : RuleBase
+{
+    const long MaxRecommendedCombinations = 256;
+
+    public override string Id => "matrix";
+
+    public override string Name => "Matrix Rule";
+
+    public override void VisitJobPre(Job job)
+    {
+        if (job.Strategy?.Matrix is not Matrix matrix || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        if (matrix.Expression is not null || matrix.Rows is null || matrix.Rows.Count == 0)
+        {
+            return;
+        }
+
+        ValidateRows(job, matrix.Rows);
+        ValidateCombinations(job, matrix, matrix.Include, "include");
+        ValidateCombinations(job, matrix, matrix.Exclude, "exclude");
+    }
+
+    void ValidateRows(Job job, IReadOnlyDictionary<Utf8String, MatrixRow> rows)
+    {
+        long combinations = 1;
+        var combinationWarningReported = false;
+
+        foreach (var pair in rows)
+        {
+            var row = pair.Value;
+            if (row.Expression is not null)
+            {
+                continue;
+            }
+
+            var values = row.Values;
+            if (values is null || values.Count == 0)
+            {
+                var jobId = Decode(job.Id.Value);
+                var axisName = Decode(row.Name.Value);
+                AddJobWarning(
+                    job,
+                    $"job '{jobId}' strategy.matrix axis '{axisName}' has no values; remove the axis or provide at least one value",
+                    row.Name.Range);
+                continue;
+            }
+
+            if (combinationWarningReported)
+            {
+                continue;
+            }
+
+            combinations *= values.Count;
+            if (combinations <= MaxRecommendedCombinations)
+            {
+                continue;
+            }
+
+            var matrixNode = job.Strategy?.Matrix;
+            if (matrixNode is null)
+            {
+                continue;
+            }
+
+            var jobIdForMessage = Decode(job.Id.Value);
+            AddJobWarning(
+                job,
+                $"job '{jobIdForMessage}' strategy.matrix expands to more than {MaxRecommendedCombinations} combinations; consider reducing matrix fan-out",
+                matrixNode.Range);
+            combinationWarningReported = true;
+        }
+    }
+
+    void ValidateCombinations(Job job, Matrix matrix, IReadOnlyList<MatrixCombinations>? combinations, string section)
+    {
+        if (matrix.Rows is null || combinations is null || combinations.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < combinations.Count; i++)
+        {
+            var combo = combinations[i];
+            if (combo.Expression is not null || combo.Entries is null)
+            {
+                continue;
+            }
+
+            for (var entryIndex = 0; entryIndex < combo.Entries.Count; entryIndex++)
+            {
+                var entry = combo.Entries[entryIndex];
+                foreach (var pair in entry)
+                {
+                    if (matrix.Rows.ContainsKey(pair.Key))
+                    {
+                        continue;
+                    }
+
+                    var jobId = Decode(job.Id.Value);
+                    var axisName = Decode(pair.Key);
+                    AddJobWarning(
+                        job,
+                        $"job '{jobId}' strategy.matrix.{section} references unknown axis '{axisName}'",
+                        matrix.Range);
+                    return;
+                }
+            }
+        }
+    }
+}

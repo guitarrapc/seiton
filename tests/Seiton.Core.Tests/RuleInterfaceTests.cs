@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(34);
+        await Assert.That(rules.Length).IsEqualTo(38);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -318,6 +318,10 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[31].Id).IsEqualTo("workflow_secrets");
         await Assert.That(rules[32].Id).IsEqualTo("job_secrets");
         await Assert.That(rules[33].Id).IsEqualTo("action_shell_is_required");
+        await Assert.That(rules[34].Id).IsEqualTo("matrix");
+        await Assert.That(rules[35].Id).IsEqualTo("env-var");
+        await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
+        await Assert.That(rules[37].Id).IsEqualTo("if-cond");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -353,6 +357,10 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("workflow_secrets")).IsEqualTo(35);
         await Assert.That(RuleCatalog.GetPriority("job_secrets")).IsEqualTo(36);
         await Assert.That(RuleCatalog.GetPriority("action_shell_is_required")).IsEqualTo(37);
+        await Assert.That(RuleCatalog.GetPriority("matrix")).IsEqualTo(38);
+        await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(39);
+        await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
+        await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
@@ -364,12 +372,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-035");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-039");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-036", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-040", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-037");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-038");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-041");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-042");
     }
 
     [Test]
@@ -2571,6 +2579,204 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_MatrixRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-small-matrix",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                            node: [20]
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-empty-axis",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: []
+                    steps:
+                        - run: echo ng
+            """,
+            ["strategy.matrix axis 'os' has no values"]),
+            new RuleCase(
+            "ng-include-unknown-axis",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                            include:
+                                - arch: x64
+                    steps:
+                        - run: echo ng
+            """,
+            ["strategy.matrix.include references unknown axis 'arch'"]),
+        };
+
+        await AssertRuleCases(new MatrixRule(), "matrix", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_EnvVarRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-portable-env-keys",
+            """
+            on: push
+            env:
+                GLOBAL_TOKEN: x
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        JOB_TOKEN_1: x
+                    steps:
+                        - env:
+                              STEP_TOKEN: x
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-env-key-lowercase",
+            """
+            on: push
+            env:
+                github_token: x
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["workflow.env key 'github_token' is not portable"]),
+            new RuleCase(
+            "ng-step-env-key-dash",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                              TOKEN-NAME: x
+                          run: echo ng
+            """,
+            ["step.env key 'TOKEN-NAME' is not portable"]),
+        };
+
+        await AssertRuleCases(new EnvVarRule(), "env-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_DeprecatedCommandsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-modern-output-file",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "result=ok" >> "$GITHUB_OUTPUT"
+            """,
+            []),
+            new RuleCase(
+            "ng-set-output-command",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "::set-output name=result::ok"
+            """,
+            ["deprecated command '::set-output'", "$GITHUB_OUTPUT"]),
+            new RuleCase(
+            "ng-set-env-command",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "::set-env name=TOKEN::x"
+            """,
+            ["deprecated command '::set-env'", "$GITHUB_ENV"]),
+        };
+
+        await AssertRuleCases(new DeprecatedCommandsRule(), "deprecated-commands", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_IfCondRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-dynamic-condition",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ github.ref != '' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ success() }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-job-if-constant-false",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ false }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["job if condition is always false"]),
+            new RuleCase(
+            "ng-step-if-constant-true",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ !false }}
+                          run: echo ng
+            """,
+            ["step if condition is always true"]),
+        };
+
+        await AssertRuleCases(new IfCondRule(), "if-cond", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -3741,6 +3947,60 @@ public sealed class RuleInterfaceTests
                         runs-on: ubuntu-latest
                         steps:
                             - run: echo hello
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "matrix",
+                new MatrixRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        strategy:
+                            matrix:
+                                os: []
+                        steps:
+                            - run: echo ng
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "env-var",
+                new EnvVarRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        env:
+                            github_token: x
+                        steps:
+                            - run: echo ng
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "deprecated-commands",
+                new DeprecatedCommandsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "::set-output name=result::ok"
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "if-cond",
+                new IfCondRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        if: ${{ false }}
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo ng
                 """,
                 ExpectsFix: false),
         };
