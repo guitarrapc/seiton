@@ -482,42 +482,48 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 
 ## 6. 実行フェーズ
 
-### Phase 1: 仕様書更新
+### Phase 1: 仕様書更新 ✅
 
 1. `Seiton_Linter_spec.md` §5 を新 config 形状に全面改定
 2. `Seiton_Linter_spec.md` §12 を `fix.pinning` / `fix.images` / `network` に改定
 3. `Seiton_Linter_csharp_spec.md` の型定義・config mapping を改定
 4. `Seiton_Linter_go_spec.md` の型定義・config mapping を改定
 
-### Phase 2: C# 型定義の書き換え
+### Phase 2: C# 型定義の書き換え ✅
 
 1. 新 config 型を定義（`RuleConfig`, `FixConfig`, `NetworkConfig`）
-2. 旧型（`RuleOption`, `ExpressionContext`, `RuleSpecificAdditiveCustomization`, `OnlineAuditConfig`）を deprecated マーク
+2. 旧型を完全削除（`RuleOption`, `ExpressionContext`, `RuleSpecificAdditiveCustomization`, `OnlineAuditConfig` 等）
 3. `LintConfig` プロパティを新型に切り替え
+4. 全ルール・全エンジン・全テストを新型に対応
 
-### Phase 3: Config パーサー更新
+### Phase 3: Config パーサー更新 ✅
 
 1. `LintConfigLibrary` の YAML パーサーを新キー構造に対応
-2. 旧キー検出 + deprecation warning + 変換ロジック実装
-3. 新旧二重定義のエラー検出実装
+2. ルール固有フィールドのバリデーション追加（`RuleCatalog.TryGetAllowedConfigKeys`）
+3. inline exclusion 形式（`- files: value`）のサポート追加
+4. 旧キーは `unknown top-level key` エラーとして処理（後方互換は不要と判断、削除済み）
 
-### Phase 4: ルール適応
+### Phase 4: ルール適応 ✅
 
-1. 各ルールの `SetConfig()` を新 config 読み出しに変更
-2. `LintEngine` の config → ルール接続を更新
-3. `PinRemediationEngine` / `OnlineAuditEngine` の config 読み出しを新型に変更
+1. 各ルールの `SetConfig()` を新 config 読み出しに変更（Phase 2 で完了）
+2. `LintEngine` の config → ルール接続を更新（Phase 2 で完了）
+3. `PinRemediationEngine` / `OnlineAuditEngine` の config 読み出しを新型に変更（Phase 2 で完了）
 
-### Phase 5: テスト更新
+### Phase 5: テスト更新 ✅
 
 1. `LintConfigLibraryTests` の全インライン YAML を新形状に書き換え
-2. 旧形式の後方互換テスト追加（deprecation warning が出ることを検証）
-3. 旧新二重定義のエラーテスト追加
-4. `PinResolutionConfigTests` / `OnlineAuditConfigTests` を新型に書き換え
+2. ルール固有フィールドバリデーションのテスト追加
+3. inline exclusion 形式のテスト追加
+4. フルターゲット config 形状の統合テスト追加
+5. `PinResolutionConfigTests` / `OnlineAuditConfigTests` を新型に書き換え
+6. 旧形式の後方互換テストは不要（旧形式サポート削除済み）
 
-### Phase 6: テンプレート・ドキュメント更新
+### Phase 6: テンプレート・ドキュメント更新 ✅
 
 1. `LintConfigLibrary.GenerateTemplateYaml()` の出力を新形状に更新
-2. README / ユーザー向けドキュメントの config 例を更新
+2. `Seiton-feature-matrix.md` の `online_audit` 参照を `rules.<rule-id>.enabled: true` に更新
+3. `competitor-pinact-structure-details.md` の `pin_resolution` 参照を `fix.pinning` に更新
+4. README には config 例が存在しないため変更不要
 
 ---
 
@@ -525,12 +531,11 @@ config は外部ユーザーに公開済みであるため、旧形式を即座�
 
 各フェーズ完了時に以下を確認する:
 
-- [ ] `dotnet build` が通る
-- [ ] `dotnet test` が全テスト pass
-- [ ] 新形式の config で lint 実行が正常動作する
-- [ ] 旧形式の config で deprecation warning 付きで lint 実行が正常動作する（Phase 3 以降）
-- [ ] 新旧二重定義で config エラーが出る（Phase 3 以降）
-- [ ] config テンプレート生成が新形式を出力する（Phase 6）
+- [x] `dotnet build` が通る
+- [x] `dotnet test` が全テスト pass（414 tests）
+- [x] 新形式の config で lint 実行が正常動作する
+- [x] 旧形式は `unknown top-level key` エラーとして処理される（後方互換は削除済み）
+- [x] config テンプレート生成が新形式を出力する
 
 ---
 

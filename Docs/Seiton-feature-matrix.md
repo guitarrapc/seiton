@@ -105,7 +105,7 @@ online audit rules（4）:
 | Dockerfile FROM pin | なし | なし | なし | なし | あり | なし | 未対応 | ❌ | P1 |
 | docker-compose image pin | なし | なし | なし | なし | あり | あり | 未対応 | ❌ | P1 |
 | 任意YAML image pin | なし | なし | なし | なし | 限定 | あり | 未対応 | ❌ | P1 |
-| Online vulnerability / advisory audit | なし | 実験的 | あり | なし | なし | なし | 実装済み（opt-in online_audit） | ✅ | 維持 |
+| Online vulnerability / advisory audit | なし | 実験的 | あり | なし | なし | なし | 実装済み（opt-in `rules.<rule-id>.enabled: true`） | ✅ | 維持 |
 
 ---
 
@@ -232,18 +232,18 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `forbidden-uses` | 🟡 | `forbidden-uses`（allow/deny wildcard の初期実装） |
 | `github-env` | ❌ | 専用監査なし |
 | `hardcoded-container-credentials` | ❌ | 専用監査なし |
-| `impostor-commit` | ✅ | online 監査（`online_audit` 有効時） |
+| `impostor-commit` | ✅ | online 監査（`rules.impostor-commit.enabled: true` で有効化） |
 | `insecure-commands` | ✅ | `insecure-commands` |
-| `known-vulnerable-actions` | ✅ | online 監査（`online_audit` 有効時） |
+| `known-vulnerable-actions` | ✅ | online 監査（`rules.known-vulnerable-actions.enabled: true` で有効化） |
 | `misfeature` | ❌ | 専用監査なし |
 | `obfuscation` | ❌ | 専用監査なし |
 | `overprovisioned-secrets` | 🟡 | `overprovisioned-secrets`（step/reusable-call 中心の初期実装） |
-| `ref-confusion` | ✅ | online 監査（`online_audit` 有効時） |
+| `ref-confusion` | ✅ | online 監査（`rules.ref-confusion.enabled: true` で有効化） |
 | `ref-version-mismatch` | 🟡 | `ref-version-mismatch`（ref/path major mismatch の初期実装） |
 | `secrets-inherit` | ✅ | `deny-inherit-secrets` |
 | `secrets-outside-env` | ✅ | `secrets-outside-env` |
 | `self-hosted-runner` | ✅ | `self-hosted-runner` |
-| `stale-action-refs` | ✅ | online 監査（`online_audit` 有効時） |
+| `stale-action-refs` | ✅ | online 監査（`rules.stale-action-refs.enabled: true` で有効化） |
 | `superfluous-actions` | ❌ | 専用監査なし |
 | `template-injection` | ✅ | `template-injection` |
 | `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |

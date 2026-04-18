@@ -197,12 +197,12 @@ pinact は次の両方を扱います:
 
 ---
 
-## 11. pinact と Seiton（`min_age_days`）比較
+## 11. pinact と Seiton（`min-age-days`）比較
 
-| 観点 | pinact（`--min-age`） | Seiton（`pin_resolution.github_actions.min_age_days`） |
+| 観点 | pinact（`--min-age`） | Seiton（`fix.pinning.min-age-days`） |
 |---|---|---|
 | 既定値 | `0`（無効） | `14`（有効） |
-| 設定面 | CLI/環境変数のみ（`--min-age`, `PINACT_MIN_AGE`） | 設定ファイルキー（`min_age_days`） |
+| 設定面 | CLI/環境変数のみ（`--min-age`, `PINACT_MIN_AGE`） | 設定ファイルキー（`fix.pinning.min-age-days`） |
 | 発動ポイント | 更新フローのみ（`run -u`） | Pin remediation の解決フロー |
 | 選択モデル | release/tag 候補を列挙し、年齢でフィルタして最適を選択 | version 形式 ref（`vN`, `vN.M`, `vN.M.P`）に対して同一バージョン系列の release/tag 候補を列挙し、適格な最適候補を選択。非 version ref は直接解決 |
 | 候補/ターゲットが新しすぎる場合 | その候補をスキップして、より古い適格候補を探索継続 | 新しすぎる候補をスキップして継続。適格候補が尽きた場合のみ skip（`null`） |
