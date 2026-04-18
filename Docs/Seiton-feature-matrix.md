@@ -27,7 +27,7 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 38（default local 34 + online audit 4）まで拡張済み。
+- ルール総数は 50（default local 46 + online audit 4）まで拡張済み。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
 ---
@@ -36,8 +36,8 @@
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（38 rules: default local 34 + online audit 4） | ✅ | 継続強化 |
-| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（zizmor 監査 13件対応 + 6件部分対応） | 🟡 | P1 |
+| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（50 rules: default local 46 + online audit 4） | ✅ | 継続強化 |
+| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（zizmor 監査 14件対応 + 8件部分対応） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
 | Network-assisted pin fix | なし | なし | 部分 | 強い | 強い | 強い | 実装済み | ✅ | 維持 |
@@ -56,24 +56,23 @@
 
 ### P0（最優先）
 
-1. 残存 zizmor high-value audits（具体監査ID優先）
-- `archived-uses`
-- `insecure-commands`
-- `overprovisioned-secrets`
-- `forbidden-uses`
-- `ref-version-mismatch`
-- `use-trusted-publishing`
-- 理由: いずれもサプライチェーン耐性・secret漏えい抑止・運用安全性に直結し、既存実装済み監査の次に効果が高い
-
-2. ghalint未吸収の高価値ルール
-- `deny_job_container_latest_image`
-- 理由: `:latest` 固定禁止の運用ポリシーは再現性・供給網安定化に寄与し、`unpinned-image` と補完関係にある
-
-3. pin対象のファイル範囲拡張（P1→P0へ昇格）
+1. pin対象のファイル範囲拡張（P1→P0へ昇格）
 - Dockerfile（`FROM`）
 - docker-compose（`image`）
 - 任意YAML（`image`）
 - 理由: `.references/dockerfile-pin` / `.references/frizbee` で実用機能が成熟しており、Actions外の供給網ギャップを早期に埋める効果が大きい
+
+2. 残存 zizmor high-value audits（次段）
+- `unsound-condition`
+- `unsound-contains`
+- `github-env`
+- `hardcoded-container-credentials`
+- 理由: Step 15.6 で high-value 6 監査（`archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing`）は実装済み。次は exploitability が高い未対応監査を優先。
+
+3. trusted publishing / uses policy の運用強化
+- `forbidden-uses` の allow/deny ポリシー精緻化
+- `use-trusted-publishing` のレジストリ/アクション判定精緻化
+- 理由: 現状は初期実装として有効だが、zizmor 同等レベルの網羅には運用設定と判定ロジックの拡張が必要
 
 ### P1（次点）
 
@@ -82,25 +81,16 @@
 - PRレビュー向け出力
 - 理由: `.references/pinact` の verify/review 導線を吸収し、実運用の継続改善を回しやすくする
 
-2. actionlint未吸収の高頻度ルール
-- `matrix`
-- `env-var`
-- `deprecated-commands`
-- `if-cond`
-- 理由: CI失敗予防と保守性向上に寄与し、ASTのみで段階導入しやすい
+2. 監査プロファイル（regular/pedantic/auditor相当）
+- 理由: 導入時ノイズ制御、組織内ロール別運用をしやすくする
 
 ### P2（中長期）
 
-1. 監査プロファイル（regular/pedantic/auditor相当）
-- 理由: 導入時ノイズ制御、組織内ロール別運用をしやすくする
-
-2. 高度監査ポリシーの拡張
+1. 高度監査ポリシーの拡張
 - `forbidden-uses`（allow/deny 許可アクション制御）
-- `unsound-condition`
-- `unsound-contains`
 - 理由: 組織統制と高度検知には有効だが、初期導入コストが高いため中長期で段階導入する
 
-3. 実験機能系ポリシーの取り込み
+2. 実験機能系ポリシーの取り込み
 - `validate-input` 相当（ghalint experimental）
 - 理由: 効果はあるが安定運用観点で優先度は低め
 
@@ -125,21 +115,21 @@
 
 | actionlint rule | Seiton 対応状況 | 備考 |
 |---|---|---|
-| matrix | ❌ | matrix 専用ルール未実装 |
+| matrix | ✅ | `matrix` |
 | credentials | ✅ | `credentials` |
 | shell-name | ✅ | `shell-name` |
 | runner-label | ✅ | `runner-label` |
 | events | 🟡 | `dangerous-triggers` + `glob-pattern` で一部吸収 |
 | job-needs | ✅ | `needs-graph` |
 | action | 🟡 | `popular-action-inputs` + `unpinned-uses` 等で一部吸収 |
-| env-var | ❌ | env key 命名専用ルール未実装 |
+| env-var | ✅ | `env-var` |
 | id | ✅ | `id-naming` |
 | glob | ✅ | `glob-pattern` |
 | permissions | ✅ | `permissions` + `deny-write-all` |
 | workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収 |
 | expression | ✅ | `expr-undefined-var`（+式ベース系） |
-| deprecated-commands | ❌ | `::set-output` など deprecated command 検出未実装 |
-| if-cond | ❌ | if 条件の定数判定・不正判定専用ルール未実装 |
+| deprecated-commands | ✅ | `deprecated-commands` |
+| if-cond | ✅ | `if-cond` |
 | shellcheck | ❌ | 外部 shellcheck 連携未実装 |
 | pyflakes | ❌ | 外部 pyflakes 連携未実装 |
 
@@ -153,7 +143,7 @@
 | deny_inherit_secrets | ✅ | `deny-inherit-secrets` |
 | workflow_secrets | ✅ | `workflow_secrets` |
 | job_secrets | ✅ | `job_secrets` |
-| deny_job_container_latest_image | ❌ | `:latest` 専用禁止は未実装（`unpinned-image` はより広いが同等ではない） |
+| deny_job_container_latest_image | ✅ | `deny_job_container_latest_image` |
 | action_ref_should_be_full_length_commit_sha | ✅ | `unpinned-uses` + `unpinned-image` |
 | github_app_should_limit_repositories | ✅ | `github-app-token-inputs` |
 | github_app_should_limit_permissions | ✅ | `github-app-token-inputs` |
@@ -165,16 +155,16 @@
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 13 | `cache-poisoning`, `dangerous-triggers`, `impostor-commit`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets` |
-| 部分対応 | 6 | `concurrency-limits`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions` |
-| 未対応 | 15 | 高度セキュリティ監査群（残差分） |
+| 直接対応済み | 14 | `cache-poisoning`, `dangerous-triggers`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets` |
+| 部分対応 | 8 | `archived-uses`, `concurrency-limits`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
+| 未対応 | 12 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID別対応表（実装確認ベース）:
 
 | 監査ID | Seiton 対応状況 | 備考 |
 |---|---|---|
 | `anonymous-definition` | ❌ | 専用監査なし |
-| `archived-uses` | ❌ | 専用監査なし |
+| `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
 | `artipacked` | ❌ | 専用監査なし |
 | `bot-conditions` | ❌ | 専用監査なし |
 | `cache-poisoning` | ✅ | `cache-poisoning` |
@@ -183,17 +173,17 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `dependabot-cooldown` | ❌ | 専用監査なし |
 | `dependabot-execution` | ❌ | 専用監査なし |
 | `excessive-permissions` | 🟡 | `deny-write-all` / `deny-read-all` / `job-permissions-required` で部分対応 |
-| `forbidden-uses` | 🟡 | 近接ルールはあるが allow/deny の専用制御は未実装 |
+| `forbidden-uses` | 🟡 | `forbidden-uses`（allow/deny wildcard の初期実装） |
 | `github-env` | ❌ | 専用監査なし |
 | `hardcoded-container-credentials` | ❌ | 専用監査なし |
 | `impostor-commit` | ✅ | online 監査（`online_audit` 有効時） |
-| `insecure-commands` | ❌ | 専用監査なし |
+| `insecure-commands` | ✅ | `insecure-commands` |
 | `known-vulnerable-actions` | ✅ | online 監査（`online_audit` 有効時） |
 | `misfeature` | ❌ | 専用監査なし |
 | `obfuscation` | ❌ | 専用監査なし |
-| `overprovisioned-secrets` | 🟡 | `deny-inherit-secrets` などで部分対応 |
+| `overprovisioned-secrets` | 🟡 | `overprovisioned-secrets`（step/reusable-call 中心の初期実装） |
 | `ref-confusion` | ✅ | online 監査（`online_audit` 有効時） |
-| `ref-version-mismatch` | 🟡 | pin 系診断はあるが専用不一致監査は未実装 |
+| `ref-version-mismatch` | 🟡 | `ref-version-mismatch`（ref/path major mismatch の初期実装） |
 | `secrets-inherit` | ✅ | `deny-inherit-secrets` |
 | `secrets-outside-env` | ✅ | `secrets-outside-env` |
 | `self-hosted-runner` | ✅ | `self-hosted-runner` |
@@ -206,7 +196,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ❌ | 専用監査なし |
 | `unsound-contains` | ❌ | 専用監査なし |
-| `use-trusted-publishing` | ❌ | 専用監査なし |
+| `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -222,31 +212,22 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 ### P0（競合網羅の最短経路）
 
-1. actionlint 未対応ルール
-- `matrix`
-- `env-var`
-- `deprecated-commands`
-- `if-cond`
+1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. ghalint 未対応ポリシー
-- `deny_job_container_latest_image`
+2. zizmor 残差分（未対応）
+- `unsound-condition`
+- `unsound-contains`
+- `github-env`
+- `hardcoded-container-credentials`
 
-3. zizmor 残差分 high-value audits
-- `archived-uses`
-- `insecure-commands`
-- `overprovisioned-secrets`
-- `forbidden-uses`
-- `ref-version-mismatch`
-- `use-trusted-publishing`
+補足（完了）:
+- actionlint parity: `matrix` / `env-var` / `deprecated-commands` / `if-cond`
+- ghalint parity: `deny_job_container_latest_image`
+- zizmor high-value (Step 15.6): `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing`
 
 ### P1（適用範囲拡張）
 
-1. dockerfile-pin/frizbee 領域
-- Dockerfile `FROM` digest pin
-- docker-compose `image:` digest pin
-- 任意 YAML `image:` digest pin
-
-2. pinact 運用機能
+1. pinact 運用機能
 - pin comment 整合チェック
 - PR review 向け出力
 
