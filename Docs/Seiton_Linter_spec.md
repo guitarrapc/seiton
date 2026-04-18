@@ -99,8 +99,8 @@ The default C# local-AST linter profile must include the following rule IDs.
 
 Column definitions:
 
-- **Default**: `✓` = active with no config (local-AST); `✗` = opt-in only, requires `online_audit.allow_network: true`.
-- **Network**: `—` = local-AST rule, no network access required; `online_audit` = requires network access via `online_audit.allow_network: true`.
+- **Default**: `✓` = active with no config (local-AST); `✗` = opt-in only, requires `rules.<id>.enabled: true`.
+- **Network**: `—` = local-AST rule, no network access required; `online` = requires network access, activated by `rules.<id>.enabled: true`.
 
 | Rule ID | Default | Network | Required Behavior Summary |
 |---|---|---|---|
@@ -127,10 +127,10 @@ Column definitions:
 | `run-inputs-context-direct-use` | ✓ | — | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
 | `secrets-whole-context-access` | ✓ | — | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
 | `checkout-persist-credentials` | ✓ | — | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
-| `known-vulnerable-actions` | ✗ | `online_audit` | Error when `uses:` references resolve to known vulnerable action versions (for example via GitHub Security Advisory metadata or curated vulnerability dataset). |
-| `impostor-commit` | ✗ | `online_audit` | Error when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's graph for the intended ref semantics. |
-| `ref-confusion` | ✗ | `online_audit` | Error when a symbolic ref in `uses:` (tag/branch) is ambiguous or confusion-prone (for example same name present in both tag and branch namespaces) under resolution policy. |
-| `stale-action-refs` | ✗ | `online_audit` | Warn when SHA-pinned `uses:` references are stale relative to maintained release/tag mapping policy. |
+| `known-vulnerable-actions` | ✗ | `online` | Error when `uses:` references resolve to known vulnerable action versions (for example via GitHub Security Advisory metadata or curated vulnerability dataset). |
+| `impostor-commit` | ✗ | `online` | Error when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's graph for the intended ref semantics. |
+| `ref-confusion` | ✗ | `online` | Error when a symbolic ref in `uses:` (tag/branch) is ambiguous or confusion-prone (for example same name present in both tag and branch namespaces) under resolution policy. |
+| `stale-action-refs` | ✗ | `online` | Warn when SHA-pinned `uses:` references are stale relative to maintained release/tag mapping policy. |
 | `deny-read-all` | ✓ | — | Error when workflow/job permissions use `read-all`; callers must use explicit least-privilege scope mapping instead of blanket read grants. |
 | `deny-inherit-secrets` | ✓ | — | Error when reusable-workflow call jobs use `secrets: inherit`; full secret inheritance is forbidden under strict policy profile. |
 | `job-timeout-minutes-required` | ✓ | — | Error when executable jobs omit `timeout-minutes` (or equivalent compliant per-step timeout policy), to avoid unbounded runner execution. |
@@ -159,7 +159,7 @@ Rule set compatibility policy:
 - Existing rule IDs are stable once published.
 - Adding a new default rule requires this catalog to be updated in the same specification change.
 - Removing or renaming a published rule ID is a breaking change and requires explicit migration guidance.
-- `online_audit` rules may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
+- `online` rules may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
 ### 4.5 Rule Guidance (Operational)
 
@@ -259,27 +259,24 @@ Default values (current C# runtime):
 
 | Setting | Default |
 |---|---|
-| `rules.<rule-id>.enabled` | `true` |
+| `rules.<rule-id>.enabled` | `true` (local-AST rules); `false` (online rules) |
 | `rules.<rule-id>.severity` | rule-defined default |
-| `additiveCustomization.*` | empty / no additions |
+| `rules.<rule-id>.<rule-specific-key>` | empty / no additions (see §5.8) |
 | `exclusions` | empty |
-| `exprContext.eventTypes` | empty |
-| `default_job_timeout_minutes_for_fix` | `null` (no timeout auto-fix attachment) |
-| `pin_resolution` | disabled (`null` unless provided, `allow_network: false` default) |
-| `pin_resolution.fail_open` | `true` |
-| `pin_resolution.request_timeout_sec` | `30` |
-| `pin_resolution.max_concurrency` | `4` |
-| `pin_resolution.github_actions.token_env_vars` | `SEITON_GITHUB_TOKEN`, `GITHUB_TOKEN` |
-| `pin_resolution.github_actions.ghes_fallback` | `false` |
-| `pin_resolution.github_actions.exclude_branches` | `main`, `master` |
-| `pin_resolution.github_actions.min_age_days` | `14` |
-| `pin_resolution.images.exclude_images` | includes `scratch` |
-| `pin_resolution.images.exclude_tags` | `latest` |
-| `online_audit` | disabled (`null` unless provided, `allow_network: false` default) |
-| `online_audit.fail_open` | `true` |
-| `online_audit.request_timeout_sec` | `30` |
-| `online_audit.max_concurrency` | `4` |
-| `online_audit.github_actions.token_env_vars` | `SEITON_GITHUB_TOKEN`, `GITHUB_TOKEN` |
+| `fix.defaults.job-timeout-minutes` | `null` (no timeout auto-fix attachment) |
+| `fix.pinning.enable-network` | `false` |
+| `fix.pinning.min-age-days` | `14` |
+| `fix.pinning.exclude-branches` | `main`, `master` |
+| `fix.images.enable-network` | `false` |
+| `fix.images.exclude-images` | includes `scratch` |
+| `fix.images.exclude-tags` | `latest` |
+| `network.on-error` | `skip` |
+| `network.timeout-seconds` | `30` |
+| `network.max-concurrency` | `4` |
+| `network.github.ghes-api-url` | empty (github.com only) |
+| `network.github.ghes-fallback` | `false` |
+
+Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable. This prevents malicious config files from redirecting token resolution to unintended environment variables.
 
 ### 5.1 Rule Identifier Contract
 
@@ -306,11 +303,11 @@ Configuration file may define file-targeted exclusion entries with path globs.
 - Path separator is normalized to `/` before matching.
 - Glob matching is case-sensitive.
 - Glob base is repository root (workspace root containing the analyzed file).
-- Exclusion entries may include optional `jobId` condition (see §5.4).
+- Exclusion entries may include optional `jobs` condition (see §5.4).
 
 ### 5.4 Job-Level Exclusion (Configuration)
 
-- Job scoping uses `job.id` only.
+- Job scoping uses `job.id` only via the `jobs` list field.
 - Job `name` is not a matching key for exclusion.
 - For reusable workflow call jobs (`uses:` at job level), matching is evaluated only against the caller workflow job in the current file.
 - Seiton does not traverse into the referenced reusable workflow file for caller-file exclusion matching.
@@ -351,80 +348,103 @@ Linter contract supports mandatory safety constraints on selected rules.
 - If config attempts to set severity lower than rule minimum severity, linter must emit configuration error.
 - Severity order is `Error > Warning > Info`.
 
-### 5.8 Rule-Specific Additive Customization
+### 5.8 Rule-Specific Configuration
 
-Linter contract supports additive rule customization for selected rules.
+Selected rules accept rule-specific configuration keys within the `rules.<rule-id>` section, in addition to the shared `enabled` / `severity` keys.
 
-- Custom entries are merged with built-in defaults; built-in defaults are not removed by this contract.
-- Merge behavior is set union (`effective = built-in U custom-added`) with deterministic deduplication.
+- Rule-specific keys are defined per rule ID. Unknown keys for a given rule ID are configuration errors.
+- Where a rule accepts an `extend` list, merge behavior is set union (`effective = built-in U user-extended`) with deterministic deduplication.
 - Duplicate entries after normalization are ignored.
-- Invalid custom entries must produce configuration error with enough location/context for users to fix input.
+- Invalid entries must produce configuration error with enough location/context for users to fix input.
+- Extension never removes built-in defaults.
 
 Non-normative example configuration shape:
 
 ```yaml
-additiveCustomization:
-  additionalDangerousEvents:
-    - issue_comment
-    - pull_request_review_comment
+rules:
+  dangerous-triggers:
+    events:
+      extend:
+        - issue_comment
+        - pull_request_review_comment
 
-  additionalKnownHostedLabels:
-    - ubuntu-24.04-arm
-    - windows-2025-vs2026
+  runner-label:
+    known-hosted-labels:
+      extend:
+        - ubuntu-24.04-arm
+        - windows-2025-vs2026
 
-  additionalPublicRegistries:
-    - registry.example.com
-    - mirror.example.net:5000
+  credentials:
+    public-registries:
+      extend:
+        - registry.example.com
+        - mirror.example.net:5000
 
-  additionalUntrustedTriggers:
-    - issue_comment
+  cache-poisoning:
+    untrusted-triggers:
+      extend:
+        - issue_comment
 
-  additionalOutputCommands:
-    - tee
+  unredacted-secrets:
+    output-commands:
+      extend:
+        - tee
 
-  forbiddenUsesAllowPatterns:
-    - actions/*
+  forbidden-uses:
+    allow:
+      - actions/*
+    deny:
+      - some-org/*
 
-  forbiddenUsesDenyPatterns:
-    - some-org/*
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+      - repository_dispatch
 ```
 
-#### 5.8.1 `dangerous-triggers` Additional Events
+#### 5.8.1 `dangerous-triggers` — `events.extend`
 
-- `additionalDangerousEvents` allows users to add event names that are treated as dangerous by the `dangerous-triggers` rule.
+- Allows users to add event names treated as dangerous by the `dangerous-triggers` rule.
 - Matching uses normalized event names (ASCII lower-case); configuration values should use canonical GitHub event naming.
 - If a configured event is present in workflow `on`, rule emits the same diagnostic/severity behavior as built-in dangerous events.
 
-#### 5.8.2 `runner-label` Additional Known Labels
+#### 5.8.2 `runner-label` — `known-hosted-labels.extend`
 
-- `additionalKnownHostedLabels` allows users to add runner labels treated as known GitHub-hosted labels for `runner-label` rule evaluation.
+- Allows users to add runner labels treated as known GitHub-hosted labels for `runner-label` rule evaluation.
 - Matching uses normalized label values (ASCII lower-case).
 - Labels added here suppress only `runner-label` unknown-label diagnostics; they do not alter parsing or execution semantics.
 
-#### 5.8.3 `credentials` Additional Public Registries
+#### 5.8.3 `credentials` — `public-registries.extend`
 
-- `additionalPublicRegistries` allows users to add registry hosts treated as public/credential-optional by the `credentials` rule.
+- Allows users to add registry hosts treated as public/credential-optional by the `credentials` rule.
 - Entry unit is registry host (`host` or `host:port`), without scheme and path.
 - Matching uses normalized host values (ASCII lower-case).
 - When image registry host matches this merged public-registry set, missing credentials does not produce `credentials` diagnostics.
 
-#### 5.8.4 `cache-poisoning` / `self-hosted-runner` Additional Untrusted Triggers
+#### 5.8.4 `cache-poisoning` / `self-hosted-runner` — `untrusted-triggers.extend`
 
-- `additionalUntrustedTriggers` allows users to add trigger event names treated as untrusted for both `cache-poisoning` and `self-hosted-runner` evaluation.
+- Allows users to add trigger event names treated as untrusted for `cache-poisoning` and/or `self-hosted-runner` evaluation.
+- Each rule has its own independent `untrusted-triggers.extend` list; users set them separately to control which rule is affected.
 - Matching uses normalized event names (ASCII lower-case).
-- Added trigger names extend, and never replace, the built-in untrusted trigger set.
+- Extended trigger names never replace the built-in untrusted trigger set.
 
-#### 5.8.5 `unredacted-secrets` Additional Output Commands
+#### 5.8.5 `unredacted-secrets` — `output-commands.extend`
 
-- `additionalOutputCommands` allows users to add command names treated as output sinks by `unredacted-secrets`.
+- Allows users to add command names treated as output sinks by `unredacted-secrets`.
 - Matching uses normalized command names (ASCII lower-case).
-- Added command names extend, and never replace, the built-in sink command set.
+- Extended command names never replace the built-in sink command set.
 
-#### 5.8.6 `forbidden-uses` Policy Patterns
+#### 5.8.6 `forbidden-uses` — `allow` / `deny`
 
-- `forbiddenUsesAllowPatterns` defines additive allow patterns for `forbidden-uses` policy evaluation.
-- `forbiddenUsesDenyPatterns` defines additive deny patterns for `forbidden-uses` policy evaluation.
+- `allow` defines additive allow patterns for `forbidden-uses` policy evaluation.
+- `deny` defines additive deny patterns for `forbidden-uses` policy evaluation.
 - Matching and precedence are runtime-defined by the `forbidden-uses` rule implementation; this contract requires deterministic matching for identical input and config.
+
+#### 5.8.7 `expr-undefined-var` — `assume-events`
+
+- Allows users to declare which trigger events the workflow is expected to handle.
+- This provides event-type context for expression validation, suppressing false positives for event-specific context roots (e.g. `github.event.inputs` is valid under `workflow_dispatch`).
+- Values are event name strings matching canonical GitHub event naming.
 
 ### 5.9 Minimal and Advanced Example Configuration File
 
@@ -447,97 +467,113 @@ rules:
 
   dangerous-triggers:
     severity: error
+    events:
+      extend:
+        - issue_comment
+        - pull_request_review_comment
 
   shell-name:
     severity: warning
 
-additiveCustomization:
-  additionalDangerousEvents:
-    - issue_comment
-    - pull_request_review_comment
+  runner-label:
+    known-hosted-labels:
+      extend:
+        - custom-large
+        - ubuntu-24.04-arm
 
-  additionalKnownHostedLabels:
-    - custom-large
-    - ubuntu-24.04-arm
+  credentials:
+    public-registries:
+      extend:
+        - registry.example.com
+        - mirror.example.net:5000
 
-  additionalPublicRegistries:
-    - registry.example.com
-    - mirror.example.net:5000
+  cache-poisoning:
+    untrusted-triggers:
+      extend:
+        - issue_comment
 
-exprContext:
-  eventTypes:
-    - workflow_dispatch
-    - repository_dispatch
+  unredacted-secrets:
+    output-commands:
+      extend:
+        - tee
 
-# Optional default timeout for partial auto-fix of job-timeout-minutes-required.
-# <= 0 disables fix attachment for that rule.
-default_job_timeout_minutes_for_fix: 15
+  forbidden-uses:
+    deny:
+      - some-untrusted-org/*
 
-pin_resolution:
-  allow_network: false
-  github_actions:
-    token_env_vars:
-      - SEITON_GITHUB_TOKEN
-      - GITHUB_TOKEN
-    ghes_api_url: ""
-    ghes_fallback: false
-    ignore_actions:
-      - name: "slsa-framework/.*"
-        ref: ".*"
-    exclude_branches:
-      - main
-      - master
-    min_age_days: 14
-  images:
-    exclude_images:
-      - scratch
-    exclude_tags:
-      - latest
-    ignore_images:
-      - mcr.microsoft.com/**
-  fail_open: true
-  request_timeout_sec: 30
-  max_concurrency: 4
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+      - repository_dispatch
 
-online_audit:
-  allow_network: false
-  github_actions:
-    token_env_vars:
-      - SEITON_GITHUB_TOKEN
-      - GITHUB_TOKEN
-    ghes_api_url: ""
-    ghes_fallback: false
-    ignore_actions:
-      - name: "slsa-framework/.*"
-        ref: ".*"
-  fail_open: true
-  request_timeout_sec: 30
-  max_concurrency: 4
+  # Online rules (default disabled; enable to activate network-assisted audit)
+  known-vulnerable-actions:
+    enabled: true
+  impostor-commit:
+    enabled: true
+  ref-confusion:
+    enabled: true
+  stale-action-refs:
+    enabled: true
 
 exclusions:
-  - filePattern: ".github/workflows/legacy/*.yml"
-    ruleIds:
+  - files: ".github/workflows/legacy/*.yml"
+    rules:
       - dangerous-triggers
       - job-permissions-required
 
-  - filePattern: ".github/workflows/release.yml"
-    jobId: publish
-    ruleIds:
+  - files: ".github/workflows/release.yml"
+    jobs:
+      - publish
+    rules:
       - credentials
+
+fix:
+  defaults:
+    job-timeout-minutes: 15
+
+  pinning:
+    enable-network: true
+    min-age-days: 14
+    exclude-branches:
+      - main
+      - master
+    ignore-actions:
+      - uses: "slsa-framework/.*"
+        ref: ".*"
+
+  images:
+    enable-network: true
+    exclude-images:
+      - scratch
+    exclude-tags:
+      - latest
+    ignore-images:
+      - "mcr.microsoft.com/**"
+
+network:
+  on-error: skip
+  timeout-seconds: 30
+  max-concurrency: 4
+  github:
+    ghes-api-url: ""
+    ghes-fallback: false
 ```
 
 Interpretation notes:
 
 - `rules.<rule-id>.enabled` controls rule enable/disable, subject to fail-safe constraints in §5.7.
 - `rules.<rule-id>.severity` overrides diagnostic severity, subject to fail-safe constraints in §5.7.
-- `additiveCustomization.additionalDangerousEvents`, `additiveCustomization.additionalKnownHostedLabels`, and `additiveCustomization.additionalPublicRegistries` are additive extensions defined in §5.8.
-- `exprContext.eventTypes` provides optional explicit event-type context for expression validation.
-- `default_job_timeout_minutes_for_fix` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
-- `pin_resolution` configures network-assisted pin remediation policy and resolver behavior.
-- `online_audit` configures opt-in network-assisted advisory/ref audit policy.
-- `exclusions[].filePattern` and optional `exclusions[].jobId` define config-based suppression scope.
-- `exclusions[].ruleIds` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
+- Rule-specific keys (e.g. `events.extend`, `public-registries.extend`, `assume-events`) are defined per rule in §5.8.
+- Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are default `enabled: false`; setting `enabled: true` activates them and the system automatically requires network access.
+- `fix.defaults.job-timeout-minutes` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
+- `fix.pinning` configures network-assisted SHA pin remediation for `unpinned-uses`.
+- `fix.images` configures network-assisted digest pin remediation for `unpinned-image`.
+- `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
+- `exclusions[].files` and optional `exclusions[].jobs` define config-based suppression scope.
+- `exclusions[].rules` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
+- Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable.
 
 ### 5.10 Recommended Config File Name and Location
 
@@ -582,13 +618,13 @@ This section describes four canonical usage profiles. Each profile states which 
 
 Config file is absent or empty. No configuration is required.
 
-**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online-audit-only rules.
+**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online rules (default `enabled: false`).
 
 Specifically, the following are **active** without any config:
 
 `job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`
 
-The following are **not active** (online-audit-only; require `online_audit.allow_network: true`):
+The following are **not active** (online rules; require `rules.<id>.enabled: true`):
 
 `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`
 
@@ -623,8 +659,8 @@ Active rules: same as Profile 1 minus `action-shell-is-required`
 
 ```yaml
 exclusions:
-  - filePattern: ".github/workflows/legacy-release.yml"
-    ruleIds:
+  - files: ".github/workflows/legacy-release.yml"
+    rules:
       - runner-no-latest
       - job-permissions-required
 ```
@@ -634,11 +670,15 @@ Active rules: same as Profile 1; `runner-no-latest` and `job-permissions-require
 **Example — add custom runner labels and extend dangerous triggers:**
 
 ```yaml
-additiveCustomization:
-  additionalKnownHostedLabels:
-    - ubuntu-24.04-large
-  additionalDangerousEvents:
-    - issue_comment
+rules:
+  runner-label:
+    known-hosted-labels:
+      extend:
+        - ubuntu-24.04-large
+  dangerous-triggers:
+    events:
+      extend:
+        - issue_comment
 ```
 
 Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large` without diagnostic; `dangerous-triggers` now treats `issue_comment` as dangerous.
@@ -653,27 +693,37 @@ Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large`
 
 Network access must be explicitly opted in. It enables two distinct network-backed capabilities:
 
-**3a — Pin remediation** (`pin_resolution.allow_network: true`):
+**3a — Pin remediation** (`fix.pinning.enable-network: true` and/or `fix.images.enable-network: true`):
 
 Adds auto-fix suggestions to `unpinned-uses` and `unpinned-image` by resolving SHAs and digests at remediation time.
 
 ```yaml
-pin_resolution:
-  allow_network: true
+fix:
+  pinning:
+    enable-network: true
+  images:
+    enable-network: true
 ```
 
 Active rules: same as Profile 1. **Additionally**, `unpinned-uses` and `unpinned-image` now carry auto-fix data.
 
-**3b — Online audit** (`online_audit.allow_network: true`):
+**3b — Online rules** (`rules.<online-rule-id>.enabled: true`):
 
-Activates the four online-audit-only rules that require network access to complete their analysis:
+Activates the four online rules that require network access to complete their analysis:
 
 ```yaml
-online_audit:
-  allow_network: true
+rules:
+  known-vulnerable-actions:
+    enabled: true
+  impostor-commit:
+    enabled: true
+  ref-confusion:
+    enabled: true
+  stale-action-refs:
+    enabled: true
 ```
 
-Active rules: all of Profile 1 **plus** the four rules that are inactive without network:
+Active rules: all of Profile 1 **plus** the four rules that are inactive by default:
 
 | Rule | Requires |
 |---|---|
@@ -685,10 +735,21 @@ Active rules: all of Profile 1 **plus** the four rules that are inactive without
 **3a + 3b combined:**
 
 ```yaml
-pin_resolution:
-  allow_network: true
-online_audit:
-  allow_network: true
+rules:
+  known-vulnerable-actions:
+    enabled: true
+  impostor-commit:
+    enabled: true
+  ref-confusion:
+    enabled: true
+  stale-action-refs:
+    enabled: true
+
+fix:
+  pinning:
+    enable-network: true
+  images:
+    enable-network: true
 ```
 
 Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` carry auto-fixes.
@@ -699,7 +760,7 @@ Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` c
 
 All sections are populated. Provides maximum control over every aspect of linting, additive customization, suppression scope, and network-assisted behavior.
 
-**Active rules:** identical to Profile 3a + 3b combined when both `allow_network: true` are set. Active rule set is still determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
+**Active rules:** identical to Profile 3a + 3b combined when all online rules are enabled and fix network is on. Active rule set is still determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
 
 **Full config example (non-normative):**
 
@@ -712,88 +773,100 @@ rules:
     severity: error            # already error by default; shown for clarity
   dangerous-triggers:
     severity: error
+    events:
+      extend:
+        - issue_comment
   action-shell-is-required:
     severity: warning
 
-additiveCustomization:
-  additionalDangerousEvents:
-    - issue_comment
-  additionalKnownHostedLabels:
-    - ubuntu-24.04-large
-  additionalPublicRegistries:
-    - registry.example.com
-  additionalUntrustedTriggers:
-    - issue_comment
-  additionalOutputCommands:
-    - tee
-  forbiddenUsesDenyPatterns:
-    - some-untrusted-org/*
+  runner-label:
+    known-hosted-labels:
+      extend:
+        - ubuntu-24.04-large
+  credentials:
+    public-registries:
+      extend:
+        - registry.example.com
+  cache-poisoning:
+    untrusted-triggers:
+      extend:
+        - issue_comment
+  unredacted-secrets:
+    output-commands:
+      extend:
+        - tee
+  forbidden-uses:
+    deny:
+      - some-untrusted-org/*
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+      - repository_dispatch
+
+  # Online rules
+  known-vulnerable-actions:
+    enabled: true
+  impostor-commit:
+    enabled: true
+  ref-confusion:
+    enabled: true
+  stale-action-refs:
+    enabled: true
 
 exclusions:
-  - filePattern: ".github/workflows/legacy-*.yml"
-    ruleIds:
+  - files: ".github/workflows/legacy-*.yml"
+    rules:
       - runner-no-latest
       - job-permissions-required
-  - filePattern: ".github/workflows/release.yml"
-    jobId: publish
-    ruleIds:
+  - files: ".github/workflows/release.yml"
+    jobs:
+      - publish
+    rules:
       - credentials
 
-exprContext:
-  eventTypes:
-    - workflow_dispatch
-    - repository_dispatch
-
-default_job_timeout_minutes_for_fix: 15
-
-pin_resolution:
-  allow_network: true          # enables SHA/digest fix suggestions on unpinned-uses / unpinned-image
-  github_actions:
-    token_env_vars:
-      - SEITON_GITHUB_TOKEN
-      - GITHUB_TOKEN
-    min_age_days: 14
-    exclude_branches:
+fix:
+  defaults:
+    job-timeout-minutes: 15
+  pinning:
+    enable-network: true
+    min-age-days: 14
+    exclude-branches:
       - main
       - master
-    ignore_actions:
-      - name: "slsa-framework/.*"
+    ignore-actions:
+      - uses: "slsa-framework/.*"
         ref: ".*"
   images:
-    exclude_images:
+    enable-network: true
+    exclude-images:
       - scratch
-    exclude_tags:
+    exclude-tags:
       - latest
-  fail_open: true
-  request_timeout_sec: 30
-  max_concurrency: 4
 
-online_audit:
-  allow_network: true          # enables known-vulnerable-actions, impostor-commit, ref-confusion, stale-action-refs
-  github_actions:
-    token_env_vars:
-      - SEITON_GITHUB_TOKEN
-      - GITHUB_TOKEN
-  fail_open: true
-  request_timeout_sec: 30
-  max_concurrency: 4
+network:
+  on-error: skip
+  timeout-seconds: 30
+  max-concurrency: 4
+  github:
+    ghes-api-url: ""
+    ghes-fallback: false
 ```
 
 **Active rules under this config:**
 
-All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus all four online-audit rules. `unpinned-uses` and `unpinned-image` carry network-assisted auto-fix data. `job-permissions-required` is disabled. `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for `legacy-*.yml`. `credentials` diagnostics are suppressed for the `publish` job in `release.yml`.
+All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus all four online rules. `unpinned-uses` and `unpinned-image` carry network-assisted auto-fix data. `job-permissions-required` is disabled. `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for `legacy-*.yml`. `credentials` diagnostics are suppressed for the `publish` job in `release.yml`.
 
 ---
 
 #### Profile Summary Table
 
-| Profile | Config required | Local-AST rules active | Online-audit rules active | `unpinned-*` carry fixes |
+| Profile | Config required | Local-AST rules active | Online rules active | `unpinned-*` carry fixes |
 |---|---|---|---|---|
 | 1 No config | None | All §4.4 local-AST (~45 rules) | ✗ | ✗ |
 | 2 Minimal | Partial (only changed keys) | Same as Profile 1 ± per-rule overrides | ✗ | ✗ |
-| 3a Pin remediation | `pin_resolution.allow_network: true` | Same as Profile 1 | ✗ | ✓ |
-| 3b Online audit | `online_audit.allow_network: true` | Same as Profile 1 | ✓ (4 rules) | ✗ |
-| 3a+3b | Both `allow_network: true` | Same as Profile 1 | ✓ (4 rules) | ✓ |
+| 3a Pin remediation | `fix.pinning.enable-network: true` | Same as Profile 1 | ✗ | ✓ |
+| 3b Online rules | `rules.<id>.enabled: true` (4 rules) | Same as Profile 1 | ✓ (4 rules) | ✗ |
+| 3a+3b | Both enabled | Same as Profile 1 | ✓ (4 rules) | ✓ |
 | 4 Full config | All sections populated | Profiles 3a+3b ± per-rule overrides | ✓ (4 rules) | ✓ |
 
 Non-normative guidance for progressive adoption:
@@ -801,8 +874,77 @@ Non-normative guidance for progressive adoption:
 1. Start with Profile 1 (no config). Review diagnostics.
 2. Apply Profile 2 to silence known migration debt or raise policy-critical rule severity.
 3. Enable Profile 3a when ready to auto-fix pinning issues at remediation time.
-4. Enable Profile 3b when advisory and ref-confusion audit coverage is needed.
+4. Enable Profile 3b when advisory and ref-confusion coverage is needed.
 5. Graduate to Profile 4 only when the full control surface is required.
+
+---
+
+### 5.12 `fix` Section Specification
+
+The `fix` top-level section groups auto-fix generation settings. All keys are optional; omitted keys use built-in defaults.
+
+```yaml
+fix:
+  defaults:
+    job-timeout-minutes: 15       # default timeout for job-timeout-minutes-required auto-fix
+
+  pinning:
+    enable-network: true          # enable SHA resolution for unpinned-uses fixes
+    min-age-days: 14              # minimum tag age for pinning eligibility
+    exclude-branches:             # branch refs to never pin
+      - main
+      - master
+    ignore-actions:               # action patterns to skip
+      - uses: "slsa-framework/.*"
+        ref: ".*"
+
+  images:
+    enable-network: true          # enable digest resolution for unpinned-image fixes
+    exclude-images:               # image names to skip ("scratch" always enforced)
+      - scratch
+    exclude-tags:                 # tag names to skip
+      - latest
+    ignore-images:                # glob patterns for images to skip
+      - "mcr.microsoft.com/**"
+```
+
+- `fix.defaults.job-timeout-minutes`: integer or null. When set, `job-timeout-minutes-required` attaches auto-fix with this value. Null/missing or `<= 0` disables fix attachment.
+- `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via `PinRemediationEngine`. Default: `false`.
+- `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
+- `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
+- `fix.pinning.ignore-actions`: list of `{uses, ref}` regex patterns to skip during SHA resolution.
+- `fix.images.enable-network`: when `true`, `unpinned-image` diagnostics may receive network-resolved digest fix payloads. Default: `false`.
+- `fix.images.exclude-images`: image names to skip. `scratch` is always enforced regardless of config.
+- `fix.images.exclude-tags`: tag names to skip. Default: `["latest"]`.
+- `fix.images.ignore-images`: glob patterns for images to skip entirely.
+
+### 5.13 `network` Section Specification
+
+The `network` top-level section groups shared network behavior settings used by all network-dependent features (pin remediation, online rules). All keys are optional; omitted keys use built-in defaults.
+
+```yaml
+network:
+  on-error: skip                  # skip | fail
+  timeout-seconds: 30
+  max-concurrency: 4
+  github:
+    ghes-api-url: ""
+    ghes-fallback: false
+```
+
+- `network.on-error`: controls behavior when network operations fail.
+  - `skip` (default): resolution failures leave the diagnostic without fix and continue processing.
+  - `fail`: any resolution failure causes the operation to return an error immediately.
+- `network.timeout-seconds`: HTTP request timeout in seconds. Default: `30`.
+- `network.max-concurrency`: maximum concurrent network operations. Default: `4`.
+- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only.
+- `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
+
+Token resolution:
+
+- GitHub API token is resolved from environment variables in hardcoded order: `SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`.
+- This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
+- Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
 
 ---
 
@@ -1081,7 +1223,7 @@ Design principles adopted for Seiton:
 - Two separate resolver interfaces: one for GitHub Actions SHA, one for OCI image digest.
 - Resolution is never called during `Check(utf8Yaml, filePath)`; only during an explicit `Remediate()` operation.
 - Resolver caches results in-process to avoid redundant network calls across diagnostics.
-- Resolver failures leave the diagnostic without a fix (`failOpen: true` behavior).
+- Resolver failures leave the diagnostic without a fix (`on-error: skip` behavior).
 
 ### 12.2 Resolver Interfaces
 
@@ -1113,57 +1255,61 @@ Resolve(imageRef) -> (digest, error)
 
 ### 12.3 Configuration
 
-Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the Seiton configuration file.
+Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the `fix` section of the Seiton configuration file (§5.12).
 
 ```yaml
-pin_resolution:
-  allow_network: false             # must be true to enable remediation
-  github_actions:
-    token_env_vars:
-      - SEITON_GITHUB_TOKEN
-      - GITHUB_TOKEN
-    ghes_api_url: ""               # optional; empty = github.com only
-    ghes_fallback: false           # if true, fall back to github.com when repo not found on GHES
-    ignore_actions:
-      - name: "slsa-framework/.*"
-        ref: ".*"
-    exclude_branches:
+fix:
+  pinning:
+    enable-network: true           # must be true to enable Actions SHA remediation
+    min-age-days: 14               # skip pinning tags created fewer than N days ago; 0 = no constraint
+    exclude-branches:
       - main
       - master
-    min_age_days: 14               # skip pinning tags created fewer than N days ago; 0 = no constraint
+    ignore-actions:
+      - uses: "slsa-framework/.*"
+        ref: ".*"
+
   images:
-    exclude_images:
+    enable-network: true           # must be true to enable OCI digest remediation
+    exclude-images:
       - scratch
-    exclude_tags:
+    exclude-tags:
       - latest
-    ignore_images:
+    ignore-images:
       - "mcr.microsoft.com/**"
-  fail_open: true                  # if true, resolution failures leave diagnostic without fix
-  request_timeout_sec: 30
-  max_concurrency: 4
+
+network:
+  on-error: skip                   # skip = failures leave diagnostic without fix; fail = abort
+  timeout-seconds: 30
+  max-concurrency: 4
+  github:
+    ghes-api-url: ""               # optional; empty = github.com only
+    ghes-fallback: false           # if true, fall back to github.com when repo not found on GHES
 ```
 
-#### 12.3.1 `allow_network`
+#### 12.3.1 `fix.pinning.enable-network` / `fix.images.enable-network`
 
-When `false` (the default), no resolver is instantiated and `unpinned-uses`/`unpinned-image` diagnostics carry no fix. When `true`, resolver implementations may be provided.
+When `false` (the default), no resolver is instantiated and the corresponding diagnostics carry no fix. When `true`, resolver implementations may be provided. Actions SHA pinning and OCI image digest pinning can be enabled independently.
 
-#### 12.3.2 `github_actions.token_env_vars`
+#### 12.3.2 Token Resolution
 
-Ordered list of environment variable names to check for a GitHub API token. The first non-empty value is used. If no variable yields a token, the GitHub API is called unauthenticated (lower rate limit). Rationale: tool-specific env var (`SEITON_GITHUB_TOKEN`) takes priority over the generic `GITHUB_TOKEN`, matching pinact's pattern.
+GitHub API token is resolved from environment variables in hardcoded order: `SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`. The first non-empty value is used. If no variable yields a token, the GitHub API is called unauthenticated (lower rate limit).
 
-#### 12.3.3 `github_actions.ghes_api_url` and `github_actions.ghes_fallback`
+This order is not configurable via the config file. Rationale: exposing token env var selection in config creates an attack surface where a malicious repository config redirects token resolution to unintended environment variables.
 
-Optional support for GitHub Enterprise Server. When `ghes_api_url` is set, the resolver first queries the GHES instance. If `ghes_fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
+#### 12.3.3 `network.github.ghes-api-url` and `network.github.ghes-fallback`
 
-#### 12.3.4 `github_actions.ignore_actions`
+Optional support for GitHub Enterprise Server. When `ghes-api-url` is set, the resolver first queries the GHES instance. If `ghes-fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
 
-List of name/ref patterns (regex) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA.
+#### 12.3.4 `fix.pinning.ignore-actions`
 
-#### 12.3.5 `github_actions.exclude_branches`
+List of `{uses, ref}` patterns (regex) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA.
+
+#### 12.3.5 `fix.pinning.exclude-branches`
 
 Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
-#### 12.3.6 `github_actions.min_age_days`
+#### 12.3.6 `fix.pinning.min-age-days`
 
 Minimum age in days a tag must have before it is considered eligible for SHA pinning. Default: `14`.
 
@@ -1183,16 +1329,16 @@ Current implementation behavior:
 
 When the requested ref is not version-like, resolver keeps direct ref resolution and applies age gate to that resolved target.
 
-#### 12.3.8 `images.exclude_images` and `images.exclude_tags`
+#### 12.3.8 `fix.images.exclude-images` and `fix.images.exclude-tags`
 
 Glob patterns for images and tags to skip during digest resolution.
 
 - `scratch` is always excluded regardless of configuration (enforced by resolver, matching frizbee's `MergeUserConfig` safety invariant).
 - `latest` is excluded by default (matches frizbee's default `ExcludeTags`). Rationale: pinning `latest` is semantically vacuous — it will drift immediately.
 
-#### 12.3.9 `fail_open`
+#### 12.3.9 `network.on-error`
 
-When `true` (the default), resolution failures (network error, auth failure, timeout) leave the diagnostic without a fix rather than causing the remediation call to fail. Callers may inspect which diagnostics received fixes and which did not. When `false`, any resolution failure causes the remediation call to return an error.
+When `skip` (the default), resolution failures (network error, auth failure, timeout) leave the diagnostic without a fix rather than causing the remediation call to fail. Callers may inspect which diagnostics received fixes and which did not. When `fail`, any resolution failure causes the remediation call to return an error.
 
 ### 12.4 Resolution Caching
 
@@ -1230,14 +1376,14 @@ If the image reference already contains `@sha256:`, it is considered already pin
 
 ### 12.6 Integration with Fix Catalog
 
-When `allow_network: true` and resolvers are injected:
+When `fix.pinning.enable-network: true` and/or `fix.images.enable-network: true` and resolvers are injected:
 
 | Rule ID | Fix Feasibility (with network) | Notes |
 |---|---|---|
 | `unpinned-uses` | ✓ Fixable (network-assisted) | Via `IActionShaResolver` |
 | `unpinned-image` | ✓ Fixable (network-assisted) | Via `IImageDigestResolver` |
 
-When `allow_network: false` (default), these rules remain ✗ Not auto-fixable as specified in §8.4.
+When `enable-network: false` (default), these rules remain ✗ Not auto-fixable as specified in §8.4.
 
 ### 12.7 Separation from Lint Contract
 

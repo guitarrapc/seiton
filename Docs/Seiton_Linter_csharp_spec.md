@@ -325,24 +325,35 @@ C# implementation must provide:
 - fail-safe checks (non-disableable, minimum severity)
 - suppression observability in `LintResult`
 
-### 4.1 Additive Rule Customization Mapping
+### 4.1 Rule-Specific Configuration Mapping
 
 Shared contract reference:
 
 - `Seiton_Linter_spec.md` §5.8
 
-C# implementation must support additive merge (`effective = built-in U custom-added`) for:
+C# implementation must support rule-specific configuration within `rules.<rule-id>` entries. Each rule accepts the shared `Enabled` / `Severity` keys plus rule-specific keys.
 
-- `dangerous-triggers.additionalDangerousEvents`
-- `runner-label.additionalKnownHostedLabels`
-- `credentials.additionalPublicRegistries`
+Additive merge (`effective = built-in U user-extended`) is used for all `extend` lists:
+
+- `rules.dangerous-triggers.events.extend`
+- `rules.runner-label.known-hosted-labels.extend`
+- `rules.credentials.public-registries.extend`
+- `rules.cache-poisoning.untrusted-triggers.extend`
+- `rules.self-hosted-runner.untrusted-triggers.extend`
+- `rules.unredacted-secrets.output-commands.extend`
+
+Direct list keys:
+
+- `rules.forbidden-uses.allow` / `rules.forbidden-uses.deny`
+- `rules.expr-undefined-var.assume-events`
 
 Mapping requirements:
 
 - Use deterministic deduplication after normalization.
 - Normalization uses ASCII lower-case matching for event names, runner labels, and registry hosts.
 - Invalid customization entries are configuration errors.
-- Additive customization never removes built-in defaults.
+- Extension never removes built-in defaults.
+- Unknown rule-specific keys for a given rule ID are configuration errors (validated via `RuleCatalog` field mapping).
 
 ### 4.2 Auto-Fix Mapping
 
@@ -490,7 +501,9 @@ public sealed class PinRemediationEngine
     public PinRemediationEngine(
         IActionShaResolver? actionShaResolver,
         IImageDigestResolver? imageDigestResolver,
-        PinResolutionConfig config)
+        FixPinningConfig pinningConfig,
+        FixImagesConfig imagesConfig,
+        NetworkConfig networkConfig)
     { }
 
     /// <summary>
@@ -507,53 +520,67 @@ public sealed class PinRemediationEngine
 
 #### 4.5.3 Configuration Mapping
 
-`PinResolutionConfig` maps from `pin_resolution` in the configuration file (§12.3):
+Pin remediation configuration maps from the `fix` and `network` sections of the configuration file (§5.12, §5.13, §12.3):
 
 ```csharp
-public sealed record PinResolutionConfig
+public sealed record FixConfig
 {
-    public bool AllowNetwork { get; init; } = false;
-
-    public GitHubActionsResolutionConfig GitHubActions { get; init; } = new();
-    public ImageResolutionConfig Images { get; init; } = new();
-
-    public bool FailOpen { get; init; } = true;
-    public int RequestTimeoutSec { get; init; } = 30;
-    public int MaxConcurrency { get; init; } = 4;
+    public FixDefaultsConfig Defaults { get; init; } = new();
+    public FixPinningConfig Pinning { get; init; } = new();
+    public FixImagesConfig Images { get; init; } = new();
 }
 
-public sealed record GitHubActionsResolutionConfig
+public sealed record FixDefaultsConfig
 {
-    public IReadOnlyList<string> TokenEnvVars { get; init; } =
-        ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
-    public string? GhesApiUrl { get; init; } = null;
-    public bool GhesFallback { get; init; } = false;
-    public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
-    public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
     /// <summary>
-    /// Minimum age in days a tag must have before it is eligible for SHA pinning.
-    /// 0 disables the age constraint. Default: 14.
-	/// For version-like refs (vN / vN.M / vN.M.P), resolver enumerates releases first,
-	/// then tags as fallback, filters by cutoff, and chooses the best eligible candidate
-	/// in the same version family before resolving to SHA.
+    /// Default timeout-minutes value for job-timeout-minutes-required auto-fix.
+    /// null or <= 0 disables fix attachment.
     /// </summary>
-    public int MinAgeDays { get; init; } = 14;
+    public int? JobTimeoutMinutes { get; init; }
 }
 
-public sealed record ImageResolutionConfig
+public sealed record FixPinningConfig
 {
+    public bool EnableNetwork { get; init; } = false;
+    public int MinAgeDays { get; init; } = 14;
+    public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
+    public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
+}
+
+public sealed record FixImagesConfig
+{
+    public bool EnableNetwork { get; init; } = false;
     public IReadOnlyList<string> ExcludeImages { get; init; } = ["scratch"];
     public IReadOnlyList<string> ExcludeTags { get; init; } = ["latest"];
     public IReadOnlyList<string> IgnoreImages { get; init; } = [];
 }
 
 public sealed record IgnoreActionEntry(string NamePattern, string RefPattern);
+
+public sealed record NetworkConfig
+{
+    public NetworkErrorMode OnError { get; init; } = NetworkErrorMode.Skip;
+    public int TimeoutSeconds { get; init; } = 30;
+    public int MaxConcurrency { get; init; } = 4;
+    public GitHubNetworkConfig GitHub { get; init; } = new();
+}
+
+public enum NetworkErrorMode { Skip, Fail }
+
+public sealed record GitHubNetworkConfig
+{
+    // Token env var order (SEITON_GITHUB_TOKEN → GITHUB_TOKEN) is hardcoded
+    // and not configurable via config file — prevents malicious config injection.
+    public string? GhesApiUrl { get; init; } = null;
+    public bool GhesFallback { get; init; } = false;
+}
 ```
 
 Safety invariants:
 
-- `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.6).
-- `AllowNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `AllowNetwork: false` must not make any network calls even if resolver implementations are injected.
+- `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.8).
+- `EnableNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `EnableNetwork: false` must not make any network calls even if resolver implementations are injected.
+- Token resolution order is hardcoded as a code-internal constant: `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`. This value is not exposed in config to prevent config-injection attacks.
 
 #### 4.5.4 Fix Format
 
@@ -571,8 +598,8 @@ OCI digest fix (§12.5.2):
 
 - `LintEngine.Check()` is unchanged — it never performs network I/O (§8.3 preserved).
 - `PinRemediationEngine.RemediateAsync()` is a separate operation, not called from `Check()`.
-- When `AllowNetwork: true`, `unpinned-uses` and `unpinned-image` diagnostics may receive fixes from `RemediateAsync()`; §8.4 catalog status changes to ✓ Fixable (network-assisted) for those rules.
-- Diagnostics without a resolver result (skip or fail-open) remain without fix payload.
+- When `EnableNetwork: true`, `unpinned-uses` and `unpinned-image` diagnostics may receive fixes from `RemediateAsync()`; §8.4 catalog status changes to ✓ Fixable (network-assisted) for those rules.
+- Diagnostics without a resolver result (skip or on-error: skip) remain without fix payload.
 
 #### 4.5.6 Observability
 
@@ -580,7 +607,7 @@ OCI digest fix (§12.5.2):
 
 - Diagnostics that received a fix (resolved successfully)
 - Diagnostics skipped by configuration (excluded by `IgnoreActions`/`ExcludeImages`/`ExcludeBranches`)
-- Diagnostics where resolution failed and `FailOpen: true` left them without fix
+- Diagnostics where resolution failed and `on-error: skip` left them without fix
 
 This maps to a `RemediationResult` wrapper:
 

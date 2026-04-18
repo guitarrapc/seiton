@@ -309,24 +309,35 @@ Go implementation must provide:
 - fail-safe checks (non-disableable, minimum severity)
 - suppression observability in lint result output
 
-### 4.1 Additive Rule Customization Mapping
+### 4.1 Rule-Specific Configuration Mapping
 
 Shared contract reference:
 
 - `Seiton_Linter_spec.md` §5.8
 
-Go implementation must support additive merge (`effective = built-in U custom-added`) for:
+Go implementation must support rule-specific configuration within `rules.<rule-id>` entries. Each rule accepts the shared `enabled` / `severity` keys plus rule-specific keys.
 
-- `dangerous-triggers.additionalDangerousEvents`
-- `runner-label.additionalKnownHostedLabels`
-- `credentials.additionalPublicRegistries`
+Additive merge (`effective = built-in U user-extended`) is used for all `extend` lists:
+
+- `rules.dangerous-triggers.events.extend`
+- `rules.runner-label.known-hosted-labels.extend`
+- `rules.credentials.public-registries.extend`
+- `rules.cache-poisoning.untrusted-triggers.extend`
+- `rules.self-hosted-runner.untrusted-triggers.extend`
+- `rules.unredacted-secrets.output-commands.extend`
+
+Direct list keys:
+
+- `rules.forbidden-uses.allow` / `rules.forbidden-uses.deny`
+- `rules.expr-undefined-var.assume-events`
 
 Mapping requirements:
 
 - Use deterministic deduplication after normalization.
 - Normalization uses ASCII lower-case matching for event names, runner labels, and registry hosts.
 - Invalid customization entries are configuration errors.
-- Additive customization never removes built-in defaults.
+- Extension never removes built-in defaults.
+- Unknown rule-specific keys for a given rule ID are configuration errors.
 
 ### 4.2 Auto-Fix Mapping
 
@@ -466,15 +477,19 @@ Go implementation notes:
 
 ```go
 type PinRemediationEngine struct {
-    actionShaResolver   ActionShaResolver   // may be nil when AllowNetwork is false
-    imageDigestResolver ImageDigestResolver // may be nil when AllowNetwork is false
-    config              PinResolutionConfig
+    actionShaResolver   ActionShaResolver   // may be nil when EnableNetwork is false
+    imageDigestResolver ImageDigestResolver // may be nil when EnableNetwork is false
+    pinningConfig       FixPinningConfig
+    imagesConfig        FixImagesConfig
+    networkConfig       NetworkConfig
 }
 
 func NewPinRemediationEngine(
     actionShaResolver ActionShaResolver,
     imageDigestResolver ImageDigestResolver,
-    config PinResolutionConfig,
+    pinningConfig FixPinningConfig,
+    imagesConfig FixImagesConfig,
+    networkConfig NetworkConfig,
 ) *PinRemediationEngine
 
 // Remediate attaches network-resolved fix payloads to unpinned-uses / unpinned-image diagnostics.
@@ -489,30 +504,28 @@ func (e *PinRemediationEngine) Remediate(
 
 #### 4.5.3 Configuration Mapping
 
+Pin remediation configuration maps from the `fix` and `network` sections of the configuration file (§5.12, §5.13, §12.3):
+
 ```go
-type PinResolutionConfig struct {
-    AllowNetwork bool
-
-    GitHubActions GitHubActionsResolutionConfig
-    Images        ImageResolutionConfig
-
-    FailOpen         bool          // default true
-    RequestTimeout   time.Duration // default 30s
-    MaxConcurrency   int           // default 4
+type FixConfig struct {
+    Defaults FixDefaultsConfig
+    Pinning  FixPinningConfig
+    Images   FixImagesConfig
 }
 
-type GitHubActionsResolutionConfig struct {
-    TokenEnvVars     []string             // default: ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]
-    GHESApiURL       string               // empty = github.com only
-    GHESFallback     bool
-    IgnoreActions    []IgnoreActionEntry
-    ExcludeBranches  []string             // default: ["main", "master"]
-    MinAgeDays       int                  // default: 14; 0 = no constraint
-                                          // version-like refs use release/tag candidate selection
-                                          // within same version family before SHA resolution
+type FixDefaultsConfig struct {
+    JobTimeoutMinutes *int // nil = no timeout auto-fix; <= 0 disables
 }
 
-type ImageResolutionConfig struct {
+type FixPinningConfig struct {
+    EnableNetwork   bool
+    MinAgeDays      int              // default: 14; 0 = no constraint
+    ExcludeBranches []string         // default: ["main", "master"]
+    IgnoreActions   []IgnoreActionEntry
+}
+
+type FixImagesConfig struct {
+    EnableNetwork bool
     ExcludeImages []string // default: ["scratch"] — always enforced
     ExcludeTags   []string // default: ["latest"]
     IgnoreImages  []string // doublestar glob patterns
@@ -522,12 +535,34 @@ type IgnoreActionEntry struct {
     NamePattern string // regex
     RefPattern  string // regex
 }
+
+type NetworkConfig struct {
+    OnError        NetworkErrorMode // default: Skip
+    TimeoutSeconds int              // default: 30
+    MaxConcurrency int              // default: 4
+    GitHub         GitHubNetworkConfig
+}
+
+type NetworkErrorMode int
+
+const (
+    NetworkErrorSkip NetworkErrorMode = iota
+    NetworkErrorFail
+)
+
+type GitHubNetworkConfig struct {
+    // Token env var order (SEITON_GITHUB_TOKEN → GITHUB_TOKEN) is hardcoded
+    // and not configurable via config file.
+    GHESApiURL   string // empty = github.com only
+    GHESFallback bool
+}
 ```
 
 Safety invariants:
 
-- `scratch` is always appended to `ExcludeImages` even if omitted from user config (enforced in `NewPinRemediationEngine`).
-- `AllowNetwork: false` prevents any network call; `Remediate` must return input diagnostics unchanged.
+- `scratch` is always appended to `ExcludeImages` even if omitted from user config (enforced in construction).
+- `EnableNetwork: false` prevents any network call; `Remediate` must return input diagnostics unchanged.
+- Token resolution order is hardcoded as a code-internal constant: `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`. This value is not exposed in config to prevent config-injection attacks.
 
 #### 4.5.4 Fix Format
 
