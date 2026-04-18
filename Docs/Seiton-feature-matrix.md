@@ -27,6 +27,7 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
+- ルール総数は 38（default local 34 + online audit 4）まで拡張済み。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
 ---
@@ -35,8 +36,8 @@
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（31 rules: default local 27 + online audit 4） | ✅ | 継続強化 |
-| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（高優先度 online 4 + local hardening） | 🟡 | P1 |
+| Workflow構文/意味の厳格Lint | 強い | 必要項目中心 | Schema+Audit | なし | なし | なし | 実装済み（38 rules: default local 34 + online audit 4） | ✅ | 継続強化 |
+| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（zizmor 監査 13件対応 + 6件部分対応） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
 | Network-assisted pin fix | なし | なし | 部分 | 強い | 強い | 強い | 実装済み | ✅ | 維持 |
@@ -56,17 +57,17 @@
 ### P0（最優先）
 
 1. 残存 zizmor high-value audits（具体監査ID優先）
-- `cache-poisoning`
-- `self-hosted-runner`
-- `unredacted-secrets`
-- `secrets-outside-env`
-- 理由: いずれもサプライチェーン侵害・機密漏えいの直結リスクが高く、online_audit 実装後の残差分として優先吸収する価値が大きい
+- `archived-uses`
+- `insecure-commands`
+- `overprovisioned-secrets`
+- `forbidden-uses`
+- `ref-version-mismatch`
+- `use-trusted-publishing`
+- 理由: いずれもサプライチェーン耐性・secret漏えい抑止・運用安全性に直結し、既存実装済み監査の次に効果が高い
 
 2. ghalint未吸収の高価値ルール
-- `workflow_secrets`
-- `job_secrets`
-- `action_shell_is_required`
-- 理由: secrets の露出面積削減と実行再現性の改善に直結し、事故予防効果が高い
+- `deny_job_container_latest_image`
+- 理由: `:latest` 固定禁止の運用ポリシーは再現性・供給網安定化に寄与し、`unpinned-image` と補完関係にある
 
 3. pin対象のファイル範囲拡張（P1→P0へ昇格）
 - Dockerfile（`FROM`）
@@ -150,13 +151,13 @@
 | deny_read_all_permission | ✅ | `deny-read-all` |
 | deny_write_all_permission | ✅ | `deny-write-all` |
 | deny_inherit_secrets | ✅ | `deny-inherit-secrets` |
-| workflow_secrets | ❌ | workflow env の secrets/github.token 禁止未実装 |
-| job_secrets | ❌ | job env の secrets/github.token 禁止未実装 |
+| workflow_secrets | ✅ | `workflow_secrets` |
+| job_secrets | ✅ | `job_secrets` |
 | deny_job_container_latest_image | ❌ | `:latest` 専用禁止は未実装（`unpinned-image` はより広いが同等ではない） |
 | action_ref_should_be_full_length_commit_sha | ✅ | `unpinned-uses` + `unpinned-image` |
 | github_app_should_limit_repositories | ✅ | `github-app-token-inputs` |
 | github_app_should_limit_permissions | ✅ | `github-app-token-inputs` |
-| action_shell_is_required | ❌ | composite action 向け shell 必須未実装 |
+| action_shell_is_required | ✅ | `action_shell_is_required` |
 | job_timeout_minutes_is_required | ✅ | `job-timeout-minutes-required` |
 | checkout_persist_credentials_should_be_false | ✅ | `checkout-persist-credentials` |
 
@@ -164,46 +165,48 @@
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 10 | `dangerous-triggers`, `template-injection`, `unpinned-uses`, `unpinned-images` 相当, `secrets-inherit` 相当, `excessive-permissions` 部分, `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs` |
-| 部分対応 | 4 | `excessive-permissions`（`deny-write-all`中心）, `ref-version-mismatch`（pin comment check 未実装）, `concurrency-limits`（部分）, `forbidden-uses`（config deny list 未実装） |
-| 未対応 | 20 | 高度セキュリティ監査群（残差分） |
+| 直接対応済み | 13 | `cache-poisoning`, `dangerous-triggers`, `impostor-commit`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets` |
+| 部分対応 | 6 | `concurrency-limits`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions` |
+| 未対応 | 15 | 高度セキュリティ監査群（残差分） |
 
-zizmor 監査ID一覧（実装確認ベース）:
+zizmor 監査ID別対応表（実装確認ベース）:
 
-- anonymous-definition
-- archived-uses
-- artipacked
-- bot-conditions
-- cache-poisoning
-- concurrency-limits
-- dangerous-triggers
-- dependabot-cooldown
-- dependabot-execution
-- excessive-permissions
-- forbidden-uses
-- github-env
-- hardcoded-container-credentials
-- impostor-commit
-- insecure-commands
-- known-vulnerable-actions
-- misfeature
-- obfuscation
-- overprovisioned-secrets
-- ref-confusion
-- ref-version-mismatch
-- secrets-inherit
-- secrets-outside-env
-- self-hosted-runner
-- stale-action-refs
-- superfluous-actions
-- template-injection
-- undocumented-permissions
-- unpinned-images
-- unpinned-uses
-- unredacted-secrets
-- unsound-condition
-- unsound-contains
-- use-trusted-publishing
+| 監査ID | Seiton 対応状況 | 備考 |
+|---|---|---|
+| `anonymous-definition` | ❌ | 専用監査なし |
+| `archived-uses` | ❌ | 専用監査なし |
+| `artipacked` | ❌ | 専用監査なし |
+| `bot-conditions` | ❌ | 専用監査なし |
+| `cache-poisoning` | ✅ | `cache-poisoning` |
+| `concurrency-limits` | 🟡 | 近接チェックはあるが専用監査は未実装 |
+| `dangerous-triggers` | ✅ | `dangerous-triggers` |
+| `dependabot-cooldown` | ❌ | 専用監査なし |
+| `dependabot-execution` | ❌ | 専用監査なし |
+| `excessive-permissions` | 🟡 | `deny-write-all` / `deny-read-all` / `job-permissions-required` で部分対応 |
+| `forbidden-uses` | 🟡 | 近接ルールはあるが allow/deny の専用制御は未実装 |
+| `github-env` | ❌ | 専用監査なし |
+| `hardcoded-container-credentials` | ❌ | 専用監査なし |
+| `impostor-commit` | ✅ | online 監査（`online_audit` 有効時） |
+| `insecure-commands` | ❌ | 専用監査なし |
+| `known-vulnerable-actions` | ✅ | online 監査（`online_audit` 有効時） |
+| `misfeature` | ❌ | 専用監査なし |
+| `obfuscation` | ❌ | 専用監査なし |
+| `overprovisioned-secrets` | 🟡 | `deny-inherit-secrets` などで部分対応 |
+| `ref-confusion` | ✅ | online 監査（`online_audit` 有効時） |
+| `ref-version-mismatch` | 🟡 | pin 系診断はあるが専用不一致監査は未実装 |
+| `secrets-inherit` | ✅ | `deny-inherit-secrets` |
+| `secrets-outside-env` | ✅ | `secrets-outside-env` |
+| `self-hosted-runner` | ✅ | `self-hosted-runner` |
+| `stale-action-refs` | ✅ | online 監査（`online_audit` 有効時） |
+| `superfluous-actions` | ❌ | 専用監査なし |
+| `template-injection` | ✅ | `template-injection` |
+| `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |
+| `unpinned-images` | ✅ | `unpinned-image` |
+| `unpinned-uses` | ✅ | `unpinned-uses` |
+| `unredacted-secrets` | ✅ | `unredacted-secrets` |
+| `unsound-condition` | ❌ | 専用監査なし |
+| `unsound-contains` | ❌ | 専用監査なし |
+| `use-trusted-publishing` | ❌ | 専用監査なし |
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -226,17 +229,15 @@ zizmor 監査ID一覧（実装確認ベース）:
 - `if-cond`
 
 2. ghalint 未対応ポリシー
-- `workflow_secrets`
-- `job_secrets`
-- `action_shell_is_required`
+- `deny_job_container_latest_image`
 
-3. zizmor online/high-value audits
-- `known-vulnerable-actions`
-- `impostor-commit`
-- `ref-confusion`
-- `stale-action-refs`
-- `unredacted-secrets`
-- `cache-poisoning`
+3. zizmor 残差分 high-value audits
+- `archived-uses`
+- `insecure-commands`
+- `overprovisioned-secrets`
+- `forbidden-uses`
+- `ref-version-mismatch`
+- `use-trusted-publishing`
 
 ### P1（適用範囲拡張）
 
