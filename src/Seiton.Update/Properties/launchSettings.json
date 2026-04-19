@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Seiton.Update": {
+      "commandName": "Project",
+      "commandLineArgs": "sync"
+    }
+  }
+}

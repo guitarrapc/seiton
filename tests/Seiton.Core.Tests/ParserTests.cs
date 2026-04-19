@@ -1678,6 +1678,53 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_ReusableWorkflowCallSecrets_AllowsSecretsContext()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            call-workflow-passing-data:
+                permissions:
+                    contents: read
+                uses: ./.github/workflows/_reusable-workflow-called.yaml
+                with:
+                    username: ${{ inputs.username }}
+                    is-valid: ${{ inputs.is-valid }}
+                secrets:
+                    APPLES: ${{ secrets.APPLES }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ReusableWorkflowCallSecrets_InvalidContext_ReportsExpressionLine()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            call-workflow-passing-data:
+                permissions:
+                    contents: read
+                uses: ./.github/workflows/_reusable-workflow-called.yaml
+                secrets:
+                    APPLES: ${{ env.APPLES }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal));
+        var expectedLine = yaml.Split('\n')
+            .Select((line, i) => (line, lineNumber: i + 1))
+            .First(x => x.line.Contains("${{ env.APPLES }}", StringComparison.Ordinal))
+            .lineNumber;
+
+        await Assert.That(diagnostic.Location.StartLine).IsEqualTo(expectedLine);
+    }
+
+    [Test]
     public async Task Parse_JobAst_StrategyContainerServices_PopulatesFields()
     {
         var yaml = """

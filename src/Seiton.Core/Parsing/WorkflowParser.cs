@@ -5252,13 +5252,7 @@ public static class WorkflowParser
 
                 var keyMark = reader.CurrentStart;
                 var keyUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterMappingKey(
-                    keyUtf8,
-                    keyMark,
-                    diagnostics,
-                    keys,
-                    MappingKeyComparison.AsciiCaseInsensitive,
-                    "runs-on"))
+                if (!TryRegisterMappingKey(keyUtf8, keyMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "runs-on"))
                 {
                     reader.Read();
                     if (!reader.End)
@@ -5286,27 +5280,16 @@ public static class WorkflowParser
                         var valueUtf8 = reader.GetScalarUtf8();
                         if (ContainsExpression(valueUtf8))
                         {
-                            labelsExpr = ParseStringAndValidateExpression(
-                                ref reader,
-                                diagnostics,
-                                ExpressionValidationContext.Job,
-                                $"{section}.labels must be scalar, sequence, or expression",
-                                parseWholeValueIfNoEmbedded: false);
+                            labelsExpr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"{section}.labels must be scalar, sequence, or expression", parseWholeValueIfNoEmbedded: false);
                         }
                         else
                         {
-                            labels = ParseStringOrStringSequence(
-                                ref reader,
-                                diagnostics,
-                                $"{section}.labels must be scalar, sequence, or expression");
+                            labels = ParseStringOrStringSequence(ref reader, diagnostics, $"{section}.labels must be scalar, sequence, or expression");
                         }
                     }
                     else
                     {
-                        labels = ParseStringOrStringSequence(
-                            ref reader,
-                            diagnostics,
-                            $"{section}.labels must be scalar, sequence, or expression");
+                        labels = ParseStringOrStringSequence(ref reader, diagnostics, $"{section}.labels must be scalar, sequence, or expression");
                     }
 
                     continue;
@@ -5314,12 +5297,7 @@ public static class WorkflowParser
 
                 if (isGroup)
                 {
-                    group = ParseStringAndValidateExpression(
-                        ref reader,
-                        diagnostics,
-                        ExpressionValidationContext.Job,
-                        $"{section}.group must be scalar",
-                        parseWholeValueIfNoEmbedded: false);
+                    group = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"{section}.group must be scalar", parseWholeValueIfNoEmbedded: false);
                     continue;
                 }
 
@@ -5351,12 +5329,7 @@ public static class WorkflowParser
             var scalarUtf8 = reader.GetScalarUtf8();
             if (ContainsExpression(scalarUtf8))
             {
-                var expr = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
-                    ExpressionValidationContext.Job,
-                    $"{section} must be scalar, sequence, or mapping",
-                    parseWholeValueIfNoEmbedded: false);
+                var expr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"{section} must be scalar, sequence, or mapping", parseWholeValueIfNoEmbedded: false);
                 return new Runner
                 {
                     LabelsExpr = expr,
@@ -5416,13 +5389,7 @@ public static class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(
-                keyUtf8,
-                keyMark,
-                diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
-                "environment"))
+            if (!TryRegisterMappingKey(keyUtf8, keyMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "environment"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -5443,23 +5410,14 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("url"u8))
             {
                 reader.Read();
-                urlNode = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
-                    ExpressionValidationContext.Job,
-                    $"job '{DecodeUtf8(source, jobId)}' environment.url must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
+                urlNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' environment.url must be scalar", parseWholeValueIfNoEmbedded: false);
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("deployment"u8))
             {
                 reader.Read();
-                deploymentNode = ParseBoolOrExpression(
-                    ref reader,
-                    diagnostics,
-                    ExpressionValidationContext.Job,
-                    $"job '{DecodeUtf8(source, jobId)}' environment.deployment must be bool or expression");
+                deploymentNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' environment.deployment must be bool or expression");
                 continue;
             }
 
@@ -5547,12 +5505,7 @@ public static class WorkflowParser
                 break;
             }
 
-            var value = ParseStringAndValidateExpression(
-                ref reader,
-                diagnostics,
-                ExpressionValidationContext.JobOutput,
-                $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar",
-                parseWholeValueIfNoEmbedded: false);
+            var value = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.JobOutput, $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar", parseWholeValueIfNoEmbedded: false);
             outputs[key] = value ?? keyNode;
         }
 
@@ -5593,13 +5546,7 @@ public static class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(
-                nameUtf8,
-                nameMark,
-                diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
-                "with"))
+            if (!TryRegisterMappingKey(nameUtf8, nameMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "with"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -5621,12 +5568,7 @@ public static class WorkflowParser
             StringNode? valueNode;
             try
             {
-                valueNode = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
-                    ExpressionValidationContext.Job,
-                    $"job '{DecodeUtf8(source, jobId)}' with.{Encoding.UTF8.GetString(nameUtf8)} must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
+                valueNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' with.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", parseWholeValueIfNoEmbedded: false);
             }
             catch
             {
@@ -5695,13 +5637,7 @@ public static class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(
-                nameUtf8,
-                nameMark,
-                diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
-                "secrets"))
+            if (!TryRegisterMappingKey(nameUtf8, nameMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "secrets"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -5720,21 +5656,12 @@ public static class WorkflowParser
                 break;
             }
 
-            StringNode? valueNode;
-            try
+            var valueNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", allowEmpty: false);
+            if (valueNode is not null)
             {
-                valueNode = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
-                    ExpressionValidationContext.Job,
-                    $"job '{DecodeUtf8(source, jobId)}' secrets.{Encoding.UTF8.GetString(nameUtf8)} must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
-            }
-            catch
-            {
-                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", reader.CurrentStart);
-                reader.SkipCurrentNode();
-                valueNode = null;
+                var valueUtf8 = valueNode.Value.AsSpan(source);
+                var valueLocation = BuildLocationFromSourceSlice(source, valueNode.Value.Offset, valueUtf8.Length);
+                ValidateExpressionText(valueUtf8, valueLocation, ExpressionValidationContext.ReusableWorkflowCallSecrets, diagnostics, parseWholeValueIfNoEmbedded: false);
             }
 
             if (valueNode is not null)
@@ -5813,11 +5740,7 @@ public static class WorkflowParser
                 return;
             }
 
-            ParseAndValidateExpression(
-                valueUtf8.Slice(trimmed.Offset, trimmed.Length),
-                ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length),
-                context,
-                diagnostics);
+            ParseAndValidateExpression(valueUtf8.Slice(trimmed.Offset, trimmed.Length), ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length), context, diagnostics);
         }
     }
 
@@ -5827,17 +5750,10 @@ public static class WorkflowParser
         for (var i = 0; i < parseResult.Diagnostics.Length; i++)
         {
             var parseDiagnostic = parseResult.Diagnostics[i];
-            diagnostics.Add(new Diagnostic(
-                parseDiagnostic.Severity,
-                $"expression parse error: {parseDiagnostic.Message}",
-                ShiftLocation(expressionLocation, parseDiagnostic.Location.Start, parseDiagnostic.Location.Length)));
+            diagnostics.Add(new Diagnostic(parseDiagnostic.Severity, $"expression parse error: {parseDiagnostic.Message}", ShiftLocation(expressionLocation, parseDiagnostic.Location.Start, parseDiagnostic.Location.Length)));
         }
 
-        var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(
-            parseResult,
-            expressionUtf8,
-            expressionLocation,
-            context);
+        var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(parseResult, expressionUtf8, expressionLocation, context);
         for (var i = 0; i < semanticDiagnostics.Length; i++)
         {
             diagnostics.Add(semanticDiagnostics[i]);
@@ -5889,9 +5805,7 @@ public static class WorkflowParser
 
     private static TextRange BuildCompositeLocation(TextPosition start, TextRange end)
     {
-        return BuildCompositeLocation(
-            start,
-            new TextPosition(end.Start + end.Length - 1, end.EndLine, end.EndColumn));
+        return BuildCompositeLocation(start, new TextPosition(end.Start + end.Length - 1, end.EndLine, end.EndColumn));
     }
 
     private static TextRange ShiftLocation(TextRange baseLocation, int relativeOffset, int length)
@@ -5904,6 +5818,53 @@ public static class WorkflowParser
             StartColumn: baseLocation.StartColumn + relativeOffset,
             EndLine: baseLocation.EndLine,
             EndColumn: baseLocation.StartColumn + relativeOffset + safeLength - 1);
+    }
+
+    private static TextRange BuildLocationFromSourceSlice(ReadOnlySpan<byte> source, int startOffset, int length)
+    {
+        var safeLength = length <= 0 ? 1 : length;
+        if ((uint)startOffset >= (uint)source.Length)
+        {
+            return new TextRange(startOffset, safeLength, 1, 1, 1, safeLength);
+        }
+
+        var endOffset = startOffset + safeLength - 1;
+        if (endOffset >= source.Length)
+        {
+            endOffset = source.Length - 1;
+        }
+
+        var start = ComputeLineColumn(source, startOffset);
+        var end = ComputeLineColumn(source, endOffset);
+        return new TextRange(
+            Start: startOffset,
+            Length: safeLength,
+            StartLine: start.Line,
+            StartColumn: start.Column,
+            EndLine: end.Line,
+            EndColumn: end.Column);
+    }
+
+    private static (int Line, int Column) ComputeLineColumn(ReadOnlySpan<byte> source, int offset)
+    {
+        var line = 1;
+        var lineStart = 0;
+        var end = offset;
+        if (end >= source.Length)
+        {
+            end = source.Length - 1;
+        }
+
+        for (var i = 0; i < end; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                line++;
+                lineStart = i + 1;
+            }
+        }
+
+        return (line, (end - lineStart) + 1);
     }
 
     private static Utf8Slice TrimAsciiWhiteSpace(ReadOnlySpan<byte> source, int offset, int length)

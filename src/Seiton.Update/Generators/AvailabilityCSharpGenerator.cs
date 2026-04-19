@@ -27,10 +27,13 @@ internal sealed class AvailabilityCSharpGenerator
         var step = Order(model.StepRoots);
         var workflowCallOutput = Order(workflow.Concat(["jobs"]).ToArray());
         var jobOutput = step;
+        // reusable workflow call secrets: fixed contexts available in the secrets: mapping of a reusable workflow call
+        string[] reusableWorkflowCallSecretsRaw = ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets"];
+        var reusableWorkflowCallSecrets = Order(reusableWorkflowCallSecretsRaw);
 
         var sb = new StringBuilder();
         AppendGeneratedHeader(sb, "sync-availability");
-        sb.Append(
+        sb.AppendLine(
             """
             using Seiton.Core.Parsing;
 
@@ -48,6 +51,8 @@ internal sealed class AvailabilityCSharpGenerator
         sb.AppendLine();
         AppendArray(sb, "JobOutputRoots", jobOutput);
         sb.AppendLine();
+        AppendArray(sb, "ReusableWorkflowCallSecretsRoots", reusableWorkflowCallSecrets);
+        sb.AppendLine();
         AppendArray(sb, "StepRoots", step);
 
         sb.Append(
@@ -61,6 +66,7 @@ internal sealed class AvailabilityCSharpGenerator
                         ExpressionValidationContext.WorkflowCallOutput => Contains(WorkflowCallOutputRoots, rootName),
                         ExpressionValidationContext.Job => Contains(JobRoots, rootName),
                         ExpressionValidationContext.JobOutput => Contains(JobOutputRoots, rootName),
+                        ExpressionValidationContext.ReusableWorkflowCallSecrets => Contains(ReusableWorkflowCallSecretsRoots, rootName),
                         ExpressionValidationContext.Step => Contains(StepRoots, rootName),
                         _ => false,
                     };
