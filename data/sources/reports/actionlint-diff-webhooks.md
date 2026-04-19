@@ -1,7 +1,7 @@
 # actionlint Diff Report: webhooks
 
 - mode: sync
-- generated-at-utc: 2026-04-15T11:06:48.3583866Z
+- generated-at-utc: 2026-04-19T16:09:40.1716218Z
 
 ## Missing In Seiton
 - none
