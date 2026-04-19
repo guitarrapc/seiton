@@ -8,7 +8,6 @@
     <PublishAot>true</PublishAot>
     <StripSymbols>true</StripSymbols>
     <OptimizationPreference>Size</OptimizationPreference>
-    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
 
   <ItemGroup>
