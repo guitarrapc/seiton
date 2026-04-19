@@ -25,33 +25,54 @@ internal static class CliOptionSuggester
         "--force",
     ];
 
+    static readonly HashSet<string> LongOptionsWithValue =
+    [
+        "--config",
+        "--stdin-filename",
+        "--ignore",
+        "--min-severity",
+        "--format",
+        "--color",
+        "--output",
+    ];
+
     const int SuggestionDistanceThreshold = 3;
 
     public static bool TryWriteSuggestionsForUnknownOptions(string[] args, TextWriter errorWriter)
     {
-        var unknownOptions = CollectUnknownLongOptions(args);
-        if (unknownOptions.Count == 0)
+        var suggestions = CollectUnknownLongOptionSuggestions(args);
+        if (suggestions.Count == 0)
         {
             return false;
         }
 
-        foreach (var optionToken in unknownOptions)
+        var hasCandidateSuggestion = false;
+        foreach (var item in suggestions)
         {
-            errorWriter.WriteLine($"Argument '{optionToken}' is not recognized.");
+            errorWriter.WriteLine($"Argument '{item.OptionToken}' is not recognized.");
 
-            var suggestion = FindBestSuggestion(optionToken);
-            if (suggestion is not null)
+            if (item.Suggestion is not null)
             {
-                errorWriter.WriteLine($"Did you mean '{suggestion}'?");
+                hasCandidateSuggestion = true;
+                errorWriter.WriteLine($"Did you mean '{item.Suggestion}'?");
+            }
+        }
+
+        if (hasCandidateSuggestion)
+        {
+            var suggestedCommand = BuildSuggestedCommand(args);
+            if (!string.IsNullOrWhiteSpace(suggestedCommand))
+            {
+                errorWriter.WriteLine($"Try: {suggestedCommand}");
             }
         }
 
         return true;
     }
 
-    static List<string> CollectUnknownLongOptions(string[] args)
+    static List<OptionSuggestion> CollectUnknownLongOptionSuggestions(string[] args)
     {
-        var unknownOptions = new List<string>();
+        var unknownOptions = new List<OptionSuggestion>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         for (var i = 0; i < args.Length; i++)
@@ -77,10 +98,83 @@ internal static class CliOptionSuggester
                 continue;
             }
 
-            unknownOptions.Add(optionToken);
+            var suggestion = FindBestSuggestion(optionToken);
+            unknownOptions.Add(new OptionSuggestion(optionToken, suggestion));
         }
 
         return unknownOptions;
+    }
+
+    static string BuildSuggestedCommand(string[] args)
+    {
+        var tokens = new List<string>(args.Length + 1)
+        {
+            "seiton"
+        };
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            var raw = args[i];
+            if (raw == "--")
+            {
+                tokens.Add(raw);
+                for (var rest = i + 1; rest < args.Length; rest++)
+                {
+                    tokens.Add(args[rest]);
+                }
+
+                break;
+            }
+
+            if (!TryGetLongOptionToken(raw, out var optionToken))
+            {
+                tokens.Add(raw);
+                continue;
+            }
+
+            var replacement = KnownLongOptions.Contains(optionToken)
+                ? optionToken
+                : FindBestSuggestion(optionToken);
+
+            if (replacement is null)
+            {
+                continue;
+            }
+
+            var eqIndex = raw.IndexOf('=');
+            if (eqIndex > 2)
+            {
+                tokens.Add($"{replacement}{raw[eqIndex..]}");
+                continue;
+            }
+
+            tokens.Add(replacement);
+            if (!LongOptionsWithValue.Contains(replacement))
+            {
+                continue;
+            }
+
+            if (i + 1 >= args.Length)
+            {
+                continue;
+            }
+
+            var next = args[i + 1];
+            if (next == "--")
+            {
+                continue;
+            }
+
+            if (next.StartsWith("-", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            tokens.Add(next);
+            i++;
+        }
+
+        return string.Join(' ', tokens);
     }
 
     static bool TryGetLongOptionToken(string raw, out string optionToken)
@@ -176,4 +270,6 @@ internal static class CliOptionSuggester
 
         return prev[b.Length];
     }
+
+    readonly record struct OptionSuggestion(string OptionToken, string? Suggestion);
 }

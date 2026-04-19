@@ -176,6 +176,29 @@ Operational rule:
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
 | `--verbose` | | `bool` | `false` | Enable verbose progress output to stderr. |
 
+### 3.6 Unknown Option Suggestions
+
+When an unrecognized long option is provided, `seiton` reports the unknown argument and, when a close match exists, prints a `Did you mean` suggestion.
+
+Matching behavior:
+
+- Candidate matching is based on normalized long option names (`-` differences are ignored).
+- Closest option is selected by edit distance with conservative thresholds to reduce noisy suggestions.
+- All unknown long options in the invocation are reported (not only the first one).
+
+When at least one actionable suggestion is found, `seiton` also emits a synthesized command hint line:
+
+```
+Try: seiton <suggested-options...>
+```
+
+Command hint behavior:
+
+- Preserves argument order from the original invocation.
+- Replaces unknown long options only when a safe suggestion exists.
+- Keeps values attached to value-taking options (for example `--config`, `--color`).
+- Drops unknown options that have no suggestion.
+
 ---
 
 ## 4. Environment Variables
