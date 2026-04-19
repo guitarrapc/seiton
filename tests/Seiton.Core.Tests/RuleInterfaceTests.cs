@@ -2369,21 +2369,6 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-tibdex-with-repository-and-permissions",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    steps:
-                        - uses: tibdex/github-app-token@v2
-                          with:
-                              repository: owner/repo
-                              permissions: >-
-                                  {"contents":"read"}
-            """,
-            []),
-            new RuleCase(
             "ng-missing-permission-constraint-only-when-create-token-uses-current-repo-default",
             """
             on: push
@@ -2421,19 +2406,6 @@ public sealed class RuleInterfaceTests
                               owner: ${{ github.repository_owner }}
             """,
             ["repository and permission constraints"]),
-            new RuleCase(
-            "ng-missing-permission-constraint",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    steps:
-                        - uses: tibdex/github-app-token@v2
-                          with:
-                              repositories: repo-a
-            """,
-            ["permission constraints"]),
         };
 
         await AssertRuleCases(new GitHubAppTokenInputsRule(), "github-app-token-inputs", cases);

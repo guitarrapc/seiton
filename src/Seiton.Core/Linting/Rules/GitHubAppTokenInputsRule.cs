@@ -16,8 +16,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         }
 
         var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
-        var actionKind = GetGitHubAppTokenActionKind(uses);
-        if (actionKind == GitHubAppTokenActionKind.None)
+        if (!IsCreateGitHubAppTokenAction(uses))
         {
             return;
         }
@@ -47,7 +46,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             }
         }
 
-        if (actionKind == GitHubAppTokenActionKind.CreateGitHubAppToken && !hasOwner)
+        if (!hasOwner)
         {
             // create-github-app-token defaults to the current repository when neither
             // owner nor repositories are specified.
@@ -85,24 +84,14 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             usesLocation);
     }
 
-    static GitHubAppTokenActionKind GetGitHubAppTokenActionKind(ReadOnlySpan<byte> uses)
+    static bool IsCreateGitHubAppTokenAction(ReadOnlySpan<byte> uses)
     {
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || uses.StartsWith("docker://"u8))
         {
-            return GitHubAppTokenActionKind.None;
+            return false;
         }
 
-        if (MatchesActionReference(uses, "actions/create-github-app-token"u8))
-        {
-            return GitHubAppTokenActionKind.CreateGitHubAppToken;
-        }
-
-        if (MatchesActionReference(uses, "tibdex/github-app-token"u8))
-        {
-            return GitHubAppTokenActionKind.TibdexGitHubAppToken;
-        }
-
-        return GitHubAppTokenActionKind.None;
+        return MatchesActionReference(uses, "actions/create-github-app-token"u8);
     }
 
     static bool MatchesActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
@@ -170,12 +159,5 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         return value is >= (byte)'A' and <= (byte)'Z'
             ? (byte)(value + 32)
             : value;
-    }
-
-    enum GitHubAppTokenActionKind
-    {
-        None,
-        CreateGitHubAppToken,
-        TibdexGitHubAppToken,
     }
 }
