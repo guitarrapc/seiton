@@ -2970,7 +2970,8 @@ public static class WorkflowParser
             if (keyUtf8.SequenceEqual("options"u8))
             {
                 reader.Read();
-                options = ParseStringOrStringSequence(ref reader, diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar");
+                // allowElemEmpty: true because choice-type inputs legitimately use '' as the "no selection" option
+                options = ParseStringOrStringSequence(ref reader, diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar", allowElemEmpty: true);
                 continue;
             }
 

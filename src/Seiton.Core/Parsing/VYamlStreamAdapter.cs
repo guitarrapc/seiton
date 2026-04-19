@@ -25,6 +25,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         get
         {
             var mark = _parser.CurrentMark;
+            // VYaml's CurrentMark for empty scalars (e.g. '' or "") advances past the token to the
+            // next token's position rather than staying at the empty scalar itself. Detect this case
+            // and walk backward through the source bytes to find the actual scalar start.
+            if (_parser.CurrentEventType == ParseEventType.Scalar && _parser.GetScalarAsUtf8().Length == 0)
+            {
+                var correctedOffset = ResolveEmptyScalarStart(mark.Position);
+                return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
+            }
+
             return new TextPosition(mark.Position, mark.Line, mark.Col);
         }
     }
@@ -59,8 +68,19 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         if (utf8.Length == 0)
         {
-            var emptyStart = _scalarSliceCursor <= _source.Length ? _scalarSliceCursor : _source.Length;
-            return new Utf8Slice(emptyStart, 0);
+            // Use the backward-scan helper so the slice offset points to the actual empty scalar
+            // rather than _scalarSliceCursor (which may be far before the '' in the source).
+            var emptyMark = _parser.CurrentMark;
+            var actualStart = ResolveEmptyScalarStart(emptyMark.Position);
+            var emptySource = _source.Span;
+            // Advance cursor past the quoted '' / "" (2 bytes) if that is what we found.
+            var quotedEnd = actualStart + 2;
+            _scalarSliceCursor = quotedEnd <= emptySource.Length
+                && emptySource[actualStart] == emptySource[actualStart + 1]
+                && (emptySource[actualStart] is (byte)'\'' or (byte)'"')
+                ? quotedEnd
+                : actualStart;
+            return new Utf8Slice(actualStart, 0);
         }
 
         var source = _source.Span;
@@ -334,6 +354,61 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     }
 
     public bool IsScalarQuoted() => false;
+
+    /// <summary>
+    /// VYaml advances its scanner past an empty scalar to the next meaningful token, so
+    /// <see cref="YamlParser.CurrentMark"/> for an empty-scalar event points at that next token.
+    /// This helper walks backward through <see cref="_source"/> from <paramref name="nextTokenPosition"/>,
+    /// skips whitespace/newlines, and – if it finds an adjacent pair of matching quotes ('''' or &quot;&quot;) –
+    /// returns the offset of the opening quote.  Otherwise it returns the backward-walked position.
+    /// </summary>
+    private int ResolveEmptyScalarStart(int nextTokenPosition)
+    {
+        var source = _source.Span;
+        var pos = nextTokenPosition;
+        if (pos > source.Length)
+        {
+            pos = source.Length;
+        }
+
+        // Walk backward past trailing whitespace and line endings.
+        while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
+        {
+            pos--;
+        }
+
+        // Check for '' (two single-quotes) or "" (two double-quotes) immediately before pos.
+        if (pos >= 2
+            && source[pos - 1] == source[pos - 2]
+            && source[pos - 1] is (byte)'\'' or (byte)'"')
+        {
+            return pos - 2;  // offset of the opening quote
+        }
+
+        return pos;
+    }
+
+    private static TextPosition ComputeTextPositionFromOffset(ReadOnlySpan<byte> source, int offset)
+    {
+        var end = offset;
+        if (end > source.Length)
+        {
+            end = source.Length;
+        }
+
+        var line = 1;
+        var lineStart = 0;
+        for (var i = 0; i < end; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                line++;
+                lineStart = i + 1;
+            }
+        }
+
+        return new TextPosition(offset, line, (end - lineStart) + 1);
+    }
 
     private static YamlEventKind MapEventKind(ParseEventType vt)
     {

@@ -839,6 +839,44 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnWorkflowDispatch_ChoiceOptionsAllowEmptyString()
+    {
+        // spec §3.4.3: choice-type inputs legitimately use '' as a "no selection" option
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    operation:
+                        description: 'Optional operation'
+                        required: false
+                        type: choice
+                        default: ''
+                        options:
+                            - ''
+                            - 'disable'
+                            - 'enable'
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "dispatch-choice-empty.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var evt = (WorkflowDispatchEvent)result.Workflow!.On[0];
+        var key = Utf8String.FromLowerAscii("operation"u8);
+        var input = evt.Inputs![key];
+        await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
+        await Assert.That(input.Options!.Count).IsEqualTo(3);
+        // no parse errors: '' is a valid choice option
+        await Assert.That(result.Diagnostics).IsEmpty();
+        // Empty-string option node must report the line of '' itself, not the next item.
+        // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
+        var emptyOptionNode = input.Options![0];
+        var disableOptionNode = input.Options![1];
+        await Assert.That(emptyOptionNode.Range.StartLine).IsNotEqualTo(disableOptionNode.Range.StartLine);
+    }
+
+    [Test]
     public async Task Parse_OnWorkflowCall_PopulatesEventAst()
     {
         var yaml = """
