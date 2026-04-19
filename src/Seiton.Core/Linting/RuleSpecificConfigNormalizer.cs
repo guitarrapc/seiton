@@ -55,6 +55,13 @@ static class RuleSpecificConfigNormalizer
                         : new ForbiddenUsesSpecificConfig(allow.Count > 0 ? allow : null, deny.Count > 0 ? deny : null);
                     break;
                 }
+            case OverprovisionedSecretsSpecificConfig specific when ruleId == "overprovisioned-secrets":
+                {
+                    var maxStep = specific.MaxStepEnvSecrets;
+                    var maxJob = specific.MaxJobSecrets;
+                    normalized = new OverprovisionedSecretsSpecificConfig(maxStep, maxJob);
+                    break;
+                }
             default:
                 {
                     if (ReferenceEquals(config.Specific, RuleSpecificConfig.None))

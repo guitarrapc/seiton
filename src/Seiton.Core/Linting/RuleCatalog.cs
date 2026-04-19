@@ -301,6 +301,7 @@ internal static class RuleCatalog
         var outputCommands = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "output-commands" };
         var assumeEvents = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "assume-events" };
         var allowDeny = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "allow", "deny" };
+        var secretThresholds = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "max-step-env-secrets", "max-job-secrets" };
 
         for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
@@ -315,6 +316,7 @@ internal static class RuleCatalog
                 "unredacted-secrets" => outputCommands,
                 "expr-undefined-var" => assumeEvents,
                 "forbidden-uses" => allowDeny,
+                "overprovisioned-secrets" => secretThresholds,
                 _ => empty,
             };
         }

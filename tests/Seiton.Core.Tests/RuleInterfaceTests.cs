@@ -3282,6 +3282,20 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-two-step-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                            API_KEY: ${{ secrets.API_KEY }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
             "ng-multiple-step-secrets",
             """
             on: push
@@ -3292,9 +3306,28 @@ public sealed class RuleInterfaceTests
                         - env:
                             TOKEN: ${{ secrets.GITHUB_TOKEN }}
                             API_KEY: ${{ secrets.API_KEY }}
+                            SECRET_KEY: ${{ secrets.SECRET_KEY }}
+                            PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+                            APP_ID: ${{ secrets.APP_ID }}
+                            DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
                           run: echo ng
             """,
-            ["multiple secret values", "minimum required"]),
+            ["more than 5 secret values", "minimum required"]),
+            new RuleCase(
+            "ok-five-job-secrets",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@v1
+                    secrets:
+                        token: ${{ secrets.GITHUB_TOKEN }}
+                        api_key: ${{ secrets.API_KEY }}
+                        secret_key: ${{ secrets.SECRET_KEY }}
+                        private_key: ${{ secrets.PRIVATE_KEY }}
+                        app_id: ${{ secrets.APP_ID }}
+            """,
+            []),
             new RuleCase(
             "ng-reusable-call-many-secrets",
             """
@@ -3305,8 +3338,12 @@ public sealed class RuleInterfaceTests
                     secrets:
                         token: ${{ secrets.GITHUB_TOKEN }}
                         api_key: ${{ secrets.API_KEY }}
+                        secret_key: ${{ secrets.SECRET_KEY }}
+                        private_key: ${{ secrets.PRIVATE_KEY }}
+                        app_id: ${{ secrets.APP_ID }}
+                        deploy_key: ${{ secrets.DEPLOY_KEY }}
             """,
-            ["passes 2 explicit secrets", "minimum required secrets"]),
+            ["passes 6 explicit secrets", "minimum required secrets"]),
         };
 
         await AssertRuleCases(new OverprovisionedSecretsRule(), "overprovisioned-secrets", cases);
@@ -4742,6 +4779,10 @@ public sealed class RuleInterfaceTests
                             - env:
                                 A: ${{ secrets.A }}
                                 B: ${{ secrets.B }}
+                                C: ${{ secrets.C }}
+                                D: ${{ secrets.D }}
+                                E: ${{ secrets.E }}
+                                F: ${{ secrets.F }}
                               run: echo ng
                 """,
                 ExpectsFix: false),

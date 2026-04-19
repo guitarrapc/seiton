@@ -4,13 +4,34 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class OverprovisionedSecretsRule : RuleBase
 {
+    internal const int DefaultMaxStepEnvSecrets = 5;
+    internal const int DefaultMaxJobSecrets = 5;
+
+    int _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
+    int _maxJobSecrets = DefaultMaxJobSecrets;
+
     public override string Id => "overprovisioned-secrets";
 
     public override string Name => "Overprovisioned Secrets Rule";
 
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        if (config.GetRuleConfig(Id)?.Specific is OverprovisionedSecretsSpecificConfig specific)
+        {
+            _maxStepEnvSecrets = specific.MaxStepEnvSecrets;
+            _maxJobSecrets = specific.MaxJobSecrets;
+        }
+        else
+        {
+            _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
+            _maxJobSecrets = DefaultMaxJobSecrets;
+        }
+    }
+
     public override void VisitJobPre(Job job)
     {
-        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Count > 1)
+        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Count > _maxJobSecrets)
         {
             AddJobWarning(
                 job,
@@ -35,11 +56,11 @@ public sealed class OverprovisionedSecretsRule : RuleBase
             }
 
             secretVarCount++;
-            if (secretVarCount > 1)
+            if (secretVarCount > _maxStepEnvSecrets)
             {
                 AddStepWarning(
                     step,
-                    "step env maps multiple secret values; reduce secret exposure to the minimum required for this step",
+                    $"step env maps more than {_maxStepEnvSecrets} secret values; reduce secret exposure to the minimum required for this step",
                     step.Env.Range);
                 return;
             }

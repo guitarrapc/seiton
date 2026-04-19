@@ -355,6 +355,11 @@ Direct list keys:
 - `rules.forbidden-uses.allow` / `rules.forbidden-uses.deny`
 - `rules.expr-undefined-var.assume-events`
 
+Integer threshold keys (non-negative integer scalar, not a list):
+
+- `rules.overprovisioned-secrets.max-step-env-secrets` — maximum `secrets.*` references in a step `env:` block before warning. Default: `5`.
+- `rules.overprovisioned-secrets.max-job-secrets` — maximum explicit secrets in a reusable workflow call `secrets:` block before warning. Default: `5`.
+
 Mapping requirements:
 
 - Use deterministic deduplication after normalization.

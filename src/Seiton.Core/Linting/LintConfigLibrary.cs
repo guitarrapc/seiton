@@ -54,6 +54,10 @@ public static class LintConfigLibrary
           #   deny:
           #     - some-untrusted-org/*
 
+          # overprovisioned-secrets:
+          #   max-step-env-secrets: 5
+          #   max-job-secrets: 5
+
           # expr-undefined-var:
           #   assume-events:
           #     - workflow_dispatch
@@ -634,6 +638,8 @@ internal sealed class LintConfigLineParser
         IReadOnlyList<string> assumeEvents = [];
         IReadOnlyList<string> allow = [];
         IReadOnlyList<string> deny = [];
+        int? maxStepEnvSecrets = null;
+        int? maxJobSecrets = null;
         var seenRuleSpecificKeys = new HashSet<string>(StringComparer.Ordinal);
 
         while (index < lines.Length)
@@ -788,6 +794,38 @@ internal sealed class LintConfigLineParser
                 continue;
             }
 
+            if (key == "max-step-env-secrets")
+            {
+                seenRuleSpecificKeys.Add("max-step-env-secrets");
+                if (!int.TryParse(value, out var parsedMax) || parsedMax < 0)
+                {
+                    diagnostics.Add(CreateError("max-step-env-secrets must be a non-negative integer", lineNumber, 5, line.Trim().Length));
+                }
+                else
+                {
+                    maxStepEnvSecrets = parsedMax;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (key == "max-job-secrets")
+            {
+                seenRuleSpecificKeys.Add("max-job-secrets");
+                if (!int.TryParse(value, out var parsedMax) || parsedMax < 0)
+                {
+                    diagnostics.Add(CreateError("max-job-secrets must be a non-negative integer", lineNumber, 5, line.Trim().Length));
+                }
+                else
+                {
+                    maxJobSecrets = parsedMax;
+                }
+
+                index++;
+                continue;
+            }
+
             diagnostics.Add(CreateError($"unknown rule option '{key}'", lineNumber, 5, key.Length));
             index++;
         }
@@ -807,6 +845,8 @@ internal sealed class LintConfigLineParser
                 assumeEvents,
                 allow,
                 deny,
+                maxStepEnvSecrets,
+                maxJobSecrets,
                 ruleLineNumber),
         };
 
@@ -883,6 +923,8 @@ internal sealed class LintConfigLineParser
         IReadOnlyList<string> assumeEvents,
         IReadOnlyList<string> allow,
         IReadOnlyList<string> deny,
+        int? maxStepEnvSecrets,
+        int? maxJobSecrets,
         int ruleLineNumber)
     {
         if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
@@ -910,6 +952,9 @@ internal sealed class LintConfigLineParser
             "unredacted-secrets" when outputCommands is { Count: > 0 } => new UnredactedSecretsSpecificConfig(outputCommands),
             "expr-undefined-var" when assumeEvents is { Count: > 0 } => new ExprUndefinedVarSpecificConfig(assumeEvents),
             "forbidden-uses" when allow.Count > 0 || deny.Count > 0 => new ForbiddenUsesSpecificConfig(allow.Count > 0 ? allow : null, deny.Count > 0 ? deny : null),
+            "overprovisioned-secrets" when maxStepEnvSecrets is not null || maxJobSecrets is not null => new OverprovisionedSecretsSpecificConfig(
+                maxStepEnvSecrets ?? 5,
+                maxJobSecrets ?? 5),
             _ => RuleSpecificConfig.None,
         };
     }

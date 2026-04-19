@@ -63,6 +63,8 @@ public sealed record ExprUndefinedVarSpecificConfig(IReadOnlyList<string> Assume
 
 public sealed record ForbiddenUsesSpecificConfig(IReadOnlyList<string>? Allow, IReadOnlyList<string>? Deny) : RuleSpecificConfig;
 
+public sealed record OverprovisionedSecretsSpecificConfig(int MaxStepEnvSecrets, int MaxJobSecrets) : RuleSpecificConfig;
+
 public sealed record LintExclusion(
     string Files,
     IReadOnlyList<string> Rules,

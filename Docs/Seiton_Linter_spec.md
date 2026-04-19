@@ -407,6 +407,10 @@ rules:
     assume-events:
       - workflow_dispatch
       - repository_dispatch
+
+  overprovisioned-secrets:
+    max-step-env-secrets: 5
+    max-job-secrets: 5
 ```
 
 #### 5.8.1 `dangerous-triggers` — `events.extend`
@@ -452,6 +456,14 @@ rules:
 - Allows users to declare which trigger events the workflow is expected to handle.
 - This provides event-type context for expression validation, suppressing false positives for event-specific context roots (e.g. `github.event.inputs` is valid under `workflow_dispatch`).
 - Values are event name strings matching canonical GitHub event naming.
+
+#### 5.8.8 `overprovisioned-secrets` — `max-step-env-secrets` / `max-job-secrets`
+
+- `max-step-env-secrets`: Maximum number of `secrets.*` references allowed in a single step `env:` block before a diagnostic is emitted. Default: `5`.
+- `max-job-secrets`: Maximum number of explicit secrets allowed in a single reusable workflow call `secrets:` block before a diagnostic is emitted. Default: `5`.
+- Both values must be non-negative integers; values of `0` effectively require zero secret assignments.
+- Setting either key suppresses the diagnostic only when the count is within the configured limit.
+- Note: two explicitly named secrets in a step `env:` is a well-established least-privilege pattern and should not produce diagnostics under the default threshold.
 
 ### 5.9 Minimal and Advanced Example Configuration File
 
@@ -512,6 +524,10 @@ rules:
     assume-events:
       - workflow_dispatch
       - repository_dispatch
+
+  overprovisioned-secrets:
+    max-step-env-secrets: 3
+    max-job-secrets: 3
 
   # Online rules (default disabled; enable to activate network-assisted audit)
   known-vulnerable-actions:
