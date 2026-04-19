@@ -73,26 +73,6 @@ public sealed class SecretsOutsideEnvRule : RuleBase
                     action.Uses.Range);
                 return;
             }
-
-            if (action.Inputs is null || action.Inputs.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var pair in action.Inputs)
-            {
-                if (!ContainsSecretsReference(pair.Value))
-                {
-                    continue;
-                }
-
-                var inputName = Decode(pair.Key);
-                AddStepWarning(
-                    step,
-                    $"action input '{inputName}' must not consume secrets context directly outside env handoff",
-                    pair.Value.Range);
-                return;
-            }
         }
     }
 

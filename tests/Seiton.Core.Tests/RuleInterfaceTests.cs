@@ -2784,7 +2784,7 @@ public sealed class RuleInterfaceTests
             """,
             ["step.if", "secrets context"]),
             new RuleCase(
-            "ng-secret-in-action-input",
+            "ok-secret-in-action-input",
             """
             on: push
             jobs:
@@ -2795,7 +2795,21 @@ public sealed class RuleInterfaceTests
                           with:
                               script: ${{ secrets.GITHUB_TOKEN }}
             """,
-            ["action input", "outside env handoff"]),
+            []),
+            new RuleCase(
+            "ok-secret-in-create-github-app-token-inputs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/create-github-app-token@v2
+                          with:
+                              app-id: ${{ secrets.APP_ID }}
+                              private-key: ${{ secrets.PRIVATE_KEY }}
+            """,
+            []),
         };
 
         await AssertRuleCases(new SecretsOutsideEnvRule(), "secrets-outside-env", cases);
