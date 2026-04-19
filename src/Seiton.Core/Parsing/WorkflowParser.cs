@@ -9,6 +9,12 @@ public static class WorkflowParser
 {
     private delegate string? Utf8ScalarValidator(ReadOnlySpan<byte> valueUtf8);
 
+    private enum ParseMode
+    {
+        Workflow,
+        ActionMetadata,
+    }
+
     private enum MappingKeyComparison
     {
         CaseSensitive,
@@ -33,22 +39,57 @@ public static class WorkflowParser
 
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
+        return ParseClassified(utf8Yaml, filePath).ParseResult;
+    }
+
+    public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
+    {
+        var pathHintKind = DocumentKindClassifier.GetPathHintKind(filePath);
+
         try
         {
-            var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
-            var result = ParseCore(ref reader, utf8Yaml);
-            if (string.IsNullOrEmpty(filePath) || result.Diagnostics.Length == 0)
+            var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+            var hasHints = TryReadRootStructuralHints(ref hintReader, out var hasJobs, out var hasRuns);
+            var finalKind = hasHints
+                ? DocumentKindClassifier.FinalizeKind(pathHintKind, hasJobs, hasRuns, out var ignoredAmbiguous, out var ignoredHintMismatch)
+                : DocumentKind.Unknown;
+
+            var isAmbiguous = hasHints && hasJobs && hasRuns;
+            var hasHintMismatch =
+                hasHints &&
+                pathHintKind == DocumentKind.ActionMetadata &&
+                finalKind == DocumentKind.Workflow;
+
+            var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+            var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
+            var parseResult = ParseCore(ref parseReader, utf8Yaml, parseMode);
+
+            var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 2);
+            diagnostics.AddRange(parseResult.Diagnostics);
+
+            if (isAmbiguous)
             {
-                return result;
+                AddError(diagnostics, "document kind is ambiguous: root has both 'jobs' and 'runs'", new TextPosition(0, 1, 1));
             }
 
-            var diagnostics = new Diagnostic[result.Diagnostics.Length];
-            for (var i = 0; i < result.Diagnostics.Length; i++)
+            if (hasHintMismatch)
             {
-                diagnostics[i] = result.Diagnostics[i] with { FilePath = filePath };
+                AddError(diagnostics, "path hint suggests action-metadata but root structure indicates workflow", new TextPosition(0, 1, 1));
             }
 
-            return result with { Diagnostics = diagnostics };
+            if (!string.IsNullOrEmpty(filePath) && diagnostics.Count > 0)
+            {
+                for (var i = 0; i < diagnostics.Count; i++)
+                {
+                    diagnostics[i] = diagnostics[i] with { FilePath = filePath };
+                }
+            }
+
+            parseResult = parseResult with { Diagnostics = diagnostics.ToArray() };
+
+            return new ClassifiedParseResult(
+                parseResult,
+                new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
         }
         catch (Exception ex)
         {
@@ -64,17 +105,66 @@ public static class WorkflowParser
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
-            return new ParseResult(default, [diagnostic], HasFatalError: true);
+            var parseResult = new ParseResult(default, [diagnostic], HasFatalError: true);
+            return new ClassifiedParseResult(
+                parseResult,
+                new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
         }
     }
 
     internal static ParseResult ParseWithReader<TReader>(ref TReader reader, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        return ParseCore(ref reader, source);
+        return ParseCore(ref reader, source, ParseMode.Workflow);
     }
 
-    private static ParseResult ParseCore<TReader>(ref TReader reader, ReadOnlySpan<byte> source)
+    static bool TryReadRootStructuralHints<TReader>(ref TReader reader, out bool hasJobs, out bool hasRuns)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        hasJobs = false;
+        hasRuns = false;
+
+        reader.SkipHeader();
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            return false;
+        }
+
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (keyUtf8.SequenceEqual("jobs"u8))
+            {
+                hasJobs = true;
+            }
+            else if (keyUtf8.SequenceEqual("runs"u8))
+            {
+                hasRuns = true;
+            }
+
+            reader.Read();
+            if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            {
+                reader.SkipCurrentNode();
+            }
+        }
+
+        return true;
+    }
+
+    private static ParseResult ParseCore<TReader>(ref TReader reader, ReadOnlySpan<byte> source, ParseMode parseMode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var diagnostics = new List<Diagnostic>(16);
@@ -238,6 +328,17 @@ public static class WorkflowParser
                 continue;
             }
 
+            if (parseMode == ParseMode.ActionMetadata && IsActionMetadataRootKey(keyUtf8))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
             var keyText = Encoding.UTF8.GetString(keyUtf8);
             reader.Read(); // consume key
 
@@ -254,12 +355,12 @@ public static class WorkflowParser
             reader.Read();
         }
 
-        if (!hasOn)
+        if (parseMode == ParseMode.Workflow && !hasOn)
         {
             AddError(diagnostics, "required key 'on' is missing", new TextPosition(0, 1, 1));
         }
 
-        if (!hasJobs)
+        if (parseMode == ParseMode.Workflow && !hasJobs)
         {
             AddError(diagnostics, "required key 'jobs' is missing", new TextPosition(0, 1, 1));
         }
@@ -278,6 +379,15 @@ public static class WorkflowParser
         };
 
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
+    }
+
+    static bool IsActionMetadataRootKey(ReadOnlySpan<byte> keyUtf8)
+    {
+        return keyUtf8.SequenceEqual("runs"u8)
+            || keyUtf8.SequenceEqual("description"u8)
+            || keyUtf8.SequenceEqual("inputs"u8)
+            || keyUtf8.SequenceEqual("outputs"u8)
+            || keyUtf8.SequenceEqual("branding"u8);
     }
 
     private static Permissions? ParsePermissionsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)
@@ -301,6 +411,7 @@ public static class WorkflowParser
             reader.SkipCurrentNode();
             return null;
         }
+
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);

@@ -1,146 +1,145 @@
-# Seiton Actions Support Plan
+# Seiton Actions 対応実装計画
 
-## 1. Goal
+## 1. 目的
 
-Enable Seiton to classify and lint both workflow files and action metadata files.
+Seiton が workflow ファイルと action metadata ファイルの両方を分類し、適切に解析・lint できるようにする。
 
-Primary requirement for fast path hints:
+高速なパスヒント要件:
 
-- `action.yml` or `action.yaml` basename => action-metadata candidate
-- `.github/actions/<name>/action.yml` or `.github/actions/<name>/action.yaml` => action-metadata candidate
+- ベース名が `action.yml` または `action.yaml` の場合は action-metadata 候補
+- `.github/actions/<name>/action.yml` または `.github/actions/<name>/action.yaml` の場合は action-metadata 候補
 
-Final document kind must be structure-confirmed (path hint is candidate only).
+最終的な文書種別は構造で確定する（パスヒントは候補に留める）。
 
-## 2. Scope
+## 2. スコープ
 
-In scope:
+対象:
 
-- Document-kind classifier in core
-- CLI file-kind routing behavior updates
-- Parser/linter entrypoint routing updates
-- Tests for path-hint + structure confirmation behavior
+- Core の document-kind classifier
+- CLI のファイル種別ルーティング挙動
+- Parser/Linter エントリポイントのルーティング
+- パスヒント + 構造確定のテスト
 
-Out of scope in this plan:
+本計画の対象外:
 
-- Full action metadata rule parity with external tools
-- Broad recursive auto-discovery of action files by default
+- 外部ツールとの action metadata ルール完全互換
+- デフォルトでの action ファイル再帰自動探索の拡張
 
-## 3. Design Policy
+## 3. 設計方針
 
-Classifier policy:
+分類ポリシー:
 
-1. Build candidate kind from path hints (fast)
-2. Confirm kind from YAML top-level structure (authoritative)
-3. If path and structure disagree, structure wins and mismatch diagnostic is emitted
+1. パスヒントから候補種別を作る（高速段）
+2. YAML ルート構造から種別を確定する（正）
+3. パスと構造が不一致なら構造を優先し、不一致診断を出す
 
-Structural discriminator policy:
+構造ディスクリミネータ:
 
-- Root `jobs` => workflow
-- Root `runs` => action-metadata
-- Root has both `jobs` and `runs` => `unknown` + ambiguity diagnostic
-- Root has neither `jobs` nor `runs` => unresolved; existing parser diagnostics determine failure details
+- ルートに `jobs` がある: `workflow`
+- ルートに `runs` がある: `action-metadata`
+- `jobs` と `runs` の両方がある: `unknown` + 曖昧性診断
+- `jobs` と `runs` のどちらもない: 未解決（既存 parser 診断で失敗理由を提示）
 
-Kinds:
+種別:
 
 - `workflow`
 - `action-metadata`
 - `unknown`
 
-## 4. Work Breakdown
+## 4. 実装内訳
 
-### Phase A: Core classifier contract
+### Phase A: Core classifier contract ✅ 完了
 
-Tasks:
+実施内容:
 
-- Add `DocumentKind` model and classifier API in core
-- Implement path-hint matcher for action metadata paths
-- Add structure-confirmation logic for workflow and action metadata
-- Implement root-key discriminator (`jobs` vs `runs`) with ambiguous-case handling
+- `DocumentKind` モデルと classifier API を core に追加
+- action metadata パスヒント判定を実装
+- 構造確定ロジック（`jobs` / `runs`）を実装
+- ルートキー衝突時（`jobs` + `runs`）の曖昧判定を実装
 
-Done when:
+完了条件:
 
-- Classifier returns deterministic kind for known fixtures
-- Path-only false positives are corrected by structure stage
-- `jobs`/`runs` discriminator behavior is covered by positive and ambiguity fixtures
+- 既知フィクスチャで classifier が決定的に同じ結果を返す
+- パスだけの誤判定を構造段で補正できる
+- `jobs`/`runs` 判定と曖昧ケースがテストで担保される
 
-### Phase B: Parser/linter entrypoint routing
+### Phase B: Parser/Linter エントリポイントルーティング ✅ 完了
 
-Tasks:
+実施内容:
 
-- Route check pipeline by finalized `DocumentKind`
-- Keep fatal parse behavior deterministic for each kind
-- Return mismatch diagnostics when hint and structure conflict
+- `WorkflowParser.ParseClassified` を追加し、最終 `DocumentKind` を返却
+- パスヒント不一致・曖昧性の診断を追加
+- Linter を最終種別で分岐し、`workflow` 以外では workflow ルールを実行しないように変更
 
-Done when:
+完了条件:
 
-- Existing workflow behavior is unchanged
-- Action metadata inputs no longer fail as missing workflow keys (`on`, `jobs`)
+- 既存 workflow の挙動が維持される
+- action metadata 入力で `on` / `jobs` 欠落エラーが誤って出ない
 
-### Phase C: CLI behavior update
+### Phase C: CLI 挙動更新 ✅ 完了
 
-Tasks:
+実施内容:
 
-- Keep default auto-discovery workflow-first under `.github/workflows/`
-- Support explicit action metadata file paths in `FILES`
-- Route explicit files through classifier before parsing
+- no-arg 既定探索は `.github/workflows/` 優先のまま維持
+- 明示指定ファイルは classifier を通して parser/linter ルーティング
 
-Done when:
+完了条件:
 
-- `seiton` (no args) behavior stays compatible
-- `seiton .github/actions/foo/action.yml` is accepted and routed as action-metadata
+- `seiton`（引数なし）の互換挙動を維持
+- `seiton .github/actions/foo/action.yml` を action-metadata として受理・ルーティング
 
-### Phase D: Test coverage
+### Phase D: テスト拡充 ✅ 完了
 
-Tasks:
+実施内容:
 
-- Unit tests for path-hint matching
-- Unit tests for structure confirmation
-- Integration tests for explicit action files through CLI
-- Regression tests for workflow-only defaults
+- 分類テスト `DocumentKindClassificationTests` を追加
+- パスヒント判定、構造確定、曖昧判定、不一致判定をカバー
+- Action 入力時に workflow ルールが走らないことを確認
+- 既存 `ParserTests` を回して回帰がないことを確認
 
-Done when:
+完了条件:
 
-- Workflow regression tests remain green
-- New action-classification tests cover positive/negative/conflict cases
+- workflow 回帰テストがグリーン
+- action 分類の正/誤/競合ケースをテストで網羅
 
-### Phase E: Documentation and release readiness
+### Phase E: ドキュメント/リリース整備 ⏳ 未完了
 
-Tasks:
+実施予定:
 
-- Keep parser/linter/CLI specs synchronized
-- Add release note entries for new file-kind support
-- Add migration note clarifying workflow-first auto-discovery remains unchanged
+- parser/linter/CLI 仕様の最終同期確認
+- リリースノートへの反映
+- workflow-first 既定探索維持の移行注意を明記
 
-Done when:
+完了条件:
 
-- Docs and behavior match
-- CI passes with updated tests
+- 仕様と実装の完全一致
+- CI とテストの最終通過
 
-## 5. Risks and Mitigations
+## 5. リスクと対策
 
-Risk:
+リスク:
 
-- Misclassification from path-only assumptions
+- パス判定だけに依存した誤分類
 
-Mitigation:
+対策:
 
-- Always finalize by structure
-- Emit mismatch diagnostics for observability
+- 必ず構造で最終確定
+- 不一致診断を出して観測可能にする
 
-Risk:
+リスク:
 
-- Breaking existing workflow auto-discovery behavior
+- 既存 workflow 自動探索の破壊
 
-Mitigation:
+対策:
 
-- Keep no-argument discovery unchanged in this phase
-- Add explicit regression tests for current defaults
+- no-arg 探索は現行挙動を維持
+- 既存デフォルト挙動の回帰テストを維持
 
-## 6. Acceptance Criteria
+## 6. 受け入れ基準
 
-- Action path hints required in this request are implemented
-- Final kind is structure-confirmed, not path-only
-- Structural hints are implemented in classifier (`jobs` => workflow, `runs` => action-metadata)
-- CLI can lint explicit action metadata files
-- Workflow default discovery remains compatible
-- Specifications and tests are updated together
+- 要求された action パスヒントが実装されている
+- 最終種別がパスのみではなく構造で確定される
+- classifier に構造ヒント（`jobs` => workflow、`runs` => action-metadata）が入っている
+- CLI で明示 action metadata ファイルを lint できる
+- workflow 既定探索が互換維持される
+- 仕様更新とテスト更新が同時に行われる

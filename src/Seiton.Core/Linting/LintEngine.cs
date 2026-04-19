@@ -43,8 +43,17 @@ public sealed class LintEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+        var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
+        var parseResult = classifiedParseResult.ParseResult;
         if (parseResult.HasFatalError || parseResult.Workflow is null)
+        {
+            return new LintResult(parseResult, parseResult.Diagnostics)
+            {
+                SuppressionSummary = SuppressionSummary.Empty,
+            };
+        }
+
+        if (classifiedParseResult.Classification.FinalKind != DocumentKind.Workflow)
         {
             return new LintResult(parseResult, parseResult.Diagnostics)
             {
