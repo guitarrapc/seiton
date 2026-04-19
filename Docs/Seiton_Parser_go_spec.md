@@ -34,6 +34,7 @@ The Seiton Parser Go implementation provides:
 4. **Expression parser** (separate recursive descent parser for `${{ }}` expressions)
 5. **Expression semantic analyzer** with type inference and context validation
 6. **Generated data** for webhooks, context availability, and popular actions
+7. **Input document-kind classification** (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
 
 Linter-side runtime details are specified in `Seiton_Linter_go_spec.md`.
 
@@ -97,6 +98,23 @@ Alias resolution happens **before** the parser runs, ensuring the parser never e
 ---
 
 ## 1. Overall Parser Flow (Spec §1)
+
+### 1.0.1 Input Document Kind Classification (Spec §1.1.2)
+
+Go parser entrypoint classifies input kind before kind-specific parse traversal.
+
+Normative path hints for action-metadata candidate:
+
+- Basename `action.yml` or `action.yaml`
+- `.github/actions/<name>/action.yml` or `.github/actions/<name>/action.yaml`
+
+Normative structural hints for finalization:
+
+- Root `jobs` => workflow
+- Root `runs` => action-metadata
+- Root has both `jobs` and `runs` => `unknown` + ambiguity diagnostic
+
+Final kind is confirmed from top-level structure; structure has priority over path hint on conflict.
 
 ### 1.1 Entry Point (Spec §1.1)
 

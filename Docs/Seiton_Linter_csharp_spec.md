@@ -28,7 +28,7 @@ Out of scope:
 
 The Seiton Linter C# implementation provides:
 
-1. Parse-first lint entrypoint (`LintEngine.Check`)
+1. Input document kind classification and parse-first lint entrypoint (`LintEngine.Check`)
 2. Visitor/pass traversal for workflow/event/job/step callbacks
 3. Rule pack orchestration via `RuleCatalog`
 4. Deterministic diagnostics post-processing (sort/dedup/filter)
@@ -93,6 +93,7 @@ C# mapping:
 
 Normative behavior follows `Seiton_Linter_spec.md` for:
 
+- parser kind classification/routing
 - parse-first flow
 - fatal parse short-circuit
 - rule execution

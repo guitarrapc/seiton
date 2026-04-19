@@ -32,13 +32,14 @@ Check(utf8Yaml, filePath) -> LintResult
 
 High-level behavior:
 
-1. Call parser entrypoint `Parse(utf8Yaml, filePath)`.
-2. If parser has fatal error or no workflow AST, return parser diagnostics as lint result.
-3. Build active rule set.
-4. Traverse AST and invoke rule callbacks.
-5. Collect rule diagnostics.
-6. Sort, deduplicate, and filter diagnostics.
-7. Return final `LintResult`.
+1. Classify input document kind (workflow or action-metadata) using parser classification contract (`Seiton_Parser_spec.md` §1.1.2).
+2. Call parser entrypoint `Parse(utf8Yaml, filePath)` for the finalized kind.
+3. If parser has fatal error or no AST for finalized kind, return parser diagnostics as lint result.
+4. Build active rule set for finalized kind.
+5. Traverse AST and invoke rule callbacks.
+6. Collect rule diagnostics.
+7. Sort, deduplicate, and filter diagnostics.
+8. Return final `LintResult`.
 
 ---
 

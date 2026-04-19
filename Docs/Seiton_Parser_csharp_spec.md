@@ -75,6 +75,7 @@ The Seiton Parser C# implementation provides:
 4. Expression parser for `${{ }}` grammar
 5. Expression semantic analyzer with context/type validation
 6. Generated metadata usage (webhooks, availability, popular actions)
+7. Input document-kind classification (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
 
 Linter-side runtime details are specified in `Seiton_Linter_csharp_spec.md`.
 
@@ -348,6 +349,23 @@ public readonly struct Utf8String : IEquatable<Utf8String>
 ---
 
 ## 1. Overall Parser Flow (Spec §1)
+
+### 1.0.1 Input Document Kind Classification (Spec §1.1.2)
+
+C# parser entrypoint classifies input kind before kind-specific parse traversal.
+
+Normative path hints for action-metadata candidate:
+
+- Basename `action.yml` or `action.yaml`
+- `.github/actions/<name>/action.yml` or `.github/actions/<name>/action.yaml`
+
+Normative structural hints for finalization:
+
+- Root `jobs` => workflow
+- Root `runs` => action-metadata
+- Root has both `jobs` and `runs` => `unknown` + ambiguity diagnostic
+
+Final kind is confirmed from top-level structure; structure has priority over path hint on conflict.
 
 ### 1.1 Entry Point (Spec §1.1)
 

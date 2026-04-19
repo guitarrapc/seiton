@@ -7,10 +7,15 @@
 
 ## 1. Purpose and Scope
 
-Seiton has two primary runtime components for GitHub Actions workflow analysis.
+Seiton has two primary runtime components for GitHub Actions document analysis.
 
 1. **Parser**: Parses UTF-8 YAML into typed AST and parser diagnostics.
 2. **Linter**: Executes rules over parsed AST and returns aggregated lint diagnostics.
+
+Supported document kinds:
+
+- Workflow files (for example `.github/workflows/*.yml`, `.github/workflows/*.yaml`)
+- Action metadata files (`action.yml`, `action.yaml`, including `.github/actions/<name>/action.yml|action.yaml`)
 
 This document fixes the boundary between those components and links to each component's normative specification.
 
@@ -20,6 +25,7 @@ This document fixes the boundary between those components and links to each comp
 
 ```
 Check(utf8Yaml, filePath)
+  -> classify input document kind (workflow or action-metadata)
   -> Parse(utf8Yaml, filePath)
   -> if fatal parse failure: return parser diagnostics
   -> execute linter rules on AST
@@ -27,6 +33,26 @@ Check(utf8Yaml, filePath)
   -> filter/sort/dedup
   -> output
 ```
+
+### 2.1 File-Kind Classification Policy
+
+Input routing uses a two-stage policy:
+
+1. Fast path hint from `filePath` (candidate kind only)
+2. Structural validation from YAML top-level keys (final kind)
+
+Normative path hints:
+
+- Basename `action.yml` or `action.yaml` -> action-metadata candidate
+- Path matching `.github/actions/<name>/action.yml` or `.github/actions/<name>/action.yaml` -> action-metadata candidate
+
+Normative structural hints:
+
+- Root `jobs` indicates workflow
+- Root `runs` indicates action metadata
+- If both are present, treat as ambiguous input and emit diagnostic
+
+Path hints are not final truth. If structure conflicts with hint, structure wins and diagnostics must explain the mismatch.
 
 ---
 

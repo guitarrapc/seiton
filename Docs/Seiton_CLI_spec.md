@@ -74,11 +74,13 @@ src/
 
 ### 2.1 Default (root) — `seiton [FILES...] [--fix]`
 
-Lint one or more workflow files. This is the primary user-facing operation.
+Lint one or more GitHub Actions YAML files (workflow files and action metadata files). This is the primary user-facing operation.
 
 When `--fix` is specified, the root command switches to fix mode (equivalent to `seiton fix`).
 
 When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory.
+
+Action metadata files are accepted when explicitly passed via `FILES` (for example `action.yml`, `action.yaml`, `.github/actions/<name>/action.yml`, `.github/actions/<name>/action.yaml`).
 
 `-` (hyphen) as a file argument reads from stdin. Requires `--stdin-filename` to give the input a meaningful path for diagnostics.
 
@@ -92,7 +94,7 @@ Identical behavior to the default root command in check mode (`seiton` without `
 
 ### 2.3 `seiton fix [FILES...]`
 
-Apply auto-fixes to workflow files. This is a compatibility alias for root fix mode (`seiton --fix`). Runs lint, then applies all available fix payloads to the source files in place.
+Apply auto-fixes to supported GitHub Actions YAML files. This is a compatibility alias for root fix mode (`seiton --fix`). Runs lint, then applies all available fix payloads to the source files in place.
 
 - If `--dry-run` is given, prints unified diffs to stdout without modifying files.
 - If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes).
@@ -253,12 +255,27 @@ When no `FILES` arguments are given to `check` / `fix`:
 2. Collect all files matching `*.yml` and `*.yaml` under that directory (non-recursive by default; recursive under subdirectories when they exist).
 3. Sort collected paths deterministically (lexicographic, `/`-normalized) before passing to `LintEngine`.
 
+Default auto-discovery scope remains workflow-first (`.github/workflows/`). Action metadata files are discovered only when explicitly passed in `FILES`.
+
 When `FILES` are given:
 
 - Each argument is treated as a file path.
 - `-` reads from stdin; `--stdin-filename` is used as the file path in diagnostics.
 - Directories are expanded to all `*.yml` / `*.yaml` files within them (non-recursive).
 - Non-existent paths produce a fatal error.
+
+File-kind routing for explicit `FILES`:
+
+1. Build a candidate kind from path hints.
+2. Confirm final kind from YAML top-level structure.
+3. Route to matching parser/linter pipeline.
+
+Normative action path hints (candidate stage):
+
+- basename is `action.yml` or `action.yaml`
+- path matches `.github/actions/<name>/action.yml` or `.github/actions/<name>/action.yaml`
+
+Path hints are intentionally fast and non-authoritative. Final routing is structure-confirmed.
 
 ---
 
@@ -372,6 +389,9 @@ seiton
 
 # Lint specific files
 seiton .github/workflows/build.yml .github/workflows/release.yml
+
+# Lint action metadata file explicitly
+seiton .github/actions/release/action.yml
 
 # Lint from stdin
 cat .github/workflows/build.yml | seiton - --stdin-filename build.yml

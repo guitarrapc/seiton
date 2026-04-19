@@ -1,6 +1,6 @@
 # Seiton Parser Specification
 
-> Defines the specification for syntactic analysis, AST construction, and expression parsing/validation of GitHub Actions workflow YAML.
+> Defines the specification for syntactic analysis, AST construction, and expression parsing/validation of GitHub Actions workflow YAML and action metadata YAML.
 > This document is a language-agnostic parser specification. For C# implementation details, see `Seiton_Parser_csharp_spec.md`.
 > Linter execution model and rule configuration are defined in `Seiton_Linter_spec.md`.
 >
@@ -34,6 +34,34 @@ Parse(utf8Yaml, filePath) -> ParseResult
 - Return: `ParseResult { Workflow?, Diagnostic[], HasFatalError }`
 - Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null in that case
 - Errors during AST construction are accumulated, not immediately fatal
+
+### 1.1.2 Input Document Kind Classification
+
+Before parser-kind-specific traversal, Seiton classifies input as one of:
+
+- `workflow`
+- `action-metadata`
+- `unknown` (classification failure)
+
+Classification contract:
+
+1. Build a candidate kind from `filePath` path hints.
+2. Confirm/finalize kind from YAML top-level structure.
+3. When hint and structure disagree, structure wins and a diagnostic must report mismatch.
+
+Normative structural hints (finalization stage):
+
+- Workflow candidate is confirmed when root mapping has `jobs`.
+- Action-metadata candidate is confirmed when root mapping has `runs`.
+- If both `jobs` and `runs` exist, classify as `unknown` and emit ambiguity diagnostic.
+- If neither `jobs` nor `runs` is present, keep classification unresolved and continue with existing parser diagnostics.
+
+Normative path hints (fast candidate stage):
+
+- Basename `action.yml` or `action.yaml` -> `action-metadata` candidate
+- Path matching `.github/actions/<name>/action.yml` or `.github/actions/<name>/action.yaml` -> `action-metadata` candidate
+
+Workflow-path hints are optional optimization only. Final kind is always structure-derived.
 
 ### 1.1.1 Supported Scope and Reference Parity
 

@@ -28,7 +28,7 @@ Out of scope:
 
 The Seiton Linter Go implementation provides:
 
-1. Parse-first lint execution flow
+1. Input document kind classification and parse-first lint execution flow
 2. Pass-based traversal and rule execution
 3. Deterministic diagnostics post-processing
 4. Config/inline suppression integration per contract
@@ -91,6 +91,7 @@ Go mapping (reference shape):
 
 Normative behavior follows `Seiton_Linter_spec.md` for:
 
+- parser kind classification/routing
 - parse-first flow
 - fatal parse short-circuit
 - rule execution
