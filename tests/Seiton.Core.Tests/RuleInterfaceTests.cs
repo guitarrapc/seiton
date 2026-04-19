@@ -2809,6 +2809,31 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_UnredactedSecrets_DiagnosticLocation_PointsToRunExpression_NotFollowingEnvKey()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: called secret
+                      run: |
+                        echo "called secret. ${APPLES}"
+                      env:
+                        APPLES: ${{ secrets.APPLES }}
+        """;
+
+        var result = new LintEngine([new UnredactedSecretsRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "unredacted-secrets-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "unredacted-secrets");
+
+        var highlightedText = yaml.Split('\n')[diagnostic.Location.StartLine - 1].Trim();
+        await Assert.That(highlightedText.Contains("${APPLES}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(highlightedText.StartsWith("echo", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
     public async Task RuleRegression_SecretsOutsideEnvRule_TableDriven()
     {
         var cases = new[]

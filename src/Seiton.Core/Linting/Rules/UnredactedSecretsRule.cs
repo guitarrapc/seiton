@@ -60,17 +60,45 @@ public sealed class UnredactedSecretsRule : RuleBase
         var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
         foreach (var name in secretVars)
         {
-            if (!ContainsOutputOfVariable(runText, name.AsSpan(), additionalOutputCommands))
+            if (!TryFindOutputOfVariableLocation(
+                runText,
+                name.AsSpan(),
+                additionalOutputCommands,
+                out var relativeOffset,
+                out var tokenLength))
             {
                 continue;
             }
 
+            var location = BuildRunTextLocation(run.Run, relativeOffset, tokenLength);
+
             AddStepWarning(
                 step,
                 $"run script may print secret-derived variable '{name}' without masking; avoid echo/printf/Write-Host of secret values",
-                run.Run.Range);
+                location);
             return;
         }
+    }
+
+    TextRange BuildRunTextLocation(StringNode runNode, int relativeOffset, int tokenLength)
+    {
+        var absoluteStart = runNode.Value.Offset + relativeOffset;
+        var absoluteLength = tokenLength;
+        if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
+        {
+            return runNode.Range;
+        }
+
+        var lineStarts = BuildLineStarts(Config.Utf8Yaml);
+        var start = OffsetToLineColumn(lineStarts, absoluteStart);
+        var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
+        return new TextRange(
+            Start: absoluteStart,
+            Length: absoluteLength,
+            StartLine: start.Line,
+            StartColumn: start.Column,
+            EndLine: end.Line,
+            EndColumn: end.Column);
     }
 
     HashSet<string>? CollectSecretDerivedEnvVarNames(Step step)
@@ -131,8 +159,16 @@ public sealed class UnredactedSecretsRule : RuleBase
         return ContainsSecretsReferenceInExpression(expression);
     }
 
-    static bool ContainsOutputOfVariable(ReadOnlySpan<byte> runText, ReadOnlySpan<char> variableName, HashSet<string> additionalOutputCommands)
+    static bool TryFindOutputOfVariableLocation(
+        ReadOnlySpan<byte> runText,
+        ReadOnlySpan<char> variableName,
+        HashSet<string> additionalOutputCommands,
+        out int relativeOffset,
+        out int tokenLength)
     {
+        relativeOffset = 0;
+        tokenLength = 0;
+
         if (runText.Length == 0 || variableName.Length == 0)
         {
             return false;
@@ -148,10 +184,17 @@ public sealed class UnredactedSecretsRule : RuleBase
             }
 
             var line = runText[lineStart..lineEnd];
-            if (ContainsOutputCommand(line, additionalOutputCommands)
-                && (ContainsPosixVariableReference(line, variableName)
-                    || ContainsPowerShellVariableReference(line, variableName)))
+            if (!ContainsOutputCommand(line, additionalOutputCommands))
             {
+                lineStart = lineEnd + 1;
+                continue;
+            }
+
+            if (TryFindPosixVariableReference(line, variableName, out var localOffset, out var localTokenLength)
+                || TryFindPowerShellVariableReference(line, variableName, out localOffset, out localTokenLength))
+            {
+                relativeOffset = lineStart + localOffset;
+                tokenLength = localTokenLength;
                 return true;
             }
 
@@ -188,18 +231,48 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsPosixVariableReference(ReadOnlySpan<byte> line, ReadOnlySpan<char> variableName)
+    static bool TryFindPosixVariableReference(
+        ReadOnlySpan<byte> line,
+        ReadOnlySpan<char> variableName,
+        out int localOffset,
+        out int tokenLength)
     {
-        if (ContainsAscii(line, '$', '{', variableName, '}'))
+        localOffset = 0;
+        tokenLength = 0;
+
+        var text = System.Text.Encoding.UTF8.GetString(line);
+        var bracketToken = "${" + variableName.ToString() + "}";
+        var simpleToken = "$" + variableName.ToString();
+
+        var bracketIndex = text.IndexOf(bracketToken, StringComparison.Ordinal);
+        var simpleIndex = text.IndexOf(simpleToken, StringComparison.Ordinal);
+
+        if (bracketIndex < 0 && simpleIndex < 0)
         {
+            return false;
+        }
+
+        if (bracketIndex >= 0 && (simpleIndex < 0 || bracketIndex <= simpleIndex))
+        {
+            localOffset = bracketIndex;
+            tokenLength = bracketToken.Length;
             return true;
         }
 
-        return ContainsAscii(line, '$', variableName);
+        localOffset = simpleIndex;
+        tokenLength = simpleToken.Length;
+        return true;
     }
 
-    static bool ContainsPowerShellVariableReference(ReadOnlySpan<byte> line, ReadOnlySpan<char> variableName)
+    static bool TryFindPowerShellVariableReference(
+        ReadOnlySpan<byte> line,
+        ReadOnlySpan<char> variableName,
+        out int localOffset,
+        out int tokenLength)
     {
+        localOffset = 0;
+        tokenLength = 0;
+
         if (line.Length == 0 || variableName.Length == 0)
         {
             return false;
@@ -226,6 +299,8 @@ public sealed class UnredactedSecretsRule : RuleBase
             if (valueStart + variableName.Length <= text.Length
                 && text.AsSpan(valueStart, variableName.Length).SequenceEqual(variableName))
             {
+                localOffset = idx;
+                tokenLength = marker.Length + variableName.Length;
                 return true;
             }
 
@@ -233,18 +308,39 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
     }
 
-    static bool ContainsAscii(ReadOnlySpan<byte> line, char sigil, ReadOnlySpan<char> variableName)
+    static int[] BuildLineStarts(byte[] source)
     {
-        var text = System.Text.Encoding.UTF8.GetString(line);
-        var token = string.Concat(sigil, variableName.ToString());
-        return text.Contains(token, StringComparison.Ordinal);
+        var starts = new List<int>(64) { 0 };
+        for (var i = 0; i < source.Length; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                var next = i + 1;
+                if (next < source.Length)
+                {
+                    starts.Add(next);
+                }
+            }
+        }
+
+        return starts.ToArray();
     }
 
-    static bool ContainsAscii(ReadOnlySpan<byte> line, char sigil, char open, ReadOnlySpan<char> variableName, char close)
+    static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)
     {
-        var text = System.Text.Encoding.UTF8.GetString(line);
-        var token = string.Concat(sigil, open, variableName.ToString(), close);
-        return text.Contains(token, StringComparison.Ordinal);
+        var idx = Array.BinarySearch(lineStarts, offset);
+        if (idx >= 0)
+        {
+            return (idx + 1, 1);
+        }
+
+        idx = ~idx - 1;
+        if (idx < 0)
+        {
+            return (1, offset + 1);
+        }
+
+        return (idx + 1, offset - lineStarts[idx] + 1);
     }
 
     static bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
