@@ -17,6 +17,7 @@ repos=(
   "praetorian-inc/trajan"
   "AdnaneKhan/Gato-X"
   "Cysharp/ConsoleAppFramework"
+  "guitarrapc/githubactions-lab"
 )
 
 for repo in "${repos[@]}"; do
