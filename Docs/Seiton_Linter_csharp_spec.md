@@ -371,7 +371,7 @@ Current model (`RuleConfig` with nullable per-rule fields + runtime allow-list v
 - Correctness depends on every call path invoking validation/normalization before rule execution.
 - Future code paths that construct `LintConfig` directly can accidentally bypass parser-level key rejection.
 
-Discriminated-union style projection reduces these risks by making post-normalization state rule-shaped:
+Discriminated-union style projection reduces these risks by making post-n‘‘‘alization state rule-shaped:
 
 - Each rule receives a typed payload (`RuleSpecificConfig` derived type) or `None`.
 - Mismatch between rule ID and customization shape is rejected during projection.

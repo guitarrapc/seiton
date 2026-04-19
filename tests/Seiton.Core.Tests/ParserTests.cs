@@ -638,6 +638,36 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnSpecialEventsEmptyMappingValue_PopulatesEmptyEvents_TableDriven()
+    {
+        // spec §3.4.1: empty mapping value (YAML null scalar) is treated as scalar-form event
+        var cases = new (string EventName, Type ExpectedType)[]
+        {
+            ("workflow_dispatch", typeof(WorkflowDispatchEvent)),
+            ("workflow_call", typeof(WorkflowCallEvent)),
+            ("repository_dispatch", typeof(RepositoryDispatchEvent)),
+            ("image_version", typeof(ImageVersionEvent)),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var yaml = $$"""
+                on:
+                    {{c.EventName}}:
+                jobs: {}
+                """.Replace("\r\n", "\n");
+
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), $"on-empty-mapping-{c.EventName}.yml");
+
+            await Assert.That(result.Workflow is not null).IsTrue();
+            await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+            await Assert.That(result.Workflow.On[0].GetType()).IsEqualTo(c.ExpectedType);
+            await Assert.That(result.Diagnostics).IsEmpty();
+        }
+    }
+
+    [Test]
     public async Task Parse_OnScheduleScalarForm_ReportsError_TableDriven()
     {
         // spec §3.4.1: schedule in scalar / sequence-item form is an error (mapping required)

@@ -2573,6 +2573,38 @@ public static class WorkflowParser
             return ParseWebhookEventWithOptions(ref reader, diagnostics, in eventInfo, eventMark, nameNode);
         }
 
+        if (reader.CurrentKind == YamlEventKind.Scalar
+            && eventInfo.Spec.Id != WebhookTypes.EventId.Schedule)
+        {
+            var isNullLike = false;
+            try
+            {
+                isNullLike = IsNullLikeOnEventOptionsScalar(reader.GetScalarUtf8());
+            }
+            catch
+            {
+                // Null scalar values may not provide UTF-8 bytes via adapter APIs.
+                isNullLike = true;
+            }
+
+            if (!isNullLike)
+            {
+                return eventInfo.Spec.Id switch
+                {
+                    WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, diagnostics, nameNode),
+                    WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, diagnostics, nameNode),
+                    WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, diagnostics, nameNode),
+                    WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, diagnostics, in eventInfo, nameNode),
+                    WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, diagnostics, nameNode),
+                    _ => BuildSimpleEvent(in eventInfo, nameNode),
+                };
+            }
+
+            // Allow scalar/null form such as "workflow_dispatch:" in on-mapping context.
+            reader.SkipCurrentNode();
+            return BuildSimpleEvent(in eventInfo, nameNode);
+        }
+
         return eventInfo.Spec.Id switch
         {
             WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, diagnostics, nameNode),
@@ -2592,6 +2624,15 @@ public static class WorkflowParser
                 || eventInfo.Spec.Id == WebhookTypes.EventId.WorkflowCall
                 || eventInfo.Spec.Id == WebhookTypes.EventId.RepositoryDispatch
                 || eventInfo.Spec.Id == WebhookTypes.EventId.ImageVersion);
+    }
+
+    private static bool IsNullLikeOnEventOptionsScalar(ReadOnlySpan<byte> scalarUtf8)
+    {
+        return scalarUtf8.Length == 0
+            || scalarUtf8.SequenceEqual("~"u8)
+            || scalarUtf8.SequenceEqual("null"u8)
+            || scalarUtf8.SequenceEqual("Null"u8)
+            || scalarUtf8.SequenceEqual("NULL"u8);
     }
 
     private static ScheduledEvent ParseScheduleEvent<TReader>(
