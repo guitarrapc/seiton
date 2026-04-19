@@ -1,6 +1,13 @@
 ﻿using ConsoleAppFramework;
 using Seiton.Commands;
+using Seiton.Cli;
 using Seiton.Output;
+
+if (CliOptionSuggester.TryWriteSuggestionForUnknownOption(args, Console.Error))
+{
+    Environment.ExitCode = ExitCode.InvalidOptions;
+    return;
+}
 
 var app = ConsoleApp.Create();
 app.Add<SeitonCli>();
