@@ -2248,6 +2248,31 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
     }
 
+        [Test]
+        public async Task Parse_JobOutputs_WithStepsContext_DoesNotReportSemanticError()
+        {
+                var yaml = """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        outputs:
+                            output1: ${{ steps.step1.outputs.firstword }}
+                            output2: ${{ steps.step2.outputs.secondword }}
+                        steps:
+                            - name: output step1
+                                id: step1
+                                run: echo "firstword=hello" >> "$GITHUB_OUTPUT"
+                            - name: output step2
+                                id: step2
+                                run: echo "secondword=world" >> "$GITHUB_OUTPUT"
+                """
+                .Replace("\r\n", "\n");
+
+                var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-outputs-steps-context.yml");
+                await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsFalse();
+        }
+
     [Test]
     public async Task Parse_StepRun_EmbeddedUnknownFunction_ReportsSemanticError()
     {

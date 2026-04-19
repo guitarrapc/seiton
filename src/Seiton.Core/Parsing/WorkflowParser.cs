@@ -5550,7 +5550,7 @@ public static class WorkflowParser
             var value = ParseStringAndValidateExpression(
                 ref reader,
                 diagnostics,
-                ExpressionValidationContext.Job,
+                ExpressionValidationContext.JobOutput,
                 $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar",
                 parseWholeValueIfNoEmbedded: false);
             outputs[key] = value ?? keyNode;

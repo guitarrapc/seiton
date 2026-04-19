@@ -9,6 +9,7 @@ public enum ExpressionValidationContext
     Workflow,
     WorkflowCallOutput,
     Job,
+    JobOutput,
     Step,
 }
 
@@ -730,6 +731,7 @@ public static class ExpressionSemanticAnalyzer
             ExpressionValidationContext.Workflow => "workflow",
             ExpressionValidationContext.WorkflowCallOutput => "workflow_call output",
             ExpressionValidationContext.Job => "job",
+            ExpressionValidationContext.JobOutput => "job output",
             ExpressionValidationContext.Step => "step",
             _ => "unknown",
         };
