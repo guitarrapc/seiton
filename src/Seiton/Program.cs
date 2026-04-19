@@ -8,7 +8,7 @@ app.Run(args);
 
 internal class SeitonCli
 {
-    /// <summary>Lint workflow files (equivalent to the check command).</summary>
+    /// <summary>Lint workflow files by default, or apply fixes when --fix is specified.</summary>
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
@@ -19,6 +19,11 @@ internal class SeitonCli
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
     /// <param name="verbose">Print progress information to stderr.</param>
+    /// <param name="fix">Enable fix mode for the root command (equivalent to the fix subcommand).</param>
+    /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
+    /// <param name="check">Exit non-zero if fixable diagnostics exist, without applying fixes (requires --fix).</param>
+    /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
+    /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
     [Command("")]
     public void Root(
         [Argument] string[]? files = null,
@@ -30,9 +35,24 @@ internal class SeitonCli
         bool oneline = false,
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
-        bool verbose = false)
+        bool verbose = false,
+        bool fix = false,
+        bool dryRun = false,
+        bool check = false,
+        bool enablePinNetwork = false,
+        bool enableImageNetwork = false)
     {
-        var code = CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
+        if (!fix && (dryRun || check || enablePinNetwork || enableImageNetwork))
+        {
+            Console.Error.WriteLine("--dry-run, --check, --enable-pin-network, and --enable-image-network require --fix on the root command");
+            Environment.ExitCode = ExitCode.InvalidOptions;
+            return;
+        }
+
+        var code = fix
+            ? FixCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork)
+            : CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
+
         if (code != 0) Environment.ExitCode = code;
     }
 
@@ -63,40 +83,6 @@ internal class SeitonCli
         if (code != 0) Environment.ExitCode = code;
     }
 
-    /// <summary>Auto-fix lint issues in workflow files.</summary>
-    /// <param name="files">Workflow files or directories to fix. Auto-discovers .github/workflows/ if omitted.</param>
-    /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
-    /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
-    /// <param name="ignore">Regex patterns for messages to ignore.</param>
-    /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
-    /// <param name="format">Output format: text | json | sarif.</param>
-    /// <param name="oneline">Print each diagnostic on a single line.</param>
-    /// <param name="color">Color mode: auto | always | never.</param>
-    /// <param name="noColor">Disable color output (overrides --color).</param>
-    /// <param name="verbose">Print progress information to stderr.</param>
-    /// <param name="dryRun">Print unified diff without modifying files.</param>
-    /// <param name="check">Exit with non-zero status if any fixes are available, without applying them.</param>
-    /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins.</param>
-    /// <param name="enableImageNetwork">Allow network requests to resolve container image digests.</param>
-    public void Fix(
-        [Argument] string[]? files = null,
-        string? config = null,
-        string stdinFilename = "<stdin>",
-        string[]? ignore = null,
-        string? minSeverity = null,
-        OutputFormat format = OutputFormat.Text,
-        bool oneline = false,
-        ColorMode color = ColorMode.Auto,
-        bool noColor = false,
-        bool verbose = false,
-        bool dryRun = false,
-        bool check = false,
-        bool enablePinNetwork = false,
-        bool enableImageNetwork = false)
-    {
-        var code = FixCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork);
-        if (code != 0) Environment.ExitCode = code;
-    }
 
     /// <summary>Generate a starter seiton config file.</summary>
     /// <param name="output">Path to write the config file to.</param>

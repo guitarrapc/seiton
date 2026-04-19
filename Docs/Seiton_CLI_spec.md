@@ -72,23 +72,27 @@ src/
 
 ## 2. Commands
 
-### 2.1 Default (root) — `seiton [FILES...]`
+### 2.1 Default (root) — `seiton [FILES...] [--fix]`
 
 Lint one or more workflow files. This is the primary user-facing operation.
+
+When `--fix` is specified, the root command switches to fix mode (equivalent to `seiton fix`).
 
 When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory.
 
 `-` (hyphen) as a file argument reads from stdin. Requires `--stdin-filename` to give the input a meaningful path for diagnostics.
 
-**Alias:** `seiton check [FILES...]` (explicit subcommand; identical behavior).
+**Compatibility aliases:**
+
+- `seiton check [FILES...]` (explicit check mode; identical to root without `--fix`)
 
 ### 2.2 `seiton check [FILES...]`
 
-Identical behavior to the default root command. Provided for explicit subcommand users and scripting clarity.
+Identical behavior to the default root command in check mode (`seiton` without `--fix`). Provided for explicit subcommand users and scripting clarity.
 
 ### 2.3 `seiton fix [FILES...]`
 
-Apply auto-fixes to workflow files. Runs lint, then applies all available fix payloads to the source files in place.
+Apply auto-fixes to workflow files. This is a compatibility alias for root fix mode (`seiton --fix`). Runs lint, then applies all available fix payloads to the source files in place.
 
 - If `--dry-run` is given, prints unified diffs to stdout without modifying files.
 - If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes).
@@ -120,7 +124,7 @@ built with .NET 10.0.0 (NativeAOT), linux/x64
 
 ## 3. Flags
 
-All flags apply to the `check` / default-root command unless otherwise noted. Subcommand-specific flags are called out.
+All flags apply to the default root command unless otherwise noted.
 
 ### 3.1 Input Flags
 
@@ -129,14 +133,15 @@ All flags apply to the `check` / default-root command unless otherwise noted. Su
 | `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` (nearest directory first, then parent directories). |
 | `--stdin-filename` | | `string` | `<stdin>` | Filename used for diagnostics when reading from stdin (`-`). |
 
-### 3.2 Lint Flags (check / fix)
+### 3.2 Lint Flags (root check/fix)
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--ignore` | | `string[]` | (none) | Regex patterns matched against diagnostic messages to suppress. Repeatable. Maps to `LintConfig.IgnorePatterns`. |
 | `--min-severity` | | `error\|warning\|info` | (none) | Suppress diagnostics below this severity. |
+| `--fix` | | `bool` | `false` | Run the root command in fix mode (equivalent to `seiton fix`). |
 
-### 3.3 Fix Flags (fix subcommand)
+### 3.3 Fix Flags (root with `--fix`, or fix subcommand)
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
@@ -144,6 +149,10 @@ All flags apply to the `check` / default-root command unless otherwise noted. Su
 | `--check` | | `bool` | `false` | Exit non-zero if fixable diagnostics exist; do not apply fixes. |
 | `--enable-pin-network` | | `bool` | `false` | Override `fix.pinning.enable-network: true` for this run. |
 | `--enable-image-network` | | `bool` | `false` | Override `fix.images.enable-network: true` for this run. |
+
+Operational rule:
+
+- `--dry-run`, `--check`, `--enable-pin-network`, and `--enable-image-network` are valid only when fix mode is active (`--fix` or `fix` subcommand).
 
 ### 3.4 Init Flags (init subcommand)
 
@@ -373,17 +382,20 @@ seiton --format json
 # Output SARIF for GitHub Code Scanning
 seiton --format sarif > results.sarif
 
-# Apply auto-fixes in place
-seiton fix
+# Apply auto-fixes in place (recommended style)
+seiton --fix
 
 # Preview fixes without applying
-seiton fix --dry-run
+seiton --fix --dry-run
 
 # Check if fixable issues exist (CI gate)
-seiton fix --check
+seiton --fix --check
 
 # Pin actions via network (uses GITHUB_TOKEN)
-seiton fix --enable-pin-network --enable-image-network
+seiton --fix --enable-pin-network --enable-image-network
+
+# Compatibility alias style (still supported)
+seiton fix --dry-run
 
 # Use explicit config
 seiton --config .github/seiton-strict.yaml
