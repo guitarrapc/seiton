@@ -25,10 +25,12 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         get
         {
             var mark = _parser.CurrentMark;
-            // VYaml's CurrentMark for empty scalars (e.g. '' or "") advances past the token to the
-            // next token's position rather than staying at the empty scalar itself. Detect this case
-            // and walk backward through the source bytes to find the actual scalar start.
-            if (_parser.CurrentEventType == ParseEventType.Scalar && _parser.GetScalarAsUtf8().Length == 0)
+            // VYaml's CurrentMark for empty/null scalars advances past the token to the next token's
+            // position rather than staying at the scalar itself. Use the backward-scan helper to recover
+            // the actual position. Check IsNullScalar() first because GetScalarAsUtf8() throws when the
+            // VYaml internal currentScalar is null (implicit-null scalars like "key:" with no value).
+            if (_parser.CurrentEventType == ParseEventType.Scalar
+                && (_parser.IsNullScalar() || _parser.GetScalarAsUtf8().Length == 0))
             {
                 var correctedOffset = ResolveEmptyScalarStart(mark.Position);
                 return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
@@ -68,19 +70,10 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         if (utf8.Length == 0)
         {
-            // Use the backward-scan helper so the slice offset points to the actual empty scalar
-            // rather than _scalarSliceCursor (which may be far before the '' in the source).
-            var emptyMark = _parser.CurrentMark;
-            var actualStart = ResolveEmptyScalarStart(emptyMark.Position);
-            var emptySource = _source.Span;
-            // Advance cursor past the quoted '' / "" (2 bytes) if that is what we found.
-            var quotedEnd = actualStart + 2;
-            _scalarSliceCursor = quotedEnd <= emptySource.Length
-                && emptySource[actualStart] == emptySource[actualStart + 1]
-                && (emptySource[actualStart] is (byte)'\'' or (byte)'"')
-                ? quotedEnd
-                : actualStart;
-            return new Utf8Slice(actualStart, 0);
+            // For empty scalars, return the current cursor position without advancing it.
+            // CurrentStart handles the backward-scan for accurate position reporting of empty scalars.
+            var emptyStart = _scalarSliceCursor <= _source.Length ? _scalarSliceCursor : _source.Length;
+            return new Utf8Slice(emptyStart, 0);
         }
 
         var source = _source.Span;
@@ -356,6 +349,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     public bool IsScalarQuoted() => false;
 
     /// <summary>
+    /// Converts a UTF-8 byte offset in <see cref="_source"/> to a 1-based line / column position.
+    /// Used by the parser core via <see cref="IYamlStreamReader.ComputePositionFromOffset"/> to derive
+    /// accurate positions from <see cref="GetScalarSlice"/> offsets, which are more reliable than
+    /// VYaml's <see cref="YamlParser.CurrentMark"/> (which advances to the next token for scalars).
+    /// </summary>
+    public TextPosition ComputePositionFromOffset(int offset)
+        => ComputeTextPositionFromOffset(_source.Span, offset);
+
+    /// <summary>
     /// VYaml advances its scanner past an empty scalar to the next meaningful token, so
     /// <see cref="YamlParser.CurrentMark"/> for an empty-scalar event points at that next token.
     /// This helper walks backward through <see cref="_source"/> from <paramref name="nextTokenPosition"/>,
@@ -375,6 +377,17 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
         {
             pos--;
+        }
+
+        // If we stopped at a '-' (YAML block sequence indicator), skip over it and continue
+        // the backward whitespace scan so the quote check can find e.g. - '' on the prior line.
+        if (pos > 0 && source[pos - 1] == (byte)'-')
+        {
+            pos--;
+            while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
+            {
+                pos--;
+            }
         }
 
         // Check for '' (two single-quotes) or "" (two double-quotes) immediately before pos.

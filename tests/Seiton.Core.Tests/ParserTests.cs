@@ -1810,6 +1810,60 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_ContainerAndServiceImageRange_PointsToImageLine()
+    {
+        // Regression: image StringNode.Range must point to the image: value line,
+        // not a subsequent line (e.g. ports: or steps:).
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                container:
+                    image: golang:1.25
+                services:
+                    redis:
+                        image: redis:8
+                        ports:
+                            - 6379:6379
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var lines = yaml.Split('\n');
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-image-range.yml");
+
+        await Assert.That(result.Workflow is not null).IsTrue();
+        var key = Utf8String.FromLowerAscii("build"u8);
+        var job = result.Workflow!.Jobs[key];
+
+        // container image line: "    image: golang:1.25" - find the actual line number
+        var expectedContainerImageLine = -1;
+        var expectedServiceImageLine = -1;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].TrimStart();
+            if (trimmed.StartsWith("image: golang", StringComparison.Ordinal) && expectedContainerImageLine < 0)
+            {
+                expectedContainerImageLine = i + 1; // 1-based
+            }
+            else if (trimmed.StartsWith("image: redis", StringComparison.Ordinal))
+            {
+                expectedServiceImageLine = i + 1; // 1-based
+            }
+        }
+
+        await Assert.That(job.Container is not null).IsTrue();
+        await Assert.That(job.Container!.Image.Range.StartLine).IsEqualTo(expectedContainerImageLine);
+
+        await Assert.That(job.Services is not null).IsTrue();
+        var redis = job.Services!.ServiceMap!.Values.First();
+        await Assert.That(redis.Container.Image.Range.StartLine).IsEqualTo(expectedServiceImageLine);
+    }
+
+    [Test]
     public async Task Parse_JobRunsOnMapping_PopulatesRunnerGroupAndLabels()
     {
         var yaml = """

@@ -2156,9 +2156,16 @@ public static class WorkflowParser
             return null;
         }
 
-        var mark = reader.CurrentStart;
+        // Use GetScalarSlice().Offset to derive position for non-empty scalars: the slice offset is
+        // computed by searching the source bytes and is reliable, whereas reader.CurrentStart for some
+        // YAML adapters (e.g. VYaml) may have already advanced past the scalar to the next token.
+        // For empty scalars, CurrentStart uses a backward-scan heuristic that is more accurate than
+        // the cursor-based Slice.Offset GetScalarSlice() returns for the empty case.
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!allowEmpty && valueUtf8.Length == 0)
         {
             AddError(diagnostics, errorMessage, mark);
@@ -2226,9 +2233,11 @@ public static class WorkflowParser
             return null;
         }
 
-        var mark = reader.CurrentStart;
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         var range = BuildScalarLocation(mark, valueUtf8.Length);
         ValidateExpressionText(
             valueUtf8,

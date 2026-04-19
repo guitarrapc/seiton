@@ -129,6 +129,28 @@ internal sealed class FakeYamlStreamReader : IYamlStreamReader
 
     public bool IsScalarQuoted() => IsValidIndex && _events[_index].Quoted;
 
+    public TextPosition ComputePositionFromOffset(int offset)
+    {
+        // FakeYamlStreamReader events already carry correct positions, but honour the same
+        // line/column computation logic that VYamlStreamAdapter uses so tests are consistent.
+        var source = _source.AsSpan();
+        var end = offset;
+        if (end > source.Length) end = source.Length;
+
+        var line = 1;
+        var lineStart = 0;
+        for (var i = 0; i < end; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                line++;
+                lineStart = i + 1;
+            }
+        }
+
+        return new TextPosition(offset, line, (end - lineStart) + 1);
+    }
+
     private bool IsValidIndex => _index >= 0 && _index < _events.Length;
 
     internal readonly record struct FakeEvent(

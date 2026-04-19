@@ -97,8 +97,10 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return false;
         }
 
+        // step.Range.EndLine reflects only the 'uses' value's position, not the whole step extent.
+        // Use usesLine + 1 as the minimum so the search always covers at least one line past 'uses'.
         var stepEndLine = step.Range.EndLine > 0
-            ? Math.Min(lines.Length, Math.Max(usesLine, step.Range.EndLine))
+            ? Math.Min(lines.Length, Math.Max(usesLine + 1, step.Range.EndLine))
             : lines.Length;
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
         var keyIndent = GetStepKeyIndentation(sourceText, usesLine);
