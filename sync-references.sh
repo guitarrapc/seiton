@@ -16,6 +16,7 @@ repos=(
   "stacklok/frizbee"
   "praetorian-inc/trajan"
   "AdnaneKhan/Gato-X"
+  "Cysharp/ConsoleAppFramework"
 )
 
 for repo in "${repos[@]}"; do

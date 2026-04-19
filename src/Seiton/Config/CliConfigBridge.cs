@@ -23,9 +23,21 @@ public static class CliConfigBridge
             return configPath;
         }
 
-        // 2. Discovery from current directory
-        var cwd = Environment.CurrentDirectory;
-        return LintConfigLibrary.FindRecommendedConfigPath(cwd);
+        // 2. Discovery from current directory and parents
+        var current = Environment.CurrentDirectory;
+        while (current is not null)
+        {
+            var discovered = LintConfigLibrary.FindRecommendedConfigPath(current);
+            if (discovered is not null)
+            {
+                return discovered;
+            }
+
+            var parent = Directory.GetParent(current);
+            current = parent?.FullName;
+        }
+
+        return null;
     }
 
     /// <summary>

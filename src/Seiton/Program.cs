@@ -5,7 +5,7 @@ using Seiton.Output;
 var app = ConsoleApp.Create();
 
 // Root command: seiton [FILES...] — same as "check"
-app.Add("", ([Argument] string[] files,
+app.Add("", ([Argument] string[]? files = null,
     string? config = null,
     string stdinFilename = "<stdin>",
     string[]? ignore = null,
@@ -16,7 +16,7 @@ app.Add("", ([Argument] string[] files,
     bool noColor = false,
     bool verbose = false) =>
 {
-    var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
+    var code = CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
     if (code != 0)
     {
         Environment.ExitCode = code;
@@ -24,7 +24,7 @@ app.Add("", ([Argument] string[] files,
 });
 
 // Explicit check subcommand
-app.Add("check", ([Argument] string[] files,
+app.Add("check", ([Argument] string[]? files = null,
     string? config = null,
     string stdinFilename = "<stdin>",
     string[]? ignore = null,
@@ -35,7 +35,7 @@ app.Add("check", ([Argument] string[] files,
     bool noColor = false,
     bool verbose = false) =>
 {
-    var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
+    var code = CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
     if (code != 0)
     {
         Environment.ExitCode = code;
@@ -43,7 +43,7 @@ app.Add("check", ([Argument] string[] files,
 });
 
 // Fix subcommand
-app.Add("fix", ([Argument] string[] files,
+app.Add("fix", ([Argument] string[]? files = null,
     string? config = null,
     string stdinFilename = "<stdin>",
     string[]? ignore = null,
@@ -58,7 +58,7 @@ app.Add("fix", ([Argument] string[] files,
     bool enablePinNetwork = false,
     bool enableImageNetwork = false) =>
 {
-    var code = FixCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork);
+    var code = FixCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork);
     if (code != 0)
     {
         Environment.ExitCode = code;

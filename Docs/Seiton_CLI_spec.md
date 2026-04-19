@@ -126,7 +126,7 @@ All flags apply to the `check` / default-root command unless otherwise noted. Su
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--config` | `-c` | `string` | (discovery order) | Explicit config file path. If omitted, discovery order from `Seiton_Linter_spec.md` §5.10 applies. |
+| `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` (nearest directory first, then parent directories). |
 | `--stdin-filename` | | `string` | `<stdin>` | Filename used for diagnostics when reading from stdin (`-`). |
 
 ### 3.2 Lint Flags (check / fix)
@@ -215,6 +215,12 @@ This ensures users can always override config-file defaults at the command line 
 3. If no config file is found, use `LintConfig` built-in defaults.
 
 An empty config file is valid and equivalent to built-in defaults.
+
+Operational clarification:
+
+- `check` / `fix` both follow the same resolution order above.
+- Auto-discovery starts at current working directory and walks parent directories upward.
+- If a config file is discovered and valid, it is applied even when `--config` is omitted.
 
 ### 5.3 Flag-to-Config Mapping
 
