@@ -3536,7 +3536,7 @@ public sealed class RuleInterfaceTests
             """,
             ["template injection risk", "run", "github.event"]),
             new RuleCase(
-            "ng-env-uses-github-event-comment-body",
+            "ok-env-maps-github-event-comment-body",
             """
             on: issue_comment
             jobs:
@@ -3547,7 +3547,7 @@ public sealed class RuleInterfaceTests
                             COMMENT_BODY: ${{ github.event.comment.body }}
                           run: echo "$COMMENT_BODY"
             """,
-            ["template injection risk", "env.COMMENT_BODY", "github.event"]),
+            []),
             new RuleCase(
             "ng-run-uses-bracket-event-access",
             """

@@ -20,25 +20,6 @@ public sealed class TemplateInjectionRule : RuleBase
         {
             CheckSink(step, run.Run, "run");
         }
-
-        var env = step.Env;
-        if (env is null)
-        {
-            return;
-        }
-
-        CheckSink(step, env.Expression, "env");
-
-        var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var pair in vars)
-        {
-            CheckSink(step, pair.Value.Value, $"env.{Decode(pair.Value.Name.Value)}");
-        }
     }
 
     void CheckSink(Step step, StringNode? valueNode, string sinkName)
