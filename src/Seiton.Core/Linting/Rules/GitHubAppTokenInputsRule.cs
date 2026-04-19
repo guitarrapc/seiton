@@ -16,13 +16,15 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         }
 
         var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
-        if (!IsGitHubAppTokenAction(uses))
+        var actionKind = GetGitHubAppTokenActionKind(uses);
+        if (actionKind == GitHubAppTokenActionKind.None)
         {
             return;
         }
 
         var hasRepositoryConstraint = false;
         var hasPermissionConstraint = false;
+        var hasOwner = false;
         if (actionExec.Inputs is not null)
         {
             foreach (var pair in actionExec.Inputs)
@@ -37,7 +39,19 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
                 {
                     hasPermissionConstraint = true;
                 }
+
+                if (IsOwnerKey(key))
+                {
+                    hasOwner = true;
+                }
             }
+        }
+
+        if (actionKind == GitHubAppTokenActionKind.CreateGitHubAppToken && !hasOwner)
+        {
+            // create-github-app-token defaults to the current repository when neither
+            // owner nor repositories are specified.
+            hasRepositoryConstraint = true;
         }
 
         if (hasRepositoryConstraint && hasPermissionConstraint)
@@ -51,7 +65,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         {
             AddStepError(
                 step,
-                $"action '{usesText}' should set repository and permission constraints when minting GitHub App token (expected with.repositories/repository and with.permissions or with.permission-*)",
+                $"action '{usesText}' should set repository and permission constraints when minting GitHub App token (expected repositories when owner is set, plus with.permissions or with.permission-*)",
                 usesLocation);
             return;
         }
@@ -60,7 +74,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         {
             AddStepError(
                 step,
-                $"action '{usesText}' should set repository constraints for GitHub App token (expected with.repositories or with.repository)",
+                $"action '{usesText}' should set repository constraints when owner is set for GitHub App token (expected with.repositories or with.repository)",
                 usesLocation);
             return;
         }
@@ -71,15 +85,24 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             usesLocation);
     }
 
-    static bool IsGitHubAppTokenAction(ReadOnlySpan<byte> uses)
+    static GitHubAppTokenActionKind GetGitHubAppTokenActionKind(ReadOnlySpan<byte> uses)
     {
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || uses.StartsWith("docker://"u8))
         {
-            return false;
+            return GitHubAppTokenActionKind.None;
         }
 
-        return MatchesActionReference(uses, "actions/create-github-app-token"u8)
-            || MatchesActionReference(uses, "tibdex/github-app-token"u8);
+        if (MatchesActionReference(uses, "actions/create-github-app-token"u8))
+        {
+            return GitHubAppTokenActionKind.CreateGitHubAppToken;
+        }
+
+        if (MatchesActionReference(uses, "tibdex/github-app-token"u8))
+        {
+            return GitHubAppTokenActionKind.TibdexGitHubAppToken;
+        }
+
+        return GitHubAppTokenActionKind.None;
     }
 
     static bool MatchesActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
@@ -101,6 +124,11 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
     {
         return EqualsAsciiIgnoreCase(inputKey, "repositories"u8)
             || EqualsAsciiIgnoreCase(inputKey, "repository"u8);
+    }
+
+    static bool IsOwnerKey(ReadOnlySpan<byte> inputKey)
+    {
+        return EqualsAsciiIgnoreCase(inputKey, "owner"u8);
     }
 
     static bool IsPermissionConstraintKey(ReadOnlySpan<byte> inputKey)
@@ -142,5 +170,12 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         return value is >= (byte)'A' and <= (byte)'Z'
             ? (byte)(value + 32)
             : value;
+    }
+
+    enum GitHubAppTokenActionKind
+    {
+        None,
+        CreateGitHubAppToken,
+        TibdexGitHubAppToken,
     }
 }

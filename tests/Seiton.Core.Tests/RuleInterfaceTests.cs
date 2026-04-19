@@ -2356,6 +2356,19 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-actions-create-token-current-repo-default-with-permission-prefix",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/create-github-app-token@v2
+                          with:
+                              permission-contents: read
+            """,
+            []),
+            new RuleCase(
             "ok-tibdex-with-repository-and-permissions",
             """
             on: push
@@ -2371,7 +2384,7 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ng-missing-both-constraints",
+            "ng-missing-permission-constraint-only-when-create-token-uses-current-repo-default",
             """
             on: push
             jobs:
@@ -2380,9 +2393,9 @@ public sealed class RuleInterfaceTests
                     steps:
                         - uses: actions/create-github-app-token@v2
             """,
-            ["repository and permission constraints"]),
+            ["permission constraints"]),
             new RuleCase(
-            "ng-missing-repository-constraint",
+            "ng-missing-repository-constraint-when-owner-set",
             """
             on: push
             jobs:
@@ -2391,9 +2404,23 @@ public sealed class RuleInterfaceTests
                     steps:
                         - uses: actions/create-github-app-token@v2
                           with:
+                              owner: ${{ github.repository_owner }}
                               permission-issues: write
             """,
             ["repository constraints"]),
+            new RuleCase(
+            "ng-missing-both-constraints-when-owner-set",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/create-github-app-token@v2
+                          with:
+                              owner: ${{ github.repository_owner }}
+            """,
+            ["repository and permission constraints"]),
             new RuleCase(
             "ng-missing-permission-constraint",
             """
