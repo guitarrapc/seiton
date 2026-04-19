@@ -14,6 +14,7 @@ public static class Availability
         "github"u8.ToArray(),
         "inputs"u8.ToArray(),
         "vars"u8.ToArray(),
+        "secrets"u8.ToArray(),
     ];
 
     static readonly byte[][] WorkflowCallOutputRoots =
@@ -32,6 +33,7 @@ public static class Availability
         "needs"u8.ToArray(),
         "strategy"u8.ToArray(),
         "matrix"u8.ToArray(),
+        "secrets"u8.ToArray(),
     ];
 
     static readonly byte[][] JobOutputRoots =

@@ -116,8 +116,8 @@ internal sealed class GitHubAvailabilityFetcher
             static x => (IReadOnlyList<string>)x.Contexts,
             StringComparer.Ordinal);
 
-        var workflowRoots = ResolveContextSet(map, "run-name", "concurrency");
-        var jobRoots = ResolveContextSet(map, "jobs.<job_id>.concurrency");
+        var workflowRoots = ResolveContextSet(map, "run-name", "concurrency", "env");
+        var jobRoots = ResolveContextSet(map, "jobs.<job_id>.concurrency", "jobs.<job_id>.env");
         var stepRoots = ResolveContextSet(map, "jobs.<job_id>.steps.run", "jobs.<job_id>.steps.if");
 
         var snapshot = new
@@ -148,18 +148,23 @@ internal sealed class GitHubAvailabilityFetcher
 
     static string[] ResolveContextSet(IReadOnlyDictionary<string, IReadOnlyList<string>> map, params string[] keys)
     {
+        var union = new HashSet<string>(StringComparer.Ordinal);
         foreach (var key in keys)
         {
-            if (map.TryGetValue(key, out var values) && values.Count > 0)
+            if (map.TryGetValue(key, out var values))
             {
-                return values
-                    .Where(static x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
+                foreach (var v in values)
+                {
+                    if (!string.IsNullOrWhiteSpace(v))
+                        union.Add(v);
+                }
             }
         }
 
-        throw new InvalidDataException($"Required availability key not found in parsed snapshot. keys=[{string.Join(", ", keys)}]");
+        if (union.Count == 0)
+            throw new InvalidDataException($"Required availability key not found in parsed snapshot. keys=[{string.Join(", ", keys)}]");
+
+        return union.ToArray();
     }
 
     static AvailabilityPaths Paths(string repoRoot)

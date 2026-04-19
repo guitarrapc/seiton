@@ -4,7 +4,8 @@
   "workflowRoots": [
     "github",
     "inputs",
-    "vars"
+    "vars",
+    "secrets"
   ],
   "jobRoots": [
     "github",
@@ -12,7 +13,8 @@
     "strategy",
     "matrix",
     "inputs",
-    "vars"
+    "vars",
+    "secrets"
   ],
   "stepRoots": [
     "github",

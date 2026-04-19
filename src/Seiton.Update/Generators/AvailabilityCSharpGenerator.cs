@@ -25,7 +25,9 @@ internal sealed class AvailabilityCSharpGenerator
         var workflow = Order(model.WorkflowRoots);
         var job = Order(model.JobRoots);
         var step = Order(model.StepRoots);
-        var workflowCallOutput = Order(workflow.Concat(["jobs"]).ToArray());
+        // workflow_call outputs only allow: github, inputs, vars, jobs (no secrets)
+        string[] workflowCallOutputRaw = ["github", "inputs", "vars", "jobs"];
+        var workflowCallOutput = Order(workflowCallOutputRaw);
         var jobOutput = step;
         // reusable workflow call secrets: fixed contexts available in the secrets: mapping of a reusable workflow call
         string[] reusableWorkflowCallSecretsRaw = ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets"];
