@@ -1,4 +1,4 @@
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Generated;
 
@@ -8,6 +8,14 @@ public static class Availability
         "github"u8.ToArray(),
         "inputs"u8.ToArray(),
         "vars"u8.ToArray(),
+    ];
+
+    static readonly byte[][] WorkflowCallOutputRoots =
+    [
+        "github"u8.ToArray(),
+        "inputs"u8.ToArray(),
+        "vars"u8.ToArray(),
+        "jobs"u8.ToArray(),
     ];
 
     static readonly byte[][] JobRoots =
@@ -40,6 +48,7 @@ public static class Availability
         return context switch
         {
             ExpressionValidationContext.Workflow => Contains(WorkflowRoots, rootName),
+            ExpressionValidationContext.WorkflowCallOutput => Contains(WorkflowCallOutputRoots, rootName),
             ExpressionValidationContext.Job => Contains(JobRoots, rootName),
             ExpressionValidationContext.Step => Contains(StepRoots, rootName),
             _ => false,

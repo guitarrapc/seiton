@@ -3621,7 +3621,7 @@ public static class WorkflowParser
                 value = ParseStringAndValidateExpression(
                     ref reader,
                     diagnostics,
-                    ExpressionValidationContext.Workflow,
+                    ExpressionValidationContext.WorkflowCallOutput,
                     "on.workflow_call output value must be scalar",
                     parseWholeValueIfNoEmbedded: false);
                 continue;

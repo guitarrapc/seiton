@@ -7,6 +7,7 @@ namespace Seiton.Core.Parsing;
 public enum ExpressionValidationContext
 {
     Workflow,
+    WorkflowCallOutput,
     Job,
     Step,
 }
@@ -727,6 +728,7 @@ public static class ExpressionSemanticAnalyzer
         return context switch
         {
             ExpressionValidationContext.Workflow => "workflow",
+            ExpressionValidationContext.WorkflowCallOutput => "workflow_call output",
             ExpressionValidationContext.Job => "job",
             ExpressionValidationContext.Step => "step",
             _ => "unknown",

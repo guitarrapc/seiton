@@ -876,6 +876,33 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnWorkflowCall_OutputValue_AllowsJobsContext()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                outputs:
+                    firstword:
+                        value: ${{ jobs.reusable_workflow_job.outputs.output1 }}
+        jobs:
+            reusable_workflow_job:
+                runs-on: ubuntu-latest
+                outputs:
+                    output1: ${{ steps.emit.outputs.value }}
+                steps:
+                    - id: emit
+                      run: echo "value=ok" >> "$GITHUB_OUTPUT"
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-workflow-call-output-jobs-context.yml");
+        var hasJobsUnavailable = result.Diagnostics.Any(static x =>
+            x.Message.Contains("context 'jobs' is not available", StringComparison.Ordinal));
+
+        await Assert.That(hasJobsUnavailable).IsFalse();
+    }
+
+    [Test]
     public async Task Parse_RequiredKeys_WorkflowCallAndSchedule_ReportsError_TableDriven()
     {
         var cases = new (string Name, string Yaml, string ExpectedMessagePart)[]
