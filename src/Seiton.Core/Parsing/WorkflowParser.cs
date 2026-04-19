@@ -4487,6 +4487,10 @@ public static class WorkflowParser
 
             var isInclude = keyUtf8.SequenceEqual("include"u8);
             var isExclude = keyUtf8.SequenceEqual("exclude"u8);
+            // Capture a stable copy of the key bytes before advancing the reader.
+            // reader.GetScalarUtf8() returns a span into VYaml's volatile internal buffer;
+            // after subsequent Read() calls the buffer content changes, making the span stale.
+            var rowKey = Utf8String.FromLowerAscii(keyUtf8);
             reader.Read();
             if (reader.End)
             {
@@ -4514,7 +4518,7 @@ public static class WorkflowParser
 
             if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
             {
-                var keyTextForDiagnostic = Encoding.UTF8.GetString(keyUtf8);
+                var keyTextForDiagnostic = Encoding.UTF8.GetString(rowKey.Span);
                 AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentStart);
             }
 
@@ -4532,14 +4536,14 @@ public static class WorkflowParser
                     ref reader,
                     diagnostics,
                     ExpressionValidationContext.Job,
-                    $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(keyUtf8)} must be sequence or scalar",
+                    $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(rowKey.Span)} must be sequence or scalar",
                     parseWholeValueIfNoEmbedded: false);
                 rowExpr = valueNode;
                 rowValues = valueNode is null ? [] : [new RawYamlString { Value = valueNode }];
             }
             else if (reader.CurrentKind == YamlEventKind.SequenceStart)
             {
-                rowValues = ParseRawYamlArray(ref reader, diagnostics, source, jobId, keyUtf8);
+                rowValues = ParseRawYamlArray(ref reader, diagnostics, source, jobId, rowKey.Span);
             }
             else
             {
@@ -4547,7 +4551,7 @@ public static class WorkflowParser
             }
 
             rows ??= new Dictionary<Utf8String, MatrixRow>();
-            rows[Utf8String.FromLowerAscii(keyUtf8)] = new MatrixRow
+            rows[rowKey] = new MatrixRow
             {
                 Name = rowName,
                 Expression = rowExpr,
