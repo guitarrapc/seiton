@@ -57,6 +57,36 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_CrLfStepsWithBlockRun_PreservesScalarSlices()
+    {
+        var yaml = """
+        name: ci
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo hello
+        """
+        .Replace("\r\n", "\n")
+        .Replace("\n", "\r\n");
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "minimal.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow!.Name is not null).IsTrue();
+        await Assert.That(result.Workflow.Name!.Value.Length).IsGreaterThan(0);
+        await Assert.That(result.Workflow.RunName).IsNull();
+        await Assert.That(result.Workflow.On.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
+        await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+
+    [Test]
     public async Task Parse_WorkflowStructuralNodes_PopulatesAst()
     {
         var yaml = """

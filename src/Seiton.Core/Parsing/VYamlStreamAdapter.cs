@@ -43,6 +43,12 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
     public Utf8Slice GetScalarSlice()
     {
+        if (_parser.TryGetScalarAsSpan(out var raw) && TryResolveRawStart(raw, out var rawStart))
+        {
+            _scalarSliceCursor = rawStart + raw.Length;
+            return new Utf8Slice(rawStart, raw.Length);
+        }
+
         var utf8 = _parser.GetScalarAsUtf8();
         if (utf8.Length == 0)
         {
@@ -83,6 +89,42 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         _scalarSliceCursor = start + utf8.Length;
         return new Utf8Slice(start, utf8.Length);
+    }
+
+    private bool TryResolveRawStart(ReadOnlySpan<byte> raw, out int start)
+    {
+        if (raw.Length == 0)
+        {
+            start = _scalarSliceCursor <= _source.Length ? _scalarSliceCursor : _source.Length;
+            return true;
+        }
+
+        var source = _source.Span;
+        if (source.Length < raw.Length)
+        {
+            start = 0;
+            return false;
+        }
+
+        if (_scalarSliceCursor <= source.Length - raw.Length)
+        {
+            var offsetFromCursor = source[_scalarSliceCursor..].IndexOf(raw);
+            if (offsetFromCursor >= 0)
+            {
+                start = _scalarSliceCursor + offsetFromCursor;
+                return true;
+            }
+        }
+
+        var offsetFromStart = source.IndexOf(raw);
+        if (offsetFromStart >= 0)
+        {
+            start = offsetFromStart;
+            return true;
+        }
+
+        start = 0;
+        return false;
     }
 
     public string? GetScalarString() => _parser.GetScalarAsString();
