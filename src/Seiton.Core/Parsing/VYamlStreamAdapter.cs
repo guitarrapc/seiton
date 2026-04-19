@@ -43,13 +43,20 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
     public Utf8Slice GetScalarSlice()
     {
+        var utf8 = _parser.GetScalarAsUtf8();
+        if (utf8.IndexOf((byte)'\n') >= 0
+            && TryResolveNormalizedSlice(utf8, out var normalizedStart, out var normalizedLength))
+        {
+            _scalarSliceCursor = normalizedStart + normalizedLength;
+            return new Utf8Slice(normalizedStart, normalizedLength);
+        }
+
         if (_parser.TryGetScalarAsSpan(out var raw) && TryResolveRawStart(raw, out var rawStart))
         {
             _scalarSliceCursor = rawStart + raw.Length;
             return new Utf8Slice(rawStart, raw.Length);
         }
 
-        var utf8 = _parser.GetScalarAsUtf8();
         if (utf8.Length == 0)
         {
             var emptyStart = _scalarSliceCursor <= _source.Length ? _scalarSliceCursor : _source.Length;
@@ -89,6 +96,172 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         _scalarSliceCursor = start + utf8.Length;
         return new Utf8Slice(start, utf8.Length);
+    }
+
+    private bool TryResolveNormalizedSlice(ReadOnlySpan<byte> utf8, out int start, out int length)
+    {
+        start = 0;
+        length = 0;
+
+        var source = _source.Span;
+        if (utf8.Length == 0 || source.Length < utf8.Length)
+        {
+            return false;
+        }
+
+        var anchorLength = utf8.IndexOf((byte)'\n');
+        if (anchorLength < 0)
+        {
+            anchorLength = utf8.Length;
+        }
+
+        if (anchorLength == 0)
+        {
+            anchorLength = Math.Min(utf8.Length, 32);
+        }
+
+        anchorLength = Math.Min(anchorLength, 32);
+        var anchor = utf8[..anchorLength];
+
+        if (TryResolveNormalizedSliceFrom(_scalarSliceCursor, source, anchor, utf8, out start, out length))
+        {
+            return true;
+        }
+
+        return _scalarSliceCursor > 0
+            && TryResolveNormalizedSliceFrom(0, source, anchor, utf8, out start, out length);
+    }
+
+    private bool TryResolveNormalizedSliceFrom(int searchStart, ReadOnlySpan<byte> source, ReadOnlySpan<byte> anchor, ReadOnlySpan<byte> utf8, out int start, out int length)
+    {
+        start = 0;
+        length = 0;
+
+        if (anchor.Length == 0 || searchStart < 0 || searchStart > source.Length - anchor.Length)
+        {
+            return false;
+        }
+
+        var relativeStart = 0;
+        var searchSpan = source[searchStart..];
+        while (relativeStart <= searchSpan.Length - anchor.Length)
+        {
+            var next = searchSpan[relativeStart..].IndexOf(anchor);
+            if (next < 0)
+            {
+                return false;
+            }
+
+            var candidate = searchStart + relativeStart + next;
+            var lineIndentWidth = CountLineIndent(source, candidate);
+            if (TryMeasureSourceLength(candidate, utf8, lineIndentWidth, out length))
+            {
+                start = candidate;
+                return true;
+            }
+
+            relativeStart += next + 1;
+        }
+
+        return false;
+    }
+
+    private static int CountLineIndent(ReadOnlySpan<byte> source, int contentStart)
+    {
+        var lineStart = contentStart;
+        while (lineStart > 0)
+        {
+            var b = source[lineStart - 1];
+            if (b is (byte)'\n' or (byte)'\r')
+            {
+                break;
+            }
+
+            lineStart--;
+        }
+
+        var indentWidth = 0;
+        for (var index = lineStart; index < contentStart; index++)
+        {
+            var b = source[index];
+            if (b is not ((byte)' ' or (byte)'\t'))
+            {
+                return 0;
+            }
+
+            indentWidth++;
+        }
+
+        return indentWidth;
+    }
+
+    private bool TryMeasureSourceLength(int start, ReadOnlySpan<byte> utf8, int lineIndentWidth, out int length)
+    {
+        length = 0;
+
+        var source = _source.Span;
+        if ((uint)start >= (uint)source.Length)
+        {
+            return false;
+        }
+
+        var sourceIndex = start;
+        var atLineStart = false;
+        for (var valueIndex = 0; valueIndex < utf8.Length; valueIndex++)
+        {
+            if (atLineStart)
+            {
+                var skipped = 0;
+                while (skipped < lineIndentWidth
+                    && sourceIndex < source.Length
+                    && (source[sourceIndex] == (byte)' ' || source[sourceIndex] == (byte)'\t'))
+                {
+                    sourceIndex++;
+                    skipped++;
+                }
+
+                atLineStart = false;
+            }
+
+            if (sourceIndex >= source.Length)
+            {
+                return false;
+            }
+
+            var valueByte = utf8[valueIndex];
+            if (valueByte == (byte)'\n')
+            {
+                if (source[sourceIndex] == (byte)'\r')
+                {
+                    if (sourceIndex + 1 >= source.Length || source[sourceIndex + 1] != (byte)'\n')
+                    {
+                        return false;
+                    }
+
+                    sourceIndex += 2;
+                    continue;
+                }
+
+                if (source[sourceIndex] != (byte)'\n')
+                {
+                    return false;
+                }
+
+                sourceIndex++;
+                atLineStart = true;
+                continue;
+            }
+
+            if (source[sourceIndex] != valueByte)
+            {
+                return false;
+            }
+
+            sourceIndex++;
+        }
+
+        length = sourceIndex - start;
+        return true;
     }
 
     private bool TryResolveRawStart(ReadOnlySpan<byte> raw, out int start)

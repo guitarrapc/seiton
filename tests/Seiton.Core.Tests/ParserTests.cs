@@ -21,7 +21,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var bytes = Encoding.UTF8.GetBytes(yaml.Replace("\r\n", "\n").Replace("\n", "\r\n"));
         var result = WorkflowParser.Parse(bytes, "minimal.yml");
 
         await Assert.That(result.HasFatalError).IsFalse();
@@ -83,6 +83,58 @@ public sealed class ParserTests
         await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
         await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(1);
         await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_BlockRunDoesNotCaptureFollowingEnvOrNextStepIf()
+    {
+        var yaml = """
+        name: ci
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: benchmark
+                      run: |
+                        dotnet run --filter "${FILTER}"
+                        echo "result=success" >> "$GITHUB_OUTPUT"
+                      env:
+                        FILTER: benchmark
+                    - name: report
+                      run: |
+                        echo first
+                        echo second
+                    - name: update
+                      if: ${{ github.ref_name != '' }}
+                      run: |
+                        echo done
+        """;
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "block-run-boundary.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow is not null).IsTrue();
+
+        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        await Assert.That(job.Steps is not null).IsTrue();
+        await Assert.That(job.Steps!.Count).IsEqualTo(3);
+
+        var firstRun = Encoding.UTF8.GetString(((ExecRun)job.Steps[0].Exec).Run.Value.AsSpan(bytes));
+        var secondRun = Encoding.UTF8.GetString(((ExecRun)job.Steps[1].Exec).Run.Value.AsSpan(bytes));
+        var thirdRun = Encoding.UTF8.GetString(((ExecRun)job.Steps[2].Exec).Run.Value.AsSpan(bytes));
+
+        await Assert.That(firstRun.Contains("env:", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(firstRun.Contains("FILTER: benchmark", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(secondRun.Contains("if:", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(secondRun.Contains("github.ref_name", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(firstRun.Contains("dotnet run --filter \"${FILTER}\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(firstRun.Contains("echo \"result=success\" >> \"$GITHUB_OUTPUT\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(secondRun.Contains("echo first", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(secondRun.Contains("echo second", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(thirdRun.Contains("echo done", StringComparison.Ordinal)).IsTrue();
     }
 
 

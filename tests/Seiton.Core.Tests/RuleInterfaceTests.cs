@@ -3742,6 +3742,32 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-block-run-does-not-bleed-into-env-or-next-step-if",
+            """
+            name: ci
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                    - name: benchmark
+                        run: |
+                            dotnet run --filter "${FILTER}"
+                            echo "result=success" >> "$GITHUB_OUTPUT"
+                        env:
+                            FILTER: ${{ inputs.target }}
+                    - name: report
+                        run: |
+                            echo first
+
+                            echo second
+                    - name: update
+                        if: ${{ inputs.target == '*' }}
+                        run: |
+                            echo done
+            """.Replace("\r\n", "\n").Replace("\n", "\r\n"),
+            []),
+            new RuleCase(
             "ok-run-uses-non-inputs-expression",
             """
             on: push
@@ -4845,6 +4871,31 @@ public sealed class RuleInterfaceTests
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_BlockRunLocation_PointsToExpressionLine()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: benchmark
+                      run: |
+                        echo "${{ inputs.target }}"
+                        echo done
+                    - name: next
+                      run: exit 1
+        """.Replace("\r\n", "\n").Replace("\n", "\r\n");
+
+        var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-block-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Location.StartLine).IsEqualTo(8);
+        await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(23);
     }
 
     [Test]
