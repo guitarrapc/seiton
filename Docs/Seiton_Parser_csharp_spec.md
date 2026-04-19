@@ -371,11 +371,13 @@ Final kind is confirmed from top-level structure; structure has priority over pa
 
 ```csharp
 public static ParseResult Parse(byte[] utf8Yaml, string filePath)
+public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
 ```
 
 - Return: `ParseResult { Workflow?, Diagnostic[], HasFatalError }`
 - Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null
 - Errors during AST construction are accumulated, not immediately fatal
+- `ParseClassified` additionally returns `DocumentKindClassification` (`PathHintKind`, `FinalKind`, `HasHintMismatch`, `IsAmbiguous`) for linter/CLI routing.
 
 ### 1.2 Parse Pipeline
 

@@ -99,6 +99,11 @@ Normative behavior follows `Seiton_Linter_spec.md` for:
 - rule execution
 - deterministic post-processing
 
+Current C# routing note:
+
+- `LintEngine.Check` uses parser kind classification and only executes workflow pass/rule traversal when finalized kind is `workflow`.
+- For finalized `action-metadata`, C# returns parser diagnostics as lint result and skips workflow rule traversal.
+
 Reference runtime shape:
 
 ```csharp

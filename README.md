@@ -1,5 +1,17 @@
 # seiton
 
+## Recent Updates
+
+### 2026-04: Action metadata input support
+
+- Added document-kind classification for workflow/action-metadata/unknown.
+- Added action metadata path hints and root-structure finalization (`jobs` vs `runs`).
+- Added mismatch and ambiguity diagnostics for classification stage.
+- Default no-arg discovery remains workflow-first under `.github/workflows/`.
+- Action metadata is supported when explicitly passed as input files.
+
+Detailed notes: `Docs/release_notes_actions_support.md`
+
 ## Generated Data Updater
 
 Generated parser metadata is maintained by `src/Seiton.Update`.

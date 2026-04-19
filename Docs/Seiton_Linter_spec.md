@@ -41,6 +41,12 @@ High-level behavior:
 7. Sort, deduplicate, and filter diagnostics.
 8. Return final `LintResult`.
 
+Current profile note (C# runtime):
+
+- If finalized kind is `action-metadata`, C# currently returns parser diagnostics only and does not execute workflow rule passes.
+- Workflow rule execution is currently scoped to finalized `workflow` inputs.
+- This preserves workflow-first rule semantics while action-metadata rule-set parity is implemented incrementally.
+
 ---
 
 ## 3. Parser/Linter Boundary

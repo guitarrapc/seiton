@@ -427,6 +427,12 @@ seiton init
 seiton validate-config --config .github/seiton.yaml
 ```
 
+### 11.1 Migration Note (Action Metadata Support)
+
+- Default no-arg discovery behavior is unchanged: `seiton` still auto-discovers only under `.github/workflows/`.
+- Action metadata files are supported when explicitly passed via `FILES`.
+- This compatibility policy prevents existing CI behavior regressions while expanding explicit input support.
+
 ---
 
 ## 12. Cross-Document Consistency

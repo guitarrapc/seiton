@@ -102,13 +102,13 @@ Seiton が workflow ファイルと action metadata ファイルの両方を分�
 - workflow 回帰テストがグリーン
 - action 分類の正/誤/競合ケースをテストで網羅
 
-### Phase E: ドキュメント/リリース整備 ⏳ 未完了
+### Phase E: ドキュメント/リリース整備 ✅ 完了
 
-実施予定:
+実施内容:
 
-- parser/linter/CLI 仕様の最終同期確認
-- リリースノートへの反映
-- workflow-first 既定探索維持の移行注意を明記
+- parser/linter/CLI 仕様の最終同期を実施
+- リリースノートを `Docs/release_notes_actions_support.md` に追加
+- workflow-first 既定探索維持の移行注意を CLI spec / README に明記
 
 完了条件:
 
