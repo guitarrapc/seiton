@@ -2041,9 +2041,11 @@ public static class WorkflowParser
             return null;
         }
 
-        var mark = reader.CurrentStart;
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         ValidateExpressionText(
             valueUtf8,
             BuildScalarLocation(mark, valueUtf8.Length),
@@ -2072,9 +2074,11 @@ public static class WorkflowParser
             return null;
         }
 
-        var mark = reader.CurrentStart;
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         var hasExpression = valueUtf8.IndexOf("${{"u8) >= 0;
         var node = new StringNode
         {
@@ -2197,9 +2201,11 @@ public static class WorkflowParser
             return null;
         }
 
-        var mark = reader.CurrentStart;
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         ValidateExpressionText(
             valueUtf8,
             BuildScalarLocation(mark, valueUtf8.Length),
