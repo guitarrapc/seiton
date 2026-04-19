@@ -259,7 +259,13 @@ public static class ExpressionParser
 
                 if (Match("("u8))
                 {
-                    var argStart = Arguments.Count;
+                    // Collect this function's direct arguments in a local list first.
+                    // ParseExpression() for each argument may recursively parse inner function
+                    // calls, which add their own args to the shared Arguments list. If we used
+                    // `argStart = Arguments.Count` before the loop and `ArgCount = Arguments.Count - argStart`
+                    // after, the inner args would inflate ArgCount. By deferring the add until after
+                    // all args are parsed, we ensure ArgStart/ArgCount reflect only this call's args.
+                    var directArgs = new List<int>(4);
                     SkipWhiteSpace();
                     if (!Match(")"u8))
                     {
@@ -268,7 +274,7 @@ public static class ExpressionParser
                             var arg = ParseExpression();
                             if (arg >= 0)
                             {
-                                Arguments.Add(arg);
+                                directArgs.Add(arg);
                             }
 
                             SkipWhiteSpace();
@@ -285,12 +291,19 @@ public static class ExpressionParser
                         }
                     }
 
+                    // Add this function's args after inner calls have already added theirs.
+                    var argStart = Arguments.Count;
+                    foreach (var a in directArgs)
+                    {
+                        Arguments.Add(a);
+                    }
+
                     expr = AddNode(new ExpressionNode(
                         ExpressionNodeKind.FunctionCall,
                         expr,
                         -1,
                         argStart,
-                        Arguments.Count - argStart,
+                        directArgs.Count,
                         default,
                         ExpressionOperator.None));
                     continue;

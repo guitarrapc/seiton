@@ -188,6 +188,9 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.Step);
 
+        // Regression: previously reported "expects 2 argument(s), but got 3" because
+        // the inner fromJson call's argument was counted toward contains's ArgCount.
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -548,5 +551,67 @@ public sealed class ExpressionTests
 
         // Root node must have parentId = -1.
         await Assert.That(parentMap[parseResult.RootNode]).IsEqualTo(-1);
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ContainsWithToJsonArg_NoDiagnostics()
+    {
+        // Regression: contains(toJSON(x), y) previously reported "expects 2 argument(s), but got 3"
+        // because toJSON's inner argument was counted toward contains's ArgCount.
+        var expression = "contains(toJSON(github.event.commits.*.message), '[build]')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Job);
+
+        await Assert.That(parseResult.Diagnostics).IsEmpty();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("argument", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ContainsWithNestedFunctionBothArgs_NoDiagnostics()
+    {
+        // f(g(x), h(y)) — both arguments are function calls; ArgStart must be correct for both.
+        var expression = "contains(fromJson(github.event.inputs.ids), fromJson(github.event.inputs.item))"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(parseResult.Diagnostics).IsEmpty();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ExtractAndParseFull_ContainsToJsonCommitMessages_NoParseDiagnostics()
+    {
+        // Full workflow round-trip for the contains(toJSON(commits.*.message), '[build]') pattern.
+        var yaml = """
+            name: trigger ci commit
+            on:
+              push:
+                branches: ["main"]
+            jobs:
+              job:
+                if: ${{ contains(toJSON(github.event.commits.*.message), '[build]') }}
+                runs-on: ubuntu-24.04
+                permissions:
+                  contents: read
+                timeout-minutes: 3
+                steps:
+                  - run: echo "$COMMIT_MESSAGES"
+                    env:
+                      COMMIT_MESSAGES: ${{ toJson(github.event.commits.*.message) }}
+            """;
+
+        var result = ExpressionExtractor.ExtractAndParse(Encoding.UTF8.GetBytes(yaml));
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
     }
 }
