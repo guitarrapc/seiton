@@ -3,7 +3,7 @@ using Seiton.Commands;
 using Seiton.Cli;
 using Seiton.Output;
 
-if (CliOptionSuggester.TryWriteSuggestionForUnknownOption(args, Console.Error))
+if (CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(args, Console.Error))
 {
     Environment.ExitCode = ExitCode.InvalidOptions;
     return;

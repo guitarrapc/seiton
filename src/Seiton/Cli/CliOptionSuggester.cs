@@ -27,8 +27,33 @@ internal static class CliOptionSuggester
 
     const int SuggestionDistanceThreshold = 3;
 
-    public static bool TryWriteSuggestionForUnknownOption(string[] args, TextWriter errorWriter)
+    public static bool TryWriteSuggestionsForUnknownOptions(string[] args, TextWriter errorWriter)
     {
+        var unknownOptions = CollectUnknownLongOptions(args);
+        if (unknownOptions.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var optionToken in unknownOptions)
+        {
+            errorWriter.WriteLine($"Argument '{optionToken}' is not recognized.");
+
+            var suggestion = FindBestSuggestion(optionToken);
+            if (suggestion is not null)
+            {
+                errorWriter.WriteLine($"Did you mean '{suggestion}'?");
+            }
+        }
+
+        return true;
+    }
+
+    static List<string> CollectUnknownLongOptions(string[] args)
+    {
+        var unknownOptions = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
         for (var i = 0; i < args.Length; i++)
         {
             var raw = args[i];
@@ -47,18 +72,15 @@ internal static class CliOptionSuggester
                 continue;
             }
 
-            var suggestion = FindBestSuggestion(optionToken);
-            if (suggestion is null)
+            if (!seen.Add(optionToken))
             {
                 continue;
             }
 
-            errorWriter.WriteLine($"Argument '{optionToken}' is not recognized.");
-            errorWriter.WriteLine($"Did you mean '{suggestion}'?");
-            return true;
+            unknownOptions.Add(optionToken);
         }
 
-        return false;
+        return unknownOptions;
     }
 
     static bool TryGetLongOptionToken(string raw, out string optionToken)
@@ -98,7 +120,19 @@ internal static class CliOptionSuggester
             best = known;
         }
 
-        return bestDistance <= SuggestionDistanceThreshold ? best : null;
+        return IsDistanceAcceptable(normalizedInput.Length, bestDistance) ? best : null;
+    }
+
+    static bool IsDistanceAcceptable(int inputLength, int distance)
+    {
+        var threshold = inputLength switch
+        {
+            <= 4 => 1,
+            <= 8 => 2,
+            _ => SuggestionDistanceThreshold,
+        };
+
+        return distance <= threshold;
     }
 
     static string Normalize(string option)
