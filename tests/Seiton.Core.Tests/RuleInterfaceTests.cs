@@ -4853,6 +4853,42 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_DiagnosticLocation_PointsToExpression_NotFollowingEnvKey()
+    {
+        // Regression: diagnostic was pointing to the step-level env: key (after the block scalar)
+        // instead of the ${{ env.* }} expression inside the run: script.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Dump environment
+                      shell: bash
+                      run: |
+                        mkdir -p "${{ env.OUTPUT_PATH }}"
+                        env | tee "${{ env.OUTPUT_PATH }}/out.sh"
+                      env:
+                        OUTPUT_PATH: ${{ inputs.output-path }}/env
+        """;
+
+        var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        // The diagnostic must NOT point to the env: key line (which comes after the run: block).
+        // It must point to the actual ${{ env.* }} expression inside the run: script.
+        var locationLine = diagnostic.Location.StartLine;
+        var envKeyLineNumber = yaml.Split('\n')
+            .Select((line, i) => (line, lineNumber: i + 1))
+            .First(x => x.line.TrimStart().StartsWith("env:") && x.lineNumber > 10)
+            .lineNumber;
+
+        await Assert.That(locationLine).IsNotEqualTo(envKeyLineNumber);
+        await Assert.That(locationLine).IsLessThan(envKeyLineNumber);
+    }
+
+    [Test]
     public async Task LintEngine_RunSecretsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
     {
         var yaml = """

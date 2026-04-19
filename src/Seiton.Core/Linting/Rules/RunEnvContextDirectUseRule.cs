@@ -32,6 +32,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
+            var location = BuildExpressionLocation(runNode, bodyStart, nextSearchStart);
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -60,7 +61,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                 AddStepError(
                     step,
                     "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
-                    runNode.Range,
+                    location,
                     fix);
             }
             else
@@ -68,11 +69,67 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                 AddStepError(
                     step,
                     "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
-                    runNode.Range);
+                    location);
             }
 
             return;
         }
+    }
+
+    TextRange BuildExpressionLocation(StringNode runNode, int bodyStart, int nextSearchStart)
+    {
+        var absoluteStart = runNode.Value.Offset + bodyStart - 3;
+        var absoluteLength = nextSearchStart - (bodyStart - 3);
+        if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
+        {
+            return runNode.Range;
+        }
+
+        var lineStarts = BuildLineStarts(Config.Utf8Yaml);
+        var start = OffsetToLineColumn(lineStarts, absoluteStart);
+        var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
+        return new TextRange(
+            Start: absoluteStart,
+            Length: absoluteLength,
+            StartLine: start.Line,
+            StartColumn: start.Column,
+            EndLine: end.Line,
+            EndColumn: end.Column);
+    }
+
+    static int[] BuildLineStarts(byte[] source)
+    {
+        var starts = new List<int>(64) { 0 };
+        for (var i = 0; i < source.Length; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                var next = i + 1;
+                if (next < source.Length)
+                {
+                    starts.Add(next);
+                }
+            }
+        }
+
+        return starts.ToArray();
+    }
+
+    static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)
+    {
+        var idx = Array.BinarySearch(lineStarts, offset);
+        if (idx >= 0)
+        {
+            return (idx + 1, 1);
+        }
+
+        idx = ~idx - 1;
+        if (idx < 0)
+        {
+            return (1, offset + 1);
+        }
+
+        return (idx + 1, offset - lineStarts[idx] + 1);
     }
 
     bool TryBuildFix(ExecRun run, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
