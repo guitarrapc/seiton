@@ -4831,6 +4831,28 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > pr_comment.md
+                          Workflow [${{ env.GITHUB_ACTIONS_RUN_URL }}) found CRLF files.
+                        EOF
+        """;
+
+        var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-heredoc.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_RunSecretsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
     {
         var yaml = """

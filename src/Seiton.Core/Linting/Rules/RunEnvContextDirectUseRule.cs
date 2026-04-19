@@ -83,6 +83,12 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             return false;
         }
 
+        var absoluteOffset = runNode.Value.Offset + expressionBodyStart - 3;
+        if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
+        {
+            return false;
+        }
+
         if (!TryParseSimpleEnvReference(expression, out var variableName))
         {
             return false;
@@ -92,12 +98,151 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             ? "$env:" + variableName
             : "${" + variableName + "}";
 
-        var absoluteOffset = runNode.Value.Offset + expressionBodyStart - 3;
         fix = new DiagnosticFix(
             "replace direct env context expansion with shell variable",
             [new TextEdit(absoluteOffset, expressionLength, replacement)]);
         return true;
     }
+
+    static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
+    {
+        if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
+        {
+            return false;
+        }
+
+        var hereDocs = new List<HereDocState>(2);
+        var targetLine = 1;
+        for (var i = 0; i < targetOffset; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                targetLine++;
+            }
+        }
+
+        var currentLine = 1;
+        var lineStart = 0;
+        while (lineStart <= source.Length)
+        {
+            var lineEnd = lineStart;
+            while (lineEnd < source.Length && source[lineEnd] != (byte)'\n')
+            {
+                lineEnd++;
+            }
+
+            var isTargetLine = currentLine == targetLine;
+            var line = source.AsSpan(lineStart, lineEnd - lineStart);
+            if (line.Length > 0 && line[^1] == (byte)'\r')
+            {
+                line = line[..^1];
+            }
+
+            if (hereDocs.Count > 0)
+            {
+                var top = hereDocs[^1];
+                var candidate = line;
+                if (top.StripTabs)
+                {
+                    var trimIndex = 0;
+                    while (trimIndex < candidate.Length && candidate[trimIndex] == (byte)'\t')
+                    {
+                        trimIndex++;
+                    }
+
+                    candidate = candidate[trimIndex..];
+                }
+
+                if (candidate.SequenceEqual(top.Terminator))
+                {
+                    hereDocs.RemoveAt(hereDocs.Count - 1);
+                }
+                else if (isTargetLine)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                if (TryParseNoExpandHereDocStart(line, out var state))
+                {
+                    hereDocs.Add(state);
+                }
+
+                if (isTargetLine)
+                {
+                    return false;
+                }
+            }
+
+            if (lineEnd >= source.Length)
+            {
+                break;
+            }
+
+            currentLine++;
+            lineStart = lineEnd + 1;
+        }
+
+        return false;
+    }
+
+    static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, out HereDocState state)
+    {
+        state = default;
+        var i = 0;
+        while (i < line.Length - 1)
+        {
+            if (line[i] != (byte)'<' || line[i + 1] != (byte)'<')
+            {
+                i++;
+                continue;
+            }
+
+            i += 2;
+            var stripTabs = false;
+            if (i < line.Length && line[i] == (byte)'-')
+            {
+                stripTabs = true;
+                i++;
+            }
+
+            while (i < line.Length && (line[i] == (byte)' ' || line[i] == (byte)'\t'))
+            {
+                i++;
+            }
+
+            if (i >= line.Length)
+            {
+                return false;
+            }
+
+            var quote = line[i];
+            if (quote is not ((byte)'\'' or (byte)'"'))
+            {
+                return false;
+            }
+
+            i++;
+            var start = i;
+            while (i < line.Length && line[i] != quote)
+            {
+                i++;
+            }
+
+            if (i <= start || i >= line.Length)
+            {
+                return false;
+            }
+
+            state = new HereDocState(line[start..i].ToArray(), stripTabs);
+            return true;
+        }
+
+        return false;
+    }
+
+    readonly record struct HereDocState(byte[] Terminator, bool StripTabs);
 
     static bool IsPowerShell(StringNode? shellNode, byte[] utf8Yaml)
     {
