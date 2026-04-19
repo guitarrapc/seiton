@@ -4,8 +4,11 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>seiton</AssemblyName>
     <RootNamespace>Seiton</RootNamespace>
-    <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+    <StripSymbols>true</StripSymbols>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
 
   <ItemGroup>
