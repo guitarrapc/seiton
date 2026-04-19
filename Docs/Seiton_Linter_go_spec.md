@@ -248,7 +248,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
 | `workflow-secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
 | `job-secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
-| `action-shell-is-required` | Error when a `run` step omits explicit `shell` declaration (including empty shell values). |
+| `action-shell-is-required` | Error when a composite action `run` step omits explicit `shell` declaration (including empty shell values). |
 
 
 ### 3.5 Phase 14 Catalog Additions

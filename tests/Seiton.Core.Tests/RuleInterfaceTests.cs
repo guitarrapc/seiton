@@ -2556,7 +2556,18 @@ public sealed class RuleInterfaceTests
         var cases = new[]
         {
             new RuleCase(
-            "ok-run-with-shell",
+                        "ok-action-run-with-shell",
+                        """
+                        name: Sample action
+                        runs:
+                            using: composite
+                            steps:
+                                - run: echo hello
+                                    shell: bash
+                        """,
+                        []),
+                        new RuleCase(
+                        "ok-run-with-shell",
             """
             on: push
             jobs:
@@ -2579,7 +2590,7 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ng-run-without-shell",
+            "ok-workflow-run-without-shell",
             """
             on: push
             jobs:
@@ -2588,9 +2599,9 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo hello
             """,
-            ["shell is required if run is set"]),
+            []),
             new RuleCase(
-            "ng-run-with-empty-shell",
+            "ok-workflow-run-with-empty-shell",
             """
             on: push
             jobs:
@@ -2600,7 +2611,7 @@ public sealed class RuleInterfaceTests
                         - run: echo hello
                           shell: ""
             """,
-            ["shell is required if run is set"]),
+            []),
         };
 
         await AssertRuleCases(new ActionShellIsRequiredRule(), "action-shell-is-required", cases);
@@ -4524,18 +4535,6 @@ public sealed class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "action-shell-is-required",
-                new ActionShellIsRequiredRule(),
-                """
-                on: push
-                jobs:
-                    build:
-                        runs-on: ubuntu-latest
-                        steps:
-                            - run: echo hello
-                """,
-                ExpectsFix: false),
-            new FixabilityCase(
                 "matrix",
                 new MatrixRule(),
                 """
@@ -5947,6 +5946,8 @@ public sealed class RuleInterfaceTests
 
         public string Name => $"Duplicate-{Id}";
 
+        public bool SupportsDocumentKind(DocumentKind documentKind) => true;
+
         public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
 
         public void SetConfig(LintConfig config)
@@ -5990,6 +5991,8 @@ public sealed class RuleInterfaceTests
 
         public string Name => "Config Capture Rule";
 
+        public bool SupportsDocumentKind(DocumentKind documentKind) => true;
+
         public LintConfig? LastConfig { get; private set; }
 
         public Diagnostic[] GetDiagnostics() => [];
@@ -6032,6 +6035,8 @@ public sealed class RuleInterfaceTests
         public string Id => "test-rule";
 
         public string Name => "Test Rule";
+
+        public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 
         public int WorkflowPreCount { get; private set; }
 

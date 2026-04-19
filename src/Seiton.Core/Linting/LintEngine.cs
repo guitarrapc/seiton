@@ -53,14 +53,6 @@ public sealed class LintEngine
             };
         }
 
-        if (classifiedParseResult.Classification.FinalKind != DocumentKind.Workflow)
-        {
-            return new LintResult(parseResult, parseResult.Diagnostics)
-            {
-                SuppressionSummary = SuppressionSummary.Empty,
-            };
-        }
-
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 8);
         diagnostics.AddRange(parseResult.Diagnostics);
 
@@ -96,6 +88,11 @@ public sealed class LintEngine
         {
             var rule = rules[i];
             if (!IsRuleEnabled(rule.Id, effectiveConfig.Rules))
+            {
+                continue;
+            }
+
+            if (!rule.SupportsDocumentKind(classifiedParseResult.Classification.FinalKind))
             {
                 continue;
             }

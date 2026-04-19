@@ -8,6 +8,8 @@ public interface IRule : IPass
 
     string Name { get; }
 
+    bool SupportsDocumentKind(DocumentKind documentKind);
+
     Diagnostic[] GetDiagnostics();
 
     void SetConfig(LintConfig config);

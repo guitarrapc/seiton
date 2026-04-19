@@ -11,6 +11,19 @@ public sealed class SyntaxRule : IRule
 
     public string Name => "Syntax Rule";
 
+    public bool SupportsDocumentKind(DocumentKind documentKind)
+    {
+        for (var i = 0; i < rules.Length; i++)
+        {
+            if (rules[i].SupportsDocumentKind(documentKind))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public Diagnostic[] GetDiagnostics()
     {
         var diagnostics = new List<Diagnostic>();

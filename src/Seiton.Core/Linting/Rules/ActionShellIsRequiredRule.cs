@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Parsing.Ast;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -7,6 +8,11 @@ public sealed class ActionShellIsRequiredRule : RuleBase
     public override string Id => "action-shell-is-required";
 
     public override string Name => "Action Shell Is Required Rule";
+
+    public override bool SupportsDocumentKind(DocumentKind documentKind)
+    {
+        return documentKind == DocumentKind.ActionMetadata;
+    }
 
     public override void VisitStep(Step step)
     {

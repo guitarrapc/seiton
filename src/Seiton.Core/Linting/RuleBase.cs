@@ -13,6 +13,11 @@ public abstract class RuleBase : IRule
 
     public abstract string Name { get; }
 
+    public virtual bool SupportsDocumentKind(DocumentKind documentKind)
+    {
+        return documentKind == DocumentKind.Workflow || documentKind == DocumentKind.ActionMetadata;
+    }
+
     public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
 
     public virtual void SetConfig(LintConfig config)
