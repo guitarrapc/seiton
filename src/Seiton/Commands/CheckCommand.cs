@@ -113,12 +113,47 @@ internal static class CheckCommand
 
         // Output
         if (allDiagnostics.Count > 0)
-        {
             DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
-            return ExitCode.LintIssuesFound;
+
+        WriteSummary(allDiagnostics, resolvedFiles.Length);
+
+        return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
+    }
+
+    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount)
+    {
+        var errors = 0;
+        var warnings = 0;
+        var infos = 0;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            switch (diagnostics[i].Severity)
+            {
+                case DiagnosticSeverity.Error: errors++; break;
+                case DiagnosticSeverity.Warning: warnings++; break;
+                default: infos++; break;
+            }
         }
 
-        return ExitCode.Success;
+        var parts = new System.Text.StringBuilder();
+        if (errors > 0) parts.Append(errors == 1 ? "1 error" : $"{errors} errors");
+        if (warnings > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(warnings == 1 ? "1 warning" : $"{warnings} warnings"); }
+        if (infos > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(infos == 1 ? "1 info" : $"{infos} infos"); }
+
+        if (parts.Length == 0)
+            Console.Error.WriteLine($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        else
+            Console.Error.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+    }
+
+    internal static bool HasActionableDiagnostics(List<Diagnostic> diagnostics)
+    {
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Severity >= DiagnosticSeverity.Warning)
+                return true;
+        }
+        return false;
     }
 
     internal static bool HasConfigErrors(Diagnostic[] configDiags, OutputFormat format, bool color, bool oneline)

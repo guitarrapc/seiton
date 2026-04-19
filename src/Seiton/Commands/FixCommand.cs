@@ -149,9 +149,11 @@ internal static class FixCommand
         if (allDiagnostics.Count > 0)
             DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
 
+        CheckCommand.WriteSummary(allDiagnostics, resolvedFiles.Length);
+
         if (check && hasFixable)
             return ExitCode.LintIssuesFound;
 
-        return allDiagnostics.Count > 0 ? ExitCode.LintIssuesFound : ExitCode.Success;
+        return CheckCommand.HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
     }
 }
