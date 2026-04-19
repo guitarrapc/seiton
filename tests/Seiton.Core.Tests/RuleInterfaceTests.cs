@@ -2930,7 +2930,7 @@ public sealed class RuleInterfaceTests
             """,
             ["strategy.matrix axis 'os' has no values"]),
             new RuleCase(
-            "ng-include-unknown-axis",
+            "ok-include-new-axis",
             """
             on: push
             jobs:
@@ -2942,9 +2942,43 @@ public sealed class RuleInterfaceTests
                             include:
                                 - arch: x64
                     steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-include-mixed-existing-and-new-axes",
+            """
+            on: push
+            jobs:
+                dispatch:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            repo: [guitarrapc/testtest]
+                            include:
+                                - repo: guitarrapc/testtest
+                                  ref: main
+                                  workflow: test
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-exclude-unknown-axis",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                            exclude:
+                                - arch: x64
+                    steps:
                         - run: echo ng
             """,
-            ["strategy.matrix.include references unknown axis 'arch'"]),
+            ["strategy.matrix.exclude references unknown axis 'arch'"]),
         };
 
         await AssertRuleCases(new MatrixRule(), "matrix", cases);

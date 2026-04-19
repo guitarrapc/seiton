@@ -129,7 +129,7 @@ internal sealed class GitHubAvailabilityFetcher
             stepRoots,
         };
 
-        var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions));
+        var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions)) + "\n";
         var existing = File.Exists(paths.MergedSnapshotPath)
             ? TextNormalization.NormalizeToLf(File.ReadAllText(paths.MergedSnapshotPath))
             : string.Empty;

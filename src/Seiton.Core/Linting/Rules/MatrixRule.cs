@@ -24,7 +24,6 @@ public sealed class MatrixRule : RuleBase
         }
 
         ValidateRows(job, matrix.Rows);
-        ValidateCombinations(job, matrix, matrix.Include, "include");
         ValidateCombinations(job, matrix, matrix.Exclude, "exclude");
     }
 
