@@ -17,7 +17,8 @@ internal static class CheckCommand
         bool oneline,
         ColorMode color,
         bool noColor,
-        bool verbose)
+        bool verbose,
+        bool includeActions)
     {
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
@@ -42,7 +43,7 @@ internal static class CheckCommand
         string[] resolvedFiles;
         try
         {
-            resolvedFiles = InputDiscovery.ResolveFiles(files);
+            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions);
         }
         catch (FileNotFoundException ex)
         {
@@ -52,7 +53,7 @@ internal static class CheckCommand
 
         if (resolvedFiles.Length == 0 && !files.Contains("-"))
         {
-            Console.Error.WriteLine("no workflow files found");
+            Console.Error.WriteLine(includeActions ? "no workflow/action files found" : "no workflow files found");
             return ExitCode.Success;
         }
 

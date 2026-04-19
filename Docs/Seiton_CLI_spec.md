@@ -80,6 +80,8 @@ When `--fix` is specified, the root command switches to fix mode (equivalent to 
 
 When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory.
 
+When `--include-actions` is specified, no-arg discovery also includes `*.yml` / `*.yaml` files under `.github/actions/`.
+
 Action metadata files are accepted when explicitly passed via `FILES` (for example `action.yml`, `action.yaml`, `.github/actions/<name>/action.yml`, `.github/actions/<name>/action.yaml`).
 
 `-` (hyphen) as a file argument reads from stdin. Requires `--stdin-filename` to give the input a meaningful path for diagnostics.
@@ -134,6 +136,7 @@ All flags apply to the default root command unless otherwise noted.
 |---|---|---|---|---|
 | `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` (nearest directory first, then parent directories). |
 | `--stdin-filename` | | `string` | `<stdin>` | Filename used for diagnostics when reading from stdin (`-`). |
+| `--include-actions` | | `bool` | `false` | Expand no-arg discovery scope to include `.github/actions/` in addition to `.github/workflows/`. |
 
 ### 3.2 Lint Flags (root check/fix)
 
@@ -255,7 +258,11 @@ When no `FILES` arguments are given to `check` / `fix`:
 2. Collect all files matching `*.yml` and `*.yaml` under that directory (non-recursive by default; recursive under subdirectories when they exist).
 3. Sort collected paths deterministically (lexicographic, `/`-normalized) before passing to `LintEngine`.
 
-Default auto-discovery scope remains workflow-first (`.github/workflows/`). Action metadata files are discovered only when explicitly passed in `FILES`.
+Default auto-discovery scope remains workflow-first (`.github/workflows/`).
+
+When `--include-actions` is enabled, discovery additionally includes `.github/actions/` from the same nearest repository root search.
+
+Action metadata files are always accepted when explicitly passed in `FILES`.
 
 When `FILES` are given:
 
@@ -387,6 +394,9 @@ ConsoleAppFramework generates completion support for registered commands and fla
 # Lint all workflows in current repository (auto-discovery)
 seiton
 
+# Lint workflows and local action metadata files in current repository
+seiton --include-actions
+
 # Lint specific files
 seiton .github/workflows/build.yml .github/workflows/release.yml
 
@@ -429,7 +439,8 @@ seiton validate-config --config .github/seiton.yaml
 
 ### 11.1 Migration Note (Action Metadata Support)
 
-- Default no-arg discovery behavior is unchanged: `seiton` still auto-discovers only under `.github/workflows/`.
+- Default no-arg discovery behavior is unchanged: `seiton` auto-discovers only under `.github/workflows/` unless `--include-actions` is set.
+- `--include-actions` opt-in expands no-arg discovery to include `.github/actions/`.
 - Action metadata files are supported when explicitly passed via `FILES`.
 - This compatibility policy prevents existing CI behavior regressions while expanding explicit input support.
 

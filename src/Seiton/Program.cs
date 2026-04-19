@@ -24,6 +24,7 @@ internal class SeitonCli
     /// <param name="check">Exit non-zero if fixable diagnostics exist, without applying fixes (requires --fix).</param>
     /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
     /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
+    /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     [Command("")]
     public void Root(
         [Argument] string[]? files = null,
@@ -40,7 +41,8 @@ internal class SeitonCli
         bool dryRun = false,
         bool check = false,
         bool enablePinNetwork = false,
-        bool enableImageNetwork = false)
+        bool enableImageNetwork = false,
+        bool includeActions = false)
     {
         if (!fix && (dryRun || check || enablePinNetwork || enableImageNetwork))
         {
@@ -50,8 +52,8 @@ internal class SeitonCli
         }
 
         var code = fix
-            ? FixCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork)
-            : CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
+            ? FixCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions)
+            : CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
 
         if (code != 0) Environment.ExitCode = code;
     }
@@ -67,6 +69,7 @@ internal class SeitonCli
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
     /// <param name="verbose">Print progress information to stderr.</param>
+    /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     public void Check(
         [Argument] string[]? files = null,
         string? config = null,
@@ -77,9 +80,10 @@ internal class SeitonCli
         bool oneline = false,
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
-        bool verbose = false)
+        bool verbose = false,
+        bool includeActions = false)
     {
-        var code = CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose);
+        var code = CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
         if (code != 0) Environment.ExitCode = code;
     }
 

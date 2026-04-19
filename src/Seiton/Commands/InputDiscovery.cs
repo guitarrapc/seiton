@@ -3,23 +3,42 @@
 internal static class InputDiscovery
 {
     /// <summary>
-    /// Discover workflow files from given arguments, or auto-discover from .github/workflows/.
+    /// Discover files from given arguments, or auto-discover from .github/workflows/.
     /// </summary>
-    public static string[] ResolveFiles(string[] files)
+    public static string[] ResolveFiles(string[] files, bool includeActions)
     {
         if (files.Length > 0)
             return ExpandFileArgs(files);
 
-        return DiscoverWorkflowFiles();
+        return DiscoverFiles(includeActions);
     }
 
-    static string[] DiscoverWorkflowFiles()
+    static string[] DiscoverFiles(bool includeActions)
     {
-        var dir = FindWorkflowsDirectory(Environment.CurrentDirectory);
-        if (dir is null || !Directory.Exists(dir))
-            return [];
+        var files = new List<string>();
 
-        return CollectYamlFiles(dir);
+        var workflowsDir = FindWorkflowsDirectory(Environment.CurrentDirectory);
+        if (workflowsDir is not null && Directory.Exists(workflowsDir))
+        {
+            files.AddRange(CollectYamlFiles(workflowsDir));
+        }
+
+        if (includeActions)
+        {
+            var actionsDir = FindActionsDirectory(Environment.CurrentDirectory);
+            if (actionsDir is not null && Directory.Exists(actionsDir))
+            {
+                files.AddRange(CollectYamlFiles(actionsDir));
+            }
+        }
+
+        if (files.Count == 0)
+        {
+            return [];
+        }
+
+        files.Sort(StringComparer.Ordinal);
+        return [.. files];
     }
 
     static string? FindWorkflowsDirectory(string startDir)
@@ -28,6 +47,22 @@ internal static class InputDiscovery
         while (current is not null)
         {
             var candidate = Path.Combine(current, ".github", "workflows");
+            if (Directory.Exists(candidate))
+                return candidate;
+
+            var parent = Directory.GetParent(current);
+            current = parent?.FullName;
+        }
+
+        return null;
+    }
+
+    static string? FindActionsDirectory(string startDir)
+    {
+        var current = startDir;
+        while (current is not null)
+        {
+            var candidate = Path.Combine(current, ".github", "actions");
             if (Directory.Exists(candidate))
                 return candidate;
 
