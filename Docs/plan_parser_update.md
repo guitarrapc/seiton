@@ -46,6 +46,8 @@ For multi-line spans (`EndLine > StartLine`), all lines are shown with `/ ... |_
 | `src/Seiton/Output/DiagnosticFormatter.cs` | Added rich output mode, source snippet extraction, `sourceMap` parameter |
 | `src/Seiton/Commands/CheckCommand.cs` | Build `sourceMap` during file lint loop; pass to `DiagnosticFormatter.Write()` |
 | `Docs/Seiton_CLI_spec.md` | Updated §7.1 to specify rich format and `--oneline` compact format |
+| `src/Seiton.Core/Linting/Rules/UnpinnedUsesRule.cs` | Refined `unpinned-uses` diagnostic location to point at `@ref` suffix in `uses:` values |
+| `tests/Seiton.Core.Tests/RuleInterfaceTests.cs` | Added regression tests for `@main` location targeting in step and reusable-workflow cases |
 
 ---
 
@@ -58,6 +60,34 @@ For multi-line spans (`EndLine > StartLine`), all lines are shown with `/ ... |_
 - [x] `ExtractLines()` extracts a range of lines from UTF-8 bytes without allocating the full string array upfront
 - [x] `CheckCommand` allocates source map only for `text` non-oneline mode
 - [x] `Seiton_CLI_spec.md` §7.1 updated with rich format spec
+- [x] `UnpinnedUsesRule` now computes a ref-specific location (`@...`) from `uses` value range
+- [x] Regression tests verify `unpinned-uses` points to `@main` (step and reusable workflow)
+
+---
+
+## 6. Follow-up: `@ref` Precision for `unpinned-uses`
+
+### 6.1 Goal
+
+Improve diagnostic usability by pointing caret ranges to the mutable ref suffix (`@main`, `@v4`, etc.) instead of the `uses:` key token.
+
+### 6.2 Scope
+
+- Applies to step-level `uses` (`ExecAction`) for `unpinned-uses` diagnostics.
+- Applies to job-level reusable workflow `uses` (`WorkflowCall`) for `unpinned-uses` diagnostics.
+- Falls back to existing location if `@` is absent or span is multi-line.
+
+### 6.3 Implementation Notes
+
+- Find last `@` in `ReadOnlySpan<byte>` (`LastIndexOf((byte)'@')`).
+- Build a `TextRange` from that byte offset to the end of value span.
+- Keep parser and AST contracts unchanged; location precision is a rule-layer concern.
+
+### 6.4 Validation
+
+- Added table-independent regression tests in `RuleInterfaceTests` asserting `StartColumn`/`EndColumn` for `@main`.
+- Run focused tests via:
+	- `dotnet run --project tests/Seiton.Core.Tests -- --treenode-filter "/*/*/LintEngine_UnpinnedUsesRule_*/*"`
 
 ---
 

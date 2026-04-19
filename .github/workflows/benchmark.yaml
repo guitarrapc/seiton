@@ -34,6 +34,7 @@ jobs:
         id: benchmark
         run: |
           dotnet run -c Release --no-build --no-launch-profile --project ./src/Seiton.Benchmark/Seiton.Benchmark.csproj -- --filter "${FILTER}"
+          echo "${{ inputs.benchmark }}"
           echo "result=success" >> "$GITHUB_OUTPUT"
         env:
           FILTER: ${{ inputs.benchmark }}

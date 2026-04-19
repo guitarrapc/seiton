@@ -1070,6 +1070,50 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_UnpinnedUsesRule_StepRefLocation_PointsToRefPart()
+    {
+        const string usesLine = "            - uses: owner/repo/action@main";
+        var yaml = string.Join(
+            "\n",
+            "on: push",
+            "jobs:",
+            "    build:",
+            "        runs-on: ubuntu-latest",
+            "        steps:",
+            usesLine,
+            string.Empty);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(NormalizeYaml(yaml)), "unpinned-uses-step-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
+
+        var refStartColumn = usesLine.IndexOf("@main", StringComparison.Ordinal) + 1;
+        await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(refStartColumn);
+        await Assert.That(diagnostic.Location.EndColumn).IsEqualTo(refStartColumn + "@main".Length);
+    }
+
+    [Test]
+    public async Task LintEngine_UnpinnedUsesRule_ReusableWorkflowRefLocation_PointsToRefPart()
+    {
+        const string usesLine = "        uses: owner/repo/.github/workflows/reusable.yml@main";
+        var yaml = string.Join(
+            "\n",
+            "on: push",
+            "jobs:",
+            "    release:",
+            usesLine,
+            string.Empty);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(NormalizeYaml(yaml)), "unpinned-uses-job-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
+
+        var refStartColumn = usesLine.IndexOf("@main", StringComparison.Ordinal) + 1;
+        await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(refStartColumn);
+        await Assert.That(diagnostic.Location.EndColumn).IsEqualTo(refStartColumn + "@main".Length);
+    }
+
+    [Test]
     public async Task RuleRegression_UnpinnedImageRule_TableDriven()
     {
         var cases = new[]

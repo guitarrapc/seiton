@@ -17,8 +17,9 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var usesLocation = BuildUsesLocation(workflowCall);
         var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var usesLocation = BuildUsesLocation(workflowCall);
+        var usesRefLocation = BuildRefLocation(workflowCall.Uses.Value, uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
@@ -27,7 +28,7 @@ public sealed class UnpinnedUsesRule : RuleBase
                 AddJobWarning(
                     job,
                     $"job '{localJobId}' local reusable workflow uses must not contain '@ref'",
-                    usesLocation);
+                    usesRefLocation);
             }
 
             return;
@@ -51,7 +52,7 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         var jobId = Decode(job.Id.Value);
         var usesText = Decode(workflowCall.Uses.Value);
-        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesLocation);
+        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
     }
 
     public override void VisitStep(Step step)
@@ -61,8 +62,9 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
         var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
+        var usesRefLocation = BuildRefLocation(actionExec.Uses.Value, uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("docker://"u8))
         {
             if (uses.Length <= "docker://"u8.Length)
@@ -77,7 +79,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                AddStepWarning(step, "local action uses must not contain '@ref'", usesLocation);
+                AddStepWarning(step, "local action uses must not contain '@ref'", usesRefLocation);
                 return;
             }
 
@@ -101,7 +103,58 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
 
         var usesText = Decode(actionExec.Uses.Value);
-        AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesLocation);
+        AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
+    }
+
+    static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
+    {
+        var at = uses.LastIndexOf((byte)'@');
+        if (at < 0 || at + 1 >= uses.Length)
+        {
+            return fallback;
+        }
+
+        var startOffset = usesValue.Offset + at;
+        var endOffset = usesValue.Offset + usesValue.Length;
+        if (startOffset < 0 || endOffset > source.Length || startOffset >= endOffset)
+        {
+            return fallback;
+        }
+
+        var (startLine, startColumn) = ComputeLineColumn(source, startOffset);
+        var (endLine, endColumn) = ComputeLineColumn(source, endOffset);
+
+        return new TextRange(
+            Start: startOffset,
+            Length: endOffset - startOffset,
+            StartLine: startLine,
+            StartColumn: startColumn,
+            EndLine: endLine,
+            EndColumn: endColumn);
+    }
+
+    static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
+    {
+        var line = 1;
+        var column = 1;
+
+        for (var i = 0; i < offset; i++)
+        {
+            var b = source[i];
+            if (b == (byte)'\n')
+            {
+                line++;
+                column = 1;
+                continue;
+            }
+
+            if (b != (byte)'\r')
+            {
+                column++;
+            }
+        }
+
+        return (line, column);
     }
 
     void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
