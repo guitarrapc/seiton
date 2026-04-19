@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Seiton.Core.Parsing;
 
@@ -11,12 +12,13 @@ public static class DiagnosticFormatter
         IReadOnlyList<Diagnostic> diagnostics,
         OutputFormat format,
         bool oneline,
-        bool color)
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap = null)
     {
         switch (format)
         {
             case OutputFormat.Text:
-                WriteText(writer, diagnostics, oneline, color);
+                WriteText(writer, diagnostics, oneline, color, sourceMap);
                 break;
             case OutputFormat.Json:
                 WriteJson(writer, diagnostics);
@@ -27,7 +29,7 @@ public static class DiagnosticFormatter
         }
     }
 
-    static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color)
+    static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap)
     {
         for (var i = 0; i < diagnostics.Count; i++)
         {
@@ -38,28 +40,233 @@ public static class DiagnosticFormatter
             var severity = d.Severity.ToString().ToLowerInvariant();
             var ruleId = d.RuleId ?? "parse";
 
-            if (color)
+            if (oneline)
             {
-                var severityColor = d.Severity switch
+                // Compact single-line format
+                if (color)
                 {
-                    DiagnosticSeverity.Error => "\x1b[31m",   // red
-                    DiagnosticSeverity.Warning => "\x1b[33m", // yellow
-                    _ => "\x1b[36m",                          // cyan
-                };
-                const string reset = "\x1b[0m";
-                const string bold = "\x1b[1m";
-                const string dim = "\x1b[2m";
+                    var severityColor = d.Severity switch
+                    {
+                        DiagnosticSeverity.Error => "\x1b[31m",   // red
+                        DiagnosticSeverity.Warning => "\x1b[33m", // yellow
+                        _ => "\x1b[36m",                          // cyan
+                    };
+                    const string reset = "\x1b[0m";
+                    const string bold = "\x1b[1m";
+                    const string dim = "\x1b[2m";
 
-                writer.Write($"{bold}{file}:{line}:{col}:{reset} ");
-                writer.Write($"{severityColor}{severity}{reset} ");
-                writer.Write($"{dim}[{ruleId}]{reset} ");
-                writer.WriteLine(d.Message);
+                    writer.Write($"{bold}{file}:{line}:{col}:{reset} ");
+                    writer.Write($"{severityColor}{severity}{reset} ");
+                    writer.Write($"{dim}[{ruleId}]{reset} ");
+                    writer.WriteLine(d.Message);
+                }
+                else
+                {
+                    writer.WriteLine($"{file}:{line}:{col}: {severity} [{ruleId}] {d.Message}");
+                }
             }
             else
             {
-                writer.WriteLine($"{file}:{line}:{col}: {severity} [{ruleId}] {d.Message}");
+                // Rich multi-line format (Rust-style)
+                WriteRichDiagnostic(writer, d, file, line, col, severity, ruleId, color, sourceMap);
             }
         }
+    }
+
+    static void WriteRichDiagnostic(
+        TextWriter writer,
+        Diagnostic d,
+        string file,
+        int line,
+        int col,
+        string severity,
+        string ruleId,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap)
+    {
+        if (color)
+        {
+            var severityColor = d.Severity switch
+            {
+                DiagnosticSeverity.Error => "\x1b[31m",
+                DiagnosticSeverity.Warning => "\x1b[33m",
+                _ => "\x1b[36m",
+            };
+            const string reset = "\x1b[0m";
+            const string bold = "\x1b[1m";
+            const string dim = "\x1b[2m";
+            const string blue = "\x1b[34m";
+
+            // Header: error[rule-id]: message
+            writer.Write($"{severityColor}{bold}{severity}[{ruleId}]{reset}{bold}: {d.Message}{reset}");
+            writer.WriteLine();
+
+            // Location arrow: --> file:line:col
+            writer.WriteLine($"  {blue}-->{reset} {file}:{line}:{col}");
+
+            // Source snippet
+            WriteSourceSnippet(writer, d, file, sourceMap, color, severityColor, blue, reset, bold, dim);
+
+            // Help text
+            if (d.Help is not null)
+                writer.WriteLine($"   {dim}={reset} {bold}help{reset}: {d.Help}");
+
+            writer.WriteLine();
+        }
+        else
+        {
+            // Header: error[rule-id]: message
+            writer.WriteLine($"{severity}[{ruleId}]: {d.Message}");
+
+            // Location arrow: --> file:line:col
+            writer.WriteLine($"  --> {file}:{line}:{col}");
+
+            // Source snippet
+            WriteSourceSnippet(writer, d, file, sourceMap, color, null, null, null, null, null);
+
+            // Help text
+            if (d.Help is not null)
+                writer.WriteLine($"   = help: {d.Help}");
+
+            writer.WriteLine();
+        }
+    }
+
+    static void WriteSourceSnippet(
+        TextWriter writer,
+        Diagnostic d,
+        string file,
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        bool color,
+        string? severityColor,
+        string? blue,
+        string? reset,
+        string? bold,
+        string? dim)
+    {
+        if (sourceMap is null || !sourceMap.TryGetValue(file, out var sourceBytes))
+        {
+            // No source available — emit minimal gutter line
+            writer.WriteLine("   |");
+            return;
+        }
+
+        var startLine = d.Location.StartLine;
+        var endLine = d.Location.EndLine;
+        var startCol = d.Location.StartColumn;
+        var endCol = d.Location.EndColumn;
+
+        // Clamp to valid range
+        if (startLine <= 0)
+        {
+            writer.WriteLine("   |");
+            return;
+        }
+        if (endLine < startLine) endLine = startLine;
+
+        var lines = ExtractLines(sourceBytes, startLine, endLine);
+        if (lines.Length == 0)
+        {
+            writer.WriteLine("   |");
+            return;
+        }
+
+        var lineNumWidth = endLine.ToString().Length;
+        var gutterPad = new string(' ', lineNumWidth);
+
+        writer.WriteLine($"   {gutterPad}|");
+
+        if (startLine == endLine)
+        {
+            // Single-line span
+            var sourceLine = lines[0];
+            WriteGutterLine(writer, startLine, lineNumWidth, sourceLine, color, blue, reset);
+
+            // Underline caret: columns are 1-based
+            var safeStart = Math.Max(1, startCol);
+            var safeEnd = endCol > safeStart ? endCol : safeStart + 1;
+            var leadingSpaces = new string(' ', safeStart - 1);
+            var caretLen = Math.Max(1, safeEnd - safeStart);
+            var carets = new string('^', caretLen);
+
+            if (color)
+                writer.WriteLine($"   {gutterPad}| {leadingSpaces}{severityColor}{carets}{reset}");
+            else
+                writer.WriteLine($"   {gutterPad}| {leadingSpaces}{carets}");
+        }
+        else
+        {
+            // Multi-line span: show opening line with /  and closing line with \___^
+            for (var li = 0; li < lines.Length; li++)
+            {
+                var ln = startLine + li;
+                var sourceLine = lines[li];
+                var prefix = li == 0 ? "/ " : "| ";
+                WriteGutterLineWithPrefix(writer, ln, lineNumWidth, prefix, sourceLine, color, blue, reset);
+            }
+            // Closing underline
+            var closingCarets = new string('^', Math.Max(1, endCol - 1));
+            if (color)
+                writer.WriteLine($"   {gutterPad}| {severityColor}|_{closingCarets}{reset}");
+            else
+                writer.WriteLine($"   {gutterPad}| |_{closingCarets}");
+        }
+
+        writer.WriteLine($"   {gutterPad}|");
+    }
+
+    static void WriteGutterLine(TextWriter writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
+    {
+        var lineStr = lineNum.ToString().PadLeft(width);
+        if (color)
+            writer.WriteLine($"   {blue}{lineStr}{reset} | {sourceLine}");
+        else
+            writer.WriteLine($"   {lineStr} | {sourceLine}");
+    }
+
+    static void WriteGutterLineWithPrefix(TextWriter writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
+    {
+        var lineStr = lineNum.ToString().PadLeft(width);
+        if (color)
+            writer.WriteLine($"   {blue}{lineStr}{reset} |{prefix}{sourceLine}");
+        else
+            writer.WriteLine($"   {lineStr} |{prefix}{sourceLine}");
+    }
+
+    static string[] ExtractLines(byte[] utf8, int startLine, int endLine)
+    {
+        var results = new string[endLine - startLine + 1];
+        var currentLine = 1;
+        var lineStart = 0;
+        var resultIdx = 0;
+
+        for (var i = 0; i <= utf8.Length; i++)
+        {
+            var isEnd = i == utf8.Length;
+            var isNewline = !isEnd && utf8[i] == (byte)'\n';
+
+            if (isNewline || isEnd)
+            {
+                if (currentLine >= startLine && currentLine <= endLine)
+                {
+                    // Strip trailing \r if present
+                    var len = i - lineStart;
+                    if (len > 0 && utf8[lineStart + len - 1] == (byte)'\r')
+                        len--;
+                    results[resultIdx++] = Encoding.UTF8.GetString(utf8, lineStart, len);
+                }
+                if (resultIdx == results.Length)
+                    break;
+                currentLine++;
+                lineStart = i + 1;
+            }
+        }
+
+        // Fill any unfilled slots (file shorter than expected)
+        for (var j = resultIdx; j < results.Length; j++)
+            results[j] = "";
+
+        return results;
     }
 
     static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)

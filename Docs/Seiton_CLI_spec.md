@@ -290,13 +290,79 @@ Path hints are intentionally fast and non-authoritative. Final routing is struct
 
 ### 7.1 `text` (default)
 
-Human-readable diagnostic output to stdout. One diagnostic per entry by default; compact single-line format with `--oneline`.
+Human-readable diagnostic output to stdout. Rich multi-line format (Rust-style) by default; compact single-line format with `--oneline`.
 
-Default multi-line format:
+#### 7.1.1 Default rich format
+
+Each diagnostic is rendered as a multi-line block showing the problem header, source location arrow, source snippet with underline caret, and optional help text.
+
+```
+error[job-permissions-required]: job "build" omits explicit permissions declaration
+  --> .github/workflows/build.yml:12:5
+     |
+  12 |     runs-on: ubuntu-latest
+     |     ^^^^^^^^^^^^^^^^^^^^^^
+     |
+   = help: add an explicit `permissions:` block to this job
+
+warning[unpinned-uses]: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA
+  --> .github/workflows/build.yml:8:11
+     |
+   8 |         uses: actions/checkout@v4
+     |               ^^^^^^^^^^^^^^^^^^^
+     |
+```
+
+Multi-line diagnostic spans are rendered with `/ ... |___^` fencing:
+
+```
+error[template-injection]: potentially unsafe use of github.event data
+  --> .github/workflows/build.yml:15:18
+     |
+  15 | /     run: echo "${{ github.event.pull_request.title }}"
+  16 | |       env:
+     | |____________^ untrusted data used in run step
+     |
+   = help: map the value to an env variable and use the shell variable instead
+```
+
+Snippet rendering behavior:
+
+- Source bytes are extracted from the original UTF-8 input per file path key.
+- Line numbers in the gutter are right-aligned to the width of the last shown line number.
+- Caret length (`^`) is derived from `TextRange.EndColumn - TextRange.StartColumn`; minimum 1.
+- When source is unavailable (for example stdin without a path, or JSON/SARIF formats), the gutter line `|` is emitted without snippet.
+
+Structure:
+
+```
+<severity>[<rule-id>]: <message>
+  --> <file>:<line>:<col>
+     |
+<line> | <source text>
+     | <leading spaces><carets>
+     |
+   = help: <help text>     (only when Diagnostic.Help is set)
+```
+
+Color coding (when color is enabled):
+
+- Severity header (`error[...]`, `warning[...]`) → severity color + bold
+- Message → bold
+- `-->` arrow and gutter `|` → blue
+- Line number → blue
+- Caret `^` characters → severity color
+- `help:` annotation → dim label + normal text
+
+#### 7.1.2 `--oneline` compact format
+
+With `--oneline`, each diagnostic is collapsed to a single line. Suitable for machine parsing, editor integrations, and environments where multi-line output is inconvenient.
 
 ```
 .github/workflows/build.yml:12:5: error [job-permissions-required] job "build" omits explicit permissions declaration
 ```
+
+Structure:
 
 ```
 <file>:<line>:<col>: <severity> [<rule-id>] <message>

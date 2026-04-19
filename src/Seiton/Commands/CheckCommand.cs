@@ -60,6 +60,7 @@ internal static class CheckCommand
         // Lint files
         var engine = new LintEngine();
         var allDiagnostics = new List<Diagnostic>();
+        Dictionary<string, byte[]>? sourceMap = resolvedFormat == OutputFormat.Text && !oneline ? new() : null;
 
         for (var i = 0; i < resolvedFiles.Length; i++)
         {
@@ -84,6 +85,7 @@ internal static class CheckCommand
 
             var result = engine.Check(utf8Yaml, filePath, lintConfig);
             allDiagnostics.AddRange(result.Diagnostics);
+            sourceMap?.TryAdd(filePath, utf8Yaml);
         }
 
         // Apply ignore patterns
@@ -114,7 +116,7 @@ internal static class CheckCommand
 
         // Output
         if (allDiagnostics.Count > 0)
-            DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+            DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
 
         WriteSummary(allDiagnostics, resolvedFiles.Length);
 

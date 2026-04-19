@@ -23,6 +23,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj" />
+    <Project Path="tests/Seiton.Tests/Seiton.Tests.csproj" />
     <Project Path="tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,330 @@
+﻿using Seiton.Core.Parsing;
+using Seiton.Output;
+
+namespace Seiton.Tests;
+
+public sealed class DiagnosticFormatterRichTextTests
+{
+    // --oneline format
+
+    [Test]
+    public async Task Oneline_Error_EmitsSingleLine()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "bad thing", 10, 5, 10, 10);
+        var output = Render(diag, oneline: true);
+
+        await Assert.That(output.TrimEnd()).IsEqualTo("test.yml:10:5: error [test-rule] bad thing");
+    }
+
+    [Test]
+    public async Task Oneline_Warning_EmitsSingleLine()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "suspicious thing", 3, 1, 3, 8);
+        var output = Render(diag, oneline: true);
+
+        await Assert.That(output.TrimEnd()).IsEqualTo("test.yml:3:1: warning [test-rule] suspicious thing");
+    }
+
+    [Test]
+    public async Task Oneline_NullRuleId_UsesParseLabel()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "parse error", 1, 1, 1, 5, ruleId: null);
+        var output = Render(diag, oneline: true);
+
+        await Assert.That(output.TrimEnd()).IsEqualTo("test.yml:1:1: error [parse] parse error");
+    }
+
+    [Test]
+    public async Task Oneline_MultipleDignostics_EachOnOwnLine()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Error, "first", 1, 1, 1, 5),
+            MakeDiagnostic(DiagnosticSeverity.Warning, "second", 2, 3, 2, 8),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Text, oneline: true, color: false);
+        writer.Flush();
+        var lines = sb.ToString().ReplaceLineEndings("\n").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        await Assert.That(lines.Length).IsEqualTo(2);
+        await Assert.That(lines[0]).IsEqualTo("test.yml:1:1: error [test-rule] first");
+        await Assert.That(lines[1]).IsEqualTo("test.yml:2:3: warning [test-rule] second");
+    }
+
+    // Rich format — header line
+
+    [Test]
+    public async Task Rich_Error_HeaderContainsSeverityRuleIdAndMessage()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "job omits permissions", 5, 3, 5, 10, ruleId: "job-permissions-required");
+        var output = Render(diag);
+
+        await Assert.That(output).Contains("error[job-permissions-required]: job omits permissions");
+    }
+
+    [Test]
+    public async Task Rich_Warning_HeaderContainsWarningSeverity()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "unpinned action", 1, 1, 1, 20);
+        var output = Render(diag);
+
+        await Assert.That(output).Contains("warning[test-rule]: unpinned action");
+    }
+
+    [Test]
+    public async Task Rich_LocationArrow_ContainsFileLineCol()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 12, 5, 12, 15, filePath: ".github/workflows/ci.yml");
+        var output = Render(diag);
+
+        await Assert.That(output).Contains("--> .github/workflows/ci.yml:12:5");
+    }
+
+    [Test]
+    public async Task Rich_GutterBar_AlwaysEmitted()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 1, 1, 5);
+        var output = Render(diag);
+
+        // At minimum the gutter | separator must appear
+        await Assert.That(output).Contains("|");
+    }
+
+    // Rich format — help annotation
+
+    [Test]
+    public async Task Rich_Help_IsEmittedWhenSet()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 1, 1, 5, help: "use explicit permissions instead");
+        var output = Render(diag);
+
+        await Assert.That(output).Contains("help: use explicit permissions instead");
+    }
+
+    [Test]
+    public async Task Rich_Help_IsAbsentWhenNull()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 1, 1, 5, help: null);
+        var output = Render(diag);
+
+        await Assert.That(output).DoesNotContain("help:");
+    }
+
+    // Rich format — source snippet
+
+    [Test]
+    public async Task Rich_SourceSnippet_ShowsReferencedLine()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        // line 4 is "    runs-on: ubuntu-latest", col 5..14
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "known label", 4, 5, 4, 14, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("    runs-on: ubuntu-latest");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_ShowsLineNumber()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 4, 5, 4, 14, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("4 |");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_CaretLengthMatchesColumnSpan()
+    {
+        // "  build:" on line 3. col 3..8 → span of 5 chars
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 3, 3, 3, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        // Caret row must have exactly 5 carets (EndColumn - StartColumn = 8 - 3 = 5)
+        await Assert.That(output).Contains("^^^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_MinimumOneCaret_WhenStartEqualsEnd()
+    {
+        var source = "on: push\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        // StartCol == EndCol → minimum 1 caret
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 4, 1, 4, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_NoSource_StillEmitsGutterBar()
+    {
+        // No source map provided — snippet should gracefully degrade
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 5, 1, 5, 10);
+        var output = Render(diag, sourceMap: null);
+
+        // Header and location arrow must still appear
+        await Assert.That(output).Contains("error[test-rule]: msg");
+        await Assert.That(output).Contains("--> test.yml:5:1");
+        await Assert.That(output).Contains("|");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_FileNotInSourceMap_StillEmitsGutterBar()
+    {
+        var sourceMap = new Dictionary<string, byte[]> { ["other.yml"] = "x\n"u8.ToArray() };
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 1, 1, 5, filePath: "missing.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("--> missing.yml:1:1");
+        await Assert.That(output).Contains("|");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_MultiLineSpan_ShowsAllLines()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        // span from line 2 to line 3
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 2, 1, 3, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("jobs:");
+        await Assert.That(output).Contains("  build:");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_LastLineOfFile_NoOutOfRange()
+    {
+        // File ends without trailing newline; diagnostic points at last line
+        var source = Encoding.UTF8.GetBytes("on: push");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 1, 1, 1, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("on: push");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_LineNumberBeyondFile_GracefulDegradation()
+    {
+        // Source has only 1 line but diagnostic says line 99
+        var source = Encoding.UTF8.GetBytes("on: push");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 99, 1, 99, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        // Must not throw; must emit at least location arrow
+        await Assert.That(output).Contains("--> ci.yml:99:1");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_CrLfLines_HandledCorrectly()
+    {
+        // Windows-style line endings
+        var source = Encoding.UTF8.GetBytes("on: push\r\njobs:\r\n  build:\r\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 2, 1, 2, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        // The extracted line should not contain \r
+        await Assert.That(output).Contains("jobs:");
+        // Verify the source \r was stripped: if it wasn't, we'd see \r\r (source \r + WriteLine \r\n)
+        await Assert.That(output).DoesNotContain("\r\r");
+    }
+
+    // Rich format — blank line between diagnostics
+
+    [Test]
+    public async Task Rich_MultipleDiagnostics_SeparatedByBlankLine()
+    {
+        var source = "on: push\njobs:\n  build:\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Error, "first error", 1, 1, 1, 8, filePath: "ci.yml"),
+            MakeDiagnostic(DiagnosticSeverity.Warning, "second warning", 2, 1, 2, 5, filePath: "ci.yml"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Text, oneline: false, color: false, sourceMap);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("error[test-rule]: first error");
+        await Assert.That(output).Contains("warning[test-rule]: second warning");
+    }
+
+    // Format routing — JSON and SARIF are unaffected by sourceMap
+
+    [Test]
+    public async Task Json_Format_NotAffectedBySourceMap()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "json test", 1, 1, 1, 5);
+        var sourceMap = new Dictionary<string, byte[]> { ["test.yml"] = "on: push\n"u8.ToArray() };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("\"severity\":\"error\"");
+        await Assert.That(output).Contains("\"message\":\"json test\"");
+    }
+
+    // Helpers
+    static Diagnostic MakeDiagnostic(
+        DiagnosticSeverity severity,
+        string message,
+        int startLine,
+        int startCol,
+        int endLine,
+        int endCol,
+        string? ruleId = "test-rule",
+        string? filePath = "test.yml",
+        string? help = null) =>
+        new(
+            Severity: severity,
+            Message: message,
+            Location: new TextRange(0, 0, startLine, startCol, endLine, endCol),
+            RuleId: ruleId,
+            FilePath: filePath,
+            Help: help);
+
+    static string Render(
+        Diagnostic diagnostic,
+        bool oneline = false,
+        bool color = false,
+        Dictionary<string, byte[]>? sourceMap = null)
+    {
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(
+            writer,
+            [diagnostic],
+            OutputFormat.Text,
+            oneline,
+            color,
+            sourceMap);
+        writer.Flush();
+        return sb.ToString();
+    }
+}
