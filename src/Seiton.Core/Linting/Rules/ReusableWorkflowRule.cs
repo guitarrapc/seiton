@@ -76,7 +76,7 @@ public sealed class ReusableWorkflowRule : RuleBase
                 AddJobError(
                     job,
                     $"job '{jobId}' local reusable workflow uses must not contain '@ref'",
-                    workflowCall.Uses.Range);
+                    BuildUsesLocation(workflowCall));
             }
 
             return;
@@ -177,7 +177,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             AddJobError(
                 job,
                 $"job '{jobId}' is missing required reusable workflow input '{requiredInput}'",
-                workflowCall.Uses.Range);
+                BuildUsesLocation(workflowCall));
         }
     }
 
@@ -258,7 +258,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             AddJobError(
                 job,
                 $"job '{jobId}' is missing required reusable workflow secret '{requiredSecret}'",
-                workflowCall.Uses.Range);
+                BuildUsesLocation(workflowCall));
         }
     }
 

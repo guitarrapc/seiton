@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -37,7 +38,7 @@ public sealed class ForbiddenUsesRule : RuleBase
             return;
         }
 
-        CheckUses(job.WorkflowCall.Uses, job, null);
+        CheckUses(job.WorkflowCall.Uses, BuildUsesLocation(job.WorkflowCall), job, null);
     }
 
     public override void VisitStep(Step step)
@@ -47,10 +48,10 @@ public sealed class ForbiddenUsesRule : RuleBase
             return;
         }
 
-        CheckUses(action.Uses, null, step);
+        CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    void CheckUses(StringNode usesNode, Job? job, Step? step)
+    void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null || !HasPolicy())
         {
@@ -75,11 +76,11 @@ public sealed class ForbiddenUsesRule : RuleBase
             var message = $"uses reference '{ownerRepo}' is denied by forbidden-uses policy";
             if (step is not null)
             {
-                AddStepWarning(step, message, usesNode.Range);
+                AddStepWarning(step, message, location);
             }
             else if (job is not null)
             {
-                AddJobWarning(job, message, usesNode.Range);
+                AddJobWarning(job, message, location);
             }
 
             return;
@@ -90,11 +91,11 @@ public sealed class ForbiddenUsesRule : RuleBase
             var message = $"uses reference '{ownerRepo}' is not in forbidden-uses allow policy";
             if (step is not null)
             {
-                AddStepWarning(step, message, usesNode.Range);
+                AddStepWarning(step, message, location);
             }
             else if (job is not null)
             {
-                AddJobWarning(job, message, usesNode.Range);
+                AddJobWarning(job, message, location);
             }
         }
     }

@@ -15,7 +15,7 @@ public sealed class OverprovisionedSecretsRule : RuleBase
             AddJobWarning(
                 job,
                 $"reusable workflow call passes {job.WorkflowCall.Secrets.Count} explicit secrets; map only minimum required secrets",
-                job.WorkflowCall.Uses.Range);
+                BuildUsesLocation(job.WorkflowCall));
         }
     }
 

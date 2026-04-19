@@ -17,6 +17,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
+        var usesLocation = BuildUsesLocation(workflowCall);
         var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
         if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
         {
@@ -26,7 +27,7 @@ public sealed class UnpinnedUsesRule : RuleBase
                 AddJobWarning(
                     job,
                     $"job '{localJobId}' local reusable workflow uses must not contain '@ref'",
-                    workflowCall.Uses.Range);
+                    usesLocation);
             }
 
             return;
@@ -39,7 +40,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             AddJobWarning(
                 job,
                 $"job '{formatJobId}' reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
-                workflowCall.Uses.Range);
+                usesLocation);
             return;
         }
 
@@ -50,7 +51,7 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         var jobId = Decode(job.Id.Value);
         var usesText = Decode(workflowCall.Uses.Value);
-        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA");
+        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesLocation);
     }
 
     public override void VisitStep(Step step)
@@ -60,12 +61,13 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
+        var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
         var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
         if (uses.StartsWith("docker://"u8))
         {
             if (uses.Length <= "docker://"u8.Length)
             {
-                AddStepWarning(step, "action uses 'docker://' must include an image reference", actionExec.Uses.Range);
+                AddStepWarning(step, "action uses 'docker://' must include an image reference", usesLocation);
             }
 
             return;
@@ -75,11 +77,11 @@ public sealed class UnpinnedUsesRule : RuleBase
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                AddStepWarning(step, "local action uses must not contain '@ref'", actionExec.Uses.Range);
+                AddStepWarning(step, "local action uses must not contain '@ref'", usesLocation);
                 return;
             }
 
-            ValidateLocalActionResolution(step, uses, actionExec.Uses.Range);
+            ValidateLocalActionResolution(step, uses, usesLocation);
             return;
         }
 
@@ -89,7 +91,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             AddStepWarning(
                 step,
                 $"action uses '{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
-                actionExec.Uses.Range);
+                usesLocation);
             return;
         }
 
@@ -99,7 +101,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
 
         var usesText = Decode(actionExec.Uses.Value);
-        AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA");
+        AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesLocation);
     }
 
     void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)

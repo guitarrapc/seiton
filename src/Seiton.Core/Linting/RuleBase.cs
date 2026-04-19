@@ -188,6 +188,16 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
+    protected static TextRange BuildUsesLocation(ExecAction action)
+    {
+        return action.UsesKeyRange ?? action.Uses.Range;
+    }
+
+    protected static TextRange BuildUsesLocation(WorkflowCall workflowCall)
+    {
+        return workflowCall.UsesKeyRange ?? workflowCall.Uses.Range;
+    }
+
     protected static bool HasNodeValue(StringNode? node)
     {
         return node is not null && node.Value.Length > 0;

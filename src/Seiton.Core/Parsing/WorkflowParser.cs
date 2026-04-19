@@ -1019,6 +1019,7 @@ public static class WorkflowParser
                     workflowCallNode = new WorkflowCall
                     {
                         Uses = usesNode ?? new StringNode { Value = default, Quoted = false, Range = default },
+                        UsesKeyRange = BuildScalarLocation(keyMark, keyUtf8.Length),
                         Inputs = workflowCallNode?.Inputs,
                         Secrets = workflowCallNode?.Secrets,
                         InheritSecrets = workflowCallNode?.InheritSecrets ?? false,
@@ -1202,6 +1203,7 @@ public static class WorkflowParser
                         workflowCallNode = new WorkflowCall
                         {
                             Uses = workflowCallNode.Uses,
+                            UsesKeyRange = workflowCallNode.UsesKeyRange,
                             Inputs = inputs,
                             Secrets = workflowCallNode.Secrets,
                             InheritSecrets = workflowCallNode.InheritSecrets,
@@ -1212,6 +1214,7 @@ public static class WorkflowParser
                         workflowCallNode = new WorkflowCall
                         {
                             Uses = new StringNode { Value = default, Quoted = false, Range = default },
+                            UsesKeyRange = null,
                             Inputs = inputs,
                             Secrets = null,
                             InheritSecrets = false,
@@ -1232,6 +1235,7 @@ public static class WorkflowParser
                         workflowCallNode = new WorkflowCall
                         {
                             Uses = workflowCallNode.Uses,
+                            UsesKeyRange = workflowCallNode.UsesKeyRange,
                             Inputs = workflowCallNode.Inputs,
                             Secrets = secrets,
                             InheritSecrets = inheritSecrets,
@@ -1242,6 +1246,7 @@ public static class WorkflowParser
                         workflowCallNode = new WorkflowCall
                         {
                             Uses = new StringNode { Value = default, Quoted = false, Range = default },
+                            UsesKeyRange = null,
                             Inputs = null,
                             Secrets = secrets,
                             InheritSecrets = inheritSecrets,
@@ -1405,6 +1410,7 @@ public static class WorkflowParser
         FloatNode? timeoutMinutesNode = null;
         StringNode? runNode = null;
         StringNode? usesNode = null;
+        TextRange? usesKeyRange = null;
         StringNode? shellNode = null;
         StringNode? workingDirectoryNode = null;
         Dictionary<Utf8String, StringNode>? withInputs = null;
@@ -1446,6 +1452,7 @@ public static class WorkflowParser
 
             if (keyUtf8.SequenceEqual("uses"u8))
             {
+                usesKeyRange = BuildScalarLocation(keyMark, keyUtf8.Length);
                 reader.Read();
                 hasUses = true;
                 if (!reader.End)
@@ -1638,6 +1645,7 @@ public static class WorkflowParser
             {
                 Kind = StepExecKind.Action,
                 Uses = usesNode ?? new StringNode { Value = default, Quoted = false, Range = default },
+                UsesKeyRange = usesKeyRange,
                 Inputs = withInputs,
                 Entrypoint = dockerEntrypoint,
                 Args = dockerArgs,

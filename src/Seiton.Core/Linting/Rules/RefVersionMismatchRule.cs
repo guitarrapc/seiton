@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -15,7 +16,7 @@ public sealed class RefVersionMismatchRule : RuleBase
             return;
         }
 
-        CheckUses(job.WorkflowCall.Uses, job, null);
+        CheckUses(job.WorkflowCall.Uses, BuildUsesLocation(job.WorkflowCall), job, null);
     }
 
     public override void VisitStep(Step step)
@@ -25,10 +26,10 @@ public sealed class RefVersionMismatchRule : RuleBase
             return;
         }
 
-        CheckUses(action.Uses, null, step);
+        CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    void CheckUses(StringNode usesNode, Job? job, Step? step)
+    void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -48,11 +49,11 @@ public sealed class RefVersionMismatchRule : RuleBase
         var message = $"uses ref major version 'v{refMajor}' mismatches action path version hint 'v{pathMajor}'; align ref and path intent";
         if (step is not null)
         {
-            AddStepWarning(step, message, usesNode.Range);
+            AddStepWarning(step, message, location);
         }
         else if (job is not null)
         {
-            AddJobWarning(job, message, usesNode.Range);
+            AddJobWarning(job, message, location);
         }
     }
 

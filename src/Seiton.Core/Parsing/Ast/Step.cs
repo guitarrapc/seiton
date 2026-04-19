@@ -45,6 +45,8 @@ public sealed class ExecAction : StepExec
 {
     public StringNode Uses { get; init; } = null!;
 
+    public TextRange? UsesKeyRange { get; init; }
+
     public IReadOnlyDictionary<Utf8String, StringNode>? Inputs { get; init; }
 
     public StringNode? Entrypoint { get; init; }

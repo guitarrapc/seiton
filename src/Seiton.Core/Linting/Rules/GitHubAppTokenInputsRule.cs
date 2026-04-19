@@ -46,12 +46,13 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         }
 
         var usesText = Decode(actionExec.Uses.Value);
+        var usesLocation = BuildUsesLocation(actionExec);
         if (!hasRepositoryConstraint && !hasPermissionConstraint)
         {
             AddStepError(
                 step,
                 $"action '{usesText}' should set repository and permission constraints when minting GitHub App token (expected with.repositories/repository and with.permissions or with.permission-*)",
-                actionExec.Uses.Range);
+                usesLocation);
             return;
         }
 
@@ -60,14 +61,14 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             AddStepError(
                 step,
                 $"action '{usesText}' should set repository constraints for GitHub App token (expected with.repositories or with.repository)",
-                actionExec.Uses.Range);
+                usesLocation);
             return;
         }
 
         AddStepError(
             step,
             $"action '{usesText}' should set permission constraints for GitHub App token (expected with.permissions or with.permission-*)",
-            actionExec.Uses.Range);
+            usesLocation);
     }
 
     static bool IsGitHubAppTokenAction(ReadOnlySpan<byte> uses)

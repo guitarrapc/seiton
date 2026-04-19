@@ -43,7 +43,7 @@ public sealed class CachePoisoningRule : RuleBase
         AddStepWarning(
             step,
             $"cache action '{actionRef}' runs in a workflow with untrusted triggers; isolate cache scope and avoid restore-key fallback across trust boundaries",
-            action.Uses.Range);
+            BuildUsesLocation(action));
     }
 
     static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)

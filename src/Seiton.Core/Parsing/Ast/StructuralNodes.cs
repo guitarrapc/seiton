@@ -192,6 +192,8 @@ public sealed class WorkflowCall
 {
     public StringNode Uses { get; init; } = null!;
 
+    public TextRange? UsesKeyRange { get; init; }
+
     public IReadOnlyDictionary<Utf8String, WorkflowCallInput>? Inputs { get; init; }
 
     public IReadOnlyDictionary<Utf8String, WorkflowCallSecret>? Secrets { get; init; }

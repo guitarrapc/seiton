@@ -36,7 +36,7 @@ public sealed class ArchivedUsesRule : RuleBase
         AddJobWarning(
             job,
             $"reusable workflow uses archived repository '{ownerRepo}'; replace with actively maintained alternative",
-            job.WorkflowCall.Uses.Range);
+            BuildUsesLocation(job.WorkflowCall));
     }
 
     public override void VisitStep(Step step)
@@ -59,7 +59,7 @@ public sealed class ArchivedUsesRule : RuleBase
         AddStepWarning(
             step,
             $"action uses archived repository '{ownerRepo}'; replace with actively maintained alternative",
-            action.Uses.Range);
+            BuildUsesLocation(action));
     }
 
     static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
