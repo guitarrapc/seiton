@@ -105,13 +105,30 @@ internal static class FixCommand
                 continue;
             }
 
-            // Apply fixes in-place
-            var fixResult = FixEngine.ApplyAndRelint(engine, utf8Yaml, filePath, result.FixableDiagnostics, lintConfig);
-            File.WriteAllBytes(filePath, fixResult.UpdatedUtf8Yaml);
-            allDiagnostics.AddRange(fixResult.After.Diagnostics);
+            // Apply fixes in-place. Iterate so diagnostics exposed after the first pass are also fixed.
+            var currentYaml = utf8Yaml;
+            var currentResult = result;
+            var appliedFixes = 0;
+            const int maxFixPasses = 8;
+
+            for (var pass = 0; pass < maxFixPasses && currentResult.HasFixableDiagnostics; pass++)
+            {
+                var nextYaml = FixEngine.Apply(currentYaml, currentResult.FixableDiagnostics);
+                if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                {
+                    break;
+                }
+
+                appliedFixes += currentResult.FixableDiagnosticCount;
+                currentYaml = nextYaml;
+                currentResult = engine.Check(currentYaml, filePath, lintConfig);
+            }
+
+            File.WriteAllBytes(filePath, currentYaml);
+            allDiagnostics.AddRange(currentResult.Diagnostics);
 
             if (verbose)
-                Console.Error.WriteLine($"  applied {result.FixableDiagnosticCount} fix(es) to {filePath}");
+                Console.Error.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
         }
 
         // Apply ignore patterns
