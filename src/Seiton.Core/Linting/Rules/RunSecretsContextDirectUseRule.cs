@@ -15,6 +15,7 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
+        base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
         _currentJob = null;
     }
