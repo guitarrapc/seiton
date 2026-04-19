@@ -311,24 +311,10 @@ public static class ExpressionParser
                 return -1;
             }
 
-            if (Peek() == '\'' || Peek() == '"')
-            {
-                return ParseStringLiteral();
-            }
-
-            if (IsDigit(Peek()))
-            {
-                return ParseNumberLiteral();
-            }
-
-            if (TryParseIdentifier(out var identifierSlice))
-            {
-                return ParseKeywordOrIdentifier(identifierSlice);
-            }
-
-            AddError($"unsupported index token '{(char)Peek()}'");
-            _pos++;
-            return -1;
+            // Allow full expressions as index keys (e.g. secrets[matrix.secret], env[vars.key]).
+            // The original limited implementation only supported string/number literals and bare
+            // identifiers. Any valid GitHub Actions expression is a valid index operand.
+            return ParseExpression();
         }
 
         private int ParseKeywordOrIdentifier(Utf8Slice identifierSlice)

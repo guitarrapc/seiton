@@ -58,6 +58,56 @@ public sealed class ExpressionTests
     }
 
     [Test]
+    public async Task Parse_MemberAccessIndexAccess_Succeeds()
+    {
+        // secrets[matrix.secret] — expression as index key (valid GitHub Actions syntax)
+        var result = ExpressionParser.Parse("secrets[matrix.secret]"u8);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.HasRoot).IsTrue();
+        await Assert.That(result.Nodes[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.IndexAccess);
+    }
+
+    [Test]
+    public async Task Parse_DeepMemberAccessIndexAccess_Succeeds()
+    {
+        // env[vars.key] — another common dynamic-key pattern
+        var result = ExpressionParser.Parse("env[vars.key]"u8);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.HasRoot).IsTrue();
+    }
+
+    [Test]
+    public async Task ExtractAndParseFull_SecretsMatrixIndexAccess_NoParseDiagnostics()
+    {
+        // Full workflow round-trip: SECRET: ${{ secrets[matrix.secret] }} must not produce parse errors
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                permissions:
+                  contents: read
+                strategy:
+                  matrix:
+                    org: [apples]
+                    include:
+                      - org: apples
+                        secret: APPLES
+                runs-on: ubuntu-latest
+                timeout-minutes: 1
+                steps:
+                  - run: echo $SECRET
+                    env:
+                      SECRET: ${{ secrets[matrix.secret] }}
+            """;
+
+        var result = ExpressionExtractor.ExtractAndParse(Encoding.UTF8.GetBytes(yaml));
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task ExtractAndParse_InvalidEmbeddedExpression_ReportsDiagnostics()
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: ${{ github. }}\n    steps:\n      - run: echo ok\n";
