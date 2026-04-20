@@ -170,7 +170,7 @@ ExpressionParser は式ごとに `List<ExpressionNode>`, `List<int>`, `List<Diag
 
 **改善策**:
 1. 内部バッファを `ArrayPool<T>.Shared.Rent` で取得し、結果サイズが確定してから `.AsSpan(0, count).ToArray()` で最小配列を作る
-2. または `ref struct ExpressionParserState` に stackalloc 済みバッファを持たせる（式は通常小さいため 64 要素程度で十分）
+2. バッファ管理を `PooledBuffer<T>` private struct に抽出し、Rent/Return/Growth を完全にカプセル化
 
 #### 3-B: 関数呼び出しの directArgs 最適化
 
@@ -179,12 +179,42 @@ ExpressionParser は式ごとに `List<ExpressionNode>`, `List<int>`, `List<Diag
 **改善策**: `Span<int>` stackalloc（GitHub Actions の関数は最大引数数が小さい）に置換。
 
 **完了条件**:
-- [ ] ExpressionParser 内の `new List<T>` が除去または pooled になっていること
-- [ ] ベンチマーク: ExpressionExtractor の Allocated が減少していること
-- [ ] 式解析の正確性が変わっていないこと（ExpressionTests 全通過）
-- [ ] 全テスト通過
+- [x] ExpressionParser 内の `new List<T>` が除去または pooled になっていること
+- [x] ベンチマーク: ExpressionExtractor の Allocated が減少していること
+- [x] 式解析の正確性が変わっていないこと（ExpressionTests 全通過）
+- [x] 全テスト通過
 
 **推定効果**: Large の ExpressionExtractor で ~50–100 KB 削減
+
+#### Phase 3 実施結果（2026-04-21 計測）
+
+**実施内容**:
+- `PooledBuffer<T>` private struct を ExpressionParser 内に導入。`ArrayPool<T>.Shared.Rent/Return` と Growth ロジックをカプセル化
+- `Parser` ref struct のフィールドを `List<T>` 3本 → `PooledBuffer<T>` 3本に置換
+- `Parser` に duck-typed `Dispose()` を追加し、`using var parser` で自動バッファ返却
+- `AddNode` / `AddArgument` は `PooledBuffer.Add()` への1行デリゲートに簡素化
+- `directArgs` を `new List<int>(4)` → `Span<int> directArgs = stackalloc int[16]` に置換
+- `GrowNodes` / `GrowArgs` / `GrowDiagnostics` / `ReturnBuffers` メソッドを全て削除（PooledBuffer 内に統合）
+
+**設計判断**:
+- 当初の実装では `Parser` に `_nodes[]` / `_nodeCount` / `Grow*()` / `ReturnBuffers()` を直接持たせていたが、public API として `ReturnBuffers()` を呼び出し側に強制する設計が使い勝手を損ねていた
+- バッファ管理を `PooledBuffer<T>` に分離し、`Parser.Dispose()` → `PooledBuffer.Dispose()` の連鎖で自動返却する設計に改善
+
+| Method | Size | Phase 2 Alloc | Phase 3 Alloc | Phase 2比削減 | Baseline比削減 |
+|---|---|---:|---:|---:|---:|
+| WorkflowParser.Parse | Small (1×3) | 22,728 B | 12,216 B | -10,512 B (-46.3%) | -19,112 B (-61.0%) |
+| WorkflowParser.Parse | Medium (6×8) | 200,616 B | 84,888 B | -115,728 B (-57.7%) | -166,152 B (-66.2%) |
+| WorkflowParser.Parse | Large (20×12) | 952,424 B | 382,808 B | -569,616 B (-59.8%) | -779,448 B (-67.1%) |
+| ExpressionExtractor | Small | 14,256 B | 3,744 B | -10,512 B (-73.7%) | -10,512 B (-73.7%) |
+| ExpressionExtractor | Medium | 156,320 B | 40,592 B | -115,728 B (-74.0%) | -115,728 B (-74.0%) |
+| ExpressionExtractor | Large | 758,376 B | 188,760 B | -569,616 B (-75.1%) | -569,616 B (-75.1%) |
+
+**考察**:
+- ExpressionExtractor の Large は -75.1% と大幅改善。`List<T>` 3本の初期化コスト（内部配列割り当て）+ per-parse の `ToArray()` コピーが式の数に比例して蓄積していたため、ArrayPool 化の効果が顕著。
+- WorkflowParser.Parse にも波及し、Large で -59.8%（Phase 2比）。式パーサーのアロケーションが全体の過半を占めていたことが裏付けられた。
+- Baseline 比では Large 382,808 B / 1,162,256 B = **67.1% 削減**。Phase 1–3 の累計で約 2/3 のアロケーションを削除。
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -277,11 +307,11 @@ Phase 5 (List最適化) は独立
 
 ## 実装ステータス
 
-### Phase 1: 診断メッセージの遅延評価 — 🔲 未着手
+### Phase 1: 診断メッセージの遅延評価 — ✅ 完了
 
-### Phase 2: HashSet<Utf8String> の削除 — 🔲 未着手
+### Phase 2: HashSet<Utf8String> の削除 — ✅ 完了
 
-### Phase 3: ExpressionParser のアロケーション削減 — 🔲 未着手
+### Phase 3: ExpressionParser のアロケーション削減 — ✅ 完了
 
 ### Phase 4: LintEngine のアロケーション削減 — 🔲 未着手
 
