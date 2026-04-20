@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -60,25 +61,88 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
             return cachedDigest;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Head, BuildManifestUri(parsed));
+        var client = _httpClientFactory.CreateClient(nameof(OciImageDigestResolver));
+        var manifestUri = BuildManifestUri(parsed);
+        var storedAuth = ResolveAuthorizationHeader(parsed.RegistryHost);
+
+        var digest = await ResolveDigestAsync(client, manifestUri, storedAuth, imageRef, cancellationToken);
+        if (digest is not null)
+        {
+            _successCache.TryAdd(parsed.CacheKey, digest);
+        }
+
+        return digest;
+    }
+
+    async Task<string?> ResolveDigestAsync(
+        HttpClient client,
+        Uri manifestUri,
+        AuthenticationHeaderValue? storedAuth,
+        string imageRef,
+        CancellationToken cancellationToken)
+    {
+        using var initialResponse = await SendHeadRequestAsync(client, manifestUri, storedAuth, cancellationToken);
+
+        // Image does not exist — return null instead of throwing.
+        if (initialResponse.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        // OCI bearer token challenge flow (RFC 6750 / Docker auth spec).
+        // Triggered when the registry returns 401 and we have no stored credentials.
+        // This covers anonymous access to Docker Hub official images, which requires
+        // obtaining a short-lived bearer token from auth.docker.io before the HEAD retry.
+        if (initialResponse.StatusCode == HttpStatusCode.Unauthorized && storedAuth is null)
+        {
+            var bearerToken = await TryAcquireBearerTokenAsync(client, initialResponse, cancellationToken);
+            if (bearerToken is not null)
+            {
+                using var authResponse = await SendHeadRequestAsync(
+                    client, manifestUri,
+                    new AuthenticationHeaderValue("Bearer", bearerToken),
+                    cancellationToken);
+
+                // Image may not exist even after successful auth.
+                if (authResponse.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return null;
+                }
+
+                return ExtractDigest(authResponse, imageRef, manifestUri);
+            }
+        }
+
+        return ExtractDigest(initialResponse, imageRef, manifestUri);
+    }
+
+    async Task<HttpResponseMessage> SendHeadRequestAsync(
+        HttpClient client,
+        Uri manifestUri,
+        AuthenticationHeaderValue? auth,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Head, manifestUri);
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Seiton", "1.0"));
         for (var i = 0; i < ManifestAcceptHeaders.Length; i++)
         {
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(ManifestAcceptHeaders[i]));
         }
 
-        var authHeader = ResolveAuthorizationHeader(parsed.RegistryHost);
-        if (authHeader is not null)
+        if (auth is not null)
         {
-            request.Headers.Authorization = authHeader;
+            request.Headers.Authorization = auth;
         }
 
-        var client = _httpClientFactory.CreateClient(nameof(OciImageDigestResolver));
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    }
+
+    static string ExtractDigest(HttpResponseMessage response, string imageRef, Uri requestUri)
+    {
         if (!response.IsSuccessStatusCode)
         {
             throw new InvalidOperationException(
-                $"Failed to resolve OCI digest for '{imageRef}' via '{request.RequestUri}' (status {(int)response.StatusCode}).");
+                $"Failed to resolve OCI digest for '{imageRef}' via '{requestUri}' (status {(int)response.StatusCode}).");
         }
 
         if (!response.Headers.TryGetValues("Docker-Content-Digest", out var digestValues))
@@ -94,8 +158,151 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
                 $"Registry response for '{imageRef}' returned invalid digest '{digest ?? string.Empty}'.");
         }
 
-        _successCache.TryAdd(parsed.CacheKey, digest!);
-        return digest;
+        return digest!;
+    }
+
+    // Parses the WWW-Authenticate: Bearer header and fetches a short-lived token
+    // from the registry's auth endpoint. Returns null when the challenge cannot be
+    // fulfilled (missing realm, non-HTTPS endpoint, or token endpoint failure).
+    static async Task<string?> TryAcquireBearerTokenAsync(
+        HttpClient client,
+        HttpResponseMessage challengeResponse,
+        CancellationToken cancellationToken)
+    {
+        var wwwAuth = challengeResponse.Headers.WwwAuthenticate
+            .FirstOrDefault(h => string.Equals(h.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase));
+        if (wwwAuth?.Parameter is null)
+        {
+            return null;
+        }
+
+        if (!TryParseBearerChallenge(wwwAuth.Parameter, out var realm, out var service, out var scope))
+        {
+            return null;
+        }
+
+        // Security: only follow HTTPS auth endpoints to prevent credential exposure.
+        if (!Uri.TryCreate(realm, UriKind.Absolute, out var realmUri)
+            || !string.Equals(realmUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var tokenUri = BuildTokenUri(realmUri, service, scope);
+        using var tokenRequest = new HttpRequestMessage(HttpMethod.Get, tokenUri);
+        tokenRequest.Headers.UserAgent.Add(new ProductInfoHeaderValue("Seiton", "1.0"));
+
+        using var tokenResponse = await client.SendAsync(
+            tokenRequest, HttpCompletionOption.ResponseContentRead, cancellationToken);
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        await using var stream = await tokenResponse.Content.ReadAsStreamAsync(cancellationToken);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        // Docker Hub returns both "access_token" and "token"; prefer "access_token" per OAuth2 spec.
+        if (doc.RootElement.TryGetProperty("access_token", out var accessToken))
+        {
+            return accessToken.GetString();
+        }
+
+        if (doc.RootElement.TryGetProperty("token", out var tokenProp))
+        {
+            return tokenProp.GetString();
+        }
+
+        return null;
+    }
+
+    static bool TryParseBearerChallenge(string parameter, out string? realm, out string? service, out string? scope)
+    {
+        realm = null;
+        service = null;
+        scope = null;
+
+        var remaining = parameter.AsSpan();
+        while (remaining.Length > 0)
+        {
+            remaining = remaining.TrimStart();
+            var eq = remaining.IndexOf('=');
+            if (eq < 0)
+            {
+                break;
+            }
+
+            var key = remaining[..eq].TrimEnd();
+            remaining = remaining[(eq + 1)..];
+
+            string? value;
+            if (remaining.Length > 0 && remaining[0] == '"')
+            {
+                remaining = remaining[1..];
+                var close = remaining.IndexOf('"');
+                if (close < 0)
+                {
+                    break;
+                }
+
+                value = remaining[..close].ToString();
+                remaining = remaining[(close + 1)..];
+                if (remaining.Length > 0 && remaining[0] == ',')
+                {
+                    remaining = remaining[1..];
+                }
+            }
+            else
+            {
+                var comma = remaining.IndexOf(',');
+                if (comma < 0)
+                {
+                    value = remaining.ToString();
+                    remaining = [];
+                }
+                else
+                {
+                    value = remaining[..comma].ToString();
+                    remaining = remaining[(comma + 1)..];
+                }
+            }
+
+            if (key.Equals("realm", StringComparison.OrdinalIgnoreCase))
+            {
+                realm = value;
+            }
+            else if (key.Equals("service", StringComparison.OrdinalIgnoreCase))
+            {
+                service = value;
+            }
+            else if (key.Equals("scope", StringComparison.OrdinalIgnoreCase))
+            {
+                scope = value;
+            }
+        }
+
+        return realm is not null;
+    }
+
+    static Uri BuildTokenUri(Uri realm, string? service, string? scope)
+    {
+        var hasService = !string.IsNullOrEmpty(service);
+        var hasScope = !string.IsNullOrEmpty(scope);
+        if (!hasService && !hasScope)
+        {
+            return realm;
+        }
+
+        var realmStr = realm.ToString();
+        var sep = realmStr.Contains('?') ? "&" : "?";
+        var query = (hasService, hasScope) switch
+        {
+            (true, true) => $"{sep}service={Uri.EscapeDataString(service!)}&scope={Uri.EscapeDataString(scope!)}",
+            (true, false) => $"{sep}service={Uri.EscapeDataString(service!)}",
+            _ => $"{sep}scope={Uri.EscapeDataString(scope!)}",
+        };
+
+        return new Uri(realmStr + query);
     }
 
     bool ShouldSkip(ParsedImageReference parsed)
@@ -220,7 +427,8 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
 
         var slash = normalized.IndexOf('/');
         var firstSegment = slash >= 0 ? normalized[..slash] : normalized;
-        var hasExplicitRegistry = firstSegment.Contains('.') || firstSegment.Contains(':') || string.Equals(firstSegment, "localhost", StringComparison.OrdinalIgnoreCase);
+        var hasExplicitRegistry = slash >= 0
+            && (firstSegment.Contains('.') || firstSegment.Contains(':') || string.Equals(firstSegment, "localhost", StringComparison.OrdinalIgnoreCase));
 
         string registryHost;
         string repositoryPath;

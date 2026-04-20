@@ -1274,7 +1274,44 @@ Resolve(imageRef) -> (digest, error)
 
 - `imageRef`: fully-qualified image reference with tag (e.g. `node:20.11.1`, `ghcr.io/org/image:v1.2.3`)
 - Returns: `sha256:<hex>` digest string, error
+- Returns `(null, null)` when the image does not exist (HTTP 404 from registry).
 - Returns `(null, SkippedError)` when the image ref is excluded by configuration (matches `exclude_images` or `exclude_tags` patterns).
+
+#### 12.2.3 OCI Registry Protocol: HEAD Manifest + Bearer Token Flow
+
+Implementations must use `HEAD /v2/{repo}/manifests/{reference}` with appropriate `Accept` headers to obtain the digest from the `Docker-Content-Digest` response header. This is rate-limit-friendly: Docker Hub counts `GET /manifests` as a **pull** (charged against the pull-rate quota), whereas `HEAD /manifests` is an **API request** (a separate, more generous quota).
+
+Comparison with `dockerfile-pin`:
+
+| Aspect | dockerfile-pin (Go) | Seiton (C#) |
+|---|---|---|
+| HTTP method | `remote.Head()` via go-containerregistry | `HttpMethod.Head` |
+| Auth handling | `authn.DefaultKeychain` (handles bearer + Basic + credential helpers automatically) | Basic from `~/.docker/config.json`; anonymous bearer challenge via RFC 6750 flow |
+| 404 image not found | `Exists()` returns `false, nil` | `Resolve()` returns `null` |
+| Error caching | Not cached (transient errors retried) | Not cached |
+| Existence check | Separate `Exists(imageRef) -> (bool, error)` method | Not exposed (folded into `Resolve` returning `null`) |
+
+**Bearer token challenge/response flow** (required for Docker Hub official images accessed without stored credentials):
+
+1. Send `HEAD /v2/{repo}/manifests/{ref}` — no auth.
+2. If the registry returns `401 Unauthorized` with a `WWW-Authenticate: Bearer realm="...",service="...",scope="..."` header:
+   a. Send `GET {realm}?service={service}&scope={scope}` to the auth endpoint.
+   b. Parse the JSON response for `access_token` (preferred) or `token`.
+   c. Retry `HEAD /v2/{repo}/manifests/{ref}` with `Authorization: Bearer {token}`.
+3. If the registry returns `200 OK`, read `Docker-Content-Digest` header value.
+4. If the registry returns `404 Not Found` (at any stage), return no digest without error.
+5. For any other non-success status, surface as a resolution error.
+
+Security constraints on the bearer token flow:
+- The `realm` URL obtained from `WWW-Authenticate` **must** use HTTPS. HTTP realm URLs are rejected without making a request.
+- The flow is only triggered when the initial request is unauthenticated. If Basic credentials are found in `~/.docker/config.json`, they are sent on the first request and the bearer challenge flow is skipped (401 with Basic auth → error, not retry).
+
+**Why HEAD does not consume the Docker Hub pull quota:**
+
+Docker Hub's pull limit (e.g. 100 pulls/6 hours for anonymous users) is charged when a client downloads at least one layer (i.e. performs a `GET /v2/{repo}/blobs/` request). A `HEAD /v2/{repo}/manifests/{ref}` request retrieves only response headers — no manifest body, no layer data — and is not counted as a pull. This is why tools like `dockerfile-pin` and Seiton use HEAD for digest resolution.
+
+**Lesson learned from `dockerfile-pin` comparison:**
+The C# implementation was already using HEAD requests before this comparison was made. The Go reference implementation confirmed this as the correct approach. The key gap identified was the absence of the anonymous bearer token challenge flow, which caused digest resolution to fail silently for Docker Hub official images (e.g. `node:20`, `python:3.12`) when no Docker credentials are configured.
 
 ### 12.3 Configuration
 

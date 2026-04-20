@@ -545,10 +545,42 @@ public interface IImageDigestResolver
 C# implementation notes:
 
 - Both interfaces are `async`; resolution may perform network I/O.
-- `null` return indicates configuration-based skip (not an error).
+- `null` return indicates configuration-based skip (not an error) **or** 404 image-not-found (also not an error — callers should not generate a fix for nonexistent images).
 - Implementations must cache successful resolutions in-process for the duration of a single `RemediateAsync` call.
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not instantiated by `LintEngine`.
+
+#### 4.5.1a `OciImageDigestResolver` — Implementation Constraints
+
+`OciImageDigestResolver` is the concrete `IImageDigestResolver` implementation. Key behavioral guarantees:
+
+**Request protocol:**
+- Uses `HEAD /v2/{repo}/manifests/{reference}` (never GET manifest). This avoids consuming Docker Hub's pull-rate quota (HEAD counts as an API request, not a pull).
+- Sends OCI + Docker manifest `Accept` headers to ensure multi-arch index digests are returned.
+- Reads `Docker-Content-Digest` response header for the digest value.
+
+**Authentication order:**
+1. If `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) contains credentials for the registry host, the stored `auth` value (Basic) is sent on the first request.
+2. If no stored credentials exist and the registry returns `401 Unauthorized` with `WWW-Authenticate: Bearer ...`, the anonymous bearer token flow (§12.2.3) is executed:
+   - `realm`, `service`, and `scope` are extracted from the challenge header.
+   - `GET {realm}?service={service}&scope={scope}` is sent to the auth endpoint.
+   - The returned `access_token` (or `token`) is used as a Bearer credential for the manifest HEAD retry.
+3. If stored credentials are present and the registry still returns 401 (wrong password, expired credentials), resolution fails with an error — the bearer challenge flow is **not** attempted when credentials were already sent.
+4. The `realm` URL from the challenge **must** be HTTPS; HTTP realm URLs are rejected without requesting a token.
+
+**HTTP status handling:**
+
+| Status | Behavior |
+|---|---|
+| `200 OK` | Extract `Docker-Content-Digest` header; validate as `sha256:<64-hex>` |
+| `401 Unauthorized` (no stored auth) | Trigger bearer token challenge flow (see above) |
+| `401 Unauthorized` (with stored auth) | Throw `InvalidOperationException` — permanent auth failure |
+| `404 Not Found` | Return `null` — image does not exist, no error |
+| Any other non-2xx | Throw `InvalidOperationException` with status code |
+
+**Caching:**
+- `_successCache: ConcurrentDictionary<string, string>` keyed by normalized `{registry}/{repo}:{tag}`.
+- Only successful digest resolutions are cached; 404 and error results are not cached so transient failures can be retried.
 
 #### 4.5.2 Remediation Entry Point
 
