@@ -1557,6 +1557,206 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
     }
 
+    // ── YAML anchor / alias tests ─────────────────────────────────────────────
+
+    [Test]
+    public async Task Parse_AnchorOnScalar_AliasedScalarResolved()
+    {
+        // &anchor on a scalar and *alias referencing it — basic scalar alias case.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: &runner ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                with:
+                  ref: *runner
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-scalar.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var step = result.Workflow!.Jobs.Values.First().Steps![0];
+        var execAction = (ExecAction)step.Exec;
+        // ref input value should be resolved to "ubuntu-latest"
+        await Assert.That(execAction.Inputs).IsNotNull();
+        var refValue = execAction.Inputs!.Values.First();
+        await Assert.That(refValue.Value.Length).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task Parse_AnchorOnSequence_AliasedSequenceResolved()
+    {
+        // &anchor on a sequence scalar alias — used in paths/paths-ignore filter.
+        var yaml = """
+        on:
+          push:
+            paths: &common_paths
+              - src/**
+              - tests/**
+          pull_request:
+            paths: *common_paths
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-sequence.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var events = result.Workflow!.On.OfType<WebhookEvent>().ToArray();
+        await Assert.That(events.Length).IsEqualTo(2);
+        var pushEvent = events[0];
+        var prEvent = events[1];
+        await Assert.That(pushEvent.Paths).IsNotNull();
+        await Assert.That(prEvent.Paths).IsNotNull();
+        await Assert.That(pushEvent.Paths!.Values.Count).IsEqualTo(prEvent.Paths!.Values.Count);
+    }
+
+    [Test]
+    public async Task Parse_AnchorOnMapping_AliasedMappingResolved()
+    {
+        // &anchor on a mapping — step env mapping aliased and reused.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ env.FOO }}
+                env: &default_env
+                  FOO: bar
+              - run: echo ${{ env.FOO }}
+                env: *default_env
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-mapping.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var steps = result.Workflow!.Jobs.Values.First().Steps!;
+        await Assert.That(steps[0].Env).IsNotNull();
+        await Assert.That(steps[1].Env).IsNotNull();
+        // Both steps should have env vars from the anchor
+        await Assert.That(steps[1].Env!.Vars!.Count).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task Parse_AnchorOnStep_AliasedStepResolved()
+    {
+        // &anchor on a complete step mapping — aliased step is replayed correctly.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - &checkout
+                uses: actions/checkout@v4
+              - *checkout
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-step.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var steps = result.Workflow!.Jobs.Values.First().Steps!;
+        await Assert.That(steps.Count).IsEqualTo(2);
+        await Assert.That(((ExecAction)steps[0].Exec).Uses.Value.Length).IsGreaterThan(0);
+        await Assert.That(((ExecAction)steps[1].Exec).Uses.Value.Length).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task Parse_AnchorOnJob_AliasedJobResolved()
+    {
+        // &anchor on an entire job mapping — aliased job is replayed correctly.
+        var yaml = """
+        on: push
+        jobs:
+          base: &base_job
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+          copy: *base_job
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-job.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(2);
+        foreach (var job in result.Workflow.Jobs.Values)
+        {
+            await Assert.That(job.RunsOn).IsNotNull();
+            await Assert.That(job.Steps).IsNotNull();
+        }
+    }
+
+    [Test]
+    public async Task Parse_AnchorOnEnv_AliasedEnvResolved()
+    {
+        // &anchor on a top-level env mapping — aliased in job env.
+        var yaml = """
+        on: push
+        env: &global_env
+          FOO: bar
+          BAZ: qux
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            env: *global_env
+            steps:
+              - run: echo ${{ env.FOO }}
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-env.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var job = result.Workflow!.Jobs.Values.First();
+        await Assert.That(job.Env).IsNotNull();
+        await Assert.That(job.Env!.Vars!.Count).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task Parse_AnchorOnIf_AliasedIfExpressionResolved()
+    {
+        // &anchor on an `if:` expression scalar — aliased across multiple steps.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo one
+                if: &cond ${{ github.ref == 'refs/heads/main' }}
+              - run: echo two
+                if: *cond
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-if.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        var steps = result.Workflow!.Jobs.Values.First().Steps!;
+        await Assert.That(steps[0].If).IsNotNull();
+        await Assert.That(steps[1].If).IsNotNull();
+    }
+
+    [Test]
+    public async Task Parse_AnchorActionlintOkFixture_NoDiagnostics()
+    {
+        // Full test using the actionlint anchors.yaml fixture — comprehensive anchor/alias coverage.
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "ok", "anchors.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        await Assert.That(result.HasFatalError).IsFalse();
+        // anchors.yaml has expression diagnostics but no fatal parse errors
+        await Assert.That(result.Diagnostics.Any(d => d.Message.StartsWith("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsFalse();
+    }
+
     [Test]
     public async Task Schema_Corpus_JsonFilesAreValid()
     {

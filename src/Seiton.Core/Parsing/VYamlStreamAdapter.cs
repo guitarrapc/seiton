@@ -9,6 +9,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private readonly Memory<byte> _source;
     private int _scalarSliceCursor;
 
+    // Anchor/alias resolution state (all null/false until first anchor is encountered)
+    private Dictionary<int, List<AnchorEvent>>? _anchorStore;    // anchor id → recorded events
+    private List<AnchorEvent>? _currentRecording;                // non-null while inside an anchor
+    private int _recordingId;                                    // anchor id being recorded
+    private int _recordingDepth;                                 // nesting depth inside anchor
+    private Queue<AnchorEvent>? _pendingReplays;                 // events queued for alias replay
+    private bool _isReplaying;                                   // true when serving a virtual event
+    private AnchorEvent _virtualCurrent;                         // current event when _isReplaying
+
     public VYamlStreamAdapter(Memory<byte> bytes)
     {
         _source = bytes;
@@ -16,14 +25,19 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         _parser = YamlParser.FromBytes(bytes);
     }
 
-    public YamlEventKind CurrentKind => MapEventKind(_parser.CurrentEventType);
+    public YamlEventKind CurrentKind =>
+        _isReplaying ? _virtualCurrent.Kind : MapEventKind(_parser.CurrentEventType);
 
-    public bool End => _parser.End;
+    public bool End =>
+        (_pendingReplays == null || _pendingReplays.Count == 0) && !_isReplaying && _parser.End;
 
     public TextPosition CurrentStart
     {
         get
         {
+            if (_isReplaying)
+                return _virtualCurrent.Start;
+
             var mark = _parser.CurrentMark;
             // VYaml's CurrentMark for empty/null scalars advances past the token to the next token's
             // position rather than staying at the scalar itself. Use the backward-scan helper to recover
@@ -42,18 +56,162 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
     public TextPosition CurrentEnd => CurrentStart;
 
-    public bool Read() => _parser.Read();
+    public bool Read()
+    {
+        // Case 1: Pending replay events from alias resolution — serve the next one.
+        if (_pendingReplays is { Count: > 0 })
+        {
+            _virtualCurrent = _pendingReplays.Dequeue();
+            _isReplaying = true;
+            // If inside a recording (alias-within-anchor), track depth.
+            if (_currentRecording != null)
+            {
+                _currentRecording.Add(_virtualCurrent);
+                TrackAnchorDepth(_virtualCurrent.Kind);
+            }
+            return true;
+        }
+        _isReplaying = false;
+
+        if (!_parser.Read())
+            return false;
+
+        var eventType = _parser.CurrentEventType;
+
+        // Case 2: Alias event — resolve and replay anchor events.
+        if (eventType == ParseEventType.Alias)
+        {
+            if (_parser.TryGetCurrentAnchor(out var aliasAnchor)
+                && _anchorStore != null
+                && _anchorStore.TryGetValue(aliasAnchor.Id, out var snapshots)
+                && snapshots.Count > 0)
+            {
+                _pendingReplays ??= new Queue<AnchorEvent>();
+                for (int i = 1; i < snapshots.Count; i++)
+                    _pendingReplays.Enqueue(snapshots[i]);
+                _virtualCurrent = snapshots[0];
+                _isReplaying = true;
+                // Record snap[0] if inside a recording.
+                // snap[1..n] will be recorded individually in Case 1 as they are dequeued,
+                // so we must NOT bulk-add them here (that would double-add them).
+                if (_currentRecording != null)
+                {
+                    _currentRecording.Add(_virtualCurrent);
+                    TrackAnchorDepth(_virtualCurrent.Kind);
+                }
+                return true;
+            }
+            // Unresolvable alias: surface as-is so the parser can emit an error.
+            // Record an Alias placeholder into the current recording (if any) so that the
+            // stored event sequence remains structurally complete and can be replayed correctly.
+            if (_currentRecording != null)
+            {
+                _currentRecording.Add(new AnchorEvent { Kind = YamlEventKind.Alias });
+                // Alias is a leaf node — _recordingDepth does not change.
+            }
+            return true;
+        }
+
+        // Case 3: Normal non-alias event.
+        // Start recording if:
+        //   1. This event carries an anchor that we have not yet recorded.
+        //   2. No recording is already in progress.
+        //   3. The event is an "opener" (Scalar, MappingStart, SequenceStart).
+        //      VYaml keeps TryGetCurrentAnchor() returning the LAST seen anchor ID for ALL
+        //      subsequent events (including MappingEnd, SequenceEnd, etc.), so we must
+        //      restrict new recordings to opener events only to avoid mis-attributing anchor
+        //      IDs to closer events and producing broken/overwritten recordings.
+        bool hasAnchor = _parser.TryGetCurrentAnchor(out var currentAnchor);
+        var currentKind = MapEventKind(eventType);
+        bool isAnchorOpener = currentKind is YamlEventKind.Scalar
+            or YamlEventKind.MappingStart or YamlEventKind.SequenceStart;
+        if (hasAnchor && _currentRecording == null && isAnchorOpener
+            && (_anchorStore == null || !_anchorStore.ContainsKey(currentAnchor.Id)))
+        {
+            _currentRecording = new List<AnchorEvent>(16);
+            _recordingId = currentAnchor.Id;
+            _recordingDepth = 0;
+        }
+
+        if (_currentRecording != null)
+        {
+            var snapshot = SnapshotCurrentEvent(eventType);
+            _currentRecording.Add(snapshot);
+            TrackAnchorDepth(currentKind);
+        }
+
+        return true;
+    }
 
     public void SkipHeader() => _parser.SkipAfter(ParseEventType.DocumentStart);
 
-    public void SkipCurrentNode() => _parser.SkipCurrentNode();
+    public void SkipCurrentNode()
+    {
+        if (_isReplaying)
+        {
+            // Drain the composite virtual node's events from the replay queue.
+            if (_virtualCurrent.Kind is YamlEventKind.SequenceStart or YamlEventKind.MappingStart)
+            {
+                var depth = 1;
+                while (_pendingReplays is { Count: > 0 } && depth > 0)
+                {
+                    var e = _pendingReplays.Dequeue();
+                    if (e.Kind is YamlEventKind.SequenceStart or YamlEventKind.MappingStart) depth++;
+                    else if (e.Kind is YamlEventKind.SequenceEnd or YamlEventKind.MappingEnd) depth--;
+                }
+            }
+            // After draining (or for a leaf), advance to the next virtual event so that
+            // CurrentKind reflects the event immediately following the skipped node.
+            // If the queue still has events, keep _isReplaying=true with the new current;
+            // otherwise end replay so the next Read() pulls from the real VYaml parser.
+            if (_pendingReplays is { Count: > 0 })
+            {
+                _virtualCurrent = _pendingReplays.Dequeue();
+                // _isReplaying stays true — there is a new current virtual event.
+            }
+            else
+            {
+                // Replay is exhausted. If the underlying VYaml parser is still positioned
+                // at the Alias event that triggered this replay, advance it so that
+                // CurrentKind reflects the event immediately following the Alias
+                // (the same post-skip invariant that VYaml's SkipCurrentNode upholds
+                // for every non-Alias node type).
+                if (_parser.CurrentEventType == ParseEventType.Alias)
+                    _parser.Read();
+                _isReplaying = false;
+            }
+            return;
+        }
+        // VYaml's SkipCurrentNode throws for Alias events (the event is already consumed by
+        // Read() and the parser state machine cannot advance from it). An Alias is a leaf node,
+        // so we advance manually — same effective behavior as SkipCurrentNode on a scalar leaf.
+        if (_parser.CurrentEventType == ParseEventType.Alias)
+        {
+            if (_parser.Read() && _currentRecording != null)
+            {
+                // Snapshot the event we just advanced to so the recording stays structurally
+                // faithful (mirrors what Read() does for every non-alias event).
+                var snapshot = SnapshotCurrentEvent(_parser.CurrentEventType);
+                _currentRecording.Add(snapshot);
+                TrackAnchorDepth(snapshot.Kind);
+            }
+            return;
+        }
+        _parser.SkipCurrentNode();
+    }
 
     public void SkipAfter(YamlEventKind kind) => _parser.SkipAfter(MapEventKind(kind));
 
-    public ReadOnlySpan<byte> GetScalarUtf8() => _parser.GetScalarAsUtf8();
+    public ReadOnlySpan<byte> GetScalarUtf8() =>
+        _isReplaying
+            ? (_virtualCurrent.ScalarBytes is { } b ? b.AsSpan() : ReadOnlySpan<byte>.Empty)
+            : _parser.GetScalarAsUtf8();
 
     public Utf8Slice GetScalarSlice()
     {
+        if (_isReplaying)
+            return _virtualCurrent.Slice;
+
         var utf8 = _parser.GetScalarAsUtf8();
         if (utf8.IndexOf((byte)'\n') >= 0
             && TryResolveNormalizedSlice(utf8, out var normalizedStart, out var normalizedLength))
@@ -313,10 +471,21 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         return false;
     }
 
-    public string? GetScalarString() => _parser.GetScalarAsString();
+    public string? GetScalarString()
+    {
+        if (_isReplaying)
+        {
+            if (_virtualCurrent.ScalarBytes == null) return null;
+            return System.Text.Encoding.UTF8.GetString(_virtualCurrent.ScalarBytes);
+        }
+        return _parser.GetScalarAsString();
+    }
 
     public ScalarTag GetScalarTag()
     {
+        if (_isReplaying)
+            return _virtualCurrent.Tag;
+
         var value = GetScalarUtf8();
         if (value.Length == 0)
         {
@@ -346,7 +515,72 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         return ScalarTag.Str;
     }
 
-    public bool IsScalarQuoted() => false;
+    public bool IsScalarQuoted() => _isReplaying ? _virtualCurrent.IsQuoted : false;
+
+    // Anchor / alias resolution helpers
+
+    /// <summary>
+    /// Snapshots the current VYaml parser event for anchor recording.
+    /// Captures the <see cref="Utf8Slice"/> by peeking (save/restore cursor) so that
+    /// replayed scalars carry a valid offset+length into the source buffer, and the
+    /// <see cref="WorkflowParser"/> can still call <see cref="GetScalarSlice"/> normally
+    /// afterwards.  When replayed, positions point to the anchor definition site, which is
+    /// acceptable for our diagnostic ranges.
+    /// </summary>
+    private AnchorEvent SnapshotCurrentEvent(ParseEventType eventType)
+    {
+        var kind = MapEventKind(eventType);
+        if (kind == YamlEventKind.Scalar)
+        {
+            // Peek the slice (save/restore cursor) so the subsequent GetScalarSlice() call
+            // from WorkflowParser operates from the same cursor position as if we hadn't
+            // looked at the slice here.
+            var savedCursor = _scalarSliceCursor;
+            var slice = GetScalarSlice();
+            _scalarSliceCursor = savedCursor;
+
+            return new AnchorEvent
+            {
+                Kind = kind,
+                ScalarBytes = _parser.GetScalarAsUtf8().ToArray(),
+                Slice = slice,
+                Tag = GetScalarTag(),
+                IsQuoted = false,
+                Start = CurrentStart,
+            };
+        }
+        return new AnchorEvent { Kind = kind, Start = CurrentStart };
+    }
+
+    /// <summary>
+    /// Updates <see cref="_recordingDepth"/> and completes the current anchor recording when
+    /// the anchor's top-level node is fully consumed.
+    /// </summary>
+    private void TrackAnchorDepth(YamlEventKind kind)
+    {
+        if (kind is YamlEventKind.SequenceStart or YamlEventKind.MappingStart)
+        {
+            _recordingDepth++;
+        }
+        else if (kind is YamlEventKind.SequenceEnd or YamlEventKind.MappingEnd)
+        {
+            _recordingDepth--;
+            if (_recordingDepth == 0)
+                CompleteAnchorRecording();
+        }
+        else if (kind == YamlEventKind.Scalar && _recordingDepth == 0)
+        {
+            CompleteAnchorRecording();
+        }
+    }
+
+    private void CompleteAnchorRecording()
+    {
+        _anchorStore ??= new Dictionary<int, List<AnchorEvent>>();
+        _anchorStore[_recordingId] = _currentRecording!;
+        _currentRecording = null;
+        _recordingDepth = 0;
+    }
 
     /// <summary>
     /// Converts a UTF-8 byte offset in <see cref="_source"/> to a 1-based line / column position.
@@ -458,4 +692,20 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             _ => ParseEventType.Nothing,
         };
     }
+}
+
+/// <summary>
+/// Snapshot of a single YAML event captured during anchor recording.
+/// Used by <see cref="VYamlStreamAdapter"/> to replay alias-referenced content.
+/// </summary>
+internal struct AnchorEvent
+{
+    public YamlEventKind Kind;
+    // Scalar data (null for non-scalar events)
+    public byte[]? ScalarBytes;
+    public Utf8Slice Slice;
+    public ScalarTag Tag;
+    public bool IsQuoted;
+    // Source position (from the anchor definition site)
+    public TextPosition Start;
 }

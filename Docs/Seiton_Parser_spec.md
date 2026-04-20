@@ -316,6 +316,43 @@ Credentials: `username` + `password` (both required), or expression.
 - Parser depends only on the YAML adapter's read contract
 - Errors are accumulated; **parsing does not abort** (multi-error recovery)
 
+### 3.1.1 YAML Anchor and Alias Support
+
+YAML anchors (`&name`) and aliases (`*name`) are supported as a current contract feature.
+
+#### Scope
+
+Anchor and alias resolution is handled transparently by the YAML adapter layer.
+The parser core receives an event stream where every `*alias` has been expanded to the full
+event sequence of the referenced anchor — the parser core never sees raw `Alias` events.
+
+Supported anchor targets:
+
+| Anchor target | Example |
+|---|---|
+| Scalar | `env: &my_val ubuntu-latest` / `runs-on: *my_val` |
+| Sequence | `paths: &paths [src/**]` / `paths: *paths` |
+| Mapping | `env: &envs {FOO: bar}` / `env: *envs` |
+| Step mapping | `- &step run: echo hello` / `- *step` |
+| Job mapping | `job1: &base_job ...` / `job2: *base_job` |
+| Nested usage | Anchors can be used anywhere a scalar, sequence, or mapping is valid |
+
+#### Constraints
+
+- **YAML merge key `<<`** is not supported. Any `<<:` key produces a `does not support merge key '<<'` error.
+- **Recursive anchors** (an alias that directly or indirectly references itself) produce parser diagnostics rather than a hang or fatal error.
+- **Undefined aliases** (aliases for which no anchor was defined) produce a `yaml parse failure` fatal error.
+- Parser core does not directly access anchor/alias graph structures; all resolution is owned by the adapter layer.
+
+#### Error recovery
+
+| Situation | Recovery |
+|---|---|
+| Undefined alias (`*name` with no matching `&name`) | `yaml parse failure` fatal diagnostic |
+| Unresolvable alias in adapter | Surface as `Alias` event; parser core reports type-mismatch diagnostic and skips |
+| YAML merge key `<<` | `does not support merge key '<<'` diagnostic; value is skipped |
+| Recursive anchor | Deterministic parse diagnostics (no hang) |
+
 ### 3.2 Workflow Top-Level Parse
 
 ```

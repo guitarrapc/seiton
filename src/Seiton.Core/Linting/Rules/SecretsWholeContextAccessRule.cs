@@ -72,7 +72,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         }
     }
 
-    // ── Step-level env helper ────────────────────────────────────────────────
+    // Step-level env helper
 
     void CheckEnvForStep(Env? env, Step step)
     {
@@ -98,7 +98,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         }
     }
 
-    // ── Job-level env helper ────────────────────────────────────────────────
+    // Job-level env helper
 
     void CheckEnvForJob(Env? env, Job job)
     {
@@ -124,7 +124,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         }
     }
 
-    // ── Core expression scanning ─────────────────────────────────────────────
+    // Core expression scanning
 
     void CheckNode<TTarget>(
         StringNode? node,
@@ -175,7 +175,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         }
     }
 
-    // ── AST traversal ────────────────────────────────────────────────────────
+    // AST traversal
 
     static bool ContainsSecretsWholeContextReference(
         int nodeId,
@@ -274,7 +274,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         return true;
     }
 
-    // ── Shared utilities ─────────────────────────────────────────────────────
+    // Shared utilities
 
     static bool TryFindExpression(
         ReadOnlySpan<byte> value,

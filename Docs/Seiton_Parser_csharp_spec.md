@@ -264,13 +264,16 @@ The parser has already completed the adapter migration:
 
 This means the entry point remains stable while alternate adapters can be introduced without rewriting parser core logic.
 
-#### 0.4.10 Alias Resolution Responsibility (Spec §1.1 step 1b)
+#### 0.4.10 Alias Resolution Responsibility (Spec §1.1 step 1b, §3.1.1)
 
-Alias resolution is a parser contract requirement but adapter/library-owned responsibility in C# runtime.
+Alias resolution is a current-contract feature owned entirely by the adapter layer.
 
-- Parser core assumes alias-normalized input events.
-- Adapter/library alias failures are normalized into fatal parse diagnostics at parser entrypoint.
-- Parser core does not directly manipulate YAML anchor/alias graph structures.
+- **Mechanism**: `VYamlStreamAdapter` implements event-buffering alias resolution. When a YAML anchor event (`&name`) is encountered, the associated node's event sequence is recorded in an in-memory store keyed by VYaml's internal anchor ID. When a YAML alias event (`*name`) is encountered, the stored event sequence is replayed to the parser core as if the aliased node appeared inline.
+- **Parser core contract**: The parser core receives alias-normalized events. It never sees raw `Alias` events on a success path.
+- **Supported anchor targets**: scalar, sequence, mapping, step mapping, job mapping (see Spec §3.1.1).
+- **Known VYaml behavior**: VYaml's `TryGetCurrentAnchor()` continues to return the last-seen anchor ID for all events following the anchored node (including `MappingEnd`, `SequenceEnd`, etc.). The adapter guards against this by restricting new anchor recordings to opener events (Scalar, MappingStart, SequenceStart) and by skipping anchors that are already stored.
+- **Adapter alias failures** are normalized into fatal parse diagnostics at the `WorkflowParser.Parse` entrypoint.
+- **Parser core** does not directly manipulate anchor/alias graph structures.
 
 ### 0.5 Design
 
