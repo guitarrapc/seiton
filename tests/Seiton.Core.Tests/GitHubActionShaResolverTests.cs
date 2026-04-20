@@ -392,13 +392,7 @@ public sealed class GitHubActionShaResolverTests
         GitHubNetworkConfig? githubConfig = null)
     {
         var client = new HttpClient(handler);
-        var factory = new StubHttpClientFactory(client);
-        return new GitHubActionShaResolver(factory, pinningConfig ?? new FixPinningConfig(), githubConfig ?? new GitHubNetworkConfig());
-    }
-
-    private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => client;
+        return new GitHubActionShaResolver(client, pinningConfig ?? new FixPinningConfig(), githubConfig ?? new GitHubNetworkConfig());
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

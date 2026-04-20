@@ -6,12 +6,12 @@ using System.Text.RegularExpressions;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
-public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory, FixPinningConfig pinningConfig, GitHubNetworkConfig githubConfig) : IActionShaResolver
+public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningConfig pinningConfig, GitHubNetworkConfig githubConfig) : IActionShaResolver
 {
     static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
     static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
-    readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    readonly HttpClient _httpClient = httpClient;
     readonly FixPinningConfig _pinningConfig = pinningConfig;
     readonly GitHubNetworkConfig _githubConfig = githubConfig;
     readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
@@ -471,7 +471,7 @@ public sealed class GitHubActionShaResolver(IHttpClientFactory httpClientFactory
         string token,
         CancellationToken cancellationToken)
     {
-        var client = _httpClientFactory.CreateClient(nameof(GitHubActionShaResolver));
+        var client = _httpClient;
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(apiBaseUri, relativePath));
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Seiton", "1.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));

@@ -15,7 +15,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         "application/vnd.docker.distribution.manifest.v2+json",
     ];
 
-    readonly IHttpClientFactory _httpClientFactory;
+    readonly HttpClient _httpClient;
     readonly FixImagesConfig _config;
     readonly string? _dockerConfigPath;
     readonly ConcurrentDictionary<string, string> _successCache = new(StringComparer.Ordinal);
@@ -24,14 +24,14 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     readonly string[] _normalizedIgnoreImages;
     volatile DockerAuthConfig? _dockerAuthConfig;
 
-    public OciImageDigestResolver(IHttpClientFactory httpClientFactory, FixImagesConfig config)
-        : this(httpClientFactory, config, dockerConfigPath: null)
+    public OciImageDigestResolver(HttpClient httpClient, FixImagesConfig config)
+        : this(httpClient, config, dockerConfigPath: null)
     {
     }
 
-    internal OciImageDigestResolver(IHttpClientFactory httpClientFactory, FixImagesConfig config, string? dockerConfigPath)
+    internal OciImageDigestResolver(HttpClient httpClient, FixImagesConfig config, string? dockerConfigPath)
     {
-        _httpClientFactory = httpClientFactory;
+        _httpClient = httpClient;
         _config = config;
         _dockerConfigPath = dockerConfigPath;
         _normalizedExcludeImages = NormalizeEntries(config.ExcludeImages);
@@ -61,7 +61,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
             return cachedDigest;
         }
 
-        var client = _httpClientFactory.CreateClient(nameof(OciImageDigestResolver));
+        var client = _httpClient;
         var manifestUri = BuildManifestUri(parsed);
         var storedAuth = ResolveAuthorizationHeader(parsed.RegistryHost);
 

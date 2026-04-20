@@ -180,14 +180,7 @@ public sealed class OciImageDigestResolverTests
         FixImagesConfig? config = null,
         string? dockerConfigPath = null)
     {
-        var client = new HttpClient(handler);
-        var factory = new StubHttpClientFactory(client);
-        return new OciImageDigestResolver(factory, config ?? new FixImagesConfig(), dockerConfigPath);
-    }
-
-    private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => client;
+        return new OciImageDigestResolver(new HttpClient(handler), config ?? new FixImagesConfig(), dockerConfigPath);
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

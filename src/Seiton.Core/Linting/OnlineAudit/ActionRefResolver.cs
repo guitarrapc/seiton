@@ -20,12 +20,12 @@ public readonly record struct ActionRefResolution(
     bool HasTagReference,
     bool IsTaggedCommit);
 
-public sealed class ActionRefResolver(IHttpClientFactory httpClientFactory, GitHubNetworkConfig githubConfig) : IActionRefResolver
+public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig githubConfig) : IActionRefResolver
 {
     static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
     static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
-    readonly IHttpClientFactory httpClientFactory = httpClientFactory;
+    readonly HttpClient httpClient = httpClient;
     readonly GitHubNetworkConfig githubConfig = githubConfig;
     readonly ConcurrentDictionary<string, ActionRefResolution> cache = new(StringComparer.Ordinal);
 
@@ -233,7 +233,7 @@ public sealed class ActionRefResolver(IHttpClientFactory httpClientFactory, GitH
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
-        var client = httpClientFactory.CreateClient(nameof(ActionRefResolver));
+        var client = httpClient;
         return await client.SendAsync(request, cancellationToken);
     }
 

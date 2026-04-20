@@ -112,15 +112,7 @@ public sealed class ActionRefResolverTests
         StubHttpMessageHandler handler,
         GitHubNetworkConfig? config = null)
     {
-        return new ActionRefResolver(new StubHttpClientFactory(handler), config ?? new GitHubNetworkConfig());
-    }
-
-    private sealed class StubHttpClientFactory(StubHttpMessageHandler handler) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name)
-        {
-            return new HttpClient(handler, disposeHandler: false);
-        }
+        return new ActionRefResolver(new HttpClient(handler), config ?? new GitHubNetworkConfig());
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

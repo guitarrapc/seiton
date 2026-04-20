@@ -70,16 +70,15 @@ internal static class FixCommand
         if (enablePinNetwork || enableImageNetwork)
         {
             sharedHttpClient = new HttpClient();
-            var httpClientFactory = new SingletonHttpClientFactory(sharedHttpClient);
             var networkConfig = lintConfig?.Network ?? new NetworkConfig();
             var pinningConfig = lintConfig?.Fix.Pinning ?? new FixPinningConfig();
             var imagesConfig = lintConfig?.Fix.Images ?? new FixImagesConfig();
 
             IActionShaResolver? shaResolver = enablePinNetwork
-                ? new GitHubActionShaResolver(httpClientFactory, pinningConfig, networkConfig.GitHub)
+                ? new GitHubActionShaResolver(sharedHttpClient, pinningConfig, networkConfig.GitHub)
                 : null;
             IImageDigestResolver? imageResolver = enableImageNetwork
-                ? new OciImageDigestResolver(httpClientFactory, imagesConfig)
+                ? new OciImageDigestResolver(sharedHttpClient, imagesConfig)
                 : null;
 
             pinRemediation = new PinRemediationEngine(
@@ -242,10 +241,5 @@ internal static class FixCommand
         {
             sharedHttpClient?.Dispose();
         }
-    }
-
-    private sealed class SingletonHttpClientFactory(HttpClient client) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => client;
     }
 }
