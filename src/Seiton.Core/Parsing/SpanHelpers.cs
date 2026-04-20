@@ -36,6 +36,34 @@ internal static class SpanHelpers
         return true;
     }
 
+    internal static bool ContainsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> token)
+    {
+        if (token.Length == 0 || value.Length < token.Length)
+        {
+            return false;
+        }
+
+        for (var start = 0; start <= value.Length - token.Length; start++)
+        {
+            var matched = true;
+            for (var i = 0; i < token.Length; i++)
+            {
+                if (ToLowerAscii(value[start + i]) != ToLowerAscii(token[i]))
+                {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     internal static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
     {
         if (value.Length == 0)
