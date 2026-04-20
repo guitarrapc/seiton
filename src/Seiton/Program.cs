@@ -33,7 +33,7 @@ internal class SeitonCli
     /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     [Command("")]
-    public void Root(
+    public async Task Root(
         [Argument] string[]? files = null,
         string? config = null,
         string stdinFilename = "<stdin>",
@@ -59,7 +59,7 @@ internal class SeitonCli
         }
 
         var code = fix
-            ? FixCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions)
+            ? await FixCommand.RunAsync(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions)
             : CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
 
         if (code != 0) Environment.ExitCode = code;

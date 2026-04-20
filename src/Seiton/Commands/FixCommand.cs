@@ -1,6 +1,7 @@
 ﻿using Seiton.Config;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using Seiton.Output;
 
@@ -8,7 +9,7 @@ namespace Seiton.Commands;
 
 internal static class FixCommand
 {
-    public static int Run(
+    public static async Task<int> RunAsync(
         string[] files,
         string? config,
         string stdinFilename,
@@ -62,116 +63,189 @@ internal static class FixCommand
             return ExitCode.Success;
         }
 
-        var engine = new LintEngine();
-        var allDiagnostics = new List<Diagnostic>();
-        var hasFixable = false;
-
-        for (var i = 0; i < resolvedFiles.Length; i++)
+        // Build pin remediation engine if network pin/image resolution is enabled.
+        // A single HttpClient is reused across all resolver calls for connection pooling.
+        PinRemediationEngine? pinRemediation = null;
+        HttpClient? sharedHttpClient = null;
+        if (enablePinNetwork || enableImageNetwork)
         {
-            var filePath = resolvedFiles[i];
-            if (filePath == "-")
+            sharedHttpClient = new HttpClient();
+            var httpClientFactory = new SingletonHttpClientFactory(sharedHttpClient);
+            var networkConfig = lintConfig?.Network ?? new NetworkConfig();
+            var pinningConfig = lintConfig?.Fix.Pinning ?? new FixPinningConfig();
+            var imagesConfig = lintConfig?.Fix.Images ?? new FixImagesConfig();
+
+            IActionShaResolver? shaResolver = enablePinNetwork
+                ? new GitHubActionShaResolver(httpClientFactory, pinningConfig, networkConfig.GitHub)
+                : null;
+            IImageDigestResolver? imageResolver = enableImageNetwork
+                ? new OciImageDigestResolver(httpClientFactory, imagesConfig)
+                : null;
+
+            pinRemediation = new PinRemediationEngine(
+                shaResolver,
+                imageResolver,
+                pinningConfig,
+                imagesConfig,
+                networkConfig);
+        }
+
+        try
+        {
+            var engine = new LintEngine();
+            var allDiagnostics = new List<Diagnostic>();
+            var hasFixable = false;
+
+            for (var i = 0; i < resolvedFiles.Length; i++)
             {
-                Console.Error.WriteLine("fix: stdin not supported for fix command");
-                return ExitCode.InvalidOptions;
-            }
-
-            var utf8Yaml = File.ReadAllBytes(filePath);
-
-            if (verbose)
-                Console.Error.WriteLine($"fixing {filePath}...");
-
-            var result = engine.Check(utf8Yaml, filePath, lintConfig);
-
-            if (!result.HasFixableDiagnostics)
-            {
-                allDiagnostics.AddRange(result.Diagnostics);
-                continue;
-            }
-
-            hasFixable = true;
-
-            if (check)
-            {
-                // --check: report fixable but don't apply
-                allDiagnostics.AddRange(result.Diagnostics);
-                continue;
-            }
-
-            if (dryRun)
-            {
-                // --dry-run: print diff
-                FixEngine.WriteUnifiedDiff(Console.Out, utf8Yaml, result.FixableDiagnostics, filePath);
-                allDiagnostics.AddRange(result.Diagnostics);
-                continue;
-            }
-
-            // Apply fixes in-place. Iterate so diagnostics exposed after the first pass are also fixed.
-            var currentYaml = utf8Yaml;
-            var currentResult = result;
-            var appliedFixes = 0;
-            const int maxFixPasses = 8;
-
-            for (var pass = 0; pass < maxFixPasses && currentResult.HasFixableDiagnostics; pass++)
-            {
-                var nextYaml = FixEngine.Apply(currentYaml, currentResult.FixableDiagnostics);
-                if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                var filePath = resolvedFiles[i];
+                if (filePath == "-")
                 {
-                    break;
+                    Console.Error.WriteLine("fix: stdin not supported for fix command");
+                    return ExitCode.InvalidOptions;
                 }
 
-                appliedFixes += currentResult.FixableDiagnosticCount;
-                currentYaml = nextYaml;
-                currentResult = engine.Check(currentYaml, filePath, lintConfig);
+                var utf8Yaml = File.ReadAllBytes(filePath);
+
+                if (verbose)
+                    Console.Error.WriteLine($"fixing {filePath}...");
+
+                var result = engine.Check(utf8Yaml, filePath, lintConfig);
+
+                // Apply network-assisted pin remediation: attaches SHA/digest DiagnosticFix values
+                // to unpinned-uses and unpinned-image diagnostics. This runs once per file.
+                IReadOnlyList<Diagnostic> effectiveDiagnostics = result.Diagnostics;
+                if (pinRemediation != null)
+                {
+                    var remResult = await pinRemediation.RemediateAsync(result.Diagnostics, utf8Yaml);
+                    effectiveDiagnostics = remResult.Diagnostics;
+                    if (verbose && remResult.ResolvedCount > 0)
+                        Console.Error.WriteLine($"  resolved {remResult.ResolvedCount} pin(s) for {filePath}");
+                }
+
+                // Check whether any diagnostic (local or pin-remediated) has a fix attached.
+                var hasAnyFix = false;
+                for (var j = 0; j < effectiveDiagnostics.Count; j++)
+                {
+                    if (effectiveDiagnostics[j].Fix != null)
+                    {
+                        hasAnyFix = true;
+                        break;
+                    }
+                }
+
+                if (!hasAnyFix)
+                {
+                    allDiagnostics.AddRange(effectiveDiagnostics);
+                    continue;
+                }
+
+                hasFixable = true;
+
+                if (check)
+                {
+                    // --check: report fixable but don't apply
+                    allDiagnostics.AddRange(effectiveDiagnostics);
+                    continue;
+                }
+
+                if (dryRun)
+                {
+                    // --dry-run: print diff using all effective (local + pin-remediated) fixes
+                    FixEngine.WriteUnifiedDiff(Console.Out, utf8Yaml, effectiveDiagnostics, filePath);
+                    allDiagnostics.AddRange(effectiveDiagnostics);
+                    continue;
+                }
+
+                // Apply first fix pass: includes both pin-remediated and local fixes.
+                var currentYaml = utf8Yaml;
+                var appliedFixes = 0;
+                const int maxFixPasses = 8;
+
+                var firstPassYaml = FixEngine.Apply(currentYaml, effectiveDiagnostics);
+                if (!firstPassYaml.AsSpan().SequenceEqual(currentYaml))
+                {
+                    var firstPassFixCount = 0;
+                    for (var j = 0; j < effectiveDiagnostics.Count; j++)
+                        if (effectiveDiagnostics[j].Fix != null) firstPassFixCount++;
+                    appliedFixes += firstPassFixCount;
+                    currentYaml = firstPassYaml;
+                }
+
+                // Subsequent re-check passes: local AST fixes only (pin diagnostics are now
+                // satisfied so they won't reappear). Skip pass 0 since it was already applied above.
+                var currentResult = engine.Check(currentYaml, filePath, lintConfig);
+                for (var pass = 1; pass < maxFixPasses && currentResult.HasFixableDiagnostics; pass++)
+                {
+                    var nextYaml = FixEngine.Apply(currentYaml, currentResult.FixableDiagnostics);
+                    if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                    {
+                        break;
+                    }
+
+                    appliedFixes += currentResult.FixableDiagnosticCount;
+                    currentYaml = nextYaml;
+                    currentResult = engine.Check(currentYaml, filePath, lintConfig);
+                }
+
+                File.WriteAllBytes(filePath, currentYaml);
+                allDiagnostics.AddRange(currentResult.Diagnostics);
+
+                if (verbose)
+                    Console.Error.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
             }
 
-            File.WriteAllBytes(filePath, currentYaml);
-            allDiagnostics.AddRange(currentResult.Diagnostics);
-
-            if (verbose)
-                Console.Error.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
-        }
-
-        // Apply ignore patterns
-        if (ignore.Length > 0)
-        {
-            var patterns = new System.Text.RegularExpressions.Regex[ignore.Length];
-            for (var i = 0; i < ignore.Length; i++)
-                patterns[i] = new System.Text.RegularExpressions.Regex(ignore[i], System.Text.RegularExpressions.RegexOptions.Compiled);
-
-            allDiagnostics.RemoveAll(d =>
+            // Apply ignore patterns
+            if (ignore.Length > 0)
             {
-                for (var i = 0; i < patterns.Length; i++)
+                var patterns = new System.Text.RegularExpressions.Regex[ignore.Length];
+                for (var i = 0; i < ignore.Length; i++)
+                    patterns[i] = new System.Text.RegularExpressions.Regex(ignore[i], System.Text.RegularExpressions.RegexOptions.Compiled);
+
+                allDiagnostics.RemoveAll(d =>
                 {
-                    if (patterns[i].IsMatch(d.Message))
-                        return true;
-                }
-                return false;
-            });
-        }
+                    for (var i = 0; i < patterns.Length; i++)
+                    {
+                        if (patterns[i].IsMatch(d.Message))
+                            return true;
+                    }
+                    return false;
+                });
+            }
 
-        // Apply min-severity filter
-        if (minSeverity is not null)
-        {
-            var threshold = minSeverity.ToLowerInvariant() switch
+            // Apply min-severity filter
+            if (minSeverity is not null)
             {
-                "error" => DiagnosticSeverity.Error,
-                "warning" => DiagnosticSeverity.Warning,
-                "info" => DiagnosticSeverity.Info,
-                _ => (DiagnosticSeverity?)null,
-            };
-            if (threshold is not null)
-                allDiagnostics.RemoveAll(d => d.Severity < threshold.Value);
+                var threshold = minSeverity.ToLowerInvariant() switch
+                {
+                    "error" => DiagnosticSeverity.Error,
+                    "warning" => DiagnosticSeverity.Warning,
+                    "info" => DiagnosticSeverity.Info,
+                    _ => (DiagnosticSeverity?)null,
+                };
+                if (threshold is not null)
+                    allDiagnostics.RemoveAll(d => d.Severity < threshold.Value);
+            }
+
+            // Output remaining diagnostics
+            if (allDiagnostics.Count > 0)
+                DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+
+            CheckCommand.WriteSummary(allDiagnostics, resolvedFiles.Length);
+
+            if (check && hasFixable)
+                return ExitCode.LintIssuesFound;
+
+            return CheckCommand.HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
         }
+        finally
+        {
+            sharedHttpClient?.Dispose();
+        }
+    }
 
-        // Output remaining diagnostics
-        if (allDiagnostics.Count > 0)
-            DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
-
-        CheckCommand.WriteSummary(allDiagnostics, resolvedFiles.Length);
-
-        if (check && hasFixable)
-            return ExitCode.LintIssuesFound;
-
-        return CheckCommand.HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
+    private sealed class SingletonHttpClientFactory(HttpClient client) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => client;
     }
 }
