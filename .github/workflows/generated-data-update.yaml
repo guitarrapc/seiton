@@ -20,6 +20,8 @@ jobs:
           private-key: ${{ secrets.SYNCED_ACTIONS_BOT_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.repository }}
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
