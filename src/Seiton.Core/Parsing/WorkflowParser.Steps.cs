@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -86,8 +86,10 @@ public static partial class WorkflowParser
                         ref reader,
                         diagnostics,
                         ExpressionValidationContext.Step,
-                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar",
+                        out var runErr,
+                        out var runMark,
                         parseWholeValueIfNoEmbedded: false);
+                    if (runErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar", runMark);
                 }
                 continue;
             }
@@ -99,7 +101,8 @@ public static partial class WorkflowParser
                 hasUses = true;
                 if (!reader.End)
                 {
-                    usesNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar");
+                    usesNode = ParseString(ref reader, out var usesErr, out var usesMark);
+                    if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar", usesMark);
                 }
                 continue;
             }
@@ -109,7 +112,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    nameNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] name must be scalar");
+                    nameNode = ParseString(ref reader, out var nameErr, out var nameMark);
+                    if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] name must be scalar", nameMark);
                 }
                 continue;
             }
@@ -119,7 +123,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    idNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar");
+                    idNode = ParseString(ref reader, out var idErr, out var idMark);
+                    if (idErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar", idMark);
                 }
                 continue;
             }
@@ -133,7 +138,9 @@ public static partial class WorkflowParser
                         ref reader,
                         diagnostics,
                         ExpressionValidationContext.Step,
-                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar");
+                        out var ifErr,
+                        out var ifMark);
+                    if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar", ifMark);
                 }
                 continue;
             }
@@ -162,7 +169,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    shellNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] shell must be scalar");
+                    shellNode = ParseString(ref reader, out var shellErr, out var shellMark);
+                    if (shellErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] shell must be scalar", shellMark);
                 }
                 continue;
             }
@@ -176,8 +184,10 @@ public static partial class WorkflowParser
                         ref reader,
                         diagnostics,
                         ExpressionValidationContext.Step,
-                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] working-directory must be scalar",
+                        out var wdErr,
+                        out var wdMark,
                         parseWholeValueIfNoEmbedded: false);
+                    if (wdErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] working-directory must be scalar", wdMark);
                 }
                 continue;
             }
@@ -187,7 +197,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    timeoutMinutesNode = ParseFloat(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number");
+                    timeoutMinutesNode = ParseFloat(ref reader, out var tmErr, out var tmMark);
+                    if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number", tmMark);
                     if (timeoutMinutesNode is not null && timeoutMinutesNode.Value <= 0)
                     {
                         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be greater than 0", keyMark);
@@ -201,11 +212,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    continueOnErrorNode = ParseBoolOrExpression(
-                        ref reader,
-                        diagnostics,
-                        ExpressionValidationContext.Step,
-                        $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] continue-on-error must be bool or expression");
+                    continueOnErrorNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Step, out var coeErr, out var coeMark);
+                    if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] continue-on-error must be bool or expression", coeMark);
                 }
                 continue;
             }
@@ -352,8 +360,10 @@ public static partial class WorkflowParser
                 ref reader,
                 diagnostics,
                 ExpressionValidationContext.Step,
-                $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with.{Encoding.UTF8.GetString(keyUtf8)} must be scalar",
+                out var withErr,
+                out var withMark,
                 parseWholeValueIfNoEmbedded: false);
+            if (withErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with.{Encoding.UTF8.GetString(keyUtf8)} must be scalar", withMark);
 
             if (value is null)
             {

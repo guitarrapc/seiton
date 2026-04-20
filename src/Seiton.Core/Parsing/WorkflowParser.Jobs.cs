@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -95,7 +95,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    nameNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' name must be scalar");
+                    nameNode = ParseString(ref reader, out var nameErr, out var nameMark);
+                    if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' name must be scalar", nameMark);
                 }
                 continue;
             }
@@ -105,7 +106,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    needsNode = ParseStringOrStringSequence(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' needs must be scalar or sequence of scalar");
+                    needsNode = ParseStringOrStringSequence(ref reader, diagnostics, out var needsErr, out var needsMark);
+                    if (needsErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' needs must be scalar or sequence of scalar", needsMark);
                 }
                 continue;
             }
@@ -154,7 +156,8 @@ public static partial class WorkflowParser
                 reader.Read(); // consume key
                 if (!reader.End)
                 {
-                    var usesNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar");
+                    var usesNode = ParseString(ref reader, out var usesErr, out var usesMark);
+                    if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar", usesMark);
                     workflowCallNode = new WorkflowCall
                     {
                         Uses = usesNode ?? new StringNode { Value = default, Quoted = false, Range = default },
@@ -172,7 +175,8 @@ public static partial class WorkflowParser
                 reader.Read(); // consume key
                 if (!reader.End)
                 {
-                    ifNode = ParseExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' if must be scalar");
+                    ifNode = ParseExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var ifErr, out var ifMark);
+                    if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' if must be scalar", ifMark);
                 }
                 continue;
             }
@@ -256,7 +260,8 @@ public static partial class WorkflowParser
 
                 if (!reader.End)
                 {
-                    timeoutMinutesNode = ParseFloat(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number");
+                    timeoutMinutesNode = ParseFloat(ref reader, out var tmErr, out var tmMark);
+                    if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number", tmMark);
                     if (timeoutMinutesNode is not null && timeoutMinutesNode.Value <= 0)
                     {
                         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be greater than 0", keyMark);
@@ -276,7 +281,8 @@ public static partial class WorkflowParser
 
                 if (!reader.End)
                 {
-                    continueOnErrorNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' continue-on-error must be bool or expression");
+                    continueOnErrorNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var coeErr, out var coeMark);
+                    if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' continue-on-error must be bool or expression", coeMark);
                 }
                 continue;
             }
@@ -610,16 +616,19 @@ public static partial class WorkflowParser
                         var valueUtf8 = reader.GetScalarUtf8();
                         if (ContainsExpression(valueUtf8))
                         {
-                            labelsExpr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"{section}.labels must be scalar, sequence, or expression", parseWholeValueIfNoEmbedded: false);
+                            labelsExpr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
+                            if (lblExprErr) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblExprMark);
                         }
                         else
                         {
-                            labels = ParseStringOrStringSequence(ref reader, diagnostics, $"{section}.labels must be scalar, sequence, or expression");
+                            labels = ParseStringOrStringSequence(ref reader, diagnostics, out var lblErr1, out var lblMark1);
+                            if (lblErr1) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
                         }
                     }
                     else
                     {
-                        labels = ParseStringOrStringSequence(ref reader, diagnostics, $"{section}.labels must be scalar, sequence, or expression");
+                        labels = ParseStringOrStringSequence(ref reader, diagnostics, out var lblErr2, out var lblMark2);
+                        if (lblErr2) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
                     }
 
                     continue;
@@ -627,7 +636,8 @@ public static partial class WorkflowParser
 
                 if (isGroup)
                 {
-                    group = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"{section}.group must be scalar", parseWholeValueIfNoEmbedded: false);
+                    group = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
+                    if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
                     continue;
                 }
 
@@ -659,7 +669,8 @@ public static partial class WorkflowParser
             var scalarUtf8 = reader.GetScalarUtf8();
             if (ContainsExpression(scalarUtf8))
             {
-                var expr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"{section} must be scalar, sequence, or mapping", parseWholeValueIfNoEmbedded: false);
+                var expr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var roExprErr, out var roExprMark, parseWholeValueIfNoEmbedded: false);
+                if (roExprErr) AddError(diagnostics, $"{section} must be scalar, sequence, or mapping", roExprMark);
                 return new Runner
                 {
                     LabelsExpr = expr,
@@ -668,7 +679,8 @@ public static partial class WorkflowParser
             }
         }
 
-        var labelsFallback = ParseStringOrStringSequence(ref reader, diagnostics, $"{section} must be scalar, sequence, or mapping");
+        var labelsFallback = ParseStringOrStringSequence(ref reader, diagnostics, out var lblFbErr, out var lblFbMark);
+        if (lblFbErr) AddError(diagnostics, $"{section} must be scalar, sequence, or mapping", lblFbMark);
         return new Runner
         {
             Labels = labelsFallback,
@@ -681,7 +693,8 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var name = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment must be scalar or mapping");
+            var name = ParseString(ref reader, out var envNameErr, out var envNameMark);
+            if (envNameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment must be scalar or mapping", envNameMark);
             return name is null
                 ? null
                 : new Seiton.Core.Parsing.Ast.Environment
@@ -733,21 +746,24 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read();
-                nameNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.name must be scalar");
+                nameNode = ParseString(ref reader, out var envNErr, out var envNMark);
+                if (envNErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.name must be scalar", envNMark);
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("url"u8))
             {
                 reader.Read();
-                urlNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' environment.url must be scalar", parseWholeValueIfNoEmbedded: false);
+                urlNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var urlErr, out var urlMark, parseWholeValueIfNoEmbedded: false);
+                if (urlErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.url must be scalar", urlMark);
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("deployment"u8))
             {
                 reader.Read();
-                deploymentNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' environment.deployment must be bool or expression");
+                deploymentNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var depErr, out var depMark);
+                if (depErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.deployment must be bool or expression", depMark);
                 continue;
             }
 
@@ -835,7 +851,8 @@ public static partial class WorkflowParser
                 break;
             }
 
-            var value = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.JobOutput, $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar", parseWholeValueIfNoEmbedded: false);
+            var value = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.JobOutput, out var outErr, out var outMark, parseWholeValueIfNoEmbedded: false);
+            if (outErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar", outMark);
             outputs[key] = value ?? keyNode;
         }
 
@@ -898,7 +915,8 @@ public static partial class WorkflowParser
             StringNode? valueNode;
             try
             {
-                valueNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' with.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", parseWholeValueIfNoEmbedded: false);
+                valueNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var withErr, out var withMark, parseWholeValueIfNoEmbedded: false);
+                if (withErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' with.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", withMark);
             }
             catch
             {
@@ -986,7 +1004,8 @@ public static partial class WorkflowParser
                 break;
             }
 
-            var valueNode = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", allowEmpty: false);
+            var valueNode = ParseString(ref reader, out var secErr, out var secMark, allowEmpty: false);
+            if (secErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", secMark);
             if (valueNode is not null)
             {
                 var valueUtf8 = valueNode.Value.AsSpan(source);

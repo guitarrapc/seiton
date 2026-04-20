@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -121,7 +121,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    failFast = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression");
+                    failFast = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var ffErr, out var ffMark);
+                    if (ffErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression", ffMark);
                 }
                 continue;
             }
@@ -131,7 +132,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    maxParallel = ParseInt(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer");
+                    maxParallel = ParseInt(ref reader, out var mpErr, out var mpMark);
+                    if (mpErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer", mpMark);
                     if (maxParallel is not null && maxParallel.Value <= 0)
                     {
                         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be greater than 0", keyMark);
@@ -173,8 +175,10 @@ public static partial class WorkflowParser
                 ref reader,
                 diagnostics,
                 ExpressionValidationContext.Job,
-                $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be scalar or mapping",
+                out var mxExprErr,
+                out var mxExprMark,
                 parseWholeValueIfNoEmbedded: false);
+            if (mxExprErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be scalar or mapping", mxExprMark);
             return new Matrix { Expression = expression, Range = expression?.Range ?? default };
         }
 
@@ -277,8 +281,10 @@ public static partial class WorkflowParser
                     ref reader,
                     diagnostics,
                     ExpressionValidationContext.Job,
-                    $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(rowKey.Span)} must be sequence or scalar",
+                    out var rowErr,
+                    out var rowMark,
                     parseWholeValueIfNoEmbedded: false);
+                if (rowErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(rowKey.Span)} must be sequence or scalar", rowMark);
                 rowExpr = valueNode;
                 rowValues = valueNode is null ? [] : [new RawYamlString { Value = valueNode }];
             }
@@ -324,8 +330,10 @@ public static partial class WorkflowParser
                 ref reader,
                 diagnostics,
                 ExpressionValidationContext.Job,
-                $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} must be sequence or scalar",
+                out var mcErr,
+                out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
+            if (mcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} must be sequence or scalar", mcMark);
             return
             [
                 new MatrixCombinations
@@ -401,8 +409,9 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var node = ParseString(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value must be scalar, mapping, or sequence", allowEmpty: true)
-                ?? new StringNode { Value = default, Quoted = false, Range = default };
+            var node = ParseString(ref reader, out var mvErr, out var mvMark, allowEmpty: true);
+            if (mvErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value must be scalar, mapping, or sequence", mvMark);
+            node ??= new StringNode { Value = default, Quoted = false, Range = default };
             return new RawYamlString { Value = node };
         }
 

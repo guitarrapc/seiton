@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -17,8 +17,10 @@ public static partial class WorkflowParser
                 ref reader,
                 diagnostics,
                 ExpressionValidationContext.Job,
-                $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression",
+                out var svcErr,
+                out var svcMark,
                 parseWholeValueIfNoEmbedded: false);
+            if (svcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", svcMark);
             return expression is null
                 ? null
                 : new Services { Expression = expression, Range = expression.Range };
@@ -112,7 +114,8 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var scalarImage = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping");
+            var scalarImage = ParseString(ref reader, out var ctrErr, out var ctrMark);
+            if (ctrErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", ctrMark);
             if (scalarImage is null)
             {
                 return null;
@@ -189,7 +192,8 @@ public static partial class WorkflowParser
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
                 }
-                image = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar");
+                image = ParseString(ref reader, out var imgErr, out var imgMark);
+                if (imgErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", imgMark);
                 continue;
             }
 
@@ -232,7 +236,8 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var pvErr, out var pvMark);
+                if (pvErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar", pvMark);
                 if (optionKey == "ports")
                 {
                     ports = values;
@@ -256,7 +261,8 @@ public static partial class WorkflowParser
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
                 }
-                options = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar");
+                options = ParseString(ref reader, out var optErr, out var optMark);
+                if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", optMark);
                 continue;
             }
 
@@ -305,8 +311,10 @@ public static partial class WorkflowParser
                 ref reader,
                 diagnostics,
                 ExpressionValidationContext.Job,
-                $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression",
+                out var crExprErr,
+                out var crExprMark,
                 parseWholeValueIfNoEmbedded: false);
+            if (crExprErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression", crExprMark);
             return expression is null
                 ? null
                 : new Credentials { Expression = expression, Range = expression.Range };
@@ -376,8 +384,10 @@ public static partial class WorkflowParser
                     ref reader,
                     diagnostics,
                     ExpressionValidationContext.Job,
-                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar",
+                    out var unErr,
+                    out var unMark,
                     parseWholeValueIfNoEmbedded: false);
+                if (unErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar", unMark);
                 continue;
             }
             else if (isPassword)
@@ -387,8 +397,10 @@ public static partial class WorkflowParser
                     ref reader,
                     diagnostics,
                     ExpressionValidationContext.Job,
-                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar",
+                    out var pwErr,
+                    out var pwMark,
                     parseWholeValueIfNoEmbedded: false);
+                if (pwErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar", pwMark);
                 continue;
             }
             else

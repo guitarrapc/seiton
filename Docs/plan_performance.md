@@ -69,13 +69,35 @@ job.Name = ParseString(ref reader, diagnostics,
 **影響範囲**: WorkflowParser.Jobs.cs, WorkflowParser.On.cs, WorkflowParser.Steps.cs 等の全スカラーパース呼び出し箇所
 
 **完了条件**:
-- [ ] DecodeUtf8 が success path のスカラーパーサー引数で呼ばれていないこと（grep 確認）
-- [ ] `$"..."` 文字列補間が success path のスカラーパーサー引数で使われていないこと
-- [ ] ベンチマーク: Small/Medium/Large の Allocated が減少していること
-- [ ] 全テスト通過（477 tests）
-- [ ] 診断メッセージの内容が変わっていないこと（テストで検証）
+- [x] DecodeUtf8 が success path のスカラーパーサー引数で呼ばれていないこと（grep 確認）— ParseStringMapping 1 箇所のみ残存
+- [x] `$"..."` 文字列補間が success path のスカラーパーサー引数で使われていないこと
+- [x] ベンチマーク: Small/Medium/Large の Allocated が減少していること（-8.8% / -12.6% / -12.5%）
+- [x] 全テスト通過（477 tests）
+- [x] 診断メッセージの内容が変わっていないこと（テストで検証）
 
 **推定効果**: Large ケースで ~100–200 KB 削減（82 callsite × 平均数十バイトの string × 240 steps）
+
+#### Phase 1 実施結果（2026-04-21 計測）
+
+**実施内容**: 選択肢 B — `out bool needsError, out TextPosition errorMark` パターンで遅延評価を実現。
+
+- ParseString, ParseBool, ParseInt, ParseFloat, ParseExpression, ParseStringAndValidateExpression, ParseStringOrStringSequence に `out` パラメータ版オーバーロードを追加
+- ParseBoolOrExpression にも同様のオーバーロードを追加
+- 46 箇所の `$"..."` 補間文字列呼び出しを `out` パターンに変換
+- 4 箇所の ParseBoolOrExpression 呼び出しを `out` パターンに変換
+- 23 箇所の定数 string 呼び出しは既存オーバーロード（ラッパー）を継続使用
+
+**残存**: `ParseStringMapping` 1 箇所（Jobs.cs `ParseJobSecrets`）は内部で複数エラー箇所に error 文字列を使うため未変換。影響は per-job-with-secrets で軽微。
+
+| Size | Baseline Alloc | Phase 1-A Alloc | 削減量 | 削減率 |
+|---|---:|---:|---:|---:|
+| Small (1×3) | 31,328 B | 28,576 B | -2,752 B | -8.8% |
+| Medium (6×8) | 251,040 B | 219,520 B | -31,520 B | -12.6% |
+| Large (20×12) | 1,162,256 B | 1,016,608 B | -145,648 B | -12.5% |
+
+Mean 実行時間は誤差範囲内（Large: 9,484→8,715 μs、ShortRun の変動幅内）。
+
+**ステータス**: ✅ 完了
 
 ---
 

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -1508,7 +1508,8 @@ public static partial class WorkflowParser
             {
                 hasBranches = true;
                 var filterNameNode = new StringNode { Value = keySlice, Quoted = false, Range = BuildScalarLocation(keyMark, "branches"u8.Length) };
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var brErr, out var brMark);
+                if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar", brMark);
                 branches = new WebhookEventFilter { Name = filterNameNode, Values = values };
                 continue;
             }
@@ -1517,7 +1518,8 @@ public static partial class WorkflowParser
             {
                 hasBranchesIgnore = true;
                 var filterNameNode = new StringNode { Value = keySlice, Quoted = false, Range = BuildScalarLocation(keyMark, "branches-ignore"u8.Length) };
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var biErr, out var biMark);
+                if (biErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar", biMark);
                 branchesIgnore = new WebhookEventFilter { Name = filterNameNode, Values = values };
                 continue;
             }
@@ -1526,7 +1528,8 @@ public static partial class WorkflowParser
             {
                 hasTags = true;
                 var filterNameNode = new StringNode { Value = keySlice, Quoted = false, Range = BuildScalarLocation(keyMark, "tags"u8.Length) };
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var tErr, out var tMark);
+                if (tErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar", tMark);
                 tags = new WebhookEventFilter { Name = filterNameNode, Values = values };
                 continue;
             }
@@ -1535,7 +1538,8 @@ public static partial class WorkflowParser
             {
                 hasTagsIgnore = true;
                 var filterNameNode = new StringNode { Value = keySlice, Quoted = false, Range = BuildScalarLocation(keyMark, "tags-ignore"u8.Length) };
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var tiErr, out var tiMark);
+                if (tiErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar", tiMark);
                 tagsIgnore = new WebhookEventFilter { Name = filterNameNode, Values = values };
                 continue;
             }
@@ -1544,7 +1548,8 @@ public static partial class WorkflowParser
             {
                 hasPaths = true;
                 var filterNameNode = new StringNode { Value = keySlice, Quoted = false, Range = BuildScalarLocation(keyMark, "paths"u8.Length) };
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var pErr, out var pMark);
+                if (pErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar", pMark);
                 paths = new WebhookEventFilter { Name = filterNameNode, Values = values };
                 continue;
             }
@@ -1553,14 +1558,16 @@ public static partial class WorkflowParser
             {
                 hasPathsIgnore = true;
                 var filterNameNode = new StringNode { Value = keySlice, Quoted = false, Range = BuildScalarLocation(keyMark, "paths-ignore"u8.Length) };
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar");
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var piErr, out var piMark);
+                if (piErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar", piMark);
                 pathsIgnore = new WebhookEventFilter { Name = filterNameNode, Values = values };
                 continue;
             }
 
             if (isWorkflows)
             {
-                workflows = ParseStringOrStringSequence(ref reader, diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar");
+                workflows = ParseStringOrStringSequence(ref reader, diagnostics, out var wErr, out var wMark);
+                if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar", wMark);
                 continue;
             }
 

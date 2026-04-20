@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Buffers.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
@@ -872,6 +872,17 @@ public static partial class WorkflowParser
     private static BoolNode? ParseBoolOrExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
+        var node = ParseBoolOrExpression(ref reader, diagnostics, context, out var needsError, out var errorMark);
+        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        return node;
+    }
+
+    private static BoolNode? ParseBoolOrExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        needsError = false;
+        errorMark = default;
+
         if (reader.End)
         {
             return null;
@@ -879,7 +890,8 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            needsError = true;
+            errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
             return null;
         }
@@ -900,7 +912,7 @@ public static partial class WorkflowParser
             return boolNode;
         }
 
-        var expressionNode = ParseStringAndValidateExpression(ref reader, diagnostics, context, errorMessage, parseWholeValueIfNoEmbedded: false);
+        var expressionNode = ParseStringAndValidateExpression(ref reader, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
         if (expressionNode is null)
         {
             return null;
