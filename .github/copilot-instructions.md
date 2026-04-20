@@ -2,19 +2,33 @@
 
 ## What is this project?
 
+Seiton は GitHub Actions ドキュメント（workflow ファイルおよび action metadata ファイル）を解析・Lint する C# ツール。
+
+- **Parser**: UTF-8 YAML を typed AST に変換し、パーサー診断を返す。
+- **Linter**: 解析済み AST に対してルールを実行し、Lint 診断を集約して返す。
+
+対象ドキュメント: `.github/workflows/*.yml`、`action.yml` / `action.yaml`。
 
 ## Project Structure
 
-## Important Guidelines
+```
+src/Seiton/           — CLI エントリポイント
+src/Seiton.Core/      — コアライブラリ（Parsing/, Linting/, Generated/）
+src/Seiton.Update/    — 生成データ更新ツール
+src/Seiton.Benchmark/ — パフォーマンスベンチマーク
+tests/                — テストプロジェクト群
+sandbox/DotnetFiles/  — 試作・検証用スクリプト
+Docs/                 — 仕様書（source of truth）
+data/                 — 生成データソース（manifest, availability など）
+```
+## Skills
 
-When implementing or reviewing parser algorithms, refer to these detailed guides:
+When implementing or reviewing, refer to these detailed skills documents for specific guidelines and best practices:
 
-- **[Architecture](agent_docs/architecture.md)** - Understand the Parser's overall architecture and design principles
-- **[Coding Style](agent_docs/coding_style.md)** - C# style conventions for this project
-- **[Performance Requirements](agent_docs/performance_requirements.md)** - Zero-allocation, aggressive inlining, and memory management
-- **[Testing Guidelines](agent_docs/testing_guidelines.md)** - Writing/Run effective unit tests
-
-**Script Rule:** Don't write any multi-line PowerShell Code in the shell. If you need to run a script, create a file then executte it.
+- `architecture/SKILL.md` — design principles and architecture of the parser
+- `performance-requirements/SKILL.md` — performance and memory efficiency requirements for parser implementation
+- `sandbox-code-guidelines/SKILL.md` — guidelines for writing and running sandbox
+- `scripting/SKILL.md` — guidelines for writing and running scripts in the project
 
 ### Auto-Generated Files
 
@@ -50,7 +64,7 @@ Before completing parser changes, validate all of the following.
 
 ### Running Tests
 
-See [Testing Guidelines](agent_docs/testing_guidelines.md) for details on writing and running tests. To run all tests:
+To run all tests:
 
 ```shell
 dotnet test
@@ -77,7 +91,7 @@ dotnet build
 
 ### Run Some Script
 
-You can create a .cs file in `sandbox/DotnetFiles/` and run it directly. See [Sandbox Code Guidelines](agent_docs/sandbox_code_guidelines.md) for details and script sample.
+You can create a .cs file in `sandbox/DotnetFiles/` and run it directly. See [Sandbox Code Guidelines](.github/skills/sandbox-code-guidelines/SKILL.md) for details and script sample.
 
 use `sandbox/DotnetFiles/Sample.cs` for template:
 
@@ -89,7 +103,7 @@ dotnet run sandbox/DotnetFiles/YourCsFile.cs
 
 Before implementing a parser/ast or making significant changes:
 
-1. Read the relevant documentation files in `.github/agent_docs/`
+1. Read the relevant documentation files in `Docs/`
 2. Review existing similar implementations in `src/`
 3. Check corresponding tests in `tests/Seiton.Tests/`
 
@@ -105,7 +119,7 @@ Spec files live under `Docs/`. When reading or writing them, follow these rules:
 - **Lessons learned** — things that were only discovered by actually trying (e.g., unexpected constraints, failed approaches, surprising behavior)
 
 **What does NOT belong in a spec:**
-- Detailed HOW — step-by-step implementation instructions, code structure, algorithm internals. Those belong in code comments, `agent_docs/`, or the implementation itself.
+- Detailed HOW — step-by-step implementation instructions, code structure, algorithm internals. Those belong in code comments, `.github/skills/`, or the implementation itself.
 
 **After implementing:**
 - Always update any related spec files to reflect what was actually built, especially documenting lessons learned or decisions made during implementation that weren't captured upfront.

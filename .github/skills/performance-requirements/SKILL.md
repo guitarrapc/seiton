@@ -1,3 +1,8 @@
+---
+name: performance-requirements
+description: Guidelines for writing high-performance and memory-efficient parser algorithms in the `src/Seiton.Core/Parsing/` folder. This includes instructions on zero allocations, aggressive inlining, loop optimization, and verification practices.
+---
+
 # Performance Requirements
 
 All parser algorithms must be implemented with **maximum attention to performance and memory efficiency**.

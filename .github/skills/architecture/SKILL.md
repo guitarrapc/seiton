@@ -1,3 +1,8 @@
+---
+name: architecture
+description: Guidelines for the architecture and design principles of the parser in the `src/Seiton.Core/Parsing/` folder. This includes layer responsibilities, hand-written parsing rationale, and evolution strategies.
+---
+
 # Parser Architecture
 
 ## Purpose

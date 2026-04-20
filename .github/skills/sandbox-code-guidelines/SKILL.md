@@ -1,3 +1,8 @@
+---
+name: sandbox-code-guidelines
+description: Guidelines for writing and running sandbox code in the `sandbox/DotnetFiles/` folder. This is for quick experiments, prototyping, or verification of ideas without needing to set up a full project. It includes instructions on how to create .cs files, run them, and best practices for using this sandbox environment effectively.
+---
+
 # Sandbox Code Guidelines
 
 **IMPORTANT:** Never use `dotnet script` or `dotnet-script` command. This project does NOT use dotnet-script.
@@ -23,7 +28,7 @@ Console.WriteLine($"Compares: {stats.CompareCount}, Swaps: {stats.SwapCount}, In
 
 ```shell
 # Create a single .cs file and run it directly
-dotnet run dotnet run sandbox/DotnetFiles/YourCsFile.cs
+dotnet run sandbox/DotnetFiles/YourCsFile.cs
 ```
 
 - For a project folder with .csproj:
