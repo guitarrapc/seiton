@@ -3,6 +3,10 @@ using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class ExprUndefinedVarRule : RuleBase
@@ -236,26 +240,6 @@ public sealed class ExprUndefinedVarRule : RuleBase
             _ => "unknown",
         };
     }
-
-    static bool IsContextRootIdentifier(int nodeId, int parentId, ExpressionNode[] nodes)
-    {
-        if (parentId < 0)
-        {
-            return true;
-        }
-
-        if (parentId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var parent = nodes[parentId];
-        return parent.Left == nodeId
-            && (parent.Kind == ExpressionNodeKind.MemberAccess
-                || parent.Kind == ExpressionNodeKind.IndexAccess
-                || parent.Kind == ExpressionNodeKind.WildcardAccess);
-    }
-
     static bool TryFindEmbeddedExpression(
         ReadOnlySpan<byte> value,
         int searchStart,
@@ -289,24 +273,4 @@ public sealed class ExprUndefinedVarRule : RuleBase
         nextSearchStart = bodyStart + closeOffset + 2;
         return true;
     }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        var end = value.Length - 1;
-
-        while (start <= end && IsWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && IsWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end < start ? [] : value.Slice(start, end - start + 1);
-    }
-
-    static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 }

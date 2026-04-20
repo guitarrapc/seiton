@@ -201,7 +201,8 @@ public sealed class OciImageDigestResolverTests
                     var response = new HttpResponseMessage(statusCode);
                     response.Headers.Add("Docker-Content-Digest", digest);
                     return response;
-                }));
+                }
+            ));
         }
 
         // Adds a handler that returns 401 + WWW-Authenticate: Bearer for anonymous HEAD requests.
@@ -217,7 +218,8 @@ public sealed class OciImageDigestResolverTests
                     var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
                     response.Headers.TryAddWithoutValidation("WWW-Authenticate", wwwAuthenticate);
                     return response;
-                }));
+                }
+            ));
         }
 
         // Adds a handler for the OCI token endpoint that returns an access_token JSON payload.
@@ -248,7 +250,8 @@ public sealed class OciImageDigestResolverTests
                     var response = new HttpResponseMessage(HttpStatusCode.OK);
                     response.Headers.Add("Docker-Content-Digest", digest);
                     return response;
-                }));
+                }
+            ));
         }
 
         static string BuildWwwAuthHeader(string realm, string? service, string? scope)

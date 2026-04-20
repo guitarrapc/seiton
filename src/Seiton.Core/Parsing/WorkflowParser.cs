@@ -3,6 +3,8 @@ using System.Buffers.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Parsing;
 
 public static class WorkflowParser
@@ -5864,77 +5866,6 @@ public static class WorkflowParser
             EndLine: end.Line,
             EndColumn: end.Column);
     }
-
-    private static (int Line, int Column) ComputeLineColumn(ReadOnlySpan<byte> source, int offset)
-    {
-        var line = 1;
-        var lineStart = 0;
-        var end = offset;
-        if (end >= source.Length)
-        {
-            end = source.Length - 1;
-        }
-
-        for (var i = 0; i < end; i++)
-        {
-            if (source[i] == (byte)'\n')
-            {
-                line++;
-                lineStart = i + 1;
-            }
-        }
-
-        return (line, (end - lineStart) + 1);
-    }
-
-    private static Utf8Slice TrimAsciiWhiteSpace(ReadOnlySpan<byte> source, int offset, int length)
-    {
-        if (length <= 0)
-        {
-            return new Utf8Slice(offset, 0);
-        }
-
-        var start = offset;
-        var end = offset + length - 1;
-
-        while (start <= end && IsAsciiWhiteSpace(source[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && IsAsciiWhiteSpace(source[end]))
-        {
-            end--;
-        }
-
-        if (end < start)
-        {
-            return new Utf8Slice(offset, 0);
-        }
-
-        return new Utf8Slice(start, end - start + 1);
-    }
-
-    private static int IndexOf(ReadOnlySpan<byte> source, int start, ReadOnlySpan<byte> pattern)
-    {
-        if (pattern.IsEmpty || start >= source.Length)
-        {
-            return -1;
-        }
-
-        for (var i = start; i <= source.Length - pattern.Length; i++)
-        {
-            if (source.Slice(i, pattern.Length).SequenceEqual(pattern))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private static bool IsAsciiWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
-
     private static bool TryRegisterMappingKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, HashSet<Utf8String> keys, MappingKeyComparison comparison, string mappingName)
     {
         if (keyUtf8.SequenceEqual("<<"u8))

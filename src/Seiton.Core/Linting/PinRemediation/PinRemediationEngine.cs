@@ -1,5 +1,7 @@
 ﻿using Seiton.Core.Parsing;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.PinRemediation;
 
 public sealed class PinRemediationEngine(
@@ -192,34 +194,5 @@ public sealed class PinRemediationEngine(
         value = message[(first + 1)..second];
         return !string.IsNullOrEmpty(value);
     }
-
-    static bool TryParseActionReference(string usesRef, out string owner, out string repo, out string reference)
-    {
-        owner = string.Empty;
-        repo = string.Empty;
-        reference = string.Empty;
-
-        var at = usesRef.LastIndexOf('@');
-        if (at <= 0 || at == usesRef.Length - 1)
-        {
-            return false;
-        }
-
-        var actionPath = usesRef[..at];
-        reference = usesRef[(at + 1)..];
-
-        var slash1 = actionPath.IndexOf('/');
-        if (slash1 <= 0 || slash1 == actionPath.Length - 1)
-        {
-            return false;
-        }
-
-        var slash2 = actionPath.IndexOf('/', slash1 + 1);
-        owner = actionPath[..slash1];
-        repo = slash2 < 0 ? actionPath[(slash1 + 1)..] : actionPath.Substring(slash1 + 1, slash2 - (slash1 + 1));
-
-        return owner.Length > 0 && repo.Length > 0 && reference.Length > 0;
-    }
-
     readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
 }

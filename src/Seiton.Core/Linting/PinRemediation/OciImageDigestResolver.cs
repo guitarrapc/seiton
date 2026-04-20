@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.PinRemediation;
 
 public sealed class OciImageDigestResolver : IImageDigestResolver
@@ -594,80 +596,6 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         var host = slash >= 0 ? trimmed[..slash] : trimmed;
         return NormalizeValue(host);
     }
-
-    static bool GlobMatch(string pattern, string path)
-    {
-        var normalizedPattern = pattern.Replace('\\', '/');
-        var normalizedPath = path.Replace('\\', '/');
-        var cache = new Dictionary<(int PatternIndex, int PathIndex), bool>();
-        return GlobMatchCore(normalizedPattern, normalizedPath, 0, 0, cache);
-    }
-
-    static bool GlobMatchCore(
-        string pattern,
-        string path,
-        int patternIndex,
-        int pathIndex,
-        Dictionary<(int PatternIndex, int PathIndex), bool> cache)
-    {
-        if (cache.TryGetValue((patternIndex, pathIndex), out var cached))
-        {
-            return cached;
-        }
-
-        bool result;
-        if (patternIndex == pattern.Length)
-        {
-            result = pathIndex == path.Length;
-        }
-        else if (pattern[patternIndex] == '*')
-        {
-            var isDoubleStar = patternIndex + 1 < pattern.Length && pattern[patternIndex + 1] == '*';
-            if (isDoubleStar)
-            {
-                patternIndex += 2;
-                result = GlobMatchCore(pattern, path, patternIndex, pathIndex, cache);
-                if (!result)
-                {
-                    for (var cursor = pathIndex; cursor < path.Length; cursor++)
-                    {
-                        if (GlobMatchCore(pattern, path, patternIndex, cursor + 1, cache))
-                        {
-                            result = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                result = GlobMatchCore(pattern, path, patternIndex + 1, pathIndex, cache);
-                if (!result)
-                {
-                    for (var cursor = pathIndex; cursor < path.Length && path[cursor] != '/'; cursor++)
-                    {
-                        if (GlobMatchCore(pattern, path, patternIndex + 1, cursor + 1, cache))
-                        {
-                            result = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        else if (pathIndex < path.Length && (pattern[patternIndex] == '?' || pattern[patternIndex] == path[pathIndex]))
-        {
-            result = GlobMatchCore(pattern, path, patternIndex + 1, pathIndex + 1, cache);
-        }
-        else
-        {
-            result = false;
-        }
-
-        cache[(patternIndex, pathIndex)] = result;
-        return result;
-    }
-
     readonly record struct ParsedImageReference(
         string RegistryHost,
         string RepositoryPath,

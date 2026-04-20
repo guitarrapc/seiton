@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.OnlineAudit;
 
 public interface IActionRefResolver
@@ -42,7 +44,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
 
         var token = ResolveToken();
-        var resolved = IsCommitSha(reference)
+        var resolved = IsFullCommitSha(reference)
             ? await ResolveCommitAsync(owner, repo, reference, token, cancellationToken)
             : await ResolveSymbolicRefAsync(owner, repo, reference, token, cancellationToken);
 
@@ -266,27 +268,5 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
 
         return new Uri(normalized, UriKind.Absolute);
-    }
-
-    static bool IsCommitSha(string reference)
-    {
-        if (reference.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < reference.Length; i++)
-        {
-            var ch = reference[i];
-            var isDigit = ch is >= '0' and <= '9';
-            var isLowerHex = ch is >= 'a' and <= 'f';
-            var isUpperHex = ch is >= 'A' and <= 'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class SelfHostedRunnerRule : RuleBase
@@ -91,27 +94,5 @@ public sealed class SelfHostedRunnerRule : RuleBase
         }
 
         return additionalUntrustedTriggers.Contains(NormalizeAsciiLower(hook));
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.Ordinal);
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        var chars = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var b = value[i];
-            chars[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
-        }
-
-        return new string(chars);
     }
 }

@@ -1,6 +1,10 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class UnredactedSecretsRule : RuleBase
@@ -307,42 +311,6 @@ public sealed class UnredactedSecretsRule : RuleBase
             start = valueStart;
         }
     }
-
-    static int[] BuildLineStarts(byte[] source)
-    {
-        var starts = new List<int>(64) { 0 };
-        for (var i = 0; i < source.Length; i++)
-        {
-            if (source[i] == (byte)'\n')
-            {
-                var next = i + 1;
-                if (next < source.Length)
-                {
-                    starts.Add(next);
-                }
-            }
-        }
-
-        return starts.ToArray();
-    }
-
-    static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)
-    {
-        var idx = Array.BinarySearch(lineStarts, offset);
-        if (idx >= 0)
-        {
-            return (idx + 1, 1);
-        }
-
-        idx = ~idx - 1;
-        if (idx < 0)
-        {
-            return (1, offset + 1);
-        }
-
-        return (idx + 1, offset - lineStarts[idx] + 1);
-    }
-
     static bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
@@ -426,121 +394,5 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
 
         return false;
-    }
-
-    static bool TryFindExpression(ReadOnlySpan<byte> value, int searchStart, out int bodyStart, out int bodyLength, out int nextSearchStart)
-    {
-        bodyStart = 0;
-        bodyLength = 0;
-        nextSearchStart = 0;
-
-        if ((uint)searchStart >= (uint)value.Length)
-        {
-            return false;
-        }
-
-        var start = value[searchStart..].IndexOf("${{"u8);
-        if (start < 0)
-        {
-            return false;
-        }
-
-        bodyStart = searchStart + start + 3;
-        var close = value[bodyStart..].IndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        bodyLength = close;
-        nextSearchStart = bodyStart + close + 2;
-        return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length && IsAsciiWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start && IsAsciiWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end >= start ? value.Slice(start, end - start + 1) : [];
-    }
-
-    static bool IsAsciiWhiteSpace(byte ch)
-    {
-        return ch == (byte)' ' || ch == (byte)'\t' || ch == (byte)'\n' || ch == (byte)'\r';
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            if (l is >= (byte)'A' and <= (byte)'Z')
-            {
-                l = (byte)(l + 32);
-            }
-
-            if (r is >= (byte)'A' and <= (byte)'Z')
-            {
-                r = (byte)(r + 32);
-            }
-
-            if (l != r)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static bool IsSimpleIdentifier(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return false;
-        }
-
-        var first = value[0];
-        if (!((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_'))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < value.Length; i++)
-        {
-            var ch = value[i];
-            if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
     }
 }

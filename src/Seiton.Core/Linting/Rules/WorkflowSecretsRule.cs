@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class WorkflowSecretsRule : RuleBase
@@ -223,91 +226,5 @@ public sealed class WorkflowSecretsRule : RuleBase
         }
 
         return false;
-    }
-
-    static bool TryFindExpression(
-        ReadOnlySpan<byte> value,
-        int searchStart,
-        out int bodyStart,
-        out int bodyLength,
-        out int nextSearchStart)
-    {
-        bodyStart = 0;
-        bodyLength = 0;
-        nextSearchStart = 0;
-
-        if ((uint)searchStart >= (uint)value.Length)
-        {
-            return false;
-        }
-
-        var start = value[searchStart..].IndexOf("${{"u8);
-        if (start < 0)
-        {
-            return false;
-        }
-
-        bodyStart = searchStart + start + 3;
-        var close = value[bodyStart..].IndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        bodyLength = close;
-        nextSearchStart = bodyStart + close + 2;
-        return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length && IsAsciiWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start && IsAsciiWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end >= start ? value.Slice(start, end - start + 1) : [];
-    }
-
-    static bool IsAsciiWhiteSpace(byte ch)
-    {
-        return ch == (byte)' ' || ch == (byte)'\t' || ch == (byte)'\n' || ch == (byte)'\r';
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            if (l >= 'A' && l <= 'Z')
-            {
-                l = (byte)(l + 32);
-            }
-
-            if (r >= 'A' && r <= 'Z')
-            {
-                r = (byte)(r + 32);
-            }
-
-            if (l != r)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

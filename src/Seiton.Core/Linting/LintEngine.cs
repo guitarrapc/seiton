@@ -1,6 +1,8 @@
 ﻿using Seiton.Core.Parsing;
 using System.Text;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting;
 
 public sealed class LintEngine
@@ -782,126 +784,6 @@ public sealed class LintEngine
 
         return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
     }
-
-    static string NormalizePath(string path)
-    {
-        return path.Replace('\\', '/');
-    }
-
-    static bool GlobMatch(string pattern, string path)
-    {
-        if (pattern.Length == 0)
-        {
-            return path.Length == 0;
-        }
-
-        var normalizedPattern = NormalizePath(pattern);
-        var normalizedPath = NormalizePath(path);
-        var cache = new Dictionary<(int PatternIndex, int PathIndex), bool>();
-        return GlobMatchCore(normalizedPattern, normalizedPath, 0, 0, cache);
-    }
-
-    static bool GlobMatchCore(
-        string pattern,
-        string path,
-        int patternIndex,
-        int pathIndex,
-        Dictionary<(int PatternIndex, int PathIndex), bool> cache)
-    {
-        if (cache.TryGetValue((patternIndex, pathIndex), out var cached))
-        {
-            return cached;
-        }
-
-        var patternLength = pattern.Length;
-        var pathLength = path.Length;
-
-        while (patternIndex < patternLength)
-        {
-            var ch = pattern[patternIndex];
-            if (ch == '*')
-            {
-                var isDoubleStar = patternIndex + 1 < patternLength && pattern[patternIndex + 1] == '*';
-                if (isDoubleStar)
-                {
-                    patternIndex += 2;
-                    while (patternIndex < patternLength && pattern[patternIndex] == '*')
-                    {
-                        patternIndex++;
-                    }
-
-                    if (patternIndex >= patternLength)
-                    {
-                        cache[(patternIndex, pathIndex)] = true;
-                        return true;
-                    }
-
-                    for (var cursor = pathIndex; cursor <= pathLength; cursor++)
-                    {
-                        if (GlobMatchCore(pattern, path, patternIndex, cursor, cache))
-                        {
-                            cache[(patternIndex, pathIndex)] = true;
-                            return true;
-                        }
-                    }
-
-                    cache[(patternIndex, pathIndex)] = false;
-                    return false;
-                }
-
-                patternIndex++;
-                for (var cursor = pathIndex; ; cursor++)
-                {
-                    if (GlobMatchCore(pattern, path, patternIndex, cursor, cache))
-                    {
-                        cache[(patternIndex, pathIndex)] = true;
-                        return true;
-                    }
-
-                    if (cursor >= pathLength || path[cursor] == '/')
-                    {
-                        break;
-                    }
-                }
-
-                cache[(patternIndex, pathIndex)] = false;
-                return false;
-            }
-
-            if (pathIndex >= pathLength)
-            {
-                cache[(patternIndex, pathIndex)] = false;
-                return false;
-            }
-
-            if (ch == '?')
-            {
-                if (path[pathIndex] == '/')
-                {
-                    cache[(patternIndex, pathIndex)] = false;
-                    return false;
-                }
-
-                patternIndex++;
-                pathIndex++;
-                continue;
-            }
-
-            if (ch != path[pathIndex])
-            {
-                cache[(patternIndex, pathIndex)] = false;
-                return false;
-            }
-
-            patternIndex++;
-            pathIndex++;
-        }
-
-        var result = pathIndex == pathLength;
-        cache[(patternIndex, pathIndex)] = result;
-        return result;
-    }
-
     static string BuildUnknownRuleIdMessage(string unknownRuleId)
     {
         var suggested = RuleCatalog.SuggestRuleId(unknownRuleId);

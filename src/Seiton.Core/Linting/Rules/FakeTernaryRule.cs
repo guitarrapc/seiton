@@ -1,6 +1,8 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class FakeTernaryRule : RuleBase
@@ -168,39 +170,5 @@ public sealed class FakeTernaryRule : RuleBase
 
         body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
         return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length)
-        {
-            var b = value[start];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                break;
-            }
-
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start)
-        {
-            var b = value[end];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                break;
-            }
-
-            end--;
-        }
-
-        if (end < start)
-        {
-            return ReadOnlySpan<byte>.Empty;
-        }
-
-        return value.Slice(start, end - start + 1);
     }
 }

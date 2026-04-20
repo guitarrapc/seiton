@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunnerLabelRule : RuleBase
@@ -80,37 +83,5 @@ public sealed class RunnerLabelRule : RuleBase
         }
 
         return additionalKnownHostedLabels.Contains(NormalizeAsciiLower(labelUtf8));
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.Ordinal);
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var buffer = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var ch = (char)value[i];
-            if (ch is >= 'A' and <= 'Z')
-            {
-                ch = (char)(ch + 32);
-            }
-
-            buffer[i] = ch;
-        }
-
-        return new string(buffer);
     }
 }

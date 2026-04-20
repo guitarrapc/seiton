@@ -1,5 +1,7 @@
 ﻿using Seiton.Core.Parsing;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting;
 
 static class RuleSpecificConfigNormalizer
@@ -203,25 +205,5 @@ static class RuleSpecificConfigNormalizer
         }
 
         return true;
-    }
-
-    static string NormalizeAsciiLower(string value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var buffer = value.ToCharArray();
-        for (var i = 0; i < buffer.Length; i++)
-        {
-            var ch = buffer[i];
-            if (ch is >= 'A' and <= 'Z')
-            {
-                buffer[i] = (char)(ch + 32);
-            }
-        }
-
-        return new string(buffer);
     }
 }

@@ -1,6 +1,8 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class ForbiddenUsesRule : RuleBase
@@ -204,17 +206,5 @@ public sealed class ForbiddenUsesRule : RuleBase
 
         ownerRepo = string.Concat(NormalizeAsciiLower(owner), "/", NormalizeAsciiLower(repo));
         return true;
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        var chars = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var b = value[i];
-            chars[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
-        }
-
-        return new string(chars);
     }
 }

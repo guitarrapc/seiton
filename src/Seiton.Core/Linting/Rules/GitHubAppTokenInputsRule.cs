@@ -1,5 +1,7 @@
 ﻿using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class GitHubAppTokenInputsRule : RuleBase
@@ -134,30 +136,5 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         }
 
         return EqualsAsciiIgnoreCase(left[..prefix.Length], prefix);
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static byte ToLowerAscii(byte value)
-    {
-        return value is >= (byte)'A' and <= (byte)'Z'
-            ? (byte)(value + 32)
-            : value;
     }
 }

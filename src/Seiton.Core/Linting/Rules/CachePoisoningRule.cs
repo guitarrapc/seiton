@@ -1,6 +1,10 @@
 ﻿using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class CachePoisoningRule : RuleBase
@@ -82,29 +86,6 @@ public sealed class CachePoisoningRule : RuleBase
 
         return additionalUntrustedTriggers.Contains(NormalizeAsciiLower(hook));
     }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.Ordinal);
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        var chars = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var b = value[i];
-            chars[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
-        }
-
-        return new string(chars);
-    }
-
     static bool IsCacheAction(ReadOnlySpan<byte> uses)
     {
         return IsActionReference(uses, "actions/cache"u8)
@@ -121,35 +102,5 @@ public sealed class CachePoisoningRule : RuleBase
         }
 
         return EqualsAsciiIgnoreCase(uses[..at], actionName);
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            if (l is >= (byte)'A' and <= (byte)'Z')
-            {
-                l = (byte)(l + 32);
-            }
-
-            if (r is >= (byte)'A' and <= (byte)'Z')
-            {
-                r = (byte)(r + 32);
-            }
-
-            if (l != r)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

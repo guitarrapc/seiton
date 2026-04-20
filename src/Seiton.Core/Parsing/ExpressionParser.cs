@@ -1,6 +1,8 @@
 ﻿using System.Buffers;
 using System.Text;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Parsing;
 
 public static class ExpressionParser
@@ -485,7 +487,5 @@ public static class ExpressionParser
 
         private static bool IsLetter(byte b) =>
             (b is >= (byte)'a' and <= (byte)'z') || (b is >= (byte)'A' and <= (byte)'Z');
-
-        private static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
     }
 }

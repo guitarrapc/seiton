@@ -2,6 +2,9 @@
 using System.Text.Json;
 using Seiton.Core.Generated;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Parsing;
 
 public enum ExpressionValidationContext
@@ -737,49 +740,5 @@ public static class ExpressionSemanticAnalyzer
             ExpressionValidationContext.Step => "step",
             _ => "unknown",
         };
-    }
-
-    static bool IsContextRootIdentifier(int nodeId, int parentId, ExpressionNode[] nodes)
-    {
-        if (parentId < 0)
-        {
-            return true;
-        }
-
-        if (parentId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var parent = nodes[parentId];
-        return parent.Left == nodeId
-            && (parent.Kind == ExpressionNodeKind.MemberAccess
-                || parent.Kind == ExpressionNodeKind.IndexAccess
-                || parent.Kind == ExpressionNodeKind.WildcardAccess);
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static byte ToLowerAscii(byte value)
-    {
-        return value is >= (byte)'A' and <= (byte)'Z'
-            ? (byte)(value + 32)
-            : value;
     }
 }

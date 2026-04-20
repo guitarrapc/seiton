@@ -5,6 +5,8 @@ using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.OnlineAudit;
 
 public sealed class OnlineAuditEngine(
@@ -225,34 +227,6 @@ public sealed class OnlineAuditEngine(
 
         targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, usesNode.Range, filePath));
     }
-
-    static bool TryParseActionReference(string usesRef, out string owner, out string repo, out string reference)
-    {
-        owner = string.Empty;
-        repo = string.Empty;
-        reference = string.Empty;
-
-        var at = usesRef.LastIndexOf('@');
-        if (at <= 0 || at == usesRef.Length - 1)
-        {
-            return false;
-        }
-
-        var actionPath = usesRef[..at];
-        reference = usesRef[(at + 1)..];
-
-        var slash1 = actionPath.IndexOf('/');
-        if (slash1 <= 0 || slash1 == actionPath.Length - 1)
-        {
-            return false;
-        }
-
-        var slash2 = actionPath.IndexOf('/', slash1 + 1);
-        owner = actionPath[..slash1];
-        repo = slash2 < 0 ? actionPath[(slash1 + 1)..] : actionPath.Substring(slash1 + 1, slash2 - (slash1 + 1));
-        return owner.Length > 0 && repo.Length > 0 && reference.Length > 0;
-    }
-
     static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
     {
         if (entries.Count == 0)
@@ -283,29 +257,7 @@ public readonly record struct ActionAuditTarget(
     TextRange Location,
     string FilePath)
 {
-    public bool IsCommitSha => IsFullLengthCommitSha(Reference);
-
-    static bool IsFullLengthCommitSha(string reference)
-    {
-        if (reference.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < reference.Length; i++)
-        {
-            var ch = reference[i];
-            var isDigit = ch is >= '0' and <= '9';
-            var isLowerHex = ch is >= 'a' and <= 'f';
-            var isUpperHex = ch is >= 'A' and <= 'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    public bool IsCommitSha => IsFullCommitSha(Reference);
 }
 
 public readonly record struct OnlineAuditResult(

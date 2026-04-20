@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class TemplateInjectionRule : RuleBase
@@ -209,57 +212,4 @@ public sealed class TemplateInjectionRule : RuleBase
 
         return true;
     }
-
-    static bool TryFindExpression(
-        ReadOnlySpan<byte> value,
-        int searchStart,
-        out int bodyStart,
-        out int bodyLength,
-        out int nextSearchStart)
-    {
-        bodyStart = 0;
-        bodyLength = 0;
-        nextSearchStart = 0;
-
-        if ((uint)searchStart >= (uint)value.Length)
-        {
-            return false;
-        }
-
-        var start = value[searchStart..].IndexOf("${{"u8);
-        if (start < 0)
-        {
-            return false;
-        }
-
-        bodyStart = searchStart + start + 3;
-        var close = value[bodyStart..].IndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        bodyLength = close;
-        nextSearchStart = bodyStart + close + 2;
-        return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        var end = value.Length - 1;
-        while (start <= end && IsWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && IsWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end < start ? [] : value.Slice(start, end - start + 1);
-    }
-
-    static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 }
