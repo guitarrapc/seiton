@@ -262,14 +262,17 @@ ExpressionParser は式ごとに `List<ExpressionNode>`, `List<int>`, `List<Diag
   - `AddRuleIds` を `ReadOnlySpan<byte>` + バイトオフセット版に書き換え
   - `BuildInlineDirectiveError` をバイト列カラム直接指定版に置き換え
   - `FindTokenColumn` (string 検索) を削除
-- `BuildKnownJobIds` (for `NormalizeExclusions`) は変更なし
+- `BuildKnownJobIds` (for `NormalizeExclusions`) は変更なし → **4-C で対応済み**
 - `BuildKnownJobIdSlices` を新設（`Utf8Slice[]` を返す、string デコードなし）— `ParseInlineSuppression` 内のジョブ ID 検証で使用
 - `BuildJobScopes` を `Utf8Slice` ベースに変更（`string JobId` → `Utf8Slice JobIdSlice`）
 - `JobScope` の `JobId string` を `JobIdSlice Utf8Slice` に変更
 - `InlineSuppression` に `byte[] Source` フィールドを追加（スコープ利用箇所での lazy decode 用）
 - `TryFindJobIdForLine` に `byte[] source` パラメータを追加し `Utf8Slice` をその場でデコード
+- `NormalizeExclusions` の `BuildKnownJobIds`（`HashSet<string>` ＋ eager decode）を除去し、`BuildKnownJobIdSlices` + `ContainsJobIdOrdinalIgnoreCase` に置換
+- `BuildKnownJobIds` メソッドを削除
+- `ContainsJobIdOrdinalIgnoreCase` / `MatchesJobIdOrdinalIgnoreCase` ヘルパーを追加（ASCII case-insensitive バイト比較、heap allocation なし）
 
-**残存**: `AddRuleIds` 内では各ルール ID トークンの `Encoding.UTF8.GetString(trimmedToken)` を維持（`RuleCatalog.TryResolveRuleId` が string を必要とするため）。ただし per-directive かつ稀なパスであり影響軽微。
+**残存**: `AddRuleIds` 内では各ルール ID トークンの `Encoding.UTF8.GetString(trimmedToken)` を維持（`RuleCatalog.TryResolveRuleId` が string を必要とするため）。ただし per-directive かつ稀なパスであり影響軽微。`jobRuleSuppressions` の dictionary key として valid な job ID を1回デコードする箇所も同様。
 
 **教訓**:
 - `ReadOnlySpan<byte>` の行スキャンではオフセット計算を丁寧に追跡する必要がある。`TrimLeadingAsciiWhitespace` は除去バイト数を返す形（`CountLeadingAsciiWhitespace`）にすると列計算が自然に書ける。

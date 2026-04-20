@@ -623,29 +623,6 @@ public sealed class LintEngine
             FilePath: filePath);
     }
 
-    static HashSet<string> BuildKnownJobIds(Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
-    {
-        var jobIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in workflow.Jobs)
-        {
-            var span = pair.Value.Id.Value.AsSpan(utf8Yaml);
-            if (span.Length == 0)
-            {
-                continue;
-            }
-
-            var jobId = Encoding.UTF8.GetString(span);
-            if (jobId.Length == 0)
-            {
-                continue;
-            }
-
-            jobIds.Add(jobId);
-        }
-
-        return jobIds;
-    }
-
     static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow)
     {
         var count = 0;
@@ -767,6 +744,38 @@ public sealed class LintEngine
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ContainsJobIdOrdinalIgnoreCase(Utf8Slice[] slices, byte[] source, string configJobId)
+    {
+        for (var k = 0; k < slices.Length; k++)
+        {
+            if (MatchesJobIdOrdinalIgnoreCase(slices[k].AsSpan(source), configJobId))
+                return true;
+        }
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool MatchesJobIdOrdinalIgnoreCase(ReadOnlySpan<byte> utf8, string str)
+    {
+        // GitHub Actions job IDs are ASCII identifiers: byte length equals character length
+        if (utf8.Length != str.Length)
+            return false;
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            var b = utf8[i];
+            var c = (byte)str[i];
+            if (b == c)
+                continue;
+            // ASCII case folding: A-Z (0x41-0x5A) <-> a-z (0x61-0x7A)
+            var bLower = (byte)(b | 0x20);
+            if (bLower >= (byte)'a' && bLower <= (byte)'z' && bLower == (byte)(c | 0x20))
+                continue;
+            return false;
+        }
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsAsciiWhitespace(byte b) => b == (byte)' ' || b == (byte)'\t';
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -848,7 +857,7 @@ public sealed class LintEngine
             return new ExclusionsNormalization([], normalizedFilePath, []);
         }
 
-        var knownJobIds = BuildKnownJobIds(workflow, utf8Yaml);
+        var knownJobIdSlices = BuildKnownJobIdSlices(workflow);
         var normalized = new List<NormalizedExclusion>(exclusions.Count);
         var diagnostics = new List<Diagnostic>();
 
@@ -903,7 +912,7 @@ public sealed class LintEngine
                 for (var j = 0; j < exclusion.Jobs.Count; j++)
                 {
                     var jobId = exclusion.Jobs[j];
-                    if (!string.IsNullOrEmpty(jobId) && !knownJobIds.Contains(jobId))
+                    if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
                     {
                         diagnostics.Add(new Diagnostic(
                             DiagnosticSeverity.Error,
