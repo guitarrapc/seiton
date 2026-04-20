@@ -1,9 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
-using System.Text;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 using static Seiton.Core.Parsing.ExpressionScanHelpers;
+using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -61,7 +61,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
-            var location = BuildExpressionLocation(runNode, bodyStart, nextSearchStart);
+            var location = BuildExpressionLocation(Config.Utf8Yaml, runNode, bodyStart, nextSearchStart);
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -105,27 +105,6 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         }
     }
 
-    TextRange BuildExpressionLocation(StringNode runNode, int bodyStart, int nextSearchStart)
-    {
-        var absoluteStart = runNode.Value.Offset + bodyStart - 3;
-        var absoluteLength = nextSearchStart - (bodyStart - 3);
-        if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
-        {
-            return runNode.Range;
-        }
-
-        var lineStarts = BuildLineStarts(Config.Utf8Yaml);
-        var start = OffsetToLineColumn(lineStarts, absoluteStart);
-        var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
-        return new TextRange(
-            Start: absoluteStart,
-            Length: absoluteLength,
-            StartLine: start.Line,
-            StartColumn: start.Column,
-            EndLine: end.Line,
-            EndColumn: end.Column);
-    }
-
     bool TryBuildFix(Step step, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
@@ -139,12 +118,13 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
             return false;
         }
 
-        if (!TryResolveShellVariableNameForInput(step, inputName, out var variableName))
+        if (!TryResolveShellVariableName(step.Env, _currentJob?.Env, _currentWorkflow?.Env,
+            Config.Utf8Yaml, inputName, TryParseSimpleInputsReference, out var variableName))
         {
             return false;
         }
 
-        var replacement = IsPowerShell(step, Config.Utf8Yaml)
+        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(step, Config.Utf8Yaml)
             ? "$env:" + variableName
             : "${" + variableName + "}";
 
@@ -155,122 +135,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return true;
     }
 
-    bool TryResolveShellVariableNameForInput(Step step, string inputName, out string variableName)
-    {
-        variableName = string.Empty;
-        var matchCount = 0;
-        if (TryResolveShellVariableNameInEnv(step.Env, inputName, out var stepVariable))
-        {
-            variableName = stepVariable;
-            matchCount++;
-        }
-
-        if (TryResolveShellVariableNameInEnv(_currentJob?.Env, inputName, out var jobVariable))
-        {
-            variableName = jobVariable;
-            matchCount++;
-        }
-
-        if (TryResolveShellVariableNameInEnv(_currentWorkflow?.Env, inputName, out var workflowVariable))
-        {
-            variableName = workflowVariable;
-            matchCount++;
-        }
-
-        return matchCount == 1;
-    }
-
-    bool TryResolveShellVariableNameInEnv(Env? env, string inputName, out string variableName)
-    {
-        variableName = string.Empty;
-        if (Config.Utf8Yaml is null || env?.Vars is null || env.Vars.Count == 0)
-        {
-            return false;
-        }
-
-        var matches = 0;
-        foreach (var pair in env.Vars)
-        {
-            var envVar = pair.Value;
-            var envNameIndex = 0;
-            if (!TryReadIdentifier(envVar.Name.Value.AsSpan(Config.Utf8Yaml), ref envNameIndex, out var candidateVariable)
-                || envNameIndex != envVar.Name.Value.Length
-                || !IsSimpleIdentifier(candidateVariable))
-            {
-                continue;
-            }
-
-            if (!TryExtractExpressionBody(envVar.Value, Config.Utf8Yaml, out var body)
-                || !TryParseSimpleInputsReference(body, out var candidateInput)
-                || !string.Equals(candidateInput, inputName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            variableName = candidateVariable;
-            matches++;
-            if (matches > 1)
-            {
-                return false;
-            }
-        }
-
-        return matches == 1;
-    }
-
-    static bool IsPowerShell(Step step, byte[] utf8Yaml)
-    {
-        if (step.Exec is not ExecRun run || run.Shell is null || run.Shell.Expression is not null)
-        {
-            return false;
-        }
-
-        var shell = Encoding.UTF8.GetString(run.Shell.Value.AsSpan(utf8Yaml));
-        return string.Equals(shell, "pwsh", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(shell, "powershell", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static bool TryExtractExpressionBody(StringNode node, byte[] utf8Yaml, out ReadOnlySpan<byte> expressionBody)
-    {
-        expressionBody = [];
-
-        var value = TrimAsciiWhiteSpace(node.Value.AsSpan(utf8Yaml));
-        if (value.Length == 0)
-        {
-            return false;
-        }
-
-        if (TryExtractEmbeddedExpressionBody(value, out expressionBody))
-        {
-            return true;
-        }
-
-        if (node.Expression is null)
-        {
-            return false;
-        }
-
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(utf8Yaml));
-        if (TryExtractEmbeddedExpressionBody(expression, out expressionBody))
-        {
-            return true;
-        }
-
-        expressionBody = expression;
-        return expressionBody.Length > 0;
-    }
-
-    static bool TryExtractEmbeddedExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> expressionBody)
-    {
-        expressionBody = [];
-        if (!value.StartsWith("${{"u8) || !value.EndsWith("}}"u8))
-        {
-            return false;
-        }
-
-        expressionBody = TrimAsciiWhiteSpace(value.Slice(3, value.Length - 5));
-        return expressionBody.Length > 0;
-    }
+    // Inputs-specific reference parsing
 
     static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName)
     {
@@ -339,80 +204,8 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return true;
     }
 
-    static bool TryConsumeMemberOrBracketName(ReadOnlySpan<byte> expression, ref int index, out string name)
-    {
-        name = string.Empty;
-        if (index >= expression.Length)
-        {
-            return false;
-        }
+    // Inputs-specific AST detection
 
-        if (expression[index] == (byte)'.')
-        {
-            index++;
-            if (!TryReadIdentifier(expression, ref index, out name))
-            {
-                return false;
-            }
-
-            SkipWhiteSpace(expression, ref index);
-            return index == expression.Length;
-        }
-
-        if (expression[index] != (byte)'[')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var quote = expression[index];
-        if (quote is not ((byte)'\'' or (byte)'"'))
-        {
-            return false;
-        }
-
-        index++;
-        var start = index;
-        while (index < expression.Length && expression[index] != quote)
-        {
-            index++;
-        }
-
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var nameBytes = expression[start..index];
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)']')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index != expression.Length)
-        {
-            return false;
-        }
-
-        var parsedName = Encoding.UTF8.GetString(nameBytes);
-        if (!IsSimpleIdentifier(parsedName))
-        {
-            return false;
-        }
-
-        name = parsedName;
-        return true;
-    }
     static bool ContainsInputsReference(
         int nodeId,
         int parentId,
@@ -427,7 +220,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
 
         var node = nodes[nodeId];
 
-        // Case 1: root `inputs` identifier ? covers ${{ inputs.* }} and ${{ inputs['*'] }}
+        // Case 1: root `inputs` identifier — covers ${{ inputs.* }} and ${{ inputs['*'] }}
         if (node.Kind == ExpressionNodeKind.Identifier
             && IsContextRootIdentifier(nodeId, parentId, nodes)
             && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
@@ -435,7 +228,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
             return true;
         }
 
-        // Case 2: accessing a property or index of github.event.inputs ? covers ${{ github.event.inputs.* }}
+        // Case 2: accessing a property or index of github.event.inputs — covers ${{ github.event.inputs.* }}
         if (node.Kind is ExpressionNodeKind.MemberAccess
             or ExpressionNodeKind.IndexAccess
             or ExpressionNodeKind.WildcardAccess)
@@ -489,8 +282,6 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return false;
     }
 
-    // Returns true when nodeId represents the `github.event.inputs` member-access chain.
-    // That is: MemberAccess(token="inputs", left=MemberAccess(token="event", left=Identifier("github")))
     static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -512,7 +303,6 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return IsGithubEventChain(node.Left, nodes, expression);
     }
 
-    // Returns true when nodeId represents `github.event`: MemberAccess(token="event", left=Identifier("github"))
     static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)

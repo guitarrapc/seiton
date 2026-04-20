@@ -397,7 +397,31 @@ Phase 1 と Phase 2 は低リスクで即時効果があるため、最初に着
 | 動作変更 | — | なし（partial class 分割のみ） |
 | テスト | 477 passed | 477 passed |
 
-### Phase 3: RunContext 系ルールの統合 — 🔲 未着手
+### Phase 3: RunContext 系ルールの統合 — ✅ 完了
+
+**実施日**: 2026-04-20
+
+**成果物 (1ファイル新設、3ファイル書き換え):**
+
+| ファイル | 行数 | 内容 |
+|---|---|---|
+| `RunContextDirectUseAnalyzer.cs` (NEW) | 333 | 共有パイプライン: BuildExpressionLocation, IsPowerShell (2 overloads), TryExtractExpressionBody, TryExtractEmbeddedExpressionBody, TryConsumeMemberOrBracketName, TryParseSimpleContextReference, ContainsContextRootReference, TryResolveShellVariableNameInEnv, TryResolveShellVariableName, SimpleReferenceParser delegate |
+| `RunEnvContextDirectUseRule.cs` | 251 | env 固有: CheckRunNode, TryBuildFix + IsInsideNoExpandHereDoc, TryParseNoExpandHereDocStart, HereDocState |
+| `RunInputsContextDirectUseRule.cs` | 338 | inputs 固有: CheckRunNode, TryBuildFix + ContainsInputsReference (github.event.inputs chain), TryParseSimpleInputsReference, TryConsumeGithubEventInputsRoot |
+| `RunSecretsContextDirectUseRule.cs` | 140 | secrets 固有: CheckRunNode, TryBuildFix のみ (全共有メソッドはAnalyzerに委譲) |
+
+**実績値:**
+
+| 指標 | Before | After |
+|---|---|---|
+| 3ファイル合計行数 | 1,391 | 729 (3ルール) + 333 (Analyzer) = 1,062 |
+| **削減行数** | — | **-329行** |
+| 重複メソッド (BuildExpressionLocation等) | 3コピー | 1定義 |
+| 重複メソッド (IsPowerShell) | 3コピー | 1定義 (2 overloads) |
+| 重複メソッド (TryExtractExpressionBody等) | 2コピー | 1定義 |
+| 重複メソッド (ContainsRootReference) | 2コピー | 1定義 (汎用rootToken) |
+| 重複メソッド (TryResolveShellVariableNameInEnv) | 2コピー | 1定義 (delegate parameterized) |
+| テスト | 477 passed | 477 passed |
 
 ### Phase 4: LintConfigLibrary の責務分離 — 🔲 未着手
 

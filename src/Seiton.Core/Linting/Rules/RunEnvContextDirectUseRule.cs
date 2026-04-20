@@ -1,9 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
-using System.Text;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 using static Seiton.Core.Parsing.ExpressionScanHelpers;
+using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -35,7 +35,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
-            var location = BuildExpressionLocation(runNode, bodyStart, nextSearchStart);
+            var location = BuildExpressionLocation(Config.Utf8Yaml, runNode, bodyStart, nextSearchStart);
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -49,12 +49,13 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                 continue;
             }
 
-            if (!ContainsEnvRootReference(
+            if (!ContainsContextRootReference(
                 parseResult.RootNode,
                 parentId: -1,
                 parseResult.Nodes,
                 parseResult.Arguments,
-                expression))
+                expression,
+                "env"u8))
             {
                 continue;
             }
@@ -79,26 +80,6 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         }
     }
 
-    TextRange BuildExpressionLocation(StringNode runNode, int bodyStart, int nextSearchStart)
-    {
-        var absoluteStart = runNode.Value.Offset + bodyStart - 3;
-        var absoluteLength = nextSearchStart - (bodyStart - 3);
-        if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
-        {
-            return runNode.Range;
-        }
-
-        var lineStarts = BuildLineStarts(Config.Utf8Yaml);
-        var start = OffsetToLineColumn(lineStarts, absoluteStart);
-        var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
-        return new TextRange(
-            Start: absoluteStart,
-            Length: absoluteLength,
-            StartLine: start.Line,
-            StartColumn: start.Column,
-            EndLine: end.Line,
-            EndColumn: end.Column);
-    }
     bool TryBuildFix(ExecRun run, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
@@ -113,12 +94,12 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             return false;
         }
 
-        if (!TryParseSimpleEnvReference(expression, out var variableName))
+        if (!TryParseSimpleContextReference(expression, "env"u8, out var variableName))
         {
             return false;
         }
 
-        var replacement = IsPowerShell(run.Shell, Config.Utf8Yaml)
+        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(run.Shell, Config.Utf8Yaml)
             ? "$env:" + variableName
             : "${" + variableName + "}";
 
@@ -267,160 +248,4 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
     }
 
     readonly record struct HereDocState(byte[] Terminator, bool StripTabs);
-
-    static bool IsPowerShell(StringNode? shellNode, byte[] utf8Yaml)
-    {
-        if (shellNode is null || shellNode.Expression is not null)
-        {
-            return false;
-        }
-
-        var shell = Encoding.UTF8.GetString(shellNode.Value.AsSpan(utf8Yaml));
-        return string.Equals(shell, "pwsh", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(shell, "powershell", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static bool TryParseSimpleEnvReference(ReadOnlySpan<byte> expression, out string variableName)
-    {
-        variableName = string.Empty;
-        var index = 0;
-        if (!ConsumeWordIgnoreCase(expression, ref index, "env"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        if (expression[index] == (byte)'.')
-        {
-            index++;
-            if (!TryReadIdentifier(expression, ref index, out variableName))
-            {
-                return false;
-            }
-
-            SkipWhiteSpace(expression, ref index);
-            return index == expression.Length;
-        }
-
-        if (expression[index] != (byte)'[')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var quote = expression[index];
-        if (quote is not ((byte)'\'' or (byte)'"'))
-        {
-            return false;
-        }
-
-        index++;
-        var start = index;
-        while (index < expression.Length && expression[index] != quote)
-        {
-            index++;
-        }
-
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var nameBytes = expression[start..index];
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)']')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index != expression.Length)
-        {
-            return false;
-        }
-
-        var name = Encoding.UTF8.GetString(nameBytes);
-        if (!IsSimpleIdentifier(name))
-        {
-            return false;
-        }
-
-        variableName = name;
-        return true;
-    }
-    static bool ContainsEnvRootReference(
-        int nodeId,
-        int parentId,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expression)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-        if (node.Kind == ExpressionNodeKind.Identifier
-            && IsContextRootIdentifier(nodeId, parentId, nodes)
-            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "env"u8))
-        {
-            return true;
-        }
-
-        return node.Kind switch
-        {
-            ExpressionNodeKind.Unary => ContainsEnvRootReference(node.Left, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.Binary => ContainsEnvRootReference(node.Left, nodeId, nodes, arguments, expression)
-                || ContainsEnvRootReference(node.Right, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.MemberAccess => ContainsEnvRootReference(node.Left, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.WildcardAccess => ContainsEnvRootReference(node.Left, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.IndexAccess => ContainsEnvRootReference(node.Left, nodeId, nodes, arguments, expression)
-                || ContainsEnvRootReference(node.Right, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.FunctionCall => ContainsEnvRootReferenceInFunction(node, nodeId, nodes, arguments, expression),
-            _ => false,
-        };
-    }
-
-    static bool ContainsEnvRootReferenceInFunction(
-        ExpressionNode functionCallNode,
-        int functionCallNodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expression)
-    {
-        if (ContainsEnvRootReference(functionCallNode.Left, functionCallNodeId, nodes, arguments, expression))
-        {
-            return true;
-        }
-
-        for (var i = 0; i < functionCallNode.ArgCount; i++)
-        {
-            var argIndex = functionCallNode.ArgStart + i;
-            if (argIndex < 0 || argIndex >= arguments.Length)
-            {
-                continue;
-            }
-
-            if (ContainsEnvRootReference(arguments[argIndex], functionCallNodeId, nodes, arguments, expression))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
