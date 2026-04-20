@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Parsing;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
@@ -7,10 +8,6 @@ namespace Seiton.Core.Linting;
 
 public sealed class LintEngine
 {
-    const string InlineDirectivePrefix = "seiton:";
-    const string DisableNextLineCommand = "disable-next-line";
-    const string DisableJobCommand = "disable-job";
-    const string DisableFileCommand = "disable-file";
 
     readonly List<IRule> rules = [];
 
@@ -223,7 +220,7 @@ public sealed class LintEngine
             return true;
         }
 
-        return TryGetConfigSuppressionRecord(diagnostic, inlineSuppression.JobScopes, normalizedExclusions, normalizedFilePath, out suppressionRecord);
+        return TryGetConfigSuppressionRecord(diagnostic, inlineSuppression.JobScopes, inlineSuppression.Source, normalizedExclusions, normalizedFilePath, out suppressionRecord);
     }
 
     static bool TryGetInlineSuppressionRecord(Diagnostic diagnostic, InlineSuppression inlineSuppression, out SuppressionRecord suppressionRecord)
@@ -265,7 +262,7 @@ public sealed class LintEngine
             return false;
         }
 
-        if (!TryFindJobIdForLine(diagnostic.Location.StartLine, inlineSuppression.JobScopes, out var jobId))
+        if (!TryFindJobIdForLine(diagnostic.Location.StartLine, inlineSuppression.JobScopes, inlineSuppression.Source, out var jobId))
         {
             suppressionRecord = default;
             return false;
@@ -291,6 +288,7 @@ public sealed class LintEngine
     static bool TryGetConfigSuppressionRecord(
         Diagnostic diagnostic,
         IReadOnlyList<JobScope> jobScopes,
+        byte[] source,
         IReadOnlyList<NormalizedExclusion> normalizedExclusions,
         string normalizedFilePath,
         out SuppressionRecord suppressionRecord)
@@ -326,7 +324,7 @@ public sealed class LintEngine
                 return true;
             }
 
-            if (!TryFindJobIdForLine(diagnostic.Location.StartLine, jobScopes, out var jobId))
+            if (!TryFindJobIdForLine(diagnostic.Location.StartLine, jobScopes, source, out var jobId))
             {
                 continue;
             }
@@ -359,14 +357,14 @@ public sealed class LintEngine
         return false;
     }
 
-    static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, out string jobId)
+    static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, byte[] source, out string jobId)
     {
         for (var i = 0; i < jobScopes.Count; i++)
         {
             var scope = jobScopes[i];
             if (line >= scope.StartLine && line <= scope.EndLine)
             {
-                jobId = scope.JobId;
+                jobId = Encoding.UTF8.GetString(scope.JobIdSlice.AsSpan(source));
                 return true;
             }
         }
@@ -382,61 +380,112 @@ public sealed class LintEngine
             return InlineSuppression.Empty;
         }
 
-        var knownJobIds = BuildKnownJobIds(workflow, utf8Yaml);
-        var jobScopes = BuildJobScopes(workflow, utf8Yaml);
-        var text = Encoding.UTF8.GetString(utf8Yaml);
-        var lines = text.Split('\n');
+        var knownJobIdSlices = BuildKnownJobIdSlices(workflow);
+        var jobScopes = BuildJobScopes(workflow);
+
+        // UTF-8 byte constants for directive parsing
+        ReadOnlySpan<byte> seitonPrefixUtf8 = "seiton:"u8;
+        ReadOnlySpan<byte> disableNextLineUtf8 = "disable-next-line"u8;
+        ReadOnlySpan<byte> disableFileUtf8 = "disable-file"u8;
+        ReadOnlySpan<byte> disableJobUtf8 = "disable-job"u8;
+
         var nextLineRuleSuppressions = new Dictionary<int, Dictionary<string, SuppressionAnchor>>();
         var fileRuleSuppressions = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
         var jobRuleSuppressions = new Dictionary<string, Dictionary<string, SuppressionAnchor>>(StringComparer.OrdinalIgnoreCase);
         var configurationDiagnostics = new List<Diagnostic>();
 
+        ReadOnlySpan<byte> remaining = utf8Yaml;
         var lineStartOffset = 0;
-        for (var i = 0; i < lines.Length; i++)
+        var lineNumber = 0;
+
+        while (!remaining.IsEmpty)
         {
-            var lineNumber = i + 1;
-            var line = lines[i];
-            var lineCore = line.EndsWith("\r", StringComparison.Ordinal) ? line[..^1] : line;
-            var commentIndex = lineCore.IndexOf('#');
-            if (commentIndex < 0)
+            lineNumber++;
+
+            // Find end-of-line ('\n' = 0x0A)
+            var newlinePos = remaining.IndexOf((byte)'\n');
+            ReadOnlySpan<byte> lineBytes;
+            int lineAdvance;
+            if (newlinePos >= 0)
             {
-                lineStartOffset += line.Length + 1;
-                continue;
-            }
-
-            var commentText = lineCore[(commentIndex + 1)..].TrimStart();
-            var command = string.Empty;
-            var arguments = string.Empty;
-
-            if (commentText.StartsWith(InlineDirectivePrefix, StringComparison.Ordinal))
-            {
-                var commandAndArgs = commentText[InlineDirectivePrefix.Length..].TrimStart();
-                if (commandAndArgs.Length == 0)
-                {
-                    lineStartOffset += line.Length + 1;
-                    continue;
-                }
-
-                var separator = commandAndArgs.IndexOfAny(' ', '\t');
-                if (separator < 0)
-                {
-                    command = commandAndArgs;
-                }
-                else
-                {
-                    command = commandAndArgs[..separator];
-                    arguments = commandAndArgs[(separator + 1)..].Trim();
-                }
+                lineBytes = remaining[..newlinePos];
+                lineAdvance = newlinePos + 1;
             }
             else
             {
-                lineStartOffset += line.Length + 1;
+                lineBytes = remaining;
+                lineAdvance = remaining.Length;
+            }
+
+            // Strip trailing \r (Windows line endings)
+            var lineCore = (!lineBytes.IsEmpty && lineBytes[^1] == (byte)'\r')
+                ? lineBytes[..^1]
+                : lineBytes;
+
+            // Fast path: skip lines without '#'
+            var hashPos = lineCore.IndexOf((byte)'#');
+            if (hashPos < 0)
+            {
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
                 continue;
             }
 
-            if (string.Equals(command, DisableNextLineCommand, StringComparison.Ordinal))
+            // Scan past '#' and trim leading whitespace to find 'seiton:'
+            var afterHashOffset = hashPos + 1;
+            var afterHashBytes = lineCore[afterHashOffset..];
+            var leadingWS1 = CountLeadingAsciiWhitespace(afterHashBytes);
+            var commentTextOffset = afterHashOffset + leadingWS1;
+            var commentText = afterHashBytes[leadingWS1..];
+
+            if (!commentText.StartsWith(seitonPrefixUtf8))
             {
-                if (arguments.Length > 0)
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
+                continue;
+            }
+
+            // After 'seiton:', trim leading whitespace to find command
+            var afterPrefixBytes = commentText[seitonPrefixUtf8.Length..];
+            var leadingWS2 = CountLeadingAsciiWhitespace(afterPrefixBytes);
+            var commandAndArgsOffset = commentTextOffset + seitonPrefixUtf8.Length + leadingWS2;
+            var commandAndArgs = afterPrefixBytes[leadingWS2..];
+
+            if (commandAndArgs.IsEmpty)
+            {
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
+                continue;
+            }
+
+            // Split command from arguments at first space/tab
+            var sepIdx = commandAndArgs.IndexOfAny((byte)' ', (byte)'\t');
+            ReadOnlySpan<byte> commandBytes;
+            int argsOffset;
+            ReadOnlySpan<byte> argsBytes;
+            if (sepIdx < 0)
+            {
+                commandBytes = commandAndArgs;
+                argsOffset = commandAndArgsOffset + commandAndArgs.Length;
+                argsBytes = ReadOnlySpan<byte>.Empty;
+            }
+            else
+            {
+                commandBytes = commandAndArgs[..sepIdx];
+                var afterSepBytes = commandAndArgs[(sepIdx + 1)..];
+                var leadingWS3 = CountLeadingAsciiWhitespace(afterSepBytes);
+                argsOffset = commandAndArgsOffset + sepIdx + 1 + leadingWS3;
+                var trimmedAfterSep = afterSepBytes[leadingWS3..];
+                var trailingWS = CountTrailingAsciiWhitespace(trimmedAfterSep);
+                argsBytes = trimmedAfterSep[..(trimmedAfterSep.Length - trailingWS)];
+            }
+
+            var commandColumn = commandAndArgsOffset + 1;  // 1-based column of command token
+            var commandLen = commandBytes.Length;
+
+            if (commandBytes.SequenceEqual(disableNextLineUtf8))
+            {
+                if (!argsBytes.IsEmpty)
                 {
                     var targetLine = lineNumber + 1;
                     if (!nextLineRuleSuppressions.TryGetValue(targetLine, out var suppressedRuleIds))
@@ -445,91 +494,114 @@ public sealed class LintEngine
                         nextLineRuleSuppressions[targetLine] = suppressedRuleIds;
                     }
 
-                    AddRuleIds(arguments, suppressedRuleIds, configurationDiagnostics, filePath, lineCore, lineStartOffset, lineNumber, commentIndex);
+                    AddRuleIds(argsBytes, argsOffset, suppressedRuleIds, configurationDiagnostics, filePath, lineStartOffset, lineNumber);
                 }
 
-                lineStartOffset += line.Length + 1;
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
                 continue;
             }
 
-            if (string.Equals(command, DisableFileCommand, StringComparison.Ordinal))
+            if (commandBytes.SequenceEqual(disableFileUtf8))
             {
-                if (arguments.Length > 0)
+                if (!argsBytes.IsEmpty)
                 {
-                    AddRuleIds(arguments, fileRuleSuppressions, configurationDiagnostics, filePath, lineCore, lineStartOffset, lineNumber, commentIndex);
+                    AddRuleIds(argsBytes, argsOffset, fileRuleSuppressions, configurationDiagnostics, filePath, lineStartOffset, lineNumber);
                 }
 
-                lineStartOffset += line.Length + 1;
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
                 continue;
             }
 
-            if (string.Equals(command, DisableJobCommand, StringComparison.Ordinal))
+            if (commandBytes.SequenceEqual(disableJobUtf8))
             {
-                var separator = arguments.IndexOfAny(' ', '\t');
-                if (separator <= 0)
+                var jobSep = argsBytes.IndexOfAny((byte)' ', (byte)'\t');
+                if (jobSep <= 0)
                 {
                     configurationDiagnostics.Add(BuildInlineDirectiveError(
                         "disable-job requires <job-id> and <rule-id list>",
                         filePath,
                         lineStartOffset,
                         lineNumber,
-                        lineCore,
-                        commentIndex,
-                        command));
-                    lineStartOffset += line.Length + 1;
+                        commandColumn,
+                        commandLen));
+                    lineStartOffset += lineAdvance;
+                    remaining = remaining[lineAdvance..];
                     continue;
                 }
 
-                var jobId = arguments[..separator].Trim();
-                var ruleIdList = arguments[(separator + 1)..].Trim();
-                if (ruleIdList.Length == 0)
+                var jobIdBytes = argsBytes[..jobSep];
+                var jobIdColumn = argsOffset + 1;  // 1-based column of job ID
+                var afterJobBytes = argsBytes[(jobSep + 1)..];
+                var leadingWS4 = CountLeadingAsciiWhitespace(afterJobBytes);
+                var ruleIdListOffset = argsOffset + jobSep + 1 + leadingWS4;
+                var ruleIdListTrimmed = afterJobBytes[leadingWS4..];
+                var trailingWS2 = CountTrailingAsciiWhitespace(ruleIdListTrimmed);
+                var ruleIdListBytes = ruleIdListTrimmed[..(ruleIdListTrimmed.Length - trailingWS2)];
+
+                if (ruleIdListBytes.IsEmpty)
                 {
                     configurationDiagnostics.Add(BuildInlineDirectiveError(
                         "disable-job requires at least one rule-id",
                         filePath,
                         lineStartOffset,
                         lineNumber,
-                        lineCore,
-                        commentIndex,
-                        command));
-                    lineStartOffset += line.Length + 1;
+                        commandColumn,
+                        commandLen));
+                    lineStartOffset += lineAdvance;
+                    remaining = remaining[lineAdvance..];
                     continue;
                 }
 
-                if (!knownJobIds.Contains(jobId))
+                // Check if job ID is known via byte comparison (no string decode)
+                var knownJob = false;
+                for (var ki = 0; ki < knownJobIdSlices.Length; ki++)
                 {
-                    var jobColumn = FindTokenColumn(lineCore, jobId, commentIndex);
-                    var jobStart = lineStartOffset + jobColumn - 1;
+                    if (knownJobIdSlices[ki].AsSpan(utf8Yaml).SequenceEqual(jobIdBytes))
+                    {
+                        knownJob = true;
+                        break;
+                    }
+                }
+
+                if (!knownJob)
+                {
+                    var jobIdString = Encoding.UTF8.GetString(jobIdBytes);
                     configurationDiagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Error,
-                        $"unknown job-id '{jobId}' in inline suppression directive",
-                        new TextRange(jobStart, jobId.Length, lineNumber, jobColumn, lineNumber, jobColumn + jobId.Length),
+                        $"unknown job-id '{jobIdString}' in inline suppression directive",
+                        new TextRange(lineStartOffset + jobIdColumn - 1, jobIdBytes.Length, lineNumber, jobIdColumn, lineNumber, jobIdColumn + jobIdBytes.Length),
                         FilePath: filePath));
-                    lineStartOffset += line.Length + 1;
+                    lineStartOffset += lineAdvance;
+                    remaining = remaining[lineAdvance..];
                     continue;
                 }
 
-                if (!jobRuleSuppressions.TryGetValue(jobId, out var suppressedRuleIds))
+                var jobIdKey = Encoding.UTF8.GetString(jobIdBytes);
+                if (!jobRuleSuppressions.TryGetValue(jobIdKey, out var jobSuppressedRuleIds))
                 {
-                    suppressedRuleIds = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
-                    jobRuleSuppressions[jobId] = suppressedRuleIds;
+                    jobSuppressedRuleIds = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
+                    jobRuleSuppressions[jobIdKey] = jobSuppressedRuleIds;
                 }
 
-                AddRuleIds(ruleIdList, suppressedRuleIds, configurationDiagnostics, filePath, lineCore, lineStartOffset, lineNumber, commentIndex);
-                lineStartOffset += line.Length + 1;
+                AddRuleIds(ruleIdListBytes, ruleIdListOffset, jobSuppressedRuleIds, configurationDiagnostics, filePath, lineStartOffset, lineNumber);
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
                 continue;
             }
 
+            // Unknown command
             configurationDiagnostics.Add(BuildInlineDirectiveError(
-                $"unknown inline suppression command '{command}'",
+                $"unknown inline suppression command '{Encoding.UTF8.GetString(commandBytes)}'",
                 filePath,
                 lineStartOffset,
                 lineNumber,
-                lineCore,
-                commentIndex,
-                command));
+                commandColumn,
+                commandLen));
 
-            lineStartOffset += line.Length + 1;
+            lineStartOffset += lineAdvance;
+            remaining = remaining[lineAdvance..];
         }
 
         return new InlineSuppression(
@@ -537,15 +609,13 @@ public sealed class LintEngine
             fileRuleSuppressions,
             jobRuleSuppressions,
             jobScopes,
+            utf8Yaml,
             configurationDiagnostics.ToArray());
     }
 
-    static Diagnostic BuildInlineDirectiveError(string message, string filePath, int lineStartOffset, int lineNumber, string lineCore, int commentIndex, string token)
+    static Diagnostic BuildInlineDirectiveError(string message, string filePath, int lineStartOffset, int lineNumber, int tokenColumn, int tokenLength)
     {
-        var tokenColumn = token.Length == 0 ? commentIndex + 2 : FindTokenColumn(lineCore, token, commentIndex);
         var tokenStart = lineStartOffset + tokenColumn - 1;
-        var tokenLength = token.Length == 0 ? 1 : token.Length;
-
         return new Diagnostic(
             DiagnosticSeverity.Error,
             message,
@@ -576,13 +646,37 @@ public sealed class LintEngine
         return jobIds;
     }
 
-    static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
+    static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow)
+    {
+        var count = 0;
+        foreach (var pair in workflow.Jobs)
+        {
+            if (!pair.Value.Id.Value.IsEmpty)
+                count++;
+        }
+
+        if (count == 0)
+            return [];
+
+        var result = new Utf8Slice[count];
+        var i = 0;
+        foreach (var pair in workflow.Jobs)
+        {
+            var slice = pair.Value.Id.Value;
+            if (!slice.IsEmpty)
+                result[i++] = slice;
+        }
+
+        return result;
+    }
+
+    static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow)
     {
         var scopes = new List<JobScope>(workflow.Jobs.Count);
         foreach (var pair in workflow.Jobs)
         {
-            var span = pair.Value.Id.Value.AsSpan(utf8Yaml);
-            if (span.Length == 0)
+            var slice = pair.Value.Id.Value;
+            if (slice.IsEmpty)
             {
                 continue;
             }
@@ -593,63 +687,104 @@ public sealed class LintEngine
                 continue;
             }
 
-            var jobId = Encoding.UTF8.GetString(span);
-            if (jobId.Length == 0)
-            {
-                continue;
-            }
-
-            scopes.Add(new JobScope(jobId, range.StartLine, range.EndLine));
+            scopes.Add(new JobScope(slice, range.StartLine, range.EndLine));
         }
 
         return scopes;
     }
 
     static void AddRuleIds(
-        string ruleIdList,
+        ReadOnlySpan<byte> ruleIdListBytes,
+        int argsLineOffset,
         Dictionary<string, SuppressionAnchor> target,
         List<Diagnostic> configurationDiagnostics,
         string filePath,
-        string lineCore,
         int lineStartOffset,
-        int lineNumber,
-        int commentIndex)
+        int lineNumber)
     {
-        var ruleIds = ruleIdList.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        for (var i = 0; i < ruleIds.Length; i++)
+        var remaining = ruleIdListBytes;
+        var currentOffset = argsLineOffset;
+        while (true)
         {
-            var ruleIdToken = ruleIds[i];
-            var tokenColumn = FindTokenColumn(lineCore, ruleIdToken, commentIndex);
-            if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
+            var commaIdx = remaining.IndexOf((byte)',');
+            ReadOnlySpan<byte> tokenBytes;
+            bool hasMore;
+            if (commaIdx >= 0)
             {
-                if (RuleCatalog.IsNonDisableable(internalRuleId))
-                {
-                    var nonDisableableTokenStart = lineStartOffset + tokenColumn - 1;
-                    configurationDiagnostics.Add(new Diagnostic(
-                        DiagnosticSeverity.Error,
-                        $"rule '{internalRuleId}' is non-disableable",
-                        new TextRange(nonDisableableTokenStart, ruleIdToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + ruleIdToken.Length),
-                        FilePath: filePath));
-                    continue;
-                }
-
-                target[internalRuleId] = new SuppressionAnchor(lineNumber, tokenColumn);
-                continue;
+                tokenBytes = remaining[..commaIdx];
+                hasMore = true;
+            }
+            else
+            {
+                tokenBytes = remaining;
+                hasMore = false;
             }
 
-            var tokenStart = lineStartOffset + tokenColumn - 1;
-            configurationDiagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                BuildUnknownRuleIdMessage(ruleIdToken),
-                new TextRange(tokenStart, ruleIdToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + ruleIdToken.Length),
-                FilePath: filePath));
+            // Trim leading/trailing ASCII whitespace from token
+            var leadingWS = CountLeadingAsciiWhitespace(tokenBytes);
+            var strippedLeading = tokenBytes[leadingWS..];
+            var trailingWS = CountTrailingAsciiWhitespace(strippedLeading);
+            var trimmedToken = strippedLeading[..(strippedLeading.Length - trailingWS)];
+
+            if (!trimmedToken.IsEmpty)
+            {
+                var tokenByteOffset = currentOffset + leadingWS;
+                var tokenColumn = tokenByteOffset + 1;          // 1-based column
+                var tokenAbsStart = lineStartOffset + tokenByteOffset;
+                var ruleIdToken = Encoding.UTF8.GetString(trimmedToken);
+
+                if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
+                {
+                    if (RuleCatalog.IsNonDisableable(internalRuleId))
+                    {
+                        configurationDiagnostics.Add(new Diagnostic(
+                            DiagnosticSeverity.Error,
+                            $"rule '{internalRuleId}' is non-disableable",
+                            new TextRange(tokenAbsStart, trimmedToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + trimmedToken.Length),
+                            FilePath: filePath));
+                    }
+                    else
+                    {
+                        target[internalRuleId] = new SuppressionAnchor(lineNumber, tokenColumn);
+                    }
+                }
+                else
+                {
+                    configurationDiagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        BuildUnknownRuleIdMessage(ruleIdToken),
+                        new TextRange(tokenAbsStart, trimmedToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + trimmedToken.Length),
+                        FilePath: filePath));
+                }
+            }
+
+            if (!hasMore)
+                break;
+
+            currentOffset += commaIdx + 1;
+            remaining = remaining[(commaIdx + 1)..];
         }
     }
 
-    static int FindTokenColumn(string line, string token, int fallbackStart)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAsciiWhitespace(byte b) => b == (byte)' ' || b == (byte)'\t';
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CountLeadingAsciiWhitespace(ReadOnlySpan<byte> span)
     {
-        var tokenStart = line.IndexOf(token, fallbackStart, StringComparison.Ordinal);
-        return tokenStart >= 0 ? tokenStart + 1 : fallbackStart + 2;
+        var i = 0;
+        while (i < span.Length && IsAsciiWhitespace(span[i]))
+            i++;
+        return i;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CountTrailingAsciiWhitespace(ReadOnlySpan<byte> span)
+    {
+        var i = span.Length;
+        while (i > 0 && IsAsciiWhitespace(span[i - 1]))
+            i--;
+        return span.Length - i;
     }
 
     static RulesNormalization NormalizeRules(IReadOnlyDictionary<string, RuleConfig>? rules, string filePath)
@@ -850,6 +985,7 @@ public sealed class LintEngine
         IReadOnlyDictionary<string, SuppressionAnchor> FileRuleSuppressions,
         IReadOnlyDictionary<string, Dictionary<string, SuppressionAnchor>> JobRuleSuppressions,
         IReadOnlyList<JobScope> JobScopes,
+        byte[] Source,
         Diagnostic[] ConfigurationDiagnostics)
     {
         public static InlineSuppression Empty { get; } = new(
@@ -857,10 +993,11 @@ public sealed class LintEngine
             new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal),
             new Dictionary<string, Dictionary<string, SuppressionAnchor>>(StringComparer.Ordinal),
             [],
+            [],
             []);
     }
 
-    readonly record struct JobScope(string JobId, int StartLine, int EndLine);
+    readonly record struct JobScope(Utf8Slice JobIdSlice, int StartLine, int EndLine);
 
     readonly record struct SuppressionAnchor(int Line, int Column);
 
