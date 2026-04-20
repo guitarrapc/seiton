@@ -37,7 +37,7 @@ public static partial class WorkflowParser
 
         string? stepsOnlyKeyInReusable = null;
         TextPosition stepsOnlyKeyInReusableMark = default;
-        var keys = new HashSet<Utf8String>();
+        ulong seen = 0;
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
@@ -57,26 +57,17 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(
-                keyUtf8,
-                keyMark,
-                diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
-                $"job '{DecodeUtf8(source, jobId)}'"))
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"job '{DecodeUtf8(source, jobId)}'"))
             {
-                reader.Read(); // consume key
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
+                reader.Read();
+                if (!reader.End) reader.SkipCurrentNode();
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("runs-on"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: runs-on", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "runs-on";
@@ -93,6 +84,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: name", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     nameNode = ParseString(ref reader, out var nameErr, out var nameMark);
@@ -104,6 +96,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("needs"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: needs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     needsNode = ParseStringOrStringSequence(ref reader, diagnostics, out var needsErr, out var needsMark);
@@ -114,7 +107,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("env"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: env", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "env";
@@ -130,7 +124,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("steps"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: steps", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "steps";
@@ -153,7 +148,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("uses"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: uses", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     var usesNode = ParseString(ref reader, out var usesErr, out var usesMark);
@@ -172,7 +168,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("if"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: if", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     ifNode = ParseExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var ifErr, out var ifMark);
@@ -184,6 +181,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("permissions"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: permissions", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     permissionsNode = ParsePermissionsNode(ref reader, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' permissions must be scalar or mapping");
@@ -194,6 +192,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("environment"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 8)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: environment", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "environment";
@@ -210,6 +209,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("concurrency"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 9)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: concurrency", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     concurrencyNode = ParseConcurrencyNode(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be scalar or mapping", ExpressionValidationContext.Job);
@@ -220,6 +220,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("outputs"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 10)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: outputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "outputs";
@@ -236,6 +237,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("defaults"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 11)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: defaults", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "defaults";
@@ -252,6 +254,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("timeout-minutes"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 12)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: timeout-minutes", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "timeout-minutes";
@@ -273,6 +276,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("continue-on-error"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 13)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: continue-on-error", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "continue-on-error";
@@ -289,7 +293,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("strategy"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 14)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: strategy", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -307,7 +312,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("container"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 15)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: container", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "container";
@@ -323,7 +329,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("services"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 16)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: services", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (stepsOnlyKeyInReusable is null)
                 {
                     stepsOnlyKeyInReusable = "services";
@@ -339,7 +346,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("with"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 17)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: with", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     var inputs = ParseWorkflowCallInputsNode(ref reader, diagnostics, source, jobId);
@@ -371,7 +379,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("secrets"u8))
             {
-                reader.Read(); // consume key
+                reader.Read();
+                if (!TrySetBit(ref seen, 18)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: secrets", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     var secrets = ParseWorkflowCallSecretsNode(ref reader, diagnostics, source, jobId, out var inheritSecrets);
@@ -403,8 +412,9 @@ public static partial class WorkflowParser
 
             var isKnownKey = IsKnownJobKey(keyUtf8);
             var hasStepsOnlyName = TryGetStepsOnlyReusableJobKeyName(keyUtf8, out var stepsOnlyKeyName);
-            var keyText = isKnownKey ? string.Empty : Encoding.UTF8.GetString(keyUtf8);
-            reader.Read(); // consume key
+            var unknownJobKey = !isKnownKey ? Encoding.UTF8.GetString(keyUtf8) : null;
+
+            reader.Read();
 
             if (stepsOnlyKeyInReusable is null && hasStepsOnlyName)
             {
@@ -421,7 +431,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"unexpected job key '{keyText}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
+            AddError(diagnostics, $"unexpected job key '{unknownJobKey}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -569,7 +579,7 @@ public static partial class WorkflowParser
             StringNode[]? labels = null;
             StringNode? labelsExpr = null;
             StringNode? group = null;
-            var keys = new HashSet<Utf8String>();
+            ulong seen = 0;
 
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -588,61 +598,56 @@ public static partial class WorkflowParser
 
                 var keyMark = reader.CurrentStart;
                 var keyUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterMappingKey(keyUtf8, keyMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "runs-on"))
+                if (IsMergeKey(keyUtf8, keyMark, diagnostics, "runs-on"))
                 {
                     reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
+                    if (!reader.End) reader.SkipCurrentNode();
                     continue;
                 }
 
-                var isLabels = keyUtf8.SequenceEqual("labels"u8);
-                var isGroup = keyUtf8.SequenceEqual("group"u8);
-                var unknownKey = isLabels || isGroup ? null : Encoding.UTF8.GetString(keyUtf8);
-
-                reader.Read();
-                if (reader.End)
+                if (keyUtf8.SequenceEqual("labels"u8))
                 {
-                    break;
-                }
-
-                if (isLabels)
-                {
-                    if (reader.CurrentKind == YamlEventKind.Scalar)
+                    reader.Read();
+                    if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "runs-on contains duplicate key: labels", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                    if (!reader.End)
                     {
-                        var valueUtf8 = reader.GetScalarUtf8();
-                        if (ContainsExpression(valueUtf8))
+                        if (reader.CurrentKind == YamlEventKind.Scalar)
                         {
-                            labelsExpr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
-                            if (lblExprErr) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblExprMark);
+                            var valueUtf8 = reader.GetScalarUtf8();
+                            if (ContainsExpression(valueUtf8))
+                            {
+                                labelsExpr = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
+                                if (lblExprErr) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblExprMark);
+                            }
+                            else
+                            {
+                                labels = ParseStringOrStringSequence(ref reader, diagnostics, out var lblErr1, out var lblMark1);
+                                if (lblErr1) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
+                            }
                         }
                         else
                         {
-                            labels = ParseStringOrStringSequence(ref reader, diagnostics, out var lblErr1, out var lblMark1);
-                            if (lblErr1) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
+                            labels = ParseStringOrStringSequence(ref reader, diagnostics, out var lblErr2, out var lblMark2);
+                            if (lblErr2) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
                         }
-                    }
-                    else
-                    {
-                        labels = ParseStringOrStringSequence(ref reader, diagnostics, out var lblErr2, out var lblMark2);
-                        if (lblErr2) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
                     }
 
                     continue;
                 }
 
-                if (isGroup)
+                if (keyUtf8.SequenceEqual("group"u8))
                 {
+                    reader.Read();
+                    if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "runs-on contains duplicate key: group", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                     group = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
                     if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
                     continue;
                 }
 
-                AddError(diagnostics, $"unexpected runs-on key: {unknownKey}", keyMark);
-                reader.SkipCurrentNode();
+                var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
+                reader.Read();
+                AddError(diagnostics, $"unexpected runs-on key: {unknownRunsOnKey}", keyMark);
+                if (!reader.End) reader.SkipCurrentNode();
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -714,7 +719,7 @@ public static partial class WorkflowParser
         StringNode? nameNode = null;
         StringNode? urlNode = null;
         BoolNode? deploymentNode = null;
-        var keys = new HashSet<Utf8String>();
+        ulong seen = 0;
 
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -732,20 +737,17 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(keyUtf8, keyMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "environment"))
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "environment"))
             {
                 reader.Read();
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
+                if (!reader.End) reader.SkipCurrentNode();
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("name"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "environment contains duplicate key: name", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 nameNode = ParseString(ref reader, out var envNErr, out var envNMark);
                 if (envNErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.name must be scalar", envNMark);
                 continue;
@@ -754,6 +756,7 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("url"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "environment contains duplicate key: url", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 urlNode = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var urlErr, out var urlMark, parseWholeValueIfNoEmbedded: false);
                 if (urlErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.url must be scalar", urlMark);
                 continue;
@@ -762,14 +765,15 @@ public static partial class WorkflowParser
             if (keyUtf8.SequenceEqual("deployment"u8))
             {
                 reader.Read();
+                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "environment contains duplicate key: deployment", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 deploymentNode = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var depErr, out var depMark);
                 if (depErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.deployment must be bool or expression", depMark);
                 continue;
             }
 
-            var unknown = Encoding.UTF8.GetString(keyUtf8);
+            var unknownEnvKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected environment key '{unknown}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
+            AddError(diagnostics, $"unexpected environment key '{unknownEnvKey}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -808,7 +812,8 @@ public static partial class WorkflowParser
         }
 
         var outputs = new Dictionary<Utf8String, StringNode>();
-        var keys = new HashSet<Utf8String>();
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -826,12 +831,16 @@ public static partial class WorkflowParser
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
             var keyMark = reader.CurrentStart;
-            if (!TryRegisterMappingKey(
+            if (!TryRegisterDynamicKey(
+                source,
                 keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
                 keyMark,
                 diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
                 "outputs"))
             {
                 reader.Read();
@@ -875,7 +884,8 @@ public static partial class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, WorkflowCallInput>();
-        var keys = new HashSet<Utf8String>();
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -893,7 +903,7 @@ public static partial class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(nameUtf8, nameMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "with"))
+            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, diagnostics, keyStore, ref keyCount, caseSensitive: false, "with"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -967,7 +977,8 @@ public static partial class WorkflowParser
         }
 
         var map = new Dictionary<Utf8String, WorkflowCallSecret>();
-        var keys = new HashSet<Utf8String>();
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -985,7 +996,7 @@ public static partial class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(nameUtf8, nameMark, diagnostics, keys, MappingKeyComparison.AsciiCaseInsensitive, "secrets"))
+            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, diagnostics, keyStore, ref keyCount, caseSensitive: false, "secrets"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -1041,7 +1052,7 @@ public static partial class WorkflowParser
             return;
         }
 
-        ParseStringMapping(ref reader, diagnostics, $"job '{DecodeUtf8(source, jobId)}' secrets must be mapping or scalar 'inherit'");
+        ParseStringMapping(ref reader, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' secrets must be mapping or scalar 'inherit'");
     }
 
 }

@@ -605,7 +605,45 @@ public static partial class WorkflowParser
             EndLine: end.Line,
             EndColumn: end.Column);
     }
-    private static bool TryRegisterMappingKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, HashSet<Utf8String> keys, MappingKeyComparison comparison, string mappingName)
+    /// <summary>
+    /// Sets the specified bit in the seen mask.
+    /// Returns true if the bit was not already set (key is new); false if duplicate.
+    /// </summary>
+    private static bool TrySetBit(ref ulong seen, int bit)
+    {
+        var mask = 1UL << bit;
+        if ((seen & mask) != 0) return false;
+        seen |= mask;
+        return true;
+    }
+
+    /// <summary>
+    /// Checks if the key is the YAML merge key '&lt;&lt;' and rejects it.
+    /// Returns true if the key IS a merge key (caller should skip key+value).
+    /// </summary>
+    private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, string mappingName)
+    {
+        if (!keyUtf8.SequenceEqual("<<"u8)) return false;
+        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+        return true;
+    }
+
+    /// <summary>
+    /// Registers a dynamic (user-defined) mapping key for duplicate detection.
+    /// Uses offset-based storage in a stackalloc buffer to avoid heap allocation.
+    /// Returns true if the key is new; false if duplicate or merge key.
+    /// </summary>
+    private static bool TryRegisterDynamicKey(
+        ReadOnlySpan<byte> source,
+        ReadOnlySpan<byte> keyUtf8,
+        int keyOffset,
+        int keyLength,
+        TextPosition keyMark,
+        List<Diagnostic> diagnostics,
+        Span<long> keyStore,
+        ref int keyCount,
+        bool caseSensitive,
+        string mappingName)
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
@@ -613,16 +651,28 @@ public static partial class WorkflowParser
             return false;
         }
 
-        var normalizedKey = comparison == MappingKeyComparison.CaseSensitive
-            ? new Utf8String(keyUtf8)
-            : Utf8String.FromLowerAscii(keyUtf8);
-        if (keys.Add(normalizedKey))
+        for (var i = 0; i < keyCount; i++)
         {
-            return true;
+            var prevOffset = (int)(keyStore[i] >> 32);
+            var prevLength = (int)(keyStore[i] & 0xFFFFFFFF);
+            var prev = source.Slice(prevOffset, prevLength);
+            var isMatch = caseSensitive
+                ? prev.SequenceEqual(keyUtf8)
+                : EqualsAsciiIgnoreCase(prev, keyUtf8);
+            if (isMatch)
+            {
+                AddError(diagnostics, $"{mappingName} contains duplicate key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
+                return false;
+            }
         }
 
-        AddError(diagnostics, $"{mappingName} contains duplicate key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
-        return false;
+        if (keyCount < keyStore.Length)
+        {
+            keyStore[keyCount] = ((long)keyOffset << 32) | (uint)keyLength;
+            keyCount++;
+        }
+
+        return true;
     }
 
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)

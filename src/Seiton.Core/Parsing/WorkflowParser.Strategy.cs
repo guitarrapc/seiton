@@ -66,7 +66,7 @@ public static partial class WorkflowParser
         Matrix? matrix = null;
         BoolNode? failFast = null;
         IntNode? maxParallel = null;
-        var keys = new HashSet<Utf8String>();
+        ulong seen = 0;
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
 
@@ -87,26 +87,17 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(
-                keyUtf8,
-                keyMark,
-                diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
-                "strategy"))
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "strategy"))
             {
                 reader.Read();
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
+                if (!reader.End) reader.SkipCurrentNode();
                 continue;
             }
 
             if (keyUtf8.SequenceEqual("matrix"u8))
             {
-                reader.Read();
+                reader.Read(); // consume key
+                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "strategy contains duplicate key: matrix", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (reader.End)
                 {
                     break;
@@ -118,7 +109,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("fail-fast"u8))
             {
-                reader.Read();
+                reader.Read(); // consume key
+                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "strategy contains duplicate key: fail-fast", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     failFast = ParseBoolOrExpression(ref reader, diagnostics, ExpressionValidationContext.Job, out var ffErr, out var ffMark);
@@ -129,7 +121,8 @@ public static partial class WorkflowParser
 
             if (keyUtf8.SequenceEqual("max-parallel"u8))
             {
-                reader.Read();
+                reader.Read(); // consume key
+                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "strategy contains duplicate key: max-parallel", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
                     maxParallel = ParseInt(ref reader, out var mpErr, out var mpMark);
@@ -142,9 +135,9 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var key = Encoding.UTF8.GetString(keyUtf8);
-            reader.Read();
-            AddError(diagnostics, $"unexpected strategy key '{key}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
+            var unknownKey = Encoding.UTF8.GetString(keyUtf8);
+            reader.Read(); // consume key
+            AddError(diagnostics, $"unexpected strategy key '{unknownKey}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -194,7 +187,8 @@ public static partial class WorkflowParser
         MatrixCombinations[]? include = null;
         MatrixCombinations[]? exclude = null;
         Dictionary<Utf8String, MatrixRow>? rows = null;
-        var keys = new HashSet<Utf8String>();
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
 
         reader.Read(); // consume matrix mapping
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -213,12 +207,16 @@ public static partial class WorkflowParser
             var keyUtf8 = reader.GetScalarUtf8();
             var keySlice = reader.GetScalarSlice();
             var keyMark = reader.CurrentStart;
-            if (!TryRegisterMappingKey(
+            if (!TryRegisterDynamicKey(
+                source,
                 keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
                 keyMark,
                 diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
                 "strategy.matrix"))
             {
                 reader.Read();
@@ -440,7 +438,8 @@ public static partial class WorkflowParser
         where TReader : IYamlStreamReader, allows ref struct
     {
         var map = new Dictionary<Utf8String, RawYamlValue>();
-        var keys = new HashSet<Utf8String>();
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -456,13 +455,18 @@ public static partial class WorkflowParser
             }
 
             var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterMappingKey(
+            if (!TryRegisterDynamicKey(
+                source,
                 keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
                 keyMark,
                 diagnostics,
-                keys,
-                MappingKeyComparison.AsciiCaseInsensitive,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
                 "matrix object"))
             {
                 reader.Read();
