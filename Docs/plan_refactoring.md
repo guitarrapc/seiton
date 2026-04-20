@@ -342,3 +342,63 @@ Phase 1 と Phase 2 は低リスクで即時効果があるため、最初に着
 3. 重複コードの grep 確認（Phase 1）
 4. パーサーベンチマーク比較（Phase 2, 5-B）
 5. 新規 `GetScalarString()` が success path に追加されていないことの確認（Phase 2）
+
+---
+
+## 実装ステータス
+
+### Phase 1: 共有ユーティリティの抽出 — ✅ 完了
+
+**実施日**: 2026-04-20
+
+**成果物 (4ファイル新設):**
+
+| ファイル | 内容 |
+|---|---|
+| `Parsing/SpanHelpers.cs` | `EqualsAsciiIgnoreCase`, `TrimAsciiWhiteSpace` (2 overloads), `IsAsciiWhiteSpace`, `IsWhiteSpace`, `ToLowerAscii`, `NormalizeAsciiLower` (2 overloads), `IndexOf`, `ComputeLineColumn` |
+| `Parsing/ExpressionScanHelpers.cs` | `TryFindExpression`, `BuildLineStarts`, `OffsetToLineColumn`, `IsContextRootIdentifier`, `ConsumeWordIgnoreCase`, `SkipWhiteSpace`, `TryReadIdentifier`, `IsSimpleIdentifier`, `IsIdentifierStart`, `IsIdentifierPart` |
+| `Linting/ActionRefHelpers.cs` | `TryParseActionReference` (2 overloads), `IsFullCommitSha` (2 overloads), `NormalizePath`, `GlobMatch`, `GlobMatchCore` |
+| `Linting/RuleConfigHelpers.cs` | `BuildNormalizedSet` |
+
+**変更したファイル**: 33ファイル（private static コピーを削除し、`using static` に置換）
+
+**実績値:**
+
+| 指標 | Before | After |
+|---|---|---|
+| 総ファイル数 | 101 | 105 (+4 shared helpers) |
+| 総行数 | 23,172 | 21,921 |
+| **削減行数** | — | **-1,251行** |
+| 重複メソッド定義数 | 113 | 0 |
+| テスト | 477 passed | 477 passed |
+
+### Phase 2: WorkflowParser の partial class 分割 — ✅ 完了
+
+**実施日**: 2026-04-20
+
+**成果物 (7 partial ファイルに分割):**
+
+| ファイル | 行数 | 内容 |
+|---|---|---|
+| `WorkflowParser.cs` | 857 | エントリポイント, nested types, ParseCore, Root sections (permissions, env, defaults, concurrency), ParseJobsMapping |
+| `WorkflowParser.On.cs` | 1,691 | ParseOnEvents以下全 on: イベントパーサー (25メソッド) |
+| `WorkflowParser.Jobs.cs` | 911 | ParseJobNode, IsKnownJobKey, RunsOn, Environment, Outputs, WorkflowCall inputs/secrets |
+| `WorkflowParser.Primitives.cs` | 638 | Scalar parsers, Expression validation, Location builders, TryRegisterMappingKey, AddError |
+| `WorkflowParser.Containers.cs` | 455 | ParseServices, ParseContainerLike, ParseCredentials, ParseStringMapping |
+| `WorkflowParser.Strategy.cs` | 429 | ParseStrategy, ParseMatrix, ParseRawYaml* |
+| `WorkflowParser.Steps.cs` | 342 | ParseSteps, ParseStep, ParseStepWithInputsNode |
+
+**実績値:**
+
+| 指標 | Before | After |
+|---|---|---|
+| WorkflowParser.cs 行数 | 5,279 | 857 (最大ファイル: On.cs 1,691) |
+| 総ファイル数 | 105 | 111 (+6 partial files) |
+| 動作変更 | — | なし（partial class 分割のみ） |
+| テスト | 477 passed | 477 passed |
+
+### Phase 3: RunContext 系ルールの統合 — 🔲 未着手
+
+### Phase 4: LintConfigLibrary の責務分離 — 🔲 未着手
+
+### Phase 5: 中規模の改善 — 🔲 未着手

@@ -1,0 +1,511 @@
+using System.Text;
+using Seiton.Core.Parsing.Ast;
+
+using static Seiton.Core.Parsing.SpanHelpers;
+
+namespace Seiton.Core.Parsing;
+
+public static partial class WorkflowParser
+{
+    private static Services? ParseServices<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        // spec §3.17: expression form is accepted as Services { Expression }
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var expression = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Job,
+                $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression",
+                parseWholeValueIfNoEmbedded: false);
+            return expression is null
+                ? null
+                : new Services { Expression = expression, Range = expression.Range };
+        }
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
+        var map = new Dictionary<Utf8String, Service>();
+        var keys = new HashSet<Utf8String>();
+
+        reader.Read(); // consume services mapping
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be scalar", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var serviceName = reader.GetScalarSlice();
+            var serviceNameUtf8 = reader.GetScalarUtf8();
+            var serviceMark = reader.CurrentStart;
+            if (!TryRegisterMappingKey(
+                serviceNameUtf8,
+                serviceMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                "services"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            var serviceNameNode = new StringNode
+            {
+                Value = serviceName,
+                Quoted = reader.IsScalarQuoted(),
+                Range = BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length),
+            };
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            var container = ParseContainerLike(ref reader, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
+            if (container is not null)
+            {
+                map[Utf8String.FromLowerAscii(serviceNameUtf8)] = new Service
+                {
+                    Name = serviceNameNode,
+                    Container = container,
+                    Range = serviceNameNode.Range,
+                };
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+            reader.Read();
+        }
+
+        return new Services
+        {
+            ServiceMap = map,
+            Range = range,
+        };
+    }
+
+    private static Container? ParseContainerLike<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var scalarImage = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping");
+            if (scalarImage is null)
+            {
+                return null;
+            }
+
+            return new Container
+            {
+                Image = scalarImage,
+                Range = scalarImage.Range,
+            };
+        }
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
+        var hasImage = false;
+        StringNode? image = null;
+        Credentials? credentials = null;
+        Env? env = null;
+        StringNode[]? ports = null;
+        StringNode[]? volumes = null;
+        StringNode? options = null;
+        var keys = new HashSet<Utf8String>();
+        reader.Read(); // consume mapping
+
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} key must be scalar", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                FormatContainerSectionName(source, jobId, serviceName, isService)))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("image"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                hasImage = true;
+                if (reader.CurrentKind != YamlEventKind.Scalar)
+                {
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
+                }
+                image = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar");
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("credentials"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                credentials = ParseCredentials(ref reader, diagnostics, source, jobId, serviceName, isService);
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("env"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                // spec §2.8/§14: env accepts expression form (${{ }}) or mapping
+                env = ParseEnvNode(
+                    ref reader,
+                    diagnostics,
+                    source,
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
+                    ExpressionValidationContext.Job);
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("ports"u8) || keyUtf8.SequenceEqual("volumes"u8))
+            {
+                var optionKey = keyUtf8.SequenceEqual("ports"u8) ? "ports" : "volumes";
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                var values = ParseStringOrStringSequence(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar");
+                if (optionKey == "ports")
+                {
+                    ports = values;
+                }
+                else
+                {
+                    volumes = values;
+                }
+                continue;
+            }
+
+            if (keyUtf8.SequenceEqual("options"u8))
+            {
+                reader.Read();
+                if (reader.End)
+                {
+                    break;
+                }
+
+                if (reader.CurrentKind != YamlEventKind.Scalar)
+                {
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
+                }
+                options = ParseString(ref reader, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar");
+                continue;
+            }
+
+            var key = Encoding.UTF8.GetString(keyUtf8);
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)} key: {key}", keyMark);
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+            reader.Read();
+        }
+
+        // spec §3.16 / §12: container mapping form requires `image`
+        if (requireImage && !hasImage)
+        {
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image is required", new TextPosition(0, 1, 1));
+        }
+
+        return new Container
+        {
+            Image = image ?? new StringNode { Value = default, Quoted = false, Range = default },
+            Credentials = credentials,
+            Env = env,
+            Ports = ports,
+            Volumes = volumes,
+            Options = options,
+            Range = range,
+        };
+    }
+
+    private static Credentials? ParseCredentials<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        // spec §3.18: expression form is accepted as Credentials { Expression }
+        if (reader.CurrentKind == YamlEventKind.Scalar)
+        {
+            var expression = ParseStringAndValidateExpression(
+                ref reader,
+                diagnostics,
+                ExpressionValidationContext.Job,
+                $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression",
+                parseWholeValueIfNoEmbedded: false);
+            return expression is null
+                ? null
+                : new Credentials { Expression = expression, Range = expression.Range };
+        }
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return null;
+        }
+
+        var mappingStart = reader.CurrentStart;
+        var range = BuildScalarLocation(mappingStart, 1);
+        var hasUsername = false;
+        var hasPassword = false;
+        StringNode? username = null;
+        StringNode? password = null;
+        var keys = new HashSet<Utf8String>();
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key must be scalar", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.AsciiCaseInsensitive,
+                $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))
+            {
+                reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            var isUsername = keyUtf8.SequenceEqual("username"u8);
+            var isPassword = keyUtf8.SequenceEqual("password"u8);
+            var keyText = isUsername || isPassword ? null : Encoding.UTF8.GetString(keyUtf8);
+
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (isUsername)
+            {
+                hasUsername = true;
+                username = ParseStringAndValidateExpression(
+                    ref reader,
+                    diagnostics,
+                    ExpressionValidationContext.Job,
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar",
+                    parseWholeValueIfNoEmbedded: false);
+                continue;
+            }
+            else if (isPassword)
+            {
+                hasPassword = true;
+                password = ParseStringAndValidateExpression(
+                    ref reader,
+                    diagnostics,
+                    ExpressionValidationContext.Job,
+                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar",
+                    parseWholeValueIfNoEmbedded: false);
+                continue;
+            }
+            else
+            {
+                AddError(diagnostics, $"unexpected {FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key: {keyText}", keyMark);
+            }
+
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                var fieldName = isUsername
+                    ? "username"
+                    : isPassword
+                        ? "password"
+                        : keyText;
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.{fieldName} must be scalar", reader.CurrentStart);
+            }
+            reader.SkipCurrentNode();
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+            reader.Read();
+        }
+
+        // spec §3.18 / §12: credentials mapping form requires both `username` and `password`
+        if (!hasUsername || !hasPassword)
+        {
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials requires both username and password", new TextPosition(0, 1, 1));
+        }
+
+        return new Credentials
+        {
+            Username = username,
+            Password = password,
+            Range = range,
+        };
+    }
+
+    private static void ParseStringMapping<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, error, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return;
+        }
+
+        var keys = new HashSet<Utf8String>();
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterMappingKey(
+                keyUtf8,
+                keyMark,
+                diagnostics,
+                keys,
+                MappingKeyComparison.CaseSensitive,
+                error))
+            {
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                continue;
+            }
+
+            if (expressionContext.HasValue)
+            {
+                var valueMark = reader.CurrentStart;
+                var valueUtf8 = reader.GetScalarUtf8();
+                ValidateExpressionText(
+                    valueUtf8,
+                    BuildScalarLocation(valueMark, valueUtf8.Length),
+                    expressionContext.Value,
+                    diagnostics,
+                    parseWholeValueIfNoEmbedded: false);
+                reader.Read();
+                continue;
+            }
+
+            reader.Read();
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+    }
+
+}
