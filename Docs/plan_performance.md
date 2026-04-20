@@ -313,6 +313,119 @@ ExpressionParser は式ごとに `List<ExpressionNode>`, `List<int>`, `List<Diag
 
 ---
 
+### Phase 6: Fix 構築の遅延化（中リスク・高効果）
+
+**目的**: `LintEngine.Check` 内で violations 発見時に即座に実行される Fix 構築（全ファイル文字列化 × N violations）を遅延化し、Lint 判定のみのパスでの不要アロケーションを排除する。
+
+#### 背景
+
+Phase 4 のベンチマーク結果で `LintEngine.Check` Large が ~97 MB と判明。パーサー単体（~382 KB）との差の主要因を調査したところ、以下が明らかになった:
+
+- `CheckoutPersistCredentialsRule`: 120 checkout steps × missing-input violation → 各回で `Encoding.UTF8.GetString(utf8Yaml)` + `text.Split('\n')` を実行（全ファイル文字列化 ~50 KB × 120 = ~6 MB）
+- `JobPermissionsRequiredRule`: 20 jobs × missing-permissions violation → 各回で同様の全ファイルデコード（~50 KB × 20 = ~1 MB）
+- `JobTimeoutMinutesRequiredRule`: Fix デフォルト値設定時に同パターン（ベンチマーク YAML では timeout-minutes 設定済みのため差異小）
+- Fix 構築は `Check()` 内の violation 検出時に eager 実行されており、`--fix` フラグの有無に関わらず常にコストを支払う
+
+#### 6-A: DiagnosticFix の遅延構築パターン導入
+
+```csharp
+// Before: Check() 内で即座に Fix テキストを構築
+var fix = TryBuildMissingInputFix(utf8Yaml, step, "persist-credentials", "false");
+diagnostics.Add(new Diagnostic(..., Fix: fix));
+
+// After: Fix 構築を遅延 — Check 時はメタデータのみ保持
+diagnostics.Add(new Diagnostic(..., Fix: null, FixHint: new FixHint(FixKind.MissingInput, stepRange, "persist-credentials", "false")));
+// Fix の実体は FixEngine 側で必要時に構築
+```
+
+**改善策の選択肢**:
+- **A**: `Diagnostic.Fix` を nullable のままにし、Fix 構築ロジックを `FixEngine` に移動。`Check()` は違反検出とメタデータのみ
+- **B**: Lazy<DiagnosticFix> + factory callback で構築を遅延化。消費側が `.Value` アクセスしたときのみ構築
+- **C**: Fix 構築を `LintConfig.Fix.Enabled` フラグで条件分岐し、Lint-only 時はスキップ
+
+推奨: **選択肢 C**（最小変更。A は理想的だが RuleBase/Diagnostic の設計変更が広範）
+
+#### 6-B: 全ファイル文字列化の共有キャッシュ
+
+同一 `Check()` 呼び出し内で複数ルールが `Encoding.UTF8.GetString(utf8Yaml)` を呼ぶ。`LintConfig` に `Lazy<string> DecodedYaml` を追加し、最初のアクセスでのみデコードする。
+
+**影響範囲**: `CheckoutPersistCredentialsRule`, `JobPermissionsRequiredRule`, `JobTimeoutMinutesRequiredRule` の Fix 構築メソッド
+
+**完了条件**:
+- [ ] Fix 構築が `LintConfig.Fix.Enabled == false`（デフォルト）のとき実行されないこと（grep + テスト確認）
+- [ ] 複数ルールでの `Encoding.UTF8.GetString(utf8Yaml)` が共有キャッシュ経由になっていること
+- [ ] ベンチマーク: `LintBenchmark` Large の Allocated が大幅減少していること（推定 -5–30 MB）
+- [ ] Fix 有効時の挙動が変わっていないこと（既存テストで検証）
+- [ ] 全テスト通過
+
+**推定効果**: Large で ~5–30 MB 削減（violation 数 × 全ファイルデコード/Split コスト）
+
+---
+
+### Phase 7: 式解析の重複排除（高リスク・高効果）
+
+**目的**: 同一 `${{ }}` 式が複数のルールから独立にパースされている重複を排除する。
+
+#### 背景
+
+Large ベンチマークで式を持つ箇所は run step の `if`、`run`、`env` 等に約 480+ 箇所。45 個のデフォルトルールのうち式を解析するルールが ~10 以上あり、同一ノードの式を各ルールが `ExpressionParser.Parse` で個別にパースする。式パーサーは Phase 3 で ArrayPool 化済みだが、per-parse の最終 `.ToArray()` コストは残存しており、ルール数 × 式数で蓄積する。
+
+#### 7-A: 事前解析キャッシュの導入
+
+`LintEngine.Check` のルール実行前に、全 AST ノードの `${{ }}` 式を一括パースし、結果を `Dictionary<(NodeType, int index), ExpressionParseResult>` にキャッシュする。各ルールはキャッシュから結果を取得する。
+
+```csharp
+// Before: 各ルールが独立にパース
+// ExprUndefinedVarRule:  ExpressionParser.Parse(expr)
+// TemplateInjectionRule: ExpressionParser.Parse(expr)
+// IfCondRule:            ExpressionParser.Parse(expr)
+// → 同一式を 3 回パース
+
+// After: 事前パース + キャッシュ参照
+// engine: cache[node] = ExpressionParser.Parse(expr)  // 1回のみ
+// rule:   cache[node]  // 参照のみ
+```
+
+#### 7-B: ルールへの式結果の配布方式
+
+ルールインターフェースに `SetExpressionCache(IReadOnlyDictionary<...> cache)` を追加するか、`LintConfig` 経由で配布する。
+
+**完了条件**:
+- [ ] 同一式が複数回パースされていないこと（ログまたはカウンタで検証）
+- [ ] ベンチマーク: `LintBenchmark` Large の Allocated が顕著に減少していること（推定 -20–50 MB）
+- [ ] 式解析結果の正確性が変わっていないこと（ExpressionTests + Rule テスト全通過）
+- [ ] 全テスト通過
+
+**推定効果**: Large で ~20–50 MB 削減。ルール数に比例する重複パースの排除。
+
+---
+
+### Phase 8: RuleBase 診断収集の最適化（低リスク・中効果）
+
+**目的**: 各ルールの `GetDiagnostics()` で発生する `List<T>.ToArray()` コピーと、LintEngine 側の per-rule 配列収集を効率化する。
+
+#### 8-A: ToArray の排除または共有バッファ化
+
+現在 45 ルール × `GetDiagnostics()` で各 `.ToArray()` を呼ぶ。大半のルールは 0 件の診断を返すが、空配列 + 配列コピーのオーバーヘッドが蓄積する。
+
+**改善策**:
+- 0 件の場合は `Array.Empty<Diagnostic>()` を返す（`RuleBase.GetDiagnostics` の共通最適化）
+- LintEngine 側の `ruleDiagnostics` 収集を `IReadOnlyList<Diagnostic>` 参照に変更し、コピーを 1 回に
+
+#### 8-B: 診断ソートの最適化
+
+`ruleDiagnostics.Sort(...)` は `List<T>.Sort` で内部的に配列コピーが発生しうる。要素数が少ない場合の最適化や、`Span<T>.Sort` への切り替えを検討。
+
+**完了条件**:
+- [ ] `GetDiagnostics()` が 0 件時に `Array.Empty<Diagnostic>()` を返すこと
+- [ ] LintEngine 側の不要な配列コピーが削減されていること
+- [ ] ベンチマーク: `LintBenchmark` Small/Medium の Allocated がわずかに改善していること
+- [ ] 全テスト通過
+
+**推定効果**: Small/Medium で ~1–5 KB 削減。Large でも ~10–50 KB。固定費削減の性質。
+
+---
+
 ## 効果の見積もりサマリー
 
 | フェーズ | 推定 Allocated 削減 (Large) | リスク | 工数 |
@@ -322,9 +435,19 @@ ExpressionParser は式ごとに `List<ExpressionNode>`, `List<int>`, `List<Diag
 | Phase 3: ExpressionParser 最適化 | ~50–100 KB | 低 | 小 |
 | Phase 4: LintEngine 最適化 | ~50–200 KB | 中 | 中 |
 | Phase 5: List→Array 最適化 | ~数 KB | 低 | 小 |
-| **合計** | **~400–900 KB** | | |
+| Phase 6: Fix 構築の遅延化 | ~5–30 MB | 中 | 中 |
+| Phase 7: 式解析の重複排除 | ~20–50 MB | 高 | 大 |
+| Phase 8: RuleBase 診断収集最適化 | ~10–50 KB | 低 | 小 |
+| **合計 (Parser Phase 1–5)** | **~400–900 KB** | | |
+| **合計 (Lint Phase 6–8)** | **~25–80 MB** | | |
 
-Large ベースライン 1,162 KB に対し、全フェーズで 35–77% のアロケーション削減を目指す。
+### Parser（Phase 1–3 実績）
+
+Large ベースライン 1,162 KB → 382 KB（**67.1% 削減**）。Phase 1–3 の 3 フェーズで約 2/3 のアロケーションを除去。
+
+### Lint（Phase 6–8 推定）
+
+Large 現行 ~97 MB。Phase 6–8 で ~25–80 MB 削減を目指す。最大の効果源は Phase 7（式解析重複排除）で、ルール数 × 式数の乗数効果が見込める。
 
 ---
 
@@ -336,9 +459,12 @@ Phase 1 (診断遅延) ──→ Phase 2 (HashSet削除) に部分依存
 Phase 3 (ExpressionParser) は独立
 Phase 4 (LintEngine) は独立（ただし 4-A のベンチマーク追加を先に行う）
 Phase 5 (List最適化) は独立
+Phase 6 (Fix遅延化) は独立（Phase 4 の LintBenchmark を利用してベンチマーク）
+Phase 7 (式解析重複排除) は Phase 6 に部分依存（Fix パスの最適化後の方がベンチマークがクリーン）
+Phase 8 (診断収集最適化) は独立
 ```
 
-推奨順: **Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5**
+推奨順: **Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6 → Phase 7 → Phase 8**
 
 各フェーズ完了後の状態確認:
 1. `dotnet build` 成功
@@ -360,3 +486,47 @@ Phase 5 (List最適化) は独立
 ### Phase 4: LintEngine のアロケーション削減 — ✅ 完了
 
 ### Phase 5: AST List → Array の最適化 — 🔲 未着手
+
+### Phase 6: Fix 構築の遅延化 — 🔲 未着手
+
+### Phase 7: 式解析の重複排除 — 🔲 未着手
+
+### Phase 8: RuleBase 診断収集の最適化 — 🔲 未着手
+
+---
+
+## Phase 4 完了後のベースライン（2026-04-21 計測）
+
+**環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.6 / AMD Ryzen 9 7950X3D / ShortRun
+
+### ParsingBenchmark
+
+| Method | Size | Mean | Allocated | Alloc Ratio | vs Initial Baseline |
+|---|---|---:|---:|---:|---:|
+| WorkflowParser.Parse (AST + rules) | Small (1×3) | 27.9 μs | 12,216 B | 1.00 | -61.0% |
+| WorkflowParser.Parse (AST + rules) | Medium (6×8) | 474 μs | 84,888 B | 1.00 | -66.2% |
+| WorkflowParser.Parse (AST + rules) | Large (20×12) | 6,976 μs | 382,808 B | 1.00 | -67.1% |
+| ExpressionExtractor | Small | 2.95 μs | 3,744 B | 0.31 | -73.7% |
+| ExpressionExtractor | Medium | 34.3 μs | 40,592 B | 0.48 | -74.0% |
+| ExpressionExtractor | Large | 168 μs | 188,760 B | 0.49 | -75.1% |
+| VYaml raw event scan | Small | 8.36 μs | 0 B | 0.00 | — |
+| VYaml raw event scan | Medium | 65.9 μs | 0 B | 0.00 | — |
+| VYaml raw event scan | Large | 299 μs | 0 B | 0.00 | — |
+
+### LintBenchmark
+
+| Method | Size | Mean | Allocated |
+|---|---|---:|---:|
+| LintEngine.Check (parse + lint) | Small (1×3) | 53.2 μs | 86,734 B |
+| LintEngine.Check (parse + lint) | Medium (6×8) | 1,928 μs | 4,975,196 B |
+| LintEngine.Check (parse + lint) | Large (20×12) | 42,148 μs | 99,468,943 B |
+
+### アロケーション内訳推定（Large, LintEngine.Check ~97 MB）
+
+| カテゴリ | 推定比率 | 推定量 | 主要発生源 |
+|---|---:|---:|---|
+| 式解析の重複（複数ルール × 同一式） | 55–75% | ~53–73 MB | ExprUndefinedVar, TemplateInjection, IfCond, FakeTernary, Secrets 系等の ~10 ルールが同一式を独立パース |
+| Fix 構築の全ファイルデコード | 15–30% | ~15–29 MB | CheckoutPersistCredentials (120回), JobPermissionsRequired (20回) の violation 毎に UTF8.GetString + Split |
+| LintEngine フレームワーク | 8–15% | ~8–15 MB | 診断リスト/配列、ソート、重複排除、抑制構造 |
+| ルール固有のコレクション/文字列 | 3–10% | ~3–10 MB | UnredactedSecrets の per-step HashSet、NeedsGraph の DFS Dictionary 等 |
+| パーサー（Phase 1–3 最適化済み） | <1% | ~0.4 MB | AST 構築（既に 67% 削減済み） |
