@@ -423,6 +423,27 @@ Phase 1 と Phase 2 は低リスクで即時効果があるため、最初に着
 | 重複メソッド (TryResolveShellVariableNameInEnv) | 2コピー | 1定義 (delegate parameterized) |
 | テスト | 477 passed | 477 passed |
 
-### Phase 4: LintConfigLibrary の責務分離 — 🔲 未着手
+### Phase 4: LintConfigLibrary の責務分離 — ✅ 完了
+
+**実施日**: 2026-04-20
+
+**発見事項**: 計画では `LintConfigLineParser` を nested class と想定していたが、実際は同一ファイル内の独立した top-level `internal sealed class` だった。`LintConfigValidationResult` も同様。1,963行のファイルに3つの独立型が連結されていた構造。
+
+**成果物 (2ファイル新設、1ファイル縮小):**
+
+| ファイル | 行数 | 内容 |
+|---|---|---|
+| `LintConfigLibrary.cs` | 456 | API (GenerateTemplateYaml, FindRecommendedConfigPath, ValidateFile, Validate) + 正規化 (NormalizeRules, NormalizeExclusions, NormalizeFix, NormalizeNetwork) + nested result records |
+| `LintConfigLineParser.cs` (NEW) | 1,490 | 行ベース YAML パーサー全体 (Parse, ParseRulesSection, ParseRuleBody, ParseFixSection, ParseNetworkSection, ParseExclusionsSection 等) + ParseResult record |
+| `LintConfigValidationResult.cs` (NEW) | 24 | `public readonly record struct LintConfigValidationResult` |
+
+**実績値:**
+
+| 指標 | Before | After |
+|---|---|---|
+| LintConfigLibrary.cs 行数 | 1,963 | 456 (最大ファイル: LintConfigLineParser.cs 1,490) |
+| 総ファイル数 | 112 | 114 (+2 extracted files) |
+| 動作変更 | — | なし（ファイル分割のみ） |
+| テスト | 477 passed | 477 passed |
 
 ### Phase 5: 中規模の改善 — 🔲 未着手
