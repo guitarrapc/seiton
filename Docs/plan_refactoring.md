@@ -297,7 +297,7 @@ Phase 1 の共有ユーティリティ適用後、このルール固有の重複
 1. `IYamlStreamReader` 版を削除し、generic 版に統一（呼び出し元の変更が必要）
 2. `IYamlStreamReader` 版を generic 版のラッパーとして実装（thin wrapper のみ残す）
 
-推奨: 選択肢 2（既存テストへの影響を最小化）
+推奨: 選択肢 1（実施済み — IYamlStreamReader 版を削除し generic 版に統一）
 
 #### 5-D: AST ノードのデフォルト割り当て除去
 
@@ -446,4 +446,4 @@ Phase 1 と Phase 2 は低リスクで即時効果があるため、最初に着
 | 動作変更 | — | なし（ファイル分割のみ） |
 | テスト | 477 passed | 477 passed |
 
-### Phase 5: 中規模の改善 — 🔲 未着手
+### Phase 5: 中規模の改善 — ✅ 完了（5-A, 5-C）

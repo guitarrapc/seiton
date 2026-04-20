@@ -8,40 +8,8 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    internal static StringNode? ParseString(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
-    {
-        if (reader.End)
-        {
-            return null;
-        }
-
-        if (reader.CurrentKind != YamlEventKind.Scalar)
-        {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return null;
-        }
-
-        var mark = reader.CurrentStart;
-        var slice = reader.GetScalarSlice();
-        var valueUtf8 = reader.GetScalarUtf8();
-        if (!allowEmpty && valueUtf8.Length == 0)
-        {
-            AddError(diagnostics, errorMessage, mark);
-        }
-
-        var node = new StringNode
-        {
-            Value = slice,
-            Quoted = reader.IsScalarQuoted(),
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
-
-        reader.Read();
-        return node;
-    }
-
-    internal static BoolNode? ParseBool(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static BoolNode? ParseBool<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
         {
@@ -74,113 +42,11 @@ public static partial class WorkflowParser
         return node;
     }
 
-    internal static IntNode? ParseInt(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
-    {
-        if (reader.End)
-        {
-            return null;
-        }
-
-        if (reader.CurrentKind != YamlEventKind.Scalar)
-        {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return null;
-        }
-
-        var mark = reader.CurrentStart;
-        var valueUtf8 = reader.GetScalarUtf8();
-        var tag = reader.GetScalarTag();
-        if (!TryParseInt64(valueUtf8, tag, out var value))
-        {
-            AddError(diagnostics, errorMessage, mark);
-            reader.Read();
-            return null;
-        }
-
-        var node = new IntNode
-        {
-            Value = value,
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
-        reader.Read();
-        return node;
-    }
-
-    internal static FloatNode? ParseFloat(IYamlStreamReader reader, List<Diagnostic> diagnostics, string errorMessage)
-    {
-        if (reader.End)
-        {
-            return null;
-        }
-
-        if (reader.CurrentKind != YamlEventKind.Scalar)
-        {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return null;
-        }
-
-        var mark = reader.CurrentStart;
-        var valueUtf8 = reader.GetScalarUtf8();
-        var tag = reader.GetScalarTag();
-        if (!TryParseDouble(valueUtf8, tag, out var value))
-        {
-            AddError(diagnostics, errorMessage, mark);
-            reader.Read();
-            return null;
-        }
-
-        var node = new FloatNode
-        {
-            Value = value,
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
-        reader.Read();
-        return node;
-    }
-
-    internal static StringNode? ParseExpression(IYamlStreamReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
-    {
-        if (reader.End)
-        {
-            return null;
-        }
-
-        if (reader.CurrentKind != YamlEventKind.Scalar)
-        {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return null;
-        }
-
-        var slice = reader.GetScalarSlice();
-        var valueUtf8 = reader.GetScalarUtf8();
-        var mark = valueUtf8.Length > 0
-            ? reader.ComputePositionFromOffset(slice.Offset)
-            : reader.CurrentStart;
-        ValidateExpressionText(
-            valueUtf8,
-            BuildScalarLocation(mark, valueUtf8.Length),
-            context,
-            diagnostics,
-            parseWholeValueIfNoEmbedded: true);
-
-        var node = new StringNode
-        {
-            Value = slice,
-            Quoted = reader.IsScalarQuoted(),
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
-
-        reader.Read();
-        return node;
-    }
-
-    internal static StringNode? MayParseExpression(
-        IYamlStreamReader reader,
+    internal static StringNode? MayParseExpression<TReader>(
+        ref TReader reader,
         List<Diagnostic> diagnostics,
         ExpressionValidationContext context)
+        where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End || reader.CurrentKind != YamlEventKind.Scalar)
         {
@@ -214,51 +80,7 @@ public static partial class WorkflowParser
         return hasExpression ? node : null;
     }
 
-    internal static StringNode[] ParseStringOrStringSequence(
-        IYamlStreamReader reader,
-        List<Diagnostic> diagnostics,
-        string errorMessage,
-        bool allowEmpty = false,
-        bool allowElemEmpty = false)
-    {
-        if (reader.End)
-        {
-            return [];
-        }
-
-        if (reader.CurrentKind == YamlEventKind.Scalar)
-        {
-            var single = ParseString(reader, diagnostics, errorMessage, allowEmpty);
-            return single is null ? [] : [single];
-        }
-
-        if (reader.CurrentKind != YamlEventKind.SequenceStart)
-        {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return [];
-        }
-
-        var list = new List<StringNode>(4);
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-        {
-            var node = ParseString(reader, diagnostics, errorMessage, allowElemEmpty);
-            if (node is not null)
-            {
-                list.Add(node);
-            }
-        }
-
-        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
-        {
-            reader.Read();
-        }
-
-        return list.ToArray();
-    }
-
-    private static StringNode? ParseString<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
+    internal static StringNode? ParseString<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -299,7 +121,7 @@ public static partial class WorkflowParser
         return node;
     }
 
-    private static StringNode? ParseExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+    internal static StringNode? ParseExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -376,7 +198,7 @@ public static partial class WorkflowParser
         return node;
     }
 
-    private static StringNode[] ParseStringOrStringSequence<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static StringNode[] ParseStringOrStringSequence<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -416,7 +238,7 @@ public static partial class WorkflowParser
         return list.ToArray();
     }
 
-    private static FloatNode? ParseFloat<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static FloatNode? ParseFloat<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -450,7 +272,7 @@ public static partial class WorkflowParser
         return node;
     }
 
-    private static IntNode? ParseInt<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static IntNode? ParseInt<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)

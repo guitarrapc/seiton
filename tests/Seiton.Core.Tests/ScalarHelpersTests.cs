@@ -13,7 +13,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseString(reader, diagnostics, "expected string");
+        var node = WorkflowParser.ParseString(ref reader, diagnostics, "expected string");
 
         await Assert.That(node is not null).IsTrue();
         await Assert.That(node!.Value.Length).IsEqualTo(5);
@@ -29,7 +29,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseBool(reader, diagnostics, "expected bool");
+        var node = WorkflowParser.ParseBool(ref reader, diagnostics, "expected bool");
 
         await Assert.That(node is not null).IsTrue();
         await Assert.That(node!.Value).IsTrue();
@@ -45,7 +45,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseInt(reader, diagnostics, "expected int");
+        var node = WorkflowParser.ParseInt(ref reader, diagnostics, "expected int");
 
         await Assert.That(node is not null).IsTrue();
         await Assert.That(node!.Value).IsEqualTo(123);
@@ -61,7 +61,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseFloat(reader, diagnostics, "expected float");
+        var node = WorkflowParser.ParseFloat(ref reader, diagnostics, "expected float");
 
         await Assert.That(node is not null).IsTrue();
         await Assert.That(node!.Value).IsEqualTo(1.5d);
@@ -77,7 +77,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseExpression(reader, diagnostics, ExpressionValidationContext.Workflow, "expected expression");
+        var node = WorkflowParser.ParseExpression(ref reader, diagnostics, ExpressionValidationContext.Workflow, "expected expression");
 
         await Assert.That(node is not null).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
@@ -93,7 +93,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.MayParseExpression(reader, diagnostics, ExpressionValidationContext.Workflow);
+        var node = WorkflowParser.MayParseExpression(ref reader, diagnostics, ExpressionValidationContext.Workflow);
 
         await Assert.That(node is not null).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
@@ -112,7 +112,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var nodes = WorkflowParser.ParseStringOrStringSequence(reader, diagnostics, "expected sequence");
+        var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, diagnostics, "expected sequence");
 
         await Assert.That(nodes.Length).IsEqualTo(2);
         await Assert.That(diagnostics).IsEmpty();
@@ -127,7 +127,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseBool(reader, diagnostics, "expected bool");
+        var node = WorkflowParser.ParseBool(ref reader, diagnostics, "expected bool");
 
         await Assert.That(node).IsNull();
         await Assert.That(diagnostics.Count).IsEqualTo(1);
