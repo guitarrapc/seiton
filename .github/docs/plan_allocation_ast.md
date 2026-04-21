@@ -2,25 +2,25 @@
 
 ## 1. 現状分析
 
-### 1.1 ベンチマーク基準値（class ベース AST、Phase 11）
+### 1.1 ベンチマーク基準値
 
-**ParsingBenchmark:**
+**ParsingBenchmark（2026-04-22 再測定）:**
 
 | Size | Time | Allocated |
 |------|------|-----------|
-| Small (1 job × 3 steps) | 69 μs | 12,080 B |
-| Medium (6 jobs × 8 steps) | 1,289 μs | 83,515 B |
-| Large (20 jobs × 12 steps) | 14,610 μs | 376,781 B |
+| Small (1 job × 3 steps) | 28 μs | 12,080 B |
+| Medium (6 jobs × 8 steps) | 480 μs | 83,512 B |
+| Large (20 jobs × 12 steps) | 6,844 μs | 376,696 B |
 
 **参考 — VYaml raw event scan（AST なし）:**
 
 | Size | Time | Allocated |
 |------|------|-----------|
-| Small | 19 μs | 0 B |
-| Medium | 113 μs | 0 B |
-| Large | 503 μs | 0 B |
+| Small | 8 μs | 0 B |
+| Medium | 66 μs | 0 B |
+| Large | 291 μs | 0 B |
 
-→ AST 構築 + ルール検証で VYaml raw 比 **29 倍遅く、377 KB 割り当て**。
+→ AST 構築 + ルール検証で VYaml raw 比 **23 倍遅く、377 KB 割り当て**。
 
 ### 1.2 struct 変換の失敗記録
 
@@ -323,22 +323,40 @@ sealed class AstArena : IDisposable
 
 ### Phase 1: コレクション最適化（低リスク、中効果）
 
-**目標:** List\<T\>→ToArray() と Dictionary 割り当てを削減。AST の公開 API は変更しない。
+**目標:** List\<T\>→ToArray() と Dictionary 中間バッファの割り当てを削減。AST の公開 API は変更しない。
+
+**現状整理（2026-04-22 確認）:**
+- パーサー内で `new List<T>` が **13 箇所**、`new Dictionary<Utf8String, T>` が **15 箇所**、`.ToArray()` が **12 箇所**。
+- `ExpressionParser` に既存の `PooledBuffer<T>` (ArrayPool ベース) パターンがある。
+- `StringNode.Value` は既に `Utf8Slice`（ゼロコピー）。ただし Dictionary キーの `Utf8String` は毎回 `byte[].ToArray()` でヒープ割り当て（17 箇所、50-200 インスタンス/parse）。
 
 **内容:**
-1. ThreadStatic な `ExpandBuffer<T>` を導入し、パーサー内の `List<T>` を置換。
-   - `List<Step>` → `ExpandBuffer<Step>` (ThreadStatic)
-   - `List<Event>` → `ExpandBuffer<Event>` (ThreadStatic)
-   - `List<StringNode>` → `ExpandBuffer<StringNode>` (ThreadStatic)
-   - `List<Diagnostic>` → `ExpandBuffer<Diagnostic>` (ThreadStatic)
-2. `ToArray()` を `ExpandBuffer.ToArray()` に変更（内部で ArrayPool.Rent → コピー → Return）。
-3. 小さな Dictionary（permissions, env 等）を sorted array ベースの `FlatMap<TKey,TValue>` に置換。
-   - GitHub Actions の map は通常 2–20 エントリ → リニアスキャンが Dictionary より高速。
-4. `Utf8String` コンストラクタを `Utf8Slice` ベースに切り替え（byte[] コピー排除）。
-   - Dictionary キーとしての `Utf8String` → `Utf8Slice` ベースに変更し、source bytes 参照を保持。
+1. `ExpressionParser` の `PooledBuffer<T>` を `Parsing/` 配下の共有ユーティリティに昇格し、パーサー全体の `List<T>` を置換。
+   - `List<Step>` → `PooledBuffer<Step>`
+   - `List<Event>` → `PooledBuffer<Event>`
+   - `List<StringNode>` → `PooledBuffer<StringNode>`
+   - `List<ScheduleEntry>` → `PooledBuffer<ScheduleEntry>`
+   - `List<WorkflowCallEventInput>` → `PooledBuffer<WorkflowCallEventInput>`
+   - `List<Diagnostic>` → `PooledBuffer<Diagnostic>`
+   - etc. (13 箇所)
+   - `.ToArray()` は `PooledBuffer.ToArray()` に変更（内部バッファは ArrayPool から借用、最終配列のみ new）。
+2. `Utf8String` の dictionary キーを `Utf8Slice` ベースに変更し byte[] コピーを排除。
+   - これには Dictionary 自体の変更が不可分（`Utf8Slice.GetHashCode()` は source span が必要なため、カスタム comparer か FlatMap が必要）。
+   - 小マップ（permissions: 2-16 entries, env: 2-20 entries, inputs: 2-25 entries 等）はソート済み配列 + リニアスキャンの `SliceMap<TValue>` に置換。
+   - 大マップ（jobs: 1-20 entries）も SliceMap で十分（20 entries のリニアスキャンは Dictionary のオーバーヘッドよりも高速）。
+   - `SliceMap` は `(Utf8Slice Key, TValue Value)[]` を保持し、検索は `source` span を受け取って `SequenceEqual` 比較。
+3. `Utf8String` 型は Lint ルール側の dictionary key 参照がない（ルールは `Utf8Slice.AsSpan()` 経由でアクセス）ため、`Utf8String` をパーサー内部から段階的に排除可能。ただし一部の外部消費（`DynamicContextTypeBuilder` 等）が `Utf8String` を key として参照しているため、互換性ラッパーを提供。
 
-**推定削減:** 30–40%（Large: 377 KB → ~230–260 KB）
-**リスク:** 低。内部実装変更のみ。公開 AST 型は変更なし。
+**完了条件:**
+- [ ] `new List<T>` がパーサー内に 0 箇所（全て PooledBuffer に置換）
+- [ ] `new Dictionary<Utf8String, T>` がパーサー内に 0 箇所（全て SliceMap に置換）
+- [ ] Utf8String byte[] コピーがパーサー hot path で 0 箇所
+- [ ] ベンチマーク: Large Allocated ≤ 280 KB（現状 377 KB 比 -25% 以上）
+- [ ] ベンチマーク: Large Mean ≤ 6,844 μs（速度後退なし）
+- [ ] 全テスト通過
+
+**推定削減:** 25–35%（Large: 377 KB → ~250–280 KB）
+**リスク:** 低～中。AST 公開型の collection interface が `IReadOnlyDictionary` → `SliceMap` に変わるため、Lint ルール側の辞書アクセスパターンも変更が必要。ただしルール側は主に foreach 列挙か TryGet であり、影響は限定的。
 
 ### Phase 2: Scalar Node の Flat Store 化（中リスク、高効果）
 
@@ -470,10 +488,10 @@ Expression パーサーは AST とは独立だが、Expression 結果の格納�
 
 | Phase | Allocated (Large Parse) | Speed (Large Parse) |
 |-------|------------------------|---------------------|
-| 現状 | 377 KB | 14.6 ms |
-| Phase 1 完了 | ≤ 260 KB | ≤ 14.6 ms (同等以上) |
-| Phase 2 完了 | ≤ 170 KB | ≤ 13 ms |
-| Phase 3 完了 | ≤ 150 KB (初回) / ~0 (再利用) | ≤ 12 ms |
+| 現状 (2026-04-22) | 377 KB | 6.8 ms |
+| Phase 1 完了 | ≤ 280 KB | ≤ 6.8 ms (同等以上) |
+| Phase 2 完了 | ≤ 170 KB | ≤ 6.5 ms |
+| Phase 3 完了 | ≤ 150 KB (初回) / ~0 (再利用) | ≤ 6.0 ms |
 
 ---
 
