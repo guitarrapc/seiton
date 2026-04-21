@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;

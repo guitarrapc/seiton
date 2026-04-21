@@ -1,3 +1,4 @@
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -6,6 +7,9 @@ namespace Seiton.Core.Linting.Rules;
 public sealed class ScheduleEventRule : RuleBase
 {
     private const int MinIntervalMinutes = 5;
+
+    private const uint AllDomMask = uint.MaxValue ^ 1u;
+    private const byte AllDowNormMask = 0x7F;
 
     public override string Id => "schedule-event";
 
@@ -20,8 +24,7 @@ public sealed class ScheduleEventRule : RuleBase
 
         for (var i = 0; i < scheduleEvent.Schedules.Count; i++)
         {
-            var entry = scheduleEvent.Schedules[i];
-            ValidateScheduleEntry(scheduleEvent, entry);
+            ValidateScheduleEntry(scheduleEvent, scheduleEvent.Schedules[i]);
         }
     }
 
@@ -40,14 +43,15 @@ public sealed class ScheduleEventRule : RuleBase
 
     private void ValidateCron(ScheduledEvent scheduleEvent, StringNode cronNode)
     {
-        var text = Decode(cronNode.Value);
-        if (!TryParseCron(text, out var cron, out var reason))
+        var yaml = Config.Utf8Yaml!;
+        var cronUtf8 = cronNode.Value.AsSpan(yaml);
+        if (!TryParseCronUtf8(cronUtf8, out var cron, out var reason))
         {
-            AddEventError(scheduleEvent, $"on.schedule cron '{text}' is invalid: {reason}", cronNode.Range);
+            AddEventError(scheduleEvent, $"on.schedule cron '{Decode(cronNode.Value)}' is invalid: {reason}", cronNode.Range);
             return;
         }
 
-        if (!TryGetMinimumIntervalMinutes(cron, out var minimumIntervalMinutes))
+        if (!TryGetMinimumIntervalMinutes(in cron, out var minimumIntervalMinutes))
         {
             return;
         }
@@ -56,69 +60,94 @@ public sealed class ScheduleEventRule : RuleBase
         {
             AddEventError(
                 scheduleEvent,
-                $"on.schedule cron '{text}' runs too frequently; the shortest interval is once every {MinIntervalMinutes} minutes",
+                $"on.schedule cron '{Decode(cronNode.Value)}' runs too frequently; the shortest interval is once every {MinIntervalMinutes} minutes",
                 cronNode.Range);
         }
     }
 
     private void ValidateTimezone(ScheduledEvent scheduleEvent, StringNode timezoneNode)
     {
-        var timezone = Decode(timezoneNode.Value);
-        if (string.IsNullOrWhiteSpace(timezone))
+        var yaml = Config.Utf8Yaml!;
+        var span = TrimAscii(timezoneNode.Value.AsSpan(yaml));
+        if (span.IsEmpty)
         {
             return;
         }
 
-        if (string.Equals(timezone, "UTC", StringComparison.Ordinal) || string.Equals(timezone, "Local", StringComparison.Ordinal))
+        if (IsUtcOrLocalUtf8(span))
         {
-            AddEventError(scheduleEvent, $"on.schedule timezone '{timezone}' is invalid", timezoneNode.Range);
+            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(timezoneNode.Value)}' is invalid", timezoneNode.Range);
             return;
         }
 
         try
         {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(timezone);
+            _ = TimeZoneInfo.FindSystemTimeZoneById(Encoding.UTF8.GetString(span));
         }
         catch
         {
-            // Cross-platform fallback: accept common IANA format and reject obvious invalid values.
-            if (!LooksLikeIanaTimezone(timezone))
+            if (!LooksLikeIanaTimezoneUtf8(span))
             {
-                AddEventError(scheduleEvent, $"on.schedule timezone '{timezone}' is invalid", timezoneNode.Range);
+                AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(timezoneNode.Value)}' is invalid", timezoneNode.Range);
             }
         }
     }
 
     private bool IsExpressionOrInterpolation(StringNode node)
     {
-        return node.Expression is not null || node.Value.AsSpan(Config.Utf8Yaml).IndexOf("${{"u8) >= 0;
+        return node.Expression is not null || node.Value.AsSpan(Config.Utf8Yaml!).IndexOf("${{"u8) >= 0;
     }
 
-    private static bool LooksLikeIanaTimezone(string timezone)
+    private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> span)
     {
-        if (timezone.Length < 3 || !timezone.Contains('/'))
+        var start = 0;
+        var end = span.Length;
+        while (start < end && IsAsciiWs(span[start]))
+        {
+            start++;
+        }
+
+        while (end > start && IsAsciiWs(span[end - 1]))
+        {
+            end--;
+        }
+
+        return span[start..end];
+    }
+
+    private static bool IsAsciiWs(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
+
+    private static bool IsUtcOrLocalUtf8(ReadOnlySpan<byte> span)
+    {
+        return Utf8EqualsAsciiIgnoreCase(span, "UTC"u8)
+            || Utf8EqualsAsciiIgnoreCase(span, "Local"u8);
+    }
+
+    private static bool LooksLikeIanaTimezoneUtf8(ReadOnlySpan<byte> timezone)
+    {
+        if (timezone.Length < 3)
         {
             return false;
         }
 
-        var slashIndex = timezone.IndexOf('/');
-        if (slashIndex <= 0)
+        var slash = timezone.IndexOf((byte)'/');
+        if (slash <= 0)
         {
             return false;
         }
 
-        var area = timezone[..slashIndex];
-        if (!s_ianaAreas.Contains(area))
+        if (!TryMatchIanaArea(timezone[..slash]))
         {
             return false;
         }
 
-        foreach (var c in timezone)
+        for (var i = 0; i < timezone.Length; i++)
         {
-            var isLetter = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-            var isDigit = c >= '0' && c <= '9';
-            var isAllowedSymbol = c is '/' or '_' or '-' or '+';
-            if (!isLetter && !isDigit && !isAllowedSymbol)
+            var b = timezone[i];
+            var isLetter = b is >= (byte)'A' and <= (byte)'Z' or >= (byte)'a' and <= (byte)'z';
+            var isDigit = b is >= (byte)'0' and <= (byte)'9';
+            var isSym = b is (byte)'/' or (byte)'_' or (byte)'-' or (byte)'+';
+            if (!isLetter && !isDigit && !isSym)
             {
                 return false;
             }
@@ -127,47 +156,117 @@ public sealed class ScheduleEventRule : RuleBase
         return true;
     }
 
-    private static bool TryParseCron(string text, out CronExpression cron, out string reason)
+    private static bool TryMatchIanaArea(ReadOnlySpan<byte> area)
     {
-        cron = default;
+        return Utf8EqualsAsciiIgnoreCase(area, "Africa"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "America"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Antarctica"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Arctic"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Asia"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Atlantic"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Australia"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Etc"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Europe"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Indian"u8)
+            || Utf8EqualsAsciiIgnoreCase(area, "Pacific"u8);
+    }
+
+    private static bool Utf8EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var l = left[i];
+            var r = right[i];
+            if (l is >= (byte)'A' and <= (byte)'Z')
+            {
+                l = (byte)(l + 32);
+            }
+
+            if (r is >= (byte)'A' and <= (byte)'Z')
+            {
+                r = (byte)(r + 32);
+            }
+
+            if (l != r)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryParseCronUtf8(ReadOnlySpan<byte> cron, out CronBitset result, out string reason)
+    {
+        result = default;
         reason = string.Empty;
-        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 5)
+        Span<(int Start, int Length)> fields = stackalloc (int, int)[5];
+        if (!TrySplitCronFields(cron, fields, out reason))
+        {
+            return false;
+        }
+
+        if (!TryParseMinutesField(cron.Slice(fields[0].Start, fields[0].Length), ref result.Minutes, out reason)
+            || !TryParseHoursField(cron.Slice(fields[1].Start, fields[1].Length), ref result.Hours, out reason)
+            || !TryParseDomField(cron.Slice(fields[2].Start, fields[2].Length), ref result.DayOfMonth, out reason)
+            || !TryParseMonthsField(cron.Slice(fields[3].Start, fields[3].Length), ref result.Months, out reason)
+            || !TryParseDowField(cron.Slice(fields[4].Start, fields[4].Length), ref result.DayOfWeekRaw, out reason))
+        {
+            return false;
+        }
+
+        result.NormalizeDayOfWeek();
+        return true;
+    }
+
+    private static bool TrySplitCronFields(ReadOnlySpan<byte> cron, Span<(int Start, int Length)> fields, out string reason)
+    {
+        reason = string.Empty;
+        var idx = 0;
+        var pos = 0;
+        var len = cron.Length;
+
+        while (pos < len && IsAsciiWs(cron[pos]))
+        {
+            pos++;
+        }
+
+        while (pos < len && idx < 5)
+        {
+            var start = pos;
+            while (pos < len && !IsAsciiWs(cron[pos]))
+            {
+                pos++;
+            }
+
+            if (start == pos)
+            {
+                reason = "cron must have exactly 5 fields";
+                return false;
+            }
+
+            fields[idx++] = (start, pos - start);
+            while (pos < len && IsAsciiWs(cron[pos]))
+            {
+                pos++;
+            }
+        }
+
+        if (idx != 5 || pos < len)
         {
             reason = "cron must have exactly 5 fields";
             return false;
         }
 
-        if (!TryParseField(parts[0], 0, 59, null, out cron.Minutes, out reason))
-        {
-            return false;
-        }
-
-        if (!TryParseField(parts[1], 0, 23, null, out cron.Hours, out reason))
-        {
-            return false;
-        }
-
-        if (!TryParseField(parts[2], 1, 31, null, out cron.DaysOfMonth, out reason))
-        {
-            return false;
-        }
-
-        if (!TryParseField(parts[3], 1, 12, s_monthNames, out cron.Months, out reason))
-        {
-            return false;
-        }
-
-        if (!TryParseField(parts[4], 0, 7, s_dayOfWeekNames, out cron.DaysOfWeekRaw, out reason))
-        {
-            return false;
-        }
-
-        cron.NormalizeDayOfWeek();
         return true;
     }
 
-    private static bool TryGetMinimumIntervalMinutes(CronExpression cron, out int minimumIntervalMinutes)
+    private static bool TryGetMinimumIntervalMinutes(in CronBitset cron, out int minimumIntervalMinutes)
     {
         minimumIntervalMinutes = int.MaxValue;
         var start = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -207,27 +306,65 @@ public sealed class ScheduleEventRule : RuleBase
         return minimumIntervalMinutes != int.MaxValue;
     }
 
-    private static bool TryParseField(
-        string fieldText,
-        int min,
-        int max,
-        IReadOnlyDictionary<string, int>? namedValues,
-        out bool[] values,
-        out string reason)
+    private static bool TryParseMinutesField(ReadOnlySpan<byte> field, ref ulong mask, out string reason)
     {
-        values = new bool[max + 1];
+        return TryParseCommaField(field, ref mask, TryApplyMinutesSegment, out reason);
+    }
+
+    private static bool TryParseHoursField(ReadOnlySpan<byte> field, ref uint mask, out string reason)
+    {
+        return TryParseCommaField(field, ref mask, TryApplyHoursSegment, out reason);
+    }
+
+    private static bool TryParseDomField(ReadOnlySpan<byte> field, ref uint mask, out string reason)
+    {
+        return TryParseCommaField(field, ref mask, TryApplyDomSegment, out reason);
+    }
+
+    private static bool TryParseMonthsField(ReadOnlySpan<byte> field, ref ushort mask, out string reason)
+    {
+        return TryParseCommaField(field, ref mask, TryApplyMonthsSegment, out reason);
+    }
+
+    private static bool TryParseDowField(ReadOnlySpan<byte> field, ref byte mask, out string reason)
+    {
+        return TryParseCommaField(field, ref mask, TryApplyDowSegment, out reason);
+    }
+
+    private delegate bool ApplySegment<T>(ReadOnlySpan<byte> segment, ref T mask, out string reason);
+
+    private static bool TryParseCommaField<T>(ReadOnlySpan<byte> field, ref T mask, ApplySegment<T> apply, out string reason)
+    {
         reason = string.Empty;
-        var segments = fieldText.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0)
+        if (field.IsEmpty)
         {
-            reason = $"field '{fieldText}' is empty";
+            reason = "cron field is empty";
             return false;
         }
 
-        for (var i = 0; i < segments.Length; i++)
+        while (!field.IsEmpty)
         {
-            var segment = segments[i];
-            if (!TryApplySegment(segment, min, max, namedValues, values, out reason))
+            var comma = field.IndexOf((byte)',');
+            ReadOnlySpan<byte> segment;
+            if (comma < 0)
+            {
+                segment = field;
+                field = default;
+            }
+            else
+            {
+                segment = field[..comma];
+                field = field[(comma + 1)..];
+            }
+
+            segment = TrimAscii(segment);
+            if (segment.IsEmpty)
+            {
+                reason = "cron field segment is empty";
+                return false;
+            }
+
+            if (!apply(segment, ref mask, out reason))
             {
                 return false;
             }
@@ -236,49 +373,102 @@ public sealed class ScheduleEventRule : RuleBase
         return true;
     }
 
-    private static bool TryApplySegment(
-        string segment,
+    private static bool TryApplyMinutesSegment(ReadOnlySpan<byte> segment, ref ulong mask, out string reason)
+    {
+        return TryApplyNumericCronSegment(segment, 0, 59, ref mask, static (ref ulong m, int v) => m |= 1UL << v, out reason);
+    }
+
+    private static bool TryApplyHoursSegment(ReadOnlySpan<byte> segment, ref uint mask, out string reason)
+    {
+        return TryApplyNumericCronSegment(segment, 0, 23, ref mask, static (ref uint m, int v) => m |= 1u << v, out reason);
+    }
+
+    private static bool TryApplyDomSegment(ReadOnlySpan<byte> segment, ref uint mask, out string reason)
+    {
+        return TryApplyNumericCronSegment(segment, 1, 31, ref mask, static (ref uint m, int v) => m |= 1u << v, out reason);
+    }
+
+    private static bool TryApplyMonthsSegment(ReadOnlySpan<byte> segment, ref ushort mask, out string reason)
+    {
+        return TryApplyNamedOrNumericSegment(segment, 1, 12, true, ref mask, static (ref ushort m, int v) => m |= (ushort)(1 << v), out reason);
+    }
+
+    private static bool TryApplyDowSegment(ReadOnlySpan<byte> segment, ref byte mask, out string reason)
+    {
+        return TryApplyNamedOrNumericSegment(segment, 0, 7, false, ref mask, static (ref byte m, int v) => m |= (byte)(1 << v), out reason);
+    }
+
+    private delegate void SetBit<T>(ref T mask, int value);
+
+    private static bool TryApplyNumericCronSegment<T>(
+        ReadOnlySpan<byte> segment,
         int min,
         int max,
-        IReadOnlyDictionary<string, int>? namedValues,
-        bool[] values,
+        ref T mask,
+        SetBit<T> setBit,
+        out string reason)
+    {
+        return TryApplyNamedOrNumericSegment(segment, min, max, false, ref mask, setBit, out reason);
+    }
+
+    private static bool TryApplyNamedOrNumericSegment<T>(
+        ReadOnlySpan<byte> segment,
+        int min,
+        int max,
+        bool monthNames,
+        ref T mask,
+        SetBit<T> setBit,
         out string reason)
     {
         reason = string.Empty;
-        var slashIndex = segment.IndexOf('/');
-        var basePart = slashIndex >= 0 ? segment[..slashIndex] : segment;
+        var slash = segment.IndexOf((byte)'/');
+        ReadOnlySpan<byte> basePart;
         var step = 1;
-
-        if (slashIndex >= 0)
+        if (slash >= 0)
         {
-            if (slashIndex == segment.Length - 1 || !int.TryParse(segment[(slashIndex + 1)..], out step) || step <= 0)
+            basePart = segment[..slash];
+            var stepSpan = segment[(slash + 1)..];
+            if (stepSpan.IsEmpty || !TryParseUtf8Int(stepSpan, out step) || step <= 0)
             {
-                reason = $"step in segment '{segment}' is invalid";
+                reason = "step in cron segment is invalid";
                 return false;
             }
+        }
+        else
+        {
+            basePart = segment;
         }
 
         var rangeMin = min;
         var rangeMax = max;
-
-        if (basePart != "*")
+        if (!(basePart.Length == 1 && basePart[0] == (byte)'*'))
         {
-            var dashIndex = basePart.IndexOf('-');
-            if (dashIndex >= 0)
+            var dash = basePart.IndexOf((byte)'-');
+            if (dash >= 0)
             {
-                if (!TryParseValue(basePart[..dashIndex], min, max, namedValues, out rangeMin)
-                    || !TryParseValue(basePart[(dashIndex + 1)..], min, max, namedValues, out rangeMax)
+                var left = basePart[..dash];
+                var right = basePart[(dash + 1)..];
+                if (!TryParseCronIntOrName(left, min, max, monthNames, out rangeMin, out reason)
+                    || !TryParseCronIntOrName(right, min, max, monthNames, out rangeMax, out reason)
                     || rangeMin > rangeMax)
                 {
-                    reason = $"range in segment '{segment}' is invalid";
+                    if (string.IsNullOrEmpty(reason))
+                    {
+                        reason = "range in cron segment is invalid";
+                    }
+
                     return false;
                 }
             }
             else
             {
-                if (!TryParseValue(basePart, min, max, namedValues, out rangeMin))
+                if (!TryParseCronIntOrName(basePart, min, max, monthNames, out rangeMin, out reason))
                 {
-                    reason = $"value '{basePart}' is out of range";
+                    if (string.IsNullOrEmpty(reason))
+                    {
+                        reason = "value in cron segment is out of range";
+                    }
+
                     return false;
                 }
 
@@ -288,112 +478,212 @@ public sealed class ScheduleEventRule : RuleBase
 
         for (var v = rangeMin; v <= rangeMax; v += step)
         {
-            values[v] = true;
+            setBit(ref mask, v);
         }
 
         return true;
     }
 
-    private static bool TryParseValue(
-        string text,
+    private static bool TryParseCronIntOrName(
+        ReadOnlySpan<byte> text,
         int min,
         int max,
-        IReadOnlyDictionary<string, int>? namedValues,
-        out int value)
+        bool monthNames,
+        out int value,
+        out string reason)
     {
-        if (namedValues is not null && namedValues.TryGetValue(text, out value))
+        reason = string.Empty;
+        if (TryParseUtf8Int(text, out value) && value >= min && value <= max)
         {
-            return value >= min && value <= max;
+            return true;
         }
 
-        if (!int.TryParse(text, out value))
+        if (monthNames && TryParseMonthName(text, out value) && value >= min && value <= max)
+        {
+            return true;
+        }
+
+        if (!monthNames && TryParseDowName(text, out value) && value >= min && value <= max)
+        {
+            return true;
+        }
+
+        reason = "invalid cron value";
+        return false;
+    }
+
+    private static bool TryParseUtf8Int(ReadOnlySpan<byte> s, out int value)
+    {
+        value = 0;
+        if (s.IsEmpty)
         {
             return false;
         }
 
-        return value >= min && value <= max;
-    }
-
-    private static readonly IReadOnlyDictionary<string, int> s_monthNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["jan"] = 1,
-        ["feb"] = 2,
-        ["mar"] = 3,
-        ["apr"] = 4,
-        ["may"] = 5,
-        ["jun"] = 6,
-        ["jul"] = 7,
-        ["aug"] = 8,
-        ["sep"] = 9,
-        ["oct"] = 10,
-        ["nov"] = 11,
-        ["dec"] = 12,
-    };
-
-    private static readonly IReadOnlyDictionary<string, int> s_dayOfWeekNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["sun"] = 0,
-        ["mon"] = 1,
-        ["tue"] = 2,
-        ["wed"] = 3,
-        ["thu"] = 4,
-        ["fri"] = 5,
-        ["sat"] = 6,
-    };
-
-    private static readonly IReadOnlySet<string> s_ianaAreas = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Africa",
-        "America",
-        "Antarctica",
-        "Arctic",
-        "Asia",
-        "Atlantic",
-        "Australia",
-        "Etc",
-        "Europe",
-        "Indian",
-        "Pacific",
-    };
-
-    private struct CronExpression
-    {
-        public bool[] Minutes;
-        public bool[] Hours;
-        public bool[] DaysOfMonth;
-        public bool[] Months;
-        public bool[] DaysOfWeekRaw;
-        public bool[] DaysOfWeek;
-
-        public void NormalizeDayOfWeek()
+        var acc = 0;
+        for (var i = 0; i < s.Length; i++)
         {
-            DaysOfWeek = new bool[7];
-            for (var i = 0; i < DaysOfWeekRaw.Length; i++)
-            {
-                if (!DaysOfWeekRaw[i])
-                {
-                    continue;
-                }
-
-                var day = i == 7 ? 0 : i;
-                if (day >= 0 && day < DaysOfWeek.Length)
-                {
-                    DaysOfWeek[day] = true;
-                }
-            }
-        }
-
-        public bool IsMatch(DateTime dt)
-        {
-            if (!Minutes[dt.Minute] || !Hours[dt.Hour] || !Months[dt.Month])
+            var b = s[i];
+            if (b is < (byte)'0' or > (byte)'9')
             {
                 return false;
             }
 
-            var dayOfMonthMatch = DaysOfMonth[dt.Day];
-            var dayOfWeekMatch = DaysOfWeek[(int)dt.DayOfWeek];
-            var domWildcard = IsWildcard(DaysOfMonth, 1);
-            var dowWildcard = IsWildcard(DaysOfWeek, 0);
+            var digit = b - (byte)'0';
+            if (acc > (int.MaxValue - digit) / 10)
+            {
+                return false;
+            }
+
+            acc = acc * 10 + digit;
+        }
+
+        value = acc;
+        return true;
+    }
+
+    private static bool TryParseMonthName(ReadOnlySpan<byte> s, out int month)
+    {
+        month = 0;
+        if (s.Length != 3)
+        {
+            return false;
+        }
+
+        month = 0;
+        if (Utf8EqualsAsciiIgnoreCase(s, "jan"u8))
+        {
+            month = 1;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "feb"u8))
+        {
+            month = 2;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "mar"u8))
+        {
+            month = 3;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "apr"u8))
+        {
+            month = 4;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "may"u8))
+        {
+            month = 5;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "jun"u8))
+        {
+            month = 6;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "jul"u8))
+        {
+            month = 7;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "aug"u8))
+        {
+            month = 8;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "sep"u8))
+        {
+            month = 9;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "oct"u8))
+        {
+            month = 10;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "nov"u8))
+        {
+            month = 11;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "dec"u8))
+        {
+            month = 12;
+        }
+
+        return month != 0;
+    }
+
+    private static bool TryParseDowName(ReadOnlySpan<byte> s, out int dow)
+    {
+        dow = -1;
+        if (s.Length != 3)
+        {
+            return false;
+        }
+
+        if (Utf8EqualsAsciiIgnoreCase(s, "sun"u8))
+        {
+            dow = 0;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "mon"u8))
+        {
+            dow = 1;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "tue"u8))
+        {
+            dow = 2;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "wed"u8))
+        {
+            dow = 3;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "thu"u8))
+        {
+            dow = 4;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "fri"u8))
+        {
+            dow = 5;
+        }
+        else if (Utf8EqualsAsciiIgnoreCase(s, "sat"u8))
+        {
+            dow = 6;
+        }
+
+        return dow >= 0;
+    }
+
+    private struct CronBitset
+    {
+        public ulong Minutes;
+        public uint Hours;
+        public uint DayOfMonth;
+        public ushort Months;
+        public byte DayOfWeekRaw;
+        public byte DayOfWeekNorm;
+
+        public void NormalizeDayOfWeek()
+        {
+            byte norm = 0;
+            for (var i = 0; i <= 6; i++)
+            {
+                if ((DayOfWeekRaw & (1 << i)) != 0)
+                {
+                    norm |= (byte)(1 << i);
+                }
+            }
+
+            if ((DayOfWeekRaw & (1 << 7)) != 0)
+            {
+                norm |= 1;
+            }
+
+            DayOfWeekNorm = norm;
+        }
+
+        public readonly bool IsMatch(DateTime dt)
+        {
+            if ((Minutes & (1UL << dt.Minute)) == 0
+                || (Hours & (1u << dt.Hour)) == 0
+                || (Months & (ushort)(1 << dt.Month)) == 0)
+            {
+                return false;
+            }
+
+            var dayOfMonthMatch = (DayOfMonth & (1u << dt.Day)) != 0;
+            var dayOfWeekMatch = (DayOfWeekNorm & (1 << (int)dt.DayOfWeek)) != 0;
+            var domWildcard = DayOfMonth == AllDomMask;
+            var dowWildcard = DayOfWeekNorm == AllDowNormMask;
 
             if (domWildcard && dowWildcard)
             {
@@ -411,19 +701,6 @@ public sealed class ScheduleEventRule : RuleBase
             }
 
             return dayOfMonthMatch || dayOfWeekMatch;
-        }
-
-        private static bool IsWildcard(bool[] values, int start)
-        {
-            for (var i = start; i < values.Length; i++)
-            {
-                if (!values[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
     }
 }
