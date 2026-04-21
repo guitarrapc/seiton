@@ -877,6 +877,44 @@ public static Utf8String FromLowerAscii(ReadOnlySpan<byte> utf8) {
 
 **コード複雑度**: 低。private コンストラクタの追加のみ。
 
+#### Phase 9 実施結果（2026-04-21）
+
+**実装**: `Utf8String` に `Utf8String(byte[] owned)` private コンストラクタを追加。`FromLowerAscii` は C# のオーバーロード解決により `byte[]` 完全一致の private コンストラクタを呼び、2 回目の `ToArray()` を排除。
+
+**ベンチマーク結果（Ryzen 7 5800H / ShortRun）**:
+
+**LintBenchmark（Phase 8 → Phase 9）**:
+
+| Size | FixEnabled | Phase 8 Alloc | Phase 9 Alloc | Delta |
+|---|---|---:|---:|---:|
+| Small (1×3) | False | 43.02 KB | 42.84 KB | **-0.18 KB** |
+| Small (1×3) | True | 78.75 KB | 78.57 KB | **-0.18 KB** |
+| Medium (6×8) | False | 605.43 KB | 603.02 KB | **-2.41 KB** |
+| Medium (6×8) | True | 4,263.61 KB | 4,261.06 KB | **-2.55 KB** |
+| Large (20×12) | False | 8,894.81 KB | 8,883.35 KB | **-11.46 KB** |
+| Large (20×12) | True | 84,715.28 KB | 84,703.85 KB | **-11.43 KB** |
+
+**ParsingBenchmark（Phase 3 baseline on Ryzen 9 7950X3D → Phase 9 on Ryzen 7 5800H）**:
+
+| Size | Phase 3 Alloc | Phase 9 Alloc | Delta |
+|---|---:|---:|---:|
+| Small (1×3) | 12,216 B | 12,080 B | **-136 B** |
+| Medium (6×8) | 84,888 B | 83,515 B | **-1,373 B** |
+| Large (20×12) | 382,808 B | 376,781 B | **-6,027 B (-5.89 KB)** |
+
+**考察**:
+- Large パーサーで **-6 KB** は推定範囲（~10–30 KB）の下限付近。`FromLowerAscii` の呼び出し回数が推定より少なかった可能性、もしくは `byte[]` の平均サイズが小さかった（ジョブ ID/出力名は ~5–15 バイトが主）
+- LintBenchmark Large で **-11.4 KB** は、パーサー (-6 KB) + NeedsGraphRule 内の `FromLowerAscii` (-5.4 KB) の合計と整合
+- Fix=true と Fix=false の差がほぼ同じ（-11.4 KB）ことから、Fix パスの影響はない（Fix は `Utf8String` を使わないため当然）
+- 変更は surgical で、リスク/コード複雑度ともに最小限。テスト 477/477 通過
+
+**完了条件チェック**:
+- [x] `FromLowerAscii` が `byte[]` を 1 回のみ割り当てること
+- [x] 既存テスト全通過（477/477）
+- [x] ベンチマーク: ParsingBenchmark Large の Allocated が減少（382,808 → 376,781 B, -1.6%）
+
+**ステータス**: ✅ 完了
+
 ---
 
 ### Phase 10: AST ノードの struct 化 — StringNode（中リスク・高効果）

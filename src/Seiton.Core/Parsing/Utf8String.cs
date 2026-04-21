@@ -9,6 +9,11 @@ public readonly struct Utf8String : IEquatable<Utf8String>
         _bytes = utf8.ToArray();
     }
 
+    Utf8String(byte[] owned)
+    {
+        _bytes = owned;
+    }
+
     public int Length => _bytes?.Length ?? 0;
 
     public ReadOnlySpan<byte> Span => _bytes is null ? ReadOnlySpan<byte>.Empty : _bytes;
