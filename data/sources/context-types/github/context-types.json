@@ -104,6 +104,10 @@
           "type": "string"
         },
         {
+          "name": "repositoryUrl",
+          "type": "string"
+        },
+        {
           "name": "repository_id",
           "type": "string"
         },
@@ -121,12 +125,8 @@
           "undocumented": true
         },
         {
-          "name": "repositoryUrl",
-          "type": "string"
-        },
-        {
           "name": "retention_days",
-          "type": "number"
+          "type": "string"
         },
         {
           "name": "run_attempt",
@@ -249,23 +249,7 @@
       "strict": true,
       "properties": [
         {
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "name": "os",
-          "type": "string"
-        },
-        {
           "name": "arch",
-          "type": "string"
-        },
-        {
-          "name": "temp",
-          "type": "string"
-        },
-        {
-          "name": "tool_cache",
           "type": "string"
         },
         {
@@ -274,6 +258,22 @@
         },
         {
           "name": "environment",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "os",
+          "type": "string"
+        },
+        {
+          "name": "temp",
+          "type": "string"
+        },
+        {
+          "name": "tool_cache",
           "type": "string"
         }
       ]

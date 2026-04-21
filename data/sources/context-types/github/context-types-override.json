@@ -1,0 +1,121 @@
+{
+  "contextOverrides": [
+    {
+      "name": "github",
+      "strict": true,
+      "propertyOverrides": [
+        {
+          "name": "event",
+          "type": "object",
+          "dynamicPropertyType": "any"
+        }
+      ],
+      "undocumentedProperties": [
+        {
+          "name": "artifact_cache_size_limit",
+          "type": "number"
+        },
+        {
+          "name": "output",
+          "type": "string"
+        },
+        {
+          "name": "repository_visibility",
+          "type": "string"
+        },
+        {
+          "name": "state",
+          "type": "string"
+        },
+        {
+          "name": "step_summary",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "env",
+      "dynamicPropertyType": "string"
+    },
+    {
+      "name": "job",
+      "strict": true,
+      "propertyOverrides": [
+        {
+          "name": "container",
+          "type": "object",
+          "strict": true,
+          "properties": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "network",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "name": "services",
+          "type": "object",
+          "dynamicPropertyType": "object",
+          "dynamicPropertyObject": {
+            "strict": true,
+            "properties": [
+              {
+                "name": "id",
+                "type": "string"
+              },
+              {
+                "name": "network",
+                "type": "string"
+              },
+              {
+                "name": "ports",
+                "type": "object",
+                "dynamicPropertyType": "string"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "runner",
+      "strict": true
+    },
+    {
+      "name": "secrets",
+      "dynamicPropertyType": "string"
+    },
+    {
+      "name": "strategy",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "steps",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "matrix",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "needs",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "inputs",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "vars",
+      "dynamicPropertyType": "string"
+    },
+    {
+      "name": "jobs",
+      "dynamicPropertyType": "any"
+    }
+  ]
+}

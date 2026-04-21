@@ -40,12 +40,12 @@ internal static class ContextTypes
                 { new Utf8String("ref_protected"u8), ExprType.Bool },
                 { new Utf8String("ref_type"u8), ExprType.String },
                 { new Utf8String("repository"u8), ExprType.String },
+                { new Utf8String("repositoryUrl"u8), ExprType.String },
                 { new Utf8String("repository_id"u8), ExprType.String },
                 { new Utf8String("repository_owner"u8), ExprType.String },
                 { new Utf8String("repository_owner_id"u8), ExprType.String },
                 { new Utf8String("repository_visibility"u8), ExprType.String },
-                { new Utf8String("repositoryUrl"u8), ExprType.String },
-                { new Utf8String("retention_days"u8), ExprType.Number },
+                { new Utf8String("retention_days"u8), ExprType.String },
                 { new Utf8String("run_attempt"u8), ExprType.String },
                 { new Utf8String("run_id"u8), ExprType.String },
                 { new Utf8String("run_number"u8), ExprType.String },
@@ -90,13 +90,13 @@ internal static class ContextTypes
         var runnerType = ExprType.Object(
             new Dictionary<Utf8String, ExprType>
             {
-                { new Utf8String("name"u8), ExprType.String },
-                { new Utf8String("os"u8), ExprType.String },
                 { new Utf8String("arch"u8), ExprType.String },
-                { new Utf8String("temp"u8), ExprType.String },
-                { new Utf8String("tool_cache"u8), ExprType.String },
                 { new Utf8String("debug"u8), ExprType.String },
                 { new Utf8String("environment"u8), ExprType.String },
+                { new Utf8String("name"u8), ExprType.String },
+                { new Utf8String("os"u8), ExprType.String },
+                { new Utf8String("temp"u8), ExprType.String },
+                { new Utf8String("tool_cache"u8), ExprType.String },
             },
             strict: true);
         var secretsType = ExprType.Object(

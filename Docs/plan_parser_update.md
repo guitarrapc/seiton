@@ -381,7 +381,7 @@ internal static class FunctionSpecs
 - [x] 全テスト通過
 
 **将来検討**:
-- `override` 専用ファイル（`ContextTypesOverride.cs`）を導入し、`context-types.json` を自動 merge 結果 + override の分離構成にする（現状は手書き JSON が両方を兼ねている）
+- （解消済み）`override` 専用ファイル分離 — `context-types-override.json` + `ContextTypesMergeService` を実装済み
 
 ---
 
