@@ -8,8 +8,8 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class SelfHostedRunnerRule : RuleBase
 {
-    bool hasUntrustedTrigger;
-    HashSet<string> additionalUntrustedTriggers = [];
+    private bool hasUntrustedTrigger;
+    private HashSet<string> additionalUntrustedTriggers = [];
 
     public override string Id => "self-hosted-runner";
 
@@ -59,7 +59,7 @@ public sealed class SelfHostedRunnerRule : RuleBase
         }
     }
 
-    static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -86,7 +86,7 @@ public sealed class SelfHostedRunnerRule : RuleBase
         return false;
     }
 
-    static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
+    private static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
     {
         if (additionalUntrustedTriggers.Count == 0)
         {

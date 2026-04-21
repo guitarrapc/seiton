@@ -8,8 +8,8 @@ namespace Seiton.Core.Tests;
 
 public sealed class PinRemediationTests
 {
-    const string ActionSha = "0123456789abcdef0123456789abcdef01234567";
-    const string ImageDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string ActionSha = "0123456789abcdef0123456789abcdef01234567";
+    private const string ImageDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     [Test]
     public async Task RemediateAsync_AttachesFixes_ForUnpinnedUsesAndImage()
@@ -131,7 +131,7 @@ public sealed class PinRemediationTests
         await Assert.That(updatedYaml.Contains($"docker://ghcr.io/astral-sh/uv:latest@{ImageDigest}", StringComparison.Ordinal)).IsTrue();
     }
 
-    static LintEngine CreatePinLintEngine()
+    private static LintEngine CreatePinLintEngine()
     {
         return new LintEngine([
             new UnpinnedUsesRule(),
@@ -139,7 +139,7 @@ public sealed class PinRemediationTests
         ]);
     }
 
-    static string CreateUnpinnedYaml()
+    private static string CreateUnpinnedYaml()
     {
         return """
         on: push

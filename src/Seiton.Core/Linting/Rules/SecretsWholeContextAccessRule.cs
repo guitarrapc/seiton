@@ -13,7 +13,7 @@ namespace Seiton.Core.Linting.Rules;
 /// </summary>
 public sealed class SecretsWholeContextAccessRule : RuleBase
 {
-    const string DiagnosticMessage =
+    private const string DiagnosticMessage =
         "expression must not reference the entire ${{ secrets }} context object; " +
         "use ${{ secrets.SPECIFIC_KEY }} to access individual secrets, then map them to env variables";
 
@@ -77,7 +77,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // Step-level env helper
 
-    void CheckEnvForStep(Env? env, Step step)
+    private void CheckEnvForStep(Env? env, Step step)
     {
         if (env is null)
         {
@@ -103,7 +103,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // Job-level env helper
 
-    void CheckEnvForJob(Env? env, Job job)
+    private void CheckEnvForJob(Env? env, Job job)
     {
         if (env is null)
         {
@@ -129,7 +129,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // Core expression scanning
 
-    void CheckNode<TTarget>(
+    private void CheckNode<TTarget>(
         StringNode? node,
         string sinkName,
         Action<SecretsWholeContextAccessRule, TextRange, TTarget> report,
@@ -180,7 +180,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // AST traversal
 
-    static bool ContainsSecretsWholeContextReference(
+    private static bool ContainsSecretsWholeContextReference(
         int nodeId,
         int parentId,
         ExpressionNode[] nodes,
@@ -222,7 +222,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         };
     }
 
-    static bool ContainsSecretsWholeContextReferenceInFunction(
+    private static bool ContainsSecretsWholeContextReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
         ExpressionNode[] nodes,
@@ -258,7 +258,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
     /// Returns false only when secrets is the left child of MemberAccess/IndexAccess/WildcardAccess,
     /// which means a specific key is being accessed (secrets.KEY or secrets['KEY']).
     /// </summary>
-    static bool IsWholeContextAccess(int nodeId, int parentId, ExpressionNode[] nodes)
+    private static bool IsWholeContextAccess(int nodeId, int parentId, ExpressionNode[] nodes)
     {
         if (parentId >= 0 && parentId < nodes.Length)
         {

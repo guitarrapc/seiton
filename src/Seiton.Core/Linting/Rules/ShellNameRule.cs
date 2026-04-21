@@ -44,7 +44,7 @@ public sealed class ShellNameRule : RuleBase
         AddStepError(step, BuildInvalidShellMessage(run.Shell), run.Shell.Range);
     }
 
-    void CheckDefaultsRunShell(Defaults? defaults, Action<StringNode> report)
+    private void CheckDefaultsRunShell(Defaults? defaults, Action<StringNode> report)
     {
         if (defaults is null || Config.Utf8Yaml is null)
         {
@@ -70,13 +70,13 @@ public sealed class ShellNameRule : RuleBase
         }
     }
 
-    string BuildInvalidShellMessage(StringNode shellNode)
+    private string BuildInvalidShellMessage(StringNode shellNode)
     {
         var shellText = Decode(shellNode.Value);
         return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python";
     }
 
-    static bool IsValidShellName(ReadOnlySpan<byte> shell)
+    private static bool IsValidShellName(ReadOnlySpan<byte> shell)
     {
         return shell.SequenceEqual("bash"u8)
             || shell.SequenceEqual("sh"u8)

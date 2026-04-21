@@ -9,14 +9,14 @@ namespace Seiton.Core.Linting;
 public sealed class LintEngine
 {
 
-    readonly List<IRule> rules = [];
-    readonly List<Diagnostic> _diagnostics = new(16);
-    readonly WorkflowVisitor _visitor = new();
-    readonly List<IRule> _activeRules = new(16);
-    readonly List<Diagnostic> _ruleDiagnostics = new(64);
-    readonly HashSet<DiagnosticIdentity> _seen = new();
-    readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
-    readonly List<SuppressionRecord> _suppressionRecords = new();
+    private readonly List<IRule> rules = [];
+    private readonly List<Diagnostic> _diagnostics = new(16);
+    private readonly WorkflowVisitor _visitor = new();
+    private readonly List<IRule> _activeRules = new(16);
+    private readonly List<Diagnostic> _ruleDiagnostics = new(64);
+    private readonly HashSet<DiagnosticIdentity> _seen = new();
+    private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
+    private readonly List<SuppressionRecord> _suppressionRecords = new();
 
     public LintEngine()
     {
@@ -172,7 +172,7 @@ public sealed class LintEngine
         };
     }
 
-    static bool IsRuleEnabled(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules)
+    private static bool IsRuleEnabled(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules)
     {
         if (!TryGetRuleConfig(ruleId, rules, out var ruleConfig))
         {
@@ -182,7 +182,7 @@ public sealed class LintEngine
         return ruleConfig!.Enabled;
     }
 
-    static bool TryGetSeverityOverride(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules, out DiagnosticSeverity severity)
+    private static bool TryGetSeverityOverride(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules, out DiagnosticSeverity severity)
     {
         if (TryGetRuleConfig(ruleId, rules, out var ruleConfig) && ruleConfig?.Severity is not null)
         {
@@ -194,7 +194,7 @@ public sealed class LintEngine
         return false;
     }
 
-    static bool TryGetRuleConfig(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules, out RuleConfig? config)
+    private static bool TryGetRuleConfig(string? ruleId, IReadOnlyDictionary<string, RuleConfig>? rules, out RuleConfig? config)
     {
         config = null;
         if (string.IsNullOrEmpty(ruleId) || rules is null || rules.Count == 0)
@@ -215,7 +215,7 @@ public sealed class LintEngine
         return rules.TryGetValue(resolvedRuleId, out config);
     }
 
-    static bool TryGetSuppressionRecord(
+    private static bool TryGetSuppressionRecord(
         Diagnostic diagnostic,
         InlineSuppression inlineSuppression,
         IReadOnlyList<NormalizedExclusion> normalizedExclusions,
@@ -230,7 +230,7 @@ public sealed class LintEngine
         return TryGetConfigSuppressionRecord(diagnostic, inlineSuppression.JobScopes, inlineSuppression.Source, normalizedExclusions, normalizedFilePath, out suppressionRecord);
     }
 
-    static bool TryGetInlineSuppressionRecord(Diagnostic diagnostic, InlineSuppression inlineSuppression, out SuppressionRecord suppressionRecord)
+    private static bool TryGetInlineSuppressionRecord(Diagnostic diagnostic, InlineSuppression inlineSuppression, out SuppressionRecord suppressionRecord)
     {
         if (diagnostic.RuleId is null)
         {
@@ -292,7 +292,7 @@ public sealed class LintEngine
         return false;
     }
 
-    static bool TryGetConfigSuppressionRecord(
+    private static bool TryGetConfigSuppressionRecord(
         Diagnostic diagnostic,
         IReadOnlyList<JobScope> jobScopes,
         byte[] source,
@@ -364,7 +364,7 @@ public sealed class LintEngine
         return false;
     }
 
-    static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, byte[] source, out string jobId)
+    private static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, byte[] source, out string jobId)
     {
         for (var i = 0; i < jobScopes.Count; i++)
         {
@@ -380,7 +380,7 @@ public sealed class LintEngine
         return false;
     }
 
-    static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow)
+    private static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow)
     {
         if (utf8Yaml.Length == 0)
         {
@@ -620,7 +620,7 @@ public sealed class LintEngine
             configurationDiagnostics.ToArray());
     }
 
-    static Diagnostic BuildInlineDirectiveError(string message, string filePath, int lineStartOffset, int lineNumber, int tokenColumn, int tokenLength)
+    private static Diagnostic BuildInlineDirectiveError(string message, string filePath, int lineStartOffset, int lineNumber, int tokenColumn, int tokenLength)
     {
         var tokenStart = lineStartOffset + tokenColumn - 1;
         return new Diagnostic(
@@ -630,7 +630,7 @@ public sealed class LintEngine
             FilePath: filePath);
     }
 
-    static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow)
+    private static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow)
     {
         var count = 0;
         foreach (var pair in workflow.Jobs)
@@ -654,7 +654,7 @@ public sealed class LintEngine
         return result;
     }
 
-    static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow)
+    private static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow)
     {
         var scopes = new List<JobScope>(workflow.Jobs.Count);
         foreach (var pair in workflow.Jobs)
@@ -677,7 +677,7 @@ public sealed class LintEngine
         return scopes;
     }
 
-    static void AddRuleIds(
+    private static void AddRuleIds(
         ReadOnlySpan<byte> ruleIdListBytes,
         int argsLineOffset,
         Dictionary<string, SuppressionAnchor> target,
@@ -803,7 +803,7 @@ public sealed class LintEngine
         return span.Length - i;
     }
 
-    static RulesNormalization NormalizeRules(IReadOnlyDictionary<string, RuleConfig>? rules, string filePath)
+    private static RulesNormalization NormalizeRules(IReadOnlyDictionary<string, RuleConfig>? rules, string filePath)
     {
         if (rules is null || rules.Count == 0)
         {
@@ -856,7 +856,7 @@ public sealed class LintEngine
         return new RulesNormalization(normalized, diagnostics.ToArray());
     }
 
-    static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
+    private static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
     {
         var normalizedFilePath = NormalizePath(filePath);
         if (exclusions is null || exclusions.Count == 0)
@@ -935,7 +935,7 @@ public sealed class LintEngine
 
         return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
     }
-    static string BuildUnknownRuleIdMessage(string unknownRuleId)
+    private static string BuildUnknownRuleIdMessage(string unknownRuleId)
     {
         var suggested = RuleCatalog.SuggestRuleId(unknownRuleId);
         return suggested is null
@@ -943,7 +943,7 @@ public sealed class LintEngine
             : $"unknown rule-id '{unknownRuleId}'. Did you mean '{suggested}'?";
     }
 
-    static int CompareDiagnosticsByPriority(Diagnostic x, Diagnostic y)
+    private static int CompareDiagnosticsByPriority(Diagnostic x, Diagnostic y)
     {
         var byPriority = RuleCatalog.GetPriority(x.RuleId).CompareTo(RuleCatalog.GetPriority(y.RuleId));
         if (byPriority != 0)
@@ -972,7 +972,7 @@ public sealed class LintEngine
         return string.CompareOrdinal(x.Message, y.Message);
     }
 
-    readonly record struct DiagnosticIdentity(
+    private readonly record struct DiagnosticIdentity(
         DiagnosticSeverity Severity,
         string Message,
         int Start,
@@ -996,7 +996,7 @@ public sealed class LintEngine
         }
     }
 
-    readonly record struct InlineSuppression(
+    private readonly record struct InlineSuppression(
         IReadOnlyDictionary<int, Dictionary<string, SuppressionAnchor>> NextLineRuleSuppressions,
         IReadOnlyDictionary<string, SuppressionAnchor> FileRuleSuppressions,
         IReadOnlyDictionary<string, Dictionary<string, SuppressionAnchor>> JobRuleSuppressions,
@@ -1013,18 +1013,18 @@ public sealed class LintEngine
             []);
     }
 
-    readonly record struct JobScope(Utf8Slice JobIdSlice, int StartLine, int EndLine);
+    private readonly record struct JobScope(Utf8Slice JobIdSlice, int StartLine, int EndLine);
 
-    readonly record struct SuppressionAnchor(int Line, int Column);
+    private readonly record struct SuppressionAnchor(int Line, int Column);
 
-    readonly record struct RulesNormalization(
+    private readonly record struct RulesNormalization(
         IReadOnlyDictionary<string, RuleConfig>? Rules,
         Diagnostic[] ConfigurationDiagnostics)
     {
         public static RulesNormalization Empty { get; } = new(null, []);
     }
 
-    readonly record struct ExclusionsNormalization(
+    private readonly record struct ExclusionsNormalization(
         IReadOnlyList<NormalizedExclusion> Exclusions,
         string NormalizedFilePath,
         Diagnostic[] ConfigurationDiagnostics)
@@ -1032,7 +1032,7 @@ public sealed class LintEngine
         public static ExclusionsNormalization Empty { get; } = new([], string.Empty, []);
     }
 
-    readonly record struct NormalizedExclusion(
+    private readonly record struct NormalizedExclusion(
         string Files,
         IReadOnlySet<string> Rules,
         IReadOnlyList<string>? Jobs);

@@ -69,7 +69,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
     }
 
-    void CheckEnv<TTarget>(
+    private void CheckEnv<TTarget>(
         Env? env,
         ExpressionValidationContext context,
         string sinkName,
@@ -97,7 +97,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
     }
 
-    void CheckNode<TTarget>(
+    private void CheckNode<TTarget>(
         StringNode? node,
         ExpressionValidationContext context,
         string sinkName,
@@ -138,7 +138,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
     }
 
-    void ValidateExpression<TTarget>(
+    private void ValidateExpression<TTarget>(
         ReadOnlySpan<byte> expression,
         ExpressionValidationContext context,
         string sinkName,
@@ -165,7 +165,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
             target);
     }
 
-    void VisitExpressionNode<TTarget>(
+    private void VisitExpressionNode<TTarget>(
         int nodeId,
         int parentId,
         ExpressionNode[] nodes,
@@ -230,7 +230,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
     }
 
-    static string ToContextText(ExpressionValidationContext context)
+    private static string ToContextText(ExpressionValidationContext context)
     {
         return context switch
         {
@@ -240,7 +240,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
             _ => "unknown",
         };
     }
-    static bool TryFindEmbeddedExpression(
+    private static bool TryFindEmbeddedExpression(
         ReadOnlySpan<byte> value,
         int searchStart,
         out int bodyStart,

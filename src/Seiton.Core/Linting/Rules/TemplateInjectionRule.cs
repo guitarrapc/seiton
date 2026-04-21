@@ -25,7 +25,7 @@ public sealed class TemplateInjectionRule : RuleBase
         }
     }
 
-    void CheckSink(Step step, StringNode? valueNode, string sinkName)
+    private void CheckSink(Step step, StringNode? valueNode, string sinkName)
     {
         if (valueNode is null || Config.Utf8Yaml is null)
         {
@@ -63,12 +63,12 @@ public sealed class TemplateInjectionRule : RuleBase
         }
     }
 
-    static bool ContainsUntrustedEventReference(ExpressionParseResult parseResult, ReadOnlySpan<byte> expression)
+    private static bool ContainsUntrustedEventReference(ExpressionParseResult parseResult, ReadOnlySpan<byte> expression)
     {
         return ContainsUntrustedEventReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    static bool ContainsUntrustedEventReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsUntrustedEventReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -95,7 +95,7 @@ public sealed class TemplateInjectionRule : RuleBase
         };
     }
 
-    static bool ContainsUntrustedEventReferenceInFunction(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsUntrustedEventReferenceInFunction(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (ContainsUntrustedEventReference(functionCallNode.Left, nodes, arguments, expression))
         {
@@ -119,7 +119,7 @@ public sealed class TemplateInjectionRule : RuleBase
         return false;
     }
 
-    static bool IsGithubEventReference(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGithubEventReference(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -155,7 +155,7 @@ public sealed class TemplateInjectionRule : RuleBase
         }
     }
 
-    static bool IsIdentifier(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
+    private static bool IsIdentifier(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -167,7 +167,7 @@ public sealed class TemplateInjectionRule : RuleBase
             && TokenEqualsIgnoreCase(node.Token.AsSpan(expression), expected);
     }
 
-    static bool IsEventIndex(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsEventIndex(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -183,7 +183,7 @@ public sealed class TemplateInjectionRule : RuleBase
         return false;
     }
 
-    static bool TokenEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    private static bool TokenEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
     {
         if (left.Length != right.Length)
         {

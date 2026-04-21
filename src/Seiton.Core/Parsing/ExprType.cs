@@ -108,7 +108,7 @@ public sealed class StringExprType : ExprType
 /// <summary>Object type, optionally with a static property map.</summary>
 public sealed class ObjectExprType : ExprType
 {
-    readonly IReadOnlyDictionary<Utf8String, ExprType>? properties;
+    private readonly IReadOnlyDictionary<Utf8String, ExprType>? properties;
 
     internal ObjectExprType(
         IReadOnlyDictionary<Utf8String, ExprType>? properties = null,

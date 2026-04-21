@@ -9,7 +9,7 @@ public readonly struct Utf8String : IEquatable<Utf8String>
         _bytes = utf8.ToArray();
     }
 
-    Utf8String(byte[] owned)
+    private Utf8String(byte[] owned)
     {
         _bytes = owned;
     }

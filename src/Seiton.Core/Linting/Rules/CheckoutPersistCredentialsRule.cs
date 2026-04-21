@@ -8,8 +8,8 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class CheckoutPersistCredentialsRule : RuleBase
 {
-    const string PersistCredentialsKey = "persist-credentials";
-    const string FixHint = "review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...";
+    private const string PersistCredentialsKey = "persist-credentials";
+    private const string FixHint = "review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...";
 
     public override string Id => "checkout-persist-credentials";
 
@@ -58,12 +58,12 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         AddStepWarning(step, message, persistCredentialsNode.Range);
     }
 
-    static string BuildMessage(string actionRef)
+    private static string BuildMessage(string actionRef)
     {
         return $"action '{actionRef}' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, {FixHint}";
     }
 
-    static bool TryBuildValueReplacementFix(LintConfig config, StringNode persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
+    private static bool TryBuildValueReplacementFix(LintConfig config, StringNode persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
         var value = persistCredentialsNode.Value.AsSpan(utf8Yaml);
@@ -79,7 +79,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return true;
     }
 
-    static bool TryBuildMissingInputFix(LintConfig config, Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
+    private static bool TryBuildMissingInputFix(LintConfig config, Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
@@ -148,7 +148,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return true;
     }
 
-    static string BuildReplacementText(StringNode valueNode, byte[] utf8Yaml)
+    private static string BuildReplacementText(StringNode valueNode, byte[] utf8Yaml)
     {
         var valueStart = valueNode.Value.Offset;
         var valueEnd = valueNode.Value.Offset + valueNode.Value.Length;
@@ -191,7 +191,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return "false";
     }
 
-    static string GetStepKeyIndentation(string sourceText, int lineNumber)
+    private static string GetStepKeyIndentation(string sourceText, int lineNumber)
     {
         var line = GetLine(sourceText, lineNumber);
         var baseIndent = FixFormatting.GetLineIndentation(sourceText, lineNumber);
@@ -205,7 +205,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             : baseIndent;
     }
 
-    static int FindWithLine(string[] lines, int usesLine, int stepEndLine, string keyIndent)
+    private static int FindWithLine(string[] lines, int usesLine, int stepEndLine, string keyIndent)
     {
         var maxLine = Math.Min(lines.Length, stepEndLine);
         for (var lineNumber = Math.Max(usesLine + 1, 1); lineNumber <= maxLine; lineNumber++)
@@ -226,7 +226,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return -1;
     }
 
-    static bool LineContainsFlowMapping(string line, string keyIndent)
+    private static bool LineContainsFlowMapping(string line, string keyIndent)
     {
         if (!line.StartsWith(keyIndent, StringComparison.Ordinal))
         {
@@ -238,7 +238,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return rest.StartsWith("with:", StringComparison.Ordinal) && braceIndex >= 0;
     }
 
-    static int FindFirstInputLine(byte[] utf8Yaml, IReadOnlyDictionary<Utf8String, StringNode> inputs)
+    private static int FindFirstInputLine(byte[] utf8Yaml, IReadOnlyDictionary<Utf8String, StringNode> inputs)
     {
         var firstLine = int.MaxValue;
         foreach (var pair in inputs)
@@ -253,13 +253,13 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return firstLine == int.MaxValue ? -1 : firstLine;
     }
 
-    static string GetLine(string sourceText, int lineNumber)
+    private static string GetLine(string sourceText, int lineNumber)
     {
         var lines = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         return lineNumber >= 1 && lineNumber <= lines.Length ? lines[lineNumber - 1] : string.Empty;
     }
 
-    static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
     {
         if (lineNumber <= 1)
         {
@@ -284,7 +284,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return utf8Yaml.Length;
     }
 
-    static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
     {
         var start = FindLineStartOffset(utf8Yaml, lineNumber);
         for (var i = start; i < utf8Yaml.Length; i++)
@@ -298,7 +298,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return utf8Yaml.Length;
     }
 
-    static int FindLineNumberFromOffset(byte[] utf8Yaml, int offset)
+    private static int FindLineNumberFromOffset(byte[] utf8Yaml, int offset)
     {
         if (offset <= 0)
         {

@@ -5,14 +5,14 @@ namespace Seiton.Core.Linting;
 
 internal static class RuleCatalog
 {
-    const string CanonicalPrefix = "seiton-lint-rule-";
+    private const string CanonicalPrefix = "seiton-lint-rule-";
 
     // Rule responsibilities are intentionally split:
     // - job-structure: cross-key structural constraints on Job shape.
     // - reusable-workflow: uses/with/secrets semantics and forbidden keys in reusable calls.
     // - permissions: scalar/scope value domain validation for permissions.
     // - popular-action-inputs: known-action input-name validation (warning-level).
-    static readonly (string Id, int Priority, Func<IRule> Factory)[] DefaultRuleFactories =
+    private static readonly (string Id, int Priority, Func<IRule> Factory)[] DefaultRuleFactories =
     [
         ("job-structure", 0, static () => new JobStructureRule()),
         ("reusable-workflow", 1, static () => new ReusableWorkflowRule()),
@@ -61,7 +61,7 @@ internal static class RuleCatalog
         ("use-trusted-publishing", 48, static () => new UseTrustedPublishingRule()),
     ];
 
-    static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
+    private static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
     [
         ("known-vulnerable-actions", 27),
         ("impostor-commit", 28),
@@ -69,17 +69,17 @@ internal static class RuleCatalog
         ("stale-action-refs", 30),
     ];
 
-    static readonly (string Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
+    private static readonly (string Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
-    static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
+    private static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
 
-    static readonly IReadOnlyDictionary<string, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
+    private static readonly IReadOnlyDictionary<string, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
 
-    static readonly IReadOnlySet<string> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
+    private static readonly IReadOnlySet<string> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
 
-    static readonly IReadOnlyDictionary<string, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
+    private static readonly IReadOnlyDictionary<string, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
 
-    static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
     public static IRule[] CreateDefaultRules()
     {
@@ -213,7 +213,7 @@ internal static class RuleCatalog
         return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys!);
     }
 
-    static bool TryFindRuleIdBySemanticId(string input, out string resolvedRuleId)
+    private static bool TryFindRuleIdBySemanticId(string input, out string resolvedRuleId)
     {
         resolvedRuleId = string.Empty;
 
@@ -232,7 +232,7 @@ internal static class RuleCatalog
         return false;
     }
 
-    static IReadOnlyDictionary<string, string> BuildCanonicalRuleIdMap()
+    private static IReadOnlyDictionary<string, string> BuildCanonicalRuleIdMap()
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 0; i < AllRuleMetadata.Length; i++)
@@ -243,7 +243,7 @@ internal static class RuleCatalog
         return map;
     }
 
-    static (string Id, int Priority)[] BuildAllRuleMetadata()
+    private static (string Id, int Priority)[] BuildAllRuleMetadata()
     {
         var metadata = new (string Id, int Priority)[DefaultRuleFactories.Length + AdditionalRuleMetadata.Length];
         for (var i = 0; i < DefaultRuleFactories.Length; i++)
@@ -259,7 +259,7 @@ internal static class RuleCatalog
         return metadata;
     }
 
-    static IReadOnlyDictionary<string, string> BuildReverseCanonicalRuleIdMap()
+    private static IReadOnlyDictionary<string, string> BuildReverseCanonicalRuleIdMap()
     {
         var reverse = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var pair in CanonicalRuleIdToRuleId)
@@ -270,7 +270,7 @@ internal static class RuleCatalog
         return reverse;
     }
 
-    static IReadOnlySet<string> BuildNonDisableableRuleIdSet()
+    private static IReadOnlySet<string> BuildNonDisableableRuleIdSet()
     {
         return new HashSet<string>(StringComparer.Ordinal)
         {
@@ -279,7 +279,7 @@ internal static class RuleCatalog
         };
     }
 
-    static IReadOnlyDictionary<string, DiagnosticSeverity> BuildMinimumSeverityMap()
+    private static IReadOnlyDictionary<string, DiagnosticSeverity> BuildMinimumSeverityMap()
     {
         return new Dictionary<string, DiagnosticSeverity>(StringComparer.Ordinal)
         {
@@ -288,7 +288,7 @@ internal static class RuleCatalog
         };
     }
 
-    static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildAllowedRuleConfigKeys()
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildAllowedRuleConfigKeys()
     {
         var empty = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal);
         var map = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
@@ -324,7 +324,7 @@ internal static class RuleCatalog
         return map;
     }
 
-    static int ComputeEditDistanceIgnoreCase(string left, string right)
+    private static int ComputeEditDistanceIgnoreCase(string left, string right)
     {
         if (left.Length == 0)
         {

@@ -233,7 +233,7 @@ internal static class RunContextDirectUseAnalyzer
         };
     }
 
-    static bool ContainsContextRootReferenceInFunction(
+    private static bool ContainsContextRootReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
         ExpressionNode[] nodes,

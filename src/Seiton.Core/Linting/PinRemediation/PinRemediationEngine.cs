@@ -11,14 +11,14 @@ public sealed class PinRemediationEngine(
     FixImagesConfig imagesConfig,
     NetworkConfig networkConfig)
 {
-    const string UsesRuleId = "unpinned-uses";
-    const string ImageRuleId = "unpinned-image";
+    private const string UsesRuleId = "unpinned-uses";
+    private const string ImageRuleId = "unpinned-image";
 
-    readonly IActionShaResolver? _actionShaResolver = actionShaResolver;
-    readonly IImageDigestResolver? _imageDigestResolver = imageDigestResolver;
-    readonly FixPinningConfig _pinningConfig = pinningConfig ?? new FixPinningConfig();
-    readonly FixImagesConfig _imagesConfig = imagesConfig ?? new FixImagesConfig();
-    readonly NetworkConfig _networkConfig = networkConfig ?? new NetworkConfig();
+    private readonly IActionShaResolver? _actionShaResolver = actionShaResolver;
+    private readonly IImageDigestResolver? _imageDigestResolver = imageDigestResolver;
+    private readonly FixPinningConfig _pinningConfig = pinningConfig ?? new FixPinningConfig();
+    private readonly FixImagesConfig _imagesConfig = imagesConfig ?? new FixImagesConfig();
+    private readonly NetworkConfig _networkConfig = networkConfig ?? new NetworkConfig();
 
     public async Task<RemediationResult> RemediateAsync(
         IReadOnlyList<Diagnostic> diagnostics,
@@ -79,7 +79,7 @@ public sealed class PinRemediationEngine(
         return new RemediationResult(outputs, resolvedCount, skippedCount, failedCount);
     }
 
-    async Task<RemediationOutcome> RemediateOneAsync(
+    private async Task<RemediationOutcome> RemediateOneAsync(
         Diagnostic diagnostic,
         byte[] utf8Yaml,
         CancellationToken cancellationToken)
@@ -114,7 +114,7 @@ public sealed class PinRemediationEngine(
         }
     }
 
-    async Task<RemediationOutcome> RemediateUnpinnedUsesAsync(
+    private async Task<RemediationOutcome> RemediateUnpinnedUsesAsync(
         Diagnostic diagnostic,
         byte[] utf8Yaml,
         CancellationToken cancellationToken)
@@ -145,7 +145,7 @@ public sealed class PinRemediationEngine(
         return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
-    async Task<RemediationOutcome> RemediateUnpinnedImageAsync(
+    private async Task<RemediationOutcome> RemediateUnpinnedImageAsync(
         Diagnostic diagnostic,
         byte[] utf8Yaml,
         CancellationToken cancellationToken)
@@ -175,7 +175,7 @@ public sealed class PinRemediationEngine(
         return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
-    static bool TryExtractQuotedValue(string message, out string value)
+    private static bool TryExtractQuotedValue(string message, out string value)
     {
         var first = message.IndexOf('\'');
         if (first < 0)
@@ -194,5 +194,5 @@ public sealed class PinRemediationEngine(
         value = message[(first + 1)..second];
         return !string.IsNullOrEmpty(value);
     }
-    readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
+    private readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
 }

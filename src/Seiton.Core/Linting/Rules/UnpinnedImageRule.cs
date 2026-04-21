@@ -59,7 +59,7 @@ public sealed class UnpinnedImageRule : RuleBase
         AddStepWarning(step, $"docker action uses '{usesText}' is not pinned by digest (expected @sha256:<64-hex>)");
     }
 
-    void ReportIfUnpinnedContainerImage(Job job, StringNode? imageNode, string locationName)
+    private void ReportIfUnpinnedContainerImage(Job job, StringNode? imageNode, string locationName)
     {
         if (imageNode is null || imageNode.Expression is not null || Config.Utf8Yaml is null)
         {

@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class ArchivedUsesRule : RuleBase
 {
-    static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)
     {
         "actions-rs/toolchain",
         "actions-rs/cargo",
@@ -64,7 +64,7 @@ public sealed class ArchivedUsesRule : RuleBase
             BuildUsesLocation(action));
     }
 
-    static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
+    private static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
     {
         ownerRepo = string.Empty;
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))

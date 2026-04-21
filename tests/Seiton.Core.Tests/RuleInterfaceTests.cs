@@ -6030,7 +6030,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
-    static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
+    private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)
         {
@@ -6062,7 +6062,7 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    static string NormalizeYaml(string raw)
+    private static string NormalizeYaml(string raw)
     {
         var normalized = raw.Replace("\r\n", "\n");
         var lines = normalized.Split('\n');
@@ -6132,13 +6132,13 @@ public sealed class RuleInterfaceTests
         return builder.ToString();
     }
 
-    readonly record struct RuleCase(string Name, string Yaml, string[] ExpectedSubstrings);
+    private readonly record struct RuleCase(string Name, string Yaml, string[] ExpectedSubstrings);
 
-    readonly record struct FixabilityCase(string RuleId, IRule Rule, string Yaml, bool ExpectsFix);
+    private readonly record struct FixabilityCase(string RuleId, IRule Rule, string Yaml, bool ExpectsFix);
 
-    sealed class DuplicateDiagnosticRule : IRule
+    private sealed class DuplicateDiagnosticRule : IRule
     {
-        readonly List<Diagnostic> diagnostics = [];
+        private readonly List<Diagnostic> diagnostics = [];
 
         public DuplicateDiagnosticRule(string id)
         {
@@ -6188,7 +6188,7 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    sealed class ConfigCaptureRule : IRule
+    private sealed class ConfigCaptureRule : IRule
     {
         public string Id => "config-capture";
 
@@ -6231,9 +6231,9 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    sealed class CountingRule : IRule
+    private sealed class CountingRule : IRule
     {
-        LintConfig? config;
+        private LintConfig? config;
 
         public string Id => "test-rule";
 
@@ -6297,7 +6297,7 @@ public sealed class RuleInterfaceTests
             StepCount++;
         }
 
-        void EnsureConfigured()
+        private void EnsureConfigured()
         {
             if (config is null)
             {

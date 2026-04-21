@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting;
 
 public abstract class RuleBase : IRule
 {
-    readonly List<Diagnostic> diagnostics = [];
+    private readonly List<Diagnostic> diagnostics = [];
     protected LintConfig Config { get; private set; } = LintConfig.Empty;
 
     public abstract string Id { get; }
@@ -141,7 +141,7 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
-    void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location, DiagnosticFix? fix = null)
+    private void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location, DiagnosticFix? fix = null)
     {
         diagnostics.Add(new Diagnostic(
             severity,

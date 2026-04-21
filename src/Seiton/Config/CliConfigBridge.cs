@@ -144,5 +144,5 @@ public static class CliConfigBridge
         };
     }
 
-    static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
+    private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
 }

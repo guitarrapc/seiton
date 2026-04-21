@@ -69,7 +69,7 @@ public static class PinFixFormatter
             : null;
     }
 
-    static bool TryExtractQuotedValue(string message, out string value)
+    private static bool TryExtractQuotedValue(string message, out string value)
     {
         var first = message.IndexOf('\'');
         if (first < 0)
@@ -88,7 +88,7 @@ public static class PinFixFormatter
         value = message[(first + 1)..second];
         return !string.IsNullOrEmpty(value);
     }
-    static bool TryBuildReplacementFix(
+    private static bool TryBuildReplacementFix(
         Diagnostic diagnostic,
         string oldValue,
         string newValue,

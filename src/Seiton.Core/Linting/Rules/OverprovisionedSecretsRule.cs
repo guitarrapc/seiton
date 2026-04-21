@@ -9,8 +9,8 @@ public sealed class OverprovisionedSecretsRule : RuleBase
     internal const int DefaultMaxStepEnvSecrets = 5;
     internal const int DefaultMaxJobSecrets = 5;
 
-    int _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
-    int _maxJobSecrets = DefaultMaxJobSecrets;
+    private int _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
+    private int _maxJobSecrets = DefaultMaxJobSecrets;
 
     public override string Id => "overprovisioned-secrets";
 
@@ -69,7 +69,7 @@ public sealed class OverprovisionedSecretsRule : RuleBase
         }
     }
 
-    bool ContainsSecretsReference(StringNode node)
+    private bool ContainsSecretsReference(StringNode node)
     {
         if (Config.Utf8Yaml is null)
         {

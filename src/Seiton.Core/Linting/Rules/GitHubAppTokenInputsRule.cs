@@ -86,7 +86,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             usesLocation);
     }
 
-    static bool IsCreateGitHubAppTokenAction(ReadOnlySpan<byte> uses)
+    private static bool IsCreateGitHubAppTokenAction(ReadOnlySpan<byte> uses)
     {
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || uses.StartsWith("docker://"u8))
         {
@@ -96,7 +96,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         return MatchesActionReference(uses, "actions/create-github-app-token"u8);
     }
 
-    static bool MatchesActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
+    private static bool MatchesActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
     {
         if (uses.Length < actionName.Length)
         {
@@ -111,24 +111,24 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         return uses.Length == actionName.Length || uses[actionName.Length] == (byte)'@';
     }
 
-    static bool IsRepositoryConstraintKey(ReadOnlySpan<byte> inputKey)
+    private static bool IsRepositoryConstraintKey(ReadOnlySpan<byte> inputKey)
     {
         return EqualsAsciiIgnoreCase(inputKey, "repositories"u8)
             || EqualsAsciiIgnoreCase(inputKey, "repository"u8);
     }
 
-    static bool IsOwnerKey(ReadOnlySpan<byte> inputKey)
+    private static bool IsOwnerKey(ReadOnlySpan<byte> inputKey)
     {
         return EqualsAsciiIgnoreCase(inputKey, "owner"u8);
     }
 
-    static bool IsPermissionConstraintKey(ReadOnlySpan<byte> inputKey)
+    private static bool IsPermissionConstraintKey(ReadOnlySpan<byte> inputKey)
     {
         return EqualsAsciiIgnoreCase(inputKey, "permissions"u8)
             || StartsWithAsciiIgnoreCase(inputKey, "permission-"u8);
     }
 
-    static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> prefix)
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> prefix)
     {
         if (left.Length < prefix.Length)
         {

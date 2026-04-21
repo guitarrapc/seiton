@@ -179,7 +179,7 @@ public static class LintConfigLibrary
         return new LintConfigValidationResult(config, diagnostics.ToArray());
     }
 
-    static NormalizedRules NormalizeRules(Dictionary<string, RuleConfig>? rules, string filePath)
+    private static NormalizedRules NormalizeRules(Dictionary<string, RuleConfig>? rules, string filePath)
     {
         if (rules is null || rules.Count == 0)
         {
@@ -232,7 +232,7 @@ public static class LintConfigLibrary
         return new NormalizedRules(normalized, diagnostics.ToArray());
     }
 
-    static NormalizedExclusions NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath)
+    private static NormalizedExclusions NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath)
     {
         if (exclusions is null || exclusions.Count == 0)
         {
@@ -309,7 +309,7 @@ public static class LintConfigLibrary
         return new NormalizedExclusions(normalized, diagnostics.ToArray());
     }
 
-    static NormalizedFix NormalizeFix(FixConfig fix, string filePath)
+    private static NormalizedFix NormalizeFix(FixConfig fix, string filePath)
     {
         var diagnostics = new List<Diagnostic>();
         var pinning = fix.Pinning;
@@ -347,7 +347,7 @@ public static class LintConfigLibrary
         return new NormalizedFix(normalizedFix, diagnostics.ToArray());
     }
 
-    static NormalizedNetwork NormalizeNetwork(NetworkConfig network, string filePath)
+    private static NormalizedNetwork NormalizeNetwork(NetworkConfig network, string filePath)
     {
         var diagnostics = new List<Diagnostic>();
 
@@ -389,7 +389,7 @@ public static class LintConfigLibrary
         return new NormalizedNetwork(normalizedNetwork, diagnostics.ToArray());
     }
 
-    static IReadOnlyList<string> NormalizeStringList(IReadOnlyList<string> values)
+    private static IReadOnlyList<string> NormalizeStringList(IReadOnlyList<string> values)
     {
         if (values.Count == 0)
         {
@@ -415,7 +415,7 @@ public static class LintConfigLibrary
         return normalized;
     }
 
-    static string BuildUnknownRuleIdMessage(string input)
+    private static string BuildUnknownRuleIdMessage(string input)
     {
         var suggestion = RuleCatalog.SuggestRuleId(input);
         if (suggestion is null)
@@ -426,28 +426,28 @@ public static class LintConfigLibrary
         return $"unknown rule-id '{input}'. did you mean '{suggestion}'?";
     }
 
-    readonly record struct NormalizedRules(
+    private readonly record struct NormalizedRules(
         IReadOnlyDictionary<string, RuleConfig> Rules,
         Diagnostic[] Diagnostics)
     {
         public static NormalizedRules Empty { get; } = new(new Dictionary<string, RuleConfig>(StringComparer.Ordinal), []);
     }
 
-    readonly record struct NormalizedExclusions(
+    private readonly record struct NormalizedExclusions(
         IReadOnlyList<LintExclusion> Exclusions,
         Diagnostic[] Diagnostics)
     {
         public static NormalizedExclusions Empty { get; } = new([], []);
     }
 
-    readonly record struct NormalizedFix(
+    private readonly record struct NormalizedFix(
         FixConfig Fix,
         Diagnostic[] Diagnostics)
     {
         public static NormalizedFix Empty { get; } = new(new FixConfig(), []);
     }
 
-    readonly record struct NormalizedNetwork(
+    private readonly record struct NormalizedNetwork(
         NetworkConfig Network,
         Diagnostic[] Diagnostics)
     {

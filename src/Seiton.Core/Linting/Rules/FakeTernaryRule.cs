@@ -21,7 +21,7 @@ public sealed class FakeTernaryRule : RuleBase
         ValidateCondition(step.If, null, step);
     }
 
-    void ValidateCondition(StringNode? condition, Job? job, Step? step)
+    private void ValidateCondition(StringNode? condition, Job? job, Step? step)
     {
         if (condition is null || Config.Utf8Yaml is null)
         {
@@ -59,7 +59,7 @@ public sealed class FakeTernaryRule : RuleBase
         }
     }
 
-    static bool ContainsFakeTernary(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsFakeTernary(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -104,7 +104,7 @@ public sealed class FakeTernaryRule : RuleBase
         };
     }
 
-    static bool ContainsFakeTernaryInArguments(
+    private static bool ContainsFakeTernaryInArguments(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -127,12 +127,12 @@ public sealed class FakeTernaryRule : RuleBase
         return false;
     }
 
-    static bool IsBooleanType(ExprType type)
+    private static bool IsBooleanType(ExprType type)
     {
         return type is BoolExprType;
     }
 
-    static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
+    private static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
     {
         body = value;
 

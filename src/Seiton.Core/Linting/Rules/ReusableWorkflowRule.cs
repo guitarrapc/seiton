@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class ReusableWorkflowRule : RuleBase
 {
-    readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
 
     public override string Id => "reusable-workflow";
 
@@ -58,7 +58,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         ValidateLocalReusableWorkflowContract(job, workflowCall, jobId);
     }
 
-    void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId)
+    private void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId)
     {
         if (Config.Utf8Yaml is null
             || string.IsNullOrEmpty(Config.FilePath)
@@ -92,7 +92,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         ValidateWorkflowCallSecrets(job, jobId, workflowCall, contract);
     }
 
-    LocalWorkflowContract? GetLocalWorkflowContract(Job job, string jobId, string relativePath, string resolvedPath)
+    private LocalWorkflowContract? GetLocalWorkflowContract(Job job, string jobId, string relativePath, string resolvedPath)
     {
         if (localWorkflowContracts.TryGetValue(resolvedPath, out var cached))
         {
@@ -147,7 +147,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return contract;
     }
 
-    void ValidateWorkflowCallInputs(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
+    private void ValidateWorkflowCallInputs(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
         if (workflowCall.Inputs is not null)
         {
@@ -181,7 +181,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
     }
 
-    void ValidateInputType(Job job, string jobId, WorkflowCallInput providedInput, InputContract expected)
+    private void ValidateInputType(Job job, string jobId, WorkflowCallInput providedInput, InputContract expected)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -224,7 +224,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
     }
 
-    void ValidateWorkflowCallSecrets(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
+    private void ValidateWorkflowCallSecrets(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
         if (workflowCall.Secrets is not null)
         {
@@ -262,7 +262,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
     }
 
-    bool TryResolveLocalWorkflowPath(ReadOnlySpan<byte> uses, out string resolvedPath, out string relativePath, out bool invalidRefFormat)
+    private bool TryResolveLocalWorkflowPath(ReadOnlySpan<byte> uses, out string resolvedPath, out string relativePath, out bool invalidRefFormat)
     {
         resolvedPath = string.Empty;
         relativePath = string.Empty;
@@ -298,7 +298,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return true;
     }
 
-    static bool ContainsInput(IReadOnlyDictionary<Utf8String, WorkflowCallInput> providedInputs, string requiredInput)
+    private static bool ContainsInput(IReadOnlyDictionary<Utf8String, WorkflowCallInput> providedInputs, string requiredInput)
     {
         foreach (var pair in providedInputs)
         {
@@ -311,7 +311,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    static bool ContainsSecret(IReadOnlyDictionary<Utf8String, WorkflowCallSecret> providedSecrets, string requiredSecret)
+    private static bool ContainsSecret(IReadOnlyDictionary<Utf8String, WorkflowCallSecret> providedSecrets, string requiredSecret)
     {
         foreach (var pair in providedSecrets)
         {
@@ -324,13 +324,13 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    static bool IsBooleanLiteral(string value)
+    private static bool IsBooleanLiteral(string value)
     {
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
             || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
-    static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
     {
         var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
         if (string.IsNullOrEmpty(workflowDirectory))
@@ -347,7 +347,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return workflowDirectory;
     }
 
-    static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
     {
         var separator = Path.DirectorySeparatorChar;
         var marker = $"{separator}.github{separator}workflows{separator}";
@@ -369,7 +369,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    static string TrimCurrentDirectoryPrefix(string path)
+    private static string TrimCurrentDirectoryPrefix(string path)
     {
         if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
@@ -379,7 +379,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return path;
     }
 
-    static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
         var chars = new char[utf8.Length];
         for (var i = 0; i < utf8.Length; i++)
@@ -390,7 +390,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return new string(chars);
     }
 
-    void ReportIfPresent(Job job, bool present, string keyName, string jobId)
+    private void ReportIfPresent(Job job, bool present, string keyName, string jobId)
     {
         if (!present)
         {
@@ -400,9 +400,9 @@ public sealed class ReusableWorkflowRule : RuleBase
         AddJobError(job, $"when job '{jobId}' calls reusable workflow with uses, key '{keyName}' is not allowed");
     }
 
-    sealed record InputContract(string Name, WorkflowCallInputType Type);
+    private sealed record InputContract(string Name, WorkflowCallInputType Type);
 
-    sealed class LocalWorkflowContract
+    private sealed class LocalWorkflowContract
     {
         public Dictionary<string, InputContract> Inputs { get; } = new(StringComparer.Ordinal);
 

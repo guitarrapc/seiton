@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class SyntaxRule : IRule
 {
-    readonly IRule[] rules = RuleCatalog.CreateDefaultRules();
+    private readonly IRule[] rules = RuleCatalog.CreateDefaultRules();
 
     public string Id => "syntax";
 

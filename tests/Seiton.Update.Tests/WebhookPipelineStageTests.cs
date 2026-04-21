@@ -379,7 +379,7 @@ public sealed class WebhookPipelineStageTests
         }
     }
 
-    static string CreateTempRepoWithRaw(string repoRoot)
+    private static string CreateTempRepoWithRaw(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcRaw = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "raw");
@@ -394,7 +394,7 @@ public sealed class WebhookPipelineStageTests
         return tempRepo;
     }
 
-    static string CreateTempRepoWithParsed(string repoRoot)
+    private static string CreateTempRepoWithParsed(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcParsed = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "parsed");
@@ -412,7 +412,7 @@ public sealed class WebhookPipelineStageTests
         return tempRepo;
     }
 
-    static string FindRepoRoot()
+    private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
@@ -433,7 +433,7 @@ public sealed class WebhookPipelineStageTests
     /// snapshot in a temp repo. Used to test excludeSchemaOnly logic without relying on real
     /// schema-only events (which may not exist if sources stay in sync).
     /// </summary>
-    static void InjectSchemaOnlyEvent(string tempRepo, string eventName)
+    private static void InjectSchemaOnlyEvent(string tempRepo, string eventName)
     {
         var parsedSchemaPath = Path.Combine(tempRepo, "data", "sources", "webhooks", "github", "parsed", "schema-webhook-events.json");
         using var doc = JsonDocument.Parse(File.ReadAllText(parsedSchemaPath));

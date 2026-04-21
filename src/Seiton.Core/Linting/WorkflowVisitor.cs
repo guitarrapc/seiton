@@ -4,7 +4,7 @@ namespace Seiton.Core.Linting;
 
 public sealed class WorkflowVisitor
 {
-    readonly List<IPass> passes = [];
+    private readonly List<IPass> passes = [];
 
     public void AddPass(IPass pass)
     {

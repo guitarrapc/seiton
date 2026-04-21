@@ -9,7 +9,7 @@ namespace Seiton.Core.Linting.PinRemediation;
 
 public sealed class OciImageDigestResolver : IImageDigestResolver
 {
-    static readonly string[] ManifestAcceptHeaders =
+    private static readonly string[] ManifestAcceptHeaders =
     [
         "application/vnd.oci.image.index.v1+json",
         "application/vnd.oci.image.manifest.v1+json",
@@ -17,14 +17,14 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         "application/vnd.docker.distribution.manifest.v2+json",
     ];
 
-    readonly HttpClient _httpClient;
-    readonly FixImagesConfig _config;
-    readonly string? _dockerConfigPath;
-    readonly ConcurrentDictionary<string, string> _successCache = new(StringComparer.Ordinal);
-    readonly string[] _normalizedExcludeImages;
-    readonly string[] _normalizedExcludeTags;
-    readonly string[] _normalizedIgnoreImages;
-    volatile DockerAuthConfig? _dockerAuthConfig;
+    private readonly HttpClient _httpClient;
+    private readonly FixImagesConfig _config;
+    private readonly string? _dockerConfigPath;
+    private readonly ConcurrentDictionary<string, string> _successCache = new(StringComparer.Ordinal);
+    private readonly string[] _normalizedExcludeImages;
+    private readonly string[] _normalizedExcludeTags;
+    private readonly string[] _normalizedIgnoreImages;
+    private volatile DockerAuthConfig? _dockerAuthConfig;
 
     public OciImageDigestResolver(HttpClient httpClient, FixImagesConfig config)
         : this(httpClient, config, dockerConfigPath: null)
@@ -76,7 +76,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return digest;
     }
 
-    async Task<string?> ResolveDigestAsync(
+    private async Task<string?> ResolveDigestAsync(
         HttpClient client,
         Uri manifestUri,
         AuthenticationHeaderValue? storedAuth,
@@ -118,7 +118,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return ExtractDigest(initialResponse, imageRef, manifestUri);
     }
 
-    async Task<HttpResponseMessage> SendHeadRequestAsync(
+    private async Task<HttpResponseMessage> SendHeadRequestAsync(
         HttpClient client,
         Uri manifestUri,
         AuthenticationHeaderValue? auth,
@@ -139,7 +139,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
-    static string ExtractDigest(HttpResponseMessage response, string imageRef, Uri requestUri)
+    private static string ExtractDigest(HttpResponseMessage response, string imageRef, Uri requestUri)
     {
         if (!response.IsSuccessStatusCode)
         {
@@ -166,7 +166,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     // Parses the WWW-Authenticate: Bearer header and fetches a short-lived token
     // from the registry's auth endpoint. Returns null when the challenge cannot be
     // fulfilled (missing realm, non-HTTPS endpoint, or token endpoint failure).
-    static async Task<string?> TryAcquireBearerTokenAsync(
+    private static async Task<string?> TryAcquireBearerTokenAsync(
         HttpClient client,
         HttpResponseMessage challengeResponse,
         CancellationToken cancellationToken)
@@ -218,7 +218,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return null;
     }
 
-    static bool TryParseBearerChallenge(string parameter, out string? realm, out string? service, out string? scope)
+    private static bool TryParseBearerChallenge(string parameter, out string? realm, out string? service, out string? scope)
     {
         realm = null;
         service = null;
@@ -286,7 +286,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return realm is not null;
     }
 
-    static Uri BuildTokenUri(Uri realm, string? service, string? scope)
+    private static Uri BuildTokenUri(Uri realm, string? service, string? scope)
     {
         var hasService = !string.IsNullOrEmpty(service);
         var hasScope = !string.IsNullOrEmpty(scope);
@@ -307,7 +307,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return new Uri(realmStr + query);
     }
 
-    bool ShouldSkip(ParsedImageReference parsed)
+    private bool ShouldSkip(ParsedImageReference parsed)
     {
         if (ContainsExact(_normalizedExcludeImages, parsed.MatchName)
             || ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
@@ -332,7 +332,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return false;
     }
 
-    AuthenticationHeaderValue? ResolveAuthorizationHeader(string registryHost)
+    private AuthenticationHeaderValue? ResolveAuthorizationHeader(string registryHost)
     {
         var dockerAuthConfig = _dockerAuthConfig;
         if (dockerAuthConfig is null)
@@ -349,12 +349,12 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return new AuthenticationHeaderValue("Basic", authValue);
     }
 
-    static Uri BuildManifestUri(ParsedImageReference parsed)
+    private static Uri BuildManifestUri(ParsedImageReference parsed)
     {
         return new Uri($"https://{parsed.RegistryHost}/v2/{parsed.RepositoryPath}/manifests/{Uri.EscapeDataString(parsed.Reference)}");
     }
 
-    static string[] NormalizeEntries(IReadOnlyList<string> values)
+    private static string[] NormalizeEntries(IReadOnlyList<string> values)
     {
         if (values.Count == 0)
         {
@@ -374,12 +374,12 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return [.. list];
     }
 
-    static string NormalizeValue(string value)
+    private static string NormalizeValue(string value)
     {
         return value.Trim().ToLowerInvariant();
     }
 
-    static bool ContainsExact(string[] values, string target)
+    private static bool ContainsExact(string[] values, string target)
     {
         for (var i = 0; i < values.Length; i++)
         {
@@ -392,7 +392,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return false;
     }
 
-    static bool TryParseImageReference(string imageRef, out ParsedImageReference parsed)
+    private static bool TryParseImageReference(string imageRef, out ParsedImageReference parsed)
     {
         parsed = default;
 
@@ -486,7 +486,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return true;
     }
 
-    static bool IsSha256Digest(string? digest)
+    private static bool IsSha256Digest(string? digest)
     {
         if (string.IsNullOrWhiteSpace(digest) || !digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
         {
@@ -514,7 +514,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return true;
     }
 
-    static DockerAuthConfig LoadDockerAuthConfig(string? dockerConfigPath)
+    private static DockerAuthConfig LoadDockerAuthConfig(string? dockerConfigPath)
     {
         var configPath = ResolveDockerConfigPath(dockerConfigPath);
         if (configPath is null || !File.Exists(configPath))
@@ -557,7 +557,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return map.Count == 0 ? DockerAuthConfig.Empty : new DockerAuthConfig(map);
     }
 
-    static string? ResolveDockerConfigPath(string? dockerConfigPath)
+    private static string? ResolveDockerConfigPath(string? dockerConfigPath)
     {
         if (!string.IsNullOrWhiteSpace(dockerConfigPath))
         {
@@ -579,7 +579,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return null;
     }
 
-    static string NormalizeRegistryKey(string value)
+    private static string NormalizeRegistryKey(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -596,7 +596,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         var host = slash >= 0 ? trimmed[..slash] : trimmed;
         return NormalizeValue(host);
     }
-    readonly record struct ParsedImageReference(
+    private readonly record struct ParsedImageReference(
         string RegistryHost,
         string RepositoryPath,
         string MatchName,
@@ -604,7 +604,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         string CacheKey,
         bool AlreadyPinned);
 
-    sealed class DockerAuthConfig(IReadOnlyDictionary<string, string> auths)
+    private sealed class DockerAuthConfig(IReadOnlyDictionary<string, string> auths)
     {
         public static DockerAuthConfig Empty { get; } = new(new Dictionary<string, string>(StringComparer.Ordinal));
 

@@ -5,8 +5,8 @@ namespace Seiton.Update.Services;
 
 internal sealed class WebhookParityChecker
 {
-    static readonly Regex SeitonEventRegex = new("eventNameUtf8\\.SequenceEqual\\(\"([^\"]+)\"u8\\)", RegexOptions.Compiled);
-    static readonly Regex ActionlintEventRegex = new("^\\s*\"([^\"]+)\":", RegexOptions.Compiled | RegexOptions.Multiline);
+    private static readonly Regex SeitonEventRegex = new("eventNameUtf8\\.SequenceEqual\\(\"([^\"]+)\"u8\\)", RegexOptions.Compiled);
+    private static readonly Regex ActionlintEventRegex = new("^\\s*\"([^\"]+)\":", RegexOptions.Compiled | RegexOptions.Multiline);
 
     public bool TryCompare(string repoRoot, out WebhookDiffResult diff)
     {
@@ -28,7 +28,7 @@ internal sealed class WebhookParityChecker
         return true;
     }
 
-    static HashSet<string> ParseSeitonEvents(string path)
+    private static HashSet<string> ParseSeitonEvents(string path)
     {
         if (!File.Exists(path))
         {
@@ -49,7 +49,7 @@ internal sealed class WebhookParityChecker
         return set;
     }
 
-    static HashSet<string> ParseActionlintEvents(string path)
+    private static HashSet<string> ParseActionlintEvents(string path)
     {
         if (!File.Exists(path))
         {

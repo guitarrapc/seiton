@@ -29,7 +29,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         AddJobWarning(job, message);
     }
 
-    static bool TryBuildPermissionsInsertFix(LintConfig config, Job job, byte[] utf8Yaml, out DiagnosticFix fix)
+    private static bool TryBuildPermissionsInsertFix(LintConfig config, Job job, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
         var sourceText = config.GetSourceText();
@@ -129,7 +129,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         return true;
     }
 
-    static int FindKeyLine(string[] lines, int startLine, int endLine, string indent, string keyPrefix)
+    private static int FindKeyLine(string[] lines, int startLine, int endLine, string indent, string keyPrefix)
     {
         var maxLine = Math.Min(lines.Length, endLine);
         for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
@@ -150,7 +150,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         return -1;
     }
 
-    static int FindFirstMappingSiblingLine(string[] lines, int startLine, int endLine, string indent)
+    private static int FindFirstMappingSiblingLine(string[] lines, int startLine, int endLine, string indent)
     {
         var maxLine = Math.Min(lines.Length, endLine);
         for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
@@ -178,7 +178,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         return -1;
     }
 
-    static int FindFirstChildLine(string[] lines, int startLine, int endLine, string parentIndent)
+    private static int FindFirstChildLine(string[] lines, int startLine, int endLine, string parentIndent)
     {
         var maxLine = Math.Min(lines.Length, endLine);
         for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
@@ -217,7 +217,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         return -1;
     }
 
-    static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
     {
         if (lineNumber <= 1)
         {
@@ -242,7 +242,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         return utf8Yaml.Length;
     }
 
-    static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
     {
         var start = FindLineStartOffset(utf8Yaml, lineNumber);
         for (var i = start; i < utf8Yaml.Length; i++)

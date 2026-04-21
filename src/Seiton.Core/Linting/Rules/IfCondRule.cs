@@ -21,7 +21,7 @@ public sealed class IfCondRule : RuleBase
         ValidateCondition(step.If, null, step);
     }
 
-    void ValidateCondition(StringNode? condition, Job? job, Step? step)
+    private void ValidateCondition(StringNode? condition, Job? job, Step? step)
     {
         if (condition is null || Config.Utf8Yaml is null)
         {
@@ -67,7 +67,7 @@ public sealed class IfCondRule : RuleBase
         }
     }
 
-    static bool IsConstantBool(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out bool value)
+    private static bool IsConstantBool(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out bool value)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -124,7 +124,7 @@ public sealed class IfCondRule : RuleBase
         return false;
     }
 
-    static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
+    private static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
     {
         body = value;
 

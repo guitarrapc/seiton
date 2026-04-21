@@ -79,7 +79,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
         }
     }
 
-    bool ContainsSecretsReference(StringNode? node)
+    private bool ContainsSecretsReference(StringNode? node)
     {
         if (Config.Utf8Yaml is null || node is null)
         {
@@ -100,7 +100,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
         return ContainsSecretsReferenceInExpression(expression);
     }
 
-    bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
+    private bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -116,7 +116,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
         return false;
     }
 
-    bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
+    private bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
@@ -132,7 +132,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
         return ContainsSecretsReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -161,7 +161,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
         };
     }
 
-    static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (ContainsSecretsReference(functionCallNode.Left, nodes, arguments, expression))
         {

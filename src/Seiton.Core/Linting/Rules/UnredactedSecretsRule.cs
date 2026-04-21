@@ -9,9 +9,9 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class UnredactedSecretsRule : RuleBase
 {
-    Workflow? currentWorkflow;
-    Job? currentJob;
-    HashSet<string> additionalOutputCommands = [];
+    private Workflow? currentWorkflow;
+    private Job? currentJob;
+    private HashSet<string> additionalOutputCommands = [];
 
     public override string Id => "unredacted-secrets";
 
@@ -84,7 +84,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
     }
 
-    TextRange BuildRunTextLocation(StringNode runNode, int relativeOffset, int tokenLength)
+    private TextRange BuildRunTextLocation(StringNode runNode, int relativeOffset, int tokenLength)
     {
         var absoluteStart = runNode.Value.Offset + relativeOffset;
         var absoluteLength = tokenLength;
@@ -105,7 +105,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             EndColumn: end.Column);
     }
 
-    HashSet<string>? CollectSecretDerivedEnvVarNames(Step step)
+    private HashSet<string>? CollectSecretDerivedEnvVarNames(Step step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -119,7 +119,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return names;
     }
 
-    void AddSecretMappedVars(Env? env, HashSet<string> names)
+    private void AddSecretMappedVars(Env? env, HashSet<string> names)
     {
         if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
@@ -142,7 +142,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
     }
 
-    bool ContainsSecretsReference(StringNode node)
+    private bool ContainsSecretsReference(StringNode node)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -163,7 +163,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return ContainsSecretsReferenceInExpression(expression);
     }
 
-    static bool TryFindOutputOfVariableLocation(
+    private static bool TryFindOutputOfVariableLocation(
         ReadOnlySpan<byte> runText,
         ReadOnlySpan<char> variableName,
         HashSet<string> additionalOutputCommands,
@@ -208,7 +208,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string> additionalOutputCommands)
+    private static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string> additionalOutputCommands)
     {
         if (ContainsAsciiIgnoreCase(line, "echo"u8)
             || ContainsAsciiIgnoreCase(line, "printf"u8)
@@ -235,7 +235,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool TryFindPosixVariableReference(
+    private static bool TryFindPosixVariableReference(
         ReadOnlySpan<byte> line,
         ReadOnlySpan<char> variableName,
         out int localOffset,
@@ -268,7 +268,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return true;
     }
 
-    static bool TryFindPowerShellVariableReference(
+    private static bool TryFindPowerShellVariableReference(
         ReadOnlySpan<byte> line,
         ReadOnlySpan<char> variableName,
         out int localOffset,
@@ -311,7 +311,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             start = valueStart;
         }
     }
-    bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
+    private bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -327,7 +327,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
+    private bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
@@ -343,7 +343,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return ContainsSecretsReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -372,7 +372,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         };
     }
 
-    static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (ContainsSecretsReference(functionCallNode.Left, nodes, arguments, expression))
         {

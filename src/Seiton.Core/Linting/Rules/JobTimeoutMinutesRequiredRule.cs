@@ -38,14 +38,14 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         AddJobError(job, message, BuildJobLocation(job));
     }
 
-    static bool IsExecutableJob(Job job)
+    private static bool IsExecutableJob(Job job)
     {
         return job.WorkflowCall is null
             && job.Steps is not null
             && job.Steps.Count > 0;
     }
 
-    static bool AllStepsHaveTimeout(IReadOnlyList<Step>? steps)
+    private static bool AllStepsHaveTimeout(IReadOnlyList<Step>? steps)
     {
         if (steps is null || steps.Count == 0)
         {
@@ -63,7 +63,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return true;
     }
 
-    static bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
+    private static bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
     {
         fix = default;
         if (timeoutMinutes <= 0)
@@ -163,7 +163,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return true;
     }
 
-    static int FindKeyLine(string[] lines, int startLine, int endLine, string indent, string keyPrefix)
+    private static int FindKeyLine(string[] lines, int startLine, int endLine, string indent, string keyPrefix)
     {
         var maxLine = Math.Min(lines.Length, endLine);
         for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
@@ -184,7 +184,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return -1;
     }
 
-    static int FindFirstMappingSiblingLine(string[] lines, int startLine, int endLine, string indent)
+    private static int FindFirstMappingSiblingLine(string[] lines, int startLine, int endLine, string indent)
     {
         var maxLine = Math.Min(lines.Length, endLine);
         for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
@@ -212,7 +212,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return -1;
     }
 
-    static int FindFirstChildLine(string[] lines, int startLine, int endLine, string parentIndent)
+    private static int FindFirstChildLine(string[] lines, int startLine, int endLine, string parentIndent)
     {
         var maxLine = Math.Min(lines.Length, endLine);
         for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
@@ -251,7 +251,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return -1;
     }
 
-    static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
     {
         if (lineNumber <= 1)
         {
@@ -276,7 +276,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return utf8Yaml.Length;
     }
 
-    static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
     {
         var start = FindLineStartOffset(utf8Yaml, lineNumber);
         for (var i = start; i < utf8Yaml.Length; i++)

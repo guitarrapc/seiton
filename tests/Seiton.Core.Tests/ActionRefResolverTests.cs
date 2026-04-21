@@ -108,7 +108,7 @@ public sealed class ActionRefResolverTests
         await Assert.That(handler.RequestedUris.Count(uri => uri == "https://api.github.com/repos/actions/setup-go/git/ref/heads/main")).IsEqualTo(1);
     }
 
-    static ActionRefResolver CreateResolver(
+    private static ActionRefResolver CreateResolver(
         StubHttpMessageHandler handler,
         GitHubNetworkConfig? config = null)
     {
@@ -117,7 +117,7 @@ public sealed class ActionRefResolverTests
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
-        readonly Dictionary<string, HttpResponseMessage> responses = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, HttpResponseMessage> responses = new(StringComparer.Ordinal);
 
         public List<string> RequestedUris { get; } = [];
 
@@ -146,7 +146,7 @@ public sealed class ActionRefResolverTests
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
-        static HttpResponseMessage CloneResponse(HttpResponseMessage response)
+        private static HttpResponseMessage CloneResponse(HttpResponseMessage response)
         {
             var clone = new HttpResponseMessage(response.StatusCode);
             if (response.Content is not null)

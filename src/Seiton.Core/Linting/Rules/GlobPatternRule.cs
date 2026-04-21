@@ -35,7 +35,7 @@ public sealed class GlobPatternRule : RuleBase
         ValidateFilter(webhookEv, webhookEv.PathsIgnore);
     }
 
-    void ValidateOptionAllowList(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
+    private void ValidateOptionAllowList(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
     {
         ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Types is not null && webhookEv.Types.Count > 0, "types"u8, webhookEv.Types?[0].Range);
         ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Branches is not null, "branches"u8, webhookEv.Branches?.Name.Range);
@@ -47,7 +47,7 @@ public sealed class GlobPatternRule : RuleBase
         ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Workflows is not null && webhookEv.Workflows.Count > 0, "workflows"u8, webhookEv.Workflows?[0].Range);
     }
 
-    void ValidateOptionAllowList(
+    private void ValidateOptionAllowList(
         WebhookEvent webhookEv,
         string eventName,
         WebhookTypes.EventSpec spec,
@@ -67,7 +67,7 @@ public sealed class GlobPatternRule : RuleBase
             optionRange ?? BuildEventLocation(webhookEv));
     }
 
-    void ValidateTypeValues(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
+    private void ValidateTypeValues(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
     {
         if (webhookEv.Types is null || webhookEv.Types.Count == 0)
         {
@@ -105,7 +105,7 @@ public sealed class GlobPatternRule : RuleBase
         }
     }
 
-    void ValidateMutualExclusionFilters(WebhookEvent webhookEv)
+    private void ValidateMutualExclusionFilters(WebhookEvent webhookEv)
     {
         if (webhookEv.Branches is not null && webhookEv.BranchesIgnore is not null)
         {
@@ -132,7 +132,7 @@ public sealed class GlobPatternRule : RuleBase
         }
     }
 
-    void ValidateFilter(WebhookEvent webhookEv, WebhookEventFilter? filter)
+    private void ValidateFilter(WebhookEvent webhookEv, WebhookEventFilter? filter)
     {
         if (filter is null)
         {
@@ -160,7 +160,7 @@ public sealed class GlobPatternRule : RuleBase
         }
     }
 
-    static bool TryGetInvalidReason(ReadOnlySpan<byte> pattern, out string reason)
+    private static bool TryGetInvalidReason(ReadOnlySpan<byte> pattern, out string reason)
     {
         var consecutiveStars = 0;
         var openBracketCount = 0;
@@ -208,7 +208,7 @@ public sealed class GlobPatternRule : RuleBase
         return false;
     }
 
-    static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
         var chars = new char[utf8.Length];
         for (var i = 0; i < utf8.Length; i++)

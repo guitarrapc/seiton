@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Fixing;
 
 public static class FixEngine
 {
-    enum DiffKind
+    private enum DiffKind
     {
         Equal,
         Delete,
@@ -221,7 +221,7 @@ public static class FixEngine
         return [.. result];
     }
 
-    static void ValidateEdits(int sourceLength, IReadOnlyList<TextEdit> edits)
+    private static void ValidateEdits(int sourceLength, IReadOnlyList<TextEdit> edits)
     {
         var ordered = edits.ToArray();
         Array.Sort(ordered, static (left, right) => left.Offset.CompareTo(right.Offset));
@@ -262,7 +262,7 @@ public static class FixEngine
         }
     }
 
-    static void ValidateRevalidation(LintResult before, LintResult after, IReadOnlyList<Diagnostic>? selectedDiagnostics)
+    private static void ValidateRevalidation(LintResult before, LintResult after, IReadOnlyList<Diagnostic>? selectedDiagnostics)
     {
         if (!before.HasFatalError && after.HasFatalError)
         {
@@ -290,7 +290,7 @@ public static class FixEngine
         }
     }
 
-    static string BuildUnifiedDiffCore(
+    private static string BuildUnifiedDiffCore(
         byte[] originalUtf8Yaml,
         byte[] updatedUtf8Yaml,
         string filePath,
@@ -399,7 +399,7 @@ public static class FixEngine
         return sb.ToString();
     }
 
-    static bool AreSameLines(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    private static bool AreSameLines(IReadOnlyList<string> left, IReadOnlyList<string> right)
     {
         if (left.Count != right.Count)
         {
@@ -417,7 +417,7 @@ public static class FixEngine
         return true;
     }
 
-    static List<DiffOp> BuildDiffOperations(IReadOnlyList<string> oldLines, IReadOnlyList<string> newLines)
+    private static List<DiffOp> BuildDiffOperations(IReadOnlyList<string> oldLines, IReadOnlyList<string> newLines)
     {
         var oldCount = oldLines.Count;
         var newCount = newLines.Count;
@@ -478,7 +478,7 @@ public static class FixEngine
         return ops;
     }
 
-    static string[] SplitLines(string text)
+    private static string[] SplitLines(string text)
     {
         if (text.Length == 0)
         {
@@ -507,7 +507,7 @@ public static class FixEngine
         return lines;
     }
 
-    readonly record struct DiagnosticIdentity(
+    private readonly record struct DiagnosticIdentity(
         DiagnosticSeverity Severity,
         string Message,
         string? RuleId,
@@ -533,7 +533,7 @@ public static class FixEngine
         }
     }
 
-    readonly record struct DiffOp(DiffKind Kind, string Text);
+    private readonly record struct DiffOp(DiffKind Kind, string Text);
 }
 
 public readonly record struct RevalidationResult(

@@ -8,7 +8,7 @@ namespace Seiton.Update.Sources;
 
 internal sealed class GitHubPopularActionsFetcher
 {
-    static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -170,7 +170,7 @@ internal sealed class GitHubPopularActionsFetcher
         }
     }
 
-    static PopularActionsPaths Paths(string repoRoot)
+    private static PopularActionsPaths Paths(string repoRoot)
     {
         var baseDir = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github");
         return new PopularActionsPaths
@@ -181,7 +181,7 @@ internal sealed class GitHubPopularActionsFetcher
         };
     }
 
-    static IReadOnlyList<PopularActionSource> LoadSources(string repoRoot)
+    private static IReadOnlyList<PopularActionSource> LoadSources(string repoRoot)
     {
         var configPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "targets.json");
         if (!File.Exists(configPath))
@@ -261,14 +261,14 @@ internal sealed class GitHubPopularActionsFetcher
             .ToList();
     }
 
-    static string ComputeSha256(string content)
+    private static string ComputeSha256(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return "sha256:" + Convert.ToHexStringLower(hash);
     }
 
-    sealed class PopularActionSource
+    private sealed class PopularActionSource
     {
         public string ActionRef { get; set; } = string.Empty;
         public string Uses { get; set; } = string.Empty;
@@ -276,27 +276,27 @@ internal sealed class GitHubPopularActionsFetcher
         public string RawFileName { get; set; } = string.Empty;
     }
 
-    sealed class PopularActionsTargetConfig
+    private sealed class PopularActionsTargetConfig
     {
         public int SchemaVersion { get; set; } = 1;
         public List<PopularActionSource>? Targets { get; set; }
     }
 
-    sealed class PopularActionsPaths
+    private sealed class PopularActionsPaths
     {
         public string RawDir { get; set; } = string.Empty;
         public string ParsedPath { get; set; } = string.Empty;
         public string MergedPath { get; set; } = string.Empty;
     }
 
-    sealed class ParsedPopularActionsSnapshot
+    private sealed class ParsedPopularActionsSnapshot
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
         public List<ParsedPopularAction> Actions { get; set; } = [];
     }
 
-    sealed class ParsedPopularAction
+    private sealed class ParsedPopularAction
     {
         public string ActionRef { get; set; } = string.Empty;
         public string Uses { get; set; } = string.Empty;

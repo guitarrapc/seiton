@@ -22,7 +22,7 @@ public sealed class JobSecretsRule : RuleBase
         CheckEnv(job.Env, job);
     }
 
-    void CheckEnv(Env? env, Job job)
+    private void CheckEnv(Env? env, Job job)
     {
         if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
@@ -45,7 +45,7 @@ public sealed class JobSecretsRule : RuleBase
         }
     }
 
-    bool ContainsSecretsOrGitHubTokenReference(StringNode node)
+    private bool ContainsSecretsOrGitHubTokenReference(StringNode node)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -66,7 +66,7 @@ public sealed class JobSecretsRule : RuleBase
         return ContainsReferenceInExpression(expression);
     }
 
-    bool ContainsReferenceInValue(ReadOnlySpan<byte> value)
+    private bool ContainsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -82,7 +82,7 @@ public sealed class JobSecretsRule : RuleBase
         return false;
     }
 
-    bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
+    private bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
@@ -99,7 +99,7 @@ public sealed class JobSecretsRule : RuleBase
             || ContainsGitHubTokenReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -116,7 +116,7 @@ public sealed class JobSecretsRule : RuleBase
         return ContainsReferenceInChildren(node, nodes, arguments, expression, ContainsSecretsReference);
     }
 
-    static bool ContainsGitHubTokenReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsGitHubTokenReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -132,7 +132,7 @@ public sealed class JobSecretsRule : RuleBase
         return ContainsReferenceInChildren(node, nodes, arguments, expression, ContainsGitHubTokenReference);
     }
 
-    static bool IsGitHubTokenAccess(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGitHubTokenAccess(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (node.Kind == ExpressionNodeKind.MemberAccess)
         {
@@ -171,9 +171,9 @@ public sealed class JobSecretsRule : RuleBase
         return false;
     }
 
-    delegate bool NodeMatcher(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression);
+    private delegate bool NodeMatcher(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression);
 
-    static bool ContainsReferenceInChildren(
+    private static bool ContainsReferenceInChildren(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -195,7 +195,7 @@ public sealed class JobSecretsRule : RuleBase
         };
     }
 
-    static bool ContainsReferenceInFunctionCall(
+    private static bool ContainsReferenceInFunctionCall(
         ExpressionNode functionCallNode,
         ExpressionNode[] nodes,
         int[] arguments,

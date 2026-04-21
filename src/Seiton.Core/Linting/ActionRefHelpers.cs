@@ -112,7 +112,7 @@ internal static class ActionRefHelpers
         return GlobMatchCore(normalizedPattern, normalizedPath, 0, 0, cache);
     }
 
-    static bool GlobMatchCore(
+    private static bool GlobMatchCore(
         string pattern,
         string path,
         int patternIndex,

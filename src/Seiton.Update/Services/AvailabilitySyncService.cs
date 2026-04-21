@@ -5,8 +5,8 @@ namespace Seiton.Update.Services;
 
 internal sealed class AvailabilitySyncService
 {
-    readonly GitHubAvailabilitySourceParser parser = new();
-    readonly AvailabilityCSharpGenerator generator = new();
+    private readonly GitHubAvailabilitySourceParser parser = new();
+    private readonly AvailabilityCSharpGenerator generator = new();
 
     public bool Sync(string repoRoot)
     {

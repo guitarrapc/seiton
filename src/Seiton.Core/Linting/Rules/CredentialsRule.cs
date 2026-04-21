@@ -9,7 +9,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class CredentialsRule : RuleBase
 {
-    HashSet<string> additionalPublicRegistries = [];
+    private HashSet<string> additionalPublicRegistries = [];
 
     public override string Id => "credentials";
 
@@ -46,7 +46,7 @@ public sealed class CredentialsRule : RuleBase
         }
     }
 
-    void ValidateContainer(Job job, string locationName, Container? container)
+    private void ValidateContainer(Job job, string locationName, Container? container)
     {
         if (container is null)
         {
@@ -75,7 +75,7 @@ public sealed class CredentialsRule : RuleBase
         AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", imageNode.Range);
     }
 
-    static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)
+    private static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)
     {
         host = default;
 
@@ -97,7 +97,7 @@ public sealed class CredentialsRule : RuleBase
         return true;
     }
 
-    static bool IsPublicRegistry(ReadOnlySpan<byte> host)
+    private static bool IsPublicRegistry(ReadOnlySpan<byte> host)
     {
         return AsciiEqualsIgnoreCase(host, "gcr.io"u8)
             || AsciiEqualsIgnoreCase(host, "ghcr.io"u8)
@@ -111,7 +111,7 @@ public sealed class CredentialsRule : RuleBase
             || AsciiEqualsIgnoreCase(host, "registry.access.redhat.com"u8);
     }
 
-    static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    private static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
     {
         if (left.Length != right.Length)
         {
@@ -141,7 +141,7 @@ public sealed class CredentialsRule : RuleBase
         return true;
     }
 
-    bool IsAdditionalPublicRegistry(ReadOnlySpan<byte> host)
+    private bool IsAdditionalPublicRegistry(ReadOnlySpan<byte> host)
     {
         if (additionalPublicRegistries.Count == 0)
         {

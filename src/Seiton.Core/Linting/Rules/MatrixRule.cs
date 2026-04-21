@@ -5,7 +5,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class MatrixRule : RuleBase
 {
-    const long MaxRecommendedCombinations = 256;
+    private const long MaxRecommendedCombinations = 256;
 
     public override string Id => "matrix";
 
@@ -27,7 +27,7 @@ public sealed class MatrixRule : RuleBase
         ValidateCombinations(job, matrix, matrix.Exclude, "exclude");
     }
 
-    void ValidateRows(Job job, IReadOnlyDictionary<Utf8String, MatrixRow> rows)
+    private void ValidateRows(Job job, IReadOnlyDictionary<Utf8String, MatrixRow> rows)
     {
         long combinations = 1;
         var combinationWarningReported = false;
@@ -78,7 +78,7 @@ public sealed class MatrixRule : RuleBase
         }
     }
 
-    void ValidateCombinations(Job job, Matrix matrix, IReadOnlyList<MatrixCombinations>? combinations, string section)
+    private void ValidateCombinations(Job job, Matrix matrix, IReadOnlyList<MatrixCombinations>? combinations, string section)
     {
         if (matrix.Rows is null || combinations is null || combinations.Count == 0)
         {

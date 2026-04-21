@@ -5,7 +5,7 @@ namespace Seiton.Update.Services;
 
 internal sealed class WebhookManifestService
 {
-    static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -42,6 +42,6 @@ internal sealed class WebhookManifestService
         File.WriteAllText(path, TextNormalization.NormalizeToLf(json));
     }
 
-    static string ManifestPath(string repoRoot) =>
+    private static string ManifestPath(string repoRoot) =>
         Path.Combine(repoRoot, "data", "sources", "manifest.json");
 }

@@ -5,16 +5,16 @@ namespace Seiton.Core.Linting;
 
 internal sealed class LintConfigLineParser
 {
-    readonly string[] lines;
-    readonly string filePath;
+    private readonly string[] lines;
+    private readonly string filePath;
 
-    int index;
+    private int index;
 
-    readonly Dictionary<string, RuleConfig> rules = new(StringComparer.OrdinalIgnoreCase);
-    readonly List<LintExclusion> exclusions = [];
-    readonly List<Diagnostic> diagnostics = [];
-    FixConfig fix = new();
-    NetworkConfig network = new();
+    private readonly Dictionary<string, RuleConfig> rules = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<LintExclusion> exclusions = [];
+    private readonly List<Diagnostic> diagnostics = [];
+    private FixConfig fix = new();
+    private NetworkConfig network = new();
 
     public LintConfigLineParser(string yamlText, string filePath)
     {
@@ -116,7 +116,7 @@ internal sealed class LintConfigLineParser
             diagnostics.ToArray());
     }
 
-    void ParseRulesSection()
+    private void ParseRulesSection()
     {
         while (index < lines.Length)
         {
@@ -153,7 +153,7 @@ internal sealed class LintConfigLineParser
         }
     }
 
-    void ParseRuleBody(string ruleId, int ruleLineNumber)
+    private void ParseRuleBody(string ruleId, int ruleLineNumber)
     {
         var enabled = true;
         DiagnosticSeverity? severity = null;
@@ -383,7 +383,7 @@ internal sealed class LintConfigLineParser
         }
     }
 
-    IReadOnlyList<string> ParseExtendableList(int parentIndent)
+    private IReadOnlyList<string> ParseExtendableList(int parentIndent)
     {
         IReadOnlyList<string> values = [];
 
@@ -439,7 +439,7 @@ internal sealed class LintConfigLineParser
         return values;
     }
 
-    RuleSpecificConfig BuildSpecificFromParsedRuleOptions(
+    private RuleSpecificConfig BuildSpecificFromParsedRuleOptions(
         string ruleId,
         IReadOnlySet<string> seenRuleSpecificKeys,
         IReadOnlyList<string> events,
@@ -486,7 +486,7 @@ internal sealed class LintConfigLineParser
         };
     }
 
-    void ParseFixSection()
+    private void ParseFixSection()
     {
         var defaults = new FixDefaultsConfig();
         var pinning = new FixPinningConfig();
@@ -560,7 +560,7 @@ internal sealed class LintConfigLineParser
         };
     }
 
-    FixDefaultsConfig ParseFixDefaultsSection()
+    private FixDefaultsConfig ParseFixDefaultsSection()
     {
         int? jobTimeoutMinutes = null;
 
@@ -616,7 +616,7 @@ internal sealed class LintConfigLineParser
         return new FixDefaultsConfig { JobTimeoutMinutes = jobTimeoutMinutes };
     }
 
-    FixPinningConfig ParseFixPinningSection()
+    private FixPinningConfig ParseFixPinningSection()
     {
         var enableNetwork = false;
         var minAgeDays = 14;
@@ -736,7 +736,7 @@ internal sealed class LintConfigLineParser
         };
     }
 
-    FixImagesConfig ParseFixImagesSection()
+    private FixImagesConfig ParseFixImagesSection()
     {
         var enableNetwork = false;
         IReadOnlyList<string> excludeImages = [];
@@ -853,7 +853,7 @@ internal sealed class LintConfigLineParser
         };
     }
 
-    void ParseNetworkSection()
+    private void ParseNetworkSection()
     {
         var onError = NetworkErrorMode.Skip;
         var timeoutSeconds = 30;
@@ -973,7 +973,7 @@ internal sealed class LintConfigLineParser
         };
     }
 
-    GitHubNetworkConfig ParseNetworkGitHubSection()
+    private GitHubNetworkConfig ParseNetworkGitHubSection()
     {
         string? ghesApiUrl = null;
         var ghesFallback = false;
@@ -1041,7 +1041,7 @@ internal sealed class LintConfigLineParser
         };
     }
 
-    IReadOnlyList<IgnoreActionEntry> ParseIgnoreActionsList(int parentIndent)
+    private IReadOnlyList<IgnoreActionEntry> ParseIgnoreActionsList(int parentIndent)
     {
         var result = new List<IgnoreActionEntry>();
 
@@ -1159,7 +1159,7 @@ internal sealed class LintConfigLineParser
         return result;
     }
 
-    List<string> ParseListBlock(int parentIndent, string keyName)
+    private List<string> ParseListBlock(int parentIndent, string keyName)
     {
         var result = new List<string>();
 
@@ -1202,7 +1202,7 @@ internal sealed class LintConfigLineParser
         return result;
     }
 
-    void ParseExclusionsSection()
+    private void ParseExclusionsSection()
     {
         while (index < lines.Length)
         {
@@ -1250,7 +1250,7 @@ internal sealed class LintConfigLineParser
         }
     }
 
-    void ParseExclusionItem(int lineNumber, string? inlineKey = null, string? inlineValue = null)
+    private void ParseExclusionItem(int lineNumber, string? inlineKey = null, string? inlineValue = null)
     {
         string? files = null;
         IReadOnlyList<string> rulesList = [];
@@ -1338,7 +1338,7 @@ internal sealed class LintConfigLineParser
         exclusions.Add(new LintExclusion(files, rulesList, jobsList.Count > 0 ? jobsList : null));
     }
 
-    void SkipIndentedBlock(int parentIndent)
+    private void SkipIndentedBlock(int parentIndent)
     {
         while (index < lines.Length)
         {
@@ -1358,7 +1358,7 @@ internal sealed class LintConfigLineParser
         }
     }
 
-    Diagnostic CreateError(string message, int line, int column, int length)
+    private Diagnostic CreateError(string message, int line, int column, int length)
     {
         var safeLength = Math.Max(length, 1);
         return new Diagnostic(
@@ -1368,7 +1368,7 @@ internal sealed class LintConfigLineParser
             FilePath: filePath);
     }
 
-    static bool TrySkip(string line)
+    private static bool TrySkip(string line)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
@@ -1379,7 +1379,7 @@ internal sealed class LintConfigLineParser
         return trimmed.StartsWith("#", StringComparison.Ordinal);
     }
 
-    static int GetIndent(string line)
+    private static int GetIndent(string line)
     {
         var count = 0;
         while (count < line.Length && line[count] == ' ')
@@ -1390,7 +1390,7 @@ internal sealed class LintConfigLineParser
         return count;
     }
 
-    static bool TryParseKey(string line, out string key)
+    private static bool TryParseKey(string line, out string key)
     {
         key = string.Empty;
 
@@ -1404,7 +1404,7 @@ internal sealed class LintConfigLineParser
         return key.Length > 0;
     }
 
-    static bool TryParseProperty(string line, out string key, out string value)
+    private static bool TryParseProperty(string line, out string key, out string value)
     {
         key = string.Empty;
         value = string.Empty;
@@ -1421,7 +1421,7 @@ internal sealed class LintConfigLineParser
         return key.Length > 0;
     }
 
-    static bool TryParseBool(string value, out bool result)
+    private static bool TryParseBool(string value, out bool result)
     {
         if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
         {
@@ -1439,7 +1439,7 @@ internal sealed class LintConfigLineParser
         return false;
     }
 
-    static bool TryParseSeverity(string value, out DiagnosticSeverity severity)
+    private static bool TryParseSeverity(string value, out DiagnosticSeverity severity)
     {
         if (string.Equals(value, "info", StringComparison.OrdinalIgnoreCase))
         {
@@ -1463,12 +1463,12 @@ internal sealed class LintConfigLineParser
         return false;
     }
 
-    static bool TryParseInt(string value, out int result)
+    private static bool TryParseInt(string value, out int result)
     {
         return int.TryParse(value, out result);
     }
 
-    static string Unquote(string value)
+    private static string Unquote(string value)
     {
         if (value.Length >= 2)
         {

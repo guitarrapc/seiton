@@ -29,7 +29,7 @@ public sealed class ActionShellIsRequiredRule : RuleBase
         AddStepError(step, "shell is required if run is set", run.Run.Range);
     }
 
-    static bool IsMissingShell(ReadOnlySpan<byte> value)
+    private static bool IsMissingShell(ReadOnlySpan<byte> value)
     {
         for (var i = 0; i < value.Length; i++)
         {

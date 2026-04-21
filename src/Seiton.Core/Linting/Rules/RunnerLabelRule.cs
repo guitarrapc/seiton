@@ -8,7 +8,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunnerLabelRule : RuleBase
 {
-    HashSet<string> additionalKnownHostedLabels = [];
+    private HashSet<string> additionalKnownHostedLabels = [];
 
     public override string Id => "runner-label";
 
@@ -55,7 +55,7 @@ public sealed class RunnerLabelRule : RuleBase
         }
     }
 
-    bool ContainsSelfHostedLabel(IReadOnlyList<StringNode> labels)
+    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNode> labels)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -75,7 +75,7 @@ public sealed class RunnerLabelRule : RuleBase
         return false;
     }
 
-    bool IsAdditionalKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
+    private bool IsAdditionalKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
         if (additionalKnownHostedLabels.Count == 0)
         {

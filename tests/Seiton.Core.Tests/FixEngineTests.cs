@@ -452,13 +452,13 @@ public sealed class FixEngineTests
         await Assert.That(updated.Contains("        runs-on: ubuntu-latest\n        permissions: {}\n        steps:", StringComparison.Ordinal)).IsTrue();
     }
 
-    static string NormalizeEol(string value)
+    private static string NormalizeEol(string value)
     {
         return value
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace("\r", "\n", StringComparison.Ordinal);
     }
-    static string NormalizeYamlLiteral(string value)
+    private static string NormalizeYamlLiteral(string value)
     {
         var normalized = NormalizeEol(value);
         var lines = normalized.Split('\n');

@@ -31,7 +31,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
+    private void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -58,7 +58,7 @@ public sealed class RefVersionMismatchRule : RuleBase
             AddJobWarning(job, message, location);
         }
     }
-    static bool TryExtractPathVersionMajor(ReadOnlySpan<byte> actionPath, out int major)
+    private static bool TryExtractPathVersionMajor(ReadOnlySpan<byte> actionPath, out int major)
     {
         major = 0;
         var slash1 = actionPath.IndexOf((byte)'/');
@@ -101,7 +101,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         return false;
     }
 
-    static bool TryExtractMajorFromSegment(ReadOnlySpan<byte> segment, out int major)
+    private static bool TryExtractMajorFromSegment(ReadOnlySpan<byte> segment, out int major)
     {
         major = 0;
         if (segment.Length == 0)
@@ -146,7 +146,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         return int.TryParse(System.Text.Encoding.UTF8.GetString(trimmed[candidateStart..end]), out major);
     }
 
-    static ReadOnlySpan<byte> TrimKnownExtension(ReadOnlySpan<byte> segment)
+    private static ReadOnlySpan<byte> TrimKnownExtension(ReadOnlySpan<byte> segment)
     {
         if (segment.EndsWith(".yml"u8))
         {
@@ -161,7 +161,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         return segment;
     }
 
-    static bool TryExtractVersionMajor(ReadOnlySpan<byte> reference, out int major)
+    private static bool TryExtractVersionMajor(ReadOnlySpan<byte> reference, out int major)
     {
         major = 0;
         if (reference.Length < 2 || reference[0] is not ((byte)'v' or (byte)'V'))
@@ -182,7 +182,7 @@ public sealed class RefVersionMismatchRule : RuleBase
 
         return int.TryParse(System.Text.Encoding.UTF8.GetString(reference[1..end]), out major);
     }
-    static bool IsDigit(byte value)
+    private static bool IsDigit(byte value)
     {
         return value is >= (byte)'0' and <= (byte)'9';
     }

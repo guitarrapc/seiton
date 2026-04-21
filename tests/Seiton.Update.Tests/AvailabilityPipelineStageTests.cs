@@ -125,7 +125,7 @@ public sealed class AvailabilityPipelineStageTests
         }
     }
 
-    static string CreateTempRepoWithRaw(string repoRoot)
+    private static string CreateTempRepoWithRaw(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcRaw = Path.Combine(repoRoot, "data", "sources", "availability", "github", "raw");
@@ -140,7 +140,7 @@ public sealed class AvailabilityPipelineStageTests
         return tempRepo;
     }
 
-    static string CreateTempRepoWithParsed(string repoRoot)
+    private static string CreateTempRepoWithParsed(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcParsed = Path.Combine(repoRoot, "data", "sources", "availability", "github", "parsed");
@@ -155,7 +155,7 @@ public sealed class AvailabilityPipelineStageTests
         return tempRepo;
     }
 
-    static string FindRepoRoot()
+    private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)

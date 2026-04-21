@@ -14,8 +14,8 @@ public sealed class LintConfig
 
     public string? FilePath { get; init; }
 
-    string? _sourceText;
-    Dictionary<long, ExpressionParseResult>? _expressionCache;
+    private string? _sourceText;
+    private Dictionary<long, ExpressionParseResult>? _expressionCache;
 
     /// <summary>
     /// Returns the decoded UTF-8 source text, lazily initialized on first access.
@@ -57,7 +57,7 @@ public sealed class LintConfig
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static long ComputeCacheKey(byte[] source, ReadOnlySpan<byte> span)
+    private static long ComputeCacheKey(byte[] source, ReadOnlySpan<byte> span)
     {
         var offset = (int)Unsafe.ByteOffset(
             ref MemoryMarshal.GetArrayDataReference(source),
@@ -98,7 +98,7 @@ public sealed record RuleConfig
 
 public abstract record RuleSpecificConfig
 {
-    sealed record NoneRuleSpecificConfig : RuleSpecificConfig;
+    private sealed record NoneRuleSpecificConfig : RuleSpecificConfig;
 
     public static RuleSpecificConfig None { get; } = new NoneRuleSpecificConfig();
 }

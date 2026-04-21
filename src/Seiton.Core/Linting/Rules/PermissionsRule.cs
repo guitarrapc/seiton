@@ -20,7 +20,7 @@ public sealed class PermissionsRule : RuleBase
         ValidatePermissions(job.Permissions, null, job);
     }
 
-    void ValidatePermissions(Permissions? permissions, Workflow? workflow, Job? job)
+    private void ValidatePermissions(Permissions? permissions, Workflow? workflow, Job? job)
     {
         if (permissions is null)
         {
@@ -58,7 +58,7 @@ public sealed class PermissionsRule : RuleBase
         }
     }
 
-    void AddError(string message, TextRange location, Workflow? workflow, Job? job)
+    private void AddError(string message, TextRange location, Workflow? workflow, Job? job)
     {
         if (job is not null)
         {

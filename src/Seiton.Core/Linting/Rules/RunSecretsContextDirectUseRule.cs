@@ -9,8 +9,8 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunSecretsContextDirectUseRule : RuleBase
 {
-    Workflow? _currentWorkflow;
-    Job? _currentJob;
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
 
     public override string Id => "run-secrets-context-direct-use";
 
@@ -49,7 +49,7 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
         CheckRunNode(step, run.Run);
     }
 
-    void CheckRunNode(Step step, StringNode runNode)
+    private void CheckRunNode(Step step, StringNode runNode)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -106,7 +106,7 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
         }
     }
 
-    bool TryBuildFix(Step step, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(Step step, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)

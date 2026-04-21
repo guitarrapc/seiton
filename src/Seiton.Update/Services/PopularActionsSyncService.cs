@@ -5,8 +5,8 @@ namespace Seiton.Update.Services;
 
 internal sealed class PopularActionsSyncService
 {
-    readonly GitHubPopularActionsSourceParser parser = new();
-    readonly PopularActionsCSharpGenerator generator = new();
+    private readonly GitHubPopularActionsSourceParser parser = new();
+    private readonly PopularActionsCSharpGenerator generator = new();
 
     public bool Sync(string repoRoot)
     {

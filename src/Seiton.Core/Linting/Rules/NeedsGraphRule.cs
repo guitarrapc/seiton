@@ -9,7 +9,7 @@ public sealed class NeedsGraphRule : RuleBase
 
     public override string Name => "Needs Graph Rule";
 
-    IReadOnlyDictionary<Utf8String, Job> _knownJobs = new Dictionary<Utf8String, Job>();
+    private IReadOnlyDictionary<Utf8String, Job> _knownJobs = new Dictionary<Utf8String, Job>();
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -43,7 +43,7 @@ public sealed class NeedsGraphRule : RuleBase
         DetectCycles();
     }
 
-    void DetectCycles()
+    private void DetectCycles()
     {
         if (_knownJobs.Count == 0 || Config.Utf8Yaml is null)
         {

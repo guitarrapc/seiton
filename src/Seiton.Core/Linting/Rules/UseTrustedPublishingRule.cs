@@ -6,8 +6,8 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class UseTrustedPublishingRule : RuleBase
 {
-    bool workflowHasIdTokenWrite;
-    bool currentJobHasIdTokenWrite;
+    private bool workflowHasIdTokenWrite;
+    private bool currentJobHasIdTokenWrite;
 
     public override string Id => "use-trusted-publishing";
 
@@ -46,7 +46,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
             run.Run.Range);
     }
 
-    bool HasIdTokenWrite(Permissions? permissions)
+    private bool HasIdTokenWrite(Permissions? permissions)
     {
         if (permissions is null)
         {
@@ -82,7 +82,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
         return false;
     }
 
-    static bool ContainsPublishCommand(ReadOnlySpan<byte> runText)
+    private static bool ContainsPublishCommand(ReadOnlySpan<byte> runText)
     {
         return ContainsAsciiIgnoreCase(runText, "npm publish"u8)
             || ContainsAsciiIgnoreCase(runText, "twine upload"u8)

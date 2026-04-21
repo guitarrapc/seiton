@@ -14,14 +14,14 @@ public sealed class OnlineAuditEngine(
     IActionRefResolver? actionRefResolver,
     NetworkConfig networkConfig)
 {
-    readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
-    readonly IActionRefResolver? refResolver = actionRefResolver;
-    readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
-    readonly KnownVulnerableActionsRule knownVulnerableActionsRule = new();
-    readonly ImpostorCommitRule impostorCommitRule = new();
-    readonly RefConfusionRule refConfusionRule = new();
-    readonly StaleActionRefsRule staleActionRefsRule = new();
-    readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
+    private readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
+    private readonly IActionRefResolver? refResolver = actionRefResolver;
+    private readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
+    private readonly KnownVulnerableActionsRule knownVulnerableActionsRule = new();
+    private readonly ImpostorCommitRule impostorCommitRule = new();
+    private readonly RefConfusionRule refConfusionRule = new();
+    private readonly StaleActionRefsRule staleActionRefsRule = new();
+    private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
 
     public async Task<OnlineAuditResult> AuditAsync(
         LintResult lintResult,
@@ -95,7 +95,7 @@ public sealed class OnlineAuditEngine(
         return new OnlineAuditResult(diagnostics.ToArray(), addedCount, skippedCount, failedCount);
     }
 
-    async Task<AuditOutcome> AuditTargetAsync(ActionAuditTarget target, CancellationToken cancellationToken)
+    private async Task<AuditOutcome> AuditTargetAsync(ActionAuditTarget target, CancellationToken cancellationToken)
     {
         if (ShouldIgnore(target))
         {
@@ -162,7 +162,7 @@ public sealed class OnlineAuditEngine(
         }
     }
 
-    bool ShouldIgnore(ActionAuditTarget target)
+    private bool ShouldIgnore(ActionAuditTarget target)
     {
         var name = target.Owner + "/" + target.Repo;
         for (var i = 0; i < compiledIgnoreActions.Length; i++)
@@ -177,7 +177,7 @@ public sealed class OnlineAuditEngine(
         return false;
     }
 
-    static List<ActionAuditTarget> CollectTargets(Workflow workflow, byte[] utf8Yaml, string filePath)
+    private static List<ActionAuditTarget> CollectTargets(Workflow workflow, byte[] utf8Yaml, string filePath)
     {
         var result = new List<ActionAuditTarget>();
         var jobs = workflow.Jobs;
@@ -214,7 +214,7 @@ public sealed class OnlineAuditEngine(
         return result;
     }
 
-    static void TryAddTarget(List<ActionAuditTarget> targets, StringNode usesNode, byte[] utf8Yaml, string filePath)
+    private static void TryAddTarget(List<ActionAuditTarget> targets, StringNode usesNode, byte[] utf8Yaml, string filePath)
     {
         var usesText = Encoding.UTF8.GetString(usesNode.Value.AsSpan(utf8Yaml));
         if (string.IsNullOrWhiteSpace(usesText)
@@ -227,7 +227,7 @@ public sealed class OnlineAuditEngine(
 
         targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, usesNode.Range, filePath));
     }
-    static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
+    private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
     {
         if (entries.Count == 0)
         {
@@ -245,8 +245,8 @@ public sealed class OnlineAuditEngine(
         return compiled;
     }
 
-    readonly record struct AuditOutcome(Diagnostic[] Diagnostics, bool Skipped, bool Failed);
-    readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct AuditOutcome(Diagnostic[] Diagnostics, bool Skipped, bool Failed);
+    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
 }
 
 public readonly record struct ActionAuditTarget(

@@ -19,7 +19,7 @@ public enum ExpressionValidationContext
 
 public static class ExpressionSemanticAnalyzer
 {
-    readonly record struct FuncOverload(ExprType ReturnType, ExprType[] Parameters, ExprType? VariadicParameter = null)
+    private readonly record struct FuncOverload(ExprType ReturnType, ExprType[] Parameters, ExprType? VariadicParameter = null)
     {
         public int MinArgs => Parameters.Length;
 
@@ -41,9 +41,9 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    readonly record struct FunctionSpec(byte[] NameUtf8, FuncOverload[] Overloads);
+    private readonly record struct FunctionSpec(byte[] NameUtf8, FuncOverload[] Overloads);
 
-    static readonly FunctionSpec[] Specs =
+    private static readonly FunctionSpec[] Specs =
     [
         new FunctionSpec("contains"u8.ToArray(),
         [
@@ -177,7 +177,7 @@ public static class ExpressionSemanticAnalyzer
         return false;
     }
 
-    static void ValidateNode(
+    private static void ValidateNode(
         int nodeId,
         int parentId,
         ExpressionNode[] nodes,
@@ -243,7 +243,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static void ValidateFunctionCall(
+    private static void ValidateFunctionCall(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -352,7 +352,7 @@ public static class ExpressionSemanticAnalyzer
         ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
     }
 
-    static void ValidateFormatPlaceholders(
+    private static void ValidateFormatPlaceholders(
         ExpressionNode functionCallNode,
         ReadOnlySpan<byte> functionNameUtf8,
         ExpressionNode[] nodes,
@@ -442,7 +442,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static bool TryValidateAgainstOverload(FuncOverload overload, ExprType[] argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
+    private static bool TryValidateAgainstOverload(FuncOverload overload, ExprType[] argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
     {
         for (var i = 0; i < argTypes.Length; i++)
         {
@@ -463,7 +463,7 @@ public static class ExpressionSemanticAnalyzer
         return true;
     }
 
-    static (int MinArgs, int MaxArgs) GetArityRange(FunctionSpec spec)
+    private static (int MinArgs, int MaxArgs) GetArityRange(FunctionSpec spec)
     {
         var minArgs = int.MaxValue;
         var maxArgs = 0;
@@ -489,7 +489,7 @@ public static class ExpressionSemanticAnalyzer
         return (minArgs, maxArgs);
     }
 
-    static ExprType InferBinaryType(ExpressionNode node)
+    private static ExprType InferBinaryType(ExpressionNode node)
     {
         return node.Operator switch
         {
@@ -505,7 +505,7 @@ public static class ExpressionSemanticAnalyzer
         };
     }
 
-    static ExprType InferMemberAccessType(
+    private static ExprType InferMemberAccessType(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -533,7 +533,7 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType InferIndexAccessType(
+    private static ExprType InferIndexAccessType(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -574,7 +574,7 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType InferWildcardType(
+    private static ExprType InferWildcardType(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -594,7 +594,7 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType InferFunctionCallType(
+    private static ExprType InferFunctionCallType(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -641,7 +641,7 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType? TryInferFromJsonLiteral(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    private static ExprType? TryInferFromJsonLiteral(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -666,7 +666,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static ExprType ConvertJsonType(JsonElement element)
+    private static ExprType ConvertJsonType(JsonElement element)
     {
         switch (element.ValueKind)
         {
@@ -713,7 +713,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static bool TryGetFunctionSpec(ReadOnlySpan<byte> nameUtf8, out FunctionSpec spec)
+    private static bool TryGetFunctionSpec(ReadOnlySpan<byte> nameUtf8, out FunctionSpec spec)
     {
         for (var i = 0; i < Specs.Length; i++)
         {
@@ -728,7 +728,7 @@ public static class ExpressionSemanticAnalyzer
         return false;
     }
 
-    static string ToContextText(ExpressionValidationContext context)
+    private static string ToContextText(ExpressionValidationContext context)
     {
         return context switch
         {

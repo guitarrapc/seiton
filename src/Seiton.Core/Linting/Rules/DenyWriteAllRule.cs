@@ -43,7 +43,7 @@ public sealed class DenyWriteAllRule : RuleBase
             });
     }
 
-    void ValidatePermissionsAll(Permissions? permissions, Action<string, TextRange, DiagnosticFix?> report)
+    private void ValidatePermissionsAll(Permissions? permissions, Action<string, TextRange, DiagnosticFix?> report)
     {
         if (Config.Utf8Yaml is null || permissions?.All is null)
         {
@@ -69,7 +69,7 @@ public sealed class DenyWriteAllRule : RuleBase
         report("permissions scalar 'write-all' is forbidden; use least-privilege scopes or 'read-all'", allNode.Range, fix);
     }
 
-    static string BuildReplacementText(StringNode allNode, byte[] utf8Yaml)
+    private static string BuildReplacementText(StringNode allNode, byte[] utf8Yaml)
     {
         var valueStart = allNode.Value.Offset;
         var valueEnd = allNode.Value.Offset + allNode.Value.Length;

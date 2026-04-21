@@ -4,7 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting;
 
-static class RuleSpecificConfigNormalizer
+internal static class RuleSpecificConfigNormalizer
 {
     public static RuleConfig Normalize(RuleConfig config, string ruleId, string filePath, List<Diagnostic> diagnostics)
     {
@@ -85,7 +85,7 @@ static class RuleSpecificConfigNormalizer
         return config with { Specific = normalized };
     }
 
-    static IReadOnlyList<string> NormalizeAdditiveValues(
+    private static IReadOnlyList<string> NormalizeAdditiveValues(
         IReadOnlyList<string> values,
         string emptyMessage,
         string filePath,
@@ -122,7 +122,7 @@ static class RuleSpecificConfigNormalizer
         return normalized;
     }
 
-    static IReadOnlyList<string> NormalizeRegistryHosts(
+    private static IReadOnlyList<string> NormalizeRegistryHosts(
         IReadOnlyList<string> values,
         string filePath,
         List<Diagnostic> diagnostics)
@@ -168,7 +168,7 @@ static class RuleSpecificConfigNormalizer
         return normalized;
     }
 
-    static bool IsValidRegistryHost(string value)
+    private static bool IsValidRegistryHost(string value)
     {
         if (value.Contains("://", StringComparison.Ordinal)
             || value.Contains('/')

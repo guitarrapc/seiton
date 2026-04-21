@@ -56,7 +56,7 @@ public sealed class WorkflowVisitorTests
         await Assert.That(trace.SequenceEqual(expected)).IsTrue();
     }
 
-    sealed class RecordingPass(List<string> trace) : IPass
+    private sealed class RecordingPass(List<string> trace) : IPass
     {
         public void VisitWorkflowPre(Workflow workflow) => trace.Add("workflow-pre");
 

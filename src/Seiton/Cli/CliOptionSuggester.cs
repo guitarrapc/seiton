@@ -2,7 +2,7 @@
 
 internal static class CliOptionSuggester
 {
-    static readonly HashSet<string> KnownLongOptions =
+    private static readonly HashSet<string> KnownLongOptions =
     [
         "--help",
         "--version",
@@ -25,7 +25,7 @@ internal static class CliOptionSuggester
         "--force",
     ];
 
-    static readonly HashSet<string> LongOptionsWithValue =
+    private static readonly HashSet<string> LongOptionsWithValue =
     [
         "--config",
         "--stdin-filename",
@@ -36,7 +36,7 @@ internal static class CliOptionSuggester
         "--output",
     ];
 
-    const int SuggestionDistanceThreshold = 3;
+    private const int SuggestionDistanceThreshold = 3;
 
     public static bool TryWriteSuggestionsForUnknownOptions(string[] args, TextWriter errorWriter)
     {
@@ -70,7 +70,7 @@ internal static class CliOptionSuggester
         return true;
     }
 
-    static List<OptionSuggestion> CollectUnknownLongOptionSuggestions(string[] args)
+    private static List<OptionSuggestion> CollectUnknownLongOptionSuggestions(string[] args)
     {
         var unknownOptions = new List<OptionSuggestion>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -105,7 +105,7 @@ internal static class CliOptionSuggester
         return unknownOptions;
     }
 
-    static string BuildSuggestedCommand(string[] args)
+    private static string BuildSuggestedCommand(string[] args)
     {
         var tokens = new List<string>(args.Length + 1)
         {
@@ -177,7 +177,7 @@ internal static class CliOptionSuggester
         return string.Join(' ', tokens);
     }
 
-    static bool TryGetLongOptionToken(string raw, out string optionToken)
+    private static bool TryGetLongOptionToken(string raw, out string optionToken)
     {
         optionToken = string.Empty;
         if (!raw.StartsWith("--", StringComparison.Ordinal) || raw.Length <= 2)
@@ -190,7 +190,7 @@ internal static class CliOptionSuggester
         return true;
     }
 
-    static string? FindBestSuggestion(string optionToken)
+    private static string? FindBestSuggestion(string optionToken)
     {
         var normalizedInput = Normalize(optionToken);
         string? best = null;
@@ -217,7 +217,7 @@ internal static class CliOptionSuggester
         return IsDistanceAcceptable(normalizedInput.Length, bestDistance) ? best : null;
     }
 
-    static bool IsDistanceAcceptable(int inputLength, int distance)
+    private static bool IsDistanceAcceptable(int inputLength, int distance)
     {
         var threshold = inputLength switch
         {
@@ -229,12 +229,12 @@ internal static class CliOptionSuggester
         return distance <= threshold;
     }
 
-    static string Normalize(string option)
+    private static string Normalize(string option)
     {
         return option.Replace("-", string.Empty, StringComparison.Ordinal);
     }
 
-    static int LevenshteinDistance(string a, string b)
+    private static int LevenshteinDistance(string a, string b)
     {
         if (a.Length == 0)
         {
@@ -271,5 +271,5 @@ internal static class CliOptionSuggester
         return prev[b.Length];
     }
 
-    readonly record struct OptionSuggestion(string OptionToken, string? Suggestion);
+    private readonly record struct OptionSuggestion(string OptionToken, string? Suggestion);
 }

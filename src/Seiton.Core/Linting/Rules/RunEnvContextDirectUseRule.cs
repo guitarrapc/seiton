@@ -23,7 +23,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         CheckRunNode(step, run, run.Run);
     }
 
-    void CheckRunNode(Step step, ExecRun run, StringNode runNode)
+    private void CheckRunNode(Step step, ExecRun run, StringNode runNode)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -80,7 +80,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         }
     }
 
-    bool TryBuildFix(ExecRun run, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(ExecRun run, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -109,7 +109,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         return true;
     }
 
-    static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
+    private static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
     {
         if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
         {
@@ -192,7 +192,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         return false;
     }
 
-    static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, out HereDocState state)
+    private static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, out HereDocState state)
     {
         state = default;
         var i = 0;
@@ -247,5 +247,5 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         return false;
     }
 
-    readonly record struct HereDocState(byte[] Terminator, bool StripTabs);
+    private readonly record struct HereDocState(byte[] Terminator, bool StripTabs);
 }

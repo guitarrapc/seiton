@@ -9,13 +9,13 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class DangerousTriggersRule : RuleBase
 {
-    static readonly WebhookTypes.EventId[] DangerousEventIds =
+    private static readonly WebhookTypes.EventId[] DangerousEventIds =
     [
         WebhookTypes.EventId.PullRequestTarget,
         WebhookTypes.EventId.WorkflowRun,
     ];
 
-    HashSet<string> additionalDangerousEvents = [];
+    private HashSet<string> additionalDangerousEvents = [];
 
     public override string Id => "dangerous-triggers";
 
@@ -62,7 +62,7 @@ public sealed class DangerousTriggersRule : RuleBase
         }
     }
 
-    bool IsAdditionalDangerousEvent(ReadOnlySpan<byte> eventNameSpan)
+    private bool IsAdditionalDangerousEvent(ReadOnlySpan<byte> eventNameSpan)
     {
         if (additionalDangerousEvents.Count == 0)
         {

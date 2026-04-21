@@ -193,13 +193,13 @@ public static class FixFormatting
         return ScalarQuoteStyle.DoubleQuoted;
     }
 
-    static bool LineExists(string sourceText, int lineNumber)
+    private static bool LineExists(string sourceText, int lineNumber)
     {
         var lines = SplitLines(sourceText);
         return lineNumber >= 1 && lineNumber <= lines.Length;
     }
 
-    static bool IsMixedIndentationInScope(string sourceText, int scopeStartLine, int scopeEndLine, string parentIndentation)
+    private static bool IsMixedIndentationInScope(string sourceText, int scopeStartLine, int scopeEndLine, string parentIndentation)
     {
         var lines = SplitLines(sourceText);
         var maxLine = Math.Min(lines.Length, scopeEndLine);
@@ -249,7 +249,7 @@ public static class FixFormatting
         return false;
     }
 
-    static bool IsSpaceOnlyIndentation(string indentation)
+    private static bool IsSpaceOnlyIndentation(string indentation)
     {
         if (indentation.Length == 0)
         {
@@ -267,7 +267,7 @@ public static class FixFormatting
         return true;
     }
 
-    static string[] SplitLines(string sourceText)
+    private static string[] SplitLines(string sourceText)
     {
         return sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
     }

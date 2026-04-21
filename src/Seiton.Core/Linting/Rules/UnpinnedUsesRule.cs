@@ -106,7 +106,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
     }
 
-    static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
+    private static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at < 0 || at + 1 >= uses.Length)
@@ -133,7 +133,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             EndColumn: endColumn);
     }
 
-    static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
+    private static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
     {
         var line = 1;
         var column = 1;
@@ -157,7 +157,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return (line, column);
     }
 
-    void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
+    private void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
     {
         if (string.IsNullOrEmpty(Config.FilePath)
             || !Path.IsPathFullyQualified(Config.FilePath)
@@ -199,7 +199,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
     }
 
-    static bool HasRemoteActionUsesFormat(ReadOnlySpan<byte> uses)
+    private static bool HasRemoteActionUsesFormat(ReadOnlySpan<byte> uses)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at <= 0 || at + 1 >= uses.Length)
@@ -229,7 +229,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return true;
     }
 
-    static bool IsFullLengthCommitShaPinned(ReadOnlySpan<byte> uses)
+    private static bool IsFullLengthCommitShaPinned(ReadOnlySpan<byte> uses)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at < 0 || at + 1 >= uses.Length)
@@ -258,7 +258,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return true;
     }
 
-    static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
     {
         var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
         if (string.IsNullOrEmpty(workflowDirectory))
@@ -275,7 +275,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return workflowDirectory;
     }
 
-    static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
     {
         var separator = Path.DirectorySeparatorChar;
         var marker = $"{separator}.github{separator}workflows{separator}";
@@ -297,7 +297,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return false;
     }
 
-    static string TrimCurrentDirectoryPrefix(string path)
+    private static string TrimCurrentDirectoryPrefix(string path)
     {
         if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
@@ -307,7 +307,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return path;
     }
 
-    static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
         var chars = new char[utf8.Length];
         for (var i = 0; i < utf8.Length; i++)

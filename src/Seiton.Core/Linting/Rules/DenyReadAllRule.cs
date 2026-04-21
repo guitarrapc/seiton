@@ -42,7 +42,7 @@ public sealed class DenyReadAllRule : RuleBase
             });
     }
 
-    void ValidatePermissionsAll(Permissions? permissions, Action<string, TextRange, DiagnosticFix?> report)
+    private void ValidatePermissionsAll(Permissions? permissions, Action<string, TextRange, DiagnosticFix?> report)
     {
         if (Config.Utf8Yaml is null || permissions?.All is null)
         {
@@ -69,7 +69,7 @@ public sealed class DenyReadAllRule : RuleBase
         report("permissions scalar 'read-all' is forbidden; use explicit least-privilege scopes", allNode.Range, fix);
     }
 
-    static TextEdit BuildExplicitMappingReplacementEdit(StringNode allNode, byte[] utf8Yaml)
+    private static TextEdit BuildExplicitMappingReplacementEdit(StringNode allNode, byte[] utf8Yaml)
     {
         var start = allNode.Value.Offset;
         var end = allNode.Value.Offset + allNode.Value.Length;

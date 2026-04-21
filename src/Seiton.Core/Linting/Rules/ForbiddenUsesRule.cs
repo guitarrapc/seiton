@@ -7,10 +7,10 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class ForbiddenUsesRule : RuleBase
 {
-    static readonly string[] DefaultDenyPatterns = ["bad-org/*"];
+    private static readonly string[] DefaultDenyPatterns = ["bad-org/*"];
 
-    IReadOnlyList<string> allowPatterns = [];
-    IReadOnlyList<string> denyPatterns = DefaultDenyPatterns;
+    private IReadOnlyList<string> allowPatterns = [];
+    private IReadOnlyList<string> denyPatterns = DefaultDenyPatterns;
 
     public override string Id => "forbidden-uses";
 
@@ -53,7 +53,7 @@ public sealed class ForbiddenUsesRule : RuleBase
         CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
+    private void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null || !HasPolicy())
         {
@@ -102,12 +102,12 @@ public sealed class ForbiddenUsesRule : RuleBase
         }
     }
 
-    bool HasPolicy()
+    private bool HasPolicy()
     {
         return allowPatterns.Count > 0 || denyPatterns.Count > 0;
     }
 
-    static bool MatchAny(string ownerRepo, IReadOnlyList<string> patterns)
+    private static bool MatchAny(string ownerRepo, IReadOnlyList<string> patterns)
     {
         if (patterns.Count == 0)
         {
@@ -125,7 +125,7 @@ public sealed class ForbiddenUsesRule : RuleBase
         return false;
     }
 
-    static bool WildcardMatch(string text, string pattern)
+    private static bool WildcardMatch(string text, string pattern)
     {
         var textIndex = 0;
         var patternIndex = 0;
@@ -169,7 +169,7 @@ public sealed class ForbiddenUsesRule : RuleBase
         return patternIndex == pattern.Length;
     }
 
-    static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
+    private static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
     {
         ownerRepo = string.Empty;
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))

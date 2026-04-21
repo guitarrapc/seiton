@@ -9,8 +9,8 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class CachePoisoningRule : RuleBase
 {
-    bool hasUntrustedTrigger;
-    HashSet<string> additionalUntrustedTriggers = [];
+    private bool hasUntrustedTrigger;
+    private HashSet<string> additionalUntrustedTriggers = [];
 
     public override string Id => "cache-poisoning";
 
@@ -50,7 +50,7 @@ public sealed class CachePoisoningRule : RuleBase
             BuildUsesLocation(action));
     }
 
-    static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -77,7 +77,7 @@ public sealed class CachePoisoningRule : RuleBase
         return false;
     }
 
-    static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
+    private static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
     {
         if (additionalUntrustedTriggers.Count == 0)
         {
@@ -86,14 +86,14 @@ public sealed class CachePoisoningRule : RuleBase
 
         return additionalUntrustedTriggers.Contains(NormalizeAsciiLower(hook));
     }
-    static bool IsCacheAction(ReadOnlySpan<byte> uses)
+    private static bool IsCacheAction(ReadOnlySpan<byte> uses)
     {
         return IsActionReference(uses, "actions/cache"u8)
             || IsActionReference(uses, "actions/cache/restore"u8)
             || IsActionReference(uses, "actions/cache/save"u8);
     }
 
-    static bool IsActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
+    private static bool IsActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
     {
         var at = uses.IndexOf((byte)'@');
         if (at <= 0)

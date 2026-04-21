@@ -58,7 +58,7 @@ public sealed class InsecureCommandsRule : RuleBase
         }
     }
 
-    bool TryFindInsecureCommandsEnv(Env env, out string envName, out TextRange location)
+    private bool TryFindInsecureCommandsEnv(Env env, out string envName, out TextRange location)
     {
         envName = string.Empty;
         location = env.Range;
@@ -89,7 +89,7 @@ public sealed class InsecureCommandsRule : RuleBase
         return false;
     }
 
-    static bool IsTruthy(string value)
+    private static bool IsTruthy(string value)
     {
         return value.Equals("true", StringComparison.OrdinalIgnoreCase)
             || value.Equals("1", StringComparison.Ordinal)

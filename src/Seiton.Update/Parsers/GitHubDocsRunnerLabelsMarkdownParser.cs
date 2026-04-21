@@ -4,7 +4,7 @@ namespace Seiton.Update.Parsers;
 
 internal sealed class GitHubDocsRunnerLabelsMarkdownParser
 {
-    static readonly Regex LabelCodeRegex = new(
+    private static readonly Regex LabelCodeRegex = new(
         "<code>(?:\\s*<a[^>]*>)?\\s*(?<label>[A-Za-z0-9][A-Za-z0-9.-]*)\\s*(?:</a>)?\\s*</code>\\s*(?<preview>\\((?:public\\s+)?preview\\))?",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
         TimeSpan.FromSeconds(2));
@@ -48,7 +48,7 @@ internal sealed class GitHubDocsRunnerLabelsMarkdownParser
             .ToArray();
     }
 
-    static string ExtractSupportedSection(string markdown)
+    private static string ExtractSupportedSection(string markdown)
     {
         var start = markdown.IndexOf("## Supported runners", StringComparison.OrdinalIgnoreCase);
         if (start < 0)
@@ -65,7 +65,7 @@ internal sealed class GitHubDocsRunnerLabelsMarkdownParser
         return markdown[start..end];
     }
 
-    static bool IsHostedRunnerLabel(string value)
+    private static bool IsHostedRunnerLabel(string value)
     {
         if (value.StartsWith("ubuntu-", StringComparison.OrdinalIgnoreCase)
             || value.StartsWith("windows-", StringComparison.OrdinalIgnoreCase)

@@ -42,7 +42,7 @@ public sealed class RunnerNoLatestRule : RuleBase
         }
     }
 
-    bool ContainsSelfHostedLabel(IReadOnlyList<StringNode> labels)
+    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNode> labels)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -67,7 +67,7 @@ public sealed class RunnerNoLatestRule : RuleBase
         return false;
     }
 
-    static bool IsLatestHostedRunnerLabel(ReadOnlySpan<byte> labelUtf8)
+    private static bool IsLatestHostedRunnerLabel(ReadOnlySpan<byte> labelUtf8)
     {
         return labelUtf8.SequenceEqual("ubuntu-latest"u8)
             || labelUtf8.SequenceEqual("windows-latest"u8)

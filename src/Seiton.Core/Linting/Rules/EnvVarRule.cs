@@ -28,7 +28,7 @@ public sealed class EnvVarRule : RuleBase
             rule.AddStepWarning(target, message, location), step, "step.env");
     }
 
-    void ValidateEnv<TTarget>(
+    private void ValidateEnv<TTarget>(
         Env? env,
         Action<EnvVarRule, string, TextRange, TTarget> report,
         TTarget target,
@@ -56,7 +56,7 @@ public sealed class EnvVarRule : RuleBase
         }
     }
 
-    static bool IsPortableEnvName(ReadOnlySpan<byte> name)
+    private static bool IsPortableEnvName(ReadOnlySpan<byte> name)
     {
         if (name.Length == 0)
         {

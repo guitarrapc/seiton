@@ -114,7 +114,7 @@ public static partial class WorkflowParser
         return ParseCore(ref reader, source, ParseMode.Workflow);
     }
 
-    static bool TryReadRootStructuralHints<TReader>(ref TReader reader, out bool hasJobs, out bool hasRuns)
+    private static bool TryReadRootStructuralHints<TReader>(ref TReader reader, out bool hasJobs, out bool hasRuns)
         where TReader : IYamlStreamReader, allows ref struct
     {
         hasJobs = false;
@@ -374,7 +374,7 @@ public static partial class WorkflowParser
         return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
     }
 
-    static bool IsActionMetadataRootKey(ReadOnlySpan<byte> keyUtf8)
+    private static bool IsActionMetadataRootKey(ReadOnlySpan<byte> keyUtf8)
     {
         return keyUtf8.SequenceEqual("runs"u8)
             || keyUtf8.SequenceEqual("description"u8)

@@ -29,7 +29,7 @@ public sealed class IdNamingRule : RuleBase
         ValidateId(step.Id, "step id", (message, location) => AddStepError(step, message, location));
     }
 
-    void ValidateId(StringNode idNode, string kind, Action<string, TextRange> report)
+    private void ValidateId(StringNode idNode, string kind, Action<string, TextRange> report)
     {
         var value = idNode.Value.AsSpan(Config.Utf8Yaml);
         if (idNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
@@ -46,7 +46,7 @@ public sealed class IdNamingRule : RuleBase
         report($"{kind} '{idText}' contains invalid characters; allowed characters are [a-zA-Z0-9_-]", idNode.Range);
     }
 
-    static bool IsValidId(ReadOnlySpan<byte> value)
+    private static bool IsValidId(ReadOnlySpan<byte> value)
     {
         if (value.IsEmpty)
         {

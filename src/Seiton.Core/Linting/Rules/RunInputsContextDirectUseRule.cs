@@ -9,8 +9,8 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class RunInputsContextDirectUseRule : RuleBase
 {
-    Workflow? _currentWorkflow;
-    Job? _currentJob;
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
 
     public override string Id => "run-inputs-context-direct-use";
 
@@ -49,7 +49,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         CheckRunNode(step, run.Run);
     }
 
-    void CheckRunNode(Step step, StringNode runNode)
+    private void CheckRunNode(Step step, StringNode runNode)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -105,7 +105,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         }
     }
 
-    bool TryBuildFix(Step step, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(Step step, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -137,7 +137,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
 
     // Inputs-specific reference parsing
 
-    static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName)
+    private static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName)
     {
         inputName = string.Empty;
 
@@ -156,7 +156,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return TryConsumeMemberOrBracketName(expression, ref index, out inputName);
     }
 
-    static bool TryConsumeSimpleInputsRoot(ReadOnlySpan<byte> expression, ref int index)
+    private static bool TryConsumeSimpleInputsRoot(ReadOnlySpan<byte> expression, ref int index)
     {
         if (!ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
         {
@@ -167,7 +167,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return true;
     }
 
-    static bool TryConsumeGithubEventInputsRoot(ReadOnlySpan<byte> expression, ref int index)
+    private static bool TryConsumeGithubEventInputsRoot(ReadOnlySpan<byte> expression, ref int index)
     {
         if (!ConsumeWordIgnoreCase(expression, ref index, "github"u8))
         {
@@ -206,7 +206,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
 
     // Inputs-specific AST detection
 
-    static bool ContainsInputsReference(
+    private static bool ContainsInputsReference(
         int nodeId,
         int parentId,
         ExpressionNode[] nodes,
@@ -253,7 +253,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         };
     }
 
-    static bool ContainsInputsReferenceInFunction(
+    private static bool ContainsInputsReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
         ExpressionNode[] nodes,
@@ -282,7 +282,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return false;
     }
 
-    static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -303,7 +303,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return IsGithubEventChain(node.Left, nodes, expression);
     }
 
-    static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -324,7 +324,7 @@ public sealed class RunInputsContextDirectUseRule : RuleBase
         return IsIdentifierNode(node.Left, nodes, expression, "github"u8);
     }
 
-    static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
+    private static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
