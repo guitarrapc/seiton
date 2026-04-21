@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(45);
+        await Assert.That(rules.Length).IsEqualTo(46);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -297,38 +297,39 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[10].Id).IsEqualTo("runner-label");
         await Assert.That(rules[11].Id).IsEqualTo("id-naming");
         await Assert.That(rules[12].Id).IsEqualTo("glob-pattern");
-        await Assert.That(rules[13].Id).IsEqualTo("deny-write-all");
-        await Assert.That(rules[14].Id).IsEqualTo("credentials");
-        await Assert.That(rules[15].Id).IsEqualTo("template-injection");
-        await Assert.That(rules[16].Id).IsEqualTo("expr-undefined-var");
-        await Assert.That(rules[17].Id).IsEqualTo("run-env-context-direct-use");
-        await Assert.That(rules[18].Id).IsEqualTo("runner-no-latest");
-        await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
-        await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
-        await Assert.That(rules[21].Id).IsEqualTo("secrets-whole-context-access");
-        await Assert.That(rules[22].Id).IsEqualTo("checkout-persist-credentials");
-        await Assert.That(rules[23].Id).IsEqualTo("deny-read-all");
-        await Assert.That(rules[24].Id).IsEqualTo("deny-inherit-secrets");
-        await Assert.That(rules[25].Id).IsEqualTo("job-timeout-minutes-required");
-        await Assert.That(rules[26].Id).IsEqualTo("github-app-token-inputs");
-        await Assert.That(rules[27].Id).IsEqualTo("cache-poisoning");
-        await Assert.That(rules[28].Id).IsEqualTo("self-hosted-runner");
-        await Assert.That(rules[29].Id).IsEqualTo("unredacted-secrets");
-        await Assert.That(rules[30].Id).IsEqualTo("secrets-outside-env");
-        await Assert.That(rules[31].Id).IsEqualTo("workflow-secrets");
-        await Assert.That(rules[32].Id).IsEqualTo("job-secrets");
-        await Assert.That(rules[33].Id).IsEqualTo("action-shell-is-required");
-        await Assert.That(rules[34].Id).IsEqualTo("matrix");
-        await Assert.That(rules[35].Id).IsEqualTo("env-var");
-        await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
-        await Assert.That(rules[37].Id).IsEqualTo("if-cond");
-        await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
-        await Assert.That(rules[39].Id).IsEqualTo("archived-uses");
-        await Assert.That(rules[40].Id).IsEqualTo("insecure-commands");
-        await Assert.That(rules[41].Id).IsEqualTo("overprovisioned-secrets");
-        await Assert.That(rules[42].Id).IsEqualTo("forbidden-uses");
-        await Assert.That(rules[43].Id).IsEqualTo("ref-version-mismatch");
-        await Assert.That(rules[44].Id).IsEqualTo("use-trusted-publishing");
+        await Assert.That(rules[13].Id).IsEqualTo("dispatch-inputs");
+        await Assert.That(rules[14].Id).IsEqualTo("deny-write-all");
+        await Assert.That(rules[15].Id).IsEqualTo("credentials");
+        await Assert.That(rules[16].Id).IsEqualTo("template-injection");
+        await Assert.That(rules[17].Id).IsEqualTo("expr-undefined-var");
+        await Assert.That(rules[18].Id).IsEqualTo("run-env-context-direct-use");
+        await Assert.That(rules[19].Id).IsEqualTo("runner-no-latest");
+        await Assert.That(rules[20].Id).IsEqualTo("run-secrets-context-direct-use");
+        await Assert.That(rules[21].Id).IsEqualTo("run-inputs-context-direct-use");
+        await Assert.That(rules[22].Id).IsEqualTo("secrets-whole-context-access");
+        await Assert.That(rules[23].Id).IsEqualTo("checkout-persist-credentials");
+        await Assert.That(rules[24].Id).IsEqualTo("deny-read-all");
+        await Assert.That(rules[25].Id).IsEqualTo("deny-inherit-secrets");
+        await Assert.That(rules[26].Id).IsEqualTo("job-timeout-minutes-required");
+        await Assert.That(rules[27].Id).IsEqualTo("github-app-token-inputs");
+        await Assert.That(rules[28].Id).IsEqualTo("cache-poisoning");
+        await Assert.That(rules[29].Id).IsEqualTo("self-hosted-runner");
+        await Assert.That(rules[30].Id).IsEqualTo("unredacted-secrets");
+        await Assert.That(rules[31].Id).IsEqualTo("secrets-outside-env");
+        await Assert.That(rules[32].Id).IsEqualTo("workflow-secrets");
+        await Assert.That(rules[33].Id).IsEqualTo("job-secrets");
+        await Assert.That(rules[34].Id).IsEqualTo("action-shell-is-required");
+        await Assert.That(rules[35].Id).IsEqualTo("matrix");
+        await Assert.That(rules[36].Id).IsEqualTo("env-var");
+        await Assert.That(rules[37].Id).IsEqualTo("deprecated-commands");
+        await Assert.That(rules[38].Id).IsEqualTo("if-cond");
+        await Assert.That(rules[39].Id).IsEqualTo("fake-ternary");
+        await Assert.That(rules[40].Id).IsEqualTo("archived-uses");
+        await Assert.That(rules[41].Id).IsEqualTo("insecure-commands");
+        await Assert.That(rules[42].Id).IsEqualTo("overprovisioned-secrets");
+        await Assert.That(rules[43].Id).IsEqualTo("forbidden-uses");
+        await Assert.That(rules[44].Id).IsEqualTo("ref-version-mismatch");
+        await Assert.That(rules[45].Id).IsEqualTo("use-trusted-publishing");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -343,42 +344,43 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("runner-label")).IsEqualTo(10);
         await Assert.That(RuleCatalog.GetPriority("id-naming")).IsEqualTo(11);
         await Assert.That(RuleCatalog.GetPriority("glob-pattern")).IsEqualTo(12);
-        await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(13);
-        await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(14);
-        await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(15);
-        await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(16);
-        await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(17);
-        await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(18);
-        await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
-        await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
-        await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(21);
-        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(22);
-        await Assert.That(RuleCatalog.GetPriority("deny-read-all")).IsEqualTo(23);
-        await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(24);
-        await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(25);
-        await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(26);
-        await Assert.That(RuleCatalog.GetPriority("cache-poisoning")).IsEqualTo(31);
-        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(32);
-        await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(33);
-        await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(34);
-        await Assert.That(RuleCatalog.GetPriority("workflow-secrets")).IsEqualTo(35);
-        await Assert.That(RuleCatalog.GetPriority("job-secrets")).IsEqualTo(36);
-        await Assert.That(RuleCatalog.GetPriority("action-shell-is-required")).IsEqualTo(37);
-        await Assert.That(RuleCatalog.GetPriority("matrix")).IsEqualTo(38);
-        await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(39);
-        await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
-        await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
-        await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
-        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(43);
-        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(44);
-        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(45);
-        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(46);
-        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(47);
-        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(48);
-        await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
-        await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
-        await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
-        await Assert.That(RuleCatalog.GetPriority("stale-action-refs")).IsEqualTo(30);
+        await Assert.That(RuleCatalog.GetPriority("dispatch-inputs")).IsEqualTo(13);
+        await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(14);
+        await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(15);
+        await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(16);
+        await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(17);
+        await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(18);
+        await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(19);
+        await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(20);
+        await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(21);
+        await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(22);
+        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(23);
+        await Assert.That(RuleCatalog.GetPriority("deny-read-all")).IsEqualTo(24);
+        await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(25);
+        await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(26);
+        await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(27);
+        await Assert.That(RuleCatalog.GetPriority("cache-poisoning")).IsEqualTo(32);
+        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(33);
+        await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(34);
+        await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(35);
+        await Assert.That(RuleCatalog.GetPriority("workflow-secrets")).IsEqualTo(36);
+        await Assert.That(RuleCatalog.GetPriority("job-secrets")).IsEqualTo(37);
+        await Assert.That(RuleCatalog.GetPriority("action-shell-is-required")).IsEqualTo(38);
+        await Assert.That(RuleCatalog.GetPriority("matrix")).IsEqualTo(39);
+        await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(40);
+        await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(41);
+        await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(42);
+        await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(43);
+        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(44);
+        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(45);
+        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(46);
+        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(47);
+        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(48);
+        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(49);
+        await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(28);
+        await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(29);
+        await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(30);
+        await Assert.That(RuleCatalog.GetPriority("stale-action-refs")).IsEqualTo(31);
     }
 
     [Test]
@@ -386,12 +388,12 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-046");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-047");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-047", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-048", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-048");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-050");
     }
 
     [Test]
@@ -1988,9 +1990,211 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step id", "contains invalid characters"]),
+            new RuleCase(
+            "ng-job-id-starts-with-digit",
+            """
+            on: push
+            jobs:
+                1build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["job id", "first character must be [a-zA-Z_]"]),
+            new RuleCase(
+            "ng-step-id-starts-with-dash",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: -setup
+                          run: echo ng
+            """,
+            ["step id", "first character must be [a-zA-Z_]"]),
+            new RuleCase(
+            "ng-step-id-duplicate-case-insensitive",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: BuildStep
+                          run: echo first
+                        - id: buildstep
+                          run: echo second
+            """,
+            ["duplicated in the same job", "case-insensitive"]),
         };
 
         await AssertRuleCases(new IdNamingRule(), "id-naming", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_DispatchInputsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-choice-with-options-and-default",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+                            options: [dev, prod]
+                            default: dev
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-choice-without-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["type 'choice' must define non-empty options"]),
+            new RuleCase(
+            "ng-choice-duplicate-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+                            options: [dev, dev]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["has duplicated option 'dev'"]),
+            new RuleCase(
+            "ng-choice-default-not-in-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+                            options: [dev, prod]
+                            default: staging
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["default value 'staging'", "not included in options"]),
+            new RuleCase(
+            "ng-non-choice-has-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        count:
+                            type: number
+                            options: [1, 2]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["options but type is 'number'"]),
+            new RuleCase(
+            "ng-number-default-not-number",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        count:
+                            type: number
+                            default: NaNValue
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["non-numeric default value"]),
+            new RuleCase(
+            "ng-boolean-default-invalid",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        force:
+                            type: boolean
+                            default: yes
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["must be 'true' or 'false'"]),
+            new RuleCase(
+            "ng-more-than-25-inputs",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        i01: { type: string }
+                        i02: { type: string }
+                        i03: { type: string }
+                        i04: { type: string }
+                        i05: { type: string }
+                        i06: { type: string }
+                        i07: { type: string }
+                        i08: { type: string }
+                        i09: { type: string }
+                        i10: { type: string }
+                        i11: { type: string }
+                        i12: { type: string }
+                        i13: { type: string }
+                        i14: { type: string }
+                        i15: { type: string }
+                        i16: { type: string }
+                        i17: { type: string }
+                        i18: { type: string }
+                        i19: { type: string }
+                        i20: { type: string }
+                        i21: { type: string }
+                        i22: { type: string }
+                        i23: { type: string }
+                        i24: { type: string }
+                        i25: { type: string }
+                        i26: { type: string }
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["cannot define more than 25 inputs"]),
+        };
+
+        await AssertRuleCases(new DispatchInputsRule(), "dispatch-inputs", cases);
     }
 
     [Test]

@@ -11,6 +11,7 @@ public sealed class IdNamingRule : RuleBase
 
     private Job? _currentJob;
     private Step? _currentStep;
+    private Dictionary<string, TextRange>? _seenStepIds;
 
     public override void VisitJobPre(Job job)
     {
@@ -20,6 +21,7 @@ public sealed class IdNamingRule : RuleBase
         }
 
         _currentJob = job;
+        _seenStepIds = [];
         ValidateId(job.Id, "job id");
         _currentJob = null;
     }
@@ -33,7 +35,13 @@ public sealed class IdNamingRule : RuleBase
 
         _currentStep = step;
         ValidateId(step.Id, "step id");
+        ValidateStepIdUniqueness(step);
         _currentStep = null;
+    }
+
+    public override void VisitJobPost(Job job)
+    {
+        _seenStepIds = null;
     }
 
     private void ValidateId(StringNode idNode, string kind)
@@ -50,7 +58,7 @@ public sealed class IdNamingRule : RuleBase
         }
 
         var idText = Decode(idNode.Value);
-        var message = $"{kind} '{idText}' contains invalid characters; allowed characters are [a-zA-Z0-9_-]";
+        var message = $"{kind} '{idText}' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]";
 
         if (_currentJob is not null)
         {
@@ -69,7 +77,16 @@ public sealed class IdNamingRule : RuleBase
             return false;
         }
 
-        for (var i = 0; i < value.Length; i++)
+        var first = value[0];
+        var firstIsUpper = first is >= (byte)'A' and <= (byte)'Z';
+        var firstIsLower = first is >= (byte)'a' and <= (byte)'z';
+        var firstIsUnderscore = first == (byte)'_';
+        if (!firstIsUpper && !firstIsLower && !firstIsUnderscore)
+        {
+            return false;
+        }
+
+        for (var i = 1; i < value.Length; i++)
         {
             var b = value[i];
             var isDigit = b is >= (byte)'0' and <= (byte)'9';
@@ -84,5 +101,28 @@ public sealed class IdNamingRule : RuleBase
         }
 
         return true;
+    }
+
+    private void ValidateStepIdUniqueness(Step step)
+    {
+        if (step.Id is null || _seenStepIds is null)
+        {
+            return;
+        }
+
+        var idText = Decode(step.Id.Value);
+        if (string.IsNullOrEmpty(idText))
+        {
+            return;
+        }
+
+        var key = idText.ToLowerInvariant();
+        if (_seenStepIds.TryGetValue(key, out _))
+        {
+            AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", step.Id.Range);
+            return;
+        }
+
+        _seenStepIds[key] = step.Id.Range;
     }
 }
