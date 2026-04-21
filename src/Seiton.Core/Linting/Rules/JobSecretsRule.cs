@@ -82,14 +82,14 @@ public sealed class JobSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
+    bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
             return false;
         }
 
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return false;

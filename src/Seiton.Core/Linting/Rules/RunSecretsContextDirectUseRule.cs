@@ -69,7 +69,7 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
                 continue;
             }
 
-            var parseResult = ExpressionParser.Parse(expression);
+            var parseResult = Config.ParseExpression(expression);
             if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
             {
                 continue;

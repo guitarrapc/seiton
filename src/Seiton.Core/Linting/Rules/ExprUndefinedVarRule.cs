@@ -146,7 +146,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return;

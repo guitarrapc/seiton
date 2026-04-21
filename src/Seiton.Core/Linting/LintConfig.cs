@@ -1,5 +1,7 @@
 ﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Seiton.Core.Linting;
@@ -13,6 +15,7 @@ public sealed class LintConfig
     public string? FilePath { get; init; }
 
     string? _sourceText;
+    Dictionary<long, ExpressionParseResult>? _expressionCache;
 
     /// <summary>
     /// Returns the decoded UTF-8 source text, lazily initialized on first access.
@@ -26,6 +29,40 @@ public sealed class LintConfig
         }
 
         return _sourceText ??= Encoding.UTF8.GetString(Utf8Yaml);
+    }
+
+    /// <summary>
+    /// Parses an expression with deduplication. If the same byte range within Utf8Yaml
+    /// has already been parsed, returns the cached result. The expression span must
+    /// originate from Utf8Yaml.
+    /// </summary>
+    public ExpressionParseResult ParseExpression(ReadOnlySpan<byte> expression)
+    {
+        if (Utf8Yaml is null || expression.IsEmpty)
+        {
+            return ExpressionParser.Parse(expression);
+        }
+
+        var key = ComputeCacheKey(Utf8Yaml, expression);
+
+        _expressionCache ??= new();
+        if (_expressionCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var result = ExpressionParser.Parse(expression);
+        _expressionCache[key] = result;
+        return result;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static long ComputeCacheKey(byte[] source, ReadOnlySpan<byte> span)
+    {
+        var offset = (int)Unsafe.ByteOffset(
+            ref MemoryMarshal.GetArrayDataReference(source),
+            ref MemoryMarshal.GetReference(span));
+        return ((long)offset << 32) | (uint)span.Length;
     }
 
     // rules section: rule-id -> RuleConfig

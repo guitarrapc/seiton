@@ -311,7 +311,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             start = valueStart;
         }
     }
-    static bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
+    bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -327,14 +327,14 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
+    bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
             return false;
         }
 
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return false;

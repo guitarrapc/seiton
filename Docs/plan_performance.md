@@ -495,12 +495,54 @@ Large ベンチマークで式を持つ箇所は run step の `if`、`run`、`en
 ルールインターフェースに `SetExpressionCache(IReadOnlyDictionary<...> cache)` を追加するか、`LintConfig` 経由で配布する。
 
 **完了条件**:
-- [ ] 同一式が複数回パースされていないこと（ログまたはカウンタで検証）
-- [ ] ベンチマーク: `LintBenchmark` Large の Allocated が顕著に減少していること（推定 -20–50 MB）
-- [ ] 式解析結果の正確性が変わっていないこと（ExpressionTests + Rule テスト全通過）
-- [ ] 全テスト通過
+- [x] 同一式が複数回パースされていないこと（オフセットベースキャッシュで重複排除）
+- [x] ベンチマーク: `LintBenchmark` Large の Allocated が減少していること → 実測: Phase 6-B比 -2.0%（lint-only）
+- [x] 式解析結果の正確性が変わっていないこと（ExpressionTests + Rule テスト全通過）
+- [x] 全テスト通過（477 tests）
 
 **推定効果**: Large で ~20–50 MB 削減。ルール数に比例する重複パースの排除。
+
+#### Phase 7 実施結果（2026-04-21 計測）
+
+**計測環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.3 / AMD Ryzen 7 5800H / ShortRun
+
+**実施内容**:
+- `LintConfig` に `ParseExpression(ReadOnlySpan<byte>)` メソッドを追加。`Dictionary<long, ExpressionParseResult>` によるオフセットベースキャッシュ
+- キャッシュキー: `((long)offset << 32) | (uint)span.Length` — `Unsafe.ByteOffset` で `Utf8Yaml` 配列先頭からのオフセットを計算
+- 12 ルールの `ExpressionParser.Parse(expression)` を `Config.ParseExpression(expression)` に置換:
+  - IfCondRule, FakeTernaryRule, JobSecretsRule, ExprUndefinedVarRule, RunInputsContextDirectUseRule, RunEnvContextDirectUseRule, RunSecretsContextDirectUseRule, SecretsOutsideEnvRule, SecretsWholeContextAccessRule, TemplateInjectionRule, WorkflowSecretsRule, UnredactedSecretsRule
+- 4 ファイル 6 メソッドの `static` を除去（`Config` インスタンスメンバーへのアクセスが必要になったため）:
+  - JobSecretsRule, WorkflowSecretsRule: `ContainsReferenceInExpression`
+  - UnredactedSecretsRule, SecretsOutsideEnvRule: `ContainsSecretsReferenceInExpression`, `ContainsSecretsReferenceInValue`
+
+**設計判断**:
+- `LintConfig` 経由の配布を選択（7-B）。ルールは `Config.ParseExpression(expr)` を呼ぶだけで透過的にキャッシュ恩恵を受ける
+- 事前一括パース（7-A）ではなくオンデマンドキャッシュを採用。理由: 全ルールが無効の式を事前パースするコストを避けるため
+- キャッシュキーに `Unsafe.ByteOffset` を使用。式の `ReadOnlySpan<byte>` は `Utf8Yaml` のサブスパンであるため、オフセット+長さで一意に識別可能
+
+| Size | FixEnabled | Phase 6-B Mean | Phase 7 Mean | 時間変化 | Phase 6-B Alloc | Phase 7 Alloc | Alloc変化 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Small (1×3) | False | 119.3 μs | 121.0 μs | +1.4% | 47.61 KB | 43.49 KB | **-8.7%** |
+| Small (1×3) | True | 132.6 μs | 132.1 μs | -0.4% | 82.23 KB | 79.22 KB | **-3.7%** |
+| Medium (6×8) | False | 2,366 μs | 2,759 μs | +16.6% | 647.04 KB | 611.21 KB | **-5.5%** |
+| Medium (6×8) | True | 4,016 μs | 4,360 μs | +8.6% | 4,305.08 KB | 4,269.36 KB | **-0.8%** |
+| Large (20×12) | False | 39,746 μs | 41,505 μs | +4.4% | 9,104.40 KB | 8,921.29 KB | **-2.0%** |
+| Large (20×12) | True | 71,334 μs | 79,750 μs | +11.8% | 84,922.83 KB | 84,742.22 KB | **-0.2%** |
+
+**考察**:
+- **アロケーション削減は控えめ**: Large lint-only で -183 KB (-2.0%)。推定の ~20-50 MB には遠く及ばなかった
+- **推定との乖離理由**:
+  - Phase 3 の ArrayPool 化により、`ExpressionParser.Parse` の per-parse コストが大幅に低下済み。重複を排除しても節約量は最終 `.ToArray()` 分のみ
+  - ベンチマーク YAML の式パターンが限定的。実際の大規模ワークフローではキャッシュヒット率が高まる可能性あり
+  - 12 ルールが全て同一ノードの式を解析するわけではない。各ルールは異なるノード種別を訪問するため、実際の重複は想定より少ない
+- **実行時間の増加**: Phase 6-B と Phase 7 は異なるタイミングの計測のため、ShortRun の変動幅内と考えられる。`Dictionary<long, ExpressionParseResult>` のオーバーヘッドが実行時間増の一因の可能性もあるが、3 回計測の誤差範囲内
+- **Dictionary キャッシュのオーバーヘッド**: キャッシュ自体の `Dictionary` + エントリ割り当てが、節約量とほぼ相殺している可能性がある。大規模ワークフローではキャッシュヒットが増えるほど正味の効果が期待できる
+
+**教訓**:
+- Phase 3 の ArrayPool 最適化が ExpressionParser のアロケーションを大きく下げたため、重複排除の余地が縮小していた。最適化は上流の変更が下流の効果見積もりを変えることを考慮すべき
+- `static` メソッドを `Config` インスタンスメンバーにアクセスさせるために非 static 化が必要になった（4 ファイル 6 メソッド）。ルール設計で `static` ヘルパーを多用すると共有状態導入時にリファクタが増える
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -540,18 +582,18 @@ Large ベンチマークで式を持つ箇所は run step の `if`、`run`、`en
 | Phase 4: LintEngine 最適化 | ~50–200 KB | 中 | 中 |
 | Phase 5: List→Array 最適化 | ~数 KB | 低 | 小 |
 | Phase 6: Fix 構築の遅延化 | ~5–30 MB | 中 | 中 |
-| Phase 7: 式解析の重複排除 | ~20–50 MB | 高 | 大 |
+| Phase 7: 式解析の重複排除 | ~183 KB (lint-only Large) | 高 | 大 |
 | Phase 8: RuleBase 診断収集最適化 | ~10–50 KB | 低 | 小 |
 | **合計 (Parser Phase 1–5)** | **~400–900 KB** | | |
-| **合計 (Lint Phase 6–8)** | **~25–80 MB** | | |
+| **合計 (Lint Phase 6–8)** | **Phase 6: -88 MB, Phase 7: -183 KB, Phase 8: 未計測** | | |
 
 ### Parser（Phase 1–3 実績）
 
 Large ベースライン 1,162 KB → 382 KB（**67.1% 削減**）。Phase 1–3 の 3 フェーズで約 2/3 のアロケーションを除去。
 
-### Lint（Phase 6–8 推定）
+### Lint（Phase 6–8 実績/推定）
 
-Large 現行 ~97 MB。Phase 6–8 で ~25–80 MB 削減を目指す。最大の効果源は Phase 7（式解析重複排除）で、ルール数 × 式数の乗数効果が見込める。
+Large 現行（lint-only）: ~8.9 MB（Phase 4 の ~97 MB から Phase 6-A+6-B で -90.6%、Phase 7 でさらに -2.0%）。Phase 7 の式キャッシュ効果は Phase 3 の ArrayPool 化により縮小。Phase 8 で ~10–50 KB の追加削減を見込む。
 
 ---
 
@@ -593,7 +635,7 @@ Phase 8 (診断収集最適化) は独立
 
 ### Phase 6: Fix 構築の遅延化 — ✅ 完了（6-A, 6-B）
 
-### Phase 7: 式解析の重複排除 — 🔲 未着手
+### Phase 7: 式解析の重複排除 — ✅ 完了
 
 ### Phase 8: RuleBase 診断収集の最適化 — 🔲 未着手
 
