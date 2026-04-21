@@ -16,7 +16,7 @@ if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
 
 if (args.Length == 0)
 {
-    args = [ "--filter", "*Benchmark*" ];
+    args = ["--filter", "*Benchmark*"];
 }
 
 BenchmarkSwitcher.FromAssembly(Assembly.GetEntryAssembly()!).Run(args, config);

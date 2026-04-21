@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing.Ast;
+﻿namespace Seiton.Core.Parsing.Ast;
 
 public sealed class ActionMetadata
 {

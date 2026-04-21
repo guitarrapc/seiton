@@ -1,9 +1,6 @@
 ﻿using System.Text;
-using System.Buffers.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
-
-using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 

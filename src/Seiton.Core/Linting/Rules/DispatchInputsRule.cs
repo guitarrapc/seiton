@@ -1,5 +1,4 @@
-using System.Globalization;
-using Seiton.Core.Parsing;
+﻿using System.Globalization;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;

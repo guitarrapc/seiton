@@ -1,8 +1,6 @@
 ﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
-using static Seiton.Core.Parsing.SpanHelpers;
-
 namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
