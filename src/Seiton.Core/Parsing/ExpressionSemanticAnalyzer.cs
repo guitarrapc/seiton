@@ -189,10 +189,12 @@ public static class ExpressionSemanticAnalyzer
         {
             case ExpressionNodeKind.Unary:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateUnaryOp(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.Binary:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
                 ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateCompareOp(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.MemberAccess:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
@@ -200,10 +202,12 @@ public static class ExpressionSemanticAnalyzer
                 break;
             case ExpressionNodeKind.WildcardAccess:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateWildcardAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.IndexAccess:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
                 ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateIndexAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.FunctionCall:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
@@ -713,6 +717,133 @@ public static class ExpressionSemanticAnalyzer
         }
 
         return ExprType.Any;
+    }
+
+    private static bool IsComparisonOperator(ExpressionOperator op)
+    {
+        return op is ExpressionOperator.Less
+            or ExpressionOperator.LessOrEqual
+            or ExpressionOperator.Greater
+            or ExpressionOperator.GreaterOrEqual;
+    }
+
+    private static bool IsNotComparableType(ExprType type)
+    {
+        return type is NullExprType or BoolExprType or ObjectExprType or ArrayExprType;
+    }
+
+    private static void ValidateCompareOp(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (!IsComparisonOperator(node.Operator))
+        {
+            return;
+        }
+
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+
+        if (IsNotComparableType(leftType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"operator '{OperatorSymbol(node.Operator)}' does not support {leftType.TypeName} type",
+                expressionLocation));
+        }
+        else if (IsNotComparableType(rightType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"operator '{OperatorSymbol(node.Operator)}' does not support {rightType.TypeName} type",
+                expressionLocation));
+        }
+    }
+
+    private static void ValidateUnaryOp(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (node.Operator != ExpressionOperator.Not)
+        {
+            return;
+        }
+
+        var operandType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        if (operandType is ObjectExprType or ArrayExprType)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"operator '!' does not support {operandType.TypeName} type",
+                expressionLocation));
+        }
+    }
+
+    private static void ValidateWildcardAccess(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        if (leftType is AnyExprType or ObjectExprType or ArrayExprType)
+        {
+            return;
+        }
+
+        diagnostics.Add(new Diagnostic(
+            DiagnosticSeverity.Error,
+            $"receiver of '.*' must be an object or array, but got {leftType.TypeName}",
+            expressionLocation));
+    }
+
+    private static void ValidateIndexAccess(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+
+        if (leftType is ArrayExprType && rightType is not (AnyExprType or NumberExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of array must be number, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+        else if (leftType is ObjectExprType && rightType is not (AnyExprType or StringExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of object must be string, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+    }
+
+    private static string OperatorSymbol(ExpressionOperator op)
+    {
+        return op switch
+        {
+            ExpressionOperator.Less => "<",
+            ExpressionOperator.LessOrEqual => "<=",
+            ExpressionOperator.Greater => ">",
+            ExpressionOperator.GreaterOrEqual => ">=",
+            _ => op.ToString(),
+        };
     }
 
     private static void ValidatePropertyAccess(

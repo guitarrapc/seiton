@@ -252,10 +252,10 @@ vars       → map object<string>
 - index access `[]` の添字が配列なら number、オブジェクトなら string であることの検証
 
 **完了条件**:
-- [ ] `null < 1` や `true > false` などが診断エラーになること
-- [ ] `"string".* ` が診断エラーになること
-- [ ] `array[1]` が正常、`array["key"]` が診断エラーになること
-- [ ] 全テスト通過
+- [x] `null < 1` や `true > false` などが診断エラーになること
+- [x] `"string".* ` が診断エラーになること
+- [x] `array[1]` が正常、`array["key"]` が診断エラーになること
+- [x] 全テスト通過
 
 ---
 
