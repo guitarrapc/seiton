@@ -151,41 +151,15 @@ public sealed class TemplateInjectionRule : RuleBase
 
     private static bool IsUntrustedReference(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
-        if (!TryBuildPathSegments(nodeId, nodes, expression, out var segments))
+        Span<PathSegment> segments = stackalloc PathSegment[16];
+        if (!TryBuildPathSegments(nodeId, nodes, expression, segments, out var count))
         {
             return false;
         }
 
-        var candidates = new List<UntrustedInputNode>(4) { s_untrustedRoots };
-        for (var i = 0; i < segments.Count; i++)
+        for (var i = 0; i < s_untrustedPaths.Length; i++)
         {
-            var segment = segments[i];
-            var next = new List<UntrustedInputNode>(4);
-            for (var j = 0; j < candidates.Count; j++)
-            {
-                var node = candidates[j];
-                if (node.TryGetChild(segment, out var direct))
-                {
-                    next.Add(direct);
-                }
-
-                if (node.TryGetChild("*", out var wildcard))
-                {
-                    next.Add(wildcard);
-                }
-            }
-
-            if (next.Count == 0)
-            {
-                return false;
-            }
-
-            candidates = next;
-        }
-
-        for (var i = 0; i < candidates.Count; i++)
-        {
-            if (candidates[i].IsLeaf)
+            if (IsPathMatch(segments[..count], s_untrustedPaths[i], expression))
             {
                 return true;
             }
@@ -194,9 +168,14 @@ public sealed class TemplateInjectionRule : RuleBase
         return false;
     }
 
-    private static bool TryBuildPathSegments(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out List<string> segments)
+    private static bool TryBuildPathSegments(
+        int nodeId,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> expression,
+        Span<PathSegment> destination,
+        out int count)
     {
-        segments = [];
+        count = 0;
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
@@ -206,37 +185,53 @@ public sealed class TemplateInjectionRule : RuleBase
         switch (node.Kind)
         {
             case ExpressionNodeKind.Identifier:
-                segments.Add(ToLowerAscii(node.Token.AsSpan(expression)));
+                destination[0] = new PathSegment(node.Token, false);
+                count = 1;
                 return true;
             case ExpressionNodeKind.MemberAccess:
-                if (!TryBuildPathSegments(node.Left, nodes, expression, out segments))
+                if (!TryBuildPathSegments(node.Left, nodes, expression, destination, out count))
                 {
                     return false;
                 }
 
-                segments.Add(ToLowerAscii(node.Token.AsSpan(expression)));
+                if (count >= destination.Length)
+                {
+                    return false;
+                }
+
+                destination[count++] = new PathSegment(node.Token, false);
                 return true;
             case ExpressionNodeKind.WildcardAccess:
-                if (!TryBuildPathSegments(node.Left, nodes, expression, out segments))
+                if (!TryBuildPathSegments(node.Left, nodes, expression, destination, out count))
                 {
                     return false;
                 }
 
-                segments.Add("*");
+                if (count >= destination.Length)
+                {
+                    return false;
+                }
+
+                destination[count++] = new PathSegment(default, true);
                 return true;
             case ExpressionNodeKind.IndexAccess:
-                if (!TryBuildPathSegments(node.Left, nodes, expression, out segments))
+                if (!TryBuildPathSegments(node.Left, nodes, expression, destination, out count))
                 {
                     return false;
                 }
 
-                if (TryGetIndexSegment(node.Right, nodes, expression, out var indexSegment))
+                if (count >= destination.Length)
                 {
-                    segments.Add(indexSegment);
+                    return false;
+                }
+
+                if (TryGetIndexSegment(node.Right, nodes, out var token))
+                {
+                    destination[count++] = new PathSegment(token, false);
                 }
                 else
                 {
-                    segments.Add("*");
+                    destination[count++] = new PathSegment(default, true);
                 }
 
                 return true;
@@ -245,9 +240,9 @@ public sealed class TemplateInjectionRule : RuleBase
         }
     }
 
-    private static bool TryGetIndexSegment(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out string segment)
+    private static bool TryGetIndexSegment(int nodeId, ExpressionNode[] nodes, out Utf8Slice token)
     {
-        segment = string.Empty;
+        token = default;
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
@@ -256,28 +251,41 @@ public sealed class TemplateInjectionRule : RuleBase
         var node = nodes[nodeId];
         if (node.Kind is ExpressionNodeKind.StringLiteral or ExpressionNodeKind.Identifier)
         {
-            segment = ToLowerAscii(node.Token.AsSpan(expression));
+            token = node.Token;
             return true;
         }
 
         return false;
     }
 
-    private static string ToLowerAscii(ReadOnlySpan<byte> text)
+    private static bool IsPathMatch(ReadOnlySpan<PathSegment> actual, string[] expected, ReadOnlySpan<byte> expression)
     {
-        var chars = new char[text.Length];
-        for (var i = 0; i < text.Length; i++)
+        if (actual.Length != expected.Length)
         {
-            var b = text[i];
-            if (b is >= (byte)'A' and <= (byte)'Z')
-            {
-                b = (byte)(b + 32);
-            }
-
-            chars[i] = (char)b;
+            return false;
         }
 
-        return new string(chars);
+        for (var i = 0; i < actual.Length; i++)
+        {
+            var expectedSegment = expected[i];
+            var actualSegment = actual[i];
+            if (expectedSegment == "*")
+            {
+                continue;
+            }
+
+            if (actualSegment.IsWildcard)
+            {
+                return false;
+            }
+
+            if (!TokenEqualsIgnoreCase(actualSegment.Token.AsSpan(expression), expectedSegment))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool TokenEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
@@ -310,66 +318,59 @@ public sealed class TemplateInjectionRule : RuleBase
         return true;
     }
 
-    private sealed class UntrustedInputNode
+    private static bool TokenEqualsIgnoreCase(ReadOnlySpan<byte> left, string right)
     {
-        private readonly Dictionary<string, UntrustedInputNode> _children = new(StringComparer.Ordinal);
-
-        public bool IsLeaf { get; private set; }
-
-        public void AddPath(ReadOnlySpan<string> segments)
+        if (left.Length != right.Length)
         {
-            if (segments.Length == 0)
-            {
-                IsLeaf = true;
-                return;
-            }
-
-            var head = segments[0];
-            if (!_children.TryGetValue(head, out var child))
-            {
-                child = new UntrustedInputNode();
-                _children[head] = child;
-            }
-
-            child.AddPath(segments[1..]);
+            return false;
         }
 
-        public bool TryGetChild(string key, out UntrustedInputNode child)
+        for (var i = 0; i < left.Length; i++)
         {
-            return _children.TryGetValue(key, out child!);
+            var l = left[i];
+            var r = right[i];
+            if (l is >= (byte)'A' and <= (byte)'Z')
+            {
+                l = (byte)(l + 32);
+            }
+
+            if (r is >= 'A' and <= 'Z')
+            {
+                r = (char)(r + 32);
+            }
+
+            if (l != (byte)r)
+            {
+                return false;
+            }
         }
+
+        return true;
     }
 
-    private static UntrustedInputNode BuildUntrustedTree()
-    {
-        var root = new UntrustedInputNode();
-        Add(root, "github", "event", "issue", "title");
-        Add(root, "github", "event", "issue", "body");
-        Add(root, "github", "event", "pull_request", "title");
-        Add(root, "github", "event", "pull_request", "body");
-        Add(root, "github", "event", "pull_request", "head", "ref");
-        Add(root, "github", "event", "pull_request", "head", "label");
-        Add(root, "github", "event", "pull_request", "head", "repo", "default_branch");
-        Add(root, "github", "event", "comment", "body");
-        Add(root, "github", "event", "review", "body");
-        Add(root, "github", "event", "review_comment", "body");
-        Add(root, "github", "event", "pages", "*", "page_name");
-        Add(root, "github", "event", "commits", "*", "message");
-        Add(root, "github", "event", "commits", "*", "author", "email");
-        Add(root, "github", "event", "commits", "*", "author", "name");
-        Add(root, "github", "event", "head_commit", "message");
-        Add(root, "github", "event", "head_commit", "author", "email");
-        Add(root, "github", "event", "head_commit", "author", "name");
-        Add(root, "github", "event", "discussion", "title");
-        Add(root, "github", "event", "discussion", "body");
-        Add(root, "github", "head_ref");
-        return root;
-    }
+    private readonly record struct PathSegment(Utf8Slice Token, bool IsWildcard);
 
-    private static void Add(UntrustedInputNode root, params string[] segments)
-    {
-        root.AddPath(segments);
-    }
-
-    private static readonly UntrustedInputNode s_untrustedRoots = BuildUntrustedTree();
+    private static readonly string[][] s_untrustedPaths =
+    [
+        ["github", "event", "issue", "title"],
+        ["github", "event", "issue", "body"],
+        ["github", "event", "pull_request", "title"],
+        ["github", "event", "pull_request", "body"],
+        ["github", "event", "pull_request", "head", "ref"],
+        ["github", "event", "pull_request", "head", "label"],
+        ["github", "event", "pull_request", "head", "repo", "default_branch"],
+        ["github", "event", "comment", "body"],
+        ["github", "event", "review", "body"],
+        ["github", "event", "review_comment", "body"],
+        ["github", "event", "pages", "*", "page_name"],
+        ["github", "event", "commits", "*", "message"],
+        ["github", "event", "commits", "*", "author", "email"],
+        ["github", "event", "commits", "*", "author", "name"],
+        ["github", "event", "head_commit", "message"],
+        ["github", "event", "head_commit", "author", "email"],
+        ["github", "event", "head_commit", "author", "name"],
+        ["github", "event", "discussion", "title"],
+        ["github", "event", "discussion", "body"],
+        ["github", "head_ref"],
+    ];
 }

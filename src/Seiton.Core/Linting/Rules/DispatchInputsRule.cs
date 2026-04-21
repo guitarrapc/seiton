@@ -31,23 +31,24 @@ public sealed class DispatchInputsRule : RuleBase
     private void ValidateInput(WorkflowDispatchEvent dispatch, DispatchInput input)
     {
         var hasOptions = input.Options is not null && input.Options.Count > 0;
-        var inputName = Decode(input.Name.Value);
 
         if (input.Type == DispatchInputType.Choice)
         {
             if (!hasOptions)
             {
+                var inputName = Decode(input.Name.Value);
                 AddEventError(dispatch, $"workflow_dispatch input '{inputName}' of type 'choice' must define non-empty options", input.Name.Range);
                 return;
             }
 
-            ValidateChoiceOptionsNoDuplicates(dispatch, input, inputName);
-            ValidateChoiceDefault(dispatch, input, inputName);
+            ValidateChoiceOptionsNoDuplicates(dispatch, input);
+            ValidateChoiceDefault(dispatch, input);
             return;
         }
 
         if (hasOptions)
         {
+            var inputName = Decode(input.Name.Value);
             AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has options but type is '{ToTypeText(input.Type)}'; options are only valid for 'choice' type", input.Name.Range);
         }
 
@@ -62,6 +63,7 @@ public sealed class DispatchInputsRule : RuleBase
             case DispatchInputType.Number:
                 if (!double.TryParse(defaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                 {
+                    var inputName = Decode(input.Name.Value);
                     AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has non-numeric default value", input.Default.Range);
                 }
 
@@ -69,6 +71,7 @@ public sealed class DispatchInputsRule : RuleBase
             case DispatchInputType.Boolean:
                 if (!defaultValue.SequenceEqual("true"u8) && !defaultValue.SequenceEqual("false"u8))
                 {
+                    var inputName = Decode(input.Name.Value);
                     AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has boolean default that must be 'true' or 'false'", input.Default.Range);
                 }
 
@@ -76,38 +79,51 @@ public sealed class DispatchInputsRule : RuleBase
         }
     }
 
-    private void ValidateChoiceOptionsNoDuplicates(WorkflowDispatchEvent dispatch, DispatchInput input, string inputName)
+    private void ValidateChoiceOptionsNoDuplicates(WorkflowDispatchEvent dispatch, DispatchInput input)
     {
-        if (input.Options is null)
+        if (input.Options is null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < input.Options.Count; i++)
         {
-            var optionNode = input.Options[i];
-            if (IsExpressionOrInterpolation(optionNode))
+            var current = input.Options[i];
+            if (IsExpressionOrInterpolation(current))
             {
                 continue;
             }
 
-            var option = Decode(optionNode.Value);
-            if (!seen.Add(option))
+            var currentValue = current.Value.AsSpan(Config.Utf8Yaml);
+            for (var j = 0; j < i; j++)
             {
-                AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has duplicated option '{option}'", optionNode.Range);
+                var previous = input.Options[j];
+                if (IsExpressionOrInterpolation(previous))
+                {
+                    continue;
+                }
+
+                if (!currentValue.SequenceEqual(previous.Value.AsSpan(Config.Utf8Yaml)))
+                {
+                    continue;
+                }
+
+                var inputName = Decode(input.Name.Value);
+                var optionText = Decode(current.Value);
+                AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has duplicated option '{optionText}'", current.Range);
+                break;
             }
         }
     }
 
-    private void ValidateChoiceDefault(WorkflowDispatchEvent dispatch, DispatchInput input, string inputName)
+    private void ValidateChoiceDefault(WorkflowDispatchEvent dispatch, DispatchInput input)
     {
-        if (input.Options is null || input.Default is null || IsExpressionOrInterpolation(input.Default))
+        if (input.Options is null || input.Default is null || IsExpressionOrInterpolation(input.Default) || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var defaultValue = Decode(input.Default.Value);
+        var defaultValue = input.Default.Value.AsSpan(Config.Utf8Yaml);
         for (var i = 0; i < input.Options.Count; i++)
         {
             var optionNode = input.Options[i];
@@ -116,13 +132,15 @@ public sealed class DispatchInputsRule : RuleBase
                 return;
             }
 
-            if (Decode(optionNode.Value) == defaultValue)
+            if (optionNode.Value.AsSpan(Config.Utf8Yaml).SequenceEqual(defaultValue))
             {
                 return;
             }
         }
 
-        AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has default value '{defaultValue}' which is not included in options", input.Default.Range);
+        var inputName = Decode(input.Name.Value);
+        var defaultText = Decode(input.Default.Value);
+        AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has default value '{defaultText}' which is not included in options", input.Default.Range);
     }
 
     private static string ToTypeText(DispatchInputType type)

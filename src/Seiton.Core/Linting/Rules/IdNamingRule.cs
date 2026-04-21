@@ -11,7 +11,7 @@ public sealed class IdNamingRule : RuleBase
 
     private Job? _currentJob;
     private Step? _currentStep;
-    private Dictionary<string, TextRange>? _seenStepIds;
+    private List<Utf8Slice>? _seenStepIdSlices;
 
     public override void VisitJobPre(Job job)
     {
@@ -21,7 +21,7 @@ public sealed class IdNamingRule : RuleBase
         }
 
         _currentJob = job;
-        _seenStepIds = [];
+        _seenStepIdSlices = [];
         ValidateId(job.Id, "job id");
         _currentJob = null;
     }
@@ -41,7 +41,7 @@ public sealed class IdNamingRule : RuleBase
 
     public override void VisitJobPost(Job job)
     {
-        _seenStepIds = null;
+        _seenStepIdSlices = null;
     }
 
     private void ValidateId(StringNode idNode, string kind)
@@ -105,24 +105,58 @@ public sealed class IdNamingRule : RuleBase
 
     private void ValidateStepIdUniqueness(Step step)
     {
-        if (step.Id is null || _seenStepIds is null)
+        if (step.Id is null || _seenStepIdSlices is null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var idText = Decode(step.Id.Value);
-        if (string.IsNullOrEmpty(idText))
+        var idSpan = step.Id.Value.AsSpan(Config.Utf8Yaml);
+        if (idSpan.Length == 0)
         {
             return;
         }
 
-        var key = idText.ToLowerInvariant();
-        if (_seenStepIds.TryGetValue(key, out _))
+        for (var i = 0; i < _seenStepIdSlices.Count; i++)
         {
-            AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", step.Id.Range);
-            return;
+            var seenSpan = _seenStepIdSlices[i].AsSpan(Config.Utf8Yaml);
+            if (SpanEqualsIgnoreCaseAscii(seenSpan, idSpan))
+            {
+                var idText = Decode(step.Id.Value);
+                AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", step.Id.Range);
+                return;
+            }
         }
 
-        _seenStepIds[key] = step.Id.Range;
+        _seenStepIdSlices.Add(step.Id.Value);
+    }
+
+    private static bool SpanEqualsIgnoreCaseAscii(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var l = left[i];
+            var r = right[i];
+            if (l is >= (byte)'A' and <= (byte)'Z')
+            {
+                l = (byte)(l + 32);
+            }
+
+            if (r is >= (byte)'A' and <= (byte)'Z')
+            {
+                r = (byte)(r + 32);
+            }
+
+            if (l != r)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
