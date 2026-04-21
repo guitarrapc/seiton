@@ -698,7 +698,7 @@ Phase 8 (診断収集最適化) は独立
 | LintEngine.Check (parse + lint) | Medium (6×8) | 1,928 μs | 4,975,196 B |
 | LintEngine.Check (parse + lint) | Large (20×12) | 42,148 μs | 99,468,943 B |
 
-### アロケーション内訳推定（Large, LintEngine.Check ~97 MB）
+### アロケーション内訳推定（Large, LintEngine.Check ~97 MB）— Phase 4 時点
 
 | カテゴリ | 推定比率 | 推定量 | 主要発生源 |
 |---|---:|---:|---|
@@ -707,3 +707,422 @@ Phase 8 (診断収集最適化) は独立
 | LintEngine フレームワーク | 8–15% | ~8–15 MB | 診断リスト/配列、ソート、重複排除、抑制構造 |
 | ルール固有のコレクション/文字列 | 3–10% | ~3–10 MB | UnredactedSecrets の per-step HashSet、NeedsGraph の DFS Dictionary 等 |
 | パーサー（Phase 1–3 最適化済み） | <1% | ~0.4 MB | AST 構築（既に 67% 削減済み） |
+
+---
+
+## Phase 8 完了後の現状分析と次期改善計画（2026-04-21）
+
+### Phase 8 完了時点のベンチマーク
+
+**LintBenchmark（Phase 8 完了後、Ryzen 7 5800H / ShortRun）**:
+
+| Size | FixEnabled | Mean | Allocated |
+|---|---|---:|---:|
+| Small (1×3) | False | 84.9 μs | 43.02 KB |
+| Small (1×3) | True | 100.3 μs | 78.75 KB |
+| Medium (6×8) | False | 1,850 μs | 605.43 KB |
+| Medium (6×8) | True | 3,555 μs | 4,263.61 KB |
+| Large (20×12) | False | 28,765 μs | 8,894.81 KB |
+| Large (20×12) | True | 94,071 μs | 84,715.28 KB |
+
+**ParsingBenchmark（Phase 3 完了後、Ryzen 9 7950X3D / ShortRun）**:
+
+| Size | Mean | Allocated |
+|---|---:|---:|
+| Small (1×3) | 27.9 μs | 12,216 B (11.93 KB) |
+| Medium (6×8) | 474 μs | 84,888 B (82.90 KB) |
+| Large (20×12) | 6,976 μs | 382,808 B (373.83 KB) |
+
+### 現状の課題とアロケーション構造
+
+Phase 1–8 で lint-only Large を ~97 MB → ~8.9 MB まで削減した。しかし CI ツールとしてはまだ改善余地がある。Go で同等機能を実装した場合との比較を念頭に、以下の構造的課題を整理する。
+
+#### Go との設計差異によるアロケーション特性の違い
+
+Go の linter（actionlint 等）は、値型ベースの AST と GC 特性の違いにより、同等規模のワークフローに対して桁違いに少ないアロケーションで動作する。主要な差異:
+
+| 側面 | Go (actionlint 参考) | C# (Seiton 現状) | 影響 |
+|---|---|---|---|
+| AST ノード | 構造体埋め込み（親スライスに連続配置） | クラス（各ノードが独立ヒープオブジェクト） | Large で数百〜数千のオブジェクト割り当て |
+| 文字列 | `[]byte` スライス（source バッファ共有） | `Utf8Slice`（offset/length、ゼロコピー ✅）、ただし辞書キーは `Utf8String`（`byte[]` コピー） | 辞書キー生成ごとに `byte[]` 割り当て |
+| コレクション | スライスの再利用（`append` で成長） | `List<T>` → `.ToArray()` パターン | 二重割り当て（List 内部配列 + 最終配列） |
+| 辞書 | `map` はランタイム最適化済み | `Dictionary<K,V>` はバケット配列 + エントリ配列 | 初期化コストが高い |
+| Lint ルール状態 | 関数 + 値レシーバー（ゼロアロケーション可能） | クラスインスタンス + `List<Diagnostic>` 内部リスト | ルールごとにオブジェクト + リスト |
+
+#### アロケーション源の詳細調査結果
+
+以下は Phase 8 完了時点のコードを全ファイル調査した結果。
+
+##### 1. AST ノードのクラスアロケーション（パーサー層）
+
+| 型 | 形式 | 生成頻度 (Large) | 推定コスト |
+|---|---|---:|---|
+| `StringNode` | class | ~500–1000 | 各 ~40B（ヘッダー + Utf8Slice + bool + Range + Expression?） |
+| `BoolNode` / `IntNode` / `FloatNode` | class | ~60–100 | 各 ~40–48B |
+| `Job` | class | 20 | 各 ~200B（多数のプロパティ） |
+| `Step` | class | 240 | 各 ~120B |
+| `ExecRun` / `ExecAction` | class | 240 | 各 ~80B |
+| Event 派生型 | class | 1–5 | 各 ~80–120B |
+| その他構造ノード | class | ~50–100 | 可変 |
+
+**推定**: AST ノードだけで Large ケースは ~100–200 KB。パーサーの 382 KB のうち約 26–52% を占める。
+
+##### 2. `Utf8String` の二重 `byte[]` コピー
+
+`Utf8String` のコンストラクタは `_bytes = utf8.ToArray()` でバイト配列を複製する。さらに `FromLowerAscii` は内部で `utf8.ToArray()` を実行した後、結果をコンストラクタに渡すため、**1 回の呼び出しで `byte[]` が 2 回割り当てられる**:
+
+```csharp
+// 現在: FromLowerAscii で 2 回 byte[] 割り当て
+public static Utf8String FromLowerAscii(ReadOnlySpan<byte> utf8)
+{
+    var bytes = utf8.ToArray();    // 1回目: ToArray
+    // ... modify bytes in place ...
+    return new Utf8String(bytes);  // 2回目: コンストラクタ内でもう1回 ToArray
+}
+```
+
+`Utf8String` は AST の辞書キー（`Jobs`, `Outputs`, `Inputs` 等）およびルール内のキー比較（`NeedsGraphRule.FromLowerAscii` 等）で広く使用される。Large ケースでは辞書キーだけで 100+ 回生成され、各回 2 回の `byte[]` アロケーションが発生。
+
+##### 3. LintEngine.Check() の per-Check コレクション群
+
+| アロケーション | 箇所 | 回数/Check | 説明 |
+|---|---|---:|---|
+| `new List<Diagnostic>` | Check L55 | 1 | 初期 diagnostics 収集 |
+| `new WorkflowVisitor` | Check L75 | 1 | ビジターオブジェクト + 内部 `List<IPass>` |
+| `new LintConfig` | Check L76 | 1 | 設定オブジェクト |
+| `new List<IRule>` | Check L85 | 1 | activeRules |
+| `new List<Diagnostic>` | Check L114 | 1 | ruleDiagnostics |
+| `new HashSet<DiagnosticIdentity>` | Check L132 | 1 | 重複排除 |
+| `new Dictionary<string,int>` | Check L133 | 1 | 抑制カウント |
+| `new List<SuppressionRecord>` | Check L134 | 1 | 抑制記録 |
+| `diagnostics.ToArray()` | Check 返却 | 1 | 最終結果配列 |
+| `suppressionRecords.ToArray()` | Check L164 | 1 | 抑制結果配列 |
+
+ParseInlineSuppression 内:
+| `new Dictionary` × 3 + `new List` × 1 | L392–395 | 1 | インライン抑制解析 |
+| `new Utf8Slice[]` | BuildKnownJobIdSlices | 1–2 | ジョブ ID スライス |
+| `new List<JobScope>` | BuildJobScopes | 1 | ジョブスコープ |
+| ネスト `Dictionary` | per-directive | 可変 | 行単位/ジョブ単位抑制マップ |
+
+NormalizeRules/NormalizeExclusions:
+| `Dictionary` + `List` | NormalizeRules | 1 | ルール設定正規化 |
+| `List` + per-exclusion `HashSet` | NormalizeExclusions | X | 除外設定正規化 |
+
+**合計**: 最低でも **15–20 個のコレクションオブジェクト** が毎回 Check() で生成される。
+
+##### 4. ルール固有のアロケーション
+
+| ルール | パターン | 頻度 (Large) | 深刻度 |
+|---|---|---:|---|
+| `UnredactedSecretsRule` | per-step `new HashSet<string>` + per-line `Encoding.UTF8.GetString` + 文字列連結 | 240 HashSet + run 行数分の string | **高** |
+| `NeedsGraphRule` | `new Dictionary` + `new Stack` + per-edge `Utf8String.FromLowerAscii`（2 回 byte[] コピー） | 1 Dict + 1 Stack + 40+ byte[] | **中-高** |
+| `DenyReadAllRule` / `DenyWriteAllRule` | per-visit キャプチャリングラムダ（クロージャオブジェクト生成） | 1+20 クロージャ | **中** |
+| `IdNamingRule` / `ShellNameRule` | per-visit キャプチャリングラムダ | 1+20+240 クロージャ | **中** |
+| `CheckoutPersistCredentialsRule` | Fix 構築時 `Replace` + `Split` + `TextEdit[]` | per-violation（Fix有効時） | **中-高**（Fix 時） |
+| `JobPermissionsRequiredRule` | 同上 | per-violation（Fix有効時） | **中-高**（Fix 時） |
+| `JobTimeoutMinutesRequiredRule` | 同上 | per-violation（Fix有効時） | **中-高**（Fix 時） |
+| `PermissionsRule` | per-scope `Encoding.UTF8.GetString`（success path） | per-permission-scope | **低-中** |
+| `GlobPatternRule` | `char[]` + `new string` via DecodeAscii | per-invalid-pattern | **低** |
+| `ReusableWorkflowRule` | `File.ReadAllBytes` + パーサー呼び出し + 契約オブジェクト | per-local-workflow | **高**（ローカル WF 参照時） |
+
+##### 5. Fix パスの文字列操作
+
+Fix 有効時（`--fix` モード）、各ルールの Fix 構築は:
+1. `config.GetSourceText()` で UTF-8 全体を `string` にデコード（Phase 6-B でキャッシュ済み、1 回のみ）
+2. しかし各 Fix 構築内で `source.Replace(...)` + `text.Split('\n')` + `string.Join(...)` 等の文字列操作が発生
+3. `FixEngine.Apply` は `Encoding.UTF8.GetBytes(edit.NewText)` + `List<byte>.InsertRange` で適用
+
+Large Fix=true で 84.7 MB のうち、パーサー（~374 KB）を除く ~84.3 MB は lint + fix 構築コスト。
+
+---
+
+### 次期改善フェーズ（Phase 9 以降）
+
+以下、**メモリ削減効果** / **コード複雑度の増加** / **実行速度への影響** の 3 軸で優先度を評価する。
+
+#### 設計方針
+
+1. **読みやすさを犠牲にしない**: `stackalloc` / `ArrayPool` の手動管理を過剰に広げるより、型設計の改善でアロケーション自体を構造的に不要にする
+2. **段階的移行**: AST の struct 化などの大規模変更は、互換性を保つラッパーを用意して段階的に実施
+3. **計測駆動**: 各フェーズ完了後にベンチマークで効果を確認。推定と実測が大きく乖離した場合は計画を見直す
+
+---
+
+### Phase 9: Utf8String の二重コピー除去（低リスク・中効果）
+
+**目的**: `Utf8String.FromLowerAscii` が `byte[]` を 2 回割り当てる問題を修正する。
+
+**現状**:
+```csharp
+public Utf8String(ReadOnlySpan<byte> utf8) { _bytes = utf8.ToArray(); }
+public static Utf8String FromLowerAscii(ReadOnlySpan<byte> utf8) {
+    var bytes = utf8.ToArray();   // 1回目
+    // ... in-place modify ...
+    return new Utf8String(bytes); // 2回目（コンストラクタ内で再度 ToArray）
+}
+```
+
+**改善策**:
+- private コンストラクタ `Utf8String(byte[] owned)` を追加し、所有権移転で `ToArray()` を 1 回に
+- `FromLowerAscii` は `bytes` を直接セットして 2 回目のコピーを排除
+
+**影響範囲**: `Utf8String.cs` のみ。AST 辞書キーと NeedsGraphRule 等のルール内キー生成に波及。
+
+**完了条件**:
+- [ ] `FromLowerAscii` が `byte[]` を 1 回のみ割り当てること
+- [ ] 既存テスト全通過
+- [ ] ベンチマーク: ParsingBenchmark Large の Allocated が減少
+
+**推定効果**: Large ParsingBenchmark で ~10–30 KB 削減（辞書キー 100+ 回 × 平均 ~20B の重複コピー排除）。
+
+**コード複雑度**: 低。private コンストラクタの追加のみ。
+
+---
+
+### Phase 10: AST ノードの struct 化 — StringNode（中リスク・高効果）
+
+**目的**: 最も頻出する `StringNode` を class → readonly record struct に変更し、ヒープオブジェクト数を大幅削減する。
+
+**現状**:
+```csharp
+public sealed class StringNode {  // ← 毎回ヒープ割り当て (~40B/instance)
+    public Utf8Slice Value { get; init; }
+    public bool Quoted { get; init; }
+    public StringNode? Expression { get; init; }  // ← nullable class 参照
+    public TextRange Range { get; init; }
+}
+```
+
+Large ケースで ~500–1000 個の StringNode が生成される。各 ~40B のオブジェクトヘッダーだけで ~20–40 KB。
+
+**改善策**:
+- `StringNode` を `readonly record struct` に変更
+- `Expression` フィールドは `StringNode?` → nullable value type で保持（`StringNode` が struct になれば自然に box-free）
+- ただし `StringNode?` が再帰的な nullable struct になる場合は `ExpressionSlice` のような別 struct への分離を検討
+
+**注意点**:
+- AST ノードを struct にすると、ルール側で `if (node is StringNode)` のようなパターンマッチングや参照比較が使えなくなる
+- `IReadOnlyList<StringNode>` の要素アクセスがコピーを伴う（ただし readonly struct なら JIT 最適化で in-place アクセス可能な場合もある）
+- `Job.Name`, `Step.Id` 等、nullable フィールドとして使われる箇所が多数。`StringNode?` は `Nullable<StringNode>` となり、struct サイズ分のスタック消費が増える
+
+**段階的移行**:
+1. まず `StringNode` のみ struct 化し、`BoolNode` / `IntNode` / `FloatNode` は後続
+2. ルールのパターンマッチングや null チェックの書き換えを含む影響調査を先行
+
+**完了条件**:
+- [ ] `StringNode` が `readonly record struct` であること
+- [ ] パターンマッチングや null チェックが正しく動作すること
+- [ ] 全テスト通過
+- [ ] ベンチマーク: ParsingBenchmark Large の Allocated が ~20–40 KB 減少
+
+**推定効果**: Large ParsingBenchmark で ~20–40 KB 削減。Lint 含む全体では per-node ヒープ参照のキャッシュミス削減による速度改善も期待。
+
+**コード複雑度**: 中。AST 消費側（ルール、ビジター）の null チェックパターン変更が広範。
+
+---
+
+### Phase 11: LintEngine per-Check コレクション再利用（低リスク・中効果）
+
+**目的**: `LintEngine.Check()` 内で毎回生成される 15–20 個のコレクションを、エンジンインスタンスに保持して再利用する。
+
+**現状**: Check() のたびに `new List<Diagnostic>`, `new HashSet<DiagnosticIdentity>`, `new Dictionary<string,int>`, `new List<SuppressionRecord>`, `new List<IRule>` 等を生成。CI では同一エンジンで複数ファイルを連続チェックするため、これらは毎回捨てられる。
+
+**改善策**:
+- LintEngine にフィールドとして保持: `_diagnostics`, `_ruleDiagnostics`, `_seenIdentities`, `_suppressedByRule`, `_suppressionRecords`, `_activeRules`
+- Check() 先頭で `.Clear()` して再利用（内部バッファは保持）
+- `WorkflowVisitor` もフィールド化しリセット
+
+```csharp
+// After
+public sealed class LintEngine {
+    readonly List<Diagnostic> _diagnostics = new(64);
+    readonly List<Diagnostic> _ruleDiagnostics = new(128);
+    readonly HashSet<DiagnosticIdentity> _seenIdentities = new();
+    readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
+    readonly List<SuppressionRecord> _suppressionRecords = new();
+    readonly List<IRule> _activeRules = new(50);
+    readonly WorkflowVisitor _visitor = new();
+
+    public LintResult Check(...) {
+        _diagnostics.Clear();
+        _ruleDiagnostics.Clear();
+        _seenIdentities.Clear();
+        _suppressedByRule.Clear();
+        _suppressionRecords.Clear();
+        _activeRules.Clear();
+        _visitor.Reset();
+        // ... use fields instead of local new ...
+    }
+}
+```
+
+**注意**: `RuleBase` の内部 `diagnostics` リストは `SetConfig()` 時にクリアされるため、ルール側は変更不要。
+
+**完了条件**:
+- [ ] Check() 内で `new List/Dictionary/HashSet` が生成されていないこと
+- [ ] 複数ファイル連続 Check のテストが通過すること（状態リーク防止）
+- [ ] ベンチマーク: LintBenchmark の Allocated が減少
+
+**推定効果**: per-Check で ~5–15 KB 削減（コレクション初期化コスト × 15–20 個）。複数ファイル連続実行時は内部バッファが育ち、再割り当ても減少。
+
+**コード複雑度**: 低。ローカル変数をフィールドに昇格し Clear() するだけ。スレッドセーフでない点は既存設計と同様。
+
+---
+
+### Phase 12: UnredactedSecretsRule の per-step HashSet 排除（中リスク・中効果）
+
+**目的**: 240 steps × per-step `new HashSet<string>` を排除し、ワークフロー/ジョブ/ステップのスコープを構造的に管理する。
+
+**現状**:
+```csharp
+// 各ステップで呼ばれる
+HashSet<string>? CollectSecretDerivedEnvVarNames(Step step) {
+    var names = new HashSet<string>(StringComparer.Ordinal);  // ← 毎step
+    AddSecretMappedVars(step.Env, names);
+    AddSecretMappedVars(currentJob?.Env, names);
+    AddSecretMappedVars(currentWorkflow?.Env, names);
+    return names;
+}
+```
+
+ワークフローレベルとジョブレベルの env は step 間で共通なのに、毎回再収集している。
+
+**改善策**:
+- VisitWorkflowPre でワークフローレベルの secrets-derived vars を 1 回収集してフィールドに保持
+- VisitJobPre でジョブレベルを追加収集（ワークフロー分 + ジョブ分）
+- VisitStep ではステップ固有の env のみ差分追加
+- HashSet をルールフィールドとして 1 個保持し、Clear + 再利用
+
+**完了条件**:
+- [ ] per-step の `new HashSet` が排除されていること
+- [ ] ワークフロー/ジョブスコープの再収集がないこと
+- [ ] 全テスト通過
+- [ ] ベンチマーク: LintBenchmark Large (Fix=false) の Allocated が減少
+
+**推定効果**: Large で ~50–100 KB 削減（240 HashSet × ~200B 初期コスト + per-env-var string デコード重複排除）。
+
+**コード複雑度**: 中。スコープ管理ロジックの導入が必要だが、パターンは他ルールと類似。
+
+---
+
+### Phase 13: キャプチャリングラムダの排除（低リスク・小効果）
+
+**目的**: `DenyReadAllRule`, `DenyWriteAllRule`, `IdNamingRule`, `ShellNameRule` の per-visit クロージャオブジェクト生成を排除する。
+
+**現状**: これらのルールは VisitWorkflowPre / VisitJobPre 内でローカル変数をキャプチャするラムダを生成。.NET ランタイムは非 static ラムダごとにクロージャオブジェクト（`<>c__DisplayClass`）を割り当てる。
+
+**改善策**:
+- キャプチャする値をルールのフィールドに保持し、メソッドを通常のインスタンスメソッドに変換
+- または static ラムダ + 明示的な state パラメータに変更
+
+**完了条件**:
+- [ ] 対象ルールにキャプチャリングラムダがないこと
+- [ ] 全テスト通過
+
+**推定効果**: Small/Medium で ~0.5–2 KB。Large で ~5–10 KB（ジョブ数 × ルール数分のクロージャ排除）。
+
+**コード複雑度**: 低。
+
+---
+
+### Phase 14: Fix パスの Span ベース行操作（中リスク・高効果）
+
+**目的**: Fix 構築時の `string.Split('\n')` / `string.Replace(...)` / `string.Join(...)` を `ReadOnlySpan<byte>` ベースの操作に置き換え、Fix=true 時のアロケーションを大幅削減する。
+
+**現状**: Fix=true Large が ~84.7 MB。このうちパーサー (~374 KB) + lint-only (~8.5 MB) を除く ~76 MB が Fix 構築コスト。主要な発生源:
+1. `config.GetSourceText()` → 全ファイル string デコード（Phase 6-B でキャッシュ済み、1 回、~50 KB）
+2. `source.Split('\n')` → 行配列（N 行分の string[] + 行 string × N）
+3. `string.Replace(...)` / `string.Insert(...)` → 新文字列割り当て
+4. `FixEngine.Apply` の `List<byte>.InsertRange` → リスト内部の再配置
+
+**改善策**:
+- **14-A**: `FixFormatting` の行操作を `ReadOnlySpan<byte>` ベースに変更。`Split('\n')` → バイトスキャンで行オフセット/長さを計算
+- **14-B**: `TextEdit.NewText` を `string` → `byte[]` に変更し、Fix 構築を UTF-8 バイト操作のみで完結させる
+- **14-C**: `FixEngine.Apply` を `Span<byte>` ベースの in-place 編集に変更（オフセット計算で一括適用）
+
+**段階的移行**:
+1. まず 14-A で行操作の Span 化を実施（最も効果が大きい）
+2. 14-B/14-C は `TextEdit` 型の変更を伴うため、14-A の効果を確認してから実施
+
+**完了条件**:
+- [ ] Fix 構築で `string.Split('\n')` が使われていないこと
+- [ ] Fix テスト全通過
+- [ ] ベンチマーク: LintBenchmark Large (Fix=true) の Allocated が大幅減少
+
+**推定効果**: Large Fix=true で ~30–50 MB 削減。`string.Split('\n')` の行配列排除だけで数十 MB 規模の改善が期待できる。
+
+**コード複雑度**: 中-高。行操作ヘルパーの実装が必要。ただし `ParseInlineSuppression` の Span 化（Phase 4 で実施済み）と同じパターン。
+
+---
+
+### Phase 15: NeedsGraphRule のアロケーション削減（低リスク・小効果）
+
+**目的**: サイクル検出の `Dictionary` + `Stack` をルールフィールドとして再利用する。
+
+**現状**:
+```csharp
+void DetectCycles() {
+    var color = new Dictionary<Utf8String, byte>(_knownJobs.Count);  // per-Check
+    var stack = new Stack<(Utf8String, int)>();                       // per-Check
+    ...
+}
+```
+
+**改善策**:
+- `color` と `stack` をルールフィールドに昇格し、VisitWorkflowPost 開始時に Clear
+
+**推定効果**: Large で ~5–15 KB。
+
+---
+
+### Phase 16: ExpressionParser 結果配列の最適化（低リスク・小効果）
+
+**目的**: `ExpressionParser.Parse()` の最終 `ToArray()` を、0 件の場合 `Array.Empty<T>()` で返す。
+
+**現状**: Phase 3 で ArrayPool 化済みだが、結果の `nodes.Snapshot()`, `diagnostics.Snapshot()` は毎回新規配列を生成する（0 件でも空配列を割り当て）。
+
+**改善策**:
+- `PooledBuffer<T>.Snapshot()` で `_count == 0` の場合 `Array.Empty<T>()` を返す
+- 式の大半はエラーなし → `diagnostics` は頻繁に空配列。Large で ~480 式 × 空 Diagnostic[] の排除
+
+**推定効果**: Large で ~5–10 KB。
+
+---
+
+### Phase 5 (未着手): AST List → Array の最適化
+
+（既存計画の Phase 5 は引き続き有効。初期容量と 0/1 ファーストパスの適用。）
+
+---
+
+### 次期フェーズのサマリーと優先順位
+
+| Phase | 概要 | 推定削減 (Large lint-only) | 推定削減 (Large Fix=true) | リスク | コード複雑度 |
+|---|---|---:|---:|---|---|
+| Phase 9 | Utf8String 二重コピー除去 | ~10–30 KB | ~10–30 KB | 低 | 低 |
+| Phase 10 | StringNode struct 化 | ~20–40 KB | ~20–40 KB | 中 | 中 |
+| Phase 11 | LintEngine コレクション再利用 | ~5–15 KB | ~5–15 KB | 低 | 低 |
+| Phase 12 | UnredactedSecrets HashSet 排除 | ~50–100 KB | ~50–100 KB | 中 | 中 |
+| Phase 13 | キャプチャリングラムダ排除 | ~5–10 KB | ~5–10 KB | 低 | 低 |
+| Phase 14 | Fix パス Span ベース行操作 | — | **~30–50 MB** | 中-高 | 中-高 |
+| Phase 15 | NeedsGraphRule 再利用 | ~5–15 KB | ~5–15 KB | 低 | 低 |
+| Phase 16 | ExpressionParser 空配列最適化 | ~5–10 KB | ~5–10 KB | 低 | 低 |
+| Phase 5 | AST List → Array 初期容量 | ~数 KB | ~数 KB | 低 | 低 |
+
+**推奨実行順序**: Phase 9 → 11 → 13 → 15 → 16 → 5 → 12 → 10 → 14
+
+理由:
+- Phase 9/11/13/15/16/5 は低リスク・低複雑度で即座に実施可能
+- Phase 12 はスコープ管理の設計判断が必要
+- Phase 10 は AST 消費側の広範な変更を伴うため、他フェーズ完了後に単独で実施
+- Phase 14 は Fix パス限定だが効果が最大。ただし TextEdit 型の変更を伴う可能性があり慎重に進める
+
+### Go との差を埋める長期的な設計検討
+
+上記の Phase 9–16 で lint-only Large を ~8.9 MB → ~8.7 MB 程度に改善できるが、Go 実装との根本的な差を埋めるには以下の構造変更が必要:
+
+1. **AST 全体の struct 化**: `Job`, `Step`, `ExecRun`, `ExecAction` 等もすべて struct に。Go のスライス上の値型と同等。ただし C# では再帰的な struct（`StringNode.Expression` → `StringNode?`）の扱いや、interface dispatch（`IReadOnlyList<Step>` → value type）に設計上の制約がある。
+2. **辞書アロケーションの削減**: `Dictionary<Utf8String, Job>` → offset-based lookup table や FrozenDictionary 等の特殊辞書。ただし可変サイズの入力に対する汎用性とのトレードオフ。
+3. **ルールの値型化**: `IRule` / `RuleBase` を `ref struct` ベースに変更し、ルールインスタンスのヒープ割り当てを排除。ただし interface dispatch が使えなくなるため、ビジターパターンの根本的な再設計が必要。
+
+これらは Seiton 全体の API 設計に影響するため、個別 Phase としてではなく、将来のメジャーバージョンでの検討事項として位置づける。
