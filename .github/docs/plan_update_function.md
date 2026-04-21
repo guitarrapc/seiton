@@ -253,15 +253,16 @@
 - `safeCalls > 0` の間は untrusted 検出を抑制。
 
 **完了条件**:
-- [ ] `github.event.issue.title` は検出されるが `github.event.number` は検出されないこと
-- [ ] `github.event.pull_request.head.ref` が検出されること
-- [ ] `github.event.commits[0].message` が検出されること
-- [ ] `github.event.commits.*.author.name` が検出されること
-- [ ] `github.head_ref` が検出されること
-- [ ] `contains(github.event.issue.title, 'keyword')` は検出されないこと（safe function）
-- [ ] `startsWith(github.event.pull_request.head.ref, 'feature/')` は検出されないこと
-- [ ] `format('{0}', github.event.issue.title)` は検出されること（unsafe function）
-- [ ] 全テスト通過
+- [x] `github.event.issue.title` は検出されるが `github.event.number` は検出されないこと
+- [x] `github.event.pull_request.head.ref` が検出されること
+- [x] `github.event.commits[0].message` が検出されること
+- [x] `github.event.commits.*.author.name` が検出されること
+- [x] `github.head_ref` が検出されること
+- [x] `contains(github.event.issue.title, 'keyword')` は検出されないこと（safe function）
+- [x] `startsWith(github.event.pull_request.head.ref, 'feature/')` は検出されないこと
+- [x] `format('{0}', github.event.issue.title)` は検出されること（unsafe function）
+- [x] 全テスト通過
+- [ ] ベンチマークを実行してアロケーションされないことを確認
 
 ---
 

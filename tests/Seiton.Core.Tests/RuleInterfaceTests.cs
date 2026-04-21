@@ -3923,7 +3923,62 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github['event'].pull_request.title }}"
             """,
-            ["template injection risk", "run", "github.event"]),
+            ["template injection risk", "run", "github context"]),
+            new RuleCase(
+            "ok-run-uses-github-event-number-not-leaf",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.number }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-run-uses-github-head-ref",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.head_ref }}"
+            """,
+            ["template injection risk", "run", "github context"]),
+            new RuleCase(
+            "ok-safe-function-contains-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ contains(github.event.issue.title, 'bug') }}"
+            """,
+            []),
+            new RuleCase(
+            "ok-safe-function-startswith-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ startsWith(github.event.pull_request.head.ref, 'feature/') }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-unsafe-function-format-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ format('{0}', github.event.issue.title) }}"
+            """,
+            ["template injection risk", "run", "github context"]),
         };
 
         await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);

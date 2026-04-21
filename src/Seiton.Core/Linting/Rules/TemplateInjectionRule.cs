@@ -57,7 +57,7 @@ public sealed class TemplateInjectionRule : RuleBase
 
             AddStepError(
                 step,
-                $"template injection risk: {sinkName} contains expression referencing untrusted github.event data",
+                $"template injection risk: {sinkName} contains expression referencing untrusted github.event/github context data",
                 valueNode.Range);
             return;
         }
@@ -65,17 +65,17 @@ public sealed class TemplateInjectionRule : RuleBase
 
     private static bool ContainsUntrustedEventReference(ExpressionParseResult parseResult, ReadOnlySpan<byte> expression)
     {
-        return ContainsUntrustedEventReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        return ContainsUntrustedEventReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, safeDepth: 0);
     }
 
-    private static bool ContainsUntrustedEventReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsUntrustedEventReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression, int safeDepth)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
         }
 
-        if (IsGithubEventReference(nodeId, nodes, expression))
+        if (safeDepth == 0 && IsUntrustedReference(nodeId, nodes, expression))
         {
             return true;
         }
@@ -83,21 +83,32 @@ public sealed class TemplateInjectionRule : RuleBase
         var node = nodes[nodeId];
         return node.Kind switch
         {
-            ExpressionNodeKind.Unary => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression),
-            ExpressionNodeKind.Binary => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression)
-                || ContainsUntrustedEventReference(node.Right, nodes, arguments, expression),
-            ExpressionNodeKind.MemberAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression),
-            ExpressionNodeKind.WildcardAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression),
-            ExpressionNodeKind.IndexAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression)
-                || ContainsUntrustedEventReference(node.Right, nodes, arguments, expression),
-            ExpressionNodeKind.FunctionCall => ContainsUntrustedEventReferenceInFunction(node, nodes, arguments, expression),
+            ExpressionNodeKind.Unary => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth),
+            ExpressionNodeKind.Binary => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth)
+                || ContainsUntrustedEventReference(node.Right, nodes, arguments, expression, safeDepth),
+            ExpressionNodeKind.MemberAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth),
+            ExpressionNodeKind.WildcardAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth),
+            ExpressionNodeKind.IndexAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth)
+                || ContainsUntrustedEventReference(node.Right, nodes, arguments, expression, safeDepth),
+            ExpressionNodeKind.FunctionCall => ContainsUntrustedEventReferenceInFunction(node, nodes, arguments, expression, safeDepth),
             _ => false,
         };
     }
 
-    private static bool ContainsUntrustedEventReferenceInFunction(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsUntrustedEventReferenceInFunction(
+        ExpressionNode functionCallNode,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression,
+        int safeDepth)
     {
-        if (ContainsUntrustedEventReference(functionCallNode.Left, nodes, arguments, expression))
+        var calleeSafeDepth = safeDepth;
+        if (IsSafeFunctionCall(functionCallNode, nodes, expression))
+        {
+            calleeSafeDepth++;
+        }
+
+        if (ContainsUntrustedEventReference(functionCallNode.Left, nodes, arguments, expression, safeDepth))
         {
             return true;
         }
@@ -110,7 +121,7 @@ public sealed class TemplateInjectionRule : RuleBase
                 continue;
             }
 
-            if (ContainsUntrustedEventReference(arguments[argIndex], nodes, arguments, expression))
+            if (ContainsUntrustedEventReference(arguments[argIndex], nodes, arguments, expression, calleeSafeDepth))
             {
                 return true;
             }
@@ -119,8 +130,73 @@ public sealed class TemplateInjectionRule : RuleBase
         return false;
     }
 
-    private static bool IsGithubEventReference(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsSafeFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
+        if (functionCallNode.Left < 0 || functionCallNode.Left >= nodes.Length)
+        {
+            return false;
+        }
+
+        var callee = nodes[functionCallNode.Left];
+        if (callee.Kind != ExpressionNodeKind.Identifier)
+        {
+            return false;
+        }
+
+        var calleeName = callee.Token.AsSpan(expression);
+        return TokenEqualsIgnoreCase(calleeName, "contains"u8)
+            || TokenEqualsIgnoreCase(calleeName, "startswith"u8)
+            || TokenEqualsIgnoreCase(calleeName, "endswith"u8);
+    }
+
+    private static bool IsUntrustedReference(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    {
+        if (!TryBuildPathSegments(nodeId, nodes, expression, out var segments))
+        {
+            return false;
+        }
+
+        var candidates = new List<UntrustedInputNode>(4) { s_untrustedRoots };
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var segment = segments[i];
+            var next = new List<UntrustedInputNode>(4);
+            for (var j = 0; j < candidates.Count; j++)
+            {
+                var node = candidates[j];
+                if (node.TryGetChild(segment, out var direct))
+                {
+                    next.Add(direct);
+                }
+
+                if (node.TryGetChild("*", out var wildcard))
+                {
+                    next.Add(wildcard);
+                }
+            }
+
+            if (next.Count == 0)
+            {
+                return false;
+            }
+
+            candidates = next;
+        }
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].IsLeaf)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryBuildPathSegments(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out List<string> segments)
+    {
+        segments = [];
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
@@ -129,46 +205,49 @@ public sealed class TemplateInjectionRule : RuleBase
         var node = nodes[nodeId];
         switch (node.Kind)
         {
+            case ExpressionNodeKind.Identifier:
+                segments.Add(ToLowerAscii(node.Token.AsSpan(expression)));
+                return true;
             case ExpressionNodeKind.MemberAccess:
-                if (TokenEqualsIgnoreCase(node.Token.AsSpan(expression), "event"u8)
-                    && IsIdentifier(node.Left, nodes, expression, "github"u8))
+                if (!TryBuildPathSegments(node.Left, nodes, expression, out segments))
                 {
-                    return true;
+                    return false;
                 }
 
-                return IsGithubEventReference(node.Left, nodes, expression);
-
-            case ExpressionNodeKind.IndexAccess:
-                if (IsIdentifier(node.Left, nodes, expression, "github"u8)
-                    && IsEventIndex(node.Right, nodes, expression))
-                {
-                    return true;
-                }
-
-                return IsGithubEventReference(node.Left, nodes, expression);
-
+                segments.Add(ToLowerAscii(node.Token.AsSpan(expression)));
+                return true;
             case ExpressionNodeKind.WildcardAccess:
-                return IsGithubEventReference(node.Left, nodes, expression);
+                if (!TryBuildPathSegments(node.Left, nodes, expression, out segments))
+                {
+                    return false;
+                }
 
+                segments.Add("*");
+                return true;
+            case ExpressionNodeKind.IndexAccess:
+                if (!TryBuildPathSegments(node.Left, nodes, expression, out segments))
+                {
+                    return false;
+                }
+
+                if (TryGetIndexSegment(node.Right, nodes, expression, out var indexSegment))
+                {
+                    segments.Add(indexSegment);
+                }
+                else
+                {
+                    segments.Add("*");
+                }
+
+                return true;
             default:
                 return false;
         }
     }
 
-    private static bool IsIdentifier(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
+    private static bool TryGetIndexSegment(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out string segment)
     {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-        return node.Kind == ExpressionNodeKind.Identifier
-            && TokenEqualsIgnoreCase(node.Token.AsSpan(expression), expected);
-    }
-
-    private static bool IsEventIndex(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
-    {
+        segment = string.Empty;
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
@@ -177,10 +256,28 @@ public sealed class TemplateInjectionRule : RuleBase
         var node = nodes[nodeId];
         if (node.Kind is ExpressionNodeKind.StringLiteral or ExpressionNodeKind.Identifier)
         {
-            return TokenEqualsIgnoreCase(node.Token.AsSpan(expression), "event"u8);
+            segment = ToLowerAscii(node.Token.AsSpan(expression));
+            return true;
         }
 
         return false;
+    }
+
+    private static string ToLowerAscii(ReadOnlySpan<byte> text)
+    {
+        var chars = new char[text.Length];
+        for (var i = 0; i < text.Length; i++)
+        {
+            var b = text[i];
+            if (b is >= (byte)'A' and <= (byte)'Z')
+            {
+                b = (byte)(b + 32);
+            }
+
+            chars[i] = (char)b;
+        }
+
+        return new string(chars);
     }
 
     private static bool TokenEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
@@ -212,4 +309,67 @@ public sealed class TemplateInjectionRule : RuleBase
 
         return true;
     }
+
+    private sealed class UntrustedInputNode
+    {
+        private readonly Dictionary<string, UntrustedInputNode> _children = new(StringComparer.Ordinal);
+
+        public bool IsLeaf { get; private set; }
+
+        public void AddPath(ReadOnlySpan<string> segments)
+        {
+            if (segments.Length == 0)
+            {
+                IsLeaf = true;
+                return;
+            }
+
+            var head = segments[0];
+            if (!_children.TryGetValue(head, out var child))
+            {
+                child = new UntrustedInputNode();
+                _children[head] = child;
+            }
+
+            child.AddPath(segments[1..]);
+        }
+
+        public bool TryGetChild(string key, out UntrustedInputNode child)
+        {
+            return _children.TryGetValue(key, out child!);
+        }
+    }
+
+    private static UntrustedInputNode BuildUntrustedTree()
+    {
+        var root = new UntrustedInputNode();
+        Add(root, "github", "event", "issue", "title");
+        Add(root, "github", "event", "issue", "body");
+        Add(root, "github", "event", "pull_request", "title");
+        Add(root, "github", "event", "pull_request", "body");
+        Add(root, "github", "event", "pull_request", "head", "ref");
+        Add(root, "github", "event", "pull_request", "head", "label");
+        Add(root, "github", "event", "pull_request", "head", "repo", "default_branch");
+        Add(root, "github", "event", "comment", "body");
+        Add(root, "github", "event", "review", "body");
+        Add(root, "github", "event", "review_comment", "body");
+        Add(root, "github", "event", "pages", "*", "page_name");
+        Add(root, "github", "event", "commits", "*", "message");
+        Add(root, "github", "event", "commits", "*", "author", "email");
+        Add(root, "github", "event", "commits", "*", "author", "name");
+        Add(root, "github", "event", "head_commit", "message");
+        Add(root, "github", "event", "head_commit", "author", "email");
+        Add(root, "github", "event", "head_commit", "author", "name");
+        Add(root, "github", "event", "discussion", "title");
+        Add(root, "github", "event", "discussion", "body");
+        Add(root, "github", "head_ref");
+        return root;
+    }
+
+    private static void Add(UntrustedInputNode root, params string[] segments)
+    {
+        root.AddPath(segments);
+    }
+
+    private static readonly UntrustedInputNode s_untrustedRoots = BuildUntrustedTree();
 }
