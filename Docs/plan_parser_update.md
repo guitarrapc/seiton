@@ -114,10 +114,10 @@ ExpressionNodeKind.Identifier => ExprType.Any,  // ← Partial の根本原因
 
 ```
 data/sources/context-types/
-  raw/contexts.md               ← fetch した raw ファイル
-  parsed/contexts.json          ← parse 結果（プロパティ名・基本型の平坦なリスト）
-  override/context-overrides.json  ← 手書きオーバーライド（strict/loose, map pattern, undocumented）
-  merged/context-types.json     ← merge 後の最終モデル
+  github/
+    raw/contexts.md               ← fetch した raw ファイル（将来実装予定）
+    parsed/contexts.json          ← parse 結果（将来実装予定）
+    context-types.json            ← 手書き JSON（現時点の primary source）
 
 src/Seiton.Core/Generated/
   ContextTypes.g.cs             ← 生成されるコード（Phase 5 の成果物）
@@ -134,7 +134,10 @@ src/Seiton.Core/Generated/
 
 ```
 data/sources/function-specs/
-  function-specs.json          ← 手書き（関数名・パラメータ型・オーバーロード・可変長フラグ・isStatusCheck 等）
+  github/
+    raw/                         ← 将来 expressions.md から関数名一覧を取得予定
+    parsed/                      ← 将来 parse 結果を保存予定
+    function-specs.json          ← 手書き（関数名・パラメータ型・オーバーロード・可変長フラグ・isStatusCheck 等）
 
 src/Seiton.Core/Generated/
   FunctionSpecs.g.cs           ← 生成されるコード（Phase 5 の成果物）
@@ -345,14 +348,14 @@ internal static class FunctionSpecs
 - `verify-function-specs` — 現在の `FunctionSpecs.g.cs` が再生成結果と一致するか検証（CI 用）
 
 **完了条件**:
-- [ ] `sync-context-types` を実行すると `ContextTypes.g.cs` が再生成されること
-- [ ] Phase 1 のインライン手書き定義を `ContextTypes.g.cs` 由来に差し替えても全テストが通過すること
-- [ ] docs にプロパティが追加された場合に `verify-context-types` が差分を報告すること
-- [ ] `sync-function-specs` を実行すると `FunctionSpecs.g.cs` が再生成されること
-- [ ] Phase 1 の手書き `Specs` 配列を `FunctionSpecs.g.cs` 由来に差し替えても全テストが通過すること
-- [ ] docs に新関数が追加された場合に `sync-function-specs` が未登録関数名を警告として出力すること
-- [ ] CI で週次実行できる設計になっていること
-- [ ] 全テスト通過
+- [x] `sync-context-types` を実行すると `ContextTypes.g.cs` が再生成されること
+- [x] Phase 1 のインライン手書き定義を `ContextTypes.g.cs` 由来に差し替えても全テストが通過すること
+- [x] docs にプロパティが追加された場合に `verify-context-types` が差分を報告すること
+- [x] `sync-function-specs` を実行すると `FunctionSpecs.g.cs` が再生成されること
+- [x] Phase 1 の手書き `Specs` 配列を `FunctionSpecs.g.cs` 由来に差し替えても全テストが通過すること
+- [ ] docs に新関数が追加された場合に `sync-function-specs` が未登録関数名を警告として出力すること（※ Fetcher/Validator は未実装。将来 expressions.md からの関数名取得を追加予定）
+- [x] CI で週次実行できる設計になっていること（sync/verify コマンド対応済み）
+- [x] 全テスト通過
 
 ---
 

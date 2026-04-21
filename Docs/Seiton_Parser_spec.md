@@ -929,6 +929,8 @@ Detailed linter runtime behavior is defined in `Seiton_Linter_spec.md`.
 | Context availability table | GitHub Docs |
 | Special function names | GitHub Docs |
 | Popular actions metadata | Fetched from action.yml |
+| Context type definitions | Hand-written JSON (`data/sources/context-types/github/context-types.json`) |
+| Function signatures | Hand-written JSON (`data/sources/function-specs/github/function-specs.json`) |
 
 ### 9.1.1 Source of Truth and Reference Role (Normative)
 

@@ -22,7 +22,7 @@ internal sealed class RunnerLabelsCSharpGenerator
             .ToArray();
 
         var sb = new StringBuilder();
-        sb.Append(
+        sb.AppendLine(
             """
             namespace Seiton.Core.Generated;
 
@@ -37,7 +37,6 @@ internal sealed class RunnerLabelsCSharpGenerator
                 internal static bool IsPreviewHostedLabel(ReadOnlySpan<byte> labelUtf8)
                 {
             """);
-        sb.AppendLine();
 
         if (preview.Length == 0)
         {

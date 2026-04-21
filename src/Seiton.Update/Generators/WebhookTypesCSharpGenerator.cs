@@ -35,7 +35,7 @@ internal sealed class WebhookTypesCSharpGenerator
     {
         var sb = new StringBuilder();
         AppendGeneratedHeader(sb, "sync-webhooks");
-        sb.Append(
+        sb.AppendLine(
             """
             namespace Seiton.Core.Generated;
 

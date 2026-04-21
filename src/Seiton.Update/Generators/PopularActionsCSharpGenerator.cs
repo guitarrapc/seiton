@@ -21,7 +21,7 @@ internal sealed class PopularActionsCSharpGenerator
 
         var sb = new StringBuilder();
         AppendGeneratedHeader(sb, "sync-popular-actions");
-        sb.Append(
+        sb.AppendLine(
             """
             namespace Seiton.Core.Generated;
 
@@ -30,7 +30,6 @@ internal sealed class PopularActionsCSharpGenerator
                 internal enum ActionId
                 {
             """);
-        sb.AppendLine();
 
         foreach (var action in normalized)
         {

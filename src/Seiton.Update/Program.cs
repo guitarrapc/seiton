@@ -112,6 +112,46 @@ app.Add("verify-runner-labels", () =>
     }
 });
 
+app.Add("sync-context-types", () =>
+{
+    var code = ContextTypesCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-context-types failed with code {code}");
+    }
+});
+
+app.Add("verify-context-types", () =>
+{
+    var code = ContextTypesCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-context-types failed with code {code}");
+    }
+});
+
+app.Add("sync-function-specs", () =>
+{
+    var code = FunctionSpecsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-function-specs failed with code {code}");
+    }
+});
+
+app.Add("verify-function-specs", () =>
+{
+    var code = FunctionSpecsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-function-specs failed with code {code}");
+    }
+});
+
 // Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
@@ -329,6 +369,16 @@ static int RunSync(string repoRoot, string dataset)
         return RunnerLabelsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "context-types")
+    {
+        return ContextTypesCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "function-specs")
+    {
+        return FunctionSpecsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -349,7 +399,19 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return RunnerLabelsCommands.Sync(repoRoot);
+        code = RunnerLabelsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = ContextTypesCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return FunctionSpecsCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -378,6 +440,16 @@ static int RunVerify(string repoRoot, string dataset)
         return RunnerLabelsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "context-types")
+    {
+        return ContextTypesCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "function-specs")
+    {
+        return FunctionSpecsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -398,7 +470,19 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return RunnerLabelsCommands.Verify(repoRoot);
+        code = RunnerLabelsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = ContextTypesCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return FunctionSpecsCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

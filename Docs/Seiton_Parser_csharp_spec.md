@@ -46,9 +46,9 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | Linter-side traversal infrastructure | Defined in `Seiton_Linter_csharp_spec.md` |
 | **Rule Engine** | Linter-side rule orchestration | Defined in `Seiton_Linter_csharp_spec.md` |
-| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented. `ExprType` hierarchy with `ObjectExprType` (strict/loose/mapped), `ArrayExprType`, bottom-up `InferType`, typed built-in function signatures, and key-granularity context availability checks. `BuiltinContextTypes` defines hand-written type schemas for all 11 context roots (`github`, `env`, `job`, `runner`, `secrets`, `strategy`, `steps`, `matrix`, `needs`, `inputs`, `vars`), enabling typed property access inference and unknown-property diagnostics on strict objects. Remaining differences are reference parity gaps (dynamic context resolution, operator type validation) |
+| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented. `ExprType` hierarchy with `ObjectExprType` (strict/loose/mapped), `ArrayExprType`, bottom-up `InferType`, typed built-in function signatures, and key-granularity context availability checks. `BuiltinContextTypes` is auto-generated in `ContextTypes.g.cs` (source: `data/sources/context-types/github/context-types.json`) and defines type schemas for all 11 context roots (`github`, `env`, `job`, `runner`, `secrets`, `strategy`, `steps`, `matrix`, `needs`, `inputs`, `vars`). Built-in function signatures (`FunctionSpec[] Specs`) are auto-generated in `FunctionSpecs.g.cs` (source: `data/sources/function-specs/github/function-specs.json`). Remaining differences are reference parity gaps (dynamic context resolution, operator type validation) |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
-| **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`) |
+| **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`, `ContextTypes.g.cs`, `FunctionSpecs.g.cs`) |
 
 #### 0.1.3 Perspectives to Supplement from ghalint
 
@@ -1171,6 +1171,8 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 | Webhook event + activity types | `WebhookTypes.g.cs` | Static table mapping event names to allowed activity types and filter options |
 | Context availability | `Availability.g.cs` | Which expression contexts and special functions are available at each workflow position |
 | Popular actions metadata | `PopularActions.g.cs` | Well-known GitHub Actions with expected input/output names and types |
+| Context type definitions | `ContextTypes.g.cs` | Built-in context type schemas for all 11 context roots (source: `data/sources/context-types/github/context-types.json`) |
+| Function signatures | `FunctionSpecs.g.cs` | Built-in function specs with parameter types and overloads (source: `data/sources/function-specs/github/function-specs.json`) |
 
 ### 9.2 Update Policy
 
@@ -1198,7 +1200,9 @@ Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore i
 
 ### 9.3 Source Pipeline Architecture (Spec §9.3)
 
-Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`).
+Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`, `context-types`, `function-specs`).
+
+> **Note**: `context-types` and `function-specs` use hand-written JSON data files as their authoritative source rather than fetching from GitHub Docs. They implement a simplified 1-stage pipeline (JSON → codegen) with sync/verify commands.
 
 #### 9.3.1 CLI Commands
 
@@ -1210,8 +1214,8 @@ Implements the 3-stage pipeline defined in Spec §9.3 for all currently supporte
 
 Sync/verify entrypoints:
 
-- `sync --dataset {webhooks|availability|popular-actions|all}`
-- `verify --dataset {webhooks|availability|popular-actions|all}`
+- `sync --dataset {webhooks|availability|popular-actions|context-types|function-specs|all}`
+- `verify --dataset {webhooks|availability|popular-actions|context-types|function-specs|all}`
 
 #### 9.3.2 Data Paths
 
@@ -1230,6 +1234,14 @@ data/sources/popular-actions/github/popular_actions.json
 
 data/sources/reports/*
 data/sources/manifest.json
+
+data/sources/context-types/github/raw/          ← future: fetched contexts.md
+data/sources/context-types/github/parsed/       ← future: parsed context property tables
+data/sources/context-types/github/context-types.json
+
+data/sources/function-specs/github/raw/         ← future: fetched function names from expressions.md
+data/sources/function-specs/github/parsed/      ← future: parsed function name list
+data/sources/function-specs/github/function-specs.json
 ```
 
 #### 9.3.3 Stage Isolation Guarantee

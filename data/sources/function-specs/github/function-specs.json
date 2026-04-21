@@ -1,0 +1,78 @@
+{
+  "functions": [
+    {
+      "name": "contains",
+      "overloads": [
+        { "returnType": "bool", "params": ["string", "any"] },
+        { "returnType": "bool", "params": ["array<any>", "any"] }
+      ]
+    },
+    {
+      "name": "startswith",
+      "overloads": [
+        { "returnType": "bool", "params": ["string", "string"] }
+      ]
+    },
+    {
+      "name": "endswith",
+      "overloads": [
+        { "returnType": "bool", "params": ["string", "string"] }
+      ]
+    },
+    {
+      "name": "format",
+      "overloads": [
+        { "returnType": "string", "params": ["string"], "variadicParam": "any" }
+      ]
+    },
+    {
+      "name": "join",
+      "overloads": [
+        { "returnType": "string", "params": ["array<any>"] },
+        { "returnType": "string", "params": ["array<any>", "string"] }
+      ]
+    },
+    {
+      "name": "tojson",
+      "overloads": [
+        { "returnType": "string", "params": ["any"] }
+      ]
+    },
+    {
+      "name": "fromjson",
+      "overloads": [
+        { "returnType": "any", "params": ["string"] }
+      ]
+    },
+    {
+      "name": "hashfiles",
+      "overloads": [
+        { "returnType": "string", "params": ["string"], "variadicParam": "string" }
+      ]
+    },
+    {
+      "name": "success",
+      "overloads": [
+        { "returnType": "bool", "params": [] }
+      ]
+    },
+    {
+      "name": "failure",
+      "overloads": [
+        { "returnType": "bool", "params": [] }
+      ]
+    },
+    {
+      "name": "cancelled",
+      "overloads": [
+        { "returnType": "bool", "params": [] }
+      ]
+    },
+    {
+      "name": "always",
+      "overloads": [
+        { "returnType": "bool", "params": [] }
+      ]
+    }
+  ]
+}

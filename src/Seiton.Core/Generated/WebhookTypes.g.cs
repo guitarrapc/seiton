@@ -15,7 +15,8 @@ internal static class WebhookTypes
     }
 
     internal enum EventId
-    {        BranchProtectionRule,
+    {
+        BranchProtectionRule,
         CheckRun,
         CheckSuite,
         Create,
