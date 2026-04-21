@@ -95,13 +95,27 @@ Before completing parser changes, validate all of the following.
 
 ### Running Tests
 
+**This project uses TUnit. Always use `--treenode-filter` — do NOT use `dotnet test --filter` (that is xUnit/MSTest syntax and will not work).**
+
 To run all tests:
 
 ```shell
 dotnet test
 ```
 
-To run specific tests (e.g., XxxxxTests):
+To run specific tests (e.g., ExpressionTests), from the repo root:
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/*
+```
+
+To run a single test method (e.g., `InferType_GitHubRetentionDays` in `ExpressionTests`):
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/InferType_GitHubRetentionDays*
+```
+
+Or, from within the test project directory, use `dotnet run`:
 
 ```shell
 dotnet run --treenode-filter /*/*/XxxxxTests/*
