@@ -197,11 +197,11 @@ vars       → map object<string>
 - 未定義 root context 名をエラーとして診断に追加（Gap #2 の解消）
 
 **完了条件**:
-- [ ] `github.typo_field` のような未知プロパティがエラーになること
-- [ ] `goggle.actor` など未定義 root ident がエラーになること
-- [ ] 既存の全テストが通過すること
-- [ ] `github.actor` / `github.ref_protected` / `job.status` / `runner.os` など主要プロパティの型が正しく推定されること
-- [ ] 全テスト通過
+- [x] `github.typo_field` のような未知プロパティがエラーになること
+- [x] `goggle.actor` など未定義 root ident がエラーになること
+- [x] 既存の全テストが通過すること
+- [x] `github.actor` / `github.ref_protected` / `job.status` / `runner.os` など主要プロパティの型が正しく推定されること
+- [x] 全テスト通過
 
 ---
 

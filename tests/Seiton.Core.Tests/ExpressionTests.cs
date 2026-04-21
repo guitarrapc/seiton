@@ -396,14 +396,153 @@ public sealed class ExpressionTests
     // ── InferType: context access ─────────────────────────────────────────────
 
     [Test]
-    public async Task InferType_ContextAccess_ReturnsAny()
+    public async Task InferType_GitHubRef_ReturnsString()
     {
         var expression = "github.ref"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
         var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
 
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_GitHubRefProtected_ReturnsBool()
+    {
+        var expression = "github.ref_protected"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_GitHubRetentionDays_ReturnsNumber()
+    {
+        var expression = "github.retention_days"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Number);
+    }
+
+    [Test]
+    public async Task InferType_JobStatus_ReturnsString()
+    {
+        var expression = "job.status"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_RunnerOs_ReturnsString()
+    {
+        var expression = "runner.os"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_EnvVariable_ReturnsString()
+    {
+        var expression = "env.MY_VAR"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_GitHubEventProperty_ReturnsAny()
+    {
+        var expression = "github.event.pull_request"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
         await Assert.That(type).IsEqualTo(ExprType.Any);
+    }
+
+    [Test]
+    public async Task InferType_GitHubContextRoot_ReturnsObject()
+    {
+        var expression = "github"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type is ObjectExprType).IsTrue();
+    }
+
+    // ── Validate: context root and property checks ────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_UndefinedRootContext_ReportsDiagnostic()
+    {
+        var expression = "goggle.actor"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_UnknownGithubProperty_ReportsDiagnostic()
+    {
+        var expression = "github.typo_field"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'typo_field' is not defined in 'github' object", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ValidGithubProperty_NoDiagnostic()
+    {
+        var expression = "github.actor"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_DynamicContextProperty_NoDiagnostic()
+    {
+        var expression = "env.MY_CUSTOM_VAR"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
 
     // ── ValidateStringArg: improved bottom-up type check ─────────────────────

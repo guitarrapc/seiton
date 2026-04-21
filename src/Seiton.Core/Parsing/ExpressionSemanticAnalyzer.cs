@@ -97,6 +97,162 @@ public static class ExpressionSemanticAnalyzer
         ]),
     ];
 
+    // ── Built-in context type definitions (Phase 1: hand-written, Phase 5: auto-generated) ──
+    private static readonly (byte[] NameUtf8, ExprType Type)[] BuiltinContextTypes = BuildBuiltinContextTypes();
+
+    private static (byte[] NameUtf8, ExprType Type)[] BuildBuiltinContextTypes()
+    {
+        // github → strict object (matches actionlint BuiltinGlobalVariableTypes)
+        var githubEvent = ExprType.Object(dynamicPropertyType: ExprType.Any); // loose: any webhook payload property
+        var githubType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("action"u8), ExprType.String },
+                { new Utf8String("action_path"u8), ExprType.String },
+                { new Utf8String("action_ref"u8), ExprType.String },
+                { new Utf8String("action_repository"u8), ExprType.String },
+                { new Utf8String("action_status"u8), ExprType.String },
+                { new Utf8String("actor"u8), ExprType.String },
+                { new Utf8String("actor_id"u8), ExprType.String },
+                { new Utf8String("api_url"u8), ExprType.String },
+                { new Utf8String("artifact_cache_size_limit"u8), ExprType.Number },
+                { new Utf8String("base_ref"u8), ExprType.String },
+                { new Utf8String("env"u8), ExprType.String },
+                { new Utf8String("event"u8), githubEvent },
+                { new Utf8String("event_name"u8), ExprType.String },
+                { new Utf8String("event_path"u8), ExprType.String },
+                { new Utf8String("graphql_url"u8), ExprType.String },
+                { new Utf8String("head_ref"u8), ExprType.String },
+                { new Utf8String("job"u8), ExprType.String },
+                { new Utf8String("output"u8), ExprType.String },
+                { new Utf8String("path"u8), ExprType.String },
+                { new Utf8String("ref"u8), ExprType.String },
+                { new Utf8String("ref_name"u8), ExprType.String },
+                { new Utf8String("ref_protected"u8), ExprType.Bool },
+                { new Utf8String("ref_type"u8), ExprType.String },
+                { new Utf8String("repository"u8), ExprType.String },
+                { new Utf8String("repository_id"u8), ExprType.String },
+                { new Utf8String("repository_owner"u8), ExprType.String },
+                { new Utf8String("repository_owner_id"u8), ExprType.String },
+                { new Utf8String("repository_visibility"u8), ExprType.String },
+                { new Utf8String("repositoryurl"u8), ExprType.String },
+                { new Utf8String("retention_days"u8), ExprType.Number },
+                { new Utf8String("run_attempt"u8), ExprType.String },
+                { new Utf8String("run_id"u8), ExprType.String },
+                { new Utf8String("run_number"u8), ExprType.String },
+                { new Utf8String("secret_source"u8), ExprType.String },
+                { new Utf8String("server_url"u8), ExprType.String },
+                { new Utf8String("sha"u8), ExprType.String },
+                { new Utf8String("state"u8), ExprType.String },
+                { new Utf8String("step_summary"u8), ExprType.String },
+                { new Utf8String("token"u8), ExprType.String },
+                { new Utf8String("triggering_actor"u8), ExprType.String },
+                { new Utf8String("workflow"u8), ExprType.String },
+                { new Utf8String("workflow_ref"u8), ExprType.String },
+                { new Utf8String("workflow_sha"u8), ExprType.String },
+                { new Utf8String("workspace"u8), ExprType.String },
+            },
+            strict: true);
+
+        // env → mapped object (any key returns string)
+        var envType = ExprType.Object(dynamicPropertyType: ExprType.String);
+
+        // job → strict object with nested structures
+        var jobContainerType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("id"u8), ExprType.String },
+                { new Utf8String("network"u8), ExprType.String },
+            },
+            strict: true);
+
+        var jobServiceType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("id"u8), ExprType.String },
+                { new Utf8String("network"u8), ExprType.String },
+                { new Utf8String("ports"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+
+        var jobType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("check_run_id"u8), ExprType.Number },
+                { new Utf8String("container"u8), jobContainerType },
+                { new Utf8String("services"u8), ExprType.Object(dynamicPropertyType: jobServiceType) },
+                { new Utf8String("status"u8), ExprType.String },
+            },
+            strict: true);
+
+        // runner → strict object
+        var runnerType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("name"u8), ExprType.String },
+                { new Utf8String("os"u8), ExprType.String },
+                { new Utf8String("arch"u8), ExprType.String },
+                { new Utf8String("temp"u8), ExprType.String },
+                { new Utf8String("tool_cache"u8), ExprType.String },
+                { new Utf8String("debug"u8), ExprType.String },
+                { new Utf8String("environment"u8), ExprType.String },
+            },
+            strict: true);
+
+        // secrets → mapped object (any key returns string)
+        var secretsType = ExprType.Object(dynamicPropertyType: ExprType.String);
+
+        // strategy → loose object with known properties (matches actionlint NewObjectType)
+        var strategyType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("fail-fast"u8), ExprType.Bool },
+                { new Utf8String("job-index"u8), ExprType.Number },
+                { new Utf8String("job-total"u8), ExprType.Number },
+                { new Utf8String("max-parallel"u8), ExprType.Number },
+            },
+            dynamicPropertyType: ExprType.Any);
+
+        // steps, matrix, needs, inputs → loose object (Phase 2 will add dynamic resolution)
+        var stepsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        var matrixType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        var needsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        var inputsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+
+        // vars → mapped object (any key returns string)
+        var varsType = ExprType.Object(dynamicPropertyType: ExprType.String);
+
+        return
+        [
+            ("github"u8.ToArray(), (ExprType)githubType),
+            ("env"u8.ToArray(), (ExprType)envType),
+            ("job"u8.ToArray(), (ExprType)jobType),
+            ("runner"u8.ToArray(), (ExprType)runnerType),
+            ("secrets"u8.ToArray(), (ExprType)secretsType),
+            ("strategy"u8.ToArray(), (ExprType)strategyType),
+            ("steps"u8.ToArray(), (ExprType)stepsType),
+            ("matrix"u8.ToArray(), (ExprType)matrixType),
+            ("needs"u8.ToArray(), (ExprType)needsType),
+            ("inputs"u8.ToArray(), (ExprType)inputsType),
+            ("vars"u8.ToArray(), (ExprType)varsType),
+        ];
+    }
+
+    private static bool TryGetBuiltinContextType(ReadOnlySpan<byte> nameUtf8, out ExprType type)
+    {
+        for (var i = 0; i < BuiltinContextTypes.Length; i++)
+        {
+            if (EqualsAsciiIgnoreCase(nameUtf8, BuiltinContextTypes[i].NameUtf8))
+            {
+                type = BuiltinContextTypes[i].Type;
+                return true;
+            }
+        }
+
+        type = ExprType.Any;
+        return false;
+    }
+
     public static Diagnostic[] Validate(
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
@@ -131,7 +287,7 @@ public static class ExpressionSemanticAnalyzer
             ExpressionNodeKind.NumberLiteral => ExprType.Number,
             ExpressionNodeKind.BooleanLiteral => ExprType.Bool,
             ExpressionNodeKind.NullLiteral => ExprType.Null,
-            ExpressionNodeKind.Identifier => ExprType.Any,
+            ExpressionNodeKind.Identifier => InferIdentifierType(node, expressionUtf8),
             ExpressionNodeKind.Unary => node.Operator == ExpressionOperator.Not
                 ? ExprType.Bool
                 : ExprType.Any,
@@ -197,7 +353,15 @@ public static class ExpressionSemanticAnalyzer
         if (node.Kind == ExpressionNodeKind.Identifier && IsContextRootIdentifier(nodeId, parentId, nodes))
         {
             var rootName = node.Token.AsSpan(expressionUtf8);
-            if (!Availability.IsRootContextAvailable(context, rootName))
+            if (!TryGetBuiltinContextType(rootName, out _))
+            {
+                var rootNameText = Encoding.UTF8.GetString(rootName);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"undefined context '{rootNameText}'",
+                    expressionLocation));
+            }
+            else if (!Availability.IsRootContextAvailable(context, rootName))
             {
                 var rootNameText = Encoding.UTF8.GetString(rootName);
                 diagnostics.Add(new Diagnostic(
@@ -222,6 +386,9 @@ public static class ExpressionSemanticAnalyzer
                 ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
                 break;
             case ExpressionNodeKind.MemberAccess:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidatePropertyAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+                break;
             case ExpressionNodeKind.WildcardAccess:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
                 break;
@@ -726,6 +893,60 @@ public static class ExpressionSemanticAnalyzer
 
         spec = default;
         return false;
+    }
+
+    private static ExprType InferIdentifierType(ExpressionNode node, ReadOnlySpan<byte> expressionUtf8)
+    {
+        var name = node.Token.AsSpan(expressionUtf8);
+        if (TryGetBuiltinContextType(name, out var type))
+        {
+            return type;
+        }
+
+        return ExprType.Any;
+    }
+
+    private static void ValidatePropertyAccess(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        if (leftType is not ObjectExprType { Strict: true } strictObj)
+        {
+            return;
+        }
+
+        var propName = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propName, out _))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"property '{propNameText}' is not defined in '{rootName}' object",
+                expressionLocation));
+        }
+    }
+
+    private static string GetChainRootName(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    {
+        var current = nodeId;
+        while (current >= 0 && current < nodes.Length)
+        {
+            var n = nodes[current];
+            if (n.Kind == ExpressionNodeKind.Identifier)
+            {
+                return Encoding.UTF8.GetString(n.Token.AsSpan(expressionUtf8));
+            }
+
+            current = n.Left;
+        }
+
+        return "object";
     }
 
     private static string ToContextText(ExpressionValidationContext context)
