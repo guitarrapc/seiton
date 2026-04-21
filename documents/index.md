@@ -106,21 +106,22 @@ Seiton bridges the two: it lints like a linter and can also apply fixes (includi
 
 [actionlint](https://github.com/rhysd/actionlint) is the most comprehensive correctness checker for GitHub Actions workflow files. It excels at syntax validation, expression type-checking, shellcheck/pyflakes integration, and reusable-workflow contract validation.
 
-Seiton focuses more heavily on **security policy** rules that actionlint does not cover, and adds **auto-fix** support.
+Seiton matches actionlint on a wide range of structural checks (including `schedule` cron constraints, `workflow_dispatch` inputs, and local action metadata contracts) while emphasizing **security policy**, **supply-chain** rules that actionlint does not implement, and **auto-fix** support.
 
 | Aspect | Seiton | actionlint |
 |---|---|---|
-| Syntax / structural validation | ✓ | ✓ (deeper) |
-| Expression type checking | ✓ | ✓ (full) |
+| Syntax / structural validation | ✓ | ✓ |
+| Expression type checking | ✓ | ✓ |
 | shellcheck / pyflakes integration | ✗ | ✓ |
 | Security rules (injection, secrets, permissions) | ✓ (broad) | Partial |
-| Supply-chain rules (pinning, archived, vulnerable) | ✓ | Partial |
+| Supply-chain rules (pinning, archived, vulnerable) | ✓ | ✗ |
 | Auto-fix | ✓ | ✗ |
 | Online audit rules | ✓ (opt-in) | ✗ |
-| Action metadata file support | ✓ | ✓ |
+| Action metadata file support | ✓ | ✗ (lints as secondary only) |
+| Local action input/output resolution | ✓ | ✓ |
 | Config model | Rule-ID-centric | Global + path-based |
 
-**When to use actionlint alongside Seiton:** actionlint's expression type checker and shellcheck integration catch a different class of bugs. Running both is complementary.
+**When to use actionlint alongside Seiton:** keep **Seiton** as the main linter; add **actionlint** when you need its integrated **shellcheck** / **pyflakes** or marginally deeper expression typing for a different class of bugs.
 
 ---
 
@@ -208,8 +209,8 @@ Seiton focuses more heavily on **security policy** rules that actionlint does no
 
 ### Summary
 
-Use Seiton as your primary GitHub Actions analysis tool. Combine it with other tools for gaps:
+Use **Seiton** as your primary GitHub Actions linter: it covers security, supply-chain hygiene, workflow and action metadata structure (including schedule, dispatch inputs, and local action contracts), optional online audits, and fixes. Combine other tools only where Seiton intentionally does not go:
 
-- Add **actionlint** if you need deep expression type-checking or shellcheck/pyflakes integration.
+- Add **actionlint** if you need integrated **shellcheck** / **pyflakes** or actionlint’s expression checker as an extra pass.
 - Add **frizbee** or **pinact** if you want a dedicated update workflow that also refreshes version annotation comments and upgrades pinned actions to newer releases.
 - Add **dockerfile-pin** if you need Dockerfile `FROM` and docker-compose `image` digest pinning outside of GitHub Actions files.
