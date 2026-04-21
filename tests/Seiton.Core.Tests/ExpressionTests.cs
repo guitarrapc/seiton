@@ -753,4 +753,167 @@ public sealed class ExpressionTests
 
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
     }
+
+    // ── ValidateDynamicPropertyAccess ─────────────────────────────────────────
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_NoOverrides_NoDiagnostics()
+    {
+        var expression = "steps.nonexistent.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, []);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StepsKnownId_NoDiagnostics()
+    {
+        var expression = "steps.build.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var stepType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("outcome"u8), ExprType.String },
+                { new Utf8String("conclusion"u8), ExprType.String },
+                { new Utf8String("outputs"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+        var stepsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("build"u8), stepType } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), stepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StepsUnknownId_ReportsDiagnostic()
+    {
+        var expression = "steps.nonexistent.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var stepType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("outcome"u8), ExprType.String },
+                { new Utf8String("conclusion"u8), ExprType.String },
+                { new Utf8String("outputs"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+        var stepsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("build"u8), stepType } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), stepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'steps'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_MatrixKnownKey_NoDiagnostics()
+    {
+        var expression = "matrix.os"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var matrixType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("os"u8), ExprType.Any } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("matrix"u8.ToArray(), matrixType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_MatrixUnknownKey_ReportsDiagnostic()
+    {
+        var expression = "matrix.unknown_key"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var matrixType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("os"u8), ExprType.Any } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("matrix"u8.ToArray(), matrixType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_key' is not defined in 'matrix'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_NeedsUnknownJob_ReportsDiagnostic()
+    {
+        var expression = "needs.nonexistent.outputs.foo"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var needsEntryType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("result"u8), ExprType.String },
+                { new Utf8String("outputs"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+        var needsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("my-dep"u8), needsEntryType } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("needs"u8.ToArray(), needsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'needs'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_InputsUnknownParam_ReportsDiagnostic()
+    {
+        var expression = "inputs.unknown_param"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var inputsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("environment"u8), ExprType.String } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("inputs"u8.ToArray(), inputsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_param' is not defined in 'inputs'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StepsLooseObject_NoDiagnostics()
+    {
+        // When steps has no IDs the override is a loose object: no property error should fire.
+        var expression = "steps.any_step.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var looseStepsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), looseStepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
 }

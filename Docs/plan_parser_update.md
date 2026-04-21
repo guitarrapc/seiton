@@ -225,11 +225,18 @@ vars       → map object<string>
 - あるいは Validate 前に `BuiltinContextTypes` を context-specific な型でオーバーライドする機構を設ける
 
 **完了条件**:
-- [ ] `steps.nonexistent-step.outputs.foo` がエラーになること
-- [ ] `matrix.unknown_key` がエラーになること（matrix セクション定義がある場合）
-- [ ] `needs.nonexistent-job.outputs.foo` がエラーになること
-- [ ] `inputs.unknown_param` がエラーになること（workflow_call/dispatch inputs 定義がある場合）
-- [ ] 全テスト通過
+- [x] `steps.nonexistent-step.outputs.foo` がエラーになること
+- [x] `matrix.unknown_key` がエラーになること（matrix セクション定義がある場合）
+- [x] `needs.nonexistent-job.outputs.foo` がエラーになること
+- [x] `inputs.unknown_param` がエラーになること（workflow_call/dispatch inputs 定義がある場合）
+- [x] 全テスト通過
+
+**実装状況**: 完全実装済み。
+
+実装概要：
+- `src/Seiton.Core/Parsing/DynamicContextTypeBuilder.cs` 新規作成。`BuildStepsOverride`・`BuildMatrixOverride`・`BuildNeedsOverride`・`BuildInputsOverride` の 4 ファクトリを提供。各コンテキストに既知の key/ID がある場合は strict `ObjectExprType` を返し、そうでない場合は loose object を返す。
+- `ExpressionSemanticAnalyzer` に `ValidateDynamicPropertyAccess` パブリックメソッドを追加。内部的に overrides 対応の `InferTypeWithOverrides` チェーン（`InferIdentifierTypeWithOverrides`・`InferMemberAccessTypeWithOverrides` 等）と `ValidateNodePropertyAccess` ウォーカーを使用。既存の `Validate` パスには非影響。
+- `ExprUndefinedVarRule` に `VisitWorkflowPre` オーバーライドを追加し、inputs override を計算。`VisitJobPre` で job ごとに steps/matrix/needs/inputs の override を計算し `_jobScopeOverrides`・`_stepScopeOverrides` にセット。`ValidateExpression` 内で既存の root context 可用性チェックに加えて `ValidateDynamicPropertyAccess` を呼び出し、プロパティアクセス診断を追加。
 
 ---
 

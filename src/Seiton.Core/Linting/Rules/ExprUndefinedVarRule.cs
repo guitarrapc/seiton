@@ -15,12 +15,44 @@ public sealed class ExprUndefinedVarRule : RuleBase
 
     public override string Name => "Expr Undefined Var Rule";
 
+    // Phase 2: per-workflow and per-job dynamic context type overrides.
+    // These replace the loose static types for steps/matrix/needs/inputs with strict,
+    // job-specific types so that property-access errors can be detected.
+    private Workflow? _currentWorkflow;
+    private (byte[] NameUtf8, ExprType Type) _inputsOverride;
+    private (byte[] NameUtf8, ExprType Type)[]? _jobScopeOverrides;
+    private (byte[] NameUtf8, ExprType Type)[]? _stepScopeOverrides;
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _currentWorkflow = workflow;
+        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On);
+        _jobScopeOverrides = null;
+        _stepScopeOverrides = null;
+    }
+
     public override void VisitJobPre(Job job)
     {
         if (Config.Utf8Yaml is null)
         {
+            _jobScopeOverrides = null;
+            _stepScopeOverrides = null;
             return;
         }
+
+        var yaml = Config.Utf8Yaml;
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix);
+        var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverride(
+            job.Needs,
+            _currentWorkflow?.Jobs ?? new Dictionary<Utf8String, Job>(0),
+            yaml);
+        var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, yaml);
+
+        // job scope: matrix, needs, inputs available (steps is NOT available in job scope)
+        _jobScopeOverrides = [matrixOverride, needsOverride, _inputsOverride];
+        // step scope: also includes steps
+        _stepScopeOverrides = [stepsOverride, matrixOverride, needsOverride, _inputsOverride];
 
         CheckNode(job.If, ExpressionValidationContext.Job, "job.if", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
@@ -163,6 +195,21 @@ public sealed class ExprUndefinedVarRule : RuleBase
             location,
             report,
             target);
+
+        // Phase 2: also validate property access against dynamic context types
+        var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
+        if (overrides is null || overrides.Length == 0)
+        {
+            return;
+        }
+
+        var propertyDiagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+        for (var i = 0; i < propertyDiagnostics.Length; i++)
+        {
+            var d = propertyDiagnostics[i];
+            report(this, d.Message, d.Location, target);
+        }
     }
 
     private void VisitExpressionNode<TTarget>(

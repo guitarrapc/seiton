@@ -3748,6 +3748,157 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_DynamicContext_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-step-accesses-known-step-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: prep
+                          run: echo ok
+                        - if: ${{ steps.prep.outcome == 'success' }}
+                          run: echo next
+            """,
+            []),
+            new RuleCase(
+            "ok-step-accesses-known-matrix-key",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            []),
+            new RuleCase(
+            "ok-step-accesses-known-needs-job",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - run: echo ${{ needs.build.result }}
+            """,
+            []),
+            new RuleCase(
+            "ok-step-accesses-known-workflow-call-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ inputs.environment }}
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-no-rows-loose-object-no-error",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            include:
+                                - os: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            []),
+            new RuleCase(
+            "ng-step-accesses-unknown-step-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: prep
+                          run: echo ok
+                        - if: ${{ steps.nonexistent.outcome == 'success' }}
+                          run: echo next
+            """,
+            ["'nonexistent' is not defined in 'steps'"]),
+            new RuleCase(
+            "ng-step-accesses-unknown-matrix-key",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                    steps:
+                        - env:
+                            VALUE: ${{ matrix.unknown_key }}
+                          run: echo "$VALUE"
+            """,
+            ["'unknown_key' is not defined in 'matrix'"]),
+            new RuleCase(
+            "ng-step-accesses-unknown-needs-job",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - env:
+                            RESULT: ${{ needs.nonexistent.outputs.foo }}
+                          run: echo "$RESULT"
+            """,
+            ["'nonexistent' is not defined in 'needs'"]),
+            new RuleCase(
+            "ng-step-accesses-unknown-workflow-call-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ inputs.unknown_param }}
+                          run: echo "$VAL"
+            """,
+            ["'unknown_param' is not defined in 'inputs'"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_RunEnvContextDirectUseRule_TableDriven()
     {
         var cases = new[]

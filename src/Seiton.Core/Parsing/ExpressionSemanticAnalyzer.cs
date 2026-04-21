@@ -771,4 +771,257 @@ public static class ExpressionSemanticAnalyzer
             _ => "unknown",
         };
     }
+
+    // ── Dynamic context property access validation ─────────────────────────────
+
+    /// <summary>
+    /// Validates property accesses in the expression using per-job context type overrides.
+    /// Only produces property-access errors (no root context availability errors).
+    /// Used by <c>ExprUndefinedVarRule</c> for dynamic contexts: steps, matrix, needs, inputs.
+    /// </summary>
+    public static Diagnostic[] ValidateDynamicPropertyAccess(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] contextOverrides)
+    {
+        if (!parseResult.HasRoot || contextOverrides is null || contextOverrides.Length == 0)
+        {
+            return [];
+        }
+
+        var diagnostics = new List<Diagnostic>();
+        ValidateNodePropertyAccess(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            expressionUtf8,
+            expressionLocation,
+            contextOverrides,
+            diagnostics);
+        return diagnostics.ToArray();
+    }
+
+    private static void ValidateNodePropertyAccess(
+        int nodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return;
+        }
+
+        var node = nodes[nodeId];
+        switch (node.Kind)
+        {
+            case ExpressionNodeKind.Unary:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.Binary:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.MemberAccess:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidatePropertyAccessWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.WildcardAccess:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.IndexAccess:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.FunctionCall:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                for (var i = 0; i < node.ArgCount; i++)
+                {
+                    var argIndex = node.ArgStart + i;
+                    if (argIndex >= 0 && argIndex < arguments.Length)
+                    {
+                        ValidateNodePropertyAccess(arguments[argIndex], nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                    }
+                }
+
+                break;
+        }
+    }
+
+    private static void ValidatePropertyAccessWithOverrides(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        if (leftType is not ObjectExprType { Strict: true } strictObj)
+        {
+            return;
+        }
+
+        var propName = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propName, out _))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"property '{propNameText}' is not defined in '{rootName}' object",
+                expressionLocation));
+        }
+    }
+
+    private static ExprType InferTypeWithOverrides(
+        int nodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return ExprType.Any;
+        }
+
+        var node = nodes[nodeId];
+        return node.Kind switch
+        {
+            ExpressionNodeKind.StringLiteral => ExprType.String,
+            ExpressionNodeKind.NumberLiteral => ExprType.Number,
+            ExpressionNodeKind.BooleanLiteral => ExprType.Bool,
+            ExpressionNodeKind.NullLiteral => ExprType.Null,
+            ExpressionNodeKind.Identifier => InferIdentifierTypeWithOverrides(node, expressionUtf8, overrides),
+            ExpressionNodeKind.Unary => node.Operator == ExpressionOperator.Not
+                ? ExprType.Bool
+                : ExprType.Any,
+            ExpressionNodeKind.Binary => InferBinaryType(node),
+            ExpressionNodeKind.MemberAccess => InferMemberAccessTypeWithOverrides(node, nodes, arguments, expressionUtf8, overrides),
+            ExpressionNodeKind.IndexAccess => InferIndexAccessTypeWithOverrides(node, nodes, arguments, expressionUtf8, overrides),
+            ExpressionNodeKind.WildcardAccess => InferWildcardTypeWithOverrides(node, nodes, arguments, expressionUtf8, overrides),
+            ExpressionNodeKind.FunctionCall => InferFunctionCallType(node, nodes, arguments, expressionUtf8),
+            _ => ExprType.Any,
+        };
+    }
+
+    private static ExprType InferIdentifierTypeWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var name = node.Token.AsSpan(expressionUtf8);
+        for (var i = 0; i < overrides.Length; i++)
+        {
+            if (EqualsAsciiIgnoreCase(name, overrides[i].NameUtf8))
+            {
+                return overrides[i].Type;
+            }
+        }
+
+        if (TryGetBuiltinContextType(name, out var type))
+        {
+            return type;
+        }
+
+        return ExprType.Any;
+    }
+
+    private static ExprType InferMemberAccessTypeWithOverrides(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        if (leftType is ObjectExprType objectType)
+        {
+            if (objectType.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propertyType))
+            {
+                return propertyType;
+            }
+
+            return ExprType.Any;
+        }
+
+        if (leftType is ArrayExprType arrayType)
+        {
+            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            {
+                return arrayType.ElementType;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    private static ExprType InferIndexAccessTypeWithOverrides(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        var rightType = InferTypeWithOverrides(node.Right, nodes, arguments, expressionUtf8, overrides);
+
+        if (leftType is ArrayExprType arrayType)
+        {
+            if (rightType.IsAssignableTo(ExprType.Number) || rightType is AnyExprType)
+            {
+                return arrayType.ElementType;
+            }
+
+            return ExprType.Any;
+        }
+
+        if (leftType is ObjectExprType objectType)
+        {
+            if (node.Right >= 0
+                && node.Right < nodes.Length
+                && nodes[node.Right].Kind == ExpressionNodeKind.StringLiteral)
+            {
+                var propertyName = nodes[node.Right].Token.AsSpan(expressionUtf8);
+                if (objectType.TryGetProperty(propertyName, out var propertyType))
+                {
+                    return propertyType;
+                }
+            }
+
+            if (rightType.IsAssignableTo(ExprType.String) || rightType is AnyExprType)
+            {
+                return objectType.DynamicPropertyType ?? ExprType.Any;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    private static ExprType InferWildcardTypeWithOverrides(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        if (leftType is ArrayExprType arrayType)
+        {
+            return arrayType.ElementType;
+        }
+
+        if (leftType is ObjectExprType objectType)
+        {
+            return objectType.DynamicPropertyType ?? ExprType.Any;
+        }
+
+        return ExprType.Any;
+    }
 }
