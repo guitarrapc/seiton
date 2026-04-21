@@ -42,6 +42,37 @@ Files under `src/Seiton.Core/Generated/` (e.g. `Availability.g.cs`) are **auto-g
 dotnet run --project src/Seiton.Update -- sync-availability
 ```
 
+### Seiton.Update Pipeline Pattern
+
+Each generated dataset follows a consistent multi-stage pipeline:
+
+```
+data/sources/{dataset}/github/
+  raw/          ← Stage 1: fetched raw files from official sources (network)
+  parsed/       ← Stage 2: parsed intermediate JSON (local, deterministic)
+  {name}.json   ← Stage 3: merged canonical snapshot or hand-written source
+```
+
+**CLI command naming convention** (per-dataset):
+- `fetch-{dataset}` — orchestrator: fetch + parse + manifest update
+- `fetch-{dataset}-sources` — Stage 1: download raw source files
+- `parse-{dataset}-sources` — Stage 2: parse raw files into intermediate JSON
+- `merge-{dataset}-sources` — Stage 3: merge parsed artifacts into snapshot
+- `sync-{dataset}` — generate `.g.cs` from snapshot/source JSON
+- `verify-{dataset}` — check `.g.cs` is up to date (CI)
+- `validate-{dataset}` — cross-check source data against docs (optional)
+
+Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `Docs/Seiton_Parser_csharp_spec.md` §9.3 for details.
+
+**When adding a new dataset pipeline**, follow the existing pattern:
+1. Create a `SourcePathResolver` in `Services/` (with legacy path fallback)
+2. Create a `Fetcher` in `Sources/` (with `HttpClient`, `ComputeSha256`, manifest entry)
+3. Create a `MarkdownParser` or `SourceParser` in `Parsers/`
+4. Create a `Generator` in `Generators/` (StringBuilder-based codegen)
+5. Create a `SyncService` in `Services/` (Sync + IsUpToDate)
+6. Create `Commands` in `Commands/` (static methods)
+7. Wire up commands in `Program.cs` (both convenience aliases and `RunSync`/`RunVerify` dispatchers)
+
 ### Parser Allocation Guardrails (Always-On)
 
 For files under `src/Seiton.Core/Parsing/**`, follow these rules strictly.

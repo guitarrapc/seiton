@@ -276,6 +276,11 @@ vars       → map object<string>
 
 **What（ContextTypes — contexts.md 由来）**: `Availability.g.cs` の生成パイプラインと同じ構成を `ContextTypes` 向けに実装する。
 
+**実装状況**: codegen （sync/verify）は実装済み。fetch/parse/override merge は未実装。
+現時点では手書き `context-types.json` が primary source。将来、contexts.md からの fetch/parse/override merge を実装し、docs 追随を完全自動化する。
+
+fetch URL: `https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md`（availability と同じ GitHub Docs raw source）
+
 ```
 Seiton.Update に追加する構成物：
   Sources/GitHubContextTypesFetcher.cs
@@ -324,7 +329,7 @@ Seiton.Update に追加する構成物：
     - data/sources/function-specs/github/function-specs.json を読み込み FunctionSpecs.g.cs を生成
 
 既存の手書き管理データ：
-  data/sources/function-specs/function-specs.json  ← 手書き（パラメータ型・オーバーロード・可変長フラグ等）
+  data/sources/function-specs/github/function-specs.json  ← 手書き（パラメータ型・オーバーロード・可変長フラグ等）
 
 Seiton.Core/Generated/ に追加されるファイル：
   FunctionSpecs.g.cs
@@ -363,6 +368,12 @@ internal static class FunctionSpecs
 - [x] docs に新関数が追加された場合に `sync-function-specs` が未登録関数名を警告として出力すること（`fetch-function-specs-sources` + `parse-function-specs-sources` で parsed 作成後、`sync-function-specs` が自動検証）
 - [x] CI で週次実行できる設計になっていること（sync/verify コマンド対応済み）
 - [x] 全テスト通過
+
+**未実装項目（将来実装予定）**:
+- [ ] `fetch-context-types-sources` で contexts.md を取得し `data/sources/context-types/github/raw/` に保存できること
+- [ ] `parse-context-types-sources` でプロパティテーブルを parse し `data/sources/context-types/github/parsed/` に JSON を出力できること
+- [ ] `merge-context-types-sources` で parsed + override を merge し `context-types.json` を更新できること
+- [ ] `fetch-context-types` オーケストレータコマンドが fetch + parse + merge + manifest 更新を一括実行できること
 
 ---
 
