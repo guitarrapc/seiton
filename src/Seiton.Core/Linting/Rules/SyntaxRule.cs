@@ -24,15 +24,19 @@ public sealed class SyntaxRule : IRule
         return false;
     }
 
-    public Diagnostic[] GetDiagnostics()
+    public IReadOnlyList<Diagnostic> GetDiagnostics()
     {
         var diagnostics = new List<Diagnostic>();
         for (var i = 0; i < rules.Length; i++)
         {
-            diagnostics.AddRange(rules[i].GetDiagnostics());
+            var ruleDiags = rules[i].GetDiagnostics();
+            for (var j = 0; j < ruleDiags.Count; j++)
+            {
+                diagnostics.Add(ruleDiags[j]);
+            }
         }
 
-        return diagnostics.ToArray();
+        return diagnostics;
     }
 
     public void SetConfig(LintConfig config)

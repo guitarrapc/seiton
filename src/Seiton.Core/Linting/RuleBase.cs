@@ -18,7 +18,7 @@ public abstract class RuleBase : IRule
         return documentKind == DocumentKind.Workflow || documentKind == DocumentKind.ActionMetadata;
     }
 
-    public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
+    public IReadOnlyList<Diagnostic> GetDiagnostics() => diagnostics;
 
     public virtual void SetConfig(LintConfig config)
     {

@@ -6151,7 +6151,7 @@ public sealed class RuleInterfaceTests
 
         public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 
-        public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
+        public IReadOnlyList<Diagnostic> GetDiagnostics() => diagnostics;
 
         public void SetConfig(LintConfig config)
         {
@@ -6198,7 +6198,7 @@ public sealed class RuleInterfaceTests
 
         public LintConfig? LastConfig { get; private set; }
 
-        public Diagnostic[] GetDiagnostics() => [];
+        public IReadOnlyList<Diagnostic> GetDiagnostics() => [];
 
         public void SetConfig(LintConfig config)
         {
@@ -6253,7 +6253,7 @@ public sealed class RuleInterfaceTests
 
         public int StepCount { get; private set; }
 
-        public Diagnostic[] GetDiagnostics() => [];
+        public IReadOnlyList<Diagnostic> GetDiagnostics() => [];
 
         public void SetConfig(LintConfig config)
         {

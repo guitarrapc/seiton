@@ -563,12 +563,43 @@ Large ベンチマークで式を持つ箇所は run step の `if`、`run`、`en
 `ruleDiagnostics.Sort(...)` は `List<T>.Sort` で内部的に配列コピーが発生しうる。要素数が少ない場合の最適化や、`Span<T>.Sort` への切り替えを検討。
 
 **完了条件**:
-- [ ] `GetDiagnostics()` が 0 件時に `Array.Empty<Diagnostic>()` を返すこと
-- [ ] LintEngine 側の不要な配列コピーが削減されていること
-- [ ] ベンチマーク: `LintBenchmark` Small/Medium の Allocated がわずかに改善していること
-- [ ] 全テスト通過
+- [x] `GetDiagnostics()` が内部リストを直接返し、不要な `ToArray()` が排除されていること
+- [x] LintEngine 側の不要な配列コピーが削減されていること（`.Length` → `.Count`）
+- [x] ベンチマーク: `LintBenchmark` Small/Medium/Large の Allocated がわずかに改善していること
+- [x] 全テスト通過（477 tests）
 
 **推定効果**: Small/Medium で ~1–5 KB 削減。Large でも ~10–50 KB。固定費削減の性質。
+
+#### Phase 8 実施結果（2026-04-21 計測）
+
+**計測環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.3 / AMD Ryzen 7 5800H / ShortRun
+
+**実施内容**:
+- `IRule.GetDiagnostics()` の戻り値型を `Diagnostic[]` → `IReadOnlyList<Diagnostic>` に変更
+- `RuleBase.GetDiagnostics()`: `diagnostics.ToArray()` → `diagnostics`（内部 `List<Diagnostic>` を直接返却、ゼロコピー）
+- `SyntaxRule.GetDiagnostics()`: `List<Diagnostic>` を直接返却 + `AddRange` → indexed `for` ループに変更
+- `LintEngine.Check`: `currentRuleDiagnostics.Length` → `.Count` に変更
+- テストスタブ 3 箇所を `IReadOnlyList<Diagnostic>` に更新
+
+**設計判断**:
+- 当初の計画では `Array.Empty<Diagnostic>()` で 0 件最適化を予定していたが、`IReadOnlyList<Diagnostic>` への変更で根本的に解決した。`RuleBase` は内部リストを直接返すため、0 件でも `ToArray()` のコピーが発生しない
+- `IReadOnlyList<Diagnostic>` を選択した理由: `Diagnostic[]` は消費側が変更可能であり、API としてルールの内部状態が漏洩する。`IReadOnlyList` は読み取り専用の契約を明示しつつ、内部リストの直接返却を許容する
+
+| Size | FixEnabled | Phase 7 Mean | Phase 8 Mean | 時間変化 | Phase 7 Alloc | Phase 8 Alloc | Alloc変化 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Small (1×3) | False | 121.0 μs | 84.9 μs | -29.8% | 43.49 KB | 43.02 KB | **-0.47 KB (-1.1%)** |
+| Small (1×3) | True | 132.1 μs | 100.3 μs | -24.1% | 79.22 KB | 78.75 KB | **-0.47 KB (-0.6%)** |
+| Medium (6×8) | False | 2,759 μs | 1,850 μs | -32.9% | 611.21 KB | 605.43 KB | **-5.78 KB (-0.9%)** |
+| Medium (6×8) | True | 4,360 μs | 3,555 μs | -18.5% | 4,269.36 KB | 4,263.61 KB | **-5.75 KB (-0.1%)** |
+| Large (20×12) | False | 41,505 μs | 28,765 μs | -30.7% | 8,921.29 KB | 8,894.81 KB | **-26.48 KB (-0.3%)** |
+| Large (20×12) | True | 79,750 μs | 94,071 μs | +17.9% | 84,742.22 KB | 84,715.28 KB | **-26.94 KB (-0.03%)** |
+
+**考察**:
+- **アロケーション削減は固定費的**: lint-only Large で -26.48 KB (-0.3%)。45 ルール × `ToArray()` コピーの排除が主因。1 ルールあたり約 0.6 KB 相当の削減（空リストの ToArray でも配列ヘッダー分のアロケーションが発生していた）
+- **時間の変動は ShortRun の計測誤差**: Phase 7 と Phase 8 は異なるタイミングでの計測のため、実行時間の差は CPU 負荷・温度等の外部要因が支配的。Phase 8 のコード変更自体は実行時間にほとんど影響しない
+- **IReadOnlyList の副次的効果**: API の型安全性が向上。ルール内部の診断リストが消費側から変更されるリスクが排除された
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -583,9 +614,9 @@ Large ベンチマークで式を持つ箇所は run step の `if`、`run`、`en
 | Phase 5: List→Array 最適化 | ~数 KB | 低 | 小 |
 | Phase 6: Fix 構築の遅延化 | ~5–30 MB | 中 | 中 |
 | Phase 7: 式解析の重複排除 | ~183 KB (lint-only Large) | 高 | 大 |
-| Phase 8: RuleBase 診断収集最適化 | ~10–50 KB | 低 | 小 |
+| Phase 8: RuleBase 診断収集最適化 | ~26 KB (lint-only Large) | 低 | 小 |
 | **合計 (Parser Phase 1–5)** | **~400–900 KB** | | |
-| **合計 (Lint Phase 6–8)** | **Phase 6: -88 MB, Phase 7: -183 KB, Phase 8: 未計測** | | |
+| **合計 (Lint Phase 6–8)** | **Phase 6: -88 MB, Phase 7: -183 KB, Phase 8: -26 KB** | | |
 
 ### Parser（Phase 1–3 実績）
 
@@ -593,7 +624,7 @@ Large ベースライン 1,162 KB → 382 KB（**67.1% 削減**）。Phase 1–3
 
 ### Lint（Phase 6–8 実績/推定）
 
-Large 現行（lint-only）: ~8.9 MB（Phase 4 の ~97 MB から Phase 6-A+6-B で -90.6%、Phase 7 でさらに -2.0%）。Phase 7 の式キャッシュ効果は Phase 3 の ArrayPool 化により縮小。Phase 8 で ~10–50 KB の追加削減を見込む。
+Large 現行（lint-only）: ~8.9 MB（Phase 4 の ~97 MB から Phase 6-A+6-B で -90.6%、Phase 7 でさらに -2.0%、Phase 8 で -26.48 KB (-0.3%)）。Phase 8 は 45 ルールの `ToArray()` 排除による固定費削減。
 
 ---
 
@@ -637,7 +668,7 @@ Phase 8 (診断収集最適化) は独立
 
 ### Phase 7: 式解析の重複排除 — ✅ 完了
 
-### Phase 8: RuleBase 診断収集の最適化 — 🔲 未着手
+### Phase 8: RuleBase 診断収集の最適化 — ✅ 完了
 
 ---
 

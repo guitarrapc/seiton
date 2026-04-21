@@ -115,7 +115,7 @@ public sealed class LintEngine
         for (var i = 0; i < activeRules.Count; i++)
         {
             var currentRuleDiagnostics = activeRules[i].GetDiagnostics();
-            for (var j = 0; j < currentRuleDiagnostics.Length; j++)
+            for (var j = 0; j < currentRuleDiagnostics.Count; j++)
             {
                 var current = currentRuleDiagnostics[j];
                 if (TryGetSeverityOverride(current.RuleId, effectiveConfig.Rules, out var severityOverride))
