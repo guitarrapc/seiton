@@ -83,21 +83,13 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
     {
         fix = default;
 
-        var sourceText = config.GetSourceText();
-        if (sourceText is null)
-        {
-            return false;
-        }
-
-        var normalized = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var lines = normalized.Split('\n');
-        if (lines.Length == 0)
+        if (utf8Yaml.Length == 0)
         {
             return false;
         }
 
         var usesLine = FindLineNumberFromOffset(utf8Yaml, actionExec.Uses.Value.Offset);
-        if (usesLine < 1 || usesLine > lines.Length)
+        if (usesLine < 1)
         {
             return false;
         }
@@ -105,26 +97,26 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         // step.Range.EndLine reflects only the 'uses' value's position, not the whole step extent.
         // Use usesLine + 1 as the minimum so the search always covers at least one line past 'uses'.
         var stepEndLine = step.Range.EndLine > 0
-            ? Math.Min(lines.Length, Math.Max(usesLine + 1, step.Range.EndLine))
-            : lines.Length;
+            ? Math.Max(usesLine + 1, step.Range.EndLine)
+            : int.MaxValue;
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
-        var keyIndent = GetStepKeyIndentation(sourceText, usesLine);
+        var keyIndent = GetStepKeyIndentation(utf8Yaml, usesLine);
 
         if (actionExec.Inputs is not null && actionExec.Inputs.Count > 0)
         {
-            var withLine = FindWithLine(lines, usesLine, stepEndLine, keyIndent);
-            if (withLine < 0 || LineContainsFlowMapping(lines[withLine - 1], keyIndent))
+            var withLine = FindWithLine(utf8Yaml, usesLine, stepEndLine, keyIndent);
+            if (withLine < 0 || LineContainsFlowMappingAt(utf8Yaml, withLine, keyIndent))
             {
                 return false;
             }
 
             var firstInputLine = FindFirstInputLine(utf8Yaml, actionExec.Inputs);
-            if (firstInputLine < 1 || firstInputLine > lines.Length)
+            if (firstInputLine < 1)
             {
                 return false;
             }
 
-            var inputIndent = FixFormatting.GetLineIndentation(sourceText, firstInputLine);
+            var inputIndent = FixFormatting.GetLineIndentation(utf8Yaml, firstInputLine);
             var insertOffset = FindLineStartOffset(utf8Yaml, firstInputLine);
             var insertText = inputIndent + PersistCredentialsKey + ": false" + lineEnding;
 
@@ -135,7 +127,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         }
 
         var withIndent = keyIndent;
-        var childIndent = withIndent + FixFormatting.InferIndentationUnit(sourceText);
+        var childIndent = withIndent + FixFormatting.InferIndentationUnit(utf8Yaml);
         var insertAfterUsesOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, usesLine);
         var withBlock = withIndent + "with:" + lineEnding + childIndent + PersistCredentialsKey + ": false" + lineEnding;
         var insertTextNoWith = insertAfterUsesOffset > 0 && insertAfterUsesOffset <= utf8Yaml.Length && utf8Yaml[insertAfterUsesOffset - 1] != (byte)'\n'
@@ -191,51 +183,68 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return "false";
     }
 
-    private static string GetStepKeyIndentation(string sourceText, int lineNumber)
+    private static string GetStepKeyIndentation(byte[] utf8Yaml, int lineNumber)
     {
-        var line = GetLine(sourceText, lineNumber);
-        var baseIndent = FixFormatting.GetLineIndentation(sourceText, lineNumber);
-        if (line.Length < baseIndent.Length + 2)
-        {
-            return baseIndent;
-        }
-
-        return line.AsSpan(baseIndent.Length).StartsWith("- ", StringComparison.Ordinal)
+        var baseIndent = FixFormatting.GetLineIndentation(utf8Yaml, lineNumber);
+        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var offset = lineStart + baseIndent.Length;
+        return offset + 1 < utf8Yaml.Length && utf8Yaml[offset] == (byte)'-' && utf8Yaml[offset + 1] == (byte)' '
             ? baseIndent + "  "
             : baseIndent;
     }
 
-    private static int FindWithLine(string[] lines, int usesLine, int stepEndLine, string keyIndent)
+    private static int FindWithLine(byte[] utf8Yaml, int usesLine, int stepEndLine, string keyIndent)
     {
-        var maxLine = Math.Min(lines.Length, stepEndLine);
-        for (var lineNumber = Math.Max(usesLine + 1, 1); lineNumber <= maxLine; lineNumber++)
+        var currentLine = 1;
+        var pos = 0;
+        var startLine = Math.Max(usesLine + 1, 1);
+        while (currentLine < startLine && pos < utf8Yaml.Length)
+            if (utf8Yaml[pos++] == (byte)'\n') currentLine++;
+
+        while (currentLine <= stepEndLine && pos <= utf8Yaml.Length)
         {
-            var line = lines[lineNumber - 1];
-            if (!line.StartsWith(keyIndent, StringComparison.Ordinal))
-            {
-                continue;
-            }
+            if (pos >= utf8Yaml.Length) break;
+            var lineStart = pos;
+            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n') pos++;
+            var lineEnd = pos;
+            if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
+            if (pos < utf8Yaml.Length) pos++;
 
-            var rest = line[keyIndent.Length..].TrimStart();
-            if (rest.StartsWith("with:", StringComparison.Ordinal))
-            {
-                return lineNumber;
-            }
+            if (ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, keyIndent, "with:"u8))
+                return currentLine;
+
+            currentLine++;
         }
-
         return -1;
     }
 
-    private static bool LineContainsFlowMapping(string line, string keyIndent)
+    private static bool LineContainsFlowMappingAt(byte[] utf8Yaml, int lineNumber, string keyIndent)
     {
-        if (!line.StartsWith(keyIndent, StringComparison.Ordinal))
-        {
-            return false;
-        }
+        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var lineEnd = lineStart;
+        while (lineEnd < utf8Yaml.Length && utf8Yaml[lineEnd] != (byte)'\n') lineEnd++;
+        if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
 
-        var rest = line[keyIndent.Length..].TrimStart();
-        var braceIndex = rest.IndexOf('{', StringComparison.Ordinal);
-        return rest.StartsWith("with:", StringComparison.Ordinal) && braceIndex >= 0;
+        if (!ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, keyIndent, "with:"u8))
+            return false;
+
+        for (var i = lineStart; i < lineEnd; i++)
+            if (utf8Yaml[i] == (byte)'{') return true;
+        return false;
+    }
+
+    // Checks if the line [lineStart..lineEnd) starts with keyIndent (ASCII), followed by optional
+    // whitespace and then the given keyBytes prefix.
+    private static bool ByteLineHasKeyAtIndent(byte[] utf8Yaml, int lineStart, int lineEnd, string keyIndent, ReadOnlySpan<byte> keyBytes)
+    {
+        if (lineEnd - lineStart < keyIndent.Length) return false;
+        for (var k = 0; k < keyIndent.Length; k++)
+            if (utf8Yaml[lineStart + k] != (byte)keyIndent[k]) return false;
+        var idx = lineStart + keyIndent.Length;
+        while (idx < lineEnd && (utf8Yaml[idx] == (byte)' ' || utf8Yaml[idx] == (byte)'\t')) idx++;
+        var remaining = lineEnd - idx;
+        if (remaining < keyBytes.Length) return false;
+        return utf8Yaml.AsSpan(idx, keyBytes.Length).SequenceEqual(keyBytes);
     }
 
     private static int FindFirstInputLine(byte[] utf8Yaml, IReadOnlyDictionary<Utf8String, StringNode> inputs)
@@ -255,6 +264,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
 
     private static string GetLine(string sourceText, int lineNumber)
     {
+        // no longer called from the hot path; retained for safety
         var lines = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         return lineNumber >= 1 && lineNumber <= lines.Length ? lines[lineNumber - 1] : string.Empty;
     }

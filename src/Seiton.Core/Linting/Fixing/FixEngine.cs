@@ -205,20 +205,34 @@ public static class FixEngine
         ValidateEdits(utf8Yaml.Length, edits);
 
         var orderedEdits = edits.ToArray();
-        Array.Sort(orderedEdits, static (left, right) => right.Offset.CompareTo(left.Offset));
+        Array.Sort(orderedEdits, static (left, right) => left.Offset.CompareTo(right.Offset));
 
-        var result = new List<byte>(utf8Yaml.Length);
-        result.AddRange(utf8Yaml);
+        // Pre-compute output size; encode each NewText into a temporary buffer.
+        var replacements = new byte[orderedEdits.Length][];
+        var outputSize = utf8Yaml.Length;
+        for (var i = 0; i < orderedEdits.Length; i++)
+        {
+            replacements[i] = Encoding.UTF8.GetBytes(orderedEdits[i].NewText);
+            outputSize = outputSize - orderedEdits[i].Length + replacements[i].Length;
+        }
 
+        var output = new byte[outputSize];
+        var srcPos = 0;
+        var dstPos = 0;
         for (var i = 0; i < orderedEdits.Length; i++)
         {
             var edit = orderedEdits[i];
-            var replacement = Encoding.UTF8.GetBytes(edit.NewText);
-            result.RemoveRange(edit.Offset, edit.Length);
-            result.InsertRange(edit.Offset, replacement);
+            var copyLen = edit.Offset - srcPos;
+            utf8Yaml.AsSpan(srcPos, copyLen).CopyTo(output.AsSpan(dstPos));
+            dstPos += copyLen;
+            srcPos = edit.Offset + edit.Length;
+
+            replacements[i].AsSpan().CopyTo(output.AsSpan(dstPos));
+            dstPos += replacements[i].Length;
         }
 
-        return [.. result];
+        utf8Yaml.AsSpan(srcPos).CopyTo(output.AsSpan(dstPos));
+        return output;
     }
 
     private static void ValidateEdits(int sourceLength, IReadOnlyList<TextEdit> edits)

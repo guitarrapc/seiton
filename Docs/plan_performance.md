@@ -1215,13 +1215,60 @@ HashSet<string>? CollectSecretDerivedEnvVarNames(Step step) {
 2. 14-B/14-C は `TextEdit` 型の変更を伴うため、14-A の効果を確認してから実施
 
 **完了条件**:
-- [ ] Fix 構築で `string.Split('\n')` が使われていないこと
-- [ ] Fix テスト全通過
-- [ ] ベンチマーク: LintBenchmark Large (Fix=true) の Allocated が大幅減少
+- [x] Fix 構築で `string.Split('\n')` が使われていないこと
+- [x] Fix テスト全通過
+- [x] ベンチマーク: LintBenchmark Large (Fix=true) の Allocated が大幅減少
 
 **推定効果**: Large Fix=true で ~30–50 MB 削減。`string.Split('\n')` の行配列排除だけで数十 MB 規模の改善が期待できる。
 
 **コード複雑度**: 中-高。行操作ヘルパーの実装が必要。ただし `ParseInlineSuppression` の Span 化（Phase 4 で実施済み）と同じパターン。
+
+#### Phase 14 実施結果（2026-04-21）
+
+**計測環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.3 / AMD Ryzen 7 5800H / ShortRun
+
+**実施内容 (14-A)**:
+- `FixFormatting` の全 string-based メソッド（`GetLineIndentation`, `InferIndentationUnit`, `IsMixedIndentationInScope`, `LineExists`, `InferIndentation`, `TryInferIndentation`）を `SplitLines` 非依存のインラインスキャンに書き換え
+- `byte[]`-based オーバーロードを新規追加: `GetLineIndentation(byte[], int)`, `InferIndentationUnit(byte[])`, `TryInferIndentation(byte[], int?, int, int, int, out string)`
+- `CheckoutPersistCredentialsRule`: `GetSourceText()` と `normalized.Split('\n')` を廃止し、`byte[]` スキャンベースのヘルパーに置き換え（`FindWithLine`, `LineContainsFlowMappingAt`, `GetStepKeyIndentation` を全て byte-based に刷新）
+- `JobPermissionsRequiredRule`: 同様に `GetSourceText()` と `Split` を廃止、byte-based `FindKeyLine`, `FindFirstChildLine`, `FindFirstMappingSiblingLine` に置き換え
+- `JobTimeoutMinutesRequiredRule`: 同様の変換
+
+**実施内容 (14-C)**:
+- `FixEngine.Apply`: `List<byte>` + `RemoveRange` / `InsertRange`（O(N×M) パッチ適用）→ 事前サイズ計算 + 単一パス `Span.CopyTo` に変換（O(N)）
+
+**設計判断**:
+- `TextEdit.NewText` は `string` のまま維持（14-B は Fix 適用パスのみ影響、ベンチマーク（Check のみ）に変化なし、かつ変更コストが高いため今回は省略）
+- string-based API は後方互換のため維持（テストが利用）
+- byte-based overload をルールが呼ぶことで `GetSourceText()` 呼び出しが完全に不要になる
+
+**LintBenchmark（Phase 13 → Phase 14）**:
+
+| Size | FixEnabled | Phase 13 Alloc | Phase 14 Alloc | Delta |
+|---|---|---:|---:|---:|
+| Small (1×3) | False | 22.90 KB | 22.90 KB | 0 |
+| Small (1×3) | True | 58.63 KB | 23.31 KB | **-35.32 KB** |
+| Medium (6×8) | False | 562.53 KB | 562.52 KB | 0 |
+| Medium (6×8) | True | 4,220.73 KB | 569 KB | **-3,651.73 KB (-86.5%)** |
+| Large (20×12) | False | 8,684.43 KB | 8,684.39 KB | 0 |
+| Large (20×12) | True | 84,505.43 KB | 8,715.45 KB | **-75,789.98 KB (-89.7%)** |
+
+**ParsingBenchmark（Phase 13 → Phase 14 — 変更なし、参考値）**:
+
+| Size | Phase 13 Alloc | Phase 14 Alloc | Delta |
+|---|---:|---:|---:|
+| Small (1×3) | 12,080 B | 12,080 B | 0 |
+| Medium (6×8) | 83,515 B | 83,515 B | 0 |
+| Large (20×12) | 376,738 B | 376,738 B | 0 |
+
+**考察**:
+- **推定を大幅超過**: 推定 ~30–50 MB に対し実際の Large Fix=true は **-75.8 MB (-89.7%)**
+- **ベンチマーク YAML の checkout ステップ数**: 20 jobs × 6 checkout steps = 120 steps。各ステップで `TryBuildMissingInputFix` が呼ばれ、旧実装では 4 回の `SplitLines`（~91 KB × 1340 行 × 4 = ~364 KB/step）が発生していた。120 steps × ~364 KB ≈ 43.7 MB が排除された
+- **JobPermissionsRequiredRule** も 20 jobs × ~4 SplitLines ≈ 7.3 MB を排除。合計 ~51 MB + FixEngine.Apply の List<byte> 効率化分の組み合わせで -75.8 MB に達した
+- **lint-only アロケーションは変化なし** (±0): Fix パスの string 配列操作は Fix=true 時のみ発生するため
+- **Fix=true の Large アロケーションが 8.7 MB まで低下**: parser (~376 KB) + lint-only (~8.5 MB) の合計に近い値になり、Fix 構築コストがほぼゼロになったことを意味する
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -1274,17 +1321,18 @@ void DetectCycles() {
 | Phase 11 | LintEngine コレクション再利用 | ~5–15 KB | ~5–15 KB | 低 | 低 | ✅ 完了 (-186.7 KB) |
 | Phase 12 | UnredactedSecrets HashSet 排除 | ~50–100 KB | ~50–100 KB | 中 | 中 | ✅ 完了（ベンチマークノイズ範囲、実 WF で効果あり） |
 | Phase 13 | キャプチャリングラムダ排除 | ~5–10 KB | ~5–10 KB | 低 | 低 | ✅ 完了 (-11.4 KB lint-only Large) |
-| Phase 14 | Fix パス Span ベース行操作 | — | **~30–50 MB** | 中-高 | 中-高 | |
+| Phase 14 | Fix パス Span ベース行操作 | — | **~30–50 MB** | 中-高 | 中-高 | ✅ 完了 (-75.8 MB Large Fix=true) |
 | Phase 15 | NeedsGraphRule 再利用 | ~5–15 KB | ~5–15 KB | 低 | 低 | |
 | Phase 16 | ExpressionParser 空配列最適化 | ~5–10 KB | ~5–10 KB | 低 | 低 |
 | Phase 5 | AST List → Array 初期容量 | ~数 KB | ~数 KB | 低 | 低 |
 
-**推奨実行順序**: Phase 15 → 16 → 5 → 14
+**推奨実行順序**: Phase 15 → 16 → 5
 
 理由:
 - Phase 9/11/12 は完了済み
 - Phase 10 は見送り（struct 化によりアロケーション +11–23% の回帰が発生したため revert）
 - Phase 15/16/5 は低リスク・低複雑度で即座に実施可能
+- Phase 14 は完了済み
 - Phase 14 は Fix パス限定だが効果が最大。ただし TextEdit 型の変更を伴う可能性があり慎重に進める
 
 ### Go との差を埋める長期的な設計検討
