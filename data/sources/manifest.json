@@ -12,6 +12,16 @@
       }
     },
     {
+      "dataset": "function-specs",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/expressions.md"
+      ],
+      "fetchedAtUtc": "2026-04-21T10:04:32.1129314\u002B00:00",
+      "rawFileHashes": {
+        "expressions.docs.md": "sha256:d2c6a4492f4302046a35c5bf4ca402302ca2e8c5547febc07ced3e00c1450865"
+      }
+    },
+    {
       "dataset": "popular-actions",
       "sourceUrls": [
         "https://raw.githubusercontent.com/actions/cache/v4/action.yml",

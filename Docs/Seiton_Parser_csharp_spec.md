@@ -1202,7 +1202,7 @@ Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore i
 
 Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`, `context-types`, `function-specs`).
 
-> **Note**: `context-types` and `function-specs` use hand-written JSON data files as their authoritative source rather than fetching from GitHub Docs. They implement a simplified 1-stage pipeline (JSON → codegen) with sync/verify commands.
+> **Note**: `context-types` uses a hand-written JSON data file as its authoritative source. `function-specs` uses a hand-written JSON for codegen but additionally supports fetching function names from GitHub Docs `expressions.md` for gap detection.
 
 #### 9.3.1 CLI Commands
 
@@ -1211,6 +1211,12 @@ Implements the 3-stage pipeline defined in Spec §9.3 for all currently supporte
 | webhooks | `fetch-webhooks-sources` | `parse-webhooks-sources` | `merge-webhooks-sources [--exclude-schema-only]` | `fetch-webhooks [--exclude-schema-only]` |
 | availability | `fetch-availability-sources` | `parse-availability-sources` | `merge-availability-sources` | `fetch-availability` |
 | popular-actions | `fetch-popular-actions-sources` | `parse-popular-actions-sources` | `merge-popular-actions-sources` | `fetch-popular-actions` |
+| function-specs | `fetch-function-specs-sources` | `parse-function-specs-sources` | — | `fetch-function-specs` |
+
+Additional function-specs commands:
+
+- `validate-function-specs` — compare parsed docs function names against `function-specs.json` and warn on unregistered functions
+- `sync-function-specs` automatically runs validation when parsed data is available
 
 Sync/verify entrypoints:
 
@@ -1239,8 +1245,8 @@ data/sources/context-types/github/raw/          ← future: fetched contexts.md
 data/sources/context-types/github/parsed/       ← future: parsed context property tables
 data/sources/context-types/github/context-types.json
 
-data/sources/function-specs/github/raw/         ← future: fetched function names from expressions.md
-data/sources/function-specs/github/parsed/      ← future: parsed function name list
+data/sources/function-specs/github/raw/         ← fetched expressions.md from GitHub Docs
+data/sources/function-specs/github/parsed/      ← parsed function name list (docs-function-names.json)
 data/sources/function-specs/github/function-specs.json
 ```
 

@@ -135,8 +135,8 @@ src/Seiton.Core/Generated/
 ```
 data/sources/function-specs/
   github/
-    raw/                         ← 将来 expressions.md から関数名一覧を取得予定
-    parsed/                      ← 将来 parse 結果を保存予定
+    raw/                         ← expressions.md を fetch して保存（fetch-function-specs-sources）
+    parsed/                      ← 関数名一覧を parse して保存（parse-function-specs-sources）
     function-specs.json          ← 手書き（関数名・パラメータ型・オーバーロード・可変長フラグ・isStatusCheck 等）
 
 src/Seiton.Core/Generated/
@@ -313,12 +313,15 @@ public static class ContextTypes
 ```
 Seiton.Update に追加する構成物：
   Sources/GitHubFunctionNamesFetcher.cs
-    - expressions.md を fetch し、H3 見出しから関数名一覧を抽出する
-    - data/sources/function-specs/raw-names.json に保存
+    - expressions.md を fetch し data/sources/function-specs/github/raw/ に保存
+    - H3 見出しから関数名一覧を抽出し data/sources/function-specs/github/parsed/docs-function-names.json に保存
+  Parsers/GitHubDocsExpressionsMarkdownParser.cs
+    - "## Functions" と "## Status check functions" セクションの H3 見出しから関数名を parse
+    - "Example" で始まるサブ見出しはスキップ
   Validators/FunctionSpecsValidator.cs
-    - raw-names.json と function-specs.json を比較し、未登録の関数名を警告として出力
+    - parsed/docs-function-names.json と function-specs.json を比較し、未登録の関数名を警告として出力
   Generators/FunctionSpecsCSharpGenerator.cs
-    - data/sources/function-specs/function-specs.json を読み込み FunctionSpecs.g.cs を生成
+    - data/sources/function-specs/github/function-specs.json を読み込み FunctionSpecs.g.cs を生成
 
 既存の手書き管理データ：
   data/sources/function-specs/function-specs.json  ← 手書き（パラメータ型・オーバーロード・可変長フラグ等）
@@ -344,8 +347,12 @@ internal static class FunctionSpecs
 **Seiton.Update コマンド追加**:
 - `sync-context-types` — fetch + parse + merge + codegen を一括実行
 - `verify-context-types` — 現在の `ContextTypes.g.cs` が再生成結果と一致するか検証（CI 用）
-- `sync-function-specs` — `function-specs.json` → `FunctionSpecs.g.cs` の codegen を実行（関数名差分チェックも含む）
+- `sync-function-specs` — `function-specs.json` → `FunctionSpecs.g.cs` の codegen を実行（parsed があれば関数名差分チェックも含む）
 - `verify-function-specs` — 現在の `FunctionSpecs.g.cs` が再生成結果と一致するか検証（CI 用）
+- `fetch-function-specs` — expressions.md fetch + parse + manifest 更新を一括実行
+- `fetch-function-specs-sources` — expressions.md を raw/ にダウンロード
+- `parse-function-specs-sources` — raw ファイルから関数名を抽出し parsed/ に保存
+- `validate-function-specs` — parsed 関数名と function-specs.json を比較し未登録を警告
 
 **完了条件**:
 - [x] `sync-context-types` を実行すると `ContextTypes.g.cs` が再生成されること
@@ -353,7 +360,7 @@ internal static class FunctionSpecs
 - [x] docs にプロパティが追加された場合に `verify-context-types` が差分を報告すること
 - [x] `sync-function-specs` を実行すると `FunctionSpecs.g.cs` が再生成されること
 - [x] Phase 1 の手書き `Specs` 配列を `FunctionSpecs.g.cs` 由来に差し替えても全テストが通過すること
-- [ ] docs に新関数が追加された場合に `sync-function-specs` が未登録関数名を警告として出力すること（※ Fetcher/Validator は未実装。将来 expressions.md からの関数名取得を追加予定）
+- [x] docs に新関数が追加された場合に `sync-function-specs` が未登録関数名を警告として出力すること（`fetch-function-specs-sources` + `parse-function-specs-sources` で parsed 作成後、`sync-function-specs` が自動検証）
 - [x] CI で週次実行できる設計になっていること（sync/verify コマンド対応済み）
 - [x] 全テスト通過
 

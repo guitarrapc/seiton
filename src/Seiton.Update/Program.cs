@@ -152,6 +152,46 @@ app.Add("verify-function-specs", () =>
     }
 });
 
+app.Add("fetch-function-specs", async () =>
+{
+    var code = await FunctionSpecsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-function-specs failed with code {code}");
+    }
+});
+
+app.Add("fetch-function-specs-sources", async () =>
+{
+    var code = await FunctionSpecsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-function-specs-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-function-specs-sources", () =>
+{
+    var code = FunctionSpecsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-function-specs-sources failed with code {code}");
+    }
+});
+
+app.Add("validate-function-specs", () =>
+{
+    var code = FunctionSpecsCommands.Validate(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"validate-function-specs failed with code {code}");
+    }
+});
+
 // Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {
