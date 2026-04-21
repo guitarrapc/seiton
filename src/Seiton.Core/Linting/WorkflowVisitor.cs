@@ -12,6 +12,11 @@ public sealed class WorkflowVisitor
         passes.Add(pass);
     }
 
+    public void Reset()
+    {
+        passes.Clear();
+    }
+
     public void Visit(Workflow workflow)
     {
         ArgumentNullException.ThrowIfNull(workflow);

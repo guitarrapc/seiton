@@ -10,6 +10,13 @@ public sealed class LintEngine
 {
 
     readonly List<IRule> rules = [];
+    readonly List<Diagnostic> _diagnostics = new(16);
+    readonly WorkflowVisitor _visitor = new();
+    readonly List<IRule> _activeRules = new(16);
+    readonly List<Diagnostic> _ruleDiagnostics = new(64);
+    readonly HashSet<DiagnosticIdentity> _seen = new();
+    readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
+    readonly List<SuppressionRecord> _suppressionRecords = new();
 
     public LintEngine()
     {
@@ -52,27 +59,27 @@ public sealed class LintEngine
             };
         }
 
-        var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 8);
-        diagnostics.AddRange(parseResult.Diagnostics);
+        _diagnostics.Clear();
+        _diagnostics.AddRange(parseResult.Diagnostics);
 
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
-        diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
+        _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, parseResult.Workflow);
-        diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
+        _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
         var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow, utf8Yaml);
-        diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
+        _diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
 
         if (rules.Count == 0)
         {
-            return new LintResult(parseResult, diagnostics.ToArray())
+            return new LintResult(parseResult, _diagnostics.ToArray())
             {
                 SuppressionSummary = SuppressionSummary.Empty,
             };
         }
 
-        var visitor = new WorkflowVisitor();
+        _visitor.Reset();
         var effectiveConfig = new LintConfig
         {
             Utf8Yaml = utf8Yaml,
@@ -82,7 +89,7 @@ public sealed class LintEngine
             Network = config?.Network ?? new NetworkConfig(),
         };
 
-        var activeRules = new List<IRule>(rules.Count);
+        _activeRules.Clear();
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
@@ -97,24 +104,24 @@ public sealed class LintEngine
             }
 
             rule.SetConfig(effectiveConfig);
-            visitor.AddPass(rule);
-            activeRules.Add(rule);
+            _visitor.AddPass(rule);
+            _activeRules.Add(rule);
         }
 
-        if (activeRules.Count == 0)
+        if (_activeRules.Count == 0)
         {
-            return new LintResult(parseResult, diagnostics.ToArray())
+            return new LintResult(parseResult, _diagnostics.ToArray())
             {
                 SuppressionSummary = SuppressionSummary.Empty,
             };
         }
 
-        visitor.Visit(parseResult.Workflow);
+        _visitor.Visit(parseResult.Workflow);
 
-        var ruleDiagnostics = new List<Diagnostic>(activeRules.Count * 4);
-        for (var i = 0; i < activeRules.Count; i++)
+        _ruleDiagnostics.Clear();
+        for (var i = 0; i < _activeRules.Count; i++)
         {
-            var currentRuleDiagnostics = activeRules[i].GetDiagnostics();
+            var currentRuleDiagnostics = _activeRules[i].GetDiagnostics();
             for (var j = 0; j < currentRuleDiagnostics.Count; j++)
             {
                 var current = currentRuleDiagnostics[j];
@@ -123,45 +130,45 @@ public sealed class LintEngine
                     current = current with { Severity = severityOverride };
                 }
 
-                ruleDiagnostics.Add(current);
+                _ruleDiagnostics.Add(current);
             }
         }
 
-        ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
+        _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
 
-        var seen = new HashSet<DiagnosticIdentity>();
-        var suppressedByRule = new Dictionary<string, int>(StringComparer.Ordinal);
-        var suppressionRecords = new List<SuppressionRecord>();
-        for (var i = 0; i < ruleDiagnostics.Count; i++)
+        _seen.Clear();
+        _suppressedByRule.Clear();
+        _suppressionRecords.Clear();
+        for (var i = 0; i < _ruleDiagnostics.Count; i++)
         {
-            var current = ruleDiagnostics[i];
+            var current = _ruleDiagnostics[i];
             var identity = new DiagnosticIdentity(current);
-            if (!seen.Add(identity))
+            if (!_seen.Add(identity))
             {
                 continue;
             }
 
             if (TryGetSuppressionRecord(current, inlineSuppression, normalizedExclusions.Exclusions, normalizedExclusions.NormalizedFilePath, out var suppressionRecord))
             {
-                suppressionRecords.Add(suppressionRecord);
-                if (!suppressedByRule.TryGetValue(suppressionRecord.RuleId, out var currentCount))
+                _suppressionRecords.Add(suppressionRecord);
+                if (!_suppressedByRule.TryGetValue(suppressionRecord.RuleId, out var currentCount))
                 {
-                    suppressedByRule[suppressionRecord.RuleId] = 1;
+                    _suppressedByRule[suppressionRecord.RuleId] = 1;
                 }
                 else
                 {
-                    suppressedByRule[suppressionRecord.RuleId] = currentCount + 1;
+                    _suppressedByRule[suppressionRecord.RuleId] = currentCount + 1;
                 }
 
                 continue;
             }
 
-            diagnostics.Add(current);
+            _diagnostics.Add(current);
         }
 
-        return new LintResult(parseResult, diagnostics.ToArray())
+        return new LintResult(parseResult, _diagnostics.ToArray())
         {
-            SuppressionSummary = new SuppressionSummary(suppressionRecords.Count, suppressedByRule, suppressionRecords.ToArray()),
+            SuppressionSummary = new SuppressionSummary(_suppressionRecords.Count, new Dictionary<string, int>(_suppressedByRule, StringComparer.Ordinal), _suppressionRecords.ToArray()),
         };
     }
 
