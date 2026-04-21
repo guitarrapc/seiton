@@ -917,51 +917,6 @@ public static Utf8String FromLowerAscii(ReadOnlySpan<byte> utf8) {
 
 ---
 
-#### Phase 11 実施結果（2026-04-21）
-
-**実装**: `LintEngine` に 7 つのコレクションフィールドを追加し、`Check()` 内の `new List/Dictionary/HashSet/WorkflowVisitor` をフィールド再利用 + `Clear()` に置換。
-
-- `_diagnostics` (List\<Diagnostic\>), `_visitor` (WorkflowVisitor), `_activeRules` (List\<IRule\>), `_ruleDiagnostics` (List\<Diagnostic\>), `_seen` (HashSet\<DiagnosticIdentity\>), `_suppressedByRule` (Dictionary\<string, int\>), `_suppressionRecords` (List\<SuppressionRecord\>)
-- `WorkflowVisitor.Reset()` メソッドを新規追加（`passes.Clear()`）
-- `SuppressionSummary` に渡す `_suppressedByRule` はスナップショットコピー必須。フィールドが次回 `Check()` で `.Clear()` されるため、`new Dictionary<string, int>(_suppressedByRule, StringComparer.Ordinal)` でコピー。
-
-**ベンチマーク結果（Ryzen 7 5800H / ShortRun）**:
-
-**LintBenchmark（Phase 9 → Phase 11）**:
-
-| Size | FixEnabled | Phase 9 Alloc | Phase 11 Alloc | Delta | 削減率 |
-|---|---|---:|---:|---:|---:|
-| Small (1×3) | False | 42.84 KB | 23.36 KB | **-19.48 KB** | **-45.5%** |
-| Small (1×3) | True | 78.57 KB | 59.02 KB | **-19.55 KB** | **-24.9%** |
-| Medium (6×8) | False | 603.02 KB | 565.44 KB | **-37.58 KB** | **-6.2%** |
-| Medium (6×8) | True | 4,261.06 KB | 4,223.55 KB | **-37.51 KB** | **-0.9%** |
-| Large (20×12) | False | 8,883.35 KB | 8,696.70 KB | **-186.65 KB** | **-2.1%** |
-| Large (20×12) | True | 84,703.85 KB | 84,522.26 KB | **-181.59 KB** | **-0.2%** |
-
-**ParsingBenchmark（Phase 9 → Phase 11 — 変更なし、参考値）**:
-
-| Size | Phase 9 Alloc | Phase 11 Alloc | Delta |
-|---|---:|---:|---:|
-| Small (1×3) | 12,080 B | 12,080 B | 0 |
-| Medium (6×8) | 83,515 B | 83,515 B | 0 |
-| Large (20×12) | 376,781 B | 376,781 B | 0 |
-
-**考察**:
-- **Small で -19.5 KB (-45.5%)** は推定の 5–15 KB を大幅に超過。Small ワークフロー（1 ファイル × 3 ジョブ）ではコレクション初期化オーバーヘッドが全体アロケーションの極めて大きな割合を占めていた
-- **Large で -186.65 KB** も推定をはるかに超過。これは `Check()` が内部で `NormalizeRules`、`ParseInlineSuppression` 等のヘルパーを呼ぶ際に生成される追加コレクションの累積分も含む
-- Fix=True/False の差が同じ（-19.5 KB / -37.5 KB / -186 KB）ことから、削減は純粋に Check() 共通パスのコレクション再利用によるもの
-- `SuppressionSummary` のスナップショットコピー（1 回の `new Dictionary` + 要素コピー）は旧コードの挙動と等価であり、追加アロケーションにはならない
-- ParsingBenchmark は完全に不変（Phase 11 は LintEngine のみの変更）
-
-**完了条件チェック**:
-- [x] Check() 内で `new List/Dictionary/HashSet` が生成されていないこと
-- [x] 複数ファイル連続 Check のテストが通過すること（477/477 全通過）
-- [x] ベンチマーク: LintBenchmark の Allocated が減少（全サイズで -19.5～-186.65 KB）
-
-**ステータス**: ✅ 完了
-
----
-
 ### Phase 10: AST ノードの struct 化 — StringNode（中リスク・高効果）
 
 **目的**: 最も頻出する `StringNode` を class → readonly record struct に変更し、ヒープオブジェクト数を大幅削減する。
@@ -1051,6 +1006,49 @@ public sealed class LintEngine {
 **実際の効果**: Small -19.5 KB (-45.5%), Medium -37.6 KB (-6.2%), Large -186.7 KB (-2.1%)。推定を大幅に超過。
 
 **コード複雑度**: 低。ローカル変数をフィールドに昇格し Clear() するだけ。スレッドセーフでない点は既存設計と同様。
+
+**ステータス**: ✅ 完了
+
+#### Phase 11 実施結果（2026-04-21）
+
+**実装**: `LintEngine` に 7 つのコレクションフィールドを追加し、`Check()` 内の `new List/Dictionary/HashSet/WorkflowVisitor` をフィールド再利用 + `Clear()` に置換。
+
+- `_diagnostics` (List\<Diagnostic\>), `_visitor` (WorkflowVisitor), `_activeRules` (List\<IRule\>), `_ruleDiagnostics` (List\<Diagnostic\>), `_seen` (HashSet\<DiagnosticIdentity\>), `_suppressedByRule` (Dictionary\<string, int\>), `_suppressionRecords` (List\<SuppressionRecord\>)
+- `WorkflowVisitor.Reset()` メソッドを新規追加（`passes.Clear()`）
+- `SuppressionSummary` に渡す `_suppressedByRule` はスナップショットコピー必須。フィールドが次回 `Check()` で `.Clear()` されるため、`new Dictionary<string, int>(_suppressedByRule, StringComparer.Ordinal)` でコピー。
+
+**ベンチマーク結果（Ryzen 7 5800H / ShortRun）**:
+
+**LintBenchmark（Phase 9 → Phase 11）**:
+
+| Size | FixEnabled | Phase 9 Alloc | Phase 11 Alloc | Delta | 削減率 |
+|---|---|---:|---:|---:|---:|
+| Small (1×3) | False | 42.84 KB | 23.36 KB | **-19.48 KB** | **-45.5%** |
+| Small (1×3) | True | 78.57 KB | 59.02 KB | **-19.55 KB** | **-24.9%** |
+| Medium (6×8) | False | 603.02 KB | 565.44 KB | **-37.58 KB** | **-6.2%** |
+| Medium (6×8) | True | 4,261.06 KB | 4,223.55 KB | **-37.51 KB** | **-0.9%** |
+| Large (20×12) | False | 8,883.35 KB | 8,696.70 KB | **-186.65 KB** | **-2.1%** |
+| Large (20×12) | True | 84,703.85 KB | 84,522.26 KB | **-181.59 KB** | **-0.2%** |
+
+**ParsingBenchmark（Phase 9 → Phase 11 — 変更なし、参考値）**:
+
+| Size | Phase 9 Alloc | Phase 11 Alloc | Delta |
+|---|---:|---:|---:|
+| Small (1×3) | 12,080 B | 12,080 B | 0 |
+| Medium (6×8) | 83,515 B | 83,515 B | 0 |
+| Large (20×12) | 376,781 B | 376,781 B | 0 |
+
+**考察**:
+- **Small で -19.5 KB (-45.5%)** は推定の 5–15 KB を大幅に超過。Small ワークフロー（1 ファイル × 3 ジョブ）ではコレクション初期化オーバーヘッドが全体アロケーションの極めて大きな割合を占めていた
+- **Large で -186.65 KB** も推定をはるかに超過。これは `Check()` が内部で `NormalizeRules`、`ParseInlineSuppression` 等のヘルパーを呼ぶ際に生成される追加コレクションの累積分も含む
+- Fix=True/False の差が同じ（-19.5 KB / -37.5 KB / -186 KB）ことから、削減は純粋に Check() 共通パスのコレクション再利用によるもの
+- `SuppressionSummary` のスナップショットコピー（1 回の `new Dictionary` + 要素コピー）は旧コードの挙動と等価であり、追加アロケーションにはならない
+- ParsingBenchmark は完全に不変（Phase 11 は LintEngine のみの変更）
+
+**完了条件チェック**:
+- [x] Check() 内で `new List/Dictionary/HashSet` が生成されていないこと
+- [x] 複数ファイル連続 Check のテストが通過すること（477/477 全通過）
+- [x] ベンチマーク: LintBenchmark の Allocated が減少（全サイズで -19.5～-186.65 KB）
 
 **ステータス**: ✅ 完了
 
