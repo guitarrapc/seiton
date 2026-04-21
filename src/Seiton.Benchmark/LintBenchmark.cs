@@ -18,9 +18,13 @@ public class LintBenchmark
     [Params(WorkflowSize.Small, WorkflowSize.Medium, WorkflowSize.Large)]
     public WorkflowSize Size { get; set; }
 
+    [Params(false, true)]
+    public bool FixEnabled { get; set; }
+
     private byte[] _yamlBytes = [];
     private string _filePath = string.Empty;
     private LintEngine _engine = null!;
+    private LintConfig _lintConfig = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -36,12 +40,22 @@ public class LintBenchmark
         _yamlBytes = Encoding.UTF8.GetBytes(yaml);
         _filePath = $"bench-lint-{Size.ToString().ToLowerInvariant()}.yml";
         _engine = new LintEngine();
+        _lintConfig = new LintConfig
+        {
+            Utf8Yaml = _yamlBytes,
+            FilePath = _filePath,
+            Fix = new FixConfig
+            {
+                Enabled = FixEnabled,
+                Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 360 }
+            }
+        };
     }
 
     [Benchmark(Baseline = true, Description = "LintEngine.Check (parse + lint)")]
     public int CheckWorkflow()
     {
-        var result = _engine.Check(_yamlBytes, _filePath);
+        var result = _engine.Check(_yamlBytes, _filePath, _lintConfig);
         return result.Diagnostics.Length;
     }
 }

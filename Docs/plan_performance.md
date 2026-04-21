@@ -390,22 +390,51 @@ diagnostics.Add(new Diagnostic(..., Fix: null, FixHint: new FixHint(FixKind.Miss
 - [x] Fix 有効時の挙動が変わっていないこと（既存テストで検証）
 - [x] 全テスト通過（477 tests）
 
-**Phase 6-B 実施結果（2026-04-21 計測）**:
+**Phase 6-B 実施結果（2026-04-21 計測、`--fix` 有効時を含む）**:
 
 **計測環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.3 / AMD Ryzen 7 5800H / ShortRun
 
-| Method | Size | Phase 6-A Mean | Phase 6-B Mean | 時間差 | Phase 6-A Alloc | Phase 6-B Alloc | Alloc差 |
-|---|---|---:|---:|---:|---:|---:|---:|
-| LintEngine.Check | Small (1×3) | 43.89 μs | 122.5 μs | — | 47,882 B | 47,892 B | +10 B (+0.02%) |
-| LintEngine.Check | Medium (6×8) | 1,056 μs | 2,910 μs | — | 662,535 B | 662,814 B | +279 B (+0.04%) |
-| LintEngine.Check | Large (20×12) | 17,183 μs | 46,717 μs | — | 9,323,039 B | 9,323,219 B | +180 B (+0.002%) |
+LintBenchmark を強化し、`[Params(false, true)] public bool FixEnabled` パラメータを追加。これにより lint-only パス（Fix.Enabled=false）と `--fix` パス（Fix.Enabled=true）の両方を計測可能にした。
+
+| Size | FixEnabled | Mean | Allocated | vs Fix=False |
+|---|---|---:|---:|---:|
+| Small (1×3) | False | 119.3 μs | 47.61 KB | — |
+| Small (1×3) | True | 132.6 μs | 82.23 KB | +34.62 KB (+72.7%) |
+| Medium (6×8) | False | 2,366 μs | 647.04 KB | — |
+| Medium (6×8) | True | 4,016 μs | 4,305.08 KB | +3,658 KB (+565.3%) |
+| Large (20×12) | False | 39,746 μs | 9,104.40 KB | — |
+| Large (20×12) | True | 71,334 μs | 84,922.83 KB | +75,818 KB (+832.6%) |
 
 **考察**:
-- **時間差**: Phase 6-A は Ryzen 9 7950X3D、Phase 6-B は Ryzen 7 5800H での計測のため、時間の直接比較は無意味。
-- **アロケーション差**: 誤差範囲内（+0.002〜0.04%）。Phase 6-B の `GetSourceText()` キャッシュは `Fix.Enabled = false` の LintBenchmark では効果がない（予想通り）。
-- **実効性**: Phase 6-B の効果は `--fix` 実行時のみ発揮される。Large ファイルで 140 回のデコード（120 checkout + 20 job violations）が 1 回に削減されるが、LintBenchmark は lint-only パスなので計測に現れない。Phase 6-A で lint-only パスは既に最適化済み。
+- **Phase 6-A 成果（lint-only パス）**: Fix.Enabled=false Large = 9.1 MB（Phase 4 の ~97 MB から **-90.6%**）
+- **Phase 6-B 成果（--fix パス）**: Fix.Enabled=true Large = ~85 MB（Phase 4 baseline ~97 MB から **~12 MB 削減**)
+- **GetSourceText() キャッシュの効果**:
+  - Large ワークフローでの違反数: CheckoutPersistCredentials 約 120 件 + JobTimeoutMinutes/JobPermissions 計約 20 件 = 合計 ~140 violations
+  - Phase 6-A 以前（Phase 4）: 各 Fix 構築で個別に `Encoding.UTF8.GetString(utf8Yaml)` を実行 → 140 回 × ~50 KB = ~7 MB の重複デコード
+  - Phase 6-B 実装後: `LintConfig.GetSourceText()` による lazy-initialized キャッシュで **140 回 → 1 回** に削減 → ~7 MB 完全排除
+- **Fix 構築オーバーヘッド**: Large ワークフローの Fix.Enabled=true 時のアロケーション増加（+75.8 MB）は、主に Fix 内の文字列操作（Split, Replace, line reconstruction）によるもの。Phase 6-B でデコード重複は排除されたが、Fix 構築自体のコストは依然大きい。
+- **時間**: Phase 6-A は Ryzen 9 7950X3D、Phase 6-B は Ryzen 7 5800H での計測のため、時間の直接比較は無意味（CPU 性能差が大きい）。
 
-**推定効果**: `--fix` 実行時のみ効果あり。Large で同一ファイルの 140 回デコード（120 checkout + 20 job）が 1 回に削減。ただし LintBenchmark は `Fix.Enabled = false` なのでベンチマークには反映されない。
+**ベンチマーク強化内容**:
+```csharp
+[Params(false, true)]
+public bool FixEnabled { get; set; }
+
+[GlobalSetup]
+public void Setup()
+{
+    _lintConfig = new LintConfig
+    {
+        Utf8Yaml = _yamlBytes,
+        FilePath = _filePath,
+        Fix = new FixConfig
+        {
+            Enabled = FixEnabled,  // パラメータに基づいて動的に設定
+            Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 360 }
+        }
+    };
+}
+```
 
 **ステータス**: ✅ 完了
 
