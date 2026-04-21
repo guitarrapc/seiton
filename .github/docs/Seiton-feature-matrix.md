@@ -166,7 +166,7 @@ online audit rules（4）:
 
 ## 6. 競合ルール精査結果（.references 実体ベース）
 
-本節は `Docs/` 要約ではなく `.references/` 配下の実装コードを起点に確認した。
+本節は `.github/docs` 要約ではなく `.references/` 配下の実装コードを起点に確認した。
 
 ### 6.1 actionlint ルール対応表（17件）
 
@@ -290,14 +290,14 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 ## 8. 参照ドキュメント
 
-- Docs/Seiton_Linter_spec.md
-- Docs/linter_implementation_csharp_plan.md
-- Docs/competitor-actionlint-structure-details.md
-- Docs/competitor-ghalint-structure-details.md
-- Docs/competitor-zizmor-structure-details.md
-- Docs/competitor-pinact-structure-details.md
-- Docs/competitor-dockerfile-pin-structure-details.md
-- Docs/competitor-frizbee-structure-details.md
+- .github/docsSeiton_Linter_spec.md
+- .github/docslinter_implementation_csharp_plan.md
+- .github/docscompetitor-actionlint-structure-details.md
+- .github/docscompetitor-ghalint-structure-details.md
+- .github/docscompetitor-zizmor-structure-details.md
+- .github/docscompetitor-pinact-structure-details.md
+- .github/docscompetitor-dockerfile-pin-structure-details.md
+- .github/docscompetitor-frizbee-structure-details.md
 - .references/actionlint
 - .references/ghalint
 - .references/zizmor

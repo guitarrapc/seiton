@@ -59,7 +59,7 @@ Linter runtime assumes parser output as structural input and never reparses YAML
 1. Keep parser/linter responsibility boundary strict.
 2. Keep lint output deterministic for identical input/config.
 3. Keep rule/exclusion policy behavior aligned with language-agnostic linter contract.
-4. Keep implementation status synchronized with `Docs/linter_implementation_csharp_plan.md`.
+4. Keep implementation status synchronized with `.github/docslinter_implementation_csharp_plan.md`.
 
 ---
 
@@ -75,7 +75,7 @@ Primary types:
 - `IRule`
 - `RuleCatalog`
 
-Current implementation status should be tracked against `Docs/linter_implementation_csharp_plan.md`.
+Current implementation status should be tracked against `.github/docslinter_implementation_csharp_plan.md`.
 
 ---
 
@@ -305,7 +305,7 @@ Status contract:
 - `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` are already in the current C# default local rule pack.
 - `matrix` / `env-var` / `deprecated-commands` / `if-cond` are already in the current C# default local rule pack.
 - `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` are already in the current C# default local rule pack.
-- C# runtime implementation and default-catalog promotion must be synchronized with `Docs/linter_implementation_csharp_plan.md` and shared-spec catalog updates.
+- C# runtime implementation and default-catalog promotion must be synchronized with `.github/docslinter_implementation_csharp_plan.md` and shared-spec catalog updates.
 
 ### 3.7 Known Partial Parity Areas (actionlint)
 
@@ -315,7 +315,7 @@ Current C# default local rules are intentionally partial for the following domai
 - `action`: partially covered by `popular-action-inputs` / `unpinned-uses`; still missing full uses-format validation breadth, local/Docker action resolution depth, and metadata contract-level validation.
 - `workflow-call`: partially covered by `reusable-workflow` / `deny-inherit-secrets`; still missing called-workflow contract validation (`inputs`/`secrets` required/type/default consistency and caller conformance).
 
-These are tracked as next-step parity-hardening items in `Docs/linter_implementation_csharp_plan.md`.
+These are tracked as next-step parity-hardening items in `.github/docslinter_implementation_csharp_plan.md`.
 
 ---
 
@@ -714,6 +714,6 @@ public sealed record RemediationResult(
 
 When this document is revised, also review and update:
 
-- `Docs/Seiton_Linter_spec.md`
-- `Docs/linter_implementation_csharp_plan.md`
-- `Docs/Seiton_spec.md` when parser/linter boundary wording changes
+- `.github/docsSeiton_Linter_spec.md`
+- `.github/docslinter_implementation_csharp_plan.md`
+- `.github/docsSeiton_spec.md` when parser/linter boundary wording changes

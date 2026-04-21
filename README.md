@@ -10,7 +10,7 @@
 - Default no-arg discovery remains workflow-first under `.github/workflows/`.
 - Action metadata is supported when explicitly passed as input files.
 
-Detailed notes: `Docs/release_notes_actions_support.md`
+Detailed notes: `.github/docs/release_notes_actions_support.md`
 
 ## Generated Data Updater
 

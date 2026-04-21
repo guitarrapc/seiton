@@ -2,24 +2,24 @@
 
 ## What is this project?
 
-Seiton は GitHub Actions ドキュメント（workflow ファイルおよび action metadata ファイル）を解析・Lint する C# ツール。
+Seiton is a C# tool that parses and lints GitHub Actions documents (workflow files and action metadata files).
 
-- **Parser**: UTF-8 YAML を typed AST に変換し、パーサー診断を返す。
-- **Linter**: 解析済み AST に対してルールを実行し、Lint 診断を集約して返す。
+- **Parser**: Converts UTF-8 YAML into a typed AST and returns parser diagnostics.
+- **Linter**: Runs rules against the parsed AST and aggregates lint diagnostics.
 
-対象ドキュメント: `.github/workflows/*.yml`、`action.yml` / `action.yaml`。
+Target documents: `.github/workflows/*.yml`, `action.yml` / `action.yaml`.
 
 ## Project Structure
 
 ```
-src/Seiton/           — CLI エントリポイント
-src/Seiton.Core/      — コアライブラリ（Parsing/, Linting/, Generated/）
-src/Seiton.Update/    — 生成データ更新ツール
-src/Seiton.Benchmark/ — パフォーマンスベンチマーク
-tests/                — テストプロジェクト群
-sandbox/DotnetFiles/  — 試作・検証用スクリプト
-Docs/                 — 仕様書（source of truth）
-data/                 — 生成データソース（manifest, availability など）
+.github/docs          — Specifications (source of truth)
+src/Seiton/           — CLI entry point
+src/Seiton.Core/      — Core library (Parsing/, Linting/, Generated/)
+src/Seiton.Update/    — Generated data update tool
+src/Seiton.Benchmark/ — Performance benchmarks
+tests/                — Test projects
+sandbox/DotnetFiles/  — Prototyping and verification scripts
+data/                 — Generated data sources (manifest, availability, etc.)
 ```
 ## Skills
 
@@ -62,7 +62,7 @@ data/sources/{dataset}/github/
 - `verify-{dataset}` — check `.g.cs` is up to date (CI)
 - `validate-{dataset}` — cross-check source data against docs (optional)
 
-Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `Docs/Seiton_Parser_csharp_spec.md` §9.3 for details.
+Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `.github/docsSeiton_Parser_csharp_spec.md` §9.3 for details.
 
 **When adding a new dataset pipeline**, follow the existing pattern:
 1. Create a `SourcePathResolver` in `Services/` (with legacy path fallback)
@@ -148,7 +148,7 @@ dotnet run sandbox/DotnetFiles/YourCsFile.cs
 
 Before implementing a parser/ast or making significant changes:
 
-1. Read the relevant documentation files in `Docs/`
+1. Read the relevant documentation files in `.github/docs`
 2. Review existing similar implementations in `src/`
 3. Check corresponding tests in `tests/Seiton.Tests/`
 
@@ -156,7 +156,7 @@ Ask which documentation files you need if you're unsure what to read.
 
 ## Specification Document Policy
 
-Spec files live under `Docs/`. When reading or writing them, follow these rules:
+Spec files live under `.github/docs`. When reading or writing them, follow these rules:
 
 **What belongs in a spec:**
 - **WHAT** — what the feature or behavior is

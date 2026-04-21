@@ -1005,9 +1005,9 @@ This observability data enables CI detection of suppression increases.
 
 When this specification is revised, also review and update:
 
-- `Docs/linter_implementation_csharp_plan.md`
-- `Docs/Seiton_spec.md`
-- `Docs/Seiton_Parser_spec.md` when parser/linter boundary changed
+- `.github/docslinter_implementation_csharp_plan.md`
+- `.github/docsSeiton_spec.md`
+- `.github/docsSeiton_Parser_spec.md` when parser/linter boundary changed
 
 ---
 

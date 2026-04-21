@@ -267,7 +267,7 @@ The shared rule catalog additionally defines the following Phase 14 rule IDs:
 Implementation status:
 
 - Shared-spec catalog status is fixed for these IDs.
-- Go runtime mapping for these IDs is planned and should follow the same sequencing as documented in `Docs/linter_implementation_csharp_plan.md` Phase 14 until Go-specific implementation plan items are added.
+- Go runtime mapping for these IDs is planned and should follow the same sequencing as documented in `.github/docslinter_implementation_csharp_plan.md` Phase 14 until Go-specific implementation plan items are added.
 
 ### 3.6 Planned High-Priority Candidate Rules
 
@@ -590,5 +590,5 @@ type RemediationResult struct {
 
 When this document is revised, also review and update:
 
-- `Docs/Seiton_Linter_spec.md`
-- `Docs/Seiton_spec.md` when parser/linter boundary wording changes
+- `.github/docsSeiton_Linter_spec.md`
+- `.github/docsSeiton_spec.md` when parser/linter boundary wording changes

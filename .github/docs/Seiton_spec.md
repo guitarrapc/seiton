@@ -96,18 +96,18 @@ Responsibilities that belong exclusively to each component:
 
 ## 5. Normative Specifications
 
-- Parser (language-agnostic): `Docs/Seiton_Parser_spec.md`
-- Parser C# companion: `Docs/Seiton_Parser_csharp_spec.md`
-- Parser Go companion: `Docs/Seiton_Parser_go_spec.md`
+- Parser (language-agnostic): `.github/docsSeiton_Parser_spec.md`
+- Parser C# companion: `.github/docsSeiton_Parser_csharp_spec.md`
+- Parser Go companion: `.github/docsSeiton_Parser_go_spec.md`
 
-- Linter (language-agnostic): `Docs/Seiton_Linter_spec.md`
-- Linter C# companion: `Docs/Seiton_Linter_csharp_spec.md`
-- Linter Go companion: `Docs/Seiton_Linter_go_spec.md`
+- Linter (language-agnostic): `.github/docsSeiton_Linter_spec.md`
+- Linter C# companion: `.github/docsSeiton_Linter_csharp_spec.md`
+- Linter Go companion: `.github/docsSeiton_Linter_go_spec.md`
 
 Implementation plans:
 
-- Parser plan (C#): `Docs/parser_implementation_csharp_plan.md`
-- Linter plan (C#): `Docs/linter_implementation_csharp_plan.md`
+- Parser plan (C#): `.github/docsparser_implementation_csharp_plan.md`
+- Linter plan (C#): `.github/docslinter_implementation_csharp_plan.md`
 
 ---
 

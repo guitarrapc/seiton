@@ -4,16 +4,16 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Folder Name="/docs/">
-    <File Path="Docs/architecture_spec_csharp.md" />
-    <File Path="Docs/architecture_spec_go.md" />
-    <File Path="Docs/architecture_spec_performance.md" />
-    <File Path="Docs/competitor-actionlint-structure-details.md" />
-    <File Path="Docs/competitor-ghalint-structure-details.md" />
-    <File Path="Docs/competitor-zizmor-structure-details.md" />
-    <File Path="Docs/Seiton_Parser_csharp_spec.md" />
-    <File Path="Docs/Seiton_Parser_go_spec.md" />
-    <File Path="Docs/Seiton_Parser_spec.md" />
-    <File Path="Docs/updater_implementation_plan.md" />
+    <File Path=".github/docs/architecture_spec_csharp.md" />
+    <File Path=".github/docs/architecture_spec_go.md" />
+    <File Path=".github/docs/architecture_spec_performance.md" />
+    <File Path=".github/docs/competitor-actionlint-structure-details.md" />
+    <File Path=".github/docs/competitor-ghalint-structure-details.md" />
+    <File Path=".github/docs/competitor-zizmor-structure-details.md" />
+    <File Path=".github/docs/Seiton_Parser_csharp_spec.md" />
+    <File Path=".github/docs/Seiton_Parser_go_spec.md" />
+    <File Path=".github/docs/Seiton_Parser_spec.md" />
+    <File Path=".github/docs/updater_implementation_plan.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Seiton/Seiton.csproj" />

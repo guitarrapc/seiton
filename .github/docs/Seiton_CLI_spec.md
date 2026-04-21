@@ -539,6 +539,6 @@ seiton validate-config --config .github/seiton.yaml
 
 When this document is revised, review and update:
 
-- `Docs/Seiton_spec.md` — component table entry for `seiton` CLI
-- `Docs/Seiton_Linter_csharp_spec.md` — if `LintConfig` bridge contract changes
-- `Docs/Seiton_Linter_spec.md` §5.10 — if config discovery order changes
+- `.github/docsSeiton_spec.md` — component table entry for `seiton` CLI
+- `.github/docsSeiton_Linter_csharp_spec.md` — if `LintConfig` bridge contract changes
+- `.github/docsSeiton_Linter_spec.md` §5.10 — if config discovery order changes
