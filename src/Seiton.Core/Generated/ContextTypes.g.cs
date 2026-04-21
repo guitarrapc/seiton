@@ -45,7 +45,7 @@ internal static class ContextTypes
                 { new Utf8String("repository_owner"u8), ExprType.String },
                 { new Utf8String("repository_owner_id"u8), ExprType.String },
                 { new Utf8String("repository_visibility"u8), ExprType.String },
-                { new Utf8String("retention_days"u8), ExprType.String },
+                { new Utf8String("retention_days"u8), ExprType.Number },
                 { new Utf8String("run_attempt"u8), ExprType.String },
                 { new Utf8String("run_id"u8), ExprType.String },
                 { new Utf8String("run_number"u8), ExprType.String },
