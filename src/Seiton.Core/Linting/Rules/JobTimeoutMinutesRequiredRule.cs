@@ -29,7 +29,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
             && Config.Utf8Yaml is not null
             && Config.Fix.Defaults.JobTimeoutMinutes is not null
             && Config.Fix.Defaults.JobTimeoutMinutes.Value > 0
-            && TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
+            && TryBuildJobTimeoutInsertFix(Config, job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
         {
             AddJobError(job, message, BuildJobLocation(job), fix);
             return;
@@ -63,7 +63,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return true;
     }
 
-    static bool TryBuildJobTimeoutInsertFix(Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
+    static bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
     {
         fix = default;
         if (timeoutMinutes <= 0)
@@ -71,7 +71,12 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
             return false;
         }
 
-        var sourceText = Encoding.UTF8.GetString(utf8Yaml);
+        var sourceText = config.GetSourceText();
+        if (sourceText is null)
+        {
+            return false;
+        }
+
         var normalized = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal);
         var lines = normalized.Split('\n');
         if (lines.Length == 0)

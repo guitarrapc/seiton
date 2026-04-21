@@ -366,19 +366,48 @@ diagnostics.Add(new Diagnostic(..., Fix: null, FixHint: new FixHint(FixKind.Miss
 
 #### 6-B: 全ファイル文字列化の共有キャッシュ
 
-同一 `Check()` 呼び出し内で複数ルールが `Encoding.UTF8.GetString(utf8Yaml)` を呼ぶ。`LintConfig` に `Lazy<string> DecodedYaml` を追加し、最初のアクセスでのみデコードする。
+同一 `Check()` 呼び出し内で複数ルールが `Encoding.UTF8.GetString(utf8Yaml)` を呼ぶ。`LintConfig` に `GetSourceText()` メソッドを追加し、最初のアクセスでのみデコードする。
 
 **影響範囲**: `CheckoutPersistCredentialsRule`, `JobPermissionsRequiredRule`, `JobTimeoutMinutesRequiredRule` の Fix 構築メソッド
+
+**実施内容**:
+- `LintConfig` に `GetSourceText()` メソッドを追加（`_sourceText` フィールドで lazy 初期化）
+- `CheckoutPersistCredentialsRule.TryBuildMissingInputFix`: `Encoding.UTF8.GetString(utf8Yaml)` → `config.GetSourceText()` に置換
+- `JobPermissionsRequiredRule.TryBuildPermissionsInsertFix`: 同様
+- `JobTimeoutMinutesRequiredRule.TryBuildJobTimeoutInsertFix`: 同様
+- 各 `TryBuild*Fix` メソッドに `LintConfig config` パラメータを追加
+
+**設計判断**:
+- Fix ロジックはルール内に残り、デコード済み文字列というデータだけを `LintConfig` 経由で共有
+- 新ルール追加時も `config.GetSourceText()` を呼ぶだけで他ファイル変更不要
+- `LintConfig` は既に「ルール実行に必要な共有データのコンテナ」として機能しており、デコード済み文字列はその一部に過ぎない
 
 **完了条件**:
 - [x] `FixConfig.Enabled` が追加されていること
 - [x] Fix 構築が `LintConfig.Fix.Enabled == false`（デフォルト）のとき実行されないこと（grep + テスト確認）
-- [ ] 複数ルールでの `Encoding.UTF8.GetString(utf8Yaml)` が共有キャッシュ経由になっていること（6-B は未着手）
-- [x] ベンチマーク: `LintBenchmark` Large の Allocated が大幅減少していること
+- [x] 複数ルールでの `Encoding.UTF8.GetString(utf8Yaml)` が共有キャッシュ経由になっていること
+- [x] ベンチマーク: `LintBenchmark` Large の Allocated が大幅減少していること（6-A で達成済み）
 - [x] Fix 有効時の挙動が変わっていないこと（既存テストで検証）
-- [x] 全テスト通過
+- [x] 全テスト通過（477 tests）
 
-**推定効果**: Large で ~5–30 MB 削減（violation 数 × 全ファイルデコード/Split コスト）
+**Phase 6-B 実施結果（2026-04-21 計測）**:
+
+**計測環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.3 / AMD Ryzen 7 5800H / ShortRun
+
+| Method | Size | Phase 6-A Mean | Phase 6-B Mean | 時間差 | Phase 6-A Alloc | Phase 6-B Alloc | Alloc差 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| LintEngine.Check | Small (1×3) | 43.89 μs | 122.5 μs | — | 47,882 B | 47,892 B | +10 B (+0.02%) |
+| LintEngine.Check | Medium (6×8) | 1,056 μs | 2,910 μs | — | 662,535 B | 662,814 B | +279 B (+0.04%) |
+| LintEngine.Check | Large (20×12) | 17,183 μs | 46,717 μs | — | 9,323,039 B | 9,323,219 B | +180 B (+0.002%) |
+
+**考察**:
+- **時間差**: Phase 6-A は Ryzen 9 7950X3D、Phase 6-B は Ryzen 7 5800H での計測のため、時間の直接比較は無意味。
+- **アロケーション差**: 誤差範囲内（+0.002〜0.04%）。Phase 6-B の `GetSourceText()` キャッシュは `Fix.Enabled = false` の LintBenchmark では効果がない（予想通り）。
+- **実効性**: Phase 6-B の効果は `--fix` 実行時のみ発揮される。Large ファイルで 140 回のデコード（120 checkout + 20 job violations）が 1 回に削減されるが、LintBenchmark は lint-only パスなので計測に現れない。Phase 6-A で lint-only パスは既に最適化済み。
+
+**推定効果**: `--fix` 実行時のみ効果あり。Large で同一ファイルの 140 回デコード（120 checkout + 20 job）が 1 回に削減。ただし LintBenchmark は `Fix.Enabled = false` なのでベンチマークには反映されない。
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -533,7 +562,7 @@ Phase 8 (診断収集最適化) は独立
 
 ### Phase 5: AST List → Array の最適化 — 🔲 未着手
 
-### Phase 6: Fix 構築の遅延化 — ✅ 完了（6-A のみ、6-B 未着手）
+### Phase 6: Fix 構築の遅延化 — ✅ 完了（6-A, 6-B）
 
 ### Phase 7: 式解析の重複排除 — 🔲 未着手
 

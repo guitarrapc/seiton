@@ -1,5 +1,6 @@
 ﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
+using System.Text;
 
 namespace Seiton.Core.Linting;
 
@@ -10,6 +11,22 @@ public sealed class LintConfig
     public byte[]? Utf8Yaml { get; init; }
 
     public string? FilePath { get; init; }
+
+    string? _sourceText;
+
+    /// <summary>
+    /// Returns the decoded UTF-8 source text, lazily initialized on first access.
+    /// Multiple rules requesting source text will share the same decoded string.
+    /// </summary>
+    public string? GetSourceText()
+    {
+        if (Utf8Yaml is null)
+        {
+            return null;
+        }
+
+        return _sourceText ??= Encoding.UTF8.GetString(Utf8Yaml);
+    }
 
     // rules section: rule-id -> RuleConfig
     public IReadOnlyDictionary<string, RuleConfig>? Rules { get; init; }

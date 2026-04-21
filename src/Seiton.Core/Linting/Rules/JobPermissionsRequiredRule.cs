@@ -20,7 +20,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
 
         var jobId = Decode(job.Id.Value);
         var message = $"job '{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
-        if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(job, Config.Utf8Yaml, out var fix))
+        if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(Config, job, Config.Utf8Yaml, out var fix))
         {
             AddJobWarning(job, message, BuildJobLocation(job), fix);
             return;
@@ -29,10 +29,15 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         AddJobWarning(job, message);
     }
 
-    static bool TryBuildPermissionsInsertFix(Job job, byte[] utf8Yaml, out DiagnosticFix fix)
+    static bool TryBuildPermissionsInsertFix(LintConfig config, Job job, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
-        var sourceText = Encoding.UTF8.GetString(utf8Yaml);
+        var sourceText = config.GetSourceText();
+        if (sourceText is null)
+        {
+            return false;
+        }
+
         var normalized = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal);
         var lines = normalized.Split('\n');
         if (lines.Length == 0)

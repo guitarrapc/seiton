@@ -33,7 +33,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
 
         if (actionExec.Inputs is null || !actionExec.Inputs.TryGetValue(Utf8String.FromLowerAscii("persist-credentials"u8), out var persistCredentialsNode))
         {
-            if (Config.Fix.Enabled && TryBuildMissingInputFix(step, actionExec, Config.Utf8Yaml, out var missingFix))
+            if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildMissingInputFix(Config, step, actionExec, Config.Utf8Yaml, out var missingFix))
             {
                 AddStepWarning(step, message, BuildStepLocation(step), missingFix);
                 return;
@@ -49,7 +49,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return;
         }
 
-        if (Config.Fix.Enabled && TryBuildValueReplacementFix(persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
+        if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildValueReplacementFix(Config, persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
         {
             AddStepWarning(step, message, persistCredentialsNode.Range, valueFix);
             return;
@@ -63,7 +63,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return $"action '{actionRef}' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, {FixHint}";
     }
 
-    static bool TryBuildValueReplacementFix(StringNode persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
+    static bool TryBuildValueReplacementFix(LintConfig config, StringNode persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
         var value = persistCredentialsNode.Value.AsSpan(utf8Yaml);
@@ -79,11 +79,16 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return true;
     }
 
-    static bool TryBuildMissingInputFix(Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
+    static bool TryBuildMissingInputFix(LintConfig config, Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
-        var sourceText = Encoding.UTF8.GetString(utf8Yaml);
+        var sourceText = config.GetSourceText();
+        if (sourceText is null)
+        {
+            return false;
+        }
+
         var normalized = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal);
         var lines = normalized.Split('\n');
         if (lines.Length == 0)
