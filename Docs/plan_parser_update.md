@@ -276,8 +276,9 @@ vars       → map object<string>
 
 **What（ContextTypes — contexts.md 由来）**: `Availability.g.cs` の生成パイプラインと同じ構成を `ContextTypes` 向けに実装する。
 
-**実装状況**: codegen （sync/verify）は実装済み。fetch/parse/override merge は未実装。
-現時点では手書き `context-types.json` が primary source。将来、contexts.md からの fetch/parse/override merge を実装し、docs 追随を完全自動化する。
+**実装状況**: 完全実装済み。codegen（sync/verify）・fetch/parse/validate/merge すべて実装済み。
+手書き `context-types.json` が primary source（undocumented プロパティや strict/loose 区別を保持）。
+`fetch-context-types-sources` → `parse-context-types-sources` → `validate-context-types` / `merge-context-types-sources` → `sync-context-types` のパイプラインが全て動作確認済み。
 
 fetch URL: `https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md`（availability と同じ GitHub Docs raw source）
 
@@ -352,6 +353,11 @@ internal static class FunctionSpecs
 **Seiton.Update コマンド追加**:
 - `sync-context-types` — fetch + parse + merge + codegen を一括実行
 - `verify-context-types` — 現在の `ContextTypes.g.cs` が再生成結果と一致するか検証（CI 用）
+- `fetch-context-types` — contexts.md fetch + parse + manifest 更新を一括実行
+- `fetch-context-types-sources` — contexts.md を raw/ にダウンロード
+- `parse-context-types-sources` — raw ファイルからプロパティ一覧を抽出し parsed/ に保存
+- `validate-context-types` — parsed コンテキストプロパティと context-types.json を比較し未登録を警告
+- `merge-context-types-sources` — 未登録トップレベルプロパティを context-types.json に自動追加
 - `sync-function-specs` — `function-specs.json` → `FunctionSpecs.g.cs` の codegen を実行（parsed があれば関数名差分チェックも含む）
 - `verify-function-specs` — 現在の `FunctionSpecs.g.cs` が再生成結果と一致するか検証（CI 用）
 - `fetch-function-specs` — expressions.md fetch + parse + manifest 更新を一括実行
@@ -363,17 +369,19 @@ internal static class FunctionSpecs
 - [x] `sync-context-types` を実行すると `ContextTypes.g.cs` が再生成されること
 - [x] Phase 1 のインライン手書き定義を `ContextTypes.g.cs` 由来に差し替えても全テストが通過すること
 - [x] docs にプロパティが追加された場合に `verify-context-types` が差分を報告すること
+- [x] `fetch-context-types-sources` で contexts.md を取得し `data/sources/context-types/github/raw/` に保存できること
+- [x] `parse-context-types-sources` でプロパティテーブルを parse し `data/sources/context-types/github/parsed/` に JSON を出力できること
+- [x] `validate-context-types` が parsed コンテキストプロパティと context-types.json を比較し、未登録プロパティ・コンテキストを警告として出力すること
+- [x] `merge-context-types-sources` が parsed トップレベルプロパティを context-types.json に自動マージできること
+- [x] `sync-context-types` が parsed データ存在時に自動validate して差分を警告すること
 - [x] `sync-function-specs` を実行すると `FunctionSpecs.g.cs` が再生成されること
 - [x] Phase 1 の手書き `Specs` 配列を `FunctionSpecs.g.cs` 由来に差し替えても全テストが通過すること
 - [x] docs に新関数が追加された場合に `sync-function-specs` が未登録関数名を警告として出力すること（`fetch-function-specs-sources` + `parse-function-specs-sources` で parsed 作成後、`sync-function-specs` が自動検証）
 - [x] CI で週次実行できる設計になっていること（sync/verify コマンド対応済み）
 - [x] 全テスト通過
 
-**未実装項目（将来実装予定）**:
-- [ ] `fetch-context-types-sources` で contexts.md を取得し `data/sources/context-types/github/raw/` に保存できること
-- [ ] `parse-context-types-sources` でプロパティテーブルを parse し `data/sources/context-types/github/parsed/` に JSON を出力できること
-- [ ] `merge-context-types-sources` で parsed + override を merge し `context-types.json` を更新できること
-- [ ] `fetch-context-types` オーケストレータコマンドが fetch + parse + merge + manifest 更新を一括実行できること
+**将来検討**:
+- `override` 専用ファイル（`ContextTypesOverride.cs`）を導入し、`context-types.json` を自動 merge 結果 + override の分離構成にする（現状は手書き JSON が両方を兼ねている）
 
 ---
 

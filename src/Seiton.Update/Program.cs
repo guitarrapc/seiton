@@ -192,6 +192,56 @@ app.Add("validate-function-specs", () =>
     }
 });
 
+app.Add("fetch-context-types", async () =>
+{
+    var code = await ContextTypesCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-context-types failed with code {code}");
+    }
+});
+
+app.Add("fetch-context-types-sources", async () =>
+{
+    var code = await ContextTypesCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-context-types-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-context-types-sources", () =>
+{
+    var code = ContextTypesCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-context-types-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-context-types-sources", () =>
+{
+    var code = ContextTypesCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-context-types-sources failed with code {code}");
+    }
+});
+
+app.Add("validate-context-types", () =>
+{
+    var code = ContextTypesCommands.Validate(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"validate-context-types failed with code {code}");
+    }
+});
+
 // Fetch official raw source files -> parse local files -> merge snapshot (+ manifest update).
 app.Add("fetch-webhooks", async (bool excludeSchemaOnly = false) =>
 {

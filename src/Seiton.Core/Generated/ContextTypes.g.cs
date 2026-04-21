@@ -44,7 +44,7 @@ internal static class ContextTypes
                 { new Utf8String("repository_owner"u8), ExprType.String },
                 { new Utf8String("repository_owner_id"u8), ExprType.String },
                 { new Utf8String("repository_visibility"u8), ExprType.String },
-                { new Utf8String("repositoryurl"u8), ExprType.String },
+                { new Utf8String("repositoryUrl"u8), ExprType.String },
                 { new Utf8String("retention_days"u8), ExprType.Number },
                 { new Utf8String("run_attempt"u8), ExprType.String },
                 { new Utf8String("run_id"u8), ExprType.String },
@@ -99,7 +99,12 @@ internal static class ContextTypes
                 { new Utf8String("environment"u8), ExprType.String },
             },
             strict: true);
-        var secretsType = ExprType.Object(dynamicPropertyType: ExprType.String);
+        var secretsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("GITHUB_TOKEN"u8), ExprType.String },
+            },
+            dynamicPropertyType: ExprType.String);
         var strategyType = ExprType.Object(
             new Dictionary<Utf8String, ExprType>
             {
@@ -114,6 +119,7 @@ internal static class ContextTypes
         var needsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         var inputsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         var varsType = ExprType.Object(dynamicPropertyType: ExprType.String);
+        var jobsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
 
         return
         [
@@ -128,6 +134,7 @@ internal static class ContextTypes
             ("needs"u8.ToArray(), (ExprType)needsType),
             ("inputs"u8.ToArray(), (ExprType)inputsType),
             ("vars"u8.ToArray(), (ExprType)varsType),
+            ("jobs"u8.ToArray(), (ExprType)jobsType),
         ];
     }
 }
