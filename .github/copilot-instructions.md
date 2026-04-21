@@ -136,7 +136,7 @@ dotnet build
 
 ### Run Some Script
 
-You can create a .cs file in `sandbox/DotnetFiles/` and run it directly. See [Sandbox Code Guidelines](.github/skills/sandbox-code-guidelines/SKILL.md) for details and script sample.
+You can create a .cs file in `sandbox/DotnetFiles/` and run it directly. See [Sandbox Code Guidelines](.agents/skills/sandbox-code-guidelines/SKILL.md) for details and script sample.
 
 use `sandbox/DotnetFiles/Sample.cs` for template:
 
@@ -164,7 +164,7 @@ Spec files live under `.github/docs`. When reading or writing them, follow these
 - **Lessons learned** — things that were only discovered by actually trying (e.g., unexpected constraints, failed approaches, surprising behavior)
 
 **What does NOT belong in a spec:**
-- Detailed HOW — step-by-step implementation instructions, code structure, algorithm internals. Those belong in code comments, `.github/skills/`, or the implementation itself.
+- Detailed HOW — step-by-step implementation instructions, code structure, algorithm internals. Those belong in code comments, `.agents/skills/`, or the implementation itself.
 
 **After implementing:**
 - Always update any related spec files to reflect what was actually built, especially documenting lessons learned or decisions made during implementation that weren't captured upfront.
