@@ -72,6 +72,12 @@ public sealed record LintExclusion(
 
 public sealed record FixConfig
 {
+    /// <summary>
+    /// When true, rules will build DiagnosticFix objects during Check().
+    /// Defaults to false so lint-only runs skip fix construction overhead.
+    /// </summary>
+    public bool Enabled { get; init; } = false;
+
     public FixDefaultsConfig Defaults { get; init; } = new();
     public FixPinningConfig Pinning { get; init; } = new();
     public FixImagesConfig Images { get; init; } = new();

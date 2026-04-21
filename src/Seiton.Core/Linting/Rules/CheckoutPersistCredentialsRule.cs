@@ -33,7 +33,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
 
         if (actionExec.Inputs is null || !actionExec.Inputs.TryGetValue(Utf8String.FromLowerAscii("persist-credentials"u8), out var persistCredentialsNode))
         {
-            if (TryBuildMissingInputFix(step, actionExec, Config.Utf8Yaml, out var missingFix))
+            if (Config.Fix.Enabled && TryBuildMissingInputFix(step, actionExec, Config.Utf8Yaml, out var missingFix))
             {
                 AddStepWarning(step, message, BuildStepLocation(step), missingFix);
                 return;
@@ -49,7 +49,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return;
         }
 
-        if (TryBuildValueReplacementFix(persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
+        if (Config.Fix.Enabled && TryBuildValueReplacementFix(persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
         {
             AddStepWarning(step, message, persistCredentialsNode.Range, valueFix);
             return;

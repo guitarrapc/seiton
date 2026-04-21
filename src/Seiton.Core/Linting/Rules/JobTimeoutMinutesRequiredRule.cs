@@ -25,16 +25,17 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
 
         var jobId = Decode(job.Id.Value);
         var message = $"job '{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
-        if (Config.Utf8Yaml is null
-            || Config.Fix.Defaults.JobTimeoutMinutes is null
-            || Config.Fix.Defaults.JobTimeoutMinutes.Value <= 0
-            || !TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
+        if (Config.Fix.Enabled
+            && Config.Utf8Yaml is not null
+            && Config.Fix.Defaults.JobTimeoutMinutes is not null
+            && Config.Fix.Defaults.JobTimeoutMinutes.Value > 0
+            && TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
         {
-            AddJobError(job, message, BuildJobLocation(job));
+            AddJobError(job, message, BuildJobLocation(job), fix);
             return;
         }
 
-        AddJobError(job, message, BuildJobLocation(job), fix);
+        AddJobError(job, message, BuildJobLocation(job));
     }
 
     static bool IsExecutableJob(Job job)

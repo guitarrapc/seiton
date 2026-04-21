@@ -828,7 +828,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml");
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -860,7 +860,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml");
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -891,7 +891,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml");
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -2334,7 +2334,7 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobTimeoutMinutesRequiredRule()]);
         var config = new LintConfig
         {
-            Fix = new FixConfig { Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 15 } },
+            Fix = new FixConfig { Enabled = true, Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 15 } },
         };
 
         var result = engine.Check(sourceBytes, "job-timeout-minutes-required-fix.yml", config);
@@ -4100,7 +4100,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4132,7 +4132,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4156,7 +4156,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4187,7 +4187,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4213,7 +4213,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4829,7 +4829,8 @@ public sealed class RuleInterfaceTests
             var c = cases[i];
             var result = new LintEngine([c.Rule]).Check(
                 Encoding.UTF8.GetBytes(NormalizeYaml(c.Yaml)),
-                $"fixability-{c.RuleId}.yml");
+                $"fixability-{c.RuleId}.yml",
+                new LintConfig { Fix = new FixConfig { Enabled = true } });
             var diagnostics = result.Diagnostics.Where(x => x.RuleId == c.RuleId).ToArray();
             if (diagnostics.Length == 0)
             {

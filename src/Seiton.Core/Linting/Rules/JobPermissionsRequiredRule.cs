@@ -20,13 +20,13 @@ public sealed class JobPermissionsRequiredRule : RuleBase
 
         var jobId = Decode(job.Id.Value);
         var message = $"job '{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
-        if (Config.Utf8Yaml is null || !TryBuildPermissionsInsertFix(job, Config.Utf8Yaml, out var fix))
+        if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(job, Config.Utf8Yaml, out var fix))
         {
-            AddJobWarning(job, message);
+            AddJobWarning(job, message, BuildJobLocation(job), fix);
             return;
         }
 
-        AddJobWarning(job, message, BuildJobLocation(job), fix);
+        AddJobWarning(job, message);
     }
 
     static bool TryBuildPermissionsInsertFix(Job job, byte[] utf8Yaml, out DiagnosticFix fix)

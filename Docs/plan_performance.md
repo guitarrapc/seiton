@@ -338,12 +338,31 @@ diagnostics.Add(new Diagnostic(..., Fix: null, FixHint: new FixHint(FixKind.Miss
 // Fix の実体は FixEngine 側で必要時に構築
 ```
 
+#### 6-A: DiagnosticFix の遅延構築パターン導入
+
+```csharp
+// Before: Check() 内で即座に Fix テキストを構築
+var fix = TryBuildMissingInputFix(utf8Yaml, step, "persist-credentials", "false");
+diagnostics.Add(new Diagnostic(..., Fix: fix));
+
+// After: Fix 構築を遅延 — Check 時はメタデータのみ保持
+diagnostics.Add(new Diagnostic(..., Fix: null, FixHint: new FixHint(FixKind.MissingInput, stepRange, "persist-credentials", "false")));
+// Fix の実体は FixEngine 側で必要時に構築
+```
+
 **改善策の選択肢**:
 - **A**: `Diagnostic.Fix` を nullable のままにし、Fix 構築ロジックを `FixEngine` に移動。`Check()` は違反検出とメタデータのみ
 - **B**: Lazy<DiagnosticFix> + factory callback で構築を遅延化。消費側が `.Value` アクセスしたときのみ構築
 - **C**: Fix 構築を `LintConfig.Fix.Enabled` フラグで条件分岐し、Lint-only 時はスキップ
 
 推奨: **選択肢 C**（最小変更。A は理想的だが RuleBase/Diagnostic の設計変更が広範）
+
+**実装（選択肢 C）**:
+- `FixConfig` に `bool Enabled { get; init; } = false` を追加（デフォルト false = lint-only ではスキップ）
+- `CheckoutPersistCredentialsRule.VisitStep` の `TryBuildMissingInputFix` / `TryBuildValueReplacementFix` 呼び出しを `Config.Fix.Enabled` でガード
+- `JobPermissionsRequiredRule.VisitJobPre` の `TryBuildPermissionsInsertFix` 呼び出しを同様にガード
+- `JobTimeoutMinutesRequiredRule.VisitJobPre` の `TryBuildJobTimeoutInsertFix` 呼び出しを同様にガード
+- `FixCommand` が `engine.Check()` を呼ぶ際に `Fix = fixConfig with { Enabled = true }` を設定
 
 #### 6-B: 全ファイル文字列化の共有キャッシュ
 
@@ -352,13 +371,40 @@ diagnostics.Add(new Diagnostic(..., Fix: null, FixHint: new FixHint(FixKind.Miss
 **影響範囲**: `CheckoutPersistCredentialsRule`, `JobPermissionsRequiredRule`, `JobTimeoutMinutesRequiredRule` の Fix 構築メソッド
 
 **完了条件**:
-- [ ] Fix 構築が `LintConfig.Fix.Enabled == false`（デフォルト）のとき実行されないこと（grep + テスト確認）
-- [ ] 複数ルールでの `Encoding.UTF8.GetString(utf8Yaml)` が共有キャッシュ経由になっていること
-- [ ] ベンチマーク: `LintBenchmark` Large の Allocated が大幅減少していること（推定 -5–30 MB）
-- [ ] Fix 有効時の挙動が変わっていないこと（既存テストで検証）
-- [ ] 全テスト通過
+- [x] `FixConfig.Enabled` が追加されていること
+- [x] Fix 構築が `LintConfig.Fix.Enabled == false`（デフォルト）のとき実行されないこと（grep + テスト確認）
+- [ ] 複数ルールでの `Encoding.UTF8.GetString(utf8Yaml)` が共有キャッシュ経由になっていること（6-B は未着手）
+- [x] ベンチマーク: `LintBenchmark` Large の Allocated が大幅減少していること
+- [x] Fix 有効時の挙動が変わっていないこと（既存テストで検証）
+- [x] 全テスト通過
 
 **推定効果**: Large で ~5–30 MB 削減（violation 数 × 全ファイルデコード/Split コスト）
+
+---
+
+### Phase 6-A 実施結果（2026-04-21 計測）
+
+**実施内容**:
+- `FixConfig` に `bool Enabled { get; init; } = false` を追加
+- `CheckoutPersistCredentialsRule.VisitStep`: `TryBuildMissingInputFix` / `TryBuildValueReplacementFix` の各呼び出しを `Config.Fix.Enabled` でガード
+- `JobPermissionsRequiredRule.VisitJobPre`: `TryBuildPermissionsInsertFix` の呼び出しを `Config.Fix.Enabled` でガード
+- `JobTimeoutMinutesRequiredRule.VisitJobPre`: `TryBuildJobTimeoutInsertFix` の呼び出しを `Config.Fix.Enabled` でガード
+- `FixCommand`: `engine.Check()` 呼び出し前に `Fix = (lintConfig?.Fix ?? new FixConfig()) with { Enabled = true }` を設定した `fixEnabledLintConfig` を構築
+- Fix テスト（`LintEngine_*_Fix_*`, `AutoFixCatalog_*`, `FixEngineTests`）に `new LintConfig { Fix = new FixConfig { Enabled = true } }` を追加
+
+**考察**:
+- `CheckoutPersistCredentialsRule` の `TryBuildMissingInputFix` が `Encoding.UTF8.GetString(utf8Yaml)` + `text.Split('\n')` を lint-only パスで実行しなくなったことが最大の効果（Large 120 violations × ~50 KB decode）
+- `JobPermissionsRequiredRule` も同様（Large 20 violations × ~50 KB decode）
+- デフォルト `Fix.Enabled = false` なので lint-only 用途（CI の check コマンド等）で追加設定不要
+- `FixCommand` のみ `Enabled = true` を明示するシンプルな opt-in 設計
+
+| Method | Size | Phase 4 Mean | Phase 6-A Mean | 時間削減 | Phase 4 Alloc | Phase 6-A Alloc | Alloc削減 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| LintEngine.Check | Small (1×3) | 53.18 μs | 43.89 μs | -17.5% | 86,734 B | 47,882 B | -44.8% |
+| LintEngine.Check | Medium (6×8) | 1,928 μs | 1,056 μs | -45.2% | 4,975,196 B | 662,535 B | -86.7% |
+| LintEngine.Check | Large (20×12) | 42,148 μs | 17,183 μs | -59.3% | 99,468,943 B | 9,323,039 B | **-90.6%** |
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -487,7 +533,7 @@ Phase 8 (診断収集最適化) は独立
 
 ### Phase 5: AST List → Array の最適化 — 🔲 未着手
 
-### Phase 6: Fix 構築の遅延化 — 🔲 未着手
+### Phase 6: Fix 構築の遅延化 — ✅ 完了（6-A のみ、6-B 未着手）
 
 ### Phase 7: 式解析の重複排除 — 🔲 未着手
 

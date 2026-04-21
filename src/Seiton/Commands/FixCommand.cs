@@ -95,6 +95,15 @@ internal static class FixCommand
             var allDiagnostics = new List<Diagnostic>();
             var hasFixable = false;
 
+            // Fix command always builds fixes; enable fix construction for all Check() calls.
+            var fixEnabledLintConfig = new LintConfig
+            {
+                Rules = lintConfig?.Rules,
+                Exclusions = lintConfig?.Exclusions,
+                Fix = (lintConfig?.Fix ?? new FixConfig()) with { Enabled = true },
+                Network = lintConfig?.Network ?? new NetworkConfig(),
+            };
+
             for (var i = 0; i < resolvedFiles.Length; i++)
             {
                 var filePath = resolvedFiles[i];
@@ -109,7 +118,7 @@ internal static class FixCommand
                 if (verbose)
                     Console.Error.WriteLine($"fixing {filePath}...");
 
-                var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                var result = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
 
                 // Apply network-assisted pin remediation: attaches SHA/digest DiagnosticFix values
                 // to unpinned-uses and unpinned-image diagnostics. This runs once per file.
@@ -173,7 +182,7 @@ internal static class FixCommand
 
                 // Subsequent re-check passes: local AST fixes only (pin diagnostics are now
                 // satisfied so they won't reappear). Skip pass 0 since it was already applied above.
-                var currentResult = engine.Check(currentYaml, filePath, lintConfig);
+                var currentResult = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
                 for (var pass = 1; pass < maxFixPasses && currentResult.HasFixableDiagnostics; pass++)
                 {
                     var nextYaml = FixEngine.Apply(currentYaml, currentResult.FixableDiagnostics);

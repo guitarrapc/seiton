@@ -416,7 +416,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(sourceText);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var lint = engine.Check(source, "indent-2.yml");
+        var lint = engine.Check(source, "indent-2.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
 
         await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
 
@@ -441,7 +441,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(sourceText);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var lint = engine.Check(source, "indent-4.yml");
+        var lint = engine.Check(source, "indent-4.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
 
         await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
 
