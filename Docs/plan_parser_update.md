@@ -392,24 +392,6 @@ internal static class FunctionSpecs
 
 ---
 
-### Phase 6: Seiton.Update のフォルダ構成整理
-
-**目的**: Seiton.Update のフォルダ構成を整理し、機能単位での拡張性を向上させること。
-
-**What**:
-
-Seiton.Updateの現在のフォルダは、Generators、Model、Parsers、Servies、Sourcesそれぞれに機能が分かれている。これを機能別にフォルダ構成に整理し、機能単位で拡張可能にする。例えばAvailability機能なら、Availabilityフォルダに、Generators、Models、Parsers、Services、Sourcesの各ファイルを配置する。
-
-**完了条件**:
-- [ ] フォルダ構成が機能別に整理されていること
-- [ ] 各機能のファイルが対応するフォルダに配置されていること
-- [ ] ビルドが成功すること
-- [ ] 既存の全テストが通過すること
-- [ ] 全テスト通過
-
-
----
-
 ## 5. 優先度と依存関係
 
 ```
