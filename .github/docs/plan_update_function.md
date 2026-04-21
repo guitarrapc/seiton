@@ -339,15 +339,15 @@
   - `node12`/`node16` 等の非推奨 runner → エラー（G3 の解消）。
 
 **完了条件**:
-- [ ] ローカルアクションの unknown input がエラーになること
-- [ ] ローカルアクションの required input 欠落がエラーになること
-- [ ] ローカルアクションの deprecated input が警告になること
-- [ ] `runs.using` が `node16` の場合にエラーになること
-- [ ] `runs.using` が `node20`/`node24` の場合は正常であること
-- [ ] composite action の `runs.using: composite` が正常であること
-- [ ] ローカルアクションが見つからない場合は null で早期リターン（クラッシュしない）こと
-- [ ] キャッシュにより同じアクションを2回パースしないこと
-- [ ] 全テスト通過
+- [x] ローカルアクションの unknown input がエラーになること
+- [x] ローカルアクションの required input 欠落がエラーになること
+- [x] ローカルアクションの deprecated input が警告になること
+- [x] `runs.using` が `node16` の場合にエラーになること
+- [x] `runs.using` が `node20`/`node24` の場合は正常であること
+- [x] composite action の `runs.using: composite` が正常であること
+- [x] ローカルアクションが見つからない場合は null で早期リターン（クラッシュしない）こと
+- [x] キャッシュにより同じアクションを2回パースしないこと（`LocalActionInputsRule` の `_cache`）
+- [x] 全テスト通過
 
 ---
 

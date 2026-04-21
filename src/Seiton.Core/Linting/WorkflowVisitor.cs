@@ -4,6 +4,8 @@ namespace Seiton.Core.Linting;
 
 public sealed class WorkflowVisitor
 {
+    private static readonly Workflow EmptyLintWorkflow = new() { Range = default };
+
     private readonly List<IPass> passes = [];
 
     public void AddPass(IPass pass)
@@ -63,6 +65,34 @@ public sealed class WorkflowVisitor
         for (var i = 0; i < passes.Count; i++)
         {
             passes[i].VisitWorkflowPost(workflow);
+        }
+    }
+
+    public void VisitActionMetadata(ActionMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+
+        for (var i = 0; i < passes.Count; i++)
+        {
+            passes[i].VisitWorkflowPre(EmptyLintWorkflow);
+        }
+
+        var steps = metadata.Runs?.Steps;
+        if (steps is not null)
+        {
+            for (var s = 0; s < steps.Count; s++)
+            {
+                var step = steps[s];
+                for (var i = 0; i < passes.Count; i++)
+                {
+                    passes[i].VisitStep(step);
+                }
+            }
+        }
+
+        for (var i = 0; i < passes.Count; i++)
+        {
+            passes[i].VisitWorkflowPost(EmptyLintWorkflow);
         }
     }
 }

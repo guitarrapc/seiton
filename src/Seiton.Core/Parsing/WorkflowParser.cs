@@ -101,7 +101,7 @@ public static partial class WorkflowParser
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
-            var parseResult = new ParseResult(default, [diagnostic], HasFatalError: true);
+            var parseResult = new ParseResult(default, default, [diagnostic], HasFatalError: true);
             return new ClassifiedParseResult(
                 parseResult,
                 new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
@@ -170,7 +170,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, "workflow root must be mapping", reader.CurrentStart);
-            return new ParseResult(default, diagnostics.ToArray(), HasFatalError: true);
+            return new ParseResult(default, default, diagnostics.ToArray(), HasFatalError: true);
         }
 
         var workflowStart = reader.CurrentStart;
@@ -189,6 +189,12 @@ public static partial class WorkflowParser
         Event[] onEvents = [];
         Dictionary<Utf8String, Job> jobs = [];
         ulong seen = 0;
+        StringNode? actionDescription = null;
+        Dictionary<Utf8String, ActionMetadataInput>? actionInputs = null;
+        Dictionary<Utf8String, ActionMetadataOutput>? actionOutputs = null;
+        ActionMetadataRuns? actionRuns = null;
+        ActionMetadataBranding? actionBranding = null;
+        ulong actionSeen = 0;
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -322,7 +328,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (parseMode == ParseMode.ActionMetadata && IsActionMetadataRootKey(keyUtf8))
+            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("author"u8))
             {
                 reader.Read();
                 if (!reader.End)
@@ -333,9 +339,68 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("description"u8))
+            {
+                reader.Read();
+                if (!TrySetBit(ref actionSeen, 0)) { AddError(diagnostics, "action metadata contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                actionDescription = ParseString(ref reader, diagnostics, "action description must be scalar");
+                continue;
+            }
+
+            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("inputs"u8))
+            {
+                reader.Read();
+                if (!TrySetBit(ref actionSeen, 1)) { AddError(diagnostics, "action metadata contains duplicate key: inputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                if (!reader.End)
+                {
+                    actionInputs = ParseActionMetadataInputs(ref reader, diagnostics, source);
+                }
+
+                continue;
+            }
+
+            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("outputs"u8))
+            {
+                reader.Read();
+                if (!TrySetBit(ref actionSeen, 2)) { AddError(diagnostics, "action metadata contains duplicate key: outputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                if (!reader.End)
+                {
+                    actionOutputs = ParseActionMetadataOutputs(ref reader, diagnostics, source);
+                }
+
+                continue;
+            }
+
+            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("runs"u8))
+            {
+                reader.Read();
+                if (!TrySetBit(ref actionSeen, 3)) { AddError(diagnostics, "action metadata contains duplicate key: runs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                if (!reader.End)
+                {
+                    actionRuns = ParseActionMetadataRuns(ref reader, diagnostics, source);
+                }
+
+                continue;
+            }
+
+            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("branding"u8))
+            {
+                reader.Read();
+                if (!TrySetBit(ref actionSeen, 4)) { AddError(diagnostics, "action metadata contains duplicate key: branding", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                if (!reader.End)
+                {
+                    actionBranding = ParseActionMetadataBranding(ref reader, diagnostics);
+                }
+
+                continue;
+            }
+
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected workflow key: {unknownKey}", keyMark);
+            AddError(
+                diagnostics,
+                parseMode == ParseMode.ActionMetadata ? $"unexpected action metadata key: {unknownKey}" : $"unexpected workflow key: {unknownKey}",
+                keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -358,6 +423,21 @@ public static partial class WorkflowParser
             AddError(diagnostics, "required key 'jobs' is missing", new TextPosition(0, 1, 1));
         }
 
+        if (parseMode == ParseMode.ActionMetadata)
+        {
+            var actionMetadata = new ActionMetadata
+            {
+                Name = nameNode,
+                Description = actionDescription,
+                Inputs = actionInputs,
+                Outputs = actionOutputs,
+                Runs = actionRuns,
+                Branding = actionBranding,
+                Range = workflowRange,
+            };
+            return new ParseResult(null, actionMetadata, diagnostics.ToArray(), HasFatalError: false);
+        }
+
         var workflow = new Workflow
         {
             Name = nameNode,
@@ -371,16 +451,7 @@ public static partial class WorkflowParser
             Range = workflowRange,
         };
 
-        return new ParseResult(workflow, diagnostics.ToArray(), HasFatalError: false);
-    }
-
-    private static bool IsActionMetadataRootKey(ReadOnlySpan<byte> keyUtf8)
-    {
-        return keyUtf8.SequenceEqual("runs"u8)
-            || keyUtf8.SequenceEqual("description"u8)
-            || keyUtf8.SequenceEqual("inputs"u8)
-            || keyUtf8.SequenceEqual("outputs"u8)
-            || keyUtf8.SequenceEqual("branding"u8);
+        return new ParseResult(workflow, null, diagnostics.ToArray(), HasFatalError: false);
     }
 
     private static Permissions? ParsePermissionsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)

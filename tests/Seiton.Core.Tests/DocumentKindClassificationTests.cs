@@ -35,6 +35,11 @@ public sealed class DocumentKindClassificationTests
         var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml");
 
         await Assert.That(result.Classification.FinalKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(result.ParseResult.Workflow).IsNull();
+        await Assert.That(result.ParseResult.ActionMetadata).IsNotNull();
+        await Assert.That(result.ParseResult.ActionMetadata!.Runs).IsNotNull();
+        await Assert.That(result.ParseResult.ActionMetadata.Runs!.Steps).IsNotNull();
+        await Assert.That(result.ParseResult.ActionMetadata.Runs.Steps!.Count).IsEqualTo(1);
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("required key 'on' is missing", StringComparison.Ordinal))).IsFalse();
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("required key 'jobs' is missing", StringComparison.Ordinal))).IsFalse();
     }

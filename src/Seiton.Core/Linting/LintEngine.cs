@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -8,6 +9,7 @@ namespace Seiton.Core.Linting;
 
 public sealed class LintEngine
 {
+    private static readonly Workflow EmptyWorkflowForSuppression = new() { Range = default };
 
     private readonly List<IRule> rules = [];
     private readonly List<Diagnostic> _diagnostics = new(16);
@@ -51,7 +53,7 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
         var parseResult = classifiedParseResult.ParseResult;
-        if (parseResult.HasFatalError || parseResult.Workflow is null)
+        if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
             return new LintResult(parseResult, parseResult.Diagnostics)
             {
@@ -65,10 +67,11 @@ public sealed class LintEngine
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
-        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, parseResult.Workflow);
+        var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
+        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression);
         _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
-        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow, utf8Yaml);
+        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml);
         _diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
 
         if (rules.Count == 0)
@@ -116,7 +119,14 @@ public sealed class LintEngine
             };
         }
 
-        _visitor.Visit(parseResult.Workflow);
+        if (parseResult.Workflow is not null)
+        {
+            _visitor.Visit(parseResult.Workflow);
+        }
+        else if (parseResult.ActionMetadata is not null)
+        {
+            _visitor.VisitActionMetadata(parseResult.ActionMetadata);
+        }
 
         _ruleDiagnostics.Clear();
         for (var i = 0; i < _activeRules.Count; i++)

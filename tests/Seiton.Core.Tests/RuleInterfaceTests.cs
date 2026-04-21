@@ -283,7 +283,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(47);
+        await Assert.That(rules.Length).IsEqualTo(48);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -331,6 +331,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[44].Id).IsEqualTo("forbidden-uses");
         await Assert.That(rules[45].Id).IsEqualTo("ref-version-mismatch");
         await Assert.That(rules[46].Id).IsEqualTo("use-trusted-publishing");
+        await Assert.That(rules[47].Id).IsEqualTo("local-action-inputs");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -379,6 +380,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(48);
         await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(49);
         await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(50);
+        await Assert.That(RuleCatalog.GetPriority("local-action-inputs")).IsEqualTo(51);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -390,12 +392,13 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-048");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-049");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-049", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-050", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-050");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-051");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-051");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-052");
     }
 
     [Test]
@@ -599,6 +602,258 @@ public sealed class RuleInterfaceTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "reusable-workflow")).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_UnknownAndRequiredInputs()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            name: My action
+            inputs:
+                required_input:
+                    required: true
+                optional_input:
+                    required: false
+                legacy:
+                    required: false
+                    deprecationMessage: use optional_input instead
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+                          with:
+                            extra_key: x
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            var msgs = result.Diagnostics.Where(x => x.RuleId == "local-action-inputs").Select(x => x.Message).ToArray();
+            await Assert.That(msgs.Any(m => m.Contains("unknown local action input 'extra_key'", StringComparison.Ordinal) && m.Contains("optional_input", StringComparison.Ordinal) && m.Contains("required_input", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(msgs.Any(m => m.Contains("required input 'required_input' is not set", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_DeprecatedInput_Warns()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-dep-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            inputs:
+                legacy:
+                    required: false
+                    deprecationMessage: use something else
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+                          with:
+                            legacy: v
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("deprecated", StringComparison.Ordinal) && x.Message.Contains("use something else", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_Node16Runner_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-node16-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "old-node");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            runs:
+              using: node16
+              main: dist/index.js
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/old-node
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("deprecated runner 'node16'", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_Node20AndComposite_Allowed()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-ok-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(Path.Combine(actionsDir, "n20"));
+        Directory.CreateDirectory(Path.Combine(actionsDir, "comp"));
+
+        var actionN20 = Path.Combine(actionsDir, "n20", "action.yml");
+        var actionComp = Path.Combine(actionsDir, "comp", "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionN20, NormalizeYaml("""
+            runs:
+              using: node20
+              main: index.js
+            """), Encoding.UTF8);
+
+            File.WriteAllText(actionComp, NormalizeYaml("""
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+                  shell: bash
+            """), Encoding.UTF8);
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/n20
+                        - uses: ./.github/actions/comp
+            """;
+
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_MissingActionFile_NoCrash()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-missing-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/does-not-exist
+            """;
+
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
         }
         finally
         {

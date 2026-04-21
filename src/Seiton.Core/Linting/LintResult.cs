@@ -11,6 +11,8 @@ public readonly record struct LintResult(
 
     public Workflow? Workflow => ParseResult.Workflow;
 
+    public ActionMetadata? ActionMetadata => ParseResult.ActionMetadata;
+
     public bool HasFatalError => ParseResult.HasFatalError;
 
     public Diagnostic[] ParseDiagnostics => ParseResult.Diagnostics;

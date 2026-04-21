@@ -168,7 +168,7 @@ public sealed class FixEngineTests
     [Test]
     public async Task LintResult_Fixes_ReturnsOnlyFixPayloads()
     {
-        var parseResult = new ParseResult(null, [], HasFatalError: false);
+        var parseResult = new ParseResult(null, null, [], HasFatalError: false);
         var result = new LintResult(
             parseResult,
             [

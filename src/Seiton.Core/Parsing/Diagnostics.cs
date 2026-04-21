@@ -30,5 +30,6 @@ public readonly record struct Diagnostic(
 
 public readonly record struct ParseResult(
     Workflow? Workflow,
+    ActionMetadata? ActionMetadata,
     Diagnostic[] Diagnostics,
     bool HasFatalError);

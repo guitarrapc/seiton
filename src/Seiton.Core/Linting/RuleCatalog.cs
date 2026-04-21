@@ -61,6 +61,7 @@ internal static class RuleCatalog
         ("forbidden-uses", 48, static () => new ForbiddenUsesRule()),
         ("ref-version-mismatch", 49, static () => new RefVersionMismatchRule()),
         ("use-trusted-publishing", 50, static () => new UseTrustedPublishingRule()),
+        ("local-action-inputs", 51, static () => new LocalActionInputsRule()),
     ];
 
     private static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
