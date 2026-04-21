@@ -188,16 +188,16 @@
 - `IsValidId()` の先頭バイトチェックを `IsAsciiLetter(b) || b == '_'` に変更。
 
 **完了条件**:
-- [ ] choice 型で options 未設定がエラーになること
-- [ ] options 内の重複値がエラーになること
-- [ ] choice 型の default が options に含まれないときエラーになること
-- [ ] choice 型以外で options 設定がエラーになること
-- [ ] number 型の default が数値でないときエラーになること
-- [ ] boolean 型の default が "true"/"false" でないときエラーになること
-- [ ] inputs が 25 個を超えるとエラーになること
-- [ ] 同一 job 内の重複 step ID が case-insensitive でエラーになること
-- [ ] 数字や `-` で始まる ID がエラーになること
-- [ ] 全テスト通過
+- [x] choice 型で options 未設定がエラーになること
+- [x] options 内の重複値がエラーになること
+- [x] choice 型の default が options に含まれないときエラーになること
+- [x] choice 型以外で options 設定がエラーになること
+- [x] number 型の default が数値でないときエラーになること
+- [x] boolean 型の default が "true"/"false" でないときエラーになること
+- [x] inputs が 25 個を超えるとエラーになること
+- [x] 同一 job 内の重複 step ID が case-insensitive でエラーになること
+- [x] 数字や `-` で始まる ID がエラーになること
+- [x] 全テスト通過
 
 ---
 
@@ -221,10 +221,10 @@
   - 空文字列は有効（デフォルト）。
 
 **完了条件**:
-- [ ] 不正な cron 式（フィールド不足、範囲外値、不正な構文）がエラーになること
-- [ ] 5分未満の間隔がエラーになること
-- [ ] 不正な timezone がエラーになること
-- [ ] 全テスト通過
+- [x] 不正な cron 式（フィールド不足、範囲外値、不正な構文）がエラーになること
+- [x] 5分未満の間隔がエラーになること
+- [x] 不正な timezone がエラーになること
+- [x] 全テスト通過
 
 ---
 
