@@ -12,6 +12,9 @@ public sealed class UnredactedSecretsRule : RuleBase
     private Workflow? currentWorkflow;
     private Job? currentJob;
     private HashSet<string> additionalOutputCommands = [];
+    private readonly List<string> _workflowVarNames = [];
+    private readonly List<string> _jobVarNames = [];
+    private readonly List<string> _stepVarNames = [];
 
     public override string Id => "unredacted-secrets";
 
@@ -30,22 +33,28 @@ public sealed class UnredactedSecretsRule : RuleBase
         base.VisitWorkflowPre(workflow);
         currentWorkflow = workflow;
         currentJob = null;
+        _workflowVarNames.Clear();
+        AddSecretMappedVars(workflow.Env, _workflowVarNames);
     }
 
     public override void VisitWorkflowPost(Workflow workflow)
     {
         currentWorkflow = null;
         currentJob = null;
+        _workflowVarNames.Clear();
     }
 
     public override void VisitJobPre(Job job)
     {
         currentJob = job;
+        _jobVarNames.Clear();
+        AddSecretMappedVars(job.Env, _jobVarNames);
     }
 
     public override void VisitJobPost(Job job)
     {
         currentJob = null;
+        _jobVarNames.Clear();
     }
 
     public override void VisitStep(Step step)
@@ -55,15 +64,25 @@ public sealed class UnredactedSecretsRule : RuleBase
             return;
         }
 
-        var secretVars = CollectSecretDerivedEnvVarNames(step);
-        if (secretVars is null || secretVars.Count == 0)
+        _stepVarNames.Clear();
+        AddSecretMappedVars(step.Env, _stepVarNames);
+
+        if (_workflowVarNames.Count == 0 && _jobVarNames.Count == 0 && _stepVarNames.Count == 0)
         {
             return;
         }
 
         var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
-        foreach (var name in secretVars)
+        if (FindAndReportSecretVar(runText, _stepVarNames, run, step)) return;
+        if (FindAndReportSecretVar(runText, _jobVarNames, run, step)) return;
+        FindAndReportSecretVar(runText, _workflowVarNames, run, step);
+    }
+
+    private bool FindAndReportSecretVar(ReadOnlySpan<byte> runText, List<string> varNames, ExecRun run, Step step)
+    {
+        for (var i = 0; i < varNames.Count; i++)
         {
+            var name = varNames[i];
             if (!TryFindOutputOfVariableLocation(
                 runText,
                 name.AsSpan(),
@@ -80,8 +99,10 @@ public sealed class UnredactedSecretsRule : RuleBase
                 step,
                 $"run script may print secret-derived variable '{name}' without masking; avoid echo/printf/Write-Host of secret values",
                 location);
-            return;
+            return true;
         }
+
+        return false;
     }
 
     private TextRange BuildRunTextLocation(StringNode runNode, int relativeOffset, int tokenLength)
@@ -105,21 +126,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             EndColumn: end.Column);
     }
 
-    private HashSet<string>? CollectSecretDerivedEnvVarNames(Step step)
-    {
-        if (Config.Utf8Yaml is null)
-        {
-            return null;
-        }
-
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        AddSecretMappedVars(step.Env, names);
-        AddSecretMappedVars(currentJob?.Env, names);
-        AddSecretMappedVars(currentWorkflow?.Env, names);
-        return names;
-    }
-
-    private void AddSecretMappedVars(Env? env, HashSet<string> names)
+    private void AddSecretMappedVars(Env? env, List<string> names)
     {
         if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
