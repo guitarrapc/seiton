@@ -854,6 +854,7 @@ The expression AST is traversed using the `VisitExprNode(node, parent, entering)
 | `always` | () | bool | No |
 | `failure` | () | bool | No |
 | `cancelled` | () | bool | No |
+| `case` | (bool, any, any, any...) | any | Yes (trailing args) |
 
 ### 7.2 Context Availability Validation
 
@@ -873,7 +874,7 @@ The root identifiers of expressions (`github`, `env`, `steps`, `job`, `runner`, 
 | `needs` | - | ✓ | ✓ |
 | `inputs` | ✓ | ✓ | ✓ |
 | `hashFiles` | - | ✓ | ✓ |
-| `success`/`failure`/`always`/`cancelled` | - | ✓ | ✓ |
+| `success`/`failure`/`always`/`cancelled` | - | ✓ (`if:` only) | ✓ (`if:` only) |
 
 **Note**: This is a simplified table. Strictly, availability differs by key position (`if:` / `env:` / `with:`, etc.). The complete availability table is managed as generated data.
 
@@ -885,6 +886,41 @@ Expression type system:
 - `EmptyObjectType` / `EmptyArrayType`
 
 Type inference is performed bottom-up while traversing the expression.
+
+### 7.4 Operator Type Validation
+
+The following operator usages are treated as errors when type information is available:
+
+- **Comparison operators** (`<`, `>`, `<=`, `>=`): operands must not be `null`, `bool`, `array`, or `object` type.
+- **Logical NOT** (`!`): operand must not be `array` or `object` type.
+- **Wildcard access** (`.*`): receiver must be `array`, `object`, or `any`; any other type is an error.
+- **Index access** (`[]`): if receiver is `array`, index must be `number`; if receiver is `object`, index must be `string`.
+
+When either operand resolves to `any`, no error is emitted (insufficient type information).
+
+### 7.5 Dynamic Context Resolution
+
+The `steps`, `matrix`, `needs`, and `inputs` context roots are dynamic: their property keys are determined from the AST at lint time rather than from a static schema.
+
+- `steps.<id>`: resolved from step `id:` values within the job. Each known step ID exposes `outcome`, `conclusion`, and `outputs.<key>`.
+- `matrix.<key>`: resolved from `strategy.matrix:` keys within the job.
+- `needs.<job_id>`: resolved from the job's `needs:` list and the referenced job's `outputs:` section.
+- `inputs.<name>`: resolved from `on.workflow_call.inputs:` or `on.workflow_dispatch.inputs:` definitions.
+
+When a known set of keys exists, the context type is a strict object and unknown property access is an error. When no key information is statically available, the context type is a loose object and unknown property access is not reported.
+
+### 7.6 Status Check Function Restriction
+
+The functions `success()`, `failure()`, `cancelled()`, and `always()` are only valid in `if:` conditions (job-level `if:` and step-level `if:`). Using them in other expression positions (e.g., `env:` values, `with:` inputs) is an error.
+
+### 7.7 `vars` Naming Convention
+
+Property names accessed via `vars.<name>` must conform to the following rules:
+
+- Must not start with `GITHUB_` (case-insensitive).
+- Must match the pattern `[a-zA-Z_][a-zA-Z0-9_]*`.
+
+Violations are reported as errors.
 
 ---
 

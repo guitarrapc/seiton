@@ -111,7 +111,7 @@ Seiton focuses more heavily on **security policy** rules that actionlint does no
 | Aspect | Seiton | actionlint |
 |---|---|---|
 | Syntax / structural validation | ✓ | ✓ (deeper) |
-| Expression type checking | Partial | ✓ (full) |
+| Expression type checking | ✓ | ✓ (full) |
 | shellcheck / pyflakes integration | ✗ | ✓ |
 | Security rules (injection, secrets, permissions) | ✓ (broad) | Partial |
 | Supply-chain rules (pinning, archived, vulnerable) | ✓ | Partial |
