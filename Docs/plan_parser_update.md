@@ -270,10 +270,10 @@ vars       → map object<string>
 - `vars.GITHUB_*` プレフィックスや `vars.foo-bar`（無効文字）の命名規約チェックを追加
 
 **完了条件**:
-- [ ] `env:` の値などで `success()` を使うとエラーになること
-- [ ] `case(true, 1, 0)` が合法と認識されること
-- [ ] `vars.GITHUB_FOO` が命名規約違反エラーになること
-- [ ] 全テスト通過
+- [x] `env:` の値などで `success()` を使うとエラーになること
+- [x] `case(true, 1, 0)` が合法と認識されること
+- [x] `vars.GITHUB_FOO` が命名規約違反エラーになること
+- [x] 全テスト通過
 
 ---
 

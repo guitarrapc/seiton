@@ -66,7 +66,8 @@ public static class ExpressionSemanticAnalyzer
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
-        ExpressionValidationContext context)
+        ExpressionValidationContext context,
+        bool allowStatusCheckFunctions = false)
     {
         if (!parseResult.HasRoot)
         {
@@ -74,7 +75,7 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var diagnostics = new List<Diagnostic>();
-        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes, parseResult.Arguments, expressionUtf8, expressionLocation, context, diagnostics);
+        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes, parseResult.Arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
         return diagnostics.ToArray();
     }
 
@@ -150,6 +151,7 @@ public static class ExpressionSemanticAnalyzer
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         ExpressionValidationContext context,
+        bool allowStatusCheckFunctions,
         List<Diagnostic> diagnostics)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -182,41 +184,46 @@ public static class ExpressionSemanticAnalyzer
 
         if (node.Kind == ExpressionNodeKind.FunctionCall)
         {
-            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, allowStatusCheckFunctions, diagnostics);
+        }
+
+        if (node.Kind == ExpressionNodeKind.MemberAccess)
+        {
+            ValidateVarsNamingConvention(node, nodes, expressionUtf8, expressionLocation, diagnostics);
         }
 
         switch (node.Kind)
         {
             case ExpressionNodeKind.Unary:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 ValidateUnaryOp(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.Binary:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
-                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 ValidateCompareOp(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.MemberAccess:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 ValidatePropertyAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.WildcardAccess:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 ValidateWildcardAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.IndexAccess:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
-                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 ValidateIndexAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.FunctionCall:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 for (var i = 0; i < node.ArgCount; i++)
                 {
                     var argIndex = node.ArgStart + i;
                     if (argIndex >= 0 && argIndex < arguments.Length)
                     {
-                        ValidateNode(arguments[argIndex], nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                        ValidateNode(arguments[argIndex], nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                     }
                 }
                 break;
@@ -229,6 +236,7 @@ public static class ExpressionSemanticAnalyzer
         int[] arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
+        bool allowStatusCheckFunctions,
         List<Diagnostic> diagnostics)
     {
         if (node.Left < 0 || node.Left >= nodes.Length)
@@ -248,6 +256,15 @@ public static class ExpressionSemanticAnalyzer
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"unknown expression function: {Encoding.UTF8.GetString(nameUtf8)}",
+                expressionLocation));
+            return;
+        }
+
+        if (!allowStatusCheckFunctions && IsStatusCheckFunction(nameUtf8))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"status check function '{Encoding.UTF8.GetString(nameUtf8)}()' is only available in 'if' conditions",
                 expressionLocation));
             return;
         }
@@ -845,6 +862,95 @@ public static class ExpressionSemanticAnalyzer
             _ => op.ToString(),
         };
     }
+
+    private static bool IsStatusCheckFunction(ReadOnlySpan<byte> nameUtf8)
+    {
+        return EqualsAsciiIgnoreCase(nameUtf8, "success"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "failure"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "cancelled"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "always"u8);
+    }
+
+    private static void ValidateVarsNamingConvention(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (node.Left < 0 || node.Left >= nodes.Length)
+        {
+            return;
+        }
+
+        var left = nodes[node.Left];
+        if (left.Kind != ExpressionNodeKind.Identifier)
+        {
+            return;
+        }
+
+        var leftName = left.Token.AsSpan(expressionUtf8);
+        if (!EqualsAsciiIgnoreCase(leftName, "vars"u8))
+        {
+            return;
+        }
+
+        var propName = node.Token.AsSpan(expressionUtf8);
+        if (propName.Length == 0)
+        {
+            return;
+        }
+
+        // Check GITHUB_ prefix prohibition (case-insensitive)
+        if (propName.Length >= 7 && EqualsAsciiIgnoreCase(propName[..7], "GITHUB_"u8))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"configuration variable name '{propNameText}' must not start with 'GITHUB_' prefix",
+                expressionLocation));
+            return;
+        }
+
+        // Check valid characters: must start with [A-Za-z_], rest must be [A-Za-z0-9_]
+        if (!IsValidVarsName(propName))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"configuration variable name '{propNameText}' contains invalid characters (must match [a-zA-Z_][a-zA-Z0-9_]*)",
+                expressionLocation));
+        }
+    }
+
+    private static bool IsValidVarsName(ReadOnlySpan<byte> name)
+    {
+        if (name.Length == 0)
+        {
+            return false;
+        }
+
+        var first = name[0];
+        if (!IsAsciiLetter(first) && first != (byte)'_')
+        {
+            return false;
+        }
+
+        for (var i = 1; i < name.Length; i++)
+        {
+            var c = name[i];
+            if (!IsAsciiLetter(c) && !IsAsciiDigit(c) && c != (byte)'_')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiLetter(byte c) => (c >= (byte)'A' && c <= (byte)'Z') || (c >= (byte)'a' && c <= (byte)'z');
+
+    private static bool IsAsciiDigit(byte c) => c >= (byte)'0' && c <= (byte)'9';
 
     private static void ValidatePropertyAccess(
         ExpressionNode node,

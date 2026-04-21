@@ -184,7 +184,8 @@ public static partial class WorkflowParser
             BuildScalarLocation(mark, valueUtf8.Length),
             context,
             diagnostics,
-            parseWholeValueIfNoEmbedded: true);
+            parseWholeValueIfNoEmbedded: true,
+            allowStatusCheckFunctions: true);
 
         var node = new StringNode
         {
@@ -462,7 +463,7 @@ public static partial class WorkflowParser
         _ = ParseExpression(ref reader, diagnostics, context, shapeError);
     }
 
-    private static void ValidateExpressionText(ReadOnlySpan<byte> valueUtf8, TextRange valueLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool parseWholeValueIfNoEmbedded)
+    private static void ValidateExpressionText(ReadOnlySpan<byte> valueUtf8, TextRange valueLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool parseWholeValueIfNoEmbedded, bool allowStatusCheckFunctions = false)
     {
         var hasEmbedded = false;
         var i = 0;
@@ -483,7 +484,7 @@ public static partial class WorkflowParser
                 {
                     var expressionUtf8 = valueUtf8.Slice(trimmed.Offset, trimmed.Length);
                     var expressionLocation = ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length);
-                    ParseAndValidateExpression(expressionUtf8, expressionLocation, context, diagnostics);
+                    ParseAndValidateExpression(expressionUtf8, expressionLocation, context, diagnostics, allowStatusCheckFunctions);
                 }
 
                 i = end + 2;
@@ -501,11 +502,11 @@ public static partial class WorkflowParser
                 return;
             }
 
-            ParseAndValidateExpression(valueUtf8.Slice(trimmed.Offset, trimmed.Length), ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length), context, diagnostics);
+            ParseAndValidateExpression(valueUtf8.Slice(trimmed.Offset, trimmed.Length), ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length), context, diagnostics, allowStatusCheckFunctions);
         }
     }
 
-    private static void ParseAndValidateExpression(ReadOnlySpan<byte> expressionUtf8, TextRange expressionLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics)
+    private static void ParseAndValidateExpression(ReadOnlySpan<byte> expressionUtf8, TextRange expressionLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool allowStatusCheckFunctions = false)
     {
         var parseResult = ExpressionParser.Parse(expressionUtf8);
         for (var i = 0; i < parseResult.Diagnostics.Length; i++)
@@ -514,7 +515,7 @@ public static partial class WorkflowParser
             diagnostics.Add(new Diagnostic(parseDiagnostic.Severity, $"expression parse error: {parseDiagnostic.Message}", ShiftLocation(expressionLocation, parseDiagnostic.Location.Start, parseDiagnostic.Location.Length)));
         }
 
-        var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(parseResult, expressionUtf8, expressionLocation, context);
+        var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(parseResult, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions);
         for (var i = 0; i < semanticDiagnostics.Length; i++)
         {
             diagnostics.Add(semanticDiagnostics[i]);

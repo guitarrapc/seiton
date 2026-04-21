@@ -61,5 +61,9 @@ internal static class FunctionSpecs
         [
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
         ]),
+        new ExpressionSemanticAnalyzer.FunctionSpec("case"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Any, [ExprType.Bool, ExprType.Any, ExprType.Any], ExprType.Any),
+        ]),
     ];
 }
