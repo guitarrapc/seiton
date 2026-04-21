@@ -9,6 +9,9 @@ public sealed class IdNamingRule : RuleBase
 
     public override string Name => "Id Naming Rule";
 
+    private Job? _currentJob;
+    private Step? _currentStep;
+
     public override void VisitJobPre(Job job)
     {
         if (Config.Utf8Yaml is null)
@@ -16,7 +19,9 @@ public sealed class IdNamingRule : RuleBase
             return;
         }
 
-        ValidateId(job.Id, "job id", (message, location) => AddJobError(job, message, location));
+        _currentJob = job;
+        ValidateId(job.Id, "job id");
+        _currentJob = null;
     }
 
     public override void VisitStep(Step step)
@@ -26,10 +31,12 @@ public sealed class IdNamingRule : RuleBase
             return;
         }
 
-        ValidateId(step.Id, "step id", (message, location) => AddStepError(step, message, location));
+        _currentStep = step;
+        ValidateId(step.Id, "step id");
+        _currentStep = null;
     }
 
-    private void ValidateId(StringNode idNode, string kind, Action<string, TextRange> report)
+    private void ValidateId(StringNode idNode, string kind)
     {
         var value = idNode.Value.AsSpan(Config.Utf8Yaml);
         if (idNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
@@ -43,7 +50,16 @@ public sealed class IdNamingRule : RuleBase
         }
 
         var idText = Decode(idNode.Value);
-        report($"{kind} '{idText}' contains invalid characters; allowed characters are [a-zA-Z0-9_-]", idNode.Range);
+        var message = $"{kind} '{idText}' contains invalid characters; allowed characters are [a-zA-Z0-9_-]";
+
+        if (_currentJob is not null)
+        {
+            AddJobError(_currentJob, message, idNode.Range);
+        }
+        else if (_currentStep is not null)
+        {
+            AddStepError(_currentStep, message, idNode.Range);
+        }
     }
 
     private static bool IsValidId(ReadOnlySpan<byte> value)

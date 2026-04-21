@@ -10,40 +10,25 @@ public sealed class DenyWriteAllRule : RuleBase
 
     public override string Name => "Deny Write-All Rule";
 
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
+
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
-        ValidatePermissionsAll(
-            workflow.Permissions,
-            (message, location, fix) =>
-            {
-                if (fix is null)
-                {
-                    AddWorkflowError(workflow, message, location);
-                    return;
-                }
-
-                AddWorkflowError(workflow, message, location, fix.Value);
-            });
+        _currentWorkflow = workflow;
+        ValidatePermissionsAll(workflow.Permissions);
+        _currentWorkflow = null;
     }
 
     public override void VisitJobPre(Job job)
     {
-        ValidatePermissionsAll(
-            job.Permissions,
-            (message, location, fix) =>
-            {
-                if (fix is null)
-                {
-                    AddJobError(job, message, location);
-                    return;
-                }
-
-                AddJobError(job, message, location, fix.Value);
-            });
+        _currentJob = job;
+        ValidatePermissionsAll(job.Permissions);
+        _currentJob = null;
     }
 
-    private void ValidatePermissionsAll(Permissions? permissions, Action<string, TextRange, DiagnosticFix?> report)
+    private void ValidatePermissionsAll(Permissions? permissions)
     {
         if (Config.Utf8Yaml is null || permissions?.All is null)
         {
@@ -66,7 +51,16 @@ public sealed class DenyWriteAllRule : RuleBase
         var fix = new DiagnosticFix(
             "replace write-all with read-all",
             [new TextEdit(allNode.Value.Offset, allNode.Value.Length, replacement)]);
-        report("permissions scalar 'write-all' is forbidden; use least-privilege scopes or 'read-all'", allNode.Range, fix);
+        var message = "permissions scalar 'write-all' is forbidden; use least-privilege scopes or 'read-all'";
+
+        if (_currentWorkflow is not null)
+        {
+            AddWorkflowError(_currentWorkflow, message, allNode.Range, fix);
+        }
+        else if (_currentJob is not null)
+        {
+            AddJobError(_currentJob, message, allNode.Range, fix);
+        }
     }
 
     private static string BuildReplacementText(StringNode allNode, byte[] utf8Yaml)

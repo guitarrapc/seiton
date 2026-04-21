@@ -8,17 +8,22 @@ public sealed class ShellNameRule : RuleBase
 
     public override string Name => "Shell Name Rule";
 
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
+
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
-        CheckDefaultsRunShell(workflow.Defaults, shellNode =>
-            AddWorkflowError(workflow, BuildInvalidShellMessage(shellNode), shellNode.Range));
+        _currentWorkflow = workflow;
+        CheckDefaultsRunShell(workflow.Defaults);
+        _currentWorkflow = null;
     }
 
     public override void VisitJobPre(Job job)
     {
-        CheckDefaultsRunShell(job.Defaults, shellNode =>
-            AddJobError(job, BuildInvalidShellMessage(shellNode), shellNode.Range));
+        _currentJob = job;
+        CheckDefaultsRunShell(job.Defaults);
+        _currentJob = null;
     }
 
     public override void VisitStep(Step step)
@@ -44,7 +49,7 @@ public sealed class ShellNameRule : RuleBase
         AddStepError(step, BuildInvalidShellMessage(run.Shell), run.Shell.Range);
     }
 
-    private void CheckDefaultsRunShell(Defaults? defaults, Action<StringNode> report)
+    private void CheckDefaultsRunShell(Defaults? defaults)
     {
         if (defaults is null || Config.Utf8Yaml is null)
         {
@@ -66,7 +71,14 @@ public sealed class ShellNameRule : RuleBase
 
         if (!IsValidShellName(shellSpan))
         {
-            report(shellNode);
+            if (_currentWorkflow is not null)
+            {
+                AddWorkflowError(_currentWorkflow, BuildInvalidShellMessage(shellNode), shellNode.Range);
+            }
+            else if (_currentJob is not null)
+            {
+                AddJobError(_currentJob, BuildInvalidShellMessage(shellNode), shellNode.Range);
+            }
         }
     }
 

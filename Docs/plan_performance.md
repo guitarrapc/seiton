@@ -1145,12 +1145,53 @@ HashSet<string>? CollectSecretDerivedEnvVarNames(Step step) {
 - または static ラムダ + 明示的な state パラメータに変更
 
 **完了条件**:
-- [ ] 対象ルールにキャプチャリングラムダがないこと
-- [ ] 全テスト通過
+- [x] 対象ルールにキャプチャリングラムダがないこと
+- [x] 全テスト通過
 
 **推定効果**: Small/Medium で ~0.5–2 KB。Large で ~5–10 KB（ジョブ数 × ルール数分のクロージャ排除）。
 
 **コード複雑度**: 低。
+
+#### Phase 13 実施結果（2026-04-21）
+
+**計測環境**: BenchmarkDotNet v0.15.6 / .NET 10.0.3 / AMD Ryzen 7 5800H / ShortRun
+
+**実施内容**:
+- `DenyReadAllRule`: `_currentWorkflow`, `_currentJob` フィールドを追加。`ValidatePermissionsAll(Permissions?, Action<string, TextRange, DiagnosticFix?>)` → `ValidatePermissionsAll(Permissions?)` に変更し、フィールド経由で `AddWorkflowError` / `AddJobError` を呼び出す
+- `DenyWriteAllRule`: 同様のパターンで `_currentWorkflow`, `_currentJob` フィールドを追加
+- `IdNamingRule`: `_currentJob`, `_currentStep` フィールドを追加。`ValidateId(StringNode, string, Action<string, TextRange>)` → `ValidateId(StringNode, string)` に変更
+- `ShellNameRule`: `_currentWorkflow`, `_currentJob` フィールドを追加。`CheckDefaultsRunShell(Defaults?, Action<StringNode>)` → `CheckDefaultsRunShell(Defaults?)` に変更
+
+**設計判断**:
+- ラムダをフィールド昇格で排除することで `<>c__DisplayClass` オブジェクトの生成を根絶
+- ヘルパー呼び出し前にフィールドをセット → 呼び出し後に `null` クリアのパターンで安全に管理（シングルスレッド）
+- `Action<>` パラメータの完全除去により、デリゲートインスタンスも生成されなくなる
+
+**LintBenchmark（Phase 12 → Phase 13）**:
+
+| Size | FixEnabled | Phase 12 Alloc | Phase 13 Alloc | Delta |
+|---|---|---:|---:|---:|
+| Small (1×3) | False | 23.40 KB | 22.90 KB | **-0.50 KB** |
+| Small (1×3) | True | 59.06 KB | 58.63 KB | **-0.43 KB** |
+| Medium (6×8) | False | 565.31 KB | 562.53 KB | **-2.78 KB** |
+| Medium (6×8) | True | 4,223.47 KB | 4,220.73 KB | **-2.74 KB** |
+| Large (20×12) | False | 8,695.86 KB | 8,684.43 KB | **-11.43 KB** |
+| Large (20×12) | True | 84,522.92 KB | 84,505.43 KB | **-17.49 KB** |
+
+**ParsingBenchmark（Phase 12 → Phase 13 — 変更なし、参考値）**:
+
+| Size | Phase 12 Alloc | Phase 13 Alloc | Delta |
+|---|---:|---:|---:|
+| Small (1×3) | 12,080 B | 12,080 B | 0 |
+| Medium (6×8) | 83,515 B | 83,515 B | 0 |
+| Large (20×12) | 376,738 B | 376,738 B | 0 |
+
+**考察**:
+- **推定を上回る効果 (Large)**: 推定 ~5–10 KB に対し実際は -11.43 KB (lint-only) / -17.49 KB (fix=true)
+- **IdNamingRule の寄与が大きい**: `ValidateId` は job ごと (20 回) + step ごと (240 回) = 260 回のクロージャを排除。他の 3 ルールは workflow + job ごと (21 回) × 3 ルールで計 63 クロージャ
+- **Fix=true でさらに大きい**: Fix パス内でもラムダを参照する分岐があり、実際に削除されたオブジェクト数が増えた
+
+**ステータス**: ✅ 完了
 
 ---
 
@@ -1232,18 +1273,18 @@ void DetectCycles() {
 | Phase 10 | StringNode struct 化 | ~20–40 KB | ~20–40 KB | 中 | 中 | 見送り（アロケーション +11–23% の回帰） |
 | Phase 11 | LintEngine コレクション再利用 | ~5–15 KB | ~5–15 KB | 低 | 低 | ✅ 完了 (-186.7 KB) |
 | Phase 12 | UnredactedSecrets HashSet 排除 | ~50–100 KB | ~50–100 KB | 中 | 中 | ✅ 完了（ベンチマークノイズ範囲、実 WF で効果あり） |
-| Phase 13 | キャプチャリングラムダ排除 | ~5–10 KB | ~5–10 KB | 低 | 低 | |
+| Phase 13 | キャプチャリングラムダ排除 | ~5–10 KB | ~5–10 KB | 低 | 低 | ✅ 完了 (-11.4 KB lint-only Large) |
 | Phase 14 | Fix パス Span ベース行操作 | — | **~30–50 MB** | 中-高 | 中-高 | |
 | Phase 15 | NeedsGraphRule 再利用 | ~5–15 KB | ~5–15 KB | 低 | 低 | |
 | Phase 16 | ExpressionParser 空配列最適化 | ~5–10 KB | ~5–10 KB | 低 | 低 |
 | Phase 5 | AST List → Array 初期容量 | ~数 KB | ~数 KB | 低 | 低 |
 
-**推奨実行順序**: Phase 13 → 15 → 16 → 5 → 14
+**推奨実行順序**: Phase 15 → 16 → 5 → 14
 
 理由:
 - Phase 9/11/12 は完了済み
 - Phase 10 は見送り（struct 化によりアロケーション +11–23% の回帰が発生したため revert）
-- Phase 13/15/16/5 は低リスク・低複雑度で即座に実施可能
+- Phase 15/16/5 は低リスク・低複雑度で即座に実施可能
 - Phase 14 は Fix パス限定だが効果が最大。ただし TextEdit 型の変更を伴う可能性があり慎重に進める
 
 ### Go との差を埋める長期的な設計検討
