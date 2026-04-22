@@ -9,28 +9,31 @@ public sealed class WorkflowVisitorTests
     [Test]
     public async Task Visit_TraversesInExpectedOrder()
     {
+        var sourceBytes = Array.Empty<byte>();
+        var arena = new AstArena(sourceBytes);
+
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+                Steps =
+                [
+                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
+                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
+                ],
+            }),
+            (new Utf8String("test"u8), new Job
+            {
+                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+                Steps =
+                [
+                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
+                ],
+            }));
+
         var workflow = new Workflow
         {
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode { Value = new Utf8Slice(0, 0) },
-                    Steps =
-                    [
-                        new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = new StringNode { Value = new Utf8Slice(0, 0) } } },
-                        new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = new StringNode { Value = new Utf8Slice(0, 0) } } },
-                    ],
-                },
-                [new Utf8String("test"u8)] = new Job
-                {
-                    Id = new StringNode { Value = new Utf8Slice(0, 0) },
-                    Steps =
-                    [
-                        new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = new StringNode { Value = new Utf8Slice(0, 0) } } },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var trace = new List<string>();
@@ -56,7 +59,7 @@ public sealed class WorkflowVisitorTests
         await Assert.That(trace.SequenceEqual(expected)).IsTrue();
     }
 
-    sealed class RecordingPass(List<string> trace) : IPass
+    private sealed class RecordingPass(List<string> trace) : IPass
     {
         public void VisitWorkflowPre(Workflow workflow) => trace.Add("workflow-pre");
 

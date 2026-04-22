@@ -5,6 +5,11 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class UnpinnedUsesRule : RuleBase
 {
+    // Cache last-produced "not pinned" message to avoid repeated string allocation
+    // for the same action ref (common: all steps use the same action)
+    private Utf8Slice _lastUnpinnedStepUsesSlice;
+    private string? _lastUnpinnedStepMessage;
+
     public override string Id => "unpinned-uses";
 
     public override string Name => "Unpinned Uses Rule";
@@ -17,14 +22,14 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(workflowCall.Uses);
         var usesLocation = BuildUsesLocation(workflowCall);
-        var usesRefLocation = BuildRefLocation(workflowCall.Uses.Value, uses, Config.Utf8Yaml, usesLocation);
+        var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(workflowCall.Uses), uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                var localJobId = Decode(job.Id.Value);
+                var localJobId = Decode(Arena.GetStringSlice(job.Id));
                 AddJobWarning(
                     job,
                     $"job '{localJobId}' local reusable workflow uses must not contain '@ref'",
@@ -36,8 +41,8 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         if (!HasRemoteActionUsesFormat(uses))
         {
-            var formatJobId = Decode(job.Id.Value);
-            var invalidUsesText = Decode(workflowCall.Uses.Value);
+            var formatJobId = Decode(Arena.GetStringSlice(job.Id));
+            var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobWarning(
                 job,
                 $"job '{formatJobId}' reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
@@ -50,8 +55,8 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
-        var usesText = Decode(workflowCall.Uses.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
         AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
     }
 
@@ -62,9 +67,9 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
-        var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
-        var usesRefLocation = BuildRefLocation(actionExec.Uses.Value, uses, Config.Utf8Yaml, usesLocation);
+        var uses = Arena.GetStringValue(actionExec.Uses);
+        var usesLocation = actionExec.UsesKeyRange ?? Arena.GetStringRange(actionExec.Uses);
+        var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(actionExec.Uses), uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("docker://"u8))
         {
             if (uses.Length <= "docker://"u8.Length)
@@ -89,7 +94,7 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         if (!HasRemoteActionUsesFormat(uses))
         {
-            var invalidUsesText = Decode(actionExec.Uses.Value);
+            var invalidUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
             AddStepWarning(
                 step,
                 $"action uses '{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
@@ -102,11 +107,38 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var usesText = Decode(actionExec.Uses.Value);
-        AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
+        var usesSlice = Arena.GetStringSlice(actionExec.Uses);
+        var message = GetUnpinnedStepMessage(usesSlice);
+        AddStepWarning(step, message, usesRefLocation);
     }
 
-    static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
+    private string GetUnpinnedStepMessage(Utf8Slice usesSlice)
+    {
+        if (_lastUnpinnedStepMessage is not null
+            && usesSlice.Offset == _lastUnpinnedStepUsesSlice.Offset
+            && usesSlice.Length == _lastUnpinnedStepUsesSlice.Length)
+        {
+            return _lastUnpinnedStepMessage;
+        }
+
+        // Different slice — check content equality for same-text-different-position
+        if (_lastUnpinnedStepMessage is not null
+            && Config.Utf8Yaml is not null
+            && usesSlice.Length == _lastUnpinnedStepUsesSlice.Length
+            && usesSlice.AsSpan(Config.Utf8Yaml).SequenceEqual(_lastUnpinnedStepUsesSlice.AsSpan(Config.Utf8Yaml)))
+        {
+            _lastUnpinnedStepUsesSlice = usesSlice;
+            return _lastUnpinnedStepMessage;
+        }
+
+        var usesText = Decode(usesSlice);
+        var msg = $"action uses '{usesText}' is not pinned to a full-length commit SHA";
+        _lastUnpinnedStepUsesSlice = usesSlice;
+        _lastUnpinnedStepMessage = msg;
+        return msg;
+    }
+
+    private static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at < 0 || at + 1 >= uses.Length)
@@ -133,7 +165,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             EndColumn: endColumn);
     }
 
-    static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
+    private static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
     {
         var line = 1;
         var column = 1;
@@ -157,7 +189,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return (line, column);
     }
 
-    void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
+    private void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
     {
         if (string.IsNullOrEmpty(Config.FilePath)
             || !Path.IsPathFullyQualified(Config.FilePath)
@@ -199,7 +231,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         }
     }
 
-    static bool HasRemoteActionUsesFormat(ReadOnlySpan<byte> uses)
+    private static bool HasRemoteActionUsesFormat(ReadOnlySpan<byte> uses)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at <= 0 || at + 1 >= uses.Length)
@@ -229,7 +261,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return true;
     }
 
-    static bool IsFullLengthCommitShaPinned(ReadOnlySpan<byte> uses)
+    private static bool IsFullLengthCommitShaPinned(ReadOnlySpan<byte> uses)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at < 0 || at + 1 >= uses.Length)
@@ -258,7 +290,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return true;
     }
 
-    static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
     {
         var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
         if (string.IsNullOrEmpty(workflowDirectory))
@@ -275,7 +307,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return workflowDirectory;
     }
 
-    static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
     {
         var separator = Path.DirectorySeparatorChar;
         var marker = $"{separator}.github{separator}workflows{separator}";
@@ -297,7 +329,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return false;
     }
 
-    static string TrimCurrentDirectoryPrefix(string path)
+    private static string TrimCurrentDirectoryPrefix(string path)
     {
         if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
@@ -307,7 +339,7 @@ public sealed class UnpinnedUsesRule : RuleBase
         return path;
     }
 
-    static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
         var chars = new char[utf8.Length];
         for (var i = 0; i < utf8.Length; i++)

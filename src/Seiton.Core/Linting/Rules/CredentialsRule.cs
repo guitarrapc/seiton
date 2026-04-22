@@ -1,11 +1,15 @@
 ﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class CredentialsRule : RuleBase
 {
-    HashSet<string> additionalPublicRegistries = [];
+    private HashSet<string> additionalPublicRegistries = [];
 
     public override string Id => "credentials";
 
@@ -29,7 +33,7 @@ public sealed class CredentialsRule : RuleBase
         ValidateContainer(job, "job.container", job.Container);
 
         var serviceMap = job.Services?.ServiceMap;
-        if (serviceMap is null || serviceMap.Count == 0)
+        if (serviceMap is null || serviceMap.Value.Count == 0)
         {
             return;
         }
@@ -37,12 +41,12 @@ public sealed class CredentialsRule : RuleBase
         foreach (var pair in serviceMap)
         {
             var service = pair.Value;
-            var serviceName = Decode(service.Name.Value);
+            var serviceName = Decode(Arena.GetStringSlice(service.Name));
             ValidateContainer(job, $"job.services.{serviceName}", service.Container);
         }
     }
 
-    void ValidateContainer(Job job, string locationName, Container? container)
+    private void ValidateContainer(Job job, string locationName, Container? container)
     {
         if (container is null)
         {
@@ -50,12 +54,12 @@ public sealed class CredentialsRule : RuleBase
         }
 
         var imageNode = container.Image;
-        if (imageNode.Expression is not null || container.Credentials is not null || Config.Utf8Yaml is null)
+        if (Arena.GetStringExpression(imageNode).HasValue || container.Credentials is not null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var image = imageNode.Value.AsSpan(Config.Utf8Yaml);
+        var image = Arena.GetStringValue(imageNode);
         if (image.IndexOf("${{"u8) >= 0)
         {
             return;
@@ -66,12 +70,12 @@ public sealed class CredentialsRule : RuleBase
             return;
         }
 
-        var imageText = Decode(imageNode.Value);
+        var imageText = Decode(Arena.GetStringSlice(imageNode));
         var hostText = Encoding.UTF8.GetString(host);
-        AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", imageNode.Range);
+        AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", Arena.GetStringRange(imageNode));
     }
 
-    static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)
+    private static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)
     {
         host = default;
 
@@ -93,7 +97,7 @@ public sealed class CredentialsRule : RuleBase
         return true;
     }
 
-    static bool IsPublicRegistry(ReadOnlySpan<byte> host)
+    private static bool IsPublicRegistry(ReadOnlySpan<byte> host)
     {
         return AsciiEqualsIgnoreCase(host, "gcr.io"u8)
             || AsciiEqualsIgnoreCase(host, "ghcr.io"u8)
@@ -107,7 +111,7 @@ public sealed class CredentialsRule : RuleBase
             || AsciiEqualsIgnoreCase(host, "registry.access.redhat.com"u8);
     }
 
-    static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    private static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
     {
         if (left.Length != right.Length)
         {
@@ -137,7 +141,7 @@ public sealed class CredentialsRule : RuleBase
         return true;
     }
 
-    bool IsAdditionalPublicRegistry(ReadOnlySpan<byte> host)
+    private bool IsAdditionalPublicRegistry(ReadOnlySpan<byte> host)
     {
         if (additionalPublicRegistries.Count == 0)
         {
@@ -145,37 +149,5 @@ public sealed class CredentialsRule : RuleBase
         }
 
         return additionalPublicRegistries.Contains(NormalizeAsciiLower(host));
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.Ordinal);
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var buffer = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var ch = (char)value[i];
-            if (ch is >= 'A' and <= 'Z')
-            {
-                ch = (char)(ch + 32);
-            }
-
-            buffer[i] = ch;
-        }
-
-        return new string(buffer);
     }
 }

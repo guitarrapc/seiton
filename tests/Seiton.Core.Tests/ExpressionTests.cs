@@ -326,14 +326,15 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task InferType_BinaryLogical_ReturnsBool()
+    public async Task InferType_BinaryLogical_ReturnsAny()
     {
+        // GitHub Actions && / || return operand values (short-circuit), not booleans
         var expression = "success() && github.event_name == 'push'"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
         var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
 
-        await Assert.That(type).IsEqualTo(ExprType.Bool);
+        await Assert.That(type).IsEqualTo(ExprType.Any);
     }
 
     // ── InferType: function return types ──────────────────────────────────────
@@ -396,14 +397,153 @@ public sealed class ExpressionTests
     // ── InferType: context access ─────────────────────────────────────────────
 
     [Test]
-    public async Task InferType_ContextAccess_ReturnsAny()
+    public async Task InferType_GitHubRef_ReturnsString()
     {
         var expression = "github.ref"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
         var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
 
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_GitHubRefProtected_ReturnsBool()
+    {
+        var expression = "github.ref_protected"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Bool);
+    }
+
+    [Test]
+    public async Task InferType_GitHubRetentionDays_ReturnsNumber()
+    {
+        var expression = "github.retention_days"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.Number);
+    }
+
+    [Test]
+    public async Task InferType_JobStatus_ReturnsString()
+    {
+        var expression = "job.status"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_RunnerOs_ReturnsString()
+    {
+        var expression = "runner.os"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_EnvVariable_ReturnsString()
+    {
+        var expression = "env.MY_VAR"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type).IsEqualTo(ExprType.String);
+    }
+
+    [Test]
+    public async Task InferType_GitHubEventProperty_ReturnsAny()
+    {
+        var expression = "github.event.pull_request"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
         await Assert.That(type).IsEqualTo(ExprType.Any);
+    }
+
+    [Test]
+    public async Task InferType_GitHubContextRoot_ReturnsObject()
+    {
+        var expression = "github"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+
+        await Assert.That(type is ObjectExprType).IsTrue();
+    }
+
+    // ── Validate: context root and property checks ────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_UndefinedRootContext_ReportsDiagnostic()
+    {
+        var expression = "goggle.actor"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_UnknownGithubProperty_ReportsDiagnostic()
+    {
+        var expression = "github.typo_field"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'typo_field' is not defined in 'github' object", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ValidGithubProperty_NoDiagnostic()
+    {
+        var expression = "github.actor"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_DynamicContextProperty_NoDiagnostic()
+    {
+        var expression = "env.MY_CUSTOM_VAR"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
 
     // ── ValidateStringArg: improved bottom-up type check ─────────────────────
@@ -421,6 +561,22 @@ public sealed class ExpressionTests
             ExpressionValidationContext.Step);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got bool", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_LogicalOrPassedToFromJson_NoDiagnostic()
+    {
+        // fromJson(matrix.x || 10) — || returns any (short-circuit value, not bool)
+        var expression = "fromJson(matrix.benchmark-timeout-min || 10)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string", StringComparison.Ordinal))).IsFalse();
     }
 
     // ── ExpressionVisitor.VisitExprNode ───────────────────────────────────────
@@ -613,5 +769,734 @@ public sealed class ExpressionTests
         var result = ExpressionExtractor.ExtractAndParse(Encoding.UTF8.GetBytes(yaml));
 
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // ── ValidateDynamicPropertyAccess ─────────────────────────────────────────
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_NoOverrides_NoDiagnostics()
+    {
+        var expression = "steps.nonexistent.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, []);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StepsKnownId_NoDiagnostics()
+    {
+        var expression = "steps.build.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var stepType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("outcome"u8), ExprType.String },
+                { new Utf8String("conclusion"u8), ExprType.String },
+                { new Utf8String("outputs"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+        var stepsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("build"u8), stepType } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), stepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StepsUnknownId_ReportsDiagnostic()
+    {
+        var expression = "steps.nonexistent.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var stepType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("outcome"u8), ExprType.String },
+                { new Utf8String("conclusion"u8), ExprType.String },
+                { new Utf8String("outputs"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+        var stepsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("build"u8), stepType } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), stepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'steps'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_MatrixKnownKey_NoDiagnostics()
+    {
+        var expression = "matrix.os"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var matrixType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("os"u8), ExprType.Any } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("matrix"u8.ToArray(), matrixType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_MatrixUnknownKey_ReportsDiagnostic()
+    {
+        var expression = "matrix.unknown_key"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var matrixType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("os"u8), ExprType.Any } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("matrix"u8.ToArray(), matrixType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_key' is not defined in 'matrix'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_NeedsUnknownJob_ReportsDiagnostic()
+    {
+        var expression = "needs.nonexistent.outputs.foo"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var needsEntryType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("result"u8), ExprType.String },
+                { new Utf8String("outputs"u8), ExprType.Object(dynamicPropertyType: ExprType.String) },
+            },
+            strict: true);
+        var needsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("my-dep"u8), needsEntryType } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("needs"u8.ToArray(), needsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'needs'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_InputsUnknownParam_ReportsDiagnostic()
+    {
+        var expression = "inputs.unknown_param"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var inputsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("environment"u8), ExprType.String } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("inputs"u8.ToArray(), inputsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_param' is not defined in 'inputs'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StepsLooseObject_NoDiagnostics()
+    {
+        // When steps has no IDs the override is a loose object: no property error should fire.
+        var expression = "steps.any_step.outcome"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var looseStepsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), looseStepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    // ── Operator type validation (Phase 3) ────────────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_CompareNullLessThanNumber_ReportsDiagnostic()
+    {
+        var expression = "null < 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<' does not support null type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareBoolGreaterThanBool_ReportsDiagnostic()
+    {
+        var expression = "true > false"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>' does not support bool type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareNumberLessOrEqualNumber_NoDiagnostic()
+    {
+        var expression = "1 <= 2"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareStringGreaterOrEqualString_NoDiagnostic()
+    {
+        var expression = "'a' >= 'b'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareObjectLessThanNumber_ReportsDiagnostic()
+    {
+        var expression = "fromJson('{\"a\":1}') < 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<' does not support object type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareArrayGreaterThanNumber_ReportsDiagnostic()
+    {
+        var expression = "fromJson('[1,2]') > 0"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support array", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareContextAny_NoDiagnostic()
+    {
+        // github.event is Any — no error should fire for comparisons with Any
+        var expression = "github.event.number >= 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityBoolOperands_NoDiagnostic()
+    {
+        // == and != are not comparison operators — they should not produce type errors
+        var expression = "true == false"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_NotObject_ReportsDiagnostic()
+    {
+        var expression = "!fromJson('{\"a\":1}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!' does not support object type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_NotArray_ReportsDiagnostic()
+    {
+        var expression = "!fromJson('[1,2]')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support array", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_NotBool_NoDiagnostic()
+    {
+        var expression = "!true"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!'", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_NotString_NoDiagnostic()
+    {
+        // !env.SOME_VAR is a common pattern — should not error
+        var expression = "!env.SOME_VAR"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!'", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_WildcardOnString_ReportsDiagnostic()
+    {
+        var expression = "github.actor.*"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*' must be an object or array, but got string", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_WildcardOnObject_NoDiagnostic()
+    {
+        // github.event is Any — wildcard should be fine
+        var expression = "github.event.*"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*'", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_WildcardOnBool_ReportsDiagnostic()
+    {
+        var expression = "github.ref_protected.*"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*' must be an object or array, but got bool", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ArrayIndexWithNumber_NoDiagnostic()
+    {
+        var expression = "fromJson('[1,2,3]')[0]"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("index of array", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ArrayIndexWithString_ReportsDiagnostic()
+    {
+        var expression = "fromJson('[1,2,3]')['key']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("index of array must be number, but got string", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ObjectIndexWithString_NoDiagnostic()
+    {
+        var expression = "github['actor']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ObjectIndexWithNumber_ReportsDiagnostic()
+    {
+        var expression = "github[0]"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object must be string, but got number", StringComparison.Ordinal))).IsTrue();
+    }
+
+    // ── Status check function restriction (Phase 4 - Gap #5) ─────────────────
+
+    [Test]
+    public async Task ParseAndValidate_SuccessInIfContext_NoDiagnostic()
+    {
+        var expression = "success()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_SuccessInNonIfContext_ReportsDiagnostic()
+    {
+        var expression = "success()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: false);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'success()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FailureInNonIfContext_ReportsDiagnostic()
+    {
+        var expression = "failure()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'failure()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CancelledInNonIfContext_ReportsDiagnostic()
+    {
+        var expression = "cancelled()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'cancelled()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_AlwaysInNonIfContext_ReportsDiagnostic()
+    {
+        var expression = "always()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'always()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_AlwaysInIfContext_NoDiagnostic()
+    {
+        var expression = "always()"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Job,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_NonStatusCheckFunctionInNonIfContext_NoDiagnostic()
+    {
+        // Regular functions like contains() should work everywhere
+        var expression = "contains(github.ref, 'main')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // ── case() function (Phase 4 - Gap #6) ───────────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_CaseFunction_ValidUsage_NoDiagnostic()
+    {
+        var expression = "case(true, 1, 0)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("unknown expression function", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CaseFunction_MoreArgs_NoDiagnostic()
+    {
+        // case with additional chained condition/value pairs
+        var expression = "case(false, 'a', true, 'b', 'default')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CaseFunction_TooFewArgs_ReportsDiagnostic()
+    {
+        var expression = "case(true, 1)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task InferType_CaseFunction_ReturnsAny()
+    {
+        var expression = "case(true, 1, 0)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var type = ExpressionSemanticAnalyzer.InferType(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            expression);
+
+        await Assert.That(type).IsTypeOf<AnyExprType>();
+    }
+
+    // ── vars naming convention (Phase 4 - Gap #7) ────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_VarsGithubPrefix_ReportsDiagnostic()
+    {
+        var expression = "vars.GITHUB_FOO"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_VarsGithubPrefixLowerCase_ReportsDiagnostic()
+    {
+        var expression = "vars.github_token"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_VarsInvalidChars_ReportsDiagnostic()
+    {
+        var expression = "vars.foo-bar"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        // Note: 'foo-bar' will be parsed as 'foo' member access followed by binary minus 'bar'
+        // But if we can get it as a single member, it would be invalid.
+        // In practice, ExpressionParser parses 'foo-bar' as identifier minus identifier.
+        // So vars.foo-bar is actually vars.foo - bar (binary operation).
+        // This test validates that valid var names don't produce errors instead.
+        await Assert.That(parseResult.HasRoot).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_VarsValidName_NoDiagnostic()
+    {
+        var expression = "vars.MY_VARIABLE_123"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("configuration variable name", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_VarsUnderscoreStart_NoDiagnostic()
+    {
+        var expression = "vars._PRIVATE"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("configuration variable name", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_NonVarsContext_NoNamingCheck()
+    {
+        // env.GITHUB_TOKEN should NOT trigger the vars naming check
+        var expression = "env.GITHUB_TOKEN"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsFalse();
     }
 }

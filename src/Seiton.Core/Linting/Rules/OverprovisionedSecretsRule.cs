@@ -1,4 +1,7 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
+
+using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -7,8 +10,8 @@ public sealed class OverprovisionedSecretsRule : RuleBase
     internal const int DefaultMaxStepEnvSecrets = 5;
     internal const int DefaultMaxJobSecrets = 5;
 
-    int _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
-    int _maxJobSecrets = DefaultMaxJobSecrets;
+    private int _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
+    private int _maxJobSecrets = DefaultMaxJobSecrets;
 
     public override string Id => "overprovisioned-secrets";
 
@@ -31,24 +34,24 @@ public sealed class OverprovisionedSecretsRule : RuleBase
 
     public override void VisitJobPre(Job job)
     {
-        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Count > _maxJobSecrets)
+        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Value.Count > _maxJobSecrets)
         {
             AddJobWarning(
                 job,
-                $"reusable workflow call passes {job.WorkflowCall.Secrets.Count} explicit secrets; map only minimum required secrets",
+                $"reusable workflow call passes {job.WorkflowCall.Secrets.Value.Count} explicit secrets; map only minimum required secrets",
                 BuildUsesLocation(job.WorkflowCall));
         }
     }
 
     public override void VisitStep(Step step)
     {
-        if (Config.Utf8Yaml is null || step.Env?.Vars is null || step.Env.Vars.Count == 0)
+        if (Config.Utf8Yaml is null || step.Env?.Vars is null || step.Env.Vars.Value.Count == 0)
         {
             return;
         }
 
         var secretVarCount = 0;
-        foreach (var pair in step.Env.Vars)
+        foreach (var pair in step.Env.Vars.Value)
         {
             if (!ContainsSecretsReference(pair.Value.Value))
             {
@@ -67,14 +70,14 @@ public sealed class OverprovisionedSecretsRule : RuleBase
         }
     }
 
-    bool ContainsSecretsReference(StringNode node)
+    private bool ContainsSecretsReference(StringNodeId node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        var value = node.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(node);
         if (ContainsAsciiIgnoreCase(value, "secrets."u8)
             || ContainsAsciiIgnoreCase(value, "secrets["u8)
             || ContainsAsciiIgnoreCase(value, "tojson(secrets)"u8)
@@ -83,12 +86,12 @@ public sealed class OverprovisionedSecretsRule : RuleBase
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = node.Expression.Value.AsSpan(Config.Utf8Yaml);
+        var expression = Arena.GetStringValue(Arena.GetStringExpression(node));
         return ContainsAsciiIgnoreCase(expression, "secrets"u8);
     }
 }

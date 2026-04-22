@@ -1,6 +1,8 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class RefVersionMismatchRule : RuleBase
@@ -29,16 +31,16 @@ public sealed class RefVersionMismatchRule : RuleBase
         CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
+    private void CheckUses(StringNodeId usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = usesNode.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(usesNode);
         if (!TryParseActionReference(uses, out var actionPath, out var reference)
-            || IsFullLengthCommitSha(reference)
+            || IsFullCommitSha(reference)
             || !TryExtractVersionMajor(reference, out var refMajor)
             || !TryExtractPathVersionMajor(actionPath, out var pathMajor)
             || pathMajor == refMajor)
@@ -56,29 +58,7 @@ public sealed class RefVersionMismatchRule : RuleBase
             AddJobWarning(job, message, location);
         }
     }
-
-    static bool TryParseActionReference(ReadOnlySpan<byte> uses, out ReadOnlySpan<byte> actionPath, out ReadOnlySpan<byte> reference)
-    {
-        actionPath = [];
-        reference = [];
-
-        if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))
-        {
-            return false;
-        }
-
-        var at = uses.LastIndexOf((byte)'@');
-        if (at <= 0 || at + 1 >= uses.Length)
-        {
-            return false;
-        }
-
-        actionPath = uses[..at];
-        reference = uses[(at + 1)..];
-        return true;
-    }
-
-    static bool TryExtractPathVersionMajor(ReadOnlySpan<byte> actionPath, out int major)
+    private static bool TryExtractPathVersionMajor(ReadOnlySpan<byte> actionPath, out int major)
     {
         major = 0;
         var slash1 = actionPath.IndexOf((byte)'/');
@@ -121,7 +101,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         return false;
     }
 
-    static bool TryExtractMajorFromSegment(ReadOnlySpan<byte> segment, out int major)
+    private static bool TryExtractMajorFromSegment(ReadOnlySpan<byte> segment, out int major)
     {
         major = 0;
         if (segment.Length == 0)
@@ -166,7 +146,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         return int.TryParse(System.Text.Encoding.UTF8.GetString(trimmed[candidateStart..end]), out major);
     }
 
-    static ReadOnlySpan<byte> TrimKnownExtension(ReadOnlySpan<byte> segment)
+    private static ReadOnlySpan<byte> TrimKnownExtension(ReadOnlySpan<byte> segment)
     {
         if (segment.EndsWith(".yml"u8))
         {
@@ -181,7 +161,7 @@ public sealed class RefVersionMismatchRule : RuleBase
         return segment;
     }
 
-    static bool TryExtractVersionMajor(ReadOnlySpan<byte> reference, out int major)
+    private static bool TryExtractVersionMajor(ReadOnlySpan<byte> reference, out int major)
     {
         major = 0;
         if (reference.Length < 2 || reference[0] is not ((byte)'v' or (byte)'V'))
@@ -202,30 +182,7 @@ public sealed class RefVersionMismatchRule : RuleBase
 
         return int.TryParse(System.Text.Encoding.UTF8.GetString(reference[1..end]), out major);
     }
-
-    static bool IsFullLengthCommitSha(ReadOnlySpan<byte> reference)
-    {
-        if (reference.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < reference.Length; i++)
-        {
-            var ch = reference[i];
-            var isDigit = ch is >= (byte)'0' and <= (byte)'9';
-            var isLowerHex = ch is >= (byte)'a' and <= (byte)'f';
-            var isUpperHex = ch is >= (byte)'A' and <= (byte)'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static bool IsDigit(byte value)
+    private static bool IsDigit(byte value)
     {
         return value is >= (byte)'0' and <= (byte)'9';
     }

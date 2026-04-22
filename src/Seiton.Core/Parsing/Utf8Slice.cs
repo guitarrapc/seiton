@@ -9,6 +9,16 @@ public readonly record struct Utf8Slice(int Offset, int Length)
         return new Utf8String(AsSpan(source));
     }
 
+    internal Utf8String ToUtf8StringZeroCopy(byte[] source)
+    {
+        if (Offset < 0 || Length < 0 || Offset + Length > source.Length)
+        {
+            return default;
+        }
+
+        return new Utf8String(source.AsMemory(Offset, Length));
+    }
+
     public ReadOnlySpan<byte> AsSpan(ReadOnlySpan<byte> source)
     {
         if (Offset < 0 || Length < 0 || Offset + Length > source.Length)

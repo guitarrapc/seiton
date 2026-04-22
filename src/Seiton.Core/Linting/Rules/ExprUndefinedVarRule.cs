@@ -3,6 +3,10 @@ using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class ExprUndefinedVarRule : RuleBase
@@ -11,12 +15,52 @@ public sealed class ExprUndefinedVarRule : RuleBase
 
     public override string Name => "Expr Undefined Var Rule";
 
+    // Phase 2: per-workflow and per-job dynamic context type overrides.
+    // These replace the loose static types for steps/matrix/needs/inputs with strict,
+    // job-specific types so that property-access errors can be detected.
+    private Workflow? _currentWorkflow;
+    private (byte[] NameUtf8, ExprType Type) _inputsOverride;
+    // Reusable fixed-size override arrays to avoid per-job allocation
+    private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[3];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[4];
+    private bool _hasOverrides;
+    private readonly List<Diagnostic> _propertyDiagnostics = new();
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _currentWorkflow = workflow;
+        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
+        _hasOverrides = false;
+    }
+
     public override void VisitJobPre(Job job)
     {
         if (Config.Utf8Yaml is null)
         {
+            _hasOverrides = false;
             return;
         }
+
+        var yaml = Config.Utf8Yaml;
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix, Arena, yaml);
+        var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverride(
+            job.Needs,
+            _currentWorkflow?.Jobs ?? default,
+            Arena,
+            yaml);
+        var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml);
+
+        // job scope: matrix, needs, inputs available (steps is NOT available in job scope)
+        _jobScopeOverrides[0] = matrixOverride;
+        _jobScopeOverrides[1] = needsOverride;
+        _jobScopeOverrides[2] = _inputsOverride;
+        // step scope: also includes steps
+        _stepScopeOverrides[0] = stepsOverride;
+        _stepScopeOverrides[1] = matrixOverride;
+        _stepScopeOverrides[2] = needsOverride;
+        _stepScopeOverrides[3] = _inputsOverride;
+        _hasOverrides = true;
 
         CheckNode(job.If, ExpressionValidationContext.Job, "job.if", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
@@ -25,15 +69,15 @@ public sealed class ExprUndefinedVarRule : RuleBase
             rule.AddJobError(targetJob, message, location), job);
 
         var callInputs = job.WorkflowCall?.Inputs;
-        if (callInputs is null || callInputs.Count == 0)
+        if (callInputs is null || callInputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in callInputs)
+        foreach (var pair in callInputs.Value)
         {
             var input = pair.Value;
-            var inputName = Decode(input.Name.Value);
+            var inputName = Decode(Arena.GetStringSlice(input.Name));
             CheckNode(input.Value, ExpressionValidationContext.Job, $"job.with.{inputName}", static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
         }
@@ -52,12 +96,12 @@ public sealed class ExprUndefinedVarRule : RuleBase
         CheckEnv(step.Env, ExpressionValidationContext.Step, "step.env", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
-        if (step.Exec is not ExecAction action || action.Inputs is null || action.Inputs.Count == 0)
+        if (step.Exec is not ExecAction action || action.Inputs is null || action.Inputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in action.Inputs)
+        foreach (var pair in action.Inputs.Value)
         {
             var inputName = Decode(pair.Key);
             CheckNode(pair.Value, ExpressionValidationContext.Step, $"step.with.{inputName}", static (rule, message, location, targetStep) =>
@@ -65,7 +109,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
     }
 
-    void CheckEnv<TTarget>(
+    private void CheckEnv<TTarget>(
         Env? env,
         ExpressionValidationContext context,
         string sinkName,
@@ -77,35 +121,35 @@ public sealed class ExprUndefinedVarRule : RuleBase
             return;
         }
 
-        CheckNode(env.Expression, context, sinkName, report, target);
+        CheckNode(Arena.GetStringExpression(env.Expression), context, sinkName, report, target);
 
         var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
+        if (vars is null || vars.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars)
+        foreach (var pair in vars.Value)
         {
             var envVar = pair.Value;
-            var keyName = Decode(envVar.Name.Value);
+            var keyName = Decode(Arena.GetStringSlice(envVar.Name));
             CheckNode(envVar.Value, context, $"{sinkName}.{keyName}", report, target);
         }
     }
 
-    void CheckNode<TTarget>(
-        StringNode? node,
+    private void CheckNode<TTarget>(
+        StringNodeId node,
         ExpressionValidationContext context,
         string sinkName,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
-        if (node is null || Config.Utf8Yaml is null)
+        if (!node.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var value = node.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(node);
         if (value.Length == 0)
         {
             return;
@@ -116,7 +160,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
 
         if (parseWholeValue && !hasEmbeddedExpression)
         {
-            ValidateExpression(value, context, sinkName, node.Range, report, target);
+            ValidateExpression(value, context, sinkName, Arena.GetStringRange(node), report, target);
             return;
         }
 
@@ -130,11 +174,11 @@ public sealed class ExprUndefinedVarRule : RuleBase
                 continue;
             }
 
-            ValidateExpression(expression, context, sinkName, node.Range, report, target);
+            ValidateExpression(expression, context, sinkName, Arena.GetStringRange(node), report, target);
         }
     }
 
-    void ValidateExpression<TTarget>(
+    private void ValidateExpression<TTarget>(
         ReadOnlySpan<byte> expression,
         ExpressionValidationContext context,
         string sinkName,
@@ -142,7 +186,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return;
@@ -159,9 +203,27 @@ public sealed class ExprUndefinedVarRule : RuleBase
             location,
             report,
             target);
+
+        // Phase 2: also validate property access against dynamic context types
+        if (!_hasOverrides)
+        {
+            return;
+        }
+
+        var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
+
+        var propertyDiagnostics = _propertyDiagnostics;
+        propertyDiagnostics.Clear();
+        ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline(
+            parseResult, expression, location, overrides, propertyDiagnostics);
+        for (var i = 0; i < propertyDiagnostics.Count; i++)
+        {
+            var d = propertyDiagnostics[i];
+            report(this, d.Message, d.Location, target);
+        }
     }
 
-    void VisitExpressionNode<TTarget>(
+    private void VisitExpressionNode<TTarget>(
         int nodeId,
         int parentId,
         ExpressionNode[] nodes,
@@ -226,7 +288,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
     }
 
-    static string ToContextText(ExpressionValidationContext context)
+    private static string ToContextText(ExpressionValidationContext context)
     {
         return context switch
         {
@@ -236,27 +298,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
             _ => "unknown",
         };
     }
-
-    static bool IsContextRootIdentifier(int nodeId, int parentId, ExpressionNode[] nodes)
-    {
-        if (parentId < 0)
-        {
-            return true;
-        }
-
-        if (parentId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var parent = nodes[parentId];
-        return parent.Left == nodeId
-            && (parent.Kind == ExpressionNodeKind.MemberAccess
-                || parent.Kind == ExpressionNodeKind.IndexAccess
-                || parent.Kind == ExpressionNodeKind.WildcardAccess);
-    }
-
-    static bool TryFindEmbeddedExpression(
+    private static bool TryFindEmbeddedExpression(
         ReadOnlySpan<byte> value,
         int searchStart,
         out int bodyStart,
@@ -289,24 +331,4 @@ public sealed class ExprUndefinedVarRule : RuleBase
         nextSearchStart = bodyStart + closeOffset + 2;
         return true;
     }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        var end = value.Length - 1;
-
-        while (start <= end && IsWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && IsWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end < start ? [] : value.Slice(start, end - start + 1);
-    }
-
-    static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 }

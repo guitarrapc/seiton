@@ -49,7 +49,7 @@ public sealed class FixModelTests
         };
 
         var result = new LintResult(
-            new ParseResult(new Parsing.Ast.Workflow(), [], false),
+            new ParseResult(new Parsing.Ast.Workflow(), null, [], false),
             diagnostics);
 
         await Assert.That(result.HasFixableDiagnostics).IsTrue();
@@ -72,7 +72,7 @@ public sealed class FixModelTests
         };
 
         var result = new LintResult(
-            new ParseResult(new Parsing.Ast.Workflow(), [], false),
+            new ParseResult(new Parsing.Ast.Workflow(), null, [], false),
             diagnostics);
 
         await Assert.That(result.HasFixableDiagnostics).IsFalse();

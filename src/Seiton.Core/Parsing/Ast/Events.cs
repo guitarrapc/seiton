@@ -2,16 +2,16 @@
 
 public abstract class Event
 {
-    public StringNode EventName { get; init; } = null!;
+    public StringNodeId EventName { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class WebhookEvent : Event
 {
-    public StringNode Hook { get; init; } = null!;
+    public StringNodeId Hook { get; init; }
 
-    public IReadOnlyList<StringNode>? Types { get; init; }
+    public StringNodeId[]? Types { get; init; }
 
     public WebhookEventFilter? Branches { get; init; }
 
@@ -25,14 +25,14 @@ public sealed class WebhookEvent : Event
 
     public WebhookEventFilter? PathsIgnore { get; init; }
 
-    public IReadOnlyList<StringNode>? Workflows { get; init; }
+    public StringNodeId[]? Workflows { get; init; }
 }
 
 public sealed class WebhookEventFilter
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public IReadOnlyList<StringNode> Values { get; init; } = [];
+    public StringNodeId[] Values { get; init; } = [];
 }
 
 public sealed class ScheduledEvent : Event
@@ -40,33 +40,33 @@ public sealed class ScheduledEvent : Event
     public IReadOnlyList<ScheduleEntry> Schedules { get; init; } = [];
 }
 
-public sealed class ScheduleEntry
+public readonly struct ScheduleEntry
 {
-    public StringNode? Cron { get; init; }
+    public StringNodeId Cron { get; init; }
 
-    public StringNode? Timezone { get; init; }
+    public StringNodeId Timezone { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class WorkflowDispatchEvent : Event
 {
-    public IReadOnlyDictionary<Utf8String, DispatchInput>? Inputs { get; init; }
+    public SliceMap<DispatchInput>? Inputs { get; init; }
 }
 
 public sealed class DispatchInput
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode? Description { get; init; }
+    public StringNodeId Description { get; init; }
 
-    public BoolNode? Required { get; init; }
+    public BoolNodeId Required { get; init; }
 
-    public StringNode? Default { get; init; }
+    public StringNodeId Default { get; init; }
 
     public DispatchInputType Type { get; init; }
 
-    public IReadOnlyList<StringNode>? Options { get; init; }
+    public StringNodeId[]? Options { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -85,22 +85,22 @@ public sealed class WorkflowCallEvent : Event
 {
     public IReadOnlyList<WorkflowCallEventInput>? Inputs { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, WorkflowCallEventSecret>? Secrets { get; init; }
+    public SliceMap<WorkflowCallEventSecret>? Secrets { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, WorkflowCallEventOutput>? Outputs { get; init; }
+    public SliceMap<WorkflowCallEventOutput>? Outputs { get; init; }
 }
 
 public sealed class WorkflowCallEventInput
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
     public Utf8String Id { get; init; }
 
-    public StringNode? Description { get; init; }
+    public StringNodeId Description { get; init; }
 
-    public BoolNode? Required { get; init; }
+    public BoolNodeId Required { get; init; }
 
-    public StringNode? Default { get; init; }
+    public StringNodeId Default { get; init; }
 
     public WorkflowCallInputType Type { get; init; }
 
@@ -115,36 +115,36 @@ public enum WorkflowCallInputType
     String,
 }
 
-public sealed class WorkflowCallEventSecret
+public readonly struct WorkflowCallEventSecret
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode? Description { get; init; }
+    public StringNodeId Description { get; init; }
 
-    public BoolNode? Required { get; init; }
+    public BoolNodeId Required { get; init; }
 
     public TextRange Range { get; init; }
 }
 
-public sealed class WorkflowCallEventOutput
+public readonly struct WorkflowCallEventOutput
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode? Description { get; init; }
+    public StringNodeId Description { get; init; }
 
-    public StringNode? Value { get; init; }
+    public StringNodeId Value { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class RepositoryDispatchEvent : Event
 {
-    public IReadOnlyList<StringNode>? Types { get; init; }
+    public StringNodeId[]? Types { get; init; }
 }
 
 public sealed class ImageVersionEvent : Event
 {
-    public IReadOnlyList<StringNode>? Names { get; init; }
+    public StringNodeId[]? Names { get; init; }
 
-    public IReadOnlyList<StringNode>? Versions { get; init; }
+    public StringNodeId[]? Versions { get; init; }
 }

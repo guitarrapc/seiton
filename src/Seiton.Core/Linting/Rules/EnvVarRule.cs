@@ -28,13 +28,13 @@ public sealed class EnvVarRule : RuleBase
             rule.AddStepWarning(target, message, location), step, "step.env");
     }
 
-    void ValidateEnv<TTarget>(
+    private void ValidateEnv<TTarget>(
         Env? env,
         Action<EnvVarRule, string, TextRange, TTarget> report,
         TTarget target,
         string sinkName)
     {
-        if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -42,21 +42,21 @@ public sealed class EnvVarRule : RuleBase
         foreach (var pair in env.Vars)
         {
             var envVar = pair.Value;
-            if (IsPortableEnvName(envVar.Name.Value.AsSpan(Config.Utf8Yaml)))
+            if (IsPortableEnvName(Arena.GetStringValue(envVar.Name)))
             {
                 continue;
             }
 
-            var name = Decode(envVar.Name.Value);
+            var name = Decode(Arena.GetStringSlice(envVar.Name));
             report(
                 this,
                 $"{sinkName} key '{name}' is not portable; use [A-Z_][A-Z0-9_]* naming",
-                envVar.Name.Range,
+                Arena.GetStringRange(envVar.Name),
                 target);
         }
     }
 
-    static bool IsPortableEnvName(ReadOnlySpan<byte> name)
+    private static bool IsPortableEnvName(ReadOnlySpan<byte> name)
     {
         if (name.Length == 0)
         {

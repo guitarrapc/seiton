@@ -35,12 +35,12 @@ internal sealed class GitHubWebhookSourceParser
         return events;
     }
 
-    sealed class GitHubWebhookSnapshot
+    private sealed class GitHubWebhookSnapshot
     {
         public List<GitHubWebhookEvent>? Events { get; set; }
     }
 
-    sealed class GitHubWebhookEvent
+    private sealed class GitHubWebhookEvent
     {
         public string Name { get; set; } = string.Empty;
 

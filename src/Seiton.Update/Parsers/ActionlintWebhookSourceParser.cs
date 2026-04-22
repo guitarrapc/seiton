@@ -5,11 +5,11 @@ namespace Seiton.Update.Parsers;
 
 internal sealed class ActionlintWebhookSourceParser
 {
-    static readonly Regex EntryRegex = new(
+    private static readonly Regex EntryRegex = new(
         "^\\s*\"(?<name>[^\"]+)\"\\s*:\\s*(?<value>nil|\\{.*\\})\\s*,?\\s*$",
         RegexOptions.Compiled);
 
-    static readonly Regex QuotedValueRegex = new("\"([^\"]+)\"", RegexOptions.Compiled);
+    private static readonly Regex QuotedValueRegex = new("\"([^\"]+)\"", RegexOptions.Compiled);
 
     public IReadOnlyList<WebhookEventModel> Parse(string path)
     {

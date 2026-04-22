@@ -168,7 +168,7 @@ public sealed class FixEngineTests
     [Test]
     public async Task LintResult_Fixes_ReturnsOnlyFixPayloads()
     {
-        var parseResult = new ParseResult(null, [], HasFatalError: false);
+        var parseResult = new ParseResult(null, null, [], HasFatalError: false);
         var result = new LintResult(
             parseResult,
             [
@@ -416,7 +416,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(sourceText);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var lint = engine.Check(source, "indent-2.yml");
+        var lint = engine.Check(source, "indent-2.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
 
         await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
 
@@ -441,7 +441,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(sourceText);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var lint = engine.Check(source, "indent-4.yml");
+        var lint = engine.Check(source, "indent-4.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
 
         await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
 
@@ -452,13 +452,13 @@ public sealed class FixEngineTests
         await Assert.That(updated.Contains("        runs-on: ubuntu-latest\n        permissions: {}\n        steps:", StringComparison.Ordinal)).IsTrue();
     }
 
-    static string NormalizeEol(string value)
+    private static string NormalizeEol(string value)
     {
         return value
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace("\r", "\n", StringComparison.Ordinal);
     }
-    static string NormalizeYamlLiteral(string value)
+    private static string NormalizeYamlLiteral(string value)
     {
         var normalized = NormalizeEol(value);
         var lines = normalized.Split('\n');

@@ -182,7 +182,7 @@ internal static class CheckCommand
         return hasError;
     }
 
-    static DiagnosticSeverity? ParseSeverity(string value)
+    private static DiagnosticSeverity? ParseSeverity(string value)
     {
         return value.ToLowerInvariant() switch
         {

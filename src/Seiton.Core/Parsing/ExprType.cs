@@ -1,4 +1,6 @@
-﻿namespace Seiton.Core.Parsing;
+﻿using static Seiton.Core.Parsing.SpanHelpers;
+
+namespace Seiton.Core.Parsing;
 
 /// <summary>
 /// Base class for the expression type hierarchy (Spec §7.3).
@@ -106,7 +108,7 @@ public sealed class StringExprType : ExprType
 /// <summary>Object type, optionally with a static property map.</summary>
 public sealed class ObjectExprType : ExprType
 {
-    readonly IReadOnlyDictionary<Utf8String, ExprType>? properties;
+    private readonly IReadOnlyDictionary<Utf8String, ExprType>? properties;
 
     internal ObjectExprType(
         IReadOnlyDictionary<Utf8String, ExprType>? properties = null,
@@ -158,31 +160,6 @@ public sealed class ObjectExprType : ExprType
 
         propertyType = ExprType.Any;
         return false;
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static byte ToLowerAscii(byte value)
-    {
-        return value is >= (byte)'A' and <= (byte)'Z'
-            ? (byte)(value + 32)
-            : value;
     }
 }
 

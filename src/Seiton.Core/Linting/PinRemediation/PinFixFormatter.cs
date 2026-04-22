@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using Seiton.Core.Parsing;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.PinRemediation;
 
 public static class PinFixFormatter
@@ -23,7 +25,7 @@ public static class PinFixFormatter
         }
 
         var currentRef = usesRef[(at + 1)..];
-        if (IsFullLengthCommitSha(currentRef))
+        if (IsFullCommitSha(currentRef))
         {
             return null;
         }
@@ -67,7 +69,7 @@ public static class PinFixFormatter
             : null;
     }
 
-    static bool TryExtractQuotedValue(string message, out string value)
+    private static bool TryExtractQuotedValue(string message, out string value)
     {
         var first = message.IndexOf('\'');
         if (first < 0)
@@ -86,30 +88,7 @@ public static class PinFixFormatter
         value = message[(first + 1)..second];
         return !string.IsNullOrEmpty(value);
     }
-
-    static bool IsFullLengthCommitSha(string value)
-    {
-        if (value.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < value.Length; i++)
-        {
-            var c = value[i];
-            var isDigit = c is >= '0' and <= '9';
-            var isLowerHex = c is >= 'a' and <= 'f';
-            var isUpperHex = c is >= 'A' and <= 'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static bool TryBuildReplacementFix(
+    private static bool TryBuildReplacementFix(
         Diagnostic diagnostic,
         string oldValue,
         string newValue,

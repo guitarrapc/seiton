@@ -2,19 +2,33 @@
 
 ## What is this project?
 
+Seiton is a C# tool that parses and lints GitHub Actions documents (workflow files and action metadata files).
+
+- **Parser**: Converts UTF-8 YAML into a typed AST and returns parser diagnostics.
+- **Linter**: Runs rules against the parsed AST and aggregates lint diagnostics.
+
+Target documents: `.github/workflows/*.yml`, `action.yml` / `action.yaml`.
 
 ## Project Structure
 
-## Important Guidelines
+```
+.github/docs          — Specifications (source of truth)
+src/Seiton/           — CLI entry point
+src/Seiton.Core/      — Core library (Parsing/, Linting/, Generated/)
+src/Seiton.Update/    — Generated data update tool
+src/Seiton.Benchmark/ — Performance benchmarks
+tests/                — Test projects
+sandbox/DotnetFiles/  — Prototyping and verification scripts
+data/                 — Generated data sources (manifest, availability, etc.)
+```
+## Skills
 
-When implementing or reviewing parser algorithms, refer to these detailed guides:
+When implementing or reviewing, refer to these detailed skills documents for specific guidelines and best practices:
 
-- **[Architecture](agent_docs/architecture.md)** - Understand the Parser's overall architecture and design principles
-- **[Coding Style](agent_docs/coding_style.md)** - C# style conventions for this project
-- **[Performance Requirements](agent_docs/performance_requirements.md)** - Zero-allocation, aggressive inlining, and memory management
-- **[Testing Guidelines](agent_docs/testing_guidelines.md)** - Writing/Run effective unit tests
-
-**Script Rule:** Don't write any multi-line PowerShell Code in the shell. If you need to run a script, create a file then executte it.
+- `architecture/SKILL.md` — design principles and architecture of the parser
+- `performance-requirements/SKILL.md` — performance and memory efficiency requirements for parser implementation
+- `sandbox-code-guidelines/SKILL.md` — guidelines for writing and running sandbox
+- `scripting/SKILL.md` — guidelines for writing and running scripts in the project
 
 ### Auto-Generated Files
 
@@ -27,6 +41,37 @@ Files under `src/Seiton.Core/Generated/` (e.g. `Availability.g.cs`) are **auto-g
 ```shell
 dotnet run --project src/Seiton.Update -- sync-availability
 ```
+
+### Seiton.Update Pipeline Pattern
+
+Each generated dataset follows a consistent multi-stage pipeline:
+
+```
+data/sources/{dataset}/github/
+  raw/          ← Stage 1: fetched raw files from official sources (network)
+  parsed/       ← Stage 2: parsed intermediate JSON (local, deterministic)
+  {name}.json   ← Stage 3: merged canonical snapshot or hand-written source
+```
+
+**CLI command naming convention** (per-dataset):
+- `fetch-{dataset}` — orchestrator: fetch + parse + manifest update
+- `fetch-{dataset}-sources` — Stage 1: download raw source files
+- `parse-{dataset}-sources` — Stage 2: parse raw files into intermediate JSON
+- `merge-{dataset}-sources` — Stage 3: merge parsed artifacts into snapshot
+- `sync-{dataset}` — generate `.g.cs` from snapshot/source JSON
+- `verify-{dataset}` — check `.g.cs` is up to date (CI)
+- `validate-{dataset}` — cross-check source data against docs (optional)
+
+Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `.github/docsSeiton_Parser_csharp_spec.md` §9.3 for details.
+
+**When adding a new dataset pipeline**, follow the existing pattern:
+1. Create a `SourcePathResolver` in `Services/` (with legacy path fallback)
+2. Create a `Fetcher` in `Sources/` (with `HttpClient`, `ComputeSha256`, manifest entry)
+3. Create a `MarkdownParser` or `SourceParser` in `Parsers/`
+4. Create a `Generator` in `Generators/` (StringBuilder-based codegen)
+5. Create a `SyncService` in `Services/` (Sync + IsUpToDate)
+6. Create `Commands` in `Commands/` (static methods)
+7. Wire up commands in `Program.cs` (both convenience aliases and `RunSync`/`RunVerify` dispatchers)
 
 ### Parser Allocation Guardrails (Always-On)
 
@@ -50,13 +95,27 @@ Before completing parser changes, validate all of the following.
 
 ### Running Tests
 
-See [Testing Guidelines](agent_docs/testing_guidelines.md) for details on writing and running tests. To run all tests:
+**This project uses TUnit. Always use `--treenode-filter` — do NOT use `dotnet test --filter` (that is xUnit/MSTest syntax and will not work).**
+
+To run all tests:
 
 ```shell
 dotnet test
 ```
 
-To run specific tests (e.g., XxxxxTests):
+To run specific tests (e.g., ExpressionTests), from the repo root:
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/*
+```
+
+To run a single test method (e.g., `InferType_GitHubRetentionDays` in `ExpressionTests`):
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/InferType_GitHubRetentionDays*
+```
+
+Or, from within the test project directory, use `dotnet run`:
 
 ```shell
 dotnet run --treenode-filter /*/*/XxxxxTests/*
@@ -77,7 +136,7 @@ dotnet build
 
 ### Run Some Script
 
-You can create a .cs file in `sandbox/DotnetFiles/` and run it directly. See [Sandbox Code Guidelines](agent_docs/sandbox_code_guidelines.md) for details and script sample.
+You can create a .cs file in `sandbox/DotnetFiles/` and run it directly. See [Sandbox Code Guidelines](.agents/skills/sandbox-code-guidelines/SKILL.md) for details and script sample.
 
 use `sandbox/DotnetFiles/Sample.cs` for template:
 
@@ -89,7 +148,7 @@ dotnet run sandbox/DotnetFiles/YourCsFile.cs
 
 Before implementing a parser/ast or making significant changes:
 
-1. Read the relevant documentation files in `.github/agent_docs/`
+1. Read the relevant documentation files in `.github/docs`
 2. Review existing similar implementations in `src/`
 3. Check corresponding tests in `tests/Seiton.Tests/`
 
@@ -97,7 +156,7 @@ Ask which documentation files you need if you're unsure what to read.
 
 ## Specification Document Policy
 
-Spec files live under `Docs/`. When reading or writing them, follow these rules:
+Spec files live under `.github/docs`. When reading or writing them, follow these rules:
 
 **What belongs in a spec:**
 - **WHAT** — what the feature or behavior is
@@ -105,7 +164,7 @@ Spec files live under `Docs/`. When reading or writing them, follow these rules:
 - **Lessons learned** — things that were only discovered by actually trying (e.g., unexpected constraints, failed approaches, surprising behavior)
 
 **What does NOT belong in a spec:**
-- Detailed HOW — step-by-step implementation instructions, code structure, algorithm internals. Those belong in code comments, `agent_docs/`, or the implementation itself.
+- Detailed HOW — step-by-step implementation instructions, code structure, algorithm internals. Those belong in code comments, `.agents/skills/`, or the implementation itself.
 
 **After implementing:**
 - Always update any related spec files to reflect what was actually built, especially documenting lessons learned or decisions made during implementation that weren't captured upfront.

@@ -11,4 +11,9 @@ internal static class UpdateLogger
     {
         Console.Error.WriteLine($"[{DateTimeOffset.UtcNow:O}] {message}");
     }
+
+    public static void Warn(string message)
+    {
+        Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] [WARN] {message}");
+    }
 }

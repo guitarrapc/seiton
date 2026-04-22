@@ -11,12 +11,12 @@ public sealed class DenyInheritSecretsRule : RuleBase
     public override void VisitJobPre(Job job)
     {
         var workflowCall = job.WorkflowCall;
-        if (workflowCall is null || !workflowCall.InheritSecrets || !HasNodeValue(workflowCall.Uses))
+        if (workflowCall is null || !workflowCall.InheritSecrets || !HasNodeValue(workflowCall.Uses, Arena))
         {
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
         AddJobError(
             job,
             $"job '{jobId}' uses 'secrets: inherit' when calling reusable workflow; explicitly map only required secrets via 'secrets:'",

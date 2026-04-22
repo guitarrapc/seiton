@@ -9,40 +9,25 @@ public sealed class DenyReadAllRule : RuleBase
 
     public override string Name => "Deny Read-All Rule";
 
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
+
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
-        ValidatePermissionsAll(
-            workflow.Permissions,
-            (message, location, fix) =>
-            {
-                if (fix is null)
-                {
-                    AddWorkflowError(workflow, message, location);
-                    return;
-                }
-
-                AddWorkflowError(workflow, message, location, fix.Value);
-            });
+        _currentWorkflow = workflow;
+        ValidatePermissionsAll(workflow.Permissions);
+        _currentWorkflow = null;
     }
 
     public override void VisitJobPre(Job job)
     {
-        ValidatePermissionsAll(
-            job.Permissions,
-            (message, location, fix) =>
-            {
-                if (fix is null)
-                {
-                    AddJobError(job, message, location);
-                    return;
-                }
-
-                AddJobError(job, message, location, fix.Value);
-            });
+        _currentJob = job;
+        ValidatePermissionsAll(job.Permissions);
+        _currentJob = null;
     }
 
-    void ValidatePermissionsAll(Permissions? permissions, Action<string, TextRange, DiagnosticFix?> report)
+    private void ValidatePermissionsAll(Permissions? permissions)
     {
         if (Config.Utf8Yaml is null || permissions?.All is null)
         {
@@ -50,8 +35,8 @@ public sealed class DenyReadAllRule : RuleBase
         }
 
         var allNode = permissions.All;
-        var value = allNode.Value.AsSpan(Config.Utf8Yaml);
-        if (allNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
+        var value = Arena.GetStringValue(allNode);
+        if (Arena.GetStringExpression(allNode).HasValue || value.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -65,17 +50,25 @@ public sealed class DenyReadAllRule : RuleBase
         var fix = new DiagnosticFix(
             "replace read-all with explicit permissions mapping baseline",
             [edit]);
+        var message = "permissions scalar 'read-all' is forbidden; use explicit least-privilege scopes";
 
-        report("permissions scalar 'read-all' is forbidden; use explicit least-privilege scopes", allNode.Range, fix);
+        if (_currentWorkflow is not null)
+        {
+            AddWorkflowError(_currentWorkflow, message, Arena.GetStringRange(allNode), fix);
+        }
+        else if (_currentJob is not null)
+        {
+            AddJobError(_currentJob, message, Arena.GetStringRange(allNode), fix);
+        }
     }
 
-    static TextEdit BuildExplicitMappingReplacementEdit(StringNode allNode, byte[] utf8Yaml)
+    private TextEdit BuildExplicitMappingReplacementEdit(StringNodeId allNode, byte[] utf8Yaml)
     {
-        var start = allNode.Value.Offset;
-        var end = allNode.Value.Offset + allNode.Value.Length;
+        var start = Arena.GetStringSlice(allNode).Offset;
+        var end = Arena.GetStringSlice(allNode).Offset + Arena.GetStringSlice(allNode).Length;
         if (start < 0 || end > utf8Yaml.Length || start > end)
         {
-            return new TextEdit(allNode.Value.Offset, allNode.Value.Length, "{}");
+            return new TextEdit(Arena.GetStringSlice(allNode).Offset, Arena.GetStringSlice(allNode).Length, "{}");
         }
 
         if (start > 0 && end < utf8Yaml.Length)

@@ -40,7 +40,7 @@ internal sealed class GitHubRunnerLabelsSourceParser
         return new RunnerLabelsModel(stable, preview);
     }
 
-    sealed class RunnerLabelsSnapshot
+    private sealed class RunnerLabelsSnapshot
     {
         public List<string>? StableLabels { get; set; }
         public List<string>? PreviewLabels { get; set; }

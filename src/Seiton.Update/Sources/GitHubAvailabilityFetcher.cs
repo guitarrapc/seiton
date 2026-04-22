@@ -8,9 +8,9 @@ namespace Seiton.Update.Sources;
 
 internal sealed class GitHubAvailabilityFetcher
 {
-    const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md";
+    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md";
 
-    static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -146,7 +146,7 @@ internal sealed class GitHubAvailabilityFetcher
         }
     }
 
-    static string[] ResolveContextSet(IReadOnlyDictionary<string, IReadOnlyList<string>> map, params string[] keys)
+    private static string[] ResolveContextSet(IReadOnlyDictionary<string, IReadOnlyList<string>> map, params string[] keys)
     {
         var union = new HashSet<string>(StringComparer.Ordinal);
         foreach (var key in keys)
@@ -167,7 +167,7 @@ internal sealed class GitHubAvailabilityFetcher
         return union.ToArray();
     }
 
-    static AvailabilityPaths Paths(string repoRoot)
+    private static AvailabilityPaths Paths(string repoRoot)
     {
         var baseDir = Path.Combine(repoRoot, "data", "sources", "availability", "github");
         return new AvailabilityPaths
@@ -178,28 +178,28 @@ internal sealed class GitHubAvailabilityFetcher
         };
     }
 
-    static string ComputeSha256(string content)
+    private static string ComputeSha256(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return "sha256:" + Convert.ToHexStringLower(hash);
     }
 
-    sealed class AvailabilityPaths
+    private sealed class AvailabilityPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
         public string ParsedDocsPath { get; set; } = string.Empty;
         public string MergedSnapshotPath { get; set; } = string.Empty;
     }
 
-    sealed class ParsedAvailabilitySnapshot
+    private sealed class ParsedAvailabilitySnapshot
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
         public List<ParsedAvailabilityEntry> Entries { get; set; } = [];
     }
 
-    sealed class ParsedAvailabilityEntry
+    private sealed class ParsedAvailabilityEntry
     {
         public string WorkflowKey { get; set; } = string.Empty;
         public List<string> Contexts { get; set; } = [];

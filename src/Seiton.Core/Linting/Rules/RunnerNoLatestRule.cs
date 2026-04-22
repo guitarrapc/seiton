@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Generated;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -12,7 +13,7 @@ public sealed class RunnerNoLatestRule : RuleBase
     public override void VisitJobPre(Job job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || runsOn.LabelsExpr is not null || runsOn.Labels is null || Config.Utf8Yaml is null)
+        if (runsOn is null || runsOn.LabelsExpr.HasValue || runsOn.Labels is null || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -22,42 +23,42 @@ public sealed class RunnerNoLatestRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
-        for (var i = 0; i < runsOn.Labels.Count; i++)
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        for (var i = 0; i < runsOn.Labels.Length; i++)
         {
             var label = runsOn.Labels[i];
-            if (label.Expression is not null)
+            if (Arena.GetStringExpression(label).HasValue)
             {
                 continue;
             }
 
-            var labelUtf8 = label.Value.AsSpan(Config.Utf8Yaml);
+            var labelUtf8 = Arena.GetStringValue(label);
             if (!IsLatestHostedRunnerLabel(labelUtf8))
             {
                 continue;
             }
 
-            var labelText = Decode(label.Value);
-            AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", label.Range);
+            var labelText = Decode(Arena.GetStringSlice(label));
+            AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", Arena.GetStringRange(label));
         }
     }
 
-    bool ContainsSelfHostedLabel(IReadOnlyList<StringNode> labels)
+    private bool ContainsSelfHostedLabel(StringNodeId[] labels)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        for (var i = 0; i < labels.Count; i++)
+        for (var i = 0; i < labels.Length; i++)
         {
             var label = labels[i];
-            if (label.Expression is not null)
+            if (Arena.GetStringExpression(label).HasValue)
             {
                 continue;
             }
 
-            var labelUtf8 = label.Value.AsSpan(Config.Utf8Yaml);
+            var labelUtf8 = Arena.GetStringValue(label);
             if (RunnerLabels.IsSelfHostedLabel(labelUtf8))
             {
                 return true;
@@ -67,7 +68,7 @@ public sealed class RunnerNoLatestRule : RuleBase
         return false;
     }
 
-    static bool IsLatestHostedRunnerLabel(ReadOnlySpan<byte> labelUtf8)
+    private static bool IsLatestHostedRunnerLabel(ReadOnlySpan<byte> labelUtf8)
     {
         return labelUtf8.SequenceEqual("ubuntu-latest"u8)
             || labelUtf8.SequenceEqual("windows-latest"u8)

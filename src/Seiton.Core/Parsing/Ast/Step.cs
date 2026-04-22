@@ -2,19 +2,19 @@
 
 public sealed class Step
 {
-    public StringNode? Id { get; init; }
+    public StringNodeId Id { get; init; }
 
-    public StringNode? If { get; init; }
+    public StringNodeId If { get; init; }
 
-    public StringNode? Name { get; init; }
+    public StringNodeId Name { get; init; }
 
     public StepExec Exec { get; init; } = null!;
 
     public Env? Env { get; init; }
 
-    public BoolNode? ContinueOnError { get; init; }
+    public BoolNodeId ContinueOnError { get; init; }
 
-    public FloatNode? TimeoutMinutes { get; init; }
+    public FloatNodeId TimeoutMinutes { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -34,22 +34,22 @@ public enum StepExecKind
 
 public sealed class ExecRun : StepExec
 {
-    public StringNode Run { get; init; } = null!;
+    public StringNodeId Run { get; init; }
 
-    public StringNode? Shell { get; init; }
+    public StringNodeId Shell { get; init; }
 
-    public StringNode? WorkingDirectory { get; init; }
+    public StringNodeId WorkingDirectory { get; init; }
 }
 
 public sealed class ExecAction : StepExec
 {
-    public StringNode Uses { get; init; } = null!;
+    public StringNodeId Uses { get; init; }
 
     public TextRange? UsesKeyRange { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, StringNode>? Inputs { get; init; }
+    public SliceMap<StringNodeId>? Inputs { get; init; }
 
-    public StringNode? Entrypoint { get; init; }
+    public StringNodeId Entrypoint { get; init; }
 
-    public StringNode? Args { get; init; }
+    public StringNodeId Args { get; init; }
 }

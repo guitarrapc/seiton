@@ -2,16 +2,26 @@
 
 public readonly struct Utf8String : IEquatable<Utf8String>
 {
-    private readonly byte[] _bytes;
+    private readonly ReadOnlyMemory<byte> _memory;
 
     public Utf8String(ReadOnlySpan<byte> utf8)
     {
-        _bytes = utf8.ToArray();
+        _memory = utf8.ToArray();
     }
 
-    public int Length => _bytes?.Length ?? 0;
+    internal Utf8String(ReadOnlyMemory<byte> memory)
+    {
+        _memory = memory;
+    }
 
-    public ReadOnlySpan<byte> Span => _bytes is null ? ReadOnlySpan<byte>.Empty : _bytes;
+    private Utf8String(byte[] owned)
+    {
+        _memory = new ReadOnlyMemory<byte>(owned);
+    }
+
+    public int Length => _memory.Length;
+
+    public ReadOnlySpan<byte> Span => _memory.Span;
 
     public static Utf8String FromLowerAscii(ReadOnlySpan<byte> utf8)
     {
@@ -34,21 +44,7 @@ public readonly struct Utf8String : IEquatable<Utf8String>
 
     public override int GetHashCode()
     {
-        unchecked
-        {
-            const uint offsetBasis = 2166136261;
-            const uint prime = 16777619;
-
-            var hash = offsetBasis;
-            var span = Span;
-            for (var i = 0; i < span.Length; i++)
-            {
-                hash ^= span[i];
-                hash *= prime;
-            }
-
-            return (int)hash;
-        }
+        return XxHash64.Hash32(Span);
     }
 
     public static bool operator ==(Utf8String left, Utf8String right) => left.Equals(right);

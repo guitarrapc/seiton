@@ -1,6 +1,8 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class IfCondRule : RuleBase
@@ -19,14 +21,14 @@ public sealed class IfCondRule : RuleBase
         ValidateCondition(step.If, null, step);
     }
 
-    void ValidateCondition(StringNode? condition, Job? job, Step? step)
+    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
     {
-        if (condition is null || Config.Utf8Yaml is null)
+        if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = condition.Value.AsSpan(Config.Utf8Yaml);
+        var raw = Arena.GetStringValue(condition);
         if (raw.Length == 0)
         {
             return;
@@ -34,17 +36,17 @@ public sealed class IfCondRule : RuleBase
 
         var expression = TryExtractExpressionBody(raw, out var body) ? body : raw;
 
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             if (job is not null)
             {
-                AddJobWarning(job, "job if condition contains syntax errors", condition.Range);
+                AddJobWarning(job, "job if condition contains syntax errors", Arena.GetStringRange(condition));
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, "step if condition contains syntax errors", condition.Range);
+                AddStepWarning(step, "step if condition contains syntax errors", Arena.GetStringRange(condition));
             }
 
             return;
@@ -55,17 +57,17 @@ public sealed class IfCondRule : RuleBase
             var boolText = value ? "true" : "false";
             if (job is not null)
             {
-                AddJobWarning(job, $"job if condition is always {boolText}", condition.Range);
+                AddJobWarning(job, $"job if condition is always {boolText}", Arena.GetStringRange(condition));
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, $"step if condition is always {boolText}", condition.Range);
+                AddStepWarning(step, $"step if condition is always {boolText}", Arena.GetStringRange(condition));
             }
         }
     }
 
-    static bool IsConstantBool(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out bool value)
+    private static bool IsConstantBool(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, out bool value)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -122,7 +124,7 @@ public sealed class IfCondRule : RuleBase
         return false;
     }
 
-    static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
+    private static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
     {
         body = value;
 
@@ -160,39 +162,5 @@ public sealed class IfCondRule : RuleBase
 
         body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
         return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length)
-        {
-            var b = value[start];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                break;
-            }
-
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start)
-        {
-            var b = value[end];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                break;
-            }
-
-            end--;
-        }
-
-        if (end < start)
-        {
-            return ReadOnlySpan<byte>.Empty;
-        }
-
-        return value.Slice(start, end - start + 1);
     }
 }

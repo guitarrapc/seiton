@@ -1,5 +1,7 @@
 ﻿using Seiton.Core.Parsing;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.PinRemediation;
 
 public sealed class PinRemediationEngine(
@@ -9,14 +11,14 @@ public sealed class PinRemediationEngine(
     FixImagesConfig imagesConfig,
     NetworkConfig networkConfig)
 {
-    const string UsesRuleId = "unpinned-uses";
-    const string ImageRuleId = "unpinned-image";
+    private const string UsesRuleId = "unpinned-uses";
+    private const string ImageRuleId = "unpinned-image";
 
-    readonly IActionShaResolver? _actionShaResolver = actionShaResolver;
-    readonly IImageDigestResolver? _imageDigestResolver = imageDigestResolver;
-    readonly FixPinningConfig _pinningConfig = pinningConfig ?? new FixPinningConfig();
-    readonly FixImagesConfig _imagesConfig = imagesConfig ?? new FixImagesConfig();
-    readonly NetworkConfig _networkConfig = networkConfig ?? new NetworkConfig();
+    private readonly IActionShaResolver? _actionShaResolver = actionShaResolver;
+    private readonly IImageDigestResolver? _imageDigestResolver = imageDigestResolver;
+    private readonly FixPinningConfig _pinningConfig = pinningConfig ?? new FixPinningConfig();
+    private readonly FixImagesConfig _imagesConfig = imagesConfig ?? new FixImagesConfig();
+    private readonly NetworkConfig _networkConfig = networkConfig ?? new NetworkConfig();
 
     public async Task<RemediationResult> RemediateAsync(
         IReadOnlyList<Diagnostic> diagnostics,
@@ -77,7 +79,7 @@ public sealed class PinRemediationEngine(
         return new RemediationResult(outputs, resolvedCount, skippedCount, failedCount);
     }
 
-    async Task<RemediationOutcome> RemediateOneAsync(
+    private async Task<RemediationOutcome> RemediateOneAsync(
         Diagnostic diagnostic,
         byte[] utf8Yaml,
         CancellationToken cancellationToken)
@@ -112,7 +114,7 @@ public sealed class PinRemediationEngine(
         }
     }
 
-    async Task<RemediationOutcome> RemediateUnpinnedUsesAsync(
+    private async Task<RemediationOutcome> RemediateUnpinnedUsesAsync(
         Diagnostic diagnostic,
         byte[] utf8Yaml,
         CancellationToken cancellationToken)
@@ -135,7 +137,7 @@ public sealed class PinRemediationEngine(
         }
 
         var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, sha, tagComment, utf8Yaml);
-        if (!fix.HasValue)
+        if (fix is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
@@ -143,7 +145,7 @@ public sealed class PinRemediationEngine(
         return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
-    async Task<RemediationOutcome> RemediateUnpinnedImageAsync(
+    private async Task<RemediationOutcome> RemediateUnpinnedImageAsync(
         Diagnostic diagnostic,
         byte[] utf8Yaml,
         CancellationToken cancellationToken)
@@ -165,7 +167,7 @@ public sealed class PinRemediationEngine(
         }
 
         var fix = PinFixFormatter.BuildImageDigestFix(diagnostic, digest, utf8Yaml);
-        if (!fix.HasValue)
+        if (fix is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
@@ -173,7 +175,7 @@ public sealed class PinRemediationEngine(
         return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
-    static bool TryExtractQuotedValue(string message, out string value)
+    private static bool TryExtractQuotedValue(string message, out string value)
     {
         var first = message.IndexOf('\'');
         if (first < 0)
@@ -192,34 +194,5 @@ public sealed class PinRemediationEngine(
         value = message[(first + 1)..second];
         return !string.IsNullOrEmpty(value);
     }
-
-    static bool TryParseActionReference(string usesRef, out string owner, out string repo, out string reference)
-    {
-        owner = string.Empty;
-        repo = string.Empty;
-        reference = string.Empty;
-
-        var at = usesRef.LastIndexOf('@');
-        if (at <= 0 || at == usesRef.Length - 1)
-        {
-            return false;
-        }
-
-        var actionPath = usesRef[..at];
-        reference = usesRef[(at + 1)..];
-
-        var slash1 = actionPath.IndexOf('/');
-        if (slash1 <= 0 || slash1 == actionPath.Length - 1)
-        {
-            return false;
-        }
-
-        var slash2 = actionPath.IndexOf('/', slash1 + 1);
-        owner = actionPath[..slash1];
-        repo = slash2 < 0 ? actionPath[(slash1 + 1)..] : actionPath.Substring(slash1 + 1, slash2 - (slash1 + 1));
-
-        return owner.Length > 0 && repo.Length > 0 && reference.Length > 0;
-    }
-
-    readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
+    private readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
 }

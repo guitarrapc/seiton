@@ -8,10 +8,10 @@ namespace Seiton.Update.Sources;
 
 internal sealed class GitHubWebhookFetcher
 {
-    const string SchemaSourceUrl = "https://json.schemastore.org/github-workflow.json";
-    const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md";
+    private const string SchemaSourceUrl = "https://json.schemastore.org/github-workflow.json";
+    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md";
 
-    static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -188,7 +188,7 @@ internal sealed class GitHubWebhookFetcher
         }
     }
 
-    static (string SchemaContent, string DocsContent) ReadRawSources(string repoRoot)
+    private static (string SchemaContent, string DocsContent) ReadRawSources(string repoRoot)
     {
         var paths = Paths(repoRoot);
         return (
@@ -196,7 +196,7 @@ internal sealed class GitHubWebhookFetcher
             File.ReadAllText(paths.RawDocsPath));
     }
 
-    static WebhookPaths Paths(string repoRoot)
+    private static WebhookPaths Paths(string repoRoot)
     {
         var baseDir = Path.Combine(repoRoot, "data", "sources", "webhooks", "github");
         return new WebhookPaths
@@ -209,7 +209,7 @@ internal sealed class GitHubWebhookFetcher
         };
     }
 
-    static IReadOnlyList<WebhookEventModel> MergeOfficialSources(
+    private static IReadOnlyList<WebhookEventModel> MergeOfficialSources(
         IReadOnlyList<WebhookEventModel> schemaEvents,
         ISet<string> docsEventNames,
         IReadOnlyDictionary<string, IReadOnlyList<string>?> docsActivityTypes,
@@ -267,7 +267,7 @@ internal sealed class GitHubWebhookFetcher
     // Activity types come from properties.types.items.enum within each event object.
     // Events with no types property => empty list.
     // Events with types property but no items.enum => null (unconstrained, e.g. repository_dispatch).
-    static IReadOnlyList<WebhookEventModel> ParseSchemaJson(string schemaJson)
+    private static IReadOnlyList<WebhookEventModel> ParseSchemaJson(string schemaJson)
     {
         using var doc = JsonDocument.Parse(schemaJson);
         var root = doc.RootElement;
@@ -322,14 +322,14 @@ internal sealed class GitHubWebhookFetcher
     //
     //   watch: The schema inherits eventObject with no types override, but GitHub docs define one activity
     //     type: "started". SchemaStore is missing this override. We restore it here to match documentation.
-    static readonly Dictionary<string, IReadOnlyList<string>?> SchemaStoreGapOverrides =
+    private static readonly Dictionary<string, IReadOnlyList<string>?> SchemaStoreGapOverrides =
         new(StringComparer.Ordinal)
         {
             ["repository_dispatch"] = null,   // user-defined types; JSON schema cannot express this
             ["watch"] = ["started"],           // SchemaStore missing this override; see GitHub docs
         };
 
-    static WebhookEventModel ApplyOverride(WebhookEventModel model)
+    private static WebhookEventModel ApplyOverride(WebhookEventModel model)
     {
         if (SchemaStoreGapOverrides.TryGetValue(model.Name, out var overriddenTypes))
         {
@@ -342,13 +342,13 @@ internal sealed class GitHubWebhookFetcher
     // Official GitHub documentation may include events that are not present in the current
     // SchemaStore workflow schema. These are appended during normalization to keep the
     // snapshot aligned with Seiton's spec contract.
-    static readonly WebhookEventModel[] LocalSupplementalEvents =
+    private static readonly WebhookEventModel[] LocalSupplementalEvents =
     [
         new("image_version", []),   // present in GitHub Docs, currently absent from SchemaStore
     ];
 
     // Find the oneOf branch that is type: "object" and has webhook event properties.
-    static JsonElement? FindOnObjectForm(JsonElement root)
+    private static JsonElement? FindOnObjectForm(JsonElement root)
     {
         if (!TryNavigate(root, out var onSchema, "properties", "on"))
         {
@@ -374,7 +374,7 @@ internal sealed class GitHubWebhookFetcher
 
     // Extract activity types from an event's JSON schema object.
     // Returns null for unconstrained types, empty list for no-types, or a list of specific types.
-    static IReadOnlyList<string>? ExtractActivityTypes(JsonElement root, JsonElement eventSchema)
+    private static IReadOnlyList<string>? ExtractActivityTypes(JsonElement root, JsonElement eventSchema)
     {
         // Step 1: find the innermost "properties" element without resolving $ref at the event level.
         //   - Some events co-locate $ref + inline properties (e.g. check_run, issues).
@@ -464,7 +464,7 @@ internal sealed class GitHubWebhookFetcher
 
     // Find the innermost properties object, traversing allOf/oneOf/anyOf WITHOUT resolving
     // top-level $ref (inline properties always win over a $ref sibling).
-    static JsonElement? FindProperties(JsonElement root, JsonElement schema)
+    private static JsonElement? FindProperties(JsonElement root, JsonElement schema)
     {
         // Prefer inline properties at this level (even when $ref is also present as a sibling)
         if (schema.TryGetProperty("properties", out var props))
@@ -495,7 +495,7 @@ internal sealed class GitHubWebhookFetcher
         return null;
     }
 
-    static JsonElement ResolveRef(JsonElement root, JsonElement schema)
+    private static JsonElement ResolveRef(JsonElement root, JsonElement schema)
     {
         if (schema.TryGetProperty("$ref", out var refProp))
         {
@@ -513,7 +513,7 @@ internal sealed class GitHubWebhookFetcher
         return schema;
     }
 
-    static JsonElement? NavigatePath(JsonElement root, string[] parts)
+    private static JsonElement? NavigatePath(JsonElement root, string[] parts)
     {
         var current = root;
         foreach (var part in parts)
@@ -527,7 +527,7 @@ internal sealed class GitHubWebhookFetcher
         return current;
     }
 
-    static bool TryNavigate(JsonElement root, out JsonElement result, params string[] path)
+    private static bool TryNavigate(JsonElement root, out JsonElement result, params string[] path)
     {
         var current = root;
         foreach (var key in path)
@@ -543,7 +543,7 @@ internal sealed class GitHubWebhookFetcher
         return true;
     }
 
-    static string SerializeSnapshot(IReadOnlyList<WebhookEventModel> events)
+    private static string SerializeSnapshot(IReadOnlyList<WebhookEventModel> events)
     {
         var snapshot = new List<object>();
         foreach (var e in events)
@@ -567,7 +567,7 @@ internal sealed class GitHubWebhookFetcher
         return TextNormalization.NormalizeToLf(json);
     }
 
-    static void WriteOfficialSourceDiffReport(
+    private static void WriteOfficialSourceDiffReport(
         string repoRoot,
         IReadOnlyList<WebhookEventModel> schemaEvents,
         ISet<string> docsEventNames,
@@ -662,7 +662,7 @@ internal sealed class GitHubWebhookFetcher
         File.WriteAllText(reportPath, TextNormalization.NormalizeToLf(sb.ToString()));
     }
 
-    static bool AreSameTypes(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+    private static bool AreSameTypes(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
     {
         if (left is null && right is null)
         {
@@ -699,7 +699,7 @@ internal sealed class GitHubWebhookFetcher
         return true;
     }
 
-    static string FormatTypes(IReadOnlyList<string>? values)
+    private static string FormatTypes(IReadOnlyList<string>? values)
     {
         if (values is null)
         {
@@ -717,14 +717,14 @@ internal sealed class GitHubWebhookFetcher
         return "[" + string.Join(", ", normalized) + "]";
     }
 
-    static string ComputeSha256(string content)
+    private static string ComputeSha256(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return "sha256:" + Convert.ToHexStringLower(hash);
     }
 
-    sealed class WebhookPaths
+    private sealed class WebhookPaths
     {
         public string RawSchemaPath { get; set; } = string.Empty;
         public string RawDocsPath { get; set; } = string.Empty;
@@ -733,27 +733,27 @@ internal sealed class GitHubWebhookFetcher
         public string MergedSnapshotPath { get; set; } = string.Empty;
     }
 
-    sealed class ParsedSchemaSnapshot
+    private sealed class ParsedSchemaSnapshot
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
         public List<ParsedWebhookEvent> Events { get; set; } = [];
     }
 
-    sealed class ParsedDocsSnapshot
+    private sealed class ParsedDocsSnapshot
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
         public List<ParsedDocsWebhookEvent> Events { get; set; } = [];
     }
 
-    sealed class ParsedWebhookEvent
+    private sealed class ParsedWebhookEvent
     {
         public string Name { get; set; } = string.Empty;
         public List<string>? ActivityTypes { get; set; }
     }
 
-    sealed class ParsedDocsWebhookEvent
+    private sealed class ParsedDocsWebhookEvent
     {
         public string Name { get; set; } = string.Empty;
         public bool HasParseableActivityTypes { get; set; }

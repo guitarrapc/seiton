@@ -13,7 +13,7 @@ internal static class InputDiscovery
         return DiscoverFiles(includeActions);
     }
 
-    static string[] DiscoverFiles(bool includeActions)
+    private static string[] DiscoverFiles(bool includeActions)
     {
         var files = new List<string>();
 
@@ -41,7 +41,7 @@ internal static class InputDiscovery
         return [.. files];
     }
 
-    static string? FindWorkflowsDirectory(string startDir)
+    private static string? FindWorkflowsDirectory(string startDir)
     {
         var current = startDir;
         while (current is not null)
@@ -57,7 +57,7 @@ internal static class InputDiscovery
         return null;
     }
 
-    static string? FindActionsDirectory(string startDir)
+    private static string? FindActionsDirectory(string startDir)
     {
         var current = startDir;
         while (current is not null)
@@ -73,7 +73,7 @@ internal static class InputDiscovery
         return null;
     }
 
-    static string[] ExpandFileArgs(string[] args)
+    private static string[] ExpandFileArgs(string[] args)
     {
         var result = new List<string>();
         for (var i = 0; i < args.Length; i++)
@@ -100,7 +100,7 @@ internal static class InputDiscovery
         return [.. result];
     }
 
-    static string[] CollectYamlFiles(string directory)
+    private static string[] CollectYamlFiles(string directory)
     {
         var files = new List<string>();
         foreach (var file in Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories))

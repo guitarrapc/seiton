@@ -5,8 +5,8 @@ namespace Seiton.Update.Services;
 
 internal sealed class RunnerLabelsSyncService
 {
-    readonly GitHubRunnerLabelsSourceParser parser = new();
-    readonly RunnerLabelsCSharpGenerator generator = new();
+    private readonly GitHubRunnerLabelsSourceParser parser = new();
+    private readonly RunnerLabelsCSharpGenerator generator = new();
 
     public bool Sync(string repoRoot)
     {

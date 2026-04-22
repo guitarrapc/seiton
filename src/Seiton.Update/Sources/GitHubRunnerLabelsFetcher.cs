@@ -8,9 +8,9 @@ namespace Seiton.Update.Sources;
 
 internal sealed class GitHubRunnerLabelsFetcher
 {
-    const string DocsSourceUrl = "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md";
+    private const string DocsSourceUrl = "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md";
 
-    static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -153,7 +153,7 @@ internal sealed class GitHubRunnerLabelsFetcher
         }
     }
 
-    static RunnerLabelsPaths Paths(string repoRoot)
+    private static RunnerLabelsPaths Paths(string repoRoot)
     {
         var baseDir = Path.Combine(repoRoot, "data", "sources", "runner-labels", "github");
         return new RunnerLabelsPaths
@@ -164,28 +164,28 @@ internal sealed class GitHubRunnerLabelsFetcher
         };
     }
 
-    static string ComputeSha256(string content)
+    private static string ComputeSha256(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return "sha256:" + Convert.ToHexStringLower(hash);
     }
 
-    sealed class RunnerLabelsPaths
+    private sealed class RunnerLabelsPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
         public string ParsedDocsPath { get; set; } = string.Empty;
         public string MergedSnapshotPath { get; set; } = string.Empty;
     }
 
-    sealed class ParsedRunnerLabelsSnapshot
+    private sealed class ParsedRunnerLabelsSnapshot
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
         public List<ParsedRunnerLabelEntry> Labels { get; set; } = [];
     }
 
-    sealed class ParsedRunnerLabelEntry
+    private sealed class ParsedRunnerLabelEntry
     {
         public string Label { get; set; } = string.Empty;
         public bool IsPreview { get; set; }

@@ -1,7 +1,6 @@
 ﻿using Seiton.Core.Parsing.Ast;
 using Seiton.Core.Parsing;
 using Seiton.Core.Linting.Fixing;
-using System.Text;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -13,7 +12,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
 
     public override void VisitJobPre(Job job)
     {
-        if (!IsExecutableJob(job) || job.TimeoutMinutes is not null)
+        if (!IsExecutableJob(job) || job.TimeoutMinutes.HasValue)
         {
             return;
         }
@@ -23,28 +22,29 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
         var message = $"job '{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
-        if (Config.Utf8Yaml is null
-            || Config.Fix.Defaults.JobTimeoutMinutes is null
-            || Config.Fix.Defaults.JobTimeoutMinutes.Value <= 0
-            || !TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
+        if (Config.Fix.Enabled
+            && Config.Utf8Yaml is not null
+            && Config.Fix.Defaults.JobTimeoutMinutes is not null
+            && Config.Fix.Defaults.JobTimeoutMinutes.Value > 0
+            && TryBuildJobTimeoutInsertFix(Config, job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
         {
-            AddJobError(job, message, BuildJobLocation(job));
+            AddJobError(job, message, BuildJobLocation(job), fix);
             return;
         }
 
-        AddJobError(job, message, BuildJobLocation(job), fix);
+        AddJobError(job, message, BuildJobLocation(job));
     }
 
-    static bool IsExecutableJob(Job job)
+    private static bool IsExecutableJob(Job job)
     {
         return job.WorkflowCall is null
             && job.Steps is not null
             && job.Steps.Count > 0;
     }
 
-    static bool AllStepsHaveTimeout(IReadOnlyList<Step>? steps)
+    private static bool AllStepsHaveTimeout(IReadOnlyList<Step>? steps)
     {
         if (steps is null || steps.Count == 0)
         {
@@ -53,7 +53,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
 
         for (var i = 0; i < steps.Count; i++)
         {
-            if (steps[i].TimeoutMinutes is null)
+            if (!steps[i].TimeoutMinutes.HasValue)
             {
                 return false;
             }
@@ -62,7 +62,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return true;
     }
 
-    static bool TryBuildJobTimeoutInsertFix(Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
+    private bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
     {
         fix = default;
         if (timeoutMinutes <= 0)
@@ -70,16 +70,13 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
             return false;
         }
 
-        var sourceText = Encoding.UTF8.GetString(utf8Yaml);
-        var normalized = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var lines = normalized.Split('\n');
-        if (lines.Length == 0)
+        if (utf8Yaml.Length == 0)
         {
             return false;
         }
 
-        var jobLine = job.Id.Range.StartLine;
-        if (jobLine < 1 || jobLine > lines.Length)
+        var jobLine = Arena.GetStringRange(job.Id).StartLine;
+        if (jobLine < 1)
         {
             return false;
         }
@@ -87,20 +84,20 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         var jobEndLine = job.Range.EndLine;
         if (jobEndLine < jobLine + 1)
         {
-            jobEndLine = Math.Min(lines.Length, jobLine + 1);
+            jobEndLine = jobLine + 1;
         }
 
-        var parentIndent = FixFormatting.GetLineIndentation(sourceText, jobLine);
-        var firstChildLine = FindFirstChildLine(lines, jobLine + 1, jobEndLine, parentIndent);
+        var parentIndent = FixFormatting.GetLineIndentation(utf8Yaml, jobLine);
+        var firstChildLine = FindFirstChildLine(utf8Yaml, jobLine + 1, jobEndLine, parentIndent);
         if (firstChildLine < 0)
         {
             return false;
         }
 
-        var scopeStartLine = Math.Min(Math.Max(1, jobLine + 1), lines.Length);
-        var scopeEndLine = Math.Min(lines.Length, Math.Max(scopeStartLine, jobEndLine));
+        var scopeStartLine = Math.Max(1, jobLine + 1);
+        var scopeEndLine = Math.Max(scopeStartLine, jobEndLine);
         if (!FixFormatting.TryInferIndentation(
-                sourceText,
+                utf8Yaml,
                 firstChildLine,
                 parentLineNumber: jobLine,
                 scopeStartLine: scopeStartLine,
@@ -112,7 +109,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
 
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
         var timeoutLine = bodyIndent + "timeout-minutes: " + timeoutMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture) + lineEnding;
-        var anchorLine = FindKeyLine(lines, jobLine + 1, jobEndLine, bodyIndent, "runs-on:");
+        var anchorLine = FindKeyLine(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent, "runs-on:"u8);
 
         int insertOffset;
         string insertText;
@@ -131,7 +128,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         }
         else
         {
-            var firstSiblingLine = FindFirstMappingSiblingLine(lines, jobLine + 1, jobEndLine, bodyIndent);
+            var firstSiblingLine = FindFirstMappingSiblingLine(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent);
             if (firstSiblingLine >= 0)
             {
                 insertOffset = FindLineStartOffset(utf8Yaml, firstSiblingLine);
@@ -157,95 +154,126 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return true;
     }
 
-    static int FindKeyLine(string[] lines, int startLine, int endLine, string indent, string keyPrefix)
+    private static int FindKeyLine(byte[] utf8Yaml, int startLine, int endLine, string indent, ReadOnlySpan<byte> keyPrefix)
     {
-        var maxLine = Math.Min(lines.Length, endLine);
-        for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
+        var currentLine = 1;
+        var pos = 0;
+        while (currentLine < startLine && pos < utf8Yaml.Length)
+            if (utf8Yaml[pos++] == (byte)'\n') currentLine++;
+
+        while (currentLine <= endLine && pos <= utf8Yaml.Length)
         {
-            var line = lines[lineNumber - 1];
-            if (!line.StartsWith(indent, StringComparison.Ordinal))
-            {
-                continue;
-            }
+            if (pos >= utf8Yaml.Length) break;
+            var lineStart = pos;
+            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n') pos++;
+            var lineEnd = pos;
+            if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
+            if (pos < utf8Yaml.Length) pos++;
 
-            var rest = line[indent.Length..].TrimStart();
-            if (rest.StartsWith(keyPrefix, StringComparison.Ordinal))
-            {
-                return lineNumber;
-            }
+            if (ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, indent, keyPrefix))
+                return currentLine;
+
+            currentLine++;
         }
-
         return -1;
     }
 
-    static int FindFirstMappingSiblingLine(string[] lines, int startLine, int endLine, string indent)
+    private static int FindFirstMappingSiblingLine(byte[] utf8Yaml, int startLine, int endLine, string indent)
     {
-        var maxLine = Math.Min(lines.Length, endLine);
-        for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
+        var currentLine = 1;
+        var pos = 0;
+        while (currentLine < startLine && pos < utf8Yaml.Length)
+            if (utf8Yaml[pos++] == (byte)'\n') currentLine++;
+
+        while (currentLine <= endLine && pos <= utf8Yaml.Length)
         {
-            var line = lines[lineNumber - 1];
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
+            if (pos >= utf8Yaml.Length) break;
+            var lineStart = pos;
+            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n') pos++;
+            var lineEnd = pos;
+            if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
+            if (pos < utf8Yaml.Length) pos++;
 
-            if (!line.StartsWith(indent, StringComparison.Ordinal))
-            {
-                continue;
-            }
+            if (IsMappingSiblingLine(utf8Yaml, lineStart, lineEnd, indent))
+                return currentLine;
 
-            var rest = line[indent.Length..].TrimStart();
-            if (rest.Length == 0 || rest[0] == '#')
-            {
-                continue;
-            }
-
-            return lineNumber;
+            currentLine++;
         }
-
         return -1;
     }
 
-    static int FindFirstChildLine(string[] lines, int startLine, int endLine, string parentIndent)
+    private static int FindFirstChildLine(byte[] utf8Yaml, int startLine, int endLine, string parentIndent)
     {
-        var maxLine = Math.Min(lines.Length, endLine);
-        for (var lineNumber = Math.Max(1, startLine); lineNumber <= maxLine; lineNumber++)
+        var currentLine = 1;
+        var pos = 0;
+        while (currentLine < startLine && pos < utf8Yaml.Length)
+            if (utf8Yaml[pos++] == (byte)'\n') currentLine++;
+
+        while (currentLine <= endLine && pos <= utf8Yaml.Length)
         {
-            var line = lines[lineNumber - 1];
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
+            if (pos >= utf8Yaml.Length) break;
+            var lineStart = pos;
+            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n') pos++;
+            var lineEnd = pos;
+            if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
+            if (pos < utf8Yaml.Length) pos++;
 
-            if (!line.StartsWith(parentIndent, StringComparison.Ordinal))
-            {
-                continue;
-            }
+            if (IsChildLine(utf8Yaml, lineStart, lineEnd, parentIndent))
+                return currentLine;
 
-            var tail = line[parentIndent.Length..];
-            if (tail.Length == 0)
-            {
-                continue;
-            }
-
-            if (tail[0] != ' ' && tail[0] != '\t')
-            {
-                continue;
-            }
-
-            var rest = tail.TrimStart();
-            if (rest.Length == 0 || rest[0] == '#')
-            {
-                continue;
-            }
-
-            return lineNumber;
+            currentLine++;
         }
-
         return -1;
     }
 
-    static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
+    private static bool IsChildLine(byte[] utf8Yaml, int lineStart, int lineEnd, string parentIndent)
+    {
+        var lineLen = lineEnd - lineStart;
+        if (lineLen == 0) return false;
+        var firstNonWs = lineStart;
+        while (firstNonWs < lineEnd && (utf8Yaml[firstNonWs] == (byte)' ' || utf8Yaml[firstNonWs] == (byte)'\t')) firstNonWs++;
+        if (firstNonWs >= lineEnd) return false;
+        if (lineLen < parentIndent.Length) return false;
+        for (var k = 0; k < parentIndent.Length; k++)
+            if (utf8Yaml[lineStart + k] != (byte)parentIndent[k]) return false;
+        var tailStart = lineStart + parentIndent.Length;
+        if (tailStart >= lineEnd) return false;
+        var tailByte = utf8Yaml[tailStart];
+        if (tailByte != (byte)' ' && tailByte != (byte)'\t') return false;
+        var restStart = tailStart;
+        while (restStart < lineEnd && (utf8Yaml[restStart] == (byte)' ' || utf8Yaml[restStart] == (byte)'\t')) restStart++;
+        return restStart < lineEnd && utf8Yaml[restStart] != (byte)'#';
+    }
+
+    private static bool IsMappingSiblingLine(byte[] utf8Yaml, int lineStart, int lineEnd, string indent)
+    {
+        var lineLen = lineEnd - lineStart;
+        if (lineLen == 0) return false;
+        var firstNonWs = lineStart;
+        while (firstNonWs < lineEnd && (utf8Yaml[firstNonWs] == (byte)' ' || utf8Yaml[firstNonWs] == (byte)'\t')) firstNonWs++;
+        if (firstNonWs >= lineEnd) return false;
+        if (lineLen < indent.Length) return false;
+        for (var k = 0; k < indent.Length; k++)
+            if (utf8Yaml[lineStart + k] != (byte)indent[k]) return false;
+        var restStart = lineStart + indent.Length;
+        while (restStart < lineEnd && (utf8Yaml[restStart] == (byte)' ' || utf8Yaml[restStart] == (byte)'\t')) restStart++;
+        if (restStart >= lineEnd) return false;
+        return utf8Yaml[restStart] != (byte)'#';
+    }
+
+    private static bool ByteLineHasKeyAtIndent(byte[] utf8Yaml, int lineStart, int lineEnd, string indent, ReadOnlySpan<byte> keyBytes)
+    {
+        if (lineEnd - lineStart < indent.Length) return false;
+        for (var k = 0; k < indent.Length; k++)
+            if (utf8Yaml[lineStart + k] != (byte)indent[k]) return false;
+        var idx = lineStart + indent.Length;
+        while (idx < lineEnd && (utf8Yaml[idx] == (byte)' ' || utf8Yaml[idx] == (byte)'\t')) idx++;
+        var remaining = lineEnd - idx;
+        if (remaining < keyBytes.Length) return false;
+        return utf8Yaml.AsSpan(idx, keyBytes.Length).SequenceEqual(keyBytes);
+    }
+
+    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
     {
         if (lineNumber <= 1)
         {
@@ -270,7 +298,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return utf8Yaml.Length;
     }
 
-    static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
+    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
     {
         var start = FindLineStartOffset(utf8Yaml, lineNumber);
         for (var i = start; i < utf8Yaml.Length; i++)

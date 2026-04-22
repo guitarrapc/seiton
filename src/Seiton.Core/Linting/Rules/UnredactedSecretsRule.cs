@@ -1,13 +1,20 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class UnredactedSecretsRule : RuleBase
 {
-    Workflow? currentWorkflow;
-    Job? currentJob;
-    HashSet<string> additionalOutputCommands = [];
+    private Workflow? currentWorkflow;
+    private Job? currentJob;
+    private HashSet<string> additionalOutputCommands = [];
+    private readonly List<string> _workflowVarNames = [];
+    private readonly List<string> _jobVarNames = [];
+    private readonly List<string> _stepVarNames = [];
 
     public override string Id => "unredacted-secrets";
 
@@ -26,22 +33,28 @@ public sealed class UnredactedSecretsRule : RuleBase
         base.VisitWorkflowPre(workflow);
         currentWorkflow = workflow;
         currentJob = null;
+        _workflowVarNames.Clear();
+        AddSecretMappedVars(workflow.Env, _workflowVarNames);
     }
 
     public override void VisitWorkflowPost(Workflow workflow)
     {
         currentWorkflow = null;
         currentJob = null;
+        _workflowVarNames.Clear();
     }
 
     public override void VisitJobPre(Job job)
     {
         currentJob = job;
+        _jobVarNames.Clear();
+        AddSecretMappedVars(job.Env, _jobVarNames);
     }
 
     public override void VisitJobPost(Job job)
     {
         currentJob = null;
+        _jobVarNames.Clear();
     }
 
     public override void VisitStep(Step step)
@@ -51,15 +64,25 @@ public sealed class UnredactedSecretsRule : RuleBase
             return;
         }
 
-        var secretVars = CollectSecretDerivedEnvVarNames(step);
-        if (secretVars is null || secretVars.Count == 0)
+        _stepVarNames.Clear();
+        AddSecretMappedVars(step.Env, _stepVarNames);
+
+        if (_workflowVarNames.Count == 0 && _jobVarNames.Count == 0 && _stepVarNames.Count == 0)
         {
             return;
         }
 
-        var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
-        foreach (var name in secretVars)
+        var runText = Arena.GetStringValue(run.Run);
+        if (FindAndReportSecretVar(runText, _stepVarNames, run, step)) return;
+        if (FindAndReportSecretVar(runText, _jobVarNames, run, step)) return;
+        FindAndReportSecretVar(runText, _workflowVarNames, run, step);
+    }
+
+    private bool FindAndReportSecretVar(ReadOnlySpan<byte> runText, List<string> varNames, ExecRun run, Step step)
+    {
+        for (var i = 0; i < varNames.Count; i++)
         {
+            var name = varNames[i];
             if (!TryFindOutputOfVariableLocation(
                 runText,
                 name.AsSpan(),
@@ -76,20 +99,22 @@ public sealed class UnredactedSecretsRule : RuleBase
                 step,
                 $"run script may print secret-derived variable '{name}' without masking; avoid echo/printf/Write-Host of secret values",
                 location);
-            return;
+            return true;
         }
+
+        return false;
     }
 
-    TextRange BuildRunTextLocation(StringNode runNode, int relativeOffset, int tokenLength)
+    private TextRange BuildRunTextLocation(StringNodeId runNode, int relativeOffset, int tokenLength)
     {
-        var absoluteStart = runNode.Value.Offset + relativeOffset;
+        var absoluteStart = Arena.GetStringSlice(runNode).Offset + relativeOffset;
         var absoluteLength = tokenLength;
         if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
         {
-            return runNode.Range;
+            return Arena.GetStringRange(runNode);
         }
 
-        var lineStarts = BuildLineStarts(Config.Utf8Yaml);
+        var lineStarts = Config.GetLineStarts();
         var start = OffsetToLineColumn(lineStarts, absoluteStart);
         var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
         return new TextRange(
@@ -101,28 +126,14 @@ public sealed class UnredactedSecretsRule : RuleBase
             EndColumn: end.Column);
     }
 
-    HashSet<string>? CollectSecretDerivedEnvVarNames(Step step)
+    private void AddSecretMappedVars(Env? env, List<string> names)
     {
-        if (Config.Utf8Yaml is null)
-        {
-            return null;
-        }
-
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        AddSecretMappedVars(step.Env, names);
-        AddSecretMappedVars(currentJob?.Env, names);
-        AddSecretMappedVars(currentWorkflow?.Env, names);
-        return names;
-    }
-
-    void AddSecretMappedVars(Env? env, HashSet<string> names)
-    {
-        if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        foreach (var pair in env.Vars)
+        foreach (var pair in env.Vars.Value)
         {
             var envVar = pair.Value;
             if (!ContainsSecretsReference(envVar.Value))
@@ -130,7 +141,7 @@ public sealed class UnredactedSecretsRule : RuleBase
                 continue;
             }
 
-            var name = Decode(envVar.Name.Value);
+            var name = Decode(Arena.GetStringSlice(envVar.Name));
             if (IsSimpleIdentifier(name))
             {
                 names.Add(name);
@@ -138,28 +149,28 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
     }
 
-    bool ContainsSecretsReference(StringNode node)
+    private bool ContainsSecretsReference(StringNodeId node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsSecretsReferenceInValue(node.Value.AsSpan(Config.Utf8Yaml)))
+        if (ContainsSecretsReferenceInValue(Arena.GetStringValue(node)))
         {
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(Config.Utf8Yaml));
+        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
         return ContainsSecretsReferenceInExpression(expression);
     }
 
-    static bool TryFindOutputOfVariableLocation(
+    private static bool TryFindOutputOfVariableLocation(
         ReadOnlySpan<byte> runText,
         ReadOnlySpan<char> variableName,
         HashSet<string> additionalOutputCommands,
@@ -204,7 +215,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string> additionalOutputCommands)
+    private static bool ContainsOutputCommand(ReadOnlySpan<byte> line, HashSet<string> additionalOutputCommands)
     {
         if (ContainsAsciiIgnoreCase(line, "echo"u8)
             || ContainsAsciiIgnoreCase(line, "printf"u8)
@@ -231,7 +242,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool TryFindPosixVariableReference(
+    private static bool TryFindPosixVariableReference(
         ReadOnlySpan<byte> line,
         ReadOnlySpan<char> variableName,
         out int localOffset,
@@ -264,7 +275,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return true;
     }
 
-    static bool TryFindPowerShellVariableReference(
+    private static bool TryFindPowerShellVariableReference(
         ReadOnlySpan<byte> line,
         ReadOnlySpan<char> variableName,
         out int localOffset,
@@ -307,43 +318,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             start = valueStart;
         }
     }
-
-    static int[] BuildLineStarts(byte[] source)
-    {
-        var starts = new List<int>(64) { 0 };
-        for (var i = 0; i < source.Length; i++)
-        {
-            if (source[i] == (byte)'\n')
-            {
-                var next = i + 1;
-                if (next < source.Length)
-                {
-                    starts.Add(next);
-                }
-            }
-        }
-
-        return starts.ToArray();
-    }
-
-    static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)
-    {
-        var idx = Array.BinarySearch(lineStarts, offset);
-        if (idx >= 0)
-        {
-            return (idx + 1, 1);
-        }
-
-        idx = ~idx - 1;
-        if (idx < 0)
-        {
-            return (1, offset + 1);
-        }
-
-        return (idx + 1, offset - lineStarts[idx] + 1);
-    }
-
-    static bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
+    private bool ContainsSecretsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -359,14 +334,14 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
+    private bool ContainsSecretsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
             return false;
         }
 
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return false;
@@ -375,7 +350,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         return ContainsSecretsReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -404,7 +379,7 @@ public sealed class UnredactedSecretsRule : RuleBase
         };
     }
 
-    static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (ContainsSecretsReference(functionCallNode.Left, nodes, arguments, expression))
         {
@@ -426,121 +401,5 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
 
         return false;
-    }
-
-    static bool TryFindExpression(ReadOnlySpan<byte> value, int searchStart, out int bodyStart, out int bodyLength, out int nextSearchStart)
-    {
-        bodyStart = 0;
-        bodyLength = 0;
-        nextSearchStart = 0;
-
-        if ((uint)searchStart >= (uint)value.Length)
-        {
-            return false;
-        }
-
-        var start = value[searchStart..].IndexOf("${{"u8);
-        if (start < 0)
-        {
-            return false;
-        }
-
-        bodyStart = searchStart + start + 3;
-        var close = value[bodyStart..].IndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        bodyLength = close;
-        nextSearchStart = bodyStart + close + 2;
-        return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length && IsAsciiWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start && IsAsciiWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end >= start ? value.Slice(start, end - start + 1) : [];
-    }
-
-    static bool IsAsciiWhiteSpace(byte ch)
-    {
-        return ch == (byte)' ' || ch == (byte)'\t' || ch == (byte)'\n' || ch == (byte)'\r';
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            if (l is >= (byte)'A' and <= (byte)'Z')
-            {
-                l = (byte)(l + 32);
-            }
-
-            if (r is >= (byte)'A' and <= (byte)'Z')
-            {
-                r = (byte)(r + 32);
-            }
-
-            if (l != r)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static bool IsSimpleIdentifier(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return false;
-        }
-
-        var first = value[0];
-        if (!((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_'))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < value.Length; i++)
-        {
-            var ch = value[i];
-            if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
     }
 }

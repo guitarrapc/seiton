@@ -5,8 +5,8 @@ namespace Seiton.Update.Services;
 
 internal sealed class WebhookSyncService
 {
-    readonly GitHubWebhookSourceParser parser = new();
-    readonly WebhookTypesCSharpGenerator generator = new();
+    private readonly GitHubWebhookSourceParser parser = new();
+    private readonly WebhookTypesCSharpGenerator generator = new();
 
     public bool Sync(string repoRoot)
     {

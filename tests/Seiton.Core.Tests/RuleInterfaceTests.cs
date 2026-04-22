@@ -66,38 +66,41 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RuleInterface_CanBeUsedWithWorkflowVisitor()
     {
+        var sourceBytes = Array.Empty<byte>();
+        var arena = new AstArena(sourceBytes);
+
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+                Steps =
+                [
+                    new Step
+                    {
+                        Exec = new ExecRun
+                        {
+                            Kind = StepExecKind.Run,
+                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+                        },
+                    },
+                ],
+            }));
+
         var workflow = new Workflow
         {
             On =
             [
                 new WebhookEvent
                 {
-                    EventName = new StringNode { Value = new Utf8Slice(0, 0) },
-                    Hook = new StringNode { Value = new Utf8Slice(0, 0) },
+                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
+                    Hook = arena.AddString(new Utf8Slice(0, 0), false, default),
                 },
                 new ScheduledEvent
                 {
-                    EventName = new StringNode { Value = new Utf8Slice(0, 0) },
+                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
                 },
             ],
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode { Value = new Utf8Slice(0, 0) },
-                    Steps =
-                    [
-                        new Step
-                        {
-                            Exec = new ExecRun
-                            {
-                                Kind = StepExecKind.Run,
-                                Run = new StringNode { Value = new Utf8Slice(0, 0) },
-                            },
-                        },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var rule = new CountingRule();
@@ -130,40 +133,42 @@ public sealed class RuleInterfaceTests
               - run: echo hello
         """;
 
+        var sourceBytes = Encoding.UTF8.GetBytes(source);
+        var arena = new AstArena(sourceBytes);
+
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = arena.AddString(
+                    new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+                    false,
+                    new TextRange(0, 0, 1, 1, 1, 1)),
+                RunsOn = new Runner(),
+                WorkflowCall = new WorkflowCall
+                {
+                    Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
+                },
+                Steps =
+                [
+                    new Step
+                    {
+                        Exec = new ExecRun
+                        {
+                            Kind = StepExecKind.Run,
+                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+                        },
+                    },
+                ],
+            }));
+
         var workflow = new Workflow
         {
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode
-                    {
-                        Value = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
-                        Range = new TextRange(0, 0, 1, 1, 1, 1),
-                    },
-                    RunsOn = new Runner(),
-                    WorkflowCall = new WorkflowCall
-                    {
-                        Uses = new StringNode { Value = new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length) },
-                    },
-                    Steps =
-                    [
-                        new Step
-                        {
-                            Exec = new ExecRun
-                            {
-                                Kind = StepExecKind.Run,
-                                Run = new StringNode { Value = new Utf8Slice(0, 0) },
-                            },
-                        },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var visitor = new WorkflowVisitor();
         var rule = new SyntaxRule();
-        rule.SetConfig(new LintConfig { Utf8Yaml = Encoding.UTF8.GetBytes(source) });
+        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
         visitor.Visit(workflow);
@@ -176,48 +181,55 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task SyntaxRule_ReportsUnknownInputForPopularAction()
     {
-        var source = "actions/checkout@v4";
+        // Source buffer must contain all key-like text that SliceMap entries reference
+        var source = "actions/checkout@v4\0fetch-depht\0build";
         var sourceBytes = Encoding.UTF8.GetBytes(source);
+        var usesEnd = "actions/checkout@v4".Length;
+        var inputKeyOffset = usesEnd + 1; // skip \0
+        var inputKeyLength = "fetch-depht".Length;
+        var buildKeyOffset = inputKeyOffset + inputKeyLength + 1;
+        var buildKeyLength = "build".Length;
+
+        var arena = new AstArena(sourceBytes);
+        var inputsEntries = new SliceMap<StringNodeId>.Entry[]
+        {
+            new(new Utf8Slice(inputKeyOffset, inputKeyLength), arena.AddString(new Utf8Slice(0, 0), false, default)),
+        };
+
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = arena.AddString(
+                    new Utf8Slice(buildKeyOffset, buildKeyLength),
+                    false,
+                    new TextRange(0, 0, 1, 1, 1, 1)),
+                RunsOn = new Runner(),
+                Steps =
+                [
+                    new Step
+                    {
+                        Exec = new ExecAction
+                        {
+                            Kind = StepExecKind.Action,
+                            Uses = arena.AddString(
+                                new Utf8Slice(0, usesEnd),
+                                false,
+                                new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1)),
+                            Inputs = new SliceMap<StringNodeId>(inputsEntries, caseSensitive: false),
+                        },
+                        Range = new TextRange(0, 0, 1, 1, 1, 1),
+                    },
+                ],
+            }));
 
         var workflow = new Workflow
         {
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode
-                    {
-                        Value = new Utf8Slice(0, 0),
-                        Range = new TextRange(0, 0, 1, 1, 1, 1),
-                    },
-                    RunsOn = new Runner(),
-                    Steps =
-                    [
-                        new Step
-                        {
-                            Exec = new ExecAction
-                            {
-                                Kind = StepExecKind.Action,
-                                Uses = new StringNode
-                                {
-                                    Value = new Utf8Slice(0, sourceBytes.Length),
-                                    Range = new TextRange(0, sourceBytes.Length, 1, 1, 1, sourceBytes.Length + 1),
-                                },
-                                Inputs = new Dictionary<Utf8String, StringNode>
-                                {
-                                    [new Utf8String("fetch-depht"u8)] = new StringNode { Value = new Utf8Slice(0, 0) },
-                                },
-                            },
-                            Range = new TextRange(0, 0, 1, 1, 1, 1),
-                        },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var visitor = new WorkflowVisitor();
         var rule = new SyntaxRule();
-        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes });
+        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
         visitor.Visit(workflow);
@@ -283,7 +295,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(45);
+        await Assert.That(rules.Length).IsEqualTo(48);
         await Assert.That(rules[0].Id).IsEqualTo("job-structure");
         await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
         await Assert.That(rules[2].Id).IsEqualTo("permissions");
@@ -297,38 +309,41 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[10].Id).IsEqualTo("runner-label");
         await Assert.That(rules[11].Id).IsEqualTo("id-naming");
         await Assert.That(rules[12].Id).IsEqualTo("glob-pattern");
-        await Assert.That(rules[13].Id).IsEqualTo("deny-write-all");
-        await Assert.That(rules[14].Id).IsEqualTo("credentials");
-        await Assert.That(rules[15].Id).IsEqualTo("template-injection");
-        await Assert.That(rules[16].Id).IsEqualTo("expr-undefined-var");
-        await Assert.That(rules[17].Id).IsEqualTo("run-env-context-direct-use");
-        await Assert.That(rules[18].Id).IsEqualTo("runner-no-latest");
-        await Assert.That(rules[19].Id).IsEqualTo("run-secrets-context-direct-use");
-        await Assert.That(rules[20].Id).IsEqualTo("run-inputs-context-direct-use");
-        await Assert.That(rules[21].Id).IsEqualTo("secrets-whole-context-access");
-        await Assert.That(rules[22].Id).IsEqualTo("checkout-persist-credentials");
-        await Assert.That(rules[23].Id).IsEqualTo("deny-read-all");
-        await Assert.That(rules[24].Id).IsEqualTo("deny-inherit-secrets");
-        await Assert.That(rules[25].Id).IsEqualTo("job-timeout-minutes-required");
-        await Assert.That(rules[26].Id).IsEqualTo("github-app-token-inputs");
-        await Assert.That(rules[27].Id).IsEqualTo("cache-poisoning");
-        await Assert.That(rules[28].Id).IsEqualTo("self-hosted-runner");
-        await Assert.That(rules[29].Id).IsEqualTo("unredacted-secrets");
-        await Assert.That(rules[30].Id).IsEqualTo("secrets-outside-env");
-        await Assert.That(rules[31].Id).IsEqualTo("workflow-secrets");
-        await Assert.That(rules[32].Id).IsEqualTo("job-secrets");
-        await Assert.That(rules[33].Id).IsEqualTo("action-shell-is-required");
-        await Assert.That(rules[34].Id).IsEqualTo("matrix");
-        await Assert.That(rules[35].Id).IsEqualTo("env-var");
-        await Assert.That(rules[36].Id).IsEqualTo("deprecated-commands");
-        await Assert.That(rules[37].Id).IsEqualTo("if-cond");
-        await Assert.That(rules[38].Id).IsEqualTo("fake-ternary");
-        await Assert.That(rules[39].Id).IsEqualTo("archived-uses");
-        await Assert.That(rules[40].Id).IsEqualTo("insecure-commands");
-        await Assert.That(rules[41].Id).IsEqualTo("overprovisioned-secrets");
-        await Assert.That(rules[42].Id).IsEqualTo("forbidden-uses");
-        await Assert.That(rules[43].Id).IsEqualTo("ref-version-mismatch");
-        await Assert.That(rules[44].Id).IsEqualTo("use-trusted-publishing");
+        await Assert.That(rules[13].Id).IsEqualTo("dispatch-inputs");
+        await Assert.That(rules[14].Id).IsEqualTo("schedule-event");
+        await Assert.That(rules[15].Id).IsEqualTo("deny-write-all");
+        await Assert.That(rules[16].Id).IsEqualTo("credentials");
+        await Assert.That(rules[17].Id).IsEqualTo("template-injection");
+        await Assert.That(rules[18].Id).IsEqualTo("expr-undefined-var");
+        await Assert.That(rules[19].Id).IsEqualTo("run-env-context-direct-use");
+        await Assert.That(rules[20].Id).IsEqualTo("runner-no-latest");
+        await Assert.That(rules[21].Id).IsEqualTo("run-secrets-context-direct-use");
+        await Assert.That(rules[22].Id).IsEqualTo("run-inputs-context-direct-use");
+        await Assert.That(rules[23].Id).IsEqualTo("secrets-whole-context-access");
+        await Assert.That(rules[24].Id).IsEqualTo("checkout-persist-credentials");
+        await Assert.That(rules[25].Id).IsEqualTo("deny-read-all");
+        await Assert.That(rules[26].Id).IsEqualTo("deny-inherit-secrets");
+        await Assert.That(rules[27].Id).IsEqualTo("job-timeout-minutes-required");
+        await Assert.That(rules[28].Id).IsEqualTo("github-app-token-inputs");
+        await Assert.That(rules[29].Id).IsEqualTo("cache-poisoning");
+        await Assert.That(rules[30].Id).IsEqualTo("self-hosted-runner");
+        await Assert.That(rules[31].Id).IsEqualTo("unredacted-secrets");
+        await Assert.That(rules[32].Id).IsEqualTo("secrets-outside-env");
+        await Assert.That(rules[33].Id).IsEqualTo("workflow-secrets");
+        await Assert.That(rules[34].Id).IsEqualTo("job-secrets");
+        await Assert.That(rules[35].Id).IsEqualTo("action-shell-is-required");
+        await Assert.That(rules[36].Id).IsEqualTo("matrix");
+        await Assert.That(rules[37].Id).IsEqualTo("env-var");
+        await Assert.That(rules[38].Id).IsEqualTo("deprecated-commands");
+        await Assert.That(rules[39].Id).IsEqualTo("if-cond");
+        await Assert.That(rules[40].Id).IsEqualTo("fake-ternary");
+        await Assert.That(rules[41].Id).IsEqualTo("archived-uses");
+        await Assert.That(rules[42].Id).IsEqualTo("insecure-commands");
+        await Assert.That(rules[43].Id).IsEqualTo("overprovisioned-secrets");
+        await Assert.That(rules[44].Id).IsEqualTo("forbidden-uses");
+        await Assert.That(rules[45].Id).IsEqualTo("ref-version-mismatch");
+        await Assert.That(rules[46].Id).IsEqualTo("use-trusted-publishing");
+        await Assert.That(rules[47].Id).IsEqualTo("local-action-inputs");
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -343,42 +358,45 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("runner-label")).IsEqualTo(10);
         await Assert.That(RuleCatalog.GetPriority("id-naming")).IsEqualTo(11);
         await Assert.That(RuleCatalog.GetPriority("glob-pattern")).IsEqualTo(12);
-        await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(13);
-        await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(14);
-        await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(15);
-        await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(16);
-        await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(17);
-        await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(18);
-        await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(19);
-        await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(20);
-        await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(21);
-        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(22);
-        await Assert.That(RuleCatalog.GetPriority("deny-read-all")).IsEqualTo(23);
-        await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(24);
-        await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(25);
-        await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(26);
-        await Assert.That(RuleCatalog.GetPriority("cache-poisoning")).IsEqualTo(31);
-        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(32);
-        await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(33);
-        await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(34);
-        await Assert.That(RuleCatalog.GetPriority("workflow-secrets")).IsEqualTo(35);
-        await Assert.That(RuleCatalog.GetPriority("job-secrets")).IsEqualTo(36);
-        await Assert.That(RuleCatalog.GetPriority("action-shell-is-required")).IsEqualTo(37);
-        await Assert.That(RuleCatalog.GetPriority("matrix")).IsEqualTo(38);
-        await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(39);
-        await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(40);
-        await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(41);
-        await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(42);
-        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(43);
-        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(44);
-        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(45);
-        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(46);
-        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(47);
-        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(48);
-        await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(27);
-        await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(28);
-        await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(29);
-        await Assert.That(RuleCatalog.GetPriority("stale-action-refs")).IsEqualTo(30);
+        await Assert.That(RuleCatalog.GetPriority("dispatch-inputs")).IsEqualTo(13);
+        await Assert.That(RuleCatalog.GetPriority("schedule-event")).IsEqualTo(14);
+        await Assert.That(RuleCatalog.GetPriority("deny-write-all")).IsEqualTo(15);
+        await Assert.That(RuleCatalog.GetPriority("credentials")).IsEqualTo(16);
+        await Assert.That(RuleCatalog.GetPriority("template-injection")).IsEqualTo(17);
+        await Assert.That(RuleCatalog.GetPriority("expr-undefined-var")).IsEqualTo(18);
+        await Assert.That(RuleCatalog.GetPriority("run-env-context-direct-use")).IsEqualTo(19);
+        await Assert.That(RuleCatalog.GetPriority("runner-no-latest")).IsEqualTo(20);
+        await Assert.That(RuleCatalog.GetPriority("run-secrets-context-direct-use")).IsEqualTo(21);
+        await Assert.That(RuleCatalog.GetPriority("run-inputs-context-direct-use")).IsEqualTo(22);
+        await Assert.That(RuleCatalog.GetPriority("secrets-whole-context-access")).IsEqualTo(23);
+        await Assert.That(RuleCatalog.GetPriority("checkout-persist-credentials")).IsEqualTo(24);
+        await Assert.That(RuleCatalog.GetPriority("deny-read-all")).IsEqualTo(25);
+        await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(26);
+        await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(27);
+        await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(28);
+        await Assert.That(RuleCatalog.GetPriority("cache-poisoning")).IsEqualTo(33);
+        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(34);
+        await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(35);
+        await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(36);
+        await Assert.That(RuleCatalog.GetPriority("workflow-secrets")).IsEqualTo(37);
+        await Assert.That(RuleCatalog.GetPriority("job-secrets")).IsEqualTo(38);
+        await Assert.That(RuleCatalog.GetPriority("action-shell-is-required")).IsEqualTo(39);
+        await Assert.That(RuleCatalog.GetPriority("matrix")).IsEqualTo(40);
+        await Assert.That(RuleCatalog.GetPriority("env-var")).IsEqualTo(41);
+        await Assert.That(RuleCatalog.GetPriority("deprecated-commands")).IsEqualTo(42);
+        await Assert.That(RuleCatalog.GetPriority("if-cond")).IsEqualTo(43);
+        await Assert.That(RuleCatalog.GetPriority("fake-ternary")).IsEqualTo(44);
+        await Assert.That(RuleCatalog.GetPriority("archived-uses")).IsEqualTo(45);
+        await Assert.That(RuleCatalog.GetPriority("insecure-commands")).IsEqualTo(46);
+        await Assert.That(RuleCatalog.GetPriority("overprovisioned-secrets")).IsEqualTo(47);
+        await Assert.That(RuleCatalog.GetPriority("forbidden-uses")).IsEqualTo(48);
+        await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(49);
+        await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(50);
+        await Assert.That(RuleCatalog.GetPriority("local-action-inputs")).IsEqualTo(51);
+        await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
+        await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
+        await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
+        await Assert.That(RuleCatalog.GetPriority("stale-action-refs")).IsEqualTo(32);
     }
 
     [Test]
@@ -386,12 +404,13 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-046");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-049");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-047", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-050", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-048");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-051");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-052");
     }
 
     [Test]
@@ -595,6 +614,258 @@ public sealed class RuleInterfaceTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "reusable-workflow")).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_UnknownAndRequiredInputs()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            name: My action
+            inputs:
+                required_input:
+                    required: true
+                optional_input:
+                    required: false
+                legacy:
+                    required: false
+                    deprecationMessage: use optional_input instead
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+                          with:
+                            extra_key: x
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            var msgs = result.Diagnostics.Where(x => x.RuleId == "local-action-inputs").Select(x => x.Message).ToArray();
+            await Assert.That(msgs.Any(m => m.Contains("unknown local action input 'extra_key'", StringComparison.Ordinal) && m.Contains("optional_input", StringComparison.Ordinal) && m.Contains("required_input", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(msgs.Any(m => m.Contains("required input 'required_input' is not set", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_DeprecatedInput_Warns()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-dep-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            inputs:
+                legacy:
+                    required: false
+                    deprecationMessage: use something else
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+                          with:
+                            legacy: v
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("deprecated", StringComparison.Ordinal) && x.Message.Contains("use something else", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_Node16Runner_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-node16-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "old-node");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            runs:
+              using: node16
+              main: dist/index.js
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/old-node
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("deprecated runner 'node16'", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_Node20AndComposite_Allowed()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-ok-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(Path.Combine(actionsDir, "n20"));
+        Directory.CreateDirectory(Path.Combine(actionsDir, "comp"));
+
+        var actionN20 = Path.Combine(actionsDir, "n20", "action.yml");
+        var actionComp = Path.Combine(actionsDir, "comp", "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionN20, NormalizeYaml("""
+            runs:
+              using: node20
+              main: index.js
+            """), Encoding.UTF8);
+
+            File.WriteAllText(actionComp, NormalizeYaml("""
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+                  shell: bash
+            """), Encoding.UTF8);
+
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/n20
+                        - uses: ./.github/actions/comp
+            """;
+
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_MissingActionFile_NoCrash()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-missing-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var callerYaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/does-not-exist
+            """;
+
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
         }
         finally
         {
@@ -828,7 +1099,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml");
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -860,7 +1131,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml");
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -891,7 +1162,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml");
+        var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -1988,9 +2259,274 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step id", "contains invalid characters"]),
+            new RuleCase(
+            "ng-job-id-starts-with-digit",
+            """
+            on: push
+            jobs:
+                1build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["job id", "first character must be [a-zA-Z_]"]),
+            new RuleCase(
+            "ng-step-id-starts-with-dash",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: -setup
+                          run: echo ng
+            """,
+            ["step id", "first character must be [a-zA-Z_]"]),
+            new RuleCase(
+            "ng-step-id-duplicate-case-insensitive",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - id: BuildStep
+                          run: echo first
+                        - id: buildstep
+                          run: echo second
+            """,
+            ["duplicated in the same job", "case-insensitive"]),
         };
 
         await AssertRuleCases(new IdNamingRule(), "id-naming", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_DispatchInputsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-choice-with-options-and-default",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+                            options: [dev, prod]
+                            default: dev
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-choice-without-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["type 'choice' must define non-empty options"]),
+            new RuleCase(
+            "ng-choice-duplicate-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+                            options: [dev, dev]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["has duplicated option 'dev'"]),
+            new RuleCase(
+            "ng-choice-default-not-in-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: choice
+                            options: [dev, prod]
+                            default: staging
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["default value 'staging'", "not included in options"]),
+            new RuleCase(
+            "ng-non-choice-has-options",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        count:
+                            type: number
+                            options: [1, 2]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["options but type is 'number'"]),
+            new RuleCase(
+            "ng-number-default-not-number",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        count:
+                            type: number
+                            default: NaNValue
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["non-numeric default value"]),
+            new RuleCase(
+            "ng-boolean-default-invalid",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        force:
+                            type: boolean
+                            default: yes
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["must be 'true' or 'false'"]),
+            new RuleCase(
+            "ng-more-than-25-inputs",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        i01: { type: string }
+                        i02: { type: string }
+                        i03: { type: string }
+                        i04: { type: string }
+                        i05: { type: string }
+                        i06: { type: string }
+                        i07: { type: string }
+                        i08: { type: string }
+                        i09: { type: string }
+                        i10: { type: string }
+                        i11: { type: string }
+                        i12: { type: string }
+                        i13: { type: string }
+                        i14: { type: string }
+                        i15: { type: string }
+                        i16: { type: string }
+                        i17: { type: string }
+                        i18: { type: string }
+                        i19: { type: string }
+                        i20: { type: string }
+                        i21: { type: string }
+                        i22: { type: string }
+                        i23: { type: string }
+                        i24: { type: string }
+                        i25: { type: string }
+                        i26: { type: string }
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["cannot define more than 25 inputs"]),
+        };
+
+        await AssertRuleCases(new DispatchInputsRule(), "dispatch-inputs", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ScheduleEventRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-valid-cron",
+            """
+            on:
+                schedule:
+                    - cron: "*/5 * * * *"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-invalid-cron-syntax",
+            """
+            on:
+                schedule:
+                    - cron: "* * * *"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["cron", "invalid", "exactly 5 fields"]),
+            new RuleCase(
+            "ng-cron-too-frequent",
+            """
+            on:
+                schedule:
+                    - cron: "* * * * *"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["runs too frequently", "once every 5 minutes"]),
+            new RuleCase(
+            "ng-invalid-timezone",
+            """
+            on:
+                schedule:
+                    - cron: "0 0 * * *"
+                      timezone: "Mars/Phobos"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["timezone", "invalid"]),
+        };
+
+        await AssertRuleCases(new ScheduleEventRule(), "schedule-event", cases);
     }
 
     [Test]
@@ -2334,7 +2870,7 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobTimeoutMinutesRequiredRule()]);
         var config = new LintConfig
         {
-            Fix = new FixConfig { Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 15 } },
+            Fix = new FixConfig { Enabled = true, Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 15 } },
         };
 
         var result = engine.Check(sourceBytes, "job-timeout-minutes-required-fix.yml", config);
@@ -3654,7 +4190,62 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github['event'].pull_request.title }}"
             """,
-            ["template injection risk", "run", "github.event"]),
+            ["template injection risk", "run", "github context"]),
+            new RuleCase(
+            "ok-run-uses-github-event-number-not-leaf",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.number }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-run-uses-github-head-ref",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.head_ref }}"
+            """,
+            ["template injection risk", "run", "github context"]),
+            new RuleCase(
+            "ok-safe-function-contains-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ contains(github.event.issue.title, 'bug') }}"
+            """,
+            []),
+            new RuleCase(
+            "ok-safe-function-startswith-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ startsWith(github.event.pull_request.head.ref, 'feature/') }}"
+            """,
+            []),
+            new RuleCase(
+            "ng-unsafe-function-format-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ format('{0}', github.event.issue.title) }}"
+            """,
+            ["template injection risk", "run", "github context"]),
         };
 
         await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
@@ -3742,6 +4333,157 @@ public sealed class RuleInterfaceTests
                             repository: ${{ unknown.repository }}
             """,
             ["step.with.repository", "undefined context 'unknown'", "step scope"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_DynamicContext_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-step-accesses-known-step-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: prep
+                          run: echo ok
+                        - if: ${{ steps.prep.outcome == 'success' }}
+                          run: echo next
+            """,
+            []),
+            new RuleCase(
+            "ok-step-accesses-known-matrix-key",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            []),
+            new RuleCase(
+            "ok-step-accesses-known-needs-job",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - run: echo ${{ needs.build.result }}
+            """,
+            []),
+            new RuleCase(
+            "ok-step-accesses-known-workflow-call-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ inputs.environment }}
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-no-rows-loose-object-no-error",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            include:
+                                - os: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            []),
+            new RuleCase(
+            "ng-step-accesses-unknown-step-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: prep
+                          run: echo ok
+                        - if: ${{ steps.nonexistent.outcome == 'success' }}
+                          run: echo next
+            """,
+            ["'nonexistent' is not defined in 'steps'"]),
+            new RuleCase(
+            "ng-step-accesses-unknown-matrix-key",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                    steps:
+                        - env:
+                            VALUE: ${{ matrix.unknown_key }}
+                          run: echo "$VALUE"
+            """,
+            ["'unknown_key' is not defined in 'matrix'"]),
+            new RuleCase(
+            "ng-step-accesses-unknown-needs-job",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - env:
+                            RESULT: ${{ needs.nonexistent.outputs.foo }}
+                          run: echo "$RESULT"
+            """,
+            ["'nonexistent' is not defined in 'needs'"]),
+            new RuleCase(
+            "ng-step-accesses-unknown-workflow-call-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ inputs.unknown_param }}
+                          run: echo "$VAL"
+            """,
+            ["'unknown_param' is not defined in 'inputs'"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -4100,7 +4842,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4132,7 +4874,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4156,7 +4898,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4187,7 +4929,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4213,7 +4955,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml");
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -4829,7 +5571,8 @@ public sealed class RuleInterfaceTests
             var c = cases[i];
             var result = new LintEngine([c.Rule]).Check(
                 Encoding.UTF8.GetBytes(NormalizeYaml(c.Yaml)),
-                $"fixability-{c.RuleId}.yml");
+                $"fixability-{c.RuleId}.yml",
+                new LintConfig { Fix = new FixConfig { Enabled = true } });
             var diagnostics = result.Diagnostics.Where(x => x.RuleId == c.RuleId).ToArray();
             if (diagnostics.Length == 0)
             {
@@ -6029,7 +6772,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
-    static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
+    private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)
         {
@@ -6061,7 +6804,7 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    static string NormalizeYaml(string raw)
+    private static string NormalizeYaml(string raw)
     {
         var normalized = raw.Replace("\r\n", "\n");
         var lines = normalized.Split('\n');
@@ -6131,13 +6874,13 @@ public sealed class RuleInterfaceTests
         return builder.ToString();
     }
 
-    readonly record struct RuleCase(string Name, string Yaml, string[] ExpectedSubstrings);
+    private readonly record struct RuleCase(string Name, string Yaml, string[] ExpectedSubstrings);
 
-    readonly record struct FixabilityCase(string RuleId, IRule Rule, string Yaml, bool ExpectsFix);
+    private readonly record struct FixabilityCase(string RuleId, IRule Rule, string Yaml, bool ExpectsFix);
 
-    sealed class DuplicateDiagnosticRule : IRule
+    private sealed class DuplicateDiagnosticRule : IRule
     {
-        readonly List<Diagnostic> diagnostics = [];
+        private readonly List<Diagnostic> diagnostics = [];
 
         public DuplicateDiagnosticRule(string id)
         {
@@ -6150,7 +6893,7 @@ public sealed class RuleInterfaceTests
 
         public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 
-        public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
+        public IReadOnlyList<Diagnostic> GetDiagnostics() => diagnostics;
 
         public void SetConfig(LintConfig config)
         {
@@ -6187,7 +6930,7 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    sealed class ConfigCaptureRule : IRule
+    private sealed class ConfigCaptureRule : IRule
     {
         public string Id => "config-capture";
 
@@ -6197,7 +6940,7 @@ public sealed class RuleInterfaceTests
 
         public LintConfig? LastConfig { get; private set; }
 
-        public Diagnostic[] GetDiagnostics() => [];
+        public IReadOnlyList<Diagnostic> GetDiagnostics() => [];
 
         public void SetConfig(LintConfig config)
         {
@@ -6230,9 +6973,9 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    sealed class CountingRule : IRule
+    private sealed class CountingRule : IRule
     {
-        LintConfig? config;
+        private LintConfig? config;
 
         public string Id => "test-rule";
 
@@ -6252,7 +6995,7 @@ public sealed class RuleInterfaceTests
 
         public int StepCount { get; private set; }
 
-        public Diagnostic[] GetDiagnostics() => [];
+        public IReadOnlyList<Diagnostic> GetDiagnostics() => [];
 
         public void SetConfig(LintConfig config)
         {
@@ -6296,7 +7039,7 @@ public sealed class RuleInterfaceTests
             StepCount++;
         }
 
-        void EnsureConfigured()
+        private void EnsureConfigured()
         {
             if (config is null)
             {

@@ -5,14 +5,14 @@ namespace Seiton.Core.Linting;
 
 internal static class RuleCatalog
 {
-    const string CanonicalPrefix = "seiton-lint-rule-";
+    private const string CanonicalPrefix = "seiton-lint-rule-";
 
     // Rule responsibilities are intentionally split:
     // - job-structure: cross-key structural constraints on Job shape.
     // - reusable-workflow: uses/with/secrets semantics and forbidden keys in reusable calls.
     // - permissions: scalar/scope value domain validation for permissions.
     // - popular-action-inputs: known-action input-name validation (warning-level).
-    static readonly (string Id, int Priority, Func<IRule> Factory)[] DefaultRuleFactories =
+    private static readonly (string Id, int Priority, Func<IRule> Factory)[] DefaultRuleFactories =
     [
         ("job-structure", 0, static () => new JobStructureRule()),
         ("reusable-workflow", 1, static () => new ReusableWorkflowRule()),
@@ -27,59 +27,62 @@ internal static class RuleCatalog
         ("runner-label", 10, static () => new RunnerLabelRule()),
         ("id-naming", 11, static () => new IdNamingRule()),
         ("glob-pattern", 12, static () => new GlobPatternRule()),
-        ("deny-write-all", 13, static () => new DenyWriteAllRule()),
-        ("credentials", 14, static () => new CredentialsRule()),
-        ("template-injection", 15, static () => new TemplateInjectionRule()),
-        ("expr-undefined-var", 16, static () => new ExprUndefinedVarRule()),
-        ("run-env-context-direct-use", 17, static () => new RunEnvContextDirectUseRule()),
-        ("runner-no-latest", 18, static () => new RunnerNoLatestRule()),
-        ("run-secrets-context-direct-use", 19, static () => new RunSecretsContextDirectUseRule()),
-        ("run-inputs-context-direct-use", 20, static () => new RunInputsContextDirectUseRule()),
-        ("secrets-whole-context-access", 21, static () => new SecretsWholeContextAccessRule()),
-        ("checkout-persist-credentials", 22, static () => new CheckoutPersistCredentialsRule()),
-        ("deny-read-all", 23, static () => new DenyReadAllRule()),
-        ("deny-inherit-secrets", 24, static () => new DenyInheritSecretsRule()),
-        ("job-timeout-minutes-required", 25, static () => new JobTimeoutMinutesRequiredRule()),
-        ("github-app-token-inputs", 26, static () => new GitHubAppTokenInputsRule()),
-        ("cache-poisoning", 31, static () => new CachePoisoningRule()),
-        ("self-hosted-runner", 32, static () => new SelfHostedRunnerRule()),
-        ("unredacted-secrets", 33, static () => new UnredactedSecretsRule()),
-        ("secrets-outside-env", 34, static () => new SecretsOutsideEnvRule()),
-        ("workflow-secrets", 35, static () => new WorkflowSecretsRule()),
-        ("job-secrets", 36, static () => new JobSecretsRule()),
-        ("action-shell-is-required", 37, static () => new ActionShellIsRequiredRule()),
-        ("matrix", 38, static () => new MatrixRule()),
-        ("env-var", 39, static () => new EnvVarRule()),
-        ("deprecated-commands", 40, static () => new DeprecatedCommandsRule()),
-        ("if-cond", 41, static () => new IfCondRule()),
-        ("fake-ternary", 42, static () => new FakeTernaryRule()),
-        ("archived-uses", 43, static () => new ArchivedUsesRule()),
-        ("insecure-commands", 44, static () => new InsecureCommandsRule()),
-        ("overprovisioned-secrets", 45, static () => new OverprovisionedSecretsRule()),
-        ("forbidden-uses", 46, static () => new ForbiddenUsesRule()),
-        ("ref-version-mismatch", 47, static () => new RefVersionMismatchRule()),
-        ("use-trusted-publishing", 48, static () => new UseTrustedPublishingRule()),
+        ("dispatch-inputs", 13, static () => new DispatchInputsRule()),
+        ("schedule-event", 14, static () => new ScheduleEventRule()),
+        ("deny-write-all", 15, static () => new DenyWriteAllRule()),
+        ("credentials", 16, static () => new CredentialsRule()),
+        ("template-injection", 17, static () => new TemplateInjectionRule()),
+        ("expr-undefined-var", 18, static () => new ExprUndefinedVarRule()),
+        ("run-env-context-direct-use", 19, static () => new RunEnvContextDirectUseRule()),
+        ("runner-no-latest", 20, static () => new RunnerNoLatestRule()),
+        ("run-secrets-context-direct-use", 21, static () => new RunSecretsContextDirectUseRule()),
+        ("run-inputs-context-direct-use", 22, static () => new RunInputsContextDirectUseRule()),
+        ("secrets-whole-context-access", 23, static () => new SecretsWholeContextAccessRule()),
+        ("checkout-persist-credentials", 24, static () => new CheckoutPersistCredentialsRule()),
+        ("deny-read-all", 25, static () => new DenyReadAllRule()),
+        ("deny-inherit-secrets", 26, static () => new DenyInheritSecretsRule()),
+        ("job-timeout-minutes-required", 27, static () => new JobTimeoutMinutesRequiredRule()),
+        ("github-app-token-inputs", 28, static () => new GitHubAppTokenInputsRule()),
+        ("cache-poisoning", 33, static () => new CachePoisoningRule()),
+        ("self-hosted-runner", 34, static () => new SelfHostedRunnerRule()),
+        ("unredacted-secrets", 35, static () => new UnredactedSecretsRule()),
+        ("secrets-outside-env", 36, static () => new SecretsOutsideEnvRule()),
+        ("workflow-secrets", 37, static () => new WorkflowSecretsRule()),
+        ("job-secrets", 38, static () => new JobSecretsRule()),
+        ("action-shell-is-required", 39, static () => new ActionShellIsRequiredRule()),
+        ("matrix", 40, static () => new MatrixRule()),
+        ("env-var", 41, static () => new EnvVarRule()),
+        ("deprecated-commands", 42, static () => new DeprecatedCommandsRule()),
+        ("if-cond", 43, static () => new IfCondRule()),
+        ("fake-ternary", 44, static () => new FakeTernaryRule()),
+        ("archived-uses", 45, static () => new ArchivedUsesRule()),
+        ("insecure-commands", 46, static () => new InsecureCommandsRule()),
+        ("overprovisioned-secrets", 47, static () => new OverprovisionedSecretsRule()),
+        ("forbidden-uses", 48, static () => new ForbiddenUsesRule()),
+        ("ref-version-mismatch", 49, static () => new RefVersionMismatchRule()),
+        ("use-trusted-publishing", 50, static () => new UseTrustedPublishingRule()),
+        ("local-action-inputs", 51, static () => new LocalActionInputsRule()),
     ];
 
-    static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
+    private static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
     [
-        ("known-vulnerable-actions", 27),
-        ("impostor-commit", 28),
-        ("ref-confusion", 29),
-        ("stale-action-refs", 30),
+        ("known-vulnerable-actions", 29),
+        ("impostor-commit", 30),
+        ("ref-confusion", 31),
+        ("stale-action-refs", 32),
     ];
 
-    static readonly (string Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
+    private static readonly (string Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
-    static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
+    private static readonly IReadOnlyDictionary<string, string> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
 
-    static readonly IReadOnlyDictionary<string, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
+    private static readonly IReadOnlyDictionary<string, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
 
-    static readonly IReadOnlySet<string> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
+    private static readonly IReadOnlySet<string> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
 
-    static readonly IReadOnlyDictionary<string, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
+    private static readonly IReadOnlyDictionary<string, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
 
-    static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
     public static IRule[] CreateDefaultRules()
     {
@@ -213,7 +216,7 @@ internal static class RuleCatalog
         return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys!);
     }
 
-    static bool TryFindRuleIdBySemanticId(string input, out string resolvedRuleId)
+    private static bool TryFindRuleIdBySemanticId(string input, out string resolvedRuleId)
     {
         resolvedRuleId = string.Empty;
 
@@ -232,7 +235,7 @@ internal static class RuleCatalog
         return false;
     }
 
-    static IReadOnlyDictionary<string, string> BuildCanonicalRuleIdMap()
+    private static IReadOnlyDictionary<string, string> BuildCanonicalRuleIdMap()
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 0; i < AllRuleMetadata.Length; i++)
@@ -243,7 +246,7 @@ internal static class RuleCatalog
         return map;
     }
 
-    static (string Id, int Priority)[] BuildAllRuleMetadata()
+    private static (string Id, int Priority)[] BuildAllRuleMetadata()
     {
         var metadata = new (string Id, int Priority)[DefaultRuleFactories.Length + AdditionalRuleMetadata.Length];
         for (var i = 0; i < DefaultRuleFactories.Length; i++)
@@ -259,7 +262,7 @@ internal static class RuleCatalog
         return metadata;
     }
 
-    static IReadOnlyDictionary<string, string> BuildReverseCanonicalRuleIdMap()
+    private static IReadOnlyDictionary<string, string> BuildReverseCanonicalRuleIdMap()
     {
         var reverse = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var pair in CanonicalRuleIdToRuleId)
@@ -270,7 +273,7 @@ internal static class RuleCatalog
         return reverse;
     }
 
-    static IReadOnlySet<string> BuildNonDisableableRuleIdSet()
+    private static IReadOnlySet<string> BuildNonDisableableRuleIdSet()
     {
         return new HashSet<string>(StringComparer.Ordinal)
         {
@@ -279,7 +282,7 @@ internal static class RuleCatalog
         };
     }
 
-    static IReadOnlyDictionary<string, DiagnosticSeverity> BuildMinimumSeverityMap()
+    private static IReadOnlyDictionary<string, DiagnosticSeverity> BuildMinimumSeverityMap()
     {
         return new Dictionary<string, DiagnosticSeverity>(StringComparer.Ordinal)
         {
@@ -288,7 +291,7 @@ internal static class RuleCatalog
         };
     }
 
-    static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildAllowedRuleConfigKeys()
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildAllowedRuleConfigKeys()
     {
         var empty = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal);
         var map = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
@@ -324,7 +327,7 @@ internal static class RuleCatalog
         return map;
     }
 
-    static int ComputeEditDistanceIgnoreCase(string left, string right)
+    private static int ComputeEditDistanceIgnoreCase(string left, string right)
     {
         if (left.Length == 0)
         {

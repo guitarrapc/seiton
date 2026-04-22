@@ -2,9 +2,9 @@
 
 public sealed class Workflow
 {
-    public StringNode? Name { get; init; }
+    public StringNodeId Name { get; init; }
 
-    public StringNode? RunName { get; init; }
+    public StringNodeId RunName { get; init; }
 
     public IReadOnlyList<Event> On { get; init; } = [];
 
@@ -16,7 +16,7 @@ public sealed class Workflow
 
     public Concurrency? Concurrency { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, Job> Jobs { get; init; } = new Dictionary<Utf8String, Job>();
+    public SliceMap<Job> Jobs { get; init; }
 
     public TextRange Range { get; init; }
 }

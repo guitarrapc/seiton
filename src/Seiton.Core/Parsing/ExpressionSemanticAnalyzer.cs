@@ -2,6 +2,9 @@
 using System.Text.Json;
 using Seiton.Core.Generated;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Parsing;
 
 public enum ExpressionValidationContext
@@ -16,7 +19,7 @@ public enum ExpressionValidationContext
 
 public static class ExpressionSemanticAnalyzer
 {
-    readonly record struct FuncOverload(ExprType ReturnType, ExprType[] Parameters, ExprType? VariadicParameter = null)
+    internal readonly record struct FuncOverload(ExprType ReturnType, ExprType[] Parameters, ExprType? VariadicParameter = null)
     {
         public int MinArgs => Parameters.Length;
 
@@ -38,67 +41,33 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    readonly record struct FunctionSpec(byte[] NameUtf8, FuncOverload[] Overloads);
+    internal readonly record struct FunctionSpec(byte[] NameUtf8, FuncOverload[] Overloads);
 
-    static readonly FunctionSpec[] Specs =
-    [
-        new FunctionSpec("contains"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, [ExprType.String, ExprType.Any]),
-            new FuncOverload(ExprType.Bool, [ExprType.ArrayOf(ExprType.Any), ExprType.Any]),
-        ]),
-        new FunctionSpec("startswith"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
-        ]),
-        new FunctionSpec("endswith"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
-        ]),
-        new FunctionSpec("format"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.String, [ExprType.String], ExprType.Any),
-        ]),
-        new FunctionSpec("join"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any)]),
-            new FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any), ExprType.String]),
-        ]),
-        new FunctionSpec("tojson"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.String, [ExprType.Any]),
-        ]),
-        new FunctionSpec("fromjson"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Any, [ExprType.String]),
-        ]),
-        new FunctionSpec("hashfiles"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.String, [ExprType.String], ExprType.String),
-        ]),
-        new FunctionSpec("success"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, []),
-        ]),
-        new FunctionSpec("failure"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, []),
-        ]),
-        new FunctionSpec("cancelled"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, []),
-        ]),
-        new FunctionSpec("always"u8.ToArray(),
-        [
-            new FuncOverload(ExprType.Bool, []),
-        ]),
-    ];
+    private static readonly FunctionSpec[] Specs = Generated.FunctionSpecs.Specs;
+
+    private static readonly (byte[] NameUtf8, ExprType Type)[] BuiltinContextTypes = Generated.ContextTypes.BuiltinContextTypes;
+
+    private static bool TryGetBuiltinContextType(ReadOnlySpan<byte> nameUtf8, out ExprType type)
+    {
+        for (var i = 0; i < BuiltinContextTypes.Length; i++)
+        {
+            if (EqualsAsciiIgnoreCase(nameUtf8, BuiltinContextTypes[i].NameUtf8))
+            {
+                type = BuiltinContextTypes[i].Type;
+                return true;
+            }
+        }
+
+        type = ExprType.Any;
+        return false;
+    }
 
     public static Diagnostic[] Validate(
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
-        ExpressionValidationContext context)
+        ExpressionValidationContext context,
+        bool allowStatusCheckFunctions = false)
     {
         if (!parseResult.HasRoot)
         {
@@ -106,14 +75,45 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var diagnostics = new List<Diagnostic>();
-        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes, parseResult.Arguments, expressionUtf8, expressionLocation, context, diagnostics);
+        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes, parseResult.Arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
         return diagnostics.ToArray();
+    }
+
+    /// <summary>
+    /// Internal fast path: validate expression using spans (no array allocation).
+    /// Diagnostics are appended directly to the caller's list.
+    /// </summary>
+    internal static void ValidateInline(
+        int rootNode,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics,
+        bool allowStatusCheckFunctions = false)
+    {
+        if (rootNode < 0)
+        {
+            return;
+        }
+
+        ValidateNode(rootNode, -1, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
     }
 
     public static ExprType InferType(
         int nodeId,
         ExpressionNode[] nodes,
         int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
+    {
+        return InferTypeSpan(nodeId, nodes, arguments, expressionUtf8);
+    }
+
+    private static ExprType InferTypeSpan(
+        int nodeId,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -128,7 +128,7 @@ public static class ExpressionSemanticAnalyzer
             ExpressionNodeKind.NumberLiteral => ExprType.Number,
             ExpressionNodeKind.BooleanLiteral => ExprType.Bool,
             ExpressionNodeKind.NullLiteral => ExprType.Null,
-            ExpressionNodeKind.Identifier => ExprType.Any,
+            ExpressionNodeKind.Identifier => InferIdentifierType(node, expressionUtf8),
             ExpressionNodeKind.Unary => node.Operator == ExpressionOperator.Not
                 ? ExprType.Bool
                 : ExprType.Any,
@@ -174,14 +174,15 @@ public static class ExpressionSemanticAnalyzer
         return false;
     }
 
-    static void ValidateNode(
+    private static void ValidateNode(
         int nodeId,
         int parentId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         ExpressionValidationContext context,
+        bool allowStatusCheckFunctions,
         List<Diagnostic> diagnostics)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -194,7 +195,15 @@ public static class ExpressionSemanticAnalyzer
         if (node.Kind == ExpressionNodeKind.Identifier && IsContextRootIdentifier(nodeId, parentId, nodes))
         {
             var rootName = node.Token.AsSpan(expressionUtf8);
-            if (!Availability.IsRootContextAvailable(context, rootName))
+            if (!TryGetBuiltinContextType(rootName, out _))
+            {
+                var rootNameText = Encoding.UTF8.GetString(rootName);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"undefined context '{rootNameText}'",
+                    expressionLocation));
+            }
+            else if (!Availability.IsRootContextAvailable(context, rootName))
             {
                 var rootNameText = Encoding.UTF8.GetString(rootName);
                 diagnostics.Add(new Diagnostic(
@@ -206,46 +215,59 @@ public static class ExpressionSemanticAnalyzer
 
         if (node.Kind == ExpressionNodeKind.FunctionCall)
         {
-            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, allowStatusCheckFunctions, diagnostics);
+        }
+
+        if (node.Kind == ExpressionNodeKind.MemberAccess)
+        {
+            ValidateVarsNamingConvention(node, nodes, expressionUtf8, expressionLocation, diagnostics);
         }
 
         switch (node.Kind)
         {
             case ExpressionNodeKind.Unary:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateUnaryOp(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.Binary:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
-                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateCompareOp(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.MemberAccess:
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidatePropertyAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+                break;
             case ExpressionNodeKind.WildcardAccess:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateWildcardAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.IndexAccess:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
-                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateNode(node.Right, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+                ValidateIndexAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.FunctionCall:
-                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                 for (var i = 0; i < node.ArgCount; i++)
                 {
                     var argIndex = node.ArgStart + i;
                     if (argIndex >= 0 && argIndex < arguments.Length)
                     {
-                        ValidateNode(arguments[argIndex], nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, diagnostics);
+                        ValidateNode(arguments[argIndex], nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
                     }
                 }
                 break;
         }
     }
 
-    static void ValidateFunctionCall(
+    private static void ValidateFunctionCall(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
+        bool allowStatusCheckFunctions,
         List<Diagnostic> diagnostics)
     {
         if (node.Left < 0 || node.Left >= nodes.Length)
@@ -265,6 +287,15 @@ public static class ExpressionSemanticAnalyzer
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"unknown expression function: {Encoding.UTF8.GetString(nameUtf8)}",
+                expressionLocation));
+            return;
+        }
+
+        if (!allowStatusCheckFunctions && IsStatusCheckFunction(nameUtf8))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"status check function '{Encoding.UTF8.GetString(nameUtf8)}()' is only available in 'if' conditions",
                 expressionLocation));
             return;
         }
@@ -296,7 +327,7 @@ public static class ExpressionSemanticAnalyzer
             var argIndex = node.ArgStart + i;
             if (argIndex >= 0 && argIndex < arguments.Length)
             {
-                argTypes[i] = InferType(arguments[argIndex], nodes, arguments, expressionUtf8);
+                argTypes[i] = InferTypeSpan(arguments[argIndex], nodes, arguments, expressionUtf8);
             }
             else
             {
@@ -349,11 +380,11 @@ public static class ExpressionSemanticAnalyzer
         ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
     }
 
-    static void ValidateFormatPlaceholders(
+    private static void ValidateFormatPlaceholders(
         ExpressionNode functionCallNode,
         ReadOnlySpan<byte> functionNameUtf8,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -439,7 +470,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static bool TryValidateAgainstOverload(FuncOverload overload, ExprType[] argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
+    private static bool TryValidateAgainstOverload(FuncOverload overload, ExprType[] argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
     {
         for (var i = 0; i < argTypes.Length; i++)
         {
@@ -460,7 +491,7 @@ public static class ExpressionSemanticAnalyzer
         return true;
     }
 
-    static (int MinArgs, int MaxArgs) GetArityRange(FunctionSpec spec)
+    private static (int MinArgs, int MaxArgs) GetArityRange(FunctionSpec spec)
     {
         var minArgs = int.MaxValue;
         var maxArgs = 0;
@@ -486,29 +517,33 @@ public static class ExpressionSemanticAnalyzer
         return (minArgs, maxArgs);
     }
 
-    static ExprType InferBinaryType(ExpressionNode node)
+    private static ExprType InferBinaryType(ExpressionNode node)
     {
+        // Comparison/equality operators always produce bool.
+        // Logical operators (&&, ||) in GitHub Actions return the operand value, not a coerced
+        // boolean (short-circuit semantics like JavaScript). Infer as Any because the result
+        // type depends on the runtime values of both branches.
         return node.Operator switch
         {
-            ExpressionOperator.And
-                or ExpressionOperator.Or
-                or ExpressionOperator.Equal
+            ExpressionOperator.Equal
                 or ExpressionOperator.NotEqual
                 or ExpressionOperator.Less
                 or ExpressionOperator.LessOrEqual
                 or ExpressionOperator.Greater
                 or ExpressionOperator.GreaterOrEqual => ExprType.Bool,
+            ExpressionOperator.And
+                or ExpressionOperator.Or => ExprType.Any,
             _ => ExprType.Any,
         };
     }
 
-    static ExprType InferMemberAccessType(
+    private static ExprType InferMemberAccessType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (leftType is ObjectExprType objectType)
         {
             if (objectType.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propertyType))
@@ -530,14 +565,14 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType InferIndexAccessType(
+    private static ExprType InferIndexAccessType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
-        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
 
         if (leftType is ArrayExprType arrayType)
         {
@@ -571,13 +606,13 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType InferWildcardType(
+    private static ExprType InferWildcardType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (leftType is ArrayExprType arrayType)
         {
             return arrayType.ElementType;
@@ -591,10 +626,10 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType InferFunctionCallType(
+    private static ExprType InferFunctionCallType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
         if (node.Left < 0 || node.Left >= nodes.Length)
@@ -638,7 +673,7 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    static ExprType? TryInferFromJsonLiteral(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    private static ExprType? TryInferFromJsonLiteral(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expressionUtf8)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -663,7 +698,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static ExprType ConvertJsonType(JsonElement element)
+    private static ExprType ConvertJsonType(JsonElement element)
     {
         switch (element.ValueKind)
         {
@@ -710,7 +745,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    static bool TryGetFunctionSpec(ReadOnlySpan<byte> nameUtf8, out FunctionSpec spec)
+    private static bool TryGetFunctionSpec(ReadOnlySpan<byte> nameUtf8, out FunctionSpec spec)
     {
         for (var i = 0; i < Specs.Length; i++)
         {
@@ -725,7 +760,277 @@ public static class ExpressionSemanticAnalyzer
         return false;
     }
 
-    static string ToContextText(ExpressionValidationContext context)
+    private static ExprType InferIdentifierType(ExpressionNode node, ReadOnlySpan<byte> expressionUtf8)
+    {
+        var name = node.Token.AsSpan(expressionUtf8);
+        if (TryGetBuiltinContextType(name, out var type))
+        {
+            return type;
+        }
+
+        return ExprType.Any;
+    }
+
+    private static bool IsComparisonOperator(ExpressionOperator op)
+    {
+        return op is ExpressionOperator.Less
+            or ExpressionOperator.LessOrEqual
+            or ExpressionOperator.Greater
+            or ExpressionOperator.GreaterOrEqual;
+    }
+
+    private static bool IsNotComparableType(ExprType type)
+    {
+        return type is NullExprType or BoolExprType or ObjectExprType or ArrayExprType;
+    }
+
+    private static void ValidateCompareOp(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (!IsComparisonOperator(node.Operator))
+        {
+            return;
+        }
+
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
+
+        if (IsNotComparableType(leftType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"operator '{OperatorSymbol(node.Operator)}' does not support {leftType.TypeName} type",
+                expressionLocation));
+        }
+        else if (IsNotComparableType(rightType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"operator '{OperatorSymbol(node.Operator)}' does not support {rightType.TypeName} type",
+                expressionLocation));
+        }
+    }
+
+    private static void ValidateUnaryOp(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (node.Operator != ExpressionOperator.Not)
+        {
+            return;
+        }
+
+        var operandType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        if (operandType is ObjectExprType or ArrayExprType)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"operator '!' does not support {operandType.TypeName} type",
+                expressionLocation));
+        }
+    }
+
+    private static void ValidateWildcardAccess(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        if (leftType is AnyExprType or ObjectExprType or ArrayExprType)
+        {
+            return;
+        }
+
+        diagnostics.Add(new Diagnostic(
+            DiagnosticSeverity.Error,
+            $"receiver of '.*' must be an object or array, but got {leftType.TypeName}",
+            expressionLocation));
+    }
+
+    private static void ValidateIndexAccess(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
+
+        if (leftType is ArrayExprType && rightType is not (AnyExprType or NumberExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of array must be number, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+        else if (leftType is ObjectExprType && rightType is not (AnyExprType or StringExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of object must be string, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+    }
+
+    private static string OperatorSymbol(ExpressionOperator op)
+    {
+        return op switch
+        {
+            ExpressionOperator.Less => "<",
+            ExpressionOperator.LessOrEqual => "<=",
+            ExpressionOperator.Greater => ">",
+            ExpressionOperator.GreaterOrEqual => ">=",
+            _ => op.ToString(),
+        };
+    }
+
+    private static bool IsStatusCheckFunction(ReadOnlySpan<byte> nameUtf8)
+    {
+        return EqualsAsciiIgnoreCase(nameUtf8, "success"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "failure"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "cancelled"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "always"u8);
+    }
+
+    private static void ValidateVarsNamingConvention(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (node.Left < 0 || node.Left >= nodes.Length)
+        {
+            return;
+        }
+
+        var left = nodes[node.Left];
+        if (left.Kind != ExpressionNodeKind.Identifier)
+        {
+            return;
+        }
+
+        var leftName = left.Token.AsSpan(expressionUtf8);
+        if (!EqualsAsciiIgnoreCase(leftName, "vars"u8))
+        {
+            return;
+        }
+
+        var propName = node.Token.AsSpan(expressionUtf8);
+        if (propName.Length == 0)
+        {
+            return;
+        }
+
+        // Check GITHUB_ prefix prohibition (case-insensitive)
+        if (propName.Length >= 7 && EqualsAsciiIgnoreCase(propName[..7], "GITHUB_"u8))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"configuration variable name '{propNameText}' must not start with 'GITHUB_' prefix",
+                expressionLocation));
+            return;
+        }
+
+        // Check valid characters: must start with [A-Za-z_], rest must be [A-Za-z0-9_]
+        if (!IsValidVarsName(propName))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"configuration variable name '{propNameText}' contains invalid characters (must match [a-zA-Z_][a-zA-Z0-9_]*)",
+                expressionLocation));
+        }
+    }
+
+    private static bool IsValidVarsName(ReadOnlySpan<byte> name)
+    {
+        if (name.Length == 0)
+        {
+            return false;
+        }
+
+        var first = name[0];
+        if (!IsAsciiLetter(first) && first != (byte)'_')
+        {
+            return false;
+        }
+
+        for (var i = 1; i < name.Length; i++)
+        {
+            var c = name[i];
+            if (!IsAsciiLetter(c) && !IsAsciiDigit(c) && c != (byte)'_')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiLetter(byte c) => (c >= (byte)'A' && c <= (byte)'Z') || (c >= (byte)'a' && c <= (byte)'z');
+
+    private static bool IsAsciiDigit(byte c) => c >= (byte)'0' && c <= (byte)'9';
+
+    private static void ValidatePropertyAccess(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        if (leftType is not ObjectExprType { Strict: true } strictObj)
+        {
+            return;
+        }
+
+        var propName = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propName, out _))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"property '{propNameText}' is not defined in '{rootName}' object",
+                expressionLocation));
+        }
+    }
+
+    private static string GetChainRootName(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expressionUtf8)
+    {
+        var current = nodeId;
+        while (current >= 0 && current < nodes.Length)
+        {
+            var n = nodes[current];
+            if (n.Kind == ExpressionNodeKind.Identifier)
+            {
+                return Encoding.UTF8.GetString(n.Token.AsSpan(expressionUtf8));
+            }
+
+            current = n.Left;
+        }
+
+        return "object";
+    }
+
+    private static string ToContextText(ExpressionValidationContext context)
     {
         return context switch
         {
@@ -739,47 +1044,282 @@ public static class ExpressionSemanticAnalyzer
         };
     }
 
-    static bool IsContextRootIdentifier(int nodeId, int parentId, ExpressionNode[] nodes)
+    // ── Dynamic context property access validation ─────────────────────────────
+
+    /// <summary>
+    /// Validates property accesses in the expression using per-job context type overrides.
+    /// Only produces property-access errors (no root context availability errors).
+    /// Used by <c>ExprUndefinedVarRule</c> for dynamic contexts: steps, matrix, needs, inputs.
+    /// </summary>
+    public static Diagnostic[] ValidateDynamicPropertyAccess(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] contextOverrides)
     {
-        if (parentId < 0)
+        if (!parseResult.HasRoot || contextOverrides is null || contextOverrides.Length == 0)
         {
-            return true;
+            return [];
         }
 
-        if (parentId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var parent = nodes[parentId];
-        return parent.Left == nodeId
-            && (parent.Kind == ExpressionNodeKind.MemberAccess
-                || parent.Kind == ExpressionNodeKind.IndexAccess
-                || parent.Kind == ExpressionNodeKind.WildcardAccess);
+        var diagnostics = new List<Diagnostic>();
+        ValidateNodePropertyAccess(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            expressionUtf8,
+            expressionLocation,
+            contextOverrides,
+            diagnostics);
+        return diagnostics.ToArray();
     }
 
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    /// <summary>
+    /// Inline variant of <see cref="ValidateDynamicPropertyAccess"/>. Appends diagnostics to caller-supplied list,
+    /// avoiding per-call <c>new List&lt;Diagnostic&gt;()</c> and <c>ToArray()</c> allocations.
+    /// </summary>
+    internal static void ValidateDynamicPropertyAccessInline(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] contextOverrides,
+        List<Diagnostic> diagnostics)
     {
-        if (left.Length != right.Length)
+        if (!parseResult.HasRoot || contextOverrides is null || contextOverrides.Length == 0)
         {
-            return false;
+            return;
         }
 
-        for (var i = 0; i < left.Length; i++)
+        ValidateNodePropertyAccess(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            expressionUtf8,
+            expressionLocation,
+            contextOverrides,
+            diagnostics);
+    }
+
+    private static void ValidateNodePropertyAccess(
+        int nodeId,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
         {
-            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
+            return;
+        }
+
+        var node = nodes[nodeId];
+        switch (node.Kind)
+        {
+            case ExpressionNodeKind.Unary:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.Binary:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.MemberAccess:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidatePropertyAccessWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.WildcardAccess:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.IndexAccess:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                break;
+            case ExpressionNodeKind.FunctionCall:
+                ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                for (var i = 0; i < node.ArgCount; i++)
+                {
+                    var argIndex = node.ArgStart + i;
+                    if (argIndex >= 0 && argIndex < arguments.Length)
+                    {
+                        ValidateNodePropertyAccess(arguments[argIndex], nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                    }
+                }
+
+                break;
+        }
+    }
+
+    private static void ValidatePropertyAccessWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        if (leftType is not ObjectExprType { Strict: true } strictObj)
+        {
+            return;
+        }
+
+        var propName = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propName, out _))
+        {
+            var propNameText = Encoding.UTF8.GetString(propName);
+            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"property '{propNameText}' is not defined in '{rootName}' object",
+                expressionLocation));
+        }
+    }
+
+    private static ExprType InferTypeWithOverrides(
+        int nodeId,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return ExprType.Any;
+        }
+
+        var node = nodes[nodeId];
+        return node.Kind switch
+        {
+            ExpressionNodeKind.StringLiteral => ExprType.String,
+            ExpressionNodeKind.NumberLiteral => ExprType.Number,
+            ExpressionNodeKind.BooleanLiteral => ExprType.Bool,
+            ExpressionNodeKind.NullLiteral => ExprType.Null,
+            ExpressionNodeKind.Identifier => InferIdentifierTypeWithOverrides(node, expressionUtf8, overrides),
+            ExpressionNodeKind.Unary => node.Operator == ExpressionOperator.Not
+                ? ExprType.Bool
+                : ExprType.Any,
+            ExpressionNodeKind.Binary => InferBinaryType(node),
+            ExpressionNodeKind.MemberAccess => InferMemberAccessTypeWithOverrides(node, nodes, arguments, expressionUtf8, overrides),
+            ExpressionNodeKind.IndexAccess => InferIndexAccessTypeWithOverrides(node, nodes, arguments, expressionUtf8, overrides),
+            ExpressionNodeKind.WildcardAccess => InferWildcardTypeWithOverrides(node, nodes, arguments, expressionUtf8, overrides),
+            ExpressionNodeKind.FunctionCall => InferFunctionCallType(node, nodes, arguments, expressionUtf8),
+            _ => ExprType.Any,
+        };
+    }
+
+    private static ExprType InferIdentifierTypeWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var name = node.Token.AsSpan(expressionUtf8);
+        for (var i = 0; i < overrides.Length; i++)
+        {
+            if (EqualsAsciiIgnoreCase(name, overrides[i].NameUtf8))
             {
-                return false;
+                return overrides[i].Type;
             }
         }
 
-        return true;
+        if (TryGetBuiltinContextType(name, out var type))
+        {
+            return type;
+        }
+
+        return ExprType.Any;
     }
 
-    static byte ToLowerAscii(byte value)
+    private static ExprType InferMemberAccessTypeWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
     {
-        return value is >= (byte)'A' and <= (byte)'Z'
-            ? (byte)(value + 32)
-            : value;
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        if (leftType is ObjectExprType objectType)
+        {
+            if (objectType.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propertyType))
+            {
+                return propertyType;
+            }
+
+            return ExprType.Any;
+        }
+
+        if (leftType is ArrayExprType arrayType)
+        {
+            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            {
+                return arrayType.ElementType;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    private static ExprType InferIndexAccessTypeWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        var rightType = InferTypeWithOverrides(node.Right, nodes, arguments, expressionUtf8, overrides);
+
+        if (leftType is ArrayExprType arrayType)
+        {
+            if (rightType.IsAssignableTo(ExprType.Number) || rightType is AnyExprType)
+            {
+                return arrayType.ElementType;
+            }
+
+            return ExprType.Any;
+        }
+
+        if (leftType is ObjectExprType objectType)
+        {
+            if (node.Right >= 0
+                && node.Right < nodes.Length
+                && nodes[node.Right].Kind == ExpressionNodeKind.StringLiteral)
+            {
+                var propertyName = nodes[node.Right].Token.AsSpan(expressionUtf8);
+                if (objectType.TryGetProperty(propertyName, out var propertyType))
+                {
+                    return propertyType;
+                }
+            }
+
+            if (rightType.IsAssignableTo(ExprType.String) || rightType is AnyExprType)
+            {
+                return objectType.DynamicPropertyType ?? ExprType.Any;
+            }
+        }
+
+        return ExprType.Any;
+    }
+
+    private static ExprType InferWildcardTypeWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        if (leftType is ArrayExprType arrayType)
+        {
+            return arrayType.ElementType;
+        }
+
+        if (leftType is ObjectExprType objectType)
+        {
+            return objectType.DynamicPropertyType ?? ExprType.Any;
+        }
+
+        return ExprType.Any;
     }
 }

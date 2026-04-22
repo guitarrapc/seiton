@@ -8,15 +8,15 @@ namespace Seiton.Core.Linting.PinRemediation;
 
 public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningConfig pinningConfig, GitHubNetworkConfig githubConfig) : IActionShaResolver
 {
-    static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
-    static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
+    private static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
+    private static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
-    readonly HttpClient _httpClient = httpClient;
-    readonly FixPinningConfig _pinningConfig = pinningConfig;
-    readonly GitHubNetworkConfig _githubConfig = githubConfig;
-    readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
-    readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(pinningConfig.ExcludeBranches);
-    readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly FixPinningConfig _pinningConfig = pinningConfig;
+    private readonly GitHubNetworkConfig _githubConfig = githubConfig;
+    private readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
+    private readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(pinningConfig.ExcludeBranches);
+    private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
     public async Task<(string? Sha, string? TagComment)> ResolveAsync(
         string owner,
@@ -52,7 +52,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
         if (_pinningConfig.MinAgeDays > 0 && !TryBuildVersionFamily(refStr, out _))
         {
-            if (result.TagDate.HasValue)
+            if (result.TagDate is not null)
             {
                 var age = DateTimeOffset.UtcNow - result.TagDate.Value;
                 if (age.TotalDays < _pinningConfig.MinAgeDays)
@@ -67,7 +67,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return (cacheValue.Sha, cacheValue.TagComment);
     }
 
-    async Task<string?> SelectBestEligibleTagAsync(
+    private async Task<string?> SelectBestEligibleTagAsync(
         string owner,
         string repo,
         VersionFamily family,
@@ -90,7 +90,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return null;
     }
 
-    async Task<List<string>> TryGetReleaseCandidatesAsync(
+    private async Task<List<string>> TryGetReleaseCandidatesAsync(
         string owner,
         string repo,
         VersionFamily family,
@@ -150,7 +150,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return candidates;
     }
 
-    async Task<List<string>> TryGetTagCandidatesAsync(
+    private async Task<List<string>> TryGetTagCandidatesAsync(
         string owner,
         string repo,
         VersionFamily family,
@@ -209,7 +209,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
                 }
 
                 var commitDate = await TryGetCommitDateWithFallbackAsync(owner, repo, commitSha, token, cancellationToken);
-                if (!commitDate.HasValue || commitDate.Value > cutoff)
+                if (commitDate is null || commitDate.Value > cutoff)
                 {
                     continue;
                 }
@@ -221,7 +221,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return candidates;
     }
 
-    static string? PickBestTag(List<string> candidates)
+    private static string? PickBestTag(List<string> candidates)
     {
         if (candidates.Count == 0)
         {
@@ -241,7 +241,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return best;
     }
 
-    async Task<HttpResponseMessage?> SendGetWithFallbackAsync(
+    private async Task<HttpResponseMessage?> SendGetWithFallbackAsync(
         string owner,
         string repo,
         string relativePath,
@@ -268,7 +268,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await SendGetAsync(PublicApiBaseUri, relativePath, token, cancellationToken);
     }
 
-    async Task<DateTimeOffset?> TryGetCommitDateWithFallbackAsync(
+    private async Task<DateTimeOffset?> TryGetCommitDateWithFallbackAsync(
         string owner,
         string repo,
         string commitSha,
@@ -279,7 +279,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         {
             var ghesBaseUri = NormalizeApiBaseUri(_githubConfig.GhesApiUrl!);
             var ghesDate = await TryGetCommitDateAsync(ghesBaseUri, owner, repo, commitSha, token, cancellationToken);
-            if (ghesDate.HasValue)
+            if (ghesDate is not null)
             {
                 return ghesDate;
             }
@@ -293,7 +293,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await TryGetCommitDateAsync(PublicApiBaseUri, owner, repo, commitSha, token, cancellationToken);
     }
 
-    bool ShouldSkip(string owner, string repo, string refStr)
+    private bool ShouldSkip(string owner, string repo, string refStr)
     {
         if (MatchesExcludedBranch(refStr))
         {
@@ -313,7 +313,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return false;
     }
 
-    bool MatchesExcludedBranch(string refStr)
+    private bool MatchesExcludedBranch(string refStr)
     {
         for (var i = 0; i < _compiledExcludeBranches.Length; i++)
         {
@@ -326,7 +326,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return false;
     }
 
-    string ResolveToken()
+    private string ResolveToken()
     {
         foreach (var envVar in TokenEnvVars)
         {
@@ -345,7 +345,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return string.Empty;
     }
 
-    async Task<ResolveAttemptResult> ResolveShaWithFallbackAsync(
+    private async Task<ResolveAttemptResult> ResolveShaWithFallbackAsync(
         string owner,
         string repo,
         string refStr,
@@ -377,7 +377,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     }
 
 
-    async Task<ResolveAttemptResult> TryResolveShaAsync(
+    private async Task<ResolveAttemptResult> TryResolveShaAsync(
         Uri apiBaseUri,
         string owner,
         string repo,
@@ -437,7 +437,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return new ResolveAttemptResult(targetSha, HttpStatusCode.OK, taggerDate);
     }
 
-    async Task<DateTimeOffset?> TryGetCommitDateAsync(
+    private async Task<DateTimeOffset?> TryGetCommitDateAsync(
         Uri apiBaseUri,
         string owner,
         string repo,
@@ -465,7 +465,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return null;
     }
 
-    async Task<HttpResponseMessage> SendGetAsync(
+    private async Task<HttpResponseMessage> SendGetAsync(
         Uri apiBaseUri,
         string relativePath,
         string token,
@@ -483,7 +483,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
-    static Uri NormalizeApiBaseUri(string apiUrl)
+    private static Uri NormalizeApiBaseUri(string apiUrl)
     {
         var baseUri = new Uri(apiUrl, UriKind.Absolute);
         var builder = new UriBuilder(baseUri);
@@ -495,7 +495,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return builder.Uri;
     }
 
-    static Regex[] CompileLiteralBranchPatterns(IReadOnlyList<string> branches)
+    private static Regex[] CompileLiteralBranchPatterns(IReadOnlyList<string> branches)
     {
         if (branches.Count == 0)
         {
@@ -511,7 +511,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return compiled;
     }
 
-    static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
+    private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
     {
         if (entries.Count == 0)
         {
@@ -530,7 +530,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return compiled;
     }
 
-    static InvalidOperationException CreateResolutionException(
+    private static InvalidOperationException CreateResolutionException(
         string owner,
         string repo,
         string refStr,
@@ -541,14 +541,14 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
             $"Failed to resolve GitHub action SHA for '{owner}/{repo}@{refStr}' via '{apiBaseUri}' (status {(int)statusCode}).");
     }
 
-    readonly record struct ResolveAttemptResult(string? Sha, HttpStatusCode StatusCode, DateTimeOffset? TagDate = null)
+    private readonly record struct ResolveAttemptResult(string? Sha, HttpStatusCode StatusCode, DateTimeOffset? TagDate = null)
     {
         public bool Success => !string.IsNullOrWhiteSpace(Sha);
     }
 
-    readonly record struct CachedResolution(string Sha, string TagComment);
+    private readonly record struct CachedResolution(string Sha, string TagComment);
 
-    readonly record struct VersionFamily(bool HasVPrefix, int[] Parts)
+    private readonly record struct VersionFamily(bool HasVPrefix, int[] Parts)
     {
         public bool IsMatch(string candidate)
         {
@@ -574,7 +574,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         }
     }
 
-    static bool TryBuildVersionFamily(string refStr, out VersionFamily family)
+    private static bool TryBuildVersionFamily(string refStr, out VersionFamily family)
     {
         family = default;
         if (!TryParseVersionTag(refStr, out var parsed))
@@ -586,7 +586,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return true;
     }
 
-    static int CompareVersionTag(string left, string right)
+    private static int CompareVersionTag(string left, string right)
     {
         var leftParsed = TryParseVersionTag(left, out var l);
         var rightParsed = TryParseVersionTag(right, out var r);
@@ -620,7 +620,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return string.CompareOrdinal(left, right);
     }
 
-    static bool TryParseVersionTag(string value, out ParsedVersionTag parsed)
+    private static bool TryParseVersionTag(string value, out ParsedVersionTag parsed)
     {
         parsed = default;
         if (string.IsNullOrWhiteSpace(value))
@@ -671,7 +671,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return true;
     }
 
-    readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
+    private readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
 
-    readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
 }

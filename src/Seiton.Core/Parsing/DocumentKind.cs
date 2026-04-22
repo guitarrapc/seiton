@@ -74,7 +74,7 @@ public static class DocumentKindClassifier
         return finalKind;
     }
 
-    static bool IsGithubActionsActionMetadataPath(string normalizedPath)
+    private static bool IsGithubActionsActionMetadataPath(string normalizedPath)
     {
         var marker = "/.github/actions/";
         var markerIndex = normalizedPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);

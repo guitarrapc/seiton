@@ -58,11 +58,11 @@ public sealed class InsecureCommandsRule : RuleBase
         }
     }
 
-    bool TryFindInsecureCommandsEnv(Env env, out string envName, out TextRange location)
+    private bool TryFindInsecureCommandsEnv(Env env, out string envName, out TextRange location)
     {
         envName = string.Empty;
         location = env.Range;
-        if (env.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        if (env.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
         {
             return false;
         }
@@ -75,21 +75,21 @@ public sealed class InsecureCommandsRule : RuleBase
                 continue;
             }
 
-            var valueText = Decode(pair.Value.Value.Value).Trim();
+            var valueText = Decode(Arena.GetStringSlice(pair.Value.Value)).Trim();
             if (!IsTruthy(valueText))
             {
                 continue;
             }
 
             envName = key;
-            location = pair.Value.Value.Range;
+            location = Arena.GetStringRange(pair.Value.Value);
             return true;
         }
 
         return false;
     }
 
-    static bool IsTruthy(string value)
+    private static bool IsTruthy(string value)
     {
         return value.Equals("true", StringComparison.OrdinalIgnoreCase)
             || value.Equals("1", StringComparison.Ordinal)

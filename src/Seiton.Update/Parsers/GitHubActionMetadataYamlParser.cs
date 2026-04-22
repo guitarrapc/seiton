@@ -80,7 +80,7 @@ internal sealed class GitHubActionMetadataYamlParser
             .ToArray();
     }
 
-    static int GetIndent(string line)
+    private static int GetIndent(string line)
     {
         var count = 0;
         while (count < line.Length && line[count] == ' ')
@@ -91,7 +91,7 @@ internal sealed class GitHubActionMetadataYamlParser
         return count;
     }
 
-    static string TrimQuotes(string text)
+    private static string TrimQuotes(string text)
     {
         if (text.Length >= 2)
         {

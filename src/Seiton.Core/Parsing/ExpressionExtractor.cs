@@ -1,4 +1,7 @@
-﻿namespace Seiton.Core.Parsing;
+﻿using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
+namespace Seiton.Core.Parsing;
 
 public readonly record struct ExpressionOccurrence(
     Utf8Slice Slice,
@@ -102,82 +105,4 @@ public static class ExpressionExtractor
 
         return (occurrences, diagnostics.ToArray());
     }
-
-    private static Utf8Slice TrimAsciiWhiteSpace(byte[] source, int offset, int length)
-    {
-        var start = offset;
-        var end = offset + length - 1;
-
-        while (start <= end && IsWhiteSpace(source[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && IsWhiteSpace(source[end]))
-        {
-            end--;
-        }
-
-        if (end < start)
-        {
-            return new Utf8Slice(offset, 0);
-        }
-
-        return new Utf8Slice(start, end - start + 1);
-    }
-
-    private static int[] BuildLineStarts(byte[] source)
-    {
-        var starts = new List<int>(64) { 0 };
-        for (var i = 0; i < source.Length; i++)
-        {
-            if (source[i] == (byte)'\n')
-            {
-                var next = i + 1;
-                if (next < source.Length)
-                {
-                    starts.Add(next);
-                }
-            }
-        }
-
-        return starts.ToArray();
-    }
-
-    private static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)
-    {
-        var idx = Array.BinarySearch(lineStarts, offset);
-        if (idx >= 0)
-        {
-            return (idx + 1, 1);
-        }
-
-        idx = ~idx - 1;
-        if (idx < 0)
-        {
-            return (1, offset + 1);
-        }
-
-        return (idx + 1, offset - lineStarts[idx] + 1);
-    }
-
-    private static int IndexOf(byte[] source, int start, ReadOnlySpan<byte> pattern)
-    {
-        if (pattern.IsEmpty || start >= source.Length)
-        {
-            return -1;
-        }
-
-        for (var i = start; i <= source.Length - pattern.Length; i++)
-        {
-            if (source.AsSpan(i, pattern.Length).SequenceEqual(pattern))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 }

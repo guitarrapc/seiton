@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 /// <summary>
@@ -10,7 +13,7 @@ namespace Seiton.Core.Linting.Rules;
 /// </summary>
 public sealed class SecretsWholeContextAccessRule : RuleBase
 {
-    const string DiagnosticMessage =
+    private const string DiagnosticMessage =
         "expression must not reference the entire ${{ secrets }} context object; " +
         "use ${{ secrets.SPECIFIC_KEY }} to access individual secrets, then map them to env variables";
 
@@ -36,9 +39,9 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         CheckEnvForStep(step.Env, step);
 
         // Check step with: inputs (only for use:actions steps)
-        if (step.Exec is ExecAction action && action.Inputs is not null && action.Inputs.Count > 0)
+        if (step.Exec is ExecAction action && action.Inputs is not null && action.Inputs.Value.Count > 0)
         {
-            foreach (var pair in action.Inputs)
+            foreach (var pair in action.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
                 CheckNode(pair.Value, sinkName: $"with.{inputName}", static (rule, location, s) =>
@@ -59,14 +62,14 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
         // Check job with: (reusable-workflow call inputs)
         var callInputs = job.WorkflowCall?.Inputs;
-        if (callInputs is null || callInputs.Count == 0)
+        if (callInputs is null || callInputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in callInputs)
+        foreach (var pair in callInputs.Value)
         {
-            var inputName = Decode(pair.Value.Name.Value);
+            var inputName = Decode(Arena.GetStringSlice(pair.Value.Name));
             CheckNode(pair.Value.Value, sinkName: $"with.{inputName}", static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
         }
@@ -74,25 +77,25 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // Step-level env helper
 
-    void CheckEnvForStep(Env? env, Step step)
+    private void CheckEnvForStep(Env? env, Step step)
     {
         if (env is null)
         {
             return;
         }
 
-        CheckNode(env.Expression, sinkName: "env", static (rule, location, s) =>
+        CheckNode(Arena.GetStringExpression(env.Expression), sinkName: "env", static (rule, location, s) =>
             rule.AddStepError(s, DiagnosticMessage, location), step);
 
         var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
+        if (vars is null || vars.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars)
+        foreach (var pair in vars.Value)
         {
-            var keyName = Decode(pair.Value.Name.Value);
+            var keyName = Decode(Arena.GetStringSlice(pair.Value.Name));
             CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, s) =>
                 rule.AddStepError(s, DiagnosticMessage, location), step);
         }
@@ -100,25 +103,25 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // Job-level env helper
 
-    void CheckEnvForJob(Env? env, Job job)
+    private void CheckEnvForJob(Env? env, Job job)
     {
         if (env is null)
         {
             return;
         }
 
-        CheckNode(env.Expression, sinkName: "env", static (rule, location, j) =>
+        CheckNode(Arena.GetStringExpression(env.Expression), sinkName: "env", static (rule, location, j) =>
             rule.AddJobError(j, DiagnosticMessage, location), job);
 
         var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
+        if (vars is null || vars.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars)
+        foreach (var pair in vars.Value)
         {
-            var keyName = Decode(pair.Value.Name.Value);
+            var keyName = Decode(Arena.GetStringSlice(pair.Value.Name));
             CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
         }
@@ -126,18 +129,18 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
     // Core expression scanning
 
-    void CheckNode<TTarget>(
-        StringNode? node,
+    private void CheckNode<TTarget>(
+        StringNodeId node,
         string sinkName,
         Action<SecretsWholeContextAccessRule, TextRange, TTarget> report,
         TTarget target)
     {
-        if (node is null || Config.Utf8Yaml is null)
+        if (!node.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var value = node.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(node);
         if (value.Length == 0)
         {
             return;
@@ -154,7 +157,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
                 continue;
             }
 
-            var parseResult = ExpressionParser.Parse(expression);
+            var parseResult = Config.ParseExpression(expression);
             if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
             {
                 continue;
@@ -170,14 +173,14 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
                 continue;
             }
 
-            report(this, node.Range, target);
+            report(this, Arena.GetStringRange(node), target);
             return;
         }
     }
 
     // AST traversal
 
-    static bool ContainsSecretsWholeContextReference(
+    private static bool ContainsSecretsWholeContextReference(
         int nodeId,
         int parentId,
         ExpressionNode[] nodes,
@@ -219,7 +222,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         };
     }
 
-    static bool ContainsSecretsWholeContextReferenceInFunction(
+    private static bool ContainsSecretsWholeContextReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
         ExpressionNode[] nodes,
@@ -255,7 +258,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
     /// Returns false only when secrets is the left child of MemberAccess/IndexAccess/WildcardAccess,
     /// which means a specific key is being accessed (secrets.KEY or secrets['KEY']).
     /// </summary>
-    static bool IsWholeContextAccess(int nodeId, int parentId, ExpressionNode[] nodes)
+    private static bool IsWholeContextAccess(int nodeId, int parentId, ExpressionNode[] nodes)
     {
         if (parentId >= 0 && parentId < nodes.Length)
         {
@@ -275,85 +278,4 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
     }
 
     // Shared utilities
-
-    static bool TryFindExpression(
-        ReadOnlySpan<byte> value,
-        int searchStart,
-        out int bodyStart,
-        out int bodyLength,
-        out int nextSearchStart)
-    {
-        bodyStart = 0;
-        bodyLength = 0;
-        nextSearchStart = 0;
-
-        if ((uint)searchStart >= (uint)value.Length)
-        {
-            return false;
-        }
-
-        var start = value[searchStart..].IndexOf("${{"u8);
-        if (start < 0)
-        {
-            return false;
-        }
-
-        bodyStart = searchStart + start + 3;
-        var close = value[bodyStart..].IndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        bodyLength = close;
-        nextSearchStart = bodyStart + close + 2;
-        return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length && (value[start] == (byte)' ' || value[start] == (byte)'\t' || value[start] == (byte)'\n' || value[start] == (byte)'\r'))
-        {
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start && (value[end] == (byte)' ' || value[end] == (byte)'\t' || value[end] == (byte)'\n' || value[end] == (byte)'\r'))
-        {
-            end--;
-        }
-
-        return value.Slice(start, end - start + 1);
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            if (l is >= (byte)'A' and <= (byte)'Z')
-            {
-                l = (byte)(l + 32);
-            }
-
-            if (r is >= (byte)'A' and <= (byte)'Z')
-            {
-                r = (byte)(r + 32);
-            }
-
-            if (l != r)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }

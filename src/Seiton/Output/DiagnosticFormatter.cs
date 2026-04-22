@@ -29,7 +29,7 @@ public static class DiagnosticFormatter
         }
     }
 
-    static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap)
+    private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap)
     {
         for (var i = 0; i < diagnostics.Count; i++)
         {
@@ -73,7 +73,7 @@ public static class DiagnosticFormatter
         }
     }
 
-    static void WriteRichDiagnostic(
+    private static void WriteRichDiagnostic(
         TextWriter writer,
         Diagnostic d,
         string file,
@@ -132,7 +132,7 @@ public static class DiagnosticFormatter
         }
     }
 
-    static void WriteSourceSnippet(
+    private static void WriteSourceSnippet(
         TextWriter writer,
         Diagnostic d,
         string file,
@@ -215,7 +215,7 @@ public static class DiagnosticFormatter
         writer.WriteLine($"   {gutterPad}|");
     }
 
-    static void WriteGutterLine(TextWriter writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
+    private static void WriteGutterLine(TextWriter writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
     {
         var lineStr = lineNum.ToString().PadLeft(width);
         if (color)
@@ -224,7 +224,7 @@ public static class DiagnosticFormatter
             writer.WriteLine($"   {lineStr} | {sourceLine}");
     }
 
-    static void WriteGutterLineWithPrefix(TextWriter writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
+    private static void WriteGutterLineWithPrefix(TextWriter writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
     {
         var lineStr = lineNum.ToString().PadLeft(width);
         if (color)
@@ -233,7 +233,7 @@ public static class DiagnosticFormatter
             writer.WriteLine($"   {lineStr} |{prefix}{sourceLine}");
     }
 
-    static string[] ExtractLines(byte[] utf8, int startLine, int endLine)
+    private static string[] ExtractLines(byte[] utf8, int startLine, int endLine)
     {
         var results = new string[endLine - startLine + 1];
         var currentLine = 1;
@@ -269,7 +269,7 @@ public static class DiagnosticFormatter
         return results;
     }
 
-    static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)
+    private static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)
     {
         var entries = new JsonDiagnosticEntry[diagnostics.Count];
         for (var i = 0; i < diagnostics.Count; i++)
@@ -291,7 +291,7 @@ public static class DiagnosticFormatter
         writer.WriteLine();
     }
 
-    static void WriteSarif(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)
+    private static void WriteSarif(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)
     {
         // Collect unique rule IDs
         var ruleSet = new Dictionary<string, int>(StringComparer.Ordinal);

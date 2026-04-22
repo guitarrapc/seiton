@@ -12,7 +12,7 @@ public sealed class PopularActionInputsRule : RuleBase
 
     public override void VisitStep(Step step)
     {
-        if (step.Exec is not ExecAction actionExec || actionExec.Inputs is null || actionExec.Inputs.Count == 0)
+        if (step.Exec is not ExecAction actionExec || actionExec.Inputs is null || actionExec.Inputs.Value.Count == 0)
         {
             return;
         }
@@ -22,21 +22,21 @@ public sealed class PopularActionInputsRule : RuleBase
             return;
         }
 
-        var usesText = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var usesText = Arena.GetStringValue(actionExec.Uses);
         if (!PopularActions.TryGet(usesText, out var actionSpec))
         {
             return;
         }
 
-        var actionName = Decode(actionExec.Uses.Value);
-        foreach (var pair in actionExec.Inputs)
+        var actionName = Decode(Arena.GetStringSlice(actionExec.Uses));
+        foreach (var pair in actionExec.Inputs.Value)
         {
-            if (actionSpec.IsInputAllowed(pair.Key.Span))
+            if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
             {
                 continue;
             }
 
-            var inputName = Encoding.UTF8.GetString(pair.Key.Span);
+            var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
             AddStepWarning(step, $"unknown input '{inputName}' for action '{actionName}'");
         }
     }

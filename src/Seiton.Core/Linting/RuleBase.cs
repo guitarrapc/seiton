@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting;
 
 public abstract class RuleBase : IRule
 {
-    readonly List<Diagnostic> diagnostics = [];
+    private readonly List<Diagnostic> diagnostics = [];
     protected LintConfig Config { get; private set; } = LintConfig.Empty;
 
     public abstract string Id { get; }
@@ -18,7 +18,7 @@ public abstract class RuleBase : IRule
         return documentKind == DocumentKind.Workflow || documentKind == DocumentKind.ActionMetadata;
     }
 
-    public Diagnostic[] GetDiagnostics() => diagnostics.ToArray();
+    public IReadOnlyList<Diagnostic> GetDiagnostics() => diagnostics;
 
     public virtual void SetConfig(LintConfig config)
     {
@@ -141,7 +141,7 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
-    void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location, DiagnosticFix? fix = null)
+    private void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location, DiagnosticFix? fix = null)
     {
         diagnostics.Add(new Diagnostic(
             severity,
@@ -167,9 +167,9 @@ public abstract class RuleBase : IRule
         return value.Length == 0 ? string.Empty : Encoding.UTF8.GetString(value.Span);
     }
 
-    protected static TextRange BuildJobLocation(Job job)
+    protected TextRange BuildJobLocation(Job job)
     {
-        var range = job.Id.Range;
+        var range = Arena.GetStringRange(job.Id);
         return new TextRange(
             Start: range.Start,
             Length: 0,
@@ -179,9 +179,9 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected static TextRange BuildEventLocation(Event ev)
+    protected TextRange BuildEventLocation(Event ev)
     {
-        var range = ev.EventName.Range;
+        var range = Arena.GetStringRange(ev.EventName);
         return new TextRange(
             Start: range.Start,
             Length: 0,
@@ -203,19 +203,21 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected static TextRange BuildUsesLocation(ExecAction action)
+    protected AstArena Arena => Config.Arena!;
+
+    protected TextRange BuildUsesLocation(ExecAction action)
     {
-        return action.UsesKeyRange ?? action.Uses.Range;
+        return action.UsesKeyRange ?? Arena.GetStringRange(action.Uses);
     }
 
-    protected static TextRange BuildUsesLocation(WorkflowCall workflowCall)
+    protected TextRange BuildUsesLocation(WorkflowCall workflowCall)
     {
-        return workflowCall.UsesKeyRange ?? workflowCall.Uses.Range;
+        return workflowCall.UsesKeyRange ?? Arena.GetStringRange(workflowCall.Uses);
     }
 
-    protected static bool HasNodeValue(StringNode? node)
+    protected static bool HasNodeValue(StringNodeId node, AstArena arena)
     {
-        return node is not null && node.Value.Length > 0;
+        return node.HasValue && arena.GetStringSlice(node).Length > 0;
     }
 
     protected static bool IsSha256DigestPinned(ReadOnlySpan<byte> image)
@@ -251,45 +253,5 @@ public abstract class RuleBase : IRule
         }
 
         return true;
-    }
-
-    protected static bool ContainsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> token)
-    {
-        if (token.Length == 0 || value.Length < token.Length)
-        {
-            return false;
-        }
-
-        for (var start = 0; start <= value.Length - token.Length; start++)
-        {
-            var matched = true;
-            for (var i = 0; i < token.Length; i++)
-            {
-                var l = value[start + i];
-                var r = token[i];
-                if (l is >= (byte)'A' and <= (byte)'Z')
-                {
-                    l = (byte)(l + 32);
-                }
-
-                if (r is >= (byte)'A' and <= (byte)'Z')
-                {
-                    r = (byte)(r + 32);
-                }
-
-                if (l != r)
-                {
-                    matched = false;
-                    break;
-                }
-            }
-
-            if (matched)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

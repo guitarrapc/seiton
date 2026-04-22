@@ -6,7 +6,7 @@ namespace Seiton.Core.Tests;
 
 public sealed class OciImageDigestResolverTests
 {
-    const string Digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private const string Digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     [Test]
     public async Task ResolveAsync_ReturnsDigest_ForExplicitRegistryTag()
@@ -175,7 +175,7 @@ public sealed class OciImageDigestResolverTests
         await Assert.That(digest).IsNull();
     }
 
-    static OciImageDigestResolver CreateResolver(
+    private static OciImageDigestResolver CreateResolver(
         StubHttpMessageHandler handler,
         FixImagesConfig? config = null,
         string? dockerConfigPath = null)
@@ -185,7 +185,7 @@ public sealed class OciImageDigestResolverTests
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
-        readonly List<(Func<HttpRequestMessage, bool> Match, Func<HttpRequestMessage, HttpResponseMessage> Respond)> _handlers = [];
+        private readonly List<(Func<HttpRequestMessage, bool> Match, Func<HttpRequestMessage, HttpResponseMessage> Respond)> _handlers = [];
 
         public List<string> RequestedUris { get; } = [];
         public string? LastAuthorizationScheme { get; private set; }
@@ -201,7 +201,8 @@ public sealed class OciImageDigestResolverTests
                     var response = new HttpResponseMessage(statusCode);
                     response.Headers.Add("Docker-Content-Digest", digest);
                     return response;
-                }));
+                }
+            ));
         }
 
         // Adds a handler that returns 401 + WWW-Authenticate: Bearer for anonymous HEAD requests.
@@ -217,7 +218,8 @@ public sealed class OciImageDigestResolverTests
                     var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
                     response.Headers.TryAddWithoutValidation("WWW-Authenticate", wwwAuthenticate);
                     return response;
-                }));
+                }
+            ));
         }
 
         // Adds a handler for the OCI token endpoint that returns an access_token JSON payload.
@@ -248,10 +250,11 @@ public sealed class OciImageDigestResolverTests
                     var response = new HttpResponseMessage(HttpStatusCode.OK);
                     response.Headers.Add("Docker-Content-Digest", digest);
                     return response;
-                }));
+                }
+            ));
         }
 
-        static string BuildWwwAuthHeader(string realm, string? service, string? scope)
+        private static string BuildWwwAuthHeader(string realm, string? service, string? scope)
         {
             var sb = new System.Text.StringBuilder("Bearer realm=\"").Append(realm).Append('"');
             if (service is not null)

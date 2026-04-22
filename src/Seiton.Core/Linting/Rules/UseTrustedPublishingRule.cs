@@ -1,11 +1,13 @@
 ﻿using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class UseTrustedPublishingRule : RuleBase
 {
-    bool workflowHasIdTokenWrite;
-    bool currentJobHasIdTokenWrite;
+    private bool workflowHasIdTokenWrite;
+    private bool currentJobHasIdTokenWrite;
 
     public override string Id => "use-trusted-publishing";
 
@@ -32,7 +34,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
             return;
         }
 
-        var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
+        var runText = Arena.GetStringValue(run.Run);
         if (!ContainsPublishCommand(runText) || currentJobHasIdTokenWrite)
         {
             return;
@@ -41,26 +43,26 @@ public sealed class UseTrustedPublishingRule : RuleBase
         AddStepWarning(
             step,
             "publish-like command detected without id-token: write permission; use trusted publishing (OIDC) instead of long-lived registry secrets",
-            run.Run.Range);
+            Arena.GetStringRange(run.Run));
     }
 
-    bool HasIdTokenWrite(Permissions? permissions)
+    private bool HasIdTokenWrite(Permissions? permissions)
     {
         if (permissions is null)
         {
             return false;
         }
 
-        if (permissions.All is not null)
+        if (permissions.All.HasValue)
         {
-            var scalar = Decode(permissions.All.Value);
+            var scalar = Decode(Arena.GetStringSlice(permissions.All));
             if (string.Equals(scalar, "write-all", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
         }
 
-        if (permissions.Scopes is null || permissions.Scopes.Count == 0)
+        if (permissions.Scopes is null || permissions.Scopes.Value.Count == 0)
         {
             return false;
         }
@@ -80,7 +82,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
         return false;
     }
 
-    static bool ContainsPublishCommand(ReadOnlySpan<byte> runText)
+    private static bool ContainsPublishCommand(ReadOnlySpan<byte> runText)
     {
         return ContainsAsciiIgnoreCase(runText, "npm publish"u8)
             || ContainsAsciiIgnoreCase(runText, "twine upload"u8)

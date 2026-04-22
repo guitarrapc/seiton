@@ -71,7 +71,7 @@ public sealed class PopularActionsUpdaterGoldenTests
         }
     }
 
-    static string CreateTempRepoCopy(string repoRoot)
+    private static string CreateTempRepoCopy(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
 
@@ -92,7 +92,7 @@ public sealed class PopularActionsUpdaterGoldenTests
         return tempRepo;
     }
 
-    static string FindRepoRoot()
+    private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)

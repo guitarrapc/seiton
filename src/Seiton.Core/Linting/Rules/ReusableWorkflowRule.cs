@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -6,7 +7,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class ReusableWorkflowRule : RuleBase
 {
-    readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
 
     public override string Id => "reusable-workflow";
 
@@ -26,17 +27,17 @@ public sealed class ReusableWorkflowRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
-        var hasUses = HasNodeValue(workflowCall.Uses);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var hasUses = HasNodeValue(workflowCall.Uses, Arena);
 
         if (!hasUses)
         {
-            if (workflowCall.Inputs is not null && workflowCall.Inputs.Count > 0)
+            if (workflowCall.Inputs is not null && workflowCall.Inputs.Value.Count > 0)
             {
                 AddJobError(job, $"job '{jobId}' key 'with' requires uses");
             }
 
-            if ((workflowCall.Secrets is not null && workflowCall.Secrets.Count > 0) || workflowCall.InheritSecrets)
+            if ((workflowCall.Secrets is not null && workflowCall.Secrets.Value.Count > 0) || workflowCall.InheritSecrets)
             {
                 AddJobError(job, $"job '{jobId}' key 'secrets' requires uses");
             }
@@ -46,19 +47,19 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         ReportIfPresent(job, job.RunsOn is not null, "runs-on", jobId);
         ReportIfPresent(job, job.Environment is not null, "environment", jobId);
-        ReportIfPresent(job, job.Outputs is not null && job.Outputs.Count > 0, "outputs", jobId);
+        ReportIfPresent(job, job.Outputs is not null && job.Outputs.Value.Count > 0, "outputs", jobId);
         ReportIfPresent(job, job.Env is not null, "env", jobId);
         ReportIfPresent(job, job.Defaults is not null, "defaults", jobId);
         ReportIfPresent(job, job.Steps is not null && job.Steps.Count > 0, "steps", jobId);
-        ReportIfPresent(job, job.TimeoutMinutes is not null, "timeout-minutes", jobId);
-        ReportIfPresent(job, job.ContinueOnError is not null, "continue-on-error", jobId);
+        ReportIfPresent(job, job.TimeoutMinutes.HasValue, "timeout-minutes", jobId);
+        ReportIfPresent(job, job.ContinueOnError.HasValue, "continue-on-error", jobId);
         ReportIfPresent(job, job.Container is not null, "container", jobId);
         ReportIfPresent(job, job.Services is not null, "services", jobId);
 
         ValidateLocalReusableWorkflowContract(job, workflowCall, jobId);
     }
 
-    void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId)
+    private void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId)
     {
         if (Config.Utf8Yaml is null
             || string.IsNullOrEmpty(Config.FilePath)
@@ -68,7 +69,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             return;
         }
 
-        var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(workflowCall.Uses);
         if (!TryResolveLocalWorkflowPath(uses, out var resolvedPath, out var relativePath, out var invalidRefFormat))
         {
             if (invalidRefFormat)
@@ -92,7 +93,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         ValidateWorkflowCallSecrets(job, jobId, workflowCall, contract);
     }
 
-    LocalWorkflowContract? GetLocalWorkflowContract(Job job, string jobId, string relativePath, string resolvedPath)
+    private LocalWorkflowContract? GetLocalWorkflowContract(Job job, string jobId, string relativePath, string resolvedPath)
     {
         if (localWorkflowContracts.TryGetValue(resolvedPath, out var cached))
         {
@@ -142,16 +143,16 @@ public sealed class ReusableWorkflowRule : RuleBase
             return null;
         }
 
-        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent);
+        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes, parseResult.Arena!);
         localWorkflowContracts[resolvedPath] = contract;
         return contract;
     }
 
-    void ValidateWorkflowCallInputs(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
+    private void ValidateWorkflowCallInputs(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
         if (workflowCall.Inputs is not null)
         {
-            foreach (var pair in workflowCall.Inputs)
+            foreach (var pair in workflowCall.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
                 if (!contract.Inputs.TryGetValue(inputName, out var expected))
@@ -159,7 +160,7 @@ public sealed class ReusableWorkflowRule : RuleBase
                     AddJobError(
                         job,
                         $"job '{jobId}' passes unknown reusable workflow input '{inputName}'",
-                        pair.Value.Name.Range);
+                        Arena.GetStringRange(pair.Value.Name));
                     continue;
                 }
 
@@ -169,7 +170,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         foreach (var requiredInput in contract.RequiredInputs)
         {
-            if (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs, requiredInput))
+            if (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs.Value, requiredInput))
             {
                 continue;
             }
@@ -181,7 +182,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
     }
 
-    void ValidateInputType(Job job, string jobId, WorkflowCallInput providedInput, InputContract expected)
+    private void ValidateInputType(Job job, string jobId, WorkflowCallInput providedInput, InputContract expected)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -189,13 +190,13 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
 
         var value = providedInput.Value;
-        var valueSpan = value.Value.AsSpan(Config.Utf8Yaml);
-        if (value.Expression is not null || valueSpan.IndexOf("${{"u8) >= 0)
+        var valueSpan = Arena.GetStringValue(value);
+        if (Arena.GetStringExpression(value).HasValue || valueSpan.IndexOf("${{"u8) >= 0)
         {
             return;
         }
 
-        var valueText = Decode(value.Value);
+        var valueText = Decode(Arena.GetStringSlice(value));
         if (expected.Type == WorkflowCallInputType.Boolean)
         {
             if (IsBooleanLiteral(valueText))
@@ -206,7 +207,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             AddJobError(
                 job,
                 $"job '{jobId}' input '{expected.Name}' expects boolean but got '{valueText}'",
-                value.Range);
+                Arena.GetStringRange(value));
             return;
         }
 
@@ -220,15 +221,15 @@ public sealed class ReusableWorkflowRule : RuleBase
             AddJobError(
                 job,
                 $"job '{jobId}' input '{expected.Name}' expects number but got '{valueText}'",
-                value.Range);
+                Arena.GetStringRange(value));
         }
     }
 
-    void ValidateWorkflowCallSecrets(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
+    private void ValidateWorkflowCallSecrets(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
         if (workflowCall.Secrets is not null)
         {
-            foreach (var pair in workflowCall.Secrets)
+            foreach (var pair in workflowCall.Secrets.Value)
             {
                 var secretName = Decode(pair.Key);
                 if (contract.Secrets.Contains(secretName))
@@ -239,7 +240,7 @@ public sealed class ReusableWorkflowRule : RuleBase
                 AddJobError(
                     job,
                     $"job '{jobId}' passes unknown reusable workflow secret '{secretName}'",
-                    pair.Value.Name.Range);
+                    Arena.GetStringRange(pair.Value.Name));
             }
         }
 
@@ -250,7 +251,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         foreach (var requiredSecret in contract.RequiredSecrets)
         {
-            if (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets, requiredSecret))
+            if (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets.Value, requiredSecret))
             {
                 continue;
             }
@@ -262,7 +263,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
     }
 
-    bool TryResolveLocalWorkflowPath(ReadOnlySpan<byte> uses, out string resolvedPath, out string relativePath, out bool invalidRefFormat)
+    private bool TryResolveLocalWorkflowPath(ReadOnlySpan<byte> uses, out string resolvedPath, out string relativePath, out bool invalidRefFormat)
     {
         resolvedPath = string.Empty;
         relativePath = string.Empty;
@@ -298,7 +299,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return true;
     }
 
-    static bool ContainsInput(IReadOnlyDictionary<Utf8String, WorkflowCallInput> providedInputs, string requiredInput)
+    private bool ContainsInput(SliceMap<WorkflowCallInput> providedInputs, string requiredInput)
     {
         foreach (var pair in providedInputs)
         {
@@ -311,7 +312,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    static bool ContainsSecret(IReadOnlyDictionary<Utf8String, WorkflowCallSecret> providedSecrets, string requiredSecret)
+    private bool ContainsSecret(SliceMap<WorkflowCallSecret> providedSecrets, string requiredSecret)
     {
         foreach (var pair in providedSecrets)
         {
@@ -324,13 +325,13 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    static bool IsBooleanLiteral(string value)
+    private static bool IsBooleanLiteral(string value)
     {
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
             || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
-    static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
     {
         var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
         if (string.IsNullOrEmpty(workflowDirectory))
@@ -347,7 +348,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return workflowDirectory;
     }
 
-    static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
     {
         var separator = Path.DirectorySeparatorChar;
         var marker = $"{separator}.github{separator}workflows{separator}";
@@ -369,7 +370,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    static string TrimCurrentDirectoryPrefix(string path)
+    private static string TrimCurrentDirectoryPrefix(string path)
     {
         if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
@@ -379,7 +380,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return path;
     }
 
-    static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
         var chars = new char[utf8.Length];
         for (var i = 0; i < utf8.Length; i++)
@@ -390,7 +391,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return new string(chars);
     }
 
-    void ReportIfPresent(Job job, bool present, string keyName, string jobId)
+    private void ReportIfPresent(Job job, bool present, string keyName, string jobId)
     {
         if (!present)
         {
@@ -400,9 +401,9 @@ public sealed class ReusableWorkflowRule : RuleBase
         AddJobError(job, $"when job '{jobId}' calls reusable workflow with uses, key '{keyName}' is not allowed");
     }
 
-    sealed record InputContract(string Name, WorkflowCallInputType Type);
+    private sealed record InputContract(string Name, WorkflowCallInputType Type);
 
-    sealed class LocalWorkflowContract
+    private sealed class LocalWorkflowContract
     {
         public Dictionary<string, InputContract> Inputs { get; } = new(StringComparer.Ordinal);
 
@@ -412,7 +413,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         public HashSet<string> RequiredSecrets { get; } = new(StringComparer.Ordinal);
 
-        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent)
+        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent, byte[] source, AstArena arena)
         {
             var contract = new LocalWorkflowContract();
 
@@ -424,8 +425,8 @@ public sealed class ReusableWorkflowRule : RuleBase
                     var inputName = Decode(input.Id);
                     contract.Inputs[inputName] = new InputContract(inputName, input.Type);
 
-                    var hasDefault = input.Default is not null;
-                    if (input.Required?.Value == true && !hasDefault)
+                    var hasDefault = input.Default.HasValue;
+                    if (input.Required.HasValue && arena.GetBoolValue(input.Required) && !hasDefault)
                     {
                         contract.RequiredInputs.Add(inputName);
                     }
@@ -434,11 +435,11 @@ public sealed class ReusableWorkflowRule : RuleBase
 
             if (workflowCallEvent.Secrets is not null)
             {
-                foreach (var pair in workflowCallEvent.Secrets)
+                foreach (var pair in workflowCallEvent.Secrets.Value)
                 {
-                    var secretName = Decode(pair.Key);
+                    var secretName = Encoding.UTF8.GetString(pair.Key.AsSpan(source));
                     contract.Secrets.Add(secretName);
-                    if (pair.Value.Required?.Value == true)
+                    if (pair.Value.Required.HasValue && arena.GetBoolValue(pair.Value.Required))
                     {
                         contract.RequiredSecrets.Add(secretName);
                     }

@@ -386,7 +386,7 @@ public sealed class GitHubActionShaResolverTests
             .IsEqualTo(1);
     }
 
-    static GitHubActionShaResolver CreateResolver(
+    private static GitHubActionShaResolver CreateResolver(
         StubHttpMessageHandler handler,
         FixPinningConfig? pinningConfig = null,
         GitHubNetworkConfig? githubConfig = null)
@@ -397,7 +397,7 @@ public sealed class GitHubActionShaResolverTests
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
-        readonly Dictionary<string, Func<HttpResponseMessage>> _responses = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Func<HttpResponseMessage>> _responses = new(StringComparer.Ordinal);
 
         public List<string> RequestedUris { get; } = [];
 

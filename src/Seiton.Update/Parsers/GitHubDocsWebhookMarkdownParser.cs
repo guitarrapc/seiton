@@ -4,11 +4,11 @@ namespace Seiton.Update.Parsers;
 
 internal sealed class GitHubDocsWebhookMarkdownParser
 {
-    static readonly Regex HeadingRegex = new(
+    private static readonly Regex HeadingRegex = new(
         "^##\\s+`?(?<name>[a-z0-9_]+)`?\\s*$",
         RegexOptions.Compiled | RegexOptions.Multiline);
 
-    static readonly Regex BacktickTokenRegex = new(
+    private static readonly Regex BacktickTokenRegex = new(
         "`(?<token>[a-z0-9_]+)`",
         RegexOptions.Compiled);
 
@@ -61,7 +61,7 @@ internal sealed class GitHubDocsWebhookMarkdownParser
         return names;
     }
 
-    static bool TryExtractActivityTypesFromTable(string section, out IReadOnlyList<string>? activityTypes)
+    private static bool TryExtractActivityTypesFromTable(string section, out IReadOnlyList<string>? activityTypes)
     {
         activityTypes = null;
         var lines = TextNormalization.NormalizeToLf(section).Split('\n');

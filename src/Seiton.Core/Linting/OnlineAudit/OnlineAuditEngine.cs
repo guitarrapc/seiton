@@ -5,6 +5,8 @@ using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.OnlineAudit;
 
 public sealed class OnlineAuditEngine(
@@ -12,14 +14,14 @@ public sealed class OnlineAuditEngine(
     IActionRefResolver? actionRefResolver,
     NetworkConfig networkConfig)
 {
-    readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
-    readonly IActionRefResolver? refResolver = actionRefResolver;
-    readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
-    readonly KnownVulnerableActionsRule knownVulnerableActionsRule = new();
-    readonly ImpostorCommitRule impostorCommitRule = new();
-    readonly RefConfusionRule refConfusionRule = new();
-    readonly StaleActionRefsRule staleActionRefsRule = new();
-    readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
+    private readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
+    private readonly IActionRefResolver? refResolver = actionRefResolver;
+    private readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
+    private readonly KnownVulnerableActionsRule knownVulnerableActionsRule = new();
+    private readonly ImpostorCommitRule impostorCommitRule = new();
+    private readonly RefConfusionRule refConfusionRule = new();
+    private readonly StaleActionRefsRule staleActionRefsRule = new();
+    private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
 
     public async Task<OnlineAuditResult> AuditAsync(
         LintResult lintResult,
@@ -40,7 +42,7 @@ public sealed class OnlineAuditEngine(
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        var targets = CollectTargets(lintResult.Workflow, utf8Yaml, filePath);
+        var targets = CollectTargets(lintResult.Workflow, lintResult.ParseResult.Arena!, utf8Yaml, filePath);
         if (targets.Count == 0)
         {
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
@@ -93,7 +95,7 @@ public sealed class OnlineAuditEngine(
         return new OnlineAuditResult(diagnostics.ToArray(), addedCount, skippedCount, failedCount);
     }
 
-    async Task<AuditOutcome> AuditTargetAsync(ActionAuditTarget target, CancellationToken cancellationToken)
+    private async Task<AuditOutcome> AuditTargetAsync(ActionAuditTarget target, CancellationToken cancellationToken)
     {
         if (ShouldIgnore(target))
         {
@@ -126,27 +128,27 @@ public sealed class OnlineAuditEngine(
 
             var diagnostics = new List<Diagnostic>(4);
             var knownVulnerable = knownVulnerableActionsRule.Evaluate(target, advisory);
-            if (knownVulnerable.HasValue)
+            if (knownVulnerable is not null)
             {
                 diagnostics.Add(knownVulnerable.Value);
             }
 
-            if (resolution.HasValue)
+            if (resolution is not null)
             {
                 var impostorCommit = impostorCommitRule.Evaluate(target, resolution.Value);
-                if (impostorCommit.HasValue)
+                if (impostorCommit is not null)
                 {
                     diagnostics.Add(impostorCommit.Value);
                 }
 
                 var refConfusion = refConfusionRule.Evaluate(target, resolution.Value);
-                if (refConfusion.HasValue)
+                if (refConfusion is not null)
                 {
                     diagnostics.Add(refConfusion.Value);
                 }
 
                 var staleActionRef = staleActionRefsRule.Evaluate(target, resolution.Value);
-                if (staleActionRef.HasValue)
+                if (staleActionRef is not null)
                 {
                     diagnostics.Add(staleActionRef.Value);
                 }
@@ -160,7 +162,7 @@ public sealed class OnlineAuditEngine(
         }
     }
 
-    bool ShouldIgnore(ActionAuditTarget target)
+    private bool ShouldIgnore(ActionAuditTarget target)
     {
         var name = target.Owner + "/" + target.Repo;
         for (var i = 0; i < compiledIgnoreActions.Length; i++)
@@ -175,11 +177,11 @@ public sealed class OnlineAuditEngine(
         return false;
     }
 
-    static List<ActionAuditTarget> CollectTargets(Workflow workflow, byte[] utf8Yaml, string filePath)
+    private static List<ActionAuditTarget> CollectTargets(Workflow workflow, AstArena arena, byte[] utf8Yaml, string filePath)
     {
         var result = new List<ActionAuditTarget>();
         var jobs = workflow.Jobs;
-        if (jobs is null || jobs.Count == 0)
+        if (jobs.Count == 0)
         {
             return result;
         }
@@ -191,7 +193,7 @@ public sealed class OnlineAuditEngine(
             var workflowCall = job.WorkflowCall;
             if (workflowCall is not null)
             {
-                TryAddTarget(result, workflowCall.Uses, utf8Yaml, filePath);
+                TryAddTarget(result, workflowCall.Uses, arena, utf8Yaml, filePath);
             }
 
             var steps = job.Steps;
@@ -204,7 +206,7 @@ public sealed class OnlineAuditEngine(
             {
                 if (steps[i].Exec is ExecAction action)
                 {
-                    TryAddTarget(result, action.Uses, utf8Yaml, filePath);
+                    TryAddTarget(result, action.Uses, arena, utf8Yaml, filePath);
                 }
             }
         }
@@ -212,9 +214,9 @@ public sealed class OnlineAuditEngine(
         return result;
     }
 
-    static void TryAddTarget(List<ActionAuditTarget> targets, StringNode usesNode, byte[] utf8Yaml, string filePath)
+    private static void TryAddTarget(List<ActionAuditTarget> targets, StringNodeId usesNode, AstArena arena, byte[] utf8Yaml, string filePath)
     {
-        var usesText = Encoding.UTF8.GetString(usesNode.Value.AsSpan(utf8Yaml));
+        var usesText = Encoding.UTF8.GetString(arena.GetStringValue(usesNode));
         if (string.IsNullOrWhiteSpace(usesText)
             || usesText.StartsWith("./", StringComparison.Ordinal)
             || usesText.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
@@ -223,37 +225,9 @@ public sealed class OnlineAuditEngine(
             return;
         }
 
-        targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, usesNode.Range, filePath));
+        targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, arena.GetStringRange(usesNode), filePath));
     }
-
-    static bool TryParseActionReference(string usesRef, out string owner, out string repo, out string reference)
-    {
-        owner = string.Empty;
-        repo = string.Empty;
-        reference = string.Empty;
-
-        var at = usesRef.LastIndexOf('@');
-        if (at <= 0 || at == usesRef.Length - 1)
-        {
-            return false;
-        }
-
-        var actionPath = usesRef[..at];
-        reference = usesRef[(at + 1)..];
-
-        var slash1 = actionPath.IndexOf('/');
-        if (slash1 <= 0 || slash1 == actionPath.Length - 1)
-        {
-            return false;
-        }
-
-        var slash2 = actionPath.IndexOf('/', slash1 + 1);
-        owner = actionPath[..slash1];
-        repo = slash2 < 0 ? actionPath[(slash1 + 1)..] : actionPath.Substring(slash1 + 1, slash2 - (slash1 + 1));
-        return owner.Length > 0 && repo.Length > 0 && reference.Length > 0;
-    }
-
-    static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
+    private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
     {
         if (entries.Count == 0)
         {
@@ -271,8 +245,8 @@ public sealed class OnlineAuditEngine(
         return compiled;
     }
 
-    readonly record struct AuditOutcome(Diagnostic[] Diagnostics, bool Skipped, bool Failed);
-    readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct AuditOutcome(Diagnostic[] Diagnostics, bool Skipped, bool Failed);
+    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
 }
 
 public readonly record struct ActionAuditTarget(
@@ -283,29 +257,7 @@ public readonly record struct ActionAuditTarget(
     TextRange Location,
     string FilePath)
 {
-    public bool IsCommitSha => IsFullLengthCommitSha(Reference);
-
-    static bool IsFullLengthCommitSha(string reference)
-    {
-        if (reference.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < reference.Length; i++)
-        {
-            var ch = reference[i];
-            var isDigit = ch is >= '0' and <= '9';
-            var isLowerHex = ch is >= 'a' and <= 'f';
-            var isUpperHex = ch is >= 'A' and <= 'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    public bool IsCommitSha => IsFullCommitSha(Reference);
 }
 
 public readonly record struct OnlineAuditResult(

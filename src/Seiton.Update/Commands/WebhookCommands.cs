@@ -105,7 +105,7 @@ internal static class WebhookCommands
         return 0;
     }
 
-    static void WriteDiffReport(string repoRoot, Model.WebhookDiffResult diff, string mode)
+    private static void WriteDiffReport(string repoRoot, Model.WebhookDiffResult diff, string mode)
     {
         var reportDir = Path.Combine(repoRoot, "data", "sources", "reports");
         Directory.CreateDirectory(reportDir);

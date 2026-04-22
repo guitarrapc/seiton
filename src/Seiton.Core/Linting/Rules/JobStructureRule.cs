@@ -10,10 +10,10 @@ public sealed class JobStructureRule : RuleBase
 
     public override void VisitJobPre(Job job)
     {
-        var hasUses = HasNodeValue(job.WorkflowCall?.Uses);
+        var hasUses = HasNodeValue(job.WorkflowCall?.Uses ?? default, Arena);
         var hasRunsOn = job.RunsOn is not null;
         var hasSteps = job.Steps is not null;
-        var jobId = Decode(job.Id.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
 
         if (hasUses && hasSteps)
         {

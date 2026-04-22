@@ -291,7 +291,7 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     // Helpers
-    static Diagnostic MakeDiagnostic(
+    private static Diagnostic MakeDiagnostic(
         DiagnosticSeverity severity,
         string message,
         int startLine,
@@ -309,7 +309,7 @@ public sealed class DiagnosticFormatterRichTextTests
             FilePath: filePath,
             Help: help);
 
-    static string Render(
+    private static string Render(
         Diagnostic diagnostic,
         bool oneline = false,
         bool color = false,

@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -8,30 +9,35 @@ public sealed class ShellNameRule : RuleBase
 
     public override string Name => "Shell Name Rule";
 
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
+
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
-        CheckDefaultsRunShell(workflow.Defaults, shellNode =>
-            AddWorkflowError(workflow, BuildInvalidShellMessage(shellNode), shellNode.Range));
+        _currentWorkflow = workflow;
+        CheckDefaultsRunShell(workflow.Defaults);
+        _currentWorkflow = null;
     }
 
     public override void VisitJobPre(Job job)
     {
-        CheckDefaultsRunShell(job.Defaults, shellNode =>
-            AddJobError(job, BuildInvalidShellMessage(shellNode), shellNode.Range));
+        _currentJob = job;
+        CheckDefaultsRunShell(job.Defaults);
+        _currentJob = null;
     }
 
     public override void VisitStep(Step step)
     {
-        if (step.Exec is not ExecRun run || run.Shell is null || Config.Utf8Yaml is null)
+        if (step.Exec is not ExecRun run || !run.Shell.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var shellSpan = run.Shell.Value.AsSpan(Config.Utf8Yaml);
+        var shellSpan = Arena.GetStringValue(run.Shell);
 
         // Skip expression values ? cannot validate at static analysis time
-        if (run.Shell.Expression is not null || shellSpan.IndexOf("${{"u8) >= 0)
+        if (Arena.GetStringExpression(run.Shell).HasValue || shellSpan.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -41,42 +47,50 @@ public sealed class ShellNameRule : RuleBase
             return;
         }
 
-        AddStepError(step, BuildInvalidShellMessage(run.Shell), run.Shell.Range);
+        AddStepError(step, BuildInvalidShellMessage(run.Shell), Arena.GetStringRange(run.Shell));
     }
 
-    void CheckDefaultsRunShell(Defaults? defaults, Action<StringNode> report)
+    private void CheckDefaultsRunShell(Defaults? defaults)
     {
         if (defaults is null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var shellNode = defaults.Run?.Shell;
-        if (shellNode is null)
+        var shellNodeNullable = defaults.Run?.Shell;
+        if (shellNodeNullable is null || !shellNodeNullable.Value.HasValue)
         {
             return;
         }
 
-        var shellSpan = shellNode.Value.AsSpan(Config.Utf8Yaml);
+        var shellNode = shellNodeNullable.Value;
+        var shellSpan = Arena.GetStringValue(shellNode);
 
-        if (shellNode.Expression is not null || shellSpan.IndexOf("${{"u8) >= 0)
+        if (Arena.GetStringExpression(shellNode).HasValue || shellSpan.IndexOf("${{"u8) >= 0)
         {
             return;
         }
 
         if (!IsValidShellName(shellSpan))
         {
-            report(shellNode);
+            if (_currentWorkflow is not null)
+            {
+                AddWorkflowError(_currentWorkflow, BuildInvalidShellMessage(shellNode), Arena.GetStringRange(shellNode));
+            }
+            else if (_currentJob is not null)
+            {
+                AddJobError(_currentJob, BuildInvalidShellMessage(shellNode), Arena.GetStringRange(shellNode));
+            }
         }
     }
 
-    string BuildInvalidShellMessage(StringNode shellNode)
+    private string BuildInvalidShellMessage(StringNodeId shellNode)
     {
-        var shellText = Decode(shellNode.Value);
+        var shellText = Decode(Arena.GetStringSlice(shellNode));
         return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python";
     }
 
-    static bool IsValidShellName(ReadOnlySpan<byte> shell)
+    private static bool IsValidShellName(ReadOnlySpan<byte> shell)
     {
         return shell.SequenceEqual("bash"u8)
             || shell.SequenceEqual("sh"u8)

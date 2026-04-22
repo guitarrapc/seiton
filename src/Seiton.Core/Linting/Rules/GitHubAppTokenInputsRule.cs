@@ -1,5 +1,7 @@
 ﻿using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class GitHubAppTokenInputsRule : RuleBase
@@ -15,7 +17,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             return;
         }
 
-        var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(actionExec.Uses);
         if (!IsCreateGitHubAppTokenAction(uses))
         {
             return;
@@ -26,9 +28,9 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         var hasOwner = false;
         if (actionExec.Inputs is not null)
         {
-            foreach (var pair in actionExec.Inputs)
+            foreach (var pair in actionExec.Inputs.Value)
             {
-                var key = pair.Key.Span;
+                var key = pair.Key.AsSpan(Config.Utf8Yaml);
                 if (IsRepositoryConstraintKey(key))
                 {
                     hasRepositoryConstraint = true;
@@ -58,7 +60,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             return;
         }
 
-        var usesText = Decode(actionExec.Uses.Value);
+        var usesText = Decode(Arena.GetStringSlice(actionExec.Uses));
         var usesLocation = BuildUsesLocation(actionExec);
         if (!hasRepositoryConstraint && !hasPermissionConstraint)
         {
@@ -84,7 +86,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             usesLocation);
     }
 
-    static bool IsCreateGitHubAppTokenAction(ReadOnlySpan<byte> uses)
+    private static bool IsCreateGitHubAppTokenAction(ReadOnlySpan<byte> uses)
     {
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("../"u8) || uses.StartsWith("docker://"u8))
         {
@@ -94,7 +96,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         return MatchesActionReference(uses, "actions/create-github-app-token"u8);
     }
 
-    static bool MatchesActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
+    private static bool MatchesActionReference(ReadOnlySpan<byte> uses, ReadOnlySpan<byte> actionName)
     {
         if (uses.Length < actionName.Length)
         {
@@ -109,24 +111,24 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         return uses.Length == actionName.Length || uses[actionName.Length] == (byte)'@';
     }
 
-    static bool IsRepositoryConstraintKey(ReadOnlySpan<byte> inputKey)
+    private static bool IsRepositoryConstraintKey(ReadOnlySpan<byte> inputKey)
     {
         return EqualsAsciiIgnoreCase(inputKey, "repositories"u8)
             || EqualsAsciiIgnoreCase(inputKey, "repository"u8);
     }
 
-    static bool IsOwnerKey(ReadOnlySpan<byte> inputKey)
+    private static bool IsOwnerKey(ReadOnlySpan<byte> inputKey)
     {
         return EqualsAsciiIgnoreCase(inputKey, "owner"u8);
     }
 
-    static bool IsPermissionConstraintKey(ReadOnlySpan<byte> inputKey)
+    private static bool IsPermissionConstraintKey(ReadOnlySpan<byte> inputKey)
     {
         return EqualsAsciiIgnoreCase(inputKey, "permissions"u8)
             || StartsWithAsciiIgnoreCase(inputKey, "permission-"u8);
     }
 
-    static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> prefix)
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> prefix)
     {
         if (left.Length < prefix.Length)
         {
@@ -134,30 +136,5 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         }
 
         return EqualsAsciiIgnoreCase(left[..prefix.Length], prefix);
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            if (ToLowerAscii(left[i]) != ToLowerAscii(right[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static byte ToLowerAscii(byte value)
-    {
-        return value is >= (byte)'A' and <= (byte)'Z'
-            ? (byte)(value + 32)
-            : value;
     }
 }

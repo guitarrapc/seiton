@@ -10,7 +10,7 @@ public interface IRule : IPass
 
     bool SupportsDocumentKind(DocumentKind documentKind);
 
-    Diagnostic[] GetDiagnostics();
+    IReadOnlyList<Diagnostic> GetDiagnostics();
 
     void SetConfig(LintConfig config);
 }

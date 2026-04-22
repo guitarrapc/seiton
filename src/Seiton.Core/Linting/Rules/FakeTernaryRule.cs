@@ -1,6 +1,8 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class FakeTernaryRule : RuleBase
@@ -19,14 +21,14 @@ public sealed class FakeTernaryRule : RuleBase
         ValidateCondition(step.If, null, step);
     }
 
-    void ValidateCondition(StringNode? condition, Job? job, Step? step)
+    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
     {
-        if (condition is null || Config.Utf8Yaml is null)
+        if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = condition.Value.AsSpan(Config.Utf8Yaml);
+        var raw = Arena.GetStringValue(condition);
         if (raw.Length == 0)
         {
             return;
@@ -34,7 +36,7 @@ public sealed class FakeTernaryRule : RuleBase
 
         var expression = TryExtractExpressionBody(raw, out var body) ? body : raw;
 
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return;
@@ -48,16 +50,16 @@ public sealed class FakeTernaryRule : RuleBase
         const string message = "avoid fake ternary pattern 'cond && a || b'; use a case expression (or equivalent explicit branching)";
         if (job is not null)
         {
-            AddJobWarning(job, message, condition.Range);
+            AddJobWarning(job, message, Arena.GetStringRange(condition));
         }
 
         if (step is not null)
         {
-            AddStepWarning(step, message, condition.Range);
+            AddStepWarning(step, message, Arena.GetStringRange(condition));
         }
     }
 
-    static bool ContainsFakeTernary(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsFakeTernary(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -102,7 +104,7 @@ public sealed class FakeTernaryRule : RuleBase
         };
     }
 
-    static bool ContainsFakeTernaryInArguments(
+    private static bool ContainsFakeTernaryInArguments(
         ExpressionNode node,
         ExpressionNode[] nodes,
         int[] arguments,
@@ -125,12 +127,12 @@ public sealed class FakeTernaryRule : RuleBase
         return false;
     }
 
-    static bool IsBooleanType(ExprType type)
+    private static bool IsBooleanType(ExprType type)
     {
         return type is BoolExprType;
     }
 
-    static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
+    private static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
     {
         body = value;
 
@@ -168,39 +170,5 @@ public sealed class FakeTernaryRule : RuleBase
 
         body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
         return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length)
-        {
-            var b = value[start];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                break;
-            }
-
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start)
-        {
-            var b = value[end];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                break;
-            }
-
-            end--;
-        }
-
-        if (end < start)
-        {
-            return ReadOnlySpan<byte>.Empty;
-        }
-
-        return value.Slice(start, end - start + 1);
     }
 }

@@ -31,7 +31,7 @@ internal sealed class GitHubAvailabilitySourceParser
             snapshot.StepRoots ?? []);
     }
 
-    sealed class AvailabilitySnapshot
+    private sealed class AvailabilitySnapshot
     {
         public List<string>? WorkflowRoots { get; set; }
         public List<string>? JobRoots { get; set; }

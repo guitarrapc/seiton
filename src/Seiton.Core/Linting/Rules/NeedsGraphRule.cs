@@ -9,7 +9,7 @@ public sealed class NeedsGraphRule : RuleBase
 
     public override string Name => "Needs Graph Rule";
 
-    IReadOnlyDictionary<Utf8String, Job> _knownJobs = new Dictionary<Utf8String, Job>();
+    private SliceMap<Job> _knownJobs;
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -24,16 +24,15 @@ public sealed class NeedsGraphRule : RuleBase
             return;
         }
 
-        for (var i = 0; i < job.Needs.Count; i++)
+        for (var i = 0; i < job.Needs.Length; i++)
         {
             var need = job.Needs[i];
-            var needSpan = need.Value.AsSpan(Config.Utf8Yaml);
-            var needKey = Utf8String.FromLowerAscii(needSpan);
-            if (!_knownJobs.ContainsKey(needKey))
+            var needSpan = Arena.GetStringValue(need);
+            if (!_knownJobs.ContainsKey(Config.Utf8Yaml, needSpan))
             {
-                var jobId = Decode(job.Id.Value);
-                var needText = Decode(need.Value);
-                AddJobError(job, $"job '{jobId}' references unknown job '{needText}' in needs", need.Range);
+                var jobId = Decode(Arena.GetStringSlice(job.Id));
+                var needText = Decode(Arena.GetStringSlice(need));
+                AddJobError(job, $"job '{jobId}' references unknown job '{needText}' in needs", Arena.GetStringRange(need));
             }
         }
     }
@@ -43,39 +42,48 @@ public sealed class NeedsGraphRule : RuleBase
         DetectCycles();
     }
 
-    void DetectCycles()
+    private void DetectCycles()
     {
         if (_knownJobs.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
 
+        var source = Config.Utf8Yaml;
+
         // DFS cycle detection using colors: 0=unvisited, 1=in-progress (gray), 2=done (black)
         var color = new Dictionary<Utf8String, byte>(_knownJobs.Count);
-        foreach (var key in _knownJobs.Keys)
+        foreach (var pair in _knownJobs)
         {
-            color[key] = 0;
+            color[pair.Key.ToUtf8StringZeroCopy(source)] = 0;
         }
 
         var stack = new Stack<(Utf8String Key, int NeighborIndex)>();
 
         foreach (var kvp in _knownJobs)
         {
-            if (color[kvp.Key] != 0)
+            var key = kvp.Key.ToUtf8StringZeroCopy(source);
+            if (color[key] != 0)
             {
                 continue;
             }
 
-            color[kvp.Key] = 1;
-            stack.Push((kvp.Key, 0));
+            color[key] = 1;
+            stack.Push((key, 0));
 
             while (stack.Count > 0)
             {
                 var (currentKey, ni) = stack.Peek();
-                var currentJob = _knownJobs[currentKey];
+                if (!_knownJobs.TryGetValue(source, currentKey.Span, out var currentJob))
+                {
+                    stack.Pop();
+                    color[currentKey] = 2;
+                    continue;
+                }
+
                 var needs = currentJob.Needs;
 
-                if (needs is null || ni >= needs.Count)
+                if (needs is null || ni >= needs.Length)
                 {
                     stack.Pop();
                     color[currentKey] = 2;
@@ -87,19 +95,19 @@ public sealed class NeedsGraphRule : RuleBase
                 stack.Push((currentKey, ni + 1));
 
                 var need = needs[ni];
-                var needSpan = need.Value.AsSpan(Config.Utf8Yaml);
+                var needSpan = Arena.GetStringValue(need);
                 var needKey = Utf8String.FromLowerAscii(needSpan);
 
                 if (!color.TryGetValue(needKey, out var neighborColor))
                 {
-                    continue; // unknown job reference ? already reported in VisitJobPre
+                    continue; // unknown job reference — already reported in VisitJobPre
                 }
 
                 if (neighborColor == 1) // gray: back-edge = cycle
                 {
-                    var jobId = Decode(currentJob.Id.Value);
-                    var needText = Decode(need.Value);
-                    AddJobError(currentJob, $"job '{jobId}' has a circular 'needs' dependency via '{needText}'", need.Range);
+                    var jobId = Decode(Arena.GetStringSlice(currentJob.Id));
+                    var needText = Decode(Arena.GetStringSlice(need));
+                    AddJobError(currentJob, $"job '{jobId}' has a circular 'needs' dependency via '{needText}'", Arena.GetStringRange(need));
                 }
                 else if (neighborColor == 0)
                 {

@@ -34,12 +34,12 @@ internal sealed class GitHubPopularActionsSourceParser
             .ToArray();
     }
 
-    sealed class PopularActionsSnapshot
+    private sealed class PopularActionsSnapshot
     {
         public List<PopularActionEntry>? Actions { get; set; }
     }
 
-    sealed class PopularActionEntry
+    private sealed class PopularActionEntry
     {
         public string Uses { get; set; } = string.Empty;
         public List<string>? Inputs { get; set; }

@@ -1,17 +1,21 @@
 ﻿using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class DangerousTriggersRule : RuleBase
 {
-    static readonly WebhookTypes.EventId[] DangerousEventIds =
+    private static readonly WebhookTypes.EventId[] DangerousEventIds =
     [
         WebhookTypes.EventId.PullRequestTarget,
         WebhookTypes.EventId.WorkflowRun,
     ];
 
-    HashSet<string> additionalDangerousEvents = [];
+    private HashSet<string> additionalDangerousEvents = [];
 
     public override string Id => "dangerous-triggers";
 
@@ -32,10 +36,10 @@ public sealed class DangerousTriggersRule : RuleBase
             return;
         }
 
-        var eventNameSpan = webhookEv.EventName.Value.AsSpan(Config.Utf8Yaml);
+        var eventNameSpan = Arena.GetStringValue(webhookEv.EventName);
         if (IsAdditionalDangerousEvent(eventNameSpan))
         {
-            var configuredEventName = Decode(webhookEv.EventName.Value);
+            var configuredEventName = Decode(Arena.GetStringSlice(webhookEv.EventName));
             AddEventWarning(webhookEv, $"event '{configuredEventName}' is potentially dangerous and may allow privilege escalation from a pull request");
             return;
         }
@@ -52,13 +56,13 @@ public sealed class DangerousTriggersRule : RuleBase
                 continue;
             }
 
-            var eventName = Decode(webhookEv.EventName.Value);
+            var eventName = Decode(Arena.GetStringSlice(webhookEv.EventName));
             AddEventWarning(webhookEv, $"event '{eventName}' is potentially dangerous and may allow privilege escalation from a pull request");
             return;
         }
     }
 
-    bool IsAdditionalDangerousEvent(ReadOnlySpan<byte> eventNameSpan)
+    private bool IsAdditionalDangerousEvent(ReadOnlySpan<byte> eventNameSpan)
     {
         if (additionalDangerousEvents.Count == 0)
         {
@@ -66,37 +70,5 @@ public sealed class DangerousTriggersRule : RuleBase
         }
 
         return additionalDangerousEvents.Contains(NormalizeAsciiLower(eventNameSpan));
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.Ordinal);
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var buffer = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var ch = (char)value[i];
-            if (ch is >= 'A' and <= 'Z')
-            {
-                ch = (char)(ch + 32);
-            }
-
-            buffer[i] = ch;
-        }
-
-        return new string(buffer);
     }
 }

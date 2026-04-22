@@ -1,28 +1,13 @@
-﻿using System.Buffers;
-using System.Text;
+﻿using System.Runtime.CompilerServices;
+using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 
 public static class ExpressionParser
 {
-    public static ExpressionParseResult Parse(string expression)
-    {
-        var byteCount = Encoding.UTF8.GetByteCount(expression);
-        var rented = ArrayPool<byte>.Shared.Rent(byteCount);
-        try
-        {
-            var written = Encoding.UTF8.GetBytes(expression.AsSpan(), rented.AsSpan(0, byteCount));
-            return Parse(rented.AsSpan(0, written));
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
-
     public static ExpressionParseResult Parse(ReadOnlySpan<byte> expressionUtf8)
     {
-        var parser = new Parser(expressionUtf8);
+        using var parser = new Parser(expressionUtf8);
         var root = parser.ParseExpression();
         parser.SkipWhiteSpace();
         if (!parser.End)
@@ -32,34 +17,92 @@ public static class ExpressionParser
 
         return new ExpressionParseResult(
             RootNode: root,
-            Nodes: parser.Nodes.ToArray(),
-            Arguments: parser.Arguments.ToArray(),
-            Diagnostics: parser.Diagnostics.ToArray());
+            Nodes: parser.NodesToArray(),
+            Arguments: parser.ArgumentsToArray(),
+            Diagnostics: parser.DiagnosticsToArray());
     }
+
+    /// <summary>
+    /// Internal fast path: parse expression and validate semantics without allocating
+    /// ExpressionNode[] / int[] arrays. Parser uses ArrayPool-backed buffers internally
+    /// and passes spans directly to the semantic analyzer.
+    /// </summary>
+    internal static void ParseAndValidateInline(
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics,
+        bool allowStatusCheckFunctions = false)
+    {
+        using var parser = new Parser(expressionUtf8);
+        var root = parser.ParseExpression();
+        parser.SkipWhiteSpace();
+        if (!parser.End)
+        {
+            parser.AddError($"unexpected token at position {parser.Position}");
+        }
+
+        // Transfer parse diagnostics with location shifting
+        var parseDiags = parser.DiagnosticsAsSpan();
+        for (var i = 0; i < parseDiags.Length; i++)
+        {
+            var d = parseDiags[i];
+            diagnostics.Add(new Diagnostic(
+                d.Severity,
+                $"expression parse error: {d.Message}",
+                ShiftExpressionLocation(expressionLocation, d.Location.Start, d.Location.Length)));
+        }
+
+        // Validate with spans — no array allocation
+        if (root >= 0)
+        {
+            ExpressionSemanticAnalyzer.ValidateInline(
+                root,
+                parser.NodesAsSpan(),
+                parser.ArgsAsSpan(),
+                expressionUtf8,
+                expressionLocation,
+                context,
+                diagnostics,
+                allowStatusCheckFunctions);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static TextRange ShiftExpressionLocation(TextRange baseLocation, int relativeOffset, int length)
+    {
+        var safeLength = length <= 0 ? 1 : length;
+        return new TextRange(
+            Start: baseLocation.Start + relativeOffset,
+            Length: safeLength,
+            StartLine: baseLocation.StartLine,
+            StartColumn: baseLocation.StartColumn + relativeOffset,
+            EndLine: baseLocation.EndLine,
+            EndColumn: baseLocation.StartColumn + relativeOffset + safeLength - 1);
+    }
+
+    // PooledBuffer<T> is now shared — see PooledBuffer.cs
 
     private ref struct Parser
     {
         private readonly ReadOnlySpan<byte> _text;
         private int _pos;
+        private PooledBuffer<ExpressionNode> _nodes;
+        private PooledBuffer<int> _args;
+        private PooledBuffer<Diagnostic> _diagnostics;
 
         public Parser(ReadOnlySpan<byte> text)
         {
             _text = text;
             _pos = 0;
-            Nodes = new List<ExpressionNode>(16);
-            Arguments = new List<int>(16);
-            Diagnostics = new List<Diagnostic>(4);
+            _nodes = new PooledBuffer<ExpressionNode>(16);
+            _args = new PooledBuffer<int>(16);
+            _diagnostics = new PooledBuffer<Diagnostic>(4);
         }
 
         public int Position => _pos;
 
         public bool End => _pos >= _text.Length;
-
-        public List<ExpressionNode> Nodes { get; }
-
-        public List<int> Arguments { get; }
-
-        public List<Diagnostic> Diagnostics { get; }
 
         public int ParseExpression() => ParseOr();
 
@@ -259,22 +302,21 @@ public static class ExpressionParser
 
                 if (Match("("u8))
                 {
-                    // Collect this function's direct arguments in a local list first.
-                    // ParseExpression() for each argument may recursively parse inner function
-                    // calls, which add their own args to the shared Arguments list. If we used
-                    // `argStart = Arguments.Count` before the loop and `ArgCount = Arguments.Count - argStart`
-                    // after, the inner args would inflate ArgCount. By deferring the add until after
-                    // all args are parsed, we ensure ArgStart/ArgCount reflect only this call's args.
-                    var directArgs = new List<int>(4);
+                    // Collect this function's direct arguments locally before adding to the
+                    // shared Arguments buffer. ParseExpression() for each argument may
+                    // recursively parse inner function calls that add their own args.
+                    // By deferring the add, ArgStart/ArgCount reflect only this call's args.
+                    Span<int> directArgs = stackalloc int[16];
+                    var directArgCount = 0;
                     SkipWhiteSpace();
                     if (!Match(")"u8))
                     {
                         while (true)
                         {
                             var arg = ParseExpression();
-                            if (arg >= 0)
+                            if (arg >= 0 && directArgCount < directArgs.Length)
                             {
-                                directArgs.Add(arg);
+                                directArgs[directArgCount++] = arg;
                             }
 
                             SkipWhiteSpace();
@@ -292,10 +334,10 @@ public static class ExpressionParser
                     }
 
                     // Add this function's args after inner calls have already added theirs.
-                    var argStart = Arguments.Count;
-                    foreach (var a in directArgs)
+                    var argStart = _args.Count;
+                    for (var i = 0; i < directArgCount; i++)
                     {
-                        Arguments.Add(a);
+                        AddArgument(directArgs[i]);
                     }
 
                     expr = AddNode(new ExpressionNode(
@@ -303,7 +345,7 @@ public static class ExpressionParser
                         expr,
                         -1,
                         argStart,
-                        directArgs.Count,
+                        directArgCount,
                         default,
                         ExpressionOperator.None));
                     continue;
@@ -435,12 +477,9 @@ public static class ExpressionParser
             return AddNode(new ExpressionNode(ExpressionNodeKind.Binary, left, right, 0, 0, default, op));
         }
 
-        private int AddNode(ExpressionNode node)
-        {
-            var id = Nodes.Count;
-            Nodes.Add(node);
-            return id;
-        }
+        private int AddNode(ExpressionNode node) => _nodes.Add(node);
+
+        private void AddArgument(int arg) => _args.Add(arg);
 
         private bool Match(ReadOnlySpan<byte> token)
         {
@@ -476,7 +515,26 @@ public static class ExpressionParser
                 StartColumn: _pos + 1,
                 EndLine: 1,
                 EndColumn: _pos + 1);
-            Diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+            _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+        }
+
+        public ExpressionNode[] NodesToArray() => _nodes.ToArray();
+
+        public int[] ArgumentsToArray() => _args.ToArray();
+
+        public Diagnostic[] DiagnosticsToArray() => _diagnostics.ToArray();
+
+        public ReadOnlySpan<ExpressionNode> NodesAsSpan() => _nodes.AsSpan();
+
+        public ReadOnlySpan<int> ArgsAsSpan() => _args.AsSpan();
+
+        public ReadOnlySpan<Diagnostic> DiagnosticsAsSpan() => _diagnostics.AsSpan();
+
+        public void Dispose()
+        {
+            _nodes.Dispose();
+            _args.Dispose();
+            _diagnostics.Dispose();
         }
 
         private byte Peek() => _text[_pos];
@@ -485,7 +543,5 @@ public static class ExpressionParser
 
         private static bool IsLetter(byte b) =>
             (b is >= (byte)'a' and <= (byte)'z') || (b is >= (byte)'A' and <= (byte)'Z');
-
-        private static bool IsWhiteSpace(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
     }
 }

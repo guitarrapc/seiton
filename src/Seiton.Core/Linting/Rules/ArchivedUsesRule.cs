@@ -1,10 +1,12 @@
 ﻿using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class ArchivedUsesRule : RuleBase
 {
-    static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)
     {
         "actions-rs/toolchain",
         "actions-rs/cargo",
@@ -23,7 +25,7 @@ public sealed class ArchivedUsesRule : RuleBase
             return;
         }
 
-        if (!TryGetOwnerRepo(job.WorkflowCall.Uses.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        if (!TryGetOwnerRepo(Arena.GetStringValue(job.WorkflowCall.Uses), out var ownerRepo))
         {
             return;
         }
@@ -46,7 +48,7 @@ public sealed class ArchivedUsesRule : RuleBase
             return;
         }
 
-        if (!TryGetOwnerRepo(action.Uses.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        if (!TryGetOwnerRepo(Arena.GetStringValue(action.Uses), out var ownerRepo))
         {
             return;
         }
@@ -62,7 +64,7 @@ public sealed class ArchivedUsesRule : RuleBase
             BuildUsesLocation(action));
     }
 
-    static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
+    private static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
     {
         ownerRepo = string.Empty;
         if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))
@@ -99,22 +101,5 @@ public sealed class ArchivedUsesRule : RuleBase
 
         ownerRepo = string.Concat(NormalizeAsciiLower(owner), "/", NormalizeAsciiLower(repo));
         return true;
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var chars = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var b = value[i];
-            chars[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
-        }
-
-        return new string(chars);
     }
 }

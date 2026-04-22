@@ -1,12 +1,15 @@
 ﻿using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Linting.RuleConfigHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class SelfHostedRunnerRule : RuleBase
 {
-    bool hasUntrustedTrigger;
-    HashSet<string> additionalUntrustedTriggers = [];
+    private bool hasUntrustedTrigger;
+    private HashSet<string> additionalUntrustedTriggers = [];
 
     public override string Id => "self-hosted-runner";
 
@@ -34,29 +37,29 @@ public sealed class SelfHostedRunnerRule : RuleBase
         }
 
         var labels = job.RunsOn.Labels;
-        for (var i = 0; i < labels.Count; i++)
+        for (var i = 0; i < labels.Length; i++)
         {
             var label = labels[i];
-            if (label.Expression is not null)
+            if (Arena.GetStringExpression(label).HasValue)
             {
                 continue;
             }
 
-            if (!RunnerLabels.IsSelfHostedLabel(label.Value.AsSpan(Config.Utf8Yaml)))
+            if (!RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(label)))
             {
                 continue;
             }
 
-            var jobId = Decode(job.Id.Value);
+            var jobId = Decode(Arena.GetStringSlice(job.Id));
             AddJobWarning(
                 job,
                 $"job '{jobId}' uses self-hosted runner under untrusted triggers; add strict job guards and isolate self-hosted execution paths",
-                label.Range);
+                Arena.GetStringRange(label));
             return;
         }
     }
 
-    static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -65,7 +68,7 @@ public sealed class SelfHostedRunnerRule : RuleBase
                 continue;
             }
 
-            var hook = webhook.Hook.Value.AsSpan(utf8Yaml);
+            var hook = Arena.GetStringValue(webhook.Hook);
             if (WebhookTypes.TryGet(hook, out _, out var spec)
                 && spec.Id is WebhookTypes.EventId.PullRequest
                     or WebhookTypes.EventId.PullRequestTarget
@@ -83,7 +86,7 @@ public sealed class SelfHostedRunnerRule : RuleBase
         return false;
     }
 
-    static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
+    private static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
     {
         if (additionalUntrustedTriggers.Count == 0)
         {
@@ -91,27 +94,5 @@ public sealed class SelfHostedRunnerRule : RuleBase
         }
 
         return additionalUntrustedTriggers.Contains(NormalizeAsciiLower(hook));
-    }
-
-    static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)
-    {
-        if (values is null || values.Count == 0)
-        {
-            return [];
-        }
-
-        return new HashSet<string>(values, StringComparer.Ordinal);
-    }
-
-    static string NormalizeAsciiLower(ReadOnlySpan<byte> value)
-    {
-        var chars = new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var b = value[i];
-            chars[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
-        }
-
-        return new string(chars);
     }
 }

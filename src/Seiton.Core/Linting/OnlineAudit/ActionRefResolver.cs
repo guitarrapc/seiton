@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.OnlineAudit;
 
 public interface IActionRefResolver
@@ -22,12 +24,12 @@ public readonly record struct ActionRefResolution(
 
 public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig githubConfig) : IActionRefResolver
 {
-    static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
-    static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
+    private static readonly Uri PublicApiBaseUri = new("https://api.github.com/");
+    private static readonly string[] TokenEnvVars = ["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
-    readonly HttpClient httpClient = httpClient;
-    readonly GitHubNetworkConfig githubConfig = githubConfig;
-    readonly ConcurrentDictionary<string, ActionRefResolution> cache = new(StringComparer.Ordinal);
+    private readonly HttpClient httpClient = httpClient;
+    private readonly GitHubNetworkConfig githubConfig = githubConfig;
+    private readonly ConcurrentDictionary<string, ActionRefResolution> cache = new(StringComparer.Ordinal);
 
     public async Task<ActionRefResolution> ResolveAsync(
         string owner,
@@ -42,7 +44,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
 
         var token = ResolveToken();
-        var resolved = IsCommitSha(reference)
+        var resolved = IsFullCommitSha(reference)
             ? await ResolveCommitAsync(owner, repo, reference, token, cancellationToken)
             : await ResolveSymbolicRefAsync(owner, repo, reference, token, cancellationToken);
 
@@ -50,7 +52,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         return resolved;
     }
 
-    async Task<ActionRefResolution> ResolveCommitAsync(
+    private async Task<ActionRefResolution> ResolveCommitAsync(
         string owner,
         string repo,
         string reference,
@@ -75,7 +77,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
             IsTaggedCommit: isTaggedCommit);
     }
 
-    async Task<ActionRefResolution> ResolveSymbolicRefAsync(
+    private async Task<ActionRefResolution> ResolveSymbolicRefAsync(
         string owner,
         string repo,
         string reference,
@@ -91,7 +93,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
             IsTaggedCommit: false);
     }
 
-    async Task<bool> CommitExistsWithFallbackAsync(
+    private async Task<bool> CommitExistsWithFallbackAsync(
         string owner,
         string repo,
         string sha,
@@ -117,7 +119,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
     }
 
-    async Task<bool> RefExistsWithFallbackAsync(
+    private async Task<bool> RefExistsWithFallbackAsync(
         string owner,
         string repo,
         string namespaceName,
@@ -145,7 +147,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
     }
 
-    async Task<bool> IsTaggedCommitWithFallbackAsync(
+    private async Task<bool> IsTaggedCommitWithFallbackAsync(
         string owner,
         string repo,
         string sha,
@@ -194,7 +196,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         return false;
     }
 
-    async Task<HttpResponseMessage?> SendGetWithFallbackAsync(
+    private async Task<HttpResponseMessage?> SendGetWithFallbackAsync(
         string relativePath,
         string token,
         CancellationToken cancellationToken)
@@ -219,7 +221,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         return await SendGetAsync(PublicApiBaseUri, relativePath, token, cancellationToken);
     }
 
-    async Task<HttpResponseMessage> SendGetAsync(
+    private async Task<HttpResponseMessage> SendGetAsync(
         Uri baseUri,
         string relativePath,
         string token,
@@ -237,7 +239,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         return await client.SendAsync(request, cancellationToken);
     }
 
-    string ResolveToken()
+    private string ResolveToken()
     {
         for (var i = 0; i < TokenEnvVars.Length; i++)
         {
@@ -257,7 +259,7 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         return string.Empty;
     }
 
-    static Uri NormalizeApiBaseUri(string apiBaseUrl)
+    private static Uri NormalizeApiBaseUri(string apiBaseUrl)
     {
         var normalized = apiBaseUrl.Trim();
         if (!normalized.EndsWith("/", StringComparison.Ordinal))
@@ -266,27 +268,5 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
 
         return new Uri(normalized, UriKind.Absolute);
-    }
-
-    static bool IsCommitSha(string reference)
-    {
-        if (reference.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < reference.Length; i++)
-        {
-            var ch = reference[i];
-            var isDigit = ch is >= '0' and <= '9';
-            var isLowerHex = ch is >= 'a' and <= 'f';
-            var isUpperHex = ch is >= 'A' and <= 'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

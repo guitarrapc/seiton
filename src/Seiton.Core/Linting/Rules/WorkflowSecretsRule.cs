@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class WorkflowSecretsRule : RuleBase
@@ -21,9 +24,9 @@ public sealed class WorkflowSecretsRule : RuleBase
         CheckEnv(workflow.Env, workflow);
     }
 
-    void CheckEnv(Env? env, Workflow workflow)
+    private void CheckEnv(Env? env, Workflow workflow)
     {
-        if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -36,36 +39,36 @@ public sealed class WorkflowSecretsRule : RuleBase
                 continue;
             }
 
-            var envName = Decode(envVar.Name.Value);
+            var envName = Decode(Arena.GetStringSlice(envVar.Name));
             AddWorkflowError(
                 workflow,
                 $"workflow env '{envName}' must not set secrets.* or github.token when workflow has multiple jobs; move secret mapping to job/step env",
-                envVar.Value.Range);
+                Arena.GetStringRange(envVar.Value));
         }
     }
 
-    bool ContainsSecretsOrGitHubTokenReference(StringNode node)
+    private bool ContainsSecretsOrGitHubTokenReference(StringNodeId node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsReferenceInValue(node.Value.AsSpan(Config.Utf8Yaml)))
+        if (ContainsReferenceInValue(Arena.GetStringValue(node)))
         {
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(Config.Utf8Yaml));
+        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
         return ContainsReferenceInExpression(expression);
     }
 
-    bool ContainsReferenceInValue(ReadOnlySpan<byte> value)
+    private bool ContainsReferenceInValue(ReadOnlySpan<byte> value)
     {
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -81,14 +84,14 @@ public sealed class WorkflowSecretsRule : RuleBase
         return false;
     }
 
-    static bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
+    private bool ContainsReferenceInExpression(ReadOnlySpan<byte> expression)
     {
         if (expression.Length == 0)
         {
             return false;
         }
 
-        var parseResult = ExpressionParser.Parse(expression);
+        var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
             return false;
@@ -98,7 +101,7 @@ public sealed class WorkflowSecretsRule : RuleBase
             || ContainsGitHubTokenReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -115,7 +118,7 @@ public sealed class WorkflowSecretsRule : RuleBase
         return ContainsReferenceInChildren(node, nodeId, nodes, arguments, expression, ContainsSecretsReference);
     }
 
-    static bool ContainsGitHubTokenReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsGitHubTokenReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -131,7 +134,7 @@ public sealed class WorkflowSecretsRule : RuleBase
         return ContainsReferenceInChildren(node, nodeId, nodes, arguments, expression, ContainsGitHubTokenReference);
     }
 
-    static bool IsGitHubTokenAccess(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGitHubTokenAccess(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (node.Kind == ExpressionNodeKind.MemberAccess)
         {
@@ -170,9 +173,9 @@ public sealed class WorkflowSecretsRule : RuleBase
         return false;
     }
 
-    delegate bool NodeMatcher(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression);
+    private delegate bool NodeMatcher(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression);
 
-    static bool ContainsReferenceInChildren(
+    private static bool ContainsReferenceInChildren(
         ExpressionNode node,
         int parentNodeId,
         ExpressionNode[] nodes,
@@ -195,7 +198,7 @@ public sealed class WorkflowSecretsRule : RuleBase
         };
     }
 
-    static bool ContainsReferenceInFunctionCall(
+    private static bool ContainsReferenceInFunctionCall(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
         ExpressionNode[] nodes,
@@ -223,91 +226,5 @@ public sealed class WorkflowSecretsRule : RuleBase
         }
 
         return false;
-    }
-
-    static bool TryFindExpression(
-        ReadOnlySpan<byte> value,
-        int searchStart,
-        out int bodyStart,
-        out int bodyLength,
-        out int nextSearchStart)
-    {
-        bodyStart = 0;
-        bodyLength = 0;
-        nextSearchStart = 0;
-
-        if ((uint)searchStart >= (uint)value.Length)
-        {
-            return false;
-        }
-
-        var start = value[searchStart..].IndexOf("${{"u8);
-        if (start < 0)
-        {
-            return false;
-        }
-
-        bodyStart = searchStart + start + 3;
-        var close = value[bodyStart..].IndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        bodyLength = close;
-        nextSearchStart = bodyStart + close + 2;
-        return true;
-    }
-
-    static ReadOnlySpan<byte> TrimAsciiWhiteSpace(ReadOnlySpan<byte> value)
-    {
-        var start = 0;
-        while (start < value.Length && IsAsciiWhiteSpace(value[start]))
-        {
-            start++;
-        }
-
-        var end = value.Length - 1;
-        while (end >= start && IsAsciiWhiteSpace(value[end]))
-        {
-            end--;
-        }
-
-        return end >= start ? value.Slice(start, end - start + 1) : [];
-    }
-
-    static bool IsAsciiWhiteSpace(byte ch)
-    {
-        return ch == (byte)' ' || ch == (byte)'\t' || ch == (byte)'\n' || ch == (byte)'\r';
-    }
-
-    static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            if (l >= 'A' && l <= 'Z')
-            {
-                l = (byte)(l + 32);
-            }
-
-            if (r >= 'A' && r <= 'Z')
-            {
-                r = (byte)(r + 32);
-            }
-
-            if (l != r)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

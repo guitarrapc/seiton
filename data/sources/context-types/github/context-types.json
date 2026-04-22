@@ -1,0 +1,338 @@
+{
+  "contexts": [
+    {
+      "name": "github",
+      "strict": true,
+      "properties": [
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "action_path",
+          "type": "string"
+        },
+        {
+          "name": "action_ref",
+          "type": "string"
+        },
+        {
+          "name": "action_repository",
+          "type": "string"
+        },
+        {
+          "name": "action_status",
+          "type": "string"
+        },
+        {
+          "name": "actor",
+          "type": "string"
+        },
+        {
+          "name": "actor_id",
+          "type": "string"
+        },
+        {
+          "name": "api_url",
+          "type": "string"
+        },
+        {
+          "name": "artifact_cache_size_limit",
+          "type": "number",
+          "undocumented": true
+        },
+        {
+          "name": "base_ref",
+          "type": "string"
+        },
+        {
+          "name": "env",
+          "type": "string"
+        },
+        {
+          "name": "event",
+          "type": "object",
+          "dynamicPropertyType": "any"
+        },
+        {
+          "name": "event_name",
+          "type": "string"
+        },
+        {
+          "name": "event_path",
+          "type": "string"
+        },
+        {
+          "name": "graphql_url",
+          "type": "string"
+        },
+        {
+          "name": "head_ref",
+          "type": "string"
+        },
+        {
+          "name": "job",
+          "type": "string"
+        },
+        {
+          "name": "output",
+          "type": "string",
+          "undocumented": true
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "ref",
+          "type": "string"
+        },
+        {
+          "name": "ref_name",
+          "type": "string"
+        },
+        {
+          "name": "ref_protected",
+          "type": "bool"
+        },
+        {
+          "name": "ref_type",
+          "type": "string"
+        },
+        {
+          "name": "repository",
+          "type": "string"
+        },
+        {
+          "name": "repositoryUrl",
+          "type": "string"
+        },
+        {
+          "name": "repository_id",
+          "type": "string"
+        },
+        {
+          "name": "repository_owner",
+          "type": "string"
+        },
+        {
+          "name": "repository_owner_id",
+          "type": "string"
+        },
+        {
+          "name": "repository_visibility",
+          "type": "string",
+          "undocumented": true
+        },
+        {
+          "name": "retention_days",
+          "type": "number"
+        },
+        {
+          "name": "run_attempt",
+          "type": "string"
+        },
+        {
+          "name": "run_id",
+          "type": "string"
+        },
+        {
+          "name": "run_number",
+          "type": "string"
+        },
+        {
+          "name": "secret_source",
+          "type": "string"
+        },
+        {
+          "name": "server_url",
+          "type": "string"
+        },
+        {
+          "name": "sha",
+          "type": "string"
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "undocumented": true
+        },
+        {
+          "name": "step_summary",
+          "type": "string",
+          "undocumented": true
+        },
+        {
+          "name": "token",
+          "type": "string"
+        },
+        {
+          "name": "triggering_actor",
+          "type": "string"
+        },
+        {
+          "name": "workflow",
+          "type": "string"
+        },
+        {
+          "name": "workflow_ref",
+          "type": "string"
+        },
+        {
+          "name": "workflow_sha",
+          "type": "string"
+        },
+        {
+          "name": "workspace",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "env",
+      "dynamicPropertyType": "string"
+    },
+    {
+      "name": "job",
+      "strict": true,
+      "properties": [
+        {
+          "name": "check_run_id",
+          "type": "number"
+        },
+        {
+          "name": "container",
+          "type": "object",
+          "strict": true,
+          "properties": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "network",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "name": "services",
+          "type": "object",
+          "dynamicPropertyType": "object",
+          "dynamicPropertyObject": {
+            "strict": true,
+            "properties": [
+              {
+                "name": "id",
+                "type": "string"
+              },
+              {
+                "name": "network",
+                "type": "string"
+              },
+              {
+                "name": "ports",
+                "type": "object",
+                "dynamicPropertyType": "string"
+              }
+            ]
+          }
+        },
+        {
+          "name": "status",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "runner",
+      "strict": true,
+      "properties": [
+        {
+          "name": "arch",
+          "type": "string"
+        },
+        {
+          "name": "debug",
+          "type": "string"
+        },
+        {
+          "name": "environment",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "os",
+          "type": "string"
+        },
+        {
+          "name": "temp",
+          "type": "string"
+        },
+        {
+          "name": "tool_cache",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "secrets",
+      "dynamicPropertyType": "string",
+      "properties": [
+        {
+          "name": "GITHUB_TOKEN",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "strategy",
+      "dynamicPropertyType": "any",
+      "properties": [
+        {
+          "name": "fail-fast",
+          "type": "bool"
+        },
+        {
+          "name": "job-index",
+          "type": "number"
+        },
+        {
+          "name": "job-total",
+          "type": "number"
+        },
+        {
+          "name": "max-parallel",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "steps",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "matrix",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "needs",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "inputs",
+      "dynamicPropertyType": "any"
+    },
+    {
+      "name": "vars",
+      "dynamicPropertyType": "string"
+    },
+    {
+      "name": "jobs",
+      "dynamicPropertyType": "any"
+    }
+  ]
+}

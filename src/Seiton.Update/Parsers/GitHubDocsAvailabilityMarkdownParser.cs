@@ -70,14 +70,14 @@ internal sealed class GitHubDocsAvailabilityMarkdownParser
         return result;
     }
 
-    static string NormalizeCell(string cell)
+    private static string NormalizeCell(string cell)
     {
         return cell
             .Replace("`", string.Empty, StringComparison.Ordinal)
             .Trim();
     }
 
-    static IReadOnlyList<string> ParseContexts(string contextCell)
+    private static IReadOnlyList<string> ParseContexts(string contextCell)
     {
         if (string.IsNullOrWhiteSpace(contextCell)
             || string.Equals(contextCell, "None", StringComparison.OrdinalIgnoreCase))
