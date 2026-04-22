@@ -1074,6 +1074,32 @@ public static class ExpressionSemanticAnalyzer
         return diagnostics.ToArray();
     }
 
+    /// <summary>
+    /// Inline variant of <see cref="ValidateDynamicPropertyAccess"/>. Appends diagnostics to caller-supplied list,
+    /// avoiding per-call <c>new List&lt;Diagnostic&gt;()</c> and <c>ToArray()</c> allocations.
+    /// </summary>
+    internal static void ValidateDynamicPropertyAccessInline(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] contextOverrides,
+        List<Diagnostic> diagnostics)
+    {
+        if (!parseResult.HasRoot || contextOverrides is null || contextOverrides.Length == 0)
+        {
+            return;
+        }
+
+        ValidateNodePropertyAccess(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            expressionUtf8,
+            expressionLocation,
+            contextOverrides,
+            diagnostics);
+    }
+
     private static void ValidateNodePropertyAccess(
         int nodeId,
         ReadOnlySpan<ExpressionNode> nodes,

@@ -804,13 +804,37 @@ Phase 4a の `ValidateInline` 実装時に以下を同時に実施:
 
 Phase 4a の実績 -108 KB は当初の Phase 4a + 4b 合計予想 (-90～110 KB) をカバー。
 
-### Phase 4c: （漸進的）ValidateDynamicPropertyAccess の改善
+### Phase 4c: （漸進的）ValidateDynamicPropertyAccess の改善 ✅ 完了
 
 **目標:** Lint ルール側の ExpressionSemanticAnalyzer 呼び出しでも同様の割り当て削減。
 
-`ExprUndefinedVarRule` 等が `ValidateDynamicPropertyAccess` を呼び出す際にも `new List<Diagnostic>() + ToArray()` パターンが存在。Phase 4a/4b の内部パスとは別に、公開 API 側にも List\<Diagnostic\> 受け入れオーバーロードを追加。
+**実施結果（LintBenchmark — LintEngine.Check）:**
 
-**推定削減:** Lint 時のみの効果。Parse ベンチマークには影響なし。
+| Size | FixEnabled | Before | After | Reduction |
+|------|-----------|--------|-------|-----------|
+| Small | False | 20.69 KB | 18.85 KB | -1.84 KB (-8.9%) |
+| Small | True | 21.10 KB | 19.27 KB | -1.83 KB (-8.7%) |
+| Medium | False | 545.15 KB | 521.65 KB | -23.50 KB (-4.3%) |
+| Medium | True | 551.55 KB | 528.07 KB | -23.48 KB (-4.3%) |
+| Large | False | 8,599.66 KB | 8,482.75 KB | -116.91 KB (-1.4%) |
+| Large | True | 8,630.01 KB | 8,512.91 KB | -117.10 KB (-1.4%) |
+
+Parse ベンチマークへの影響: なし（Large 113,464 B 変化なし）。全 543 テスト通過。
+
+**実施内容:**
+1. **`ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline()` 追加**:
+   - `List<Diagnostic>` を呼び出し元から受け取り、直接追加。`new List<Diagnostic>()` + `ToArray()` を排除。
+   - 既存の `ValidateDynamicPropertyAccess()` 公開 API は変更なし（後方互換維持）。
+2. **`ExprUndefinedVarRule` の呼び出し元更新**:
+   - クラスフィールドに `_propertyDiagnostics` (`List<Diagnostic>`) を追加し、式ごとに `Clear()` + 再利用。
+   - `ValidateDynamicPropertyAccess` → `ValidateDynamicPropertyAccessInline` に変更。
+   - `propertyDiagnostics.Length` → `propertyDiagnostics.Count` に変更。
+
+**完了条件の達成状況:**
+- [x] `ExprUndefinedVarRule` が `new List<Diagnostic>()` + `ToArray()` を割り当てない
+- [x] Parse ベンチマークに影響なし
+- [x] Lint ベンチマーク: Large -117 KB (-1.4%)
+- [x] 全テスト通過（543/543）
 
 ### Phase 5: （抜本的）Expression 検証の遅延実行
 

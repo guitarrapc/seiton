@@ -22,6 +22,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
     private (byte[] NameUtf8, ExprType Type) _inputsOverride;
     private (byte[] NameUtf8, ExprType Type)[]? _jobScopeOverrides;
     private (byte[] NameUtf8, ExprType Type)[]? _stepScopeOverrides;
+    private readonly List<Diagnostic> _propertyDiagnostics = new();
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -204,9 +205,11 @@ public sealed class ExprUndefinedVarRule : RuleBase
             return;
         }
 
-        var propertyDiagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
-            parseResult, expression, location, overrides);
-        for (var i = 0; i < propertyDiagnostics.Length; i++)
+        var propertyDiagnostics = _propertyDiagnostics;
+        propertyDiagnostics.Clear();
+        ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline(
+            parseResult, expression, location, overrides, propertyDiagnostics);
+        for (var i = 0; i < propertyDiagnostics.Count; i++)
         {
             var d = propertyDiagnostics[i];
             report(this, d.Message, d.Location, target);
