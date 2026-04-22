@@ -116,7 +116,8 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             return false;
         }
 
-        var hereDocs = new List<HereDocState>(2);
+        Span<HereDocState> hereDocs = stackalloc HereDocState[4];
+        var hereDocCount = 0;
         var targetLine = 1;
         for (var i = 0; i < targetOffset; i++)
         {
@@ -143,9 +144,9 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                 line = line[..^1];
             }
 
-            if (hereDocs.Count > 0)
+            if (hereDocCount > 0)
             {
-                var top = hereDocs[^1];
+                var top = hereDocs[hereDocCount - 1];
                 var candidate = line;
                 if (top.StripTabs)
                 {
@@ -158,9 +159,9 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                     candidate = candidate[trimIndex..];
                 }
 
-                if (candidate.SequenceEqual(top.Terminator))
+                if (candidate.SequenceEqual(source.AsSpan(top.TerminatorOffset, top.TerminatorLength)))
                 {
-                    hereDocs.RemoveAt(hereDocs.Count - 1);
+                    hereDocCount--;
                 }
                 else if (isTargetLine)
                 {
@@ -169,9 +170,9 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             }
             else
             {
-                if (TryParseNoExpandHereDocStart(line, out var state))
+                if (TryParseNoExpandHereDocStart(line, lineStart, out var state) && hereDocCount < hereDocs.Length)
                 {
-                    hereDocs.Add(state);
+                    hereDocs[hereDocCount++] = state;
                 }
 
                 if (isTargetLine)
@@ -192,7 +193,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         return false;
     }
 
-    private static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, out HereDocState state)
+    private static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, int lineStartInSource, out HereDocState state)
     {
         state = default;
         var i = 0;
@@ -240,12 +241,12 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
                 return false;
             }
 
-            state = new HereDocState(line[start..i].ToArray(), stripTabs);
+            state = new HereDocState(lineStartInSource + start, i - start, stripTabs);
             return true;
         }
 
         return false;
     }
 
-    private readonly record struct HereDocState(byte[] Terminator, bool StripTabs);
+    private readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
 }

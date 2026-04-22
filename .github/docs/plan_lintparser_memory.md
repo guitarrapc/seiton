@@ -173,8 +173,24 @@ ParseBenchmark: Large 113,553 B = 110.9 KB（回帰なし）
 **推定削減:** ~5-10 KB（元々の呼び出し回数が限定的なら小効果）
 
 **完了条件:**
-- [ ] `IsInsideNoExpandHereDoc` 内の `new List<>` 排除
-- [ ] `byte[].ToArray()` 排除
+- [x] `IsInsideNoExpandHereDoc` 内の `new List<>` 排除
+- [x] `byte[].ToArray()` 排除
+- [x] 全テスト通過（543/543）
+
+**実測結果（Phase L2 完了後）:**
+
+LintBenchmark:
+| Size | FixEnabled | L1後 | L2後 | 差分 |
+|------|-----------|------|------|------|
+| Large | False | 720.96 KB | 720.29 KB | -0.67 KB |
+| Large | True | 752.61 KB | 750.45 KB | -2.16 KB |
+
+効果は小さい（~2 KB）。`IsInsideNoExpandHereDoc` は fix 構築時のみ呼ばれ、かつ run-context ルールは最初のマッチで return するため呼び出し回数が限定的。ただしゼロアロケーション化により GC 圧力を完全排除。
+
+**変更内容:**
+1. `new List<HereDocState>(2)` → `stackalloc HereDocState[4]` + カウンタ
+2. `HereDocState(byte[] Terminator, bool StripTabs)` → `HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs)` — source 配列への offset 参照
+3. `line[start..i].ToArray()` → `lineStartInSource + start` offset 計算（byte[] コピー排除）
 
 ### Phase L3: Expression キャッシュの最適化（中リスク、中効果）
 
@@ -303,13 +319,13 @@ Phase L1 (低リスク) ──→ Phase L3 (中リスク) ──→ Phase L4 (�
 |-------|---------------------|--------|---------------------|
 | 現状 | — | — | 8,483 KB |
 | **Phase L1 (BuildLineStarts)** ✅ | **-7,762 KB (実測)** | 低 | **721 KB** |
-| Phase L2 (HereDoc最適化) | -5 KB | 低 | ~716 KB |
-| Phase L3 (Expression cache) | **-250 KB** | 中 | **~466 KB** |
-| Phase L4 (DynamicContextType) | -15 KB | 中 | ~451 KB |
-| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~426 KB |
-| **累積目標** | **-8,057 KB (-95.0%)** | — | **~426 KB** |
+| **Phase L2 (HereDoc最適化)** ✅ | **-2 KB (実測)** | 低 | **720 KB** |
+| Phase L3 (Expression cache) | **-250 KB** | 中 | **~470 KB** |
+| Phase L4 (DynamicContextType) | -15 KB | 中 | ~455 KB |
+| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~430 KB |
+| **累積目標** | **-8,053 KB (-94.9%)** | — | **~430 KB** |
 
-**Phase L1 完了: 91.5% の削減達成（8,483 KB → 721 KB）**。推定の 983 KB を大幅に上回る結果。
+**Phase L1+L2 完了: 91.5% の削減達成（8,483 KB → 720 KB）**。
 
 ---
 
