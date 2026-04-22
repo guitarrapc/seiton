@@ -488,16 +488,20 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferBinaryType(ExpressionNode node)
     {
+        // Comparison/equality operators always produce bool.
+        // Logical operators (&&, ||) in GitHub Actions return the operand value, not a coerced
+        // boolean (short-circuit semantics like JavaScript). Infer as Any because the result
+        // type depends on the runtime values of both branches.
         return node.Operator switch
         {
-            ExpressionOperator.And
-                or ExpressionOperator.Or
-                or ExpressionOperator.Equal
+            ExpressionOperator.Equal
                 or ExpressionOperator.NotEqual
                 or ExpressionOperator.Less
                 or ExpressionOperator.LessOrEqual
                 or ExpressionOperator.Greater
                 or ExpressionOperator.GreaterOrEqual => ExprType.Bool,
+            ExpressionOperator.And
+                or ExpressionOperator.Or => ExprType.Any,
             _ => ExprType.Any,
         };
     }

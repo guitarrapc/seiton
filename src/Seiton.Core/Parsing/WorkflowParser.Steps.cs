@@ -195,9 +195,9 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!reader.End)
                 {
-                    timeoutMinutesNode = ParseFloat(ref reader, arena, out var tmErr, out var tmMark);
-                    if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number", tmMark);
-                    if (timeoutMinutesNode.HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
+                    timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var tmErr, out var tmMark);
+                    if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number or expression", tmMark);
+                    if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
                     {
                         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be greater than 0", keyMark);
                     }

@@ -283,6 +283,14 @@ public sealed class AstArena : IDisposable
         return FloatNodeId.FromIndex(_floatCount++);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public FloatNodeId AddFloat(double value, StringNodeId expression, TextRange range)
+    {
+        if (_floatCount == _floats.Length) Grow(ref _floats);
+        _floats[_floatCount] = new FloatNodeData(value, expression, range);
+        return FloatNodeId.FromIndex(_floatCount++);
+    }
+
     // ---- String read ----
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

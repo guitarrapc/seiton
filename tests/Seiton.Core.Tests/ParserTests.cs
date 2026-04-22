@@ -2402,6 +2402,47 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_JobTimeoutMinutes_Expression_AcceptsExpression()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: ${{ fromJson(matrix.timeout || 10) }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-timeout-expression.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Workflow).IsNotNull();
+        var bytes = Encoding.UTF8.GetBytes(yaml.Replace("\r\n", "\n"));
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.TimeoutMinutes.HasValue).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepTimeoutMinutes_Expression_AcceptsExpression()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - timeout-minutes: ${{ fromJson(matrix.timeout || 10) }}
+                      run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-timeout-expression.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Workflow).IsNotNull();
+    }
+
+    [Test]
     public async Task Parse_StrategyMaxParallel_NonPositive_ReportsError()
     {
         var yaml = """

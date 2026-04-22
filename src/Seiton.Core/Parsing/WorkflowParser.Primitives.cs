@@ -335,6 +335,54 @@ public static partial class WorkflowParser
         return node;
     }
 
+    private static FloatNodeId ParseFloatOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        var node = ParseFloatOrExpression(ref reader, arena, diagnostics, context, out var needsError, out var errorMark);
+        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        return node;
+    }
+
+    private static FloatNodeId ParseFloatOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        needsError = false;
+        errorMark = default;
+
+        if (reader.End)
+        {
+            return default;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            needsError = true;
+            errorMark = reader.CurrentStart;
+            reader.SkipCurrentNode();
+            return default;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        var range = BuildScalarLocation(mark, valueUtf8.Length);
+
+        if (TryParseDouble(valueUtf8, tag, out var value))
+        {
+            var floatNode = arena.AddFloat(value, range);
+            reader.Read();
+            return floatNode;
+        }
+
+        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
+        if (!expressionNode.HasValue)
+        {
+            return default;
+        }
+
+        return arena.AddFloat(0, expressionNode, range);
+    }
+
     internal static IntNodeId ParseInt<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {

@@ -326,14 +326,15 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task InferType_BinaryLogical_ReturnsBool()
+    public async Task InferType_BinaryLogical_ReturnsAny()
     {
+        // GitHub Actions && / || return operand values (short-circuit), not booleans
         var expression = "success() && github.event_name == 'push'"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
         var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
 
-        await Assert.That(type).IsEqualTo(ExprType.Bool);
+        await Assert.That(type).IsEqualTo(ExprType.Any);
     }
 
     // ── InferType: function return types ──────────────────────────────────────
@@ -560,6 +561,22 @@ public sealed class ExpressionTests
             ExpressionValidationContext.Step);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got bool", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_LogicalOrPassedToFromJson_NoDiagnostic()
+    {
+        // fromJson(matrix.x || 10) — || returns any (short-circuit value, not bool)
+        var expression = "fromJson(matrix.benchmark-timeout-min || 10)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string", StringComparison.Ordinal))).IsFalse();
     }
 
     // ── ExpressionVisitor.VisitExprNode ───────────────────────────────────────
