@@ -246,3 +246,15 @@ Seiton.Core 合計: 133 files, ~26,000 lines
   LintEngine.cs                  912 lines
   WorkflowParser.cs              902 lines
 ```
+
+---
+
+## 5. 検証計画
+
+各 Phase 完了時に以下を測定:
+
+1. **BenchmarkDotNet LintBenchmark** — Allocated (Small/Medium/Large, FixEnabled=false/true)
+2. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
+3. **LintPerRuleAlloc.cs** — run-context ルール個別計測
+4. **全テストパス** — `dotnet test` Green 確認
+5. 本planの該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載

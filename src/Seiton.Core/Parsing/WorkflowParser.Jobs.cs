@@ -5,6 +5,83 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    private enum JobNodeMappingKey : byte
+    {
+        RunsOn = 0,
+        Name = 1,
+        Needs = 2,
+        Env = 3,
+        Steps = 4,
+        Uses = 5,
+        If = 6,
+        Permissions = 7,
+        Environment = 8,
+        Concurrency = 9,
+        Outputs = 10,
+        Defaults = 11,
+        TimeoutMinutes = 12,
+        ContinueOnError = 13,
+        Strategy = 14,
+        Container = 15,
+        Services = 16,
+        With = 17,
+        Secrets = 18,
+    }
+
+    /// <summary>UTF-8 rows for <see cref="JobNodeMappingKey"/>; ordinal must match enum value and duplicate-tracking bit index.</summary>
+    private readonly struct JobNodeKeyTable : IUtf8OrderedKeyTable
+    {
+        public static int KeyCount => 19;
+
+        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
+        {
+            0 => "runs-on"u8,
+            1 => "name"u8,
+            2 => "needs"u8,
+            3 => "env"u8,
+            4 => "steps"u8,
+            5 => "uses"u8,
+            6 => "if"u8,
+            7 => "permissions"u8,
+            8 => "environment"u8,
+            9 => "concurrency"u8,
+            10 => "outputs"u8,
+            11 => "defaults"u8,
+            12 => "timeout-minutes"u8,
+            13 => "continue-on-error"u8,
+            14 => "strategy"u8,
+            15 => "container"u8,
+            16 => "services"u8,
+            17 => "with"u8,
+            18 => "secrets"u8,
+            _ => ReadOnlySpan<byte>.Empty,
+        };
+    }
+
+    private static string JobNodeDuplicateKeyName(JobNodeMappingKey key) => key switch
+    {
+        JobNodeMappingKey.RunsOn => "runs-on",
+        JobNodeMappingKey.Name => "name",
+        JobNodeMappingKey.Needs => "needs",
+        JobNodeMappingKey.Env => "env",
+        JobNodeMappingKey.Steps => "steps",
+        JobNodeMappingKey.Uses => "uses",
+        JobNodeMappingKey.If => "if",
+        JobNodeMappingKey.Permissions => "permissions",
+        JobNodeMappingKey.Environment => "environment",
+        JobNodeMappingKey.Concurrency => "concurrency",
+        JobNodeMappingKey.Outputs => "outputs",
+        JobNodeMappingKey.Defaults => "defaults",
+        JobNodeMappingKey.TimeoutMinutes => "timeout-minutes",
+        JobNodeMappingKey.ContinueOnError => "continue-on-error",
+        JobNodeMappingKey.Strategy => "strategy",
+        JobNodeMappingKey.Container => "container",
+        JobNodeMappingKey.Services => "services",
+        JobNodeMappingKey.With => "with",
+        JobNodeMappingKey.Secrets => "secrets",
+        _ => "job key",
+    };
+
     private static Job ParseJobNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition jobIdMark, StringNodeId jobIdNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -62,349 +139,311 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("runs-on"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<JobNodeKeyTable>(keyUtf8, out var jobKeyOrd))
             {
+                var keyLen = keyUtf8.Length;
+                var jobKey = (JobNodeMappingKey)jobKeyOrd;
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: runs-on", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
+                if (!TrySetBit(ref seen, jobKeyOrd))
                 {
-                    stepsOnlyKeyInReusable = "runs-on";
-                    stepsOnlyKeyInReusableMark = keyMark;
+                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: {JobNodeDuplicateKeyName(jobKey)}", keyMark);
+                    if (!reader.End) reader.SkipCurrentNode();
+                    continue;
                 }
 
-                if (!reader.End)
+                switch (jobKey)
                 {
-                    runsOnNode = ParseRunsOnNode(ref reader, arena, diagnostics, source, jobId);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("name"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: name", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
-                    if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' name must be scalar", nameMark);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("needs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: needs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    needsNode = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var needsErr, out var needsMark);
-                    if (needsErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' needs must be scalar or sequence of scalar", needsMark);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("env"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: env", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "env";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.Job);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("steps"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: steps", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "steps";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-                if (!reader.End)
-                {
-                    if (reader.CurrentKind != YamlEventKind.SequenceStart)
-                    {
-                        AddError(diagnostics, $"job '{jobId}' steps must be sequence", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                    }
-                    else
-                    {
-                        stepsNode = ParseSteps(ref reader, arena, diagnostics, source, jobId);
-                    }
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("uses"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: uses", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    var usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
-                    if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar", usesMark);
-                    workflowCallNode = new WorkflowCall
-                    {
-                        Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
-                        UsesKeyRange = BuildScalarLocation(keyMark, keyUtf8.Length),
-                        Inputs = workflowCallNode?.Inputs,
-                        Secrets = workflowCallNode?.Secrets,
-                        InheritSecrets = workflowCallNode?.InheritSecrets ?? false,
-                    };
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("if"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: if", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var ifErr, out var ifMark);
-                    if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' if must be scalar", ifMark);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("permissions"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: permissions", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    permissionsNode = ParsePermissionsNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' permissions must be scalar or mapping");
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("environment"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 8)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: environment", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "environment";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    environmentNode = ParseEnvironmentNode(ref reader, arena, diagnostics, source, jobId);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("concurrency"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 9)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: concurrency", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be scalar or mapping", ExpressionValidationContext.Job);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("outputs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 10)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: outputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "outputs";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    outputsNode = ParseOutputsNode(ref reader, arena, diagnostics, source, jobId);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("defaults"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 11)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: defaults", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "defaults";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' defaults must be mapping");
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("timeout-minutes"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 12)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: timeout-minutes", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "timeout-minutes";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var tmErr, out var tmMark);
-                    if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number or expression", tmMark);
-                    if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be greater than 0", keyMark);
-                    }
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("continue-on-error"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 13)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: continue-on-error", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "continue-on-error";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var coeErr, out var coeMark);
-                    if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' continue-on-error must be bool or expression", coeMark);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("strategy"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 14)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: strategy", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    if (reader.CurrentKind != YamlEventKind.MappingStart)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy must be mapping", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                    }
-                    else
-                    {
-                        strategyNode = ParseStrategy(ref reader, arena, diagnostics, source, jobId);
-                    }
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("container"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 15)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: container", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "container";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("services"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 16)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: services", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (stepsOnlyKeyInReusable is null)
-                {
-                    stepsOnlyKeyInReusable = "services";
-                    stepsOnlyKeyInReusableMark = keyMark;
-                }
-
-                if (!reader.End)
-                {
-                    servicesNode = ParseServices(ref reader, arena, diagnostics, source, jobId);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("with"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 17)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: with", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    var inputs = ParseWorkflowCallInputsNode(ref reader, arena, diagnostics, source, jobId);
-                    if (workflowCallNode is not null)
-                    {
-                        workflowCallNode = new WorkflowCall
+                    case JobNodeMappingKey.RunsOn:
+                        if (stepsOnlyKeyInReusable is null)
                         {
-                            Uses = workflowCallNode.Uses,
-                            UsesKeyRange = workflowCallNode.UsesKeyRange,
-                            Inputs = inputs,
-                            Secrets = workflowCallNode.Secrets,
-                            InheritSecrets = workflowCallNode.InheritSecrets,
-                        };
-                    }
-                    else
-                    {
-                        workflowCallNode = new WorkflowCall
-                        {
-                            Uses = arena.AddString(default, false, default),
-                            UsesKeyRange = null,
-                            Inputs = inputs,
-                            Secrets = null,
-                            InheritSecrets = false,
-                        };
-                    }
-                }
-                continue;
-            }
+                            stepsOnlyKeyInReusable = "runs-on";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
 
-            if (keyUtf8.SequenceEqual("secrets"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 18)) { AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: secrets", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    var secrets = ParseWorkflowCallSecretsNode(ref reader, arena, diagnostics, source, jobId, out var inheritSecrets);
-                    if (workflowCallNode is not null)
-                    {
-                        workflowCallNode = new WorkflowCall
+                        if (!reader.End)
                         {
-                            Uses = workflowCallNode.Uses,
-                            UsesKeyRange = workflowCallNode.UsesKeyRange,
-                            Inputs = workflowCallNode.Inputs,
-                            Secrets = secrets,
-                            InheritSecrets = inheritSecrets,
-                        };
-                    }
-                    else
-                    {
-                        workflowCallNode = new WorkflowCall
+                            runsOnNode = ParseRunsOnNode(ref reader, arena, diagnostics, source, jobId);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Name:
+                        if (!reader.End)
                         {
-                            Uses = arena.AddString(default, false, default),
-                            UsesKeyRange = null,
-                            Inputs = null,
-                            Secrets = secrets,
-                            InheritSecrets = inheritSecrets,
-                        };
-                    }
+                            nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
+                            if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' name must be scalar", nameMark);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Needs:
+                        if (!reader.End)
+                        {
+                            needsNode = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var needsErr, out var needsMark);
+                            if (needsErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' needs must be scalar or sequence of scalar", needsMark);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Env:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "env";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.Job);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Steps:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "steps";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            if (reader.CurrentKind != YamlEventKind.SequenceStart)
+                            {
+                                AddError(diagnostics, $"job '{jobId}' steps must be sequence", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else
+                            {
+                                stepsNode = ParseSteps(ref reader, arena, diagnostics, source, jobId);
+                            }
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Uses:
+                        if (!reader.End)
+                        {
+                            var usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
+                            if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be scalar", usesMark);
+                            workflowCallNode = new WorkflowCall
+                            {
+                                Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
+                                UsesKeyRange = BuildScalarLocation(keyMark, keyLen),
+                                Inputs = workflowCallNode?.Inputs,
+                                Secrets = workflowCallNode?.Secrets,
+                                InheritSecrets = workflowCallNode?.InheritSecrets ?? false,
+                            };
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.If:
+                        if (!reader.End)
+                        {
+                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var ifErr, out var ifMark);
+                            if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' if must be scalar", ifMark);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Permissions:
+                        if (!reader.End)
+                        {
+                            permissionsNode = ParsePermissionsNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' permissions must be scalar or mapping");
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Environment:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "environment";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            environmentNode = ParseEnvironmentNode(ref reader, arena, diagnostics, source, jobId);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Concurrency:
+                        if (!reader.End)
+                        {
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be scalar or mapping", ExpressionValidationContext.Job);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Outputs:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "outputs";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            outputsNode = ParseOutputsNode(ref reader, arena, diagnostics, source, jobId);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Defaults:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "defaults";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' defaults must be mapping");
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.TimeoutMinutes:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "timeout-minutes";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var tmErr, out var tmMark);
+                            if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number or expression", tmMark);
+                            if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
+                            {
+                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be greater than 0", keyMark);
+                            }
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.ContinueOnError:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "continue-on-error";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var coeErr, out var coeMark);
+                            if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' continue-on-error must be bool or expression", coeMark);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Strategy:
+                        if (!reader.End)
+                        {
+                            if (reader.CurrentKind != YamlEventKind.MappingStart)
+                            {
+                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy must be mapping", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else
+                            {
+                                strategyNode = ParseStrategy(ref reader, arena, diagnostics, source, jobId);
+                            }
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Container:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "container";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Services:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "services";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            servicesNode = ParseServices(ref reader, arena, diagnostics, source, jobId);
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.With:
+                        if (!reader.End)
+                        {
+                            var inputs = ParseWorkflowCallInputsNode(ref reader, arena, diagnostics, source, jobId);
+                            if (workflowCallNode is not null)
+                            {
+                                workflowCallNode = new WorkflowCall
+                                {
+                                    Uses = workflowCallNode.Uses,
+                                    UsesKeyRange = workflowCallNode.UsesKeyRange,
+                                    Inputs = inputs,
+                                    Secrets = workflowCallNode.Secrets,
+                                    InheritSecrets = workflowCallNode.InheritSecrets,
+                                };
+                            }
+                            else
+                            {
+                                workflowCallNode = new WorkflowCall
+                                {
+                                    Uses = arena.AddString(default, false, default),
+                                    UsesKeyRange = null,
+                                    Inputs = inputs,
+                                    Secrets = null,
+                                    InheritSecrets = false,
+                                };
+                            }
+                        }
+
+                        break;
+
+                    case JobNodeMappingKey.Secrets:
+                        if (!reader.End)
+                        {
+                            var secrets = ParseWorkflowCallSecretsNode(ref reader, arena, diagnostics, source, jobId, out var inheritSecrets);
+                            if (workflowCallNode is not null)
+                            {
+                                workflowCallNode = new WorkflowCall
+                                {
+                                    Uses = workflowCallNode.Uses,
+                                    UsesKeyRange = workflowCallNode.UsesKeyRange,
+                                    Inputs = workflowCallNode.Inputs,
+                                    Secrets = secrets,
+                                    InheritSecrets = inheritSecrets,
+                                };
+                            }
+                            else
+                            {
+                                workflowCallNode = new WorkflowCall
+                                {
+                                    Uses = arena.AddString(default, false, default),
+                                    UsesKeyRange = null,
+                                    Inputs = null,
+                                    Secrets = secrets,
+                                    InheritSecrets = inheritSecrets,
+                                };
+                            }
+                        }
+
+                        break;
                 }
+
                 continue;
             }
 
