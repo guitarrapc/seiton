@@ -72,18 +72,7 @@ public sealed class LintConfig
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static long ComputeContentHash(ReadOnlySpan<byte> span)
     {
-        // FNV-1a 64-bit hash on expression content
-        const ulong offsetBasis = 14695981039346656037;
-        const ulong prime = 1099511628211;
-
-        var hash = offsetBasis;
-        for (var i = 0; i < span.Length; i++)
-        {
-            hash ^= span[i];
-            hash *= prime;
-        }
-
-        return (long)hash;
+        return (long)XxHash64.Hash(span);
     }
 
     private readonly record struct ExpressionCacheEntry(int Offset, int Length, ExpressionParseResult Result);

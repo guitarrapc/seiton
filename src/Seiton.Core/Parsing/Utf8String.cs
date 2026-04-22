@@ -44,21 +44,7 @@ public readonly struct Utf8String : IEquatable<Utf8String>
 
     public override int GetHashCode()
     {
-        unchecked
-        {
-            const uint offsetBasis = 2166136261;
-            const uint prime = 16777619;
-
-            var hash = offsetBasis;
-            var span = Span;
-            for (var i = 0; i < span.Length; i++)
-            {
-                hash ^= span[i];
-                hash *= prime;
-            }
-
-            return (int)hash;
-        }
+        return XxHash64.Hash32(Span);
     }
 
     public static bool operator ==(Utf8String left, Utf8String right) => left.Equals(right);

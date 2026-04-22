@@ -135,6 +135,26 @@ internal static class XxHash64
 3. **LintPerRuleAlloc.cs** — run-context ルール個別計測
 4. **全テストパス** — `dotnet test` Green 確認
 
+### 実測結果
+
+**LintBenchmark Allocated** (ベースラインは直前の L5/L6 メモリ最適化後):
+
+| Size | FixEnabled | Before (L6後) | After (XXH64) | 差分 |
+|---|---|---|---|---|
+| Small | False | 14.42 KB | 14.42 KB | ±0 |
+| Small | True | 14.83 KB | 14.83 KB | ±0 |
+| Medium | False | 92.91 KB | 92.90 KB | -0.01 KB |
+| Medium | True | 99.32 KB | 99.33 KB | ±0 |
+| Large | False | 435.63 KB | 436.31 KB | ±0 (ノイズ) |
+| Large | True | 465.79 KB | 467.33 KB | ±0 (ノイズ) |
+
+> ハッシュ関数の変更はアロケーション量にほぼ影響しない (期待通り)。
+> XXH64 はスタック上の固定長変数のみ使用し、ヒープ割り当てゼロ。
+
+**ParsingBenchmark**: 回帰なし。WorkflowParser.Parse は誤差範囲内で安定。
+
+**テスト**: 全 553 テスト pass、0 failures。
+
 ## 影響範囲
 
 - `src/Seiton.Core/Parsing/XxHash64.cs` — **新規**
