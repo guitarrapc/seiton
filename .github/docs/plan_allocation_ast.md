@@ -587,4 +587,422 @@ Phase 1 (低リスク) ✅ ──→ ベンチマーク検証 ✅ ──→ Phas
      └─ ArrayPool 活用 ✅                           └─ Lint ルール移行 ✅                          └─ ライフサイクル設計 ✅
 ```
 
-Phase 1〜3 で累計 **-41.3% 削減**（377 KB → 221 KB）を達成。残り 221 KB のさらなる削減には allocation profiler による詳細分析が必要。
+Phase 1〜3 で累計 **-41.3% 削減**（377 KB → 221 KB）を達成。
+
+---
+
+## 9. Phase 4+ 詳細調査結果
+
+### 9.1 残り 221 KB のアロケーション内訳（実測）
+
+AllocationBreakdown.cs + ExpressionAllocProbe.cs による精密計測結果（Large: 20 jobs × 12 steps = 240 steps、482 式）。
+
+#### 9.1.1 構造体サイズ実測
+
+| 型 | サイズ |
+|----|--------|
+| ExpressionNode | 32B |
+| Utf8Slice | 8B |
+| TextRange | 24B |
+| Diagnostic | 96B |
+| ExpressionParseResult | 32B |
+
+#### 9.1.2 クラスインスタンス内訳（実測 56,168B）
+
+| クラス | 個数 | 単体サイズ | 合計 |
+|--------|------|-----------|------|
+| Step | 240 | 80B | 19,200B |
+| ExecAction | 120 | 88B | 10,560B |
+| Env (step) | 120 | 72B | 8,640B |
+| ExecRun | 120 | 64B | 7,680B |
+| Job | 20 | 160B | 3,200B |
+| Matrix | 20 | 96B | 1,920B |
+| Strategy | 20 | 64B | 1,280B |
+| Runner | 20 | 64B | 1,280B |
+| RawYamlString | 40 | 24B | 960B |
+| MatrixRow | 20 | 32B | 640B |
+| その他 (Workflow, Events, Env, Defaults, etc.) | 少数 | — | ~808B |
+| **合計** | **750** | — | **~56,168B** |
+
+#### 9.1.3 配列アロケーション内訳（実測 ~7,608B）
+
+| 配列 | 推定合計 |
+|------|---------|
+| Steps arrays (20 jobs × 12 steps) | ~2,240B |
+| EnvVar SliceMap entries | ~4,840B |
+| Jobs SliceMap entries | ~496B |
+| Handle arrays (Needs/Labels/Types/etc.) | ~424B |
+| On events array | ~32B |
+| **合計** | **~7,608B** |
+
+#### 9.1.4 Expression パイプライン内訳（実測）
+
+**単独計測（ExpressionAllocProbe.cs）:**
+
+| 操作 | 482 回合計 | 内訳 |
+|------|-----------|------|
+| ExpressionParser.Parse のみ | 95,576B | ExpressionNode[] ~88KB + int[] ~4KB + ArrayPool warmup ~3KB |
+| ExpressionSemanticAnalyzer.Validate のみ | 220,616B | List\<Diagnostic\> ~15KB + ExprType[] ~4KB + その他 ~201KB |
+| **Parse + Validate 合計** | **316,192B** | — |
+
+**式の種類別 Parse コスト:**
+
+| 式 | Parse alloc | ノード数 | ノード配列 | 引数配列 |
+|----|-----------|---------|-----------|---------|
+| `github.ref_name` | 6,280B※ | 2 | 88B | 0B |
+| `github.ref` | 2,608B | 2 | 88B | 0B |
+| `startsWith(...) && success()` | 3,840B | 8 | 280B | 32B |
+| `matrix.os` | 2,560B | 2 | 88B | 0B |
+| `github.sha` | 2,272B | 2 | 88B | 0B |
+| `!cancelled() && ...` | 3,808B | 8 | 280B | 0B |
+
+※初回は ArrayPool cold start コストを含む。
+
+**式の種類別 Validate コスト:**
+
+| 式 | Validate alloc | 概要 |
+|----|---------------|------|
+| `github.ref_name` | 15,704B※ | 初回 JIT + static 初期化 |
+| `github.ref` | 1,432B | List\<Diagnostic\> + 検証走査 |
+| `startsWith(...) && success()` | 2,264B | + ExprType[] + 関数検証 |
+| `matrix.os` | 320B | 最小コスト |
+| `github.sha` | 376B | 最小コスト |
+| `!cancelled() && ...` | 2,168B | + 関数検証 |
+
+※初回コストは JIT コンパイルと静的フィールド初期化を含む。Validate の定常コストは 320–2,264B/回。
+
+#### 9.1.5 全体アロケーション構成（推定）
+
+```
+全体: ~221 KB (ベンチマーク) / ~259 KB (GC.GetTotalAllocatedBytes)
+
+├── Expression パイプライン    ~150–180 KB (68–81%)
+│   ├── ExpressionNode[] ToArray   ~88 KB
+│   ├── Validate 内部割り当て      ~60–90 KB
+│   │   ├── List<Diagnostic> (482回)  ~15 KB
+│   │   ├── ExprType[] (関数検証)    ~4 KB
+│   │   └── その他検証走査           ~41–71 KB
+│   └── int[] Arguments ToArray     ~4 KB
+│
+├── 構造クラスインスタンス      ~56 KB (25%)
+│   ├── Step + StepExec           ~46 KB
+│   ├── Job + Strategy/Matrix/Runner  ~8 KB
+│   └── その他                    ~2 KB
+│
+└── 構造配列 (SliceMap等)        ~8 KB (4%)
+```
+
+**結論:** 残り 221 KB の **約 7 割が Expression パイプライン（Parse + Validate）** に起因。構造クラスは約 25%。Expression 最適化が Phase 4 の最優先。
+
+### 9.2 Expression パイプラインの割り当てメカニズム
+
+#### 現行フロー（per expression, 482 回/Large parse）
+
+```
+WorkflowParser.ValidateExpressionText()
+  └── ParseAndValidateExpression(expressionUtf8, ...)
+        ├── ExpressionParser.Parse(expressionUtf8)
+        │     ├── new PooledBuffer<ExpressionNode>(16)  ← ArrayPool.Rent (再利用可)
+        │     ├── new PooledBuffer<int>(16)             ← ArrayPool.Rent (再利用可)
+        │     ├── new PooledBuffer<Diagnostic>(4)       ← ArrayPool.Rent (再利用可)
+        │     ├── ... parse ...
+        │     ├── NodesToArray() → new ExpressionNode[N] ← ★ 毎回ヒープ割り当て
+        │     ├── ArgumentsToArray() → new int[M]        ← ★ (M>0 の場合)
+        │     ├── DiagnosticsToArray() → Diagnostic[]     ← (通常 empty → cached)
+        │     └── Dispose() → 3× ArrayPool.Return
+        │
+        └── ExpressionSemanticAnalyzer.Validate(parseResult, ...)
+              ├── new List<Diagnostic>()                   ← ★ 毎回ヒープ割り当て
+              ├── ValidateNode() → 再帰走査
+              │     └── ValidateFunctionCall()
+              │           └── new ExprType[argCount]       ← ★ 関数呼び出し時
+              └── diagnostics.ToArray()                    ← (通常 empty → cached)
+```
+
+**問題点:**
+1. `ExpressionNode[]` / `int[]` は `ParseAndValidateExpression` 内で生成・消費・破棄される **一時データ** だが、毎回新規配列を割り当てている。
+2. `List<Diagnostic>` も同様に一時的だが、482 回生成される。
+3. `ExprType[]` は stackalloc で代替可能なサイズ（関数引数は最大 ~16）。
+
+---
+
+## 10. Phase 4+ 実装計画
+
+### Phase 4a: Expression バッファ再利用（中リスク、高効果）
+
+**目標:** Expression パーサーの内部パスで ExpressionNode[] / int[] の ToArray() を排除し、PooledBuffer を直接再利用する。
+
+**推定削減:** Large -88 KB to -92 KB（ExpressionNode[] ~88 KB + int[] ~4 KB）
+
+**設計:**
+
+```csharp
+// 新: ExpressionParser に内部パス追加
+public static class ExpressionParser
+{
+    // 既存 public API（変更なし）
+    public static ExpressionParseResult Parse(ReadOnlySpan<byte> expressionUtf8) { ... }
+
+    // 新: 内部パス — 呼び出し元提供の PooledBuffer に書き込み
+    internal static int ParseInto(
+        ReadOnlySpan<byte> expressionUtf8,
+        ref PooledBuffer<ExpressionNode> nodes,
+        ref PooledBuffer<int> args,
+        ref PooledBuffer<Diagnostic> diagnostics)
+    {
+        // PooledBuffer をリセット（配列は保持）
+        nodes.Reset();
+        args.Reset();
+        diagnostics.Reset();
+
+        // Parser 内部で ref PooledBuffer を使用
+        var parser = new Parser(expressionUtf8, ref nodes, ref args, ref diagnostics);
+        var root = parser.ParseExpression();
+        parser.SkipWhiteSpace();
+        if (!parser.End) parser.AddError(...);
+        return root;
+    }
+}
+```
+
+```csharp
+// WorkflowParser 側: パース全体で共有する PooledBuffer
+public static partial class WorkflowParser
+{
+    // ParseAndValidateExpression 内で毎回 Reset + 再利用
+    private static void ParseAndValidateExpression(
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics,
+        ref PooledBuffer<ExpressionNode> exprNodes,
+        ref PooledBuffer<int> exprArgs,
+        ref PooledBuffer<Diagnostic> exprDiags,
+        bool allowStatusCheckFunctions = false)
+    {
+        var rootNode = ExpressionParser.ParseInto(
+            expressionUtf8, ref exprNodes, ref exprArgs, ref exprDiags);
+
+        // Parse diagnostics → caller's list
+        for (var i = 0; i < exprDiags.Count; i++) { ... }
+
+        // Validate with spans（配列割り当てなし）
+        ExpressionSemanticAnalyzer.ValidateInline(
+            rootNode, exprNodes.AsSpan(), exprArgs.AsSpan(),
+            expressionUtf8, expressionLocation, context,
+            diagnostics, allowStatusCheckFunctions);
+    }
+}
+```
+
+**変更ファイル:**
+1. `ExpressionParser.cs` — `ParseInto()` 追加、`Parser` ref struct に外部バッファ受け入れモード追加
+2. `PooledBuffer.cs` — `Reset()` メソッド追加（`_count = 0`, 配列保持）
+3. `ExpressionSemanticAnalyzer.cs` — `ValidateInline()` 追加（`ReadOnlySpan<ExpressionNode>` / `ReadOnlySpan<int>` 受け入れ）
+4. `WorkflowParser.Primitives.cs` — `ParseAndValidateExpression` に PooledBuffer 引数追加
+5. `WorkflowParser.cs` / `WorkflowParser.Steps.cs` / `WorkflowParser.Jobs.cs` — PooledBuffer のスレッディング
+
+**公開 API への影響:** なし（ExpressionParser.Parse / ExpressionExtractor / LintConfig.ParseExpression は変更不要）
+
+**完了条件:**
+- [ ] `ExpressionParser.ParseInto` が ExpressionNode[] を割り当てない
+- [ ] `ValidateInline` が List\<Diagnostic\> を割り当てない
+- [ ] 公開 API `ExpressionParser.Parse` / `ExpressionExtractor` が変更されていない
+- [ ] ベンチマーク: Large Parse Allocated ≤ 140 KB
+- [ ] 全テスト通過
+
+### Phase 4b: Semantic Validator per-call 割り当て排除（低リスク、中効果）
+
+**目標:** ExpressionSemanticAnalyzer 内部の per-call ヒープ割り当てを排除。
+
+**推定削減:** Large -15 KB to -25 KB（List\<Diagnostic\> ~15 KB + ExprType[] ~4 KB + その他）
+
+**設計:**
+
+```csharp
+// 変更 1: List<Diagnostic> を呼び出し元から受け取り
+internal static void ValidateInline(
+    int rootNode,
+    ReadOnlySpan<ExpressionNode> nodes,
+    ReadOnlySpan<int> arguments,
+    ReadOnlySpan<byte> expressionUtf8,
+    TextRange expressionLocation,
+    ExpressionValidationContext context,
+    List<Diagnostic> diagnostics,  // ← 呼び出し元の list に直接追加
+    bool allowStatusCheckFunctions = false)
+{
+    if (rootNode < 0) return;
+    ValidateNode(rootNode, -1, nodes, arguments, ...);
+}
+
+// 変更 2: ExprType[] → stackalloc
+private static void ValidateFunctionCall(...)
+{
+    // 現行: var argTypes = new ExprType[argCount];
+    // 新: stackalloc（関数引数は最大 ~16）
+    Span<ExprType> argTypes = argCount <= 16
+        ? stackalloc ExprType[argCount]
+        : new ExprType[argCount]; // fallback（到達しないはず）
+}
+```
+
+**変更ファイル:**
+1. `ExpressionSemanticAnalyzer.cs` — `ValidateInline()` 追加 / `ValidateFunctionCall` の stackalloc 化
+2. `WorkflowParser.Primitives.cs` — `ParseAndValidateExpression` が caller's diagnostics を渡す
+
+**Phase 4a との統合:** Phase 4a の `ValidateInline` に Phase 4b の変更を含める。同時実装が自然。
+
+**完了条件:**
+- [ ] `ValidateFunctionCall` 内の `new ExprType[]` が stackalloc に変更
+- [ ] 内部パスで `new List<Diagnostic>()` が 0 箇所
+- [ ] ベンチマーク: Phase 4a の目標に追加で -15 KB 以上
+- [ ] 全テスト通過
+
+### Phase 4c: （漸進的）ValidateDynamicPropertyAccess の改善
+
+**目標:** Lint ルール側の ExpressionSemanticAnalyzer 呼び出しでも同様の割り当て削減。
+
+`ExprUndefinedVarRule` 等が `ValidateDynamicPropertyAccess` を呼び出す際にも `new List<Diagnostic>() + ToArray()` パターンが存在。Phase 4a/4b の内部パスとは別に、公開 API 側にも List\<Diagnostic\> 受け入れオーバーロードを追加。
+
+**推定削減:** Lint 時のみの効果。Parse ベンチマークには影響なし。
+
+### Phase 5: （抜本的）Expression 検証の遅延実行
+
+**目標:** WorkflowParser.Parse 時に式の解析・検証を行わず、後段（Lint ルール or 独立パス）に遅延。
+
+**推定削減:** Large -130 KB to -150 KB（Parse 時の expression 割り当てをほぼ全排除）
+
+**設計コンセプト:**
+
+```
+現行:
+  WorkflowParser.Parse()
+    ├── 構造パース (jobs, steps, events...)
+    └── 式ごとに Parse + Validate            ← ~150 KB
+
+遅延実行案:
+  WorkflowParser.Parse()
+    └── 構造パース (jobs, steps, events...)    ← ~70 KB
+  ExpressionValidationPass.Run(workflow)
+    └── 構造を走査し式を Parse + Validate      ← ~150 KB（遅延）
+```
+
+**利点:**
+- Parse のアロケーションが ~70 KB に劇的削減
+- 式検証が不要な場合（高速 lint サブセット等）は完全スキップ可能
+- 式検証を Lint ルールとして統合すれば、ルールベースの有効/無効制御が可能
+
+**リスク・問題点:**
+- **診断モデルの変更:** 現在 expression エラーはパーサー診断。遅延すると Lint 診断に分類が変わる。
+- **TextRange の保持:** 式の位置情報（Utf8Slice + TextRange）を構造ノードに保持する必要。現在は StringNodeId の Expression プロパティで式参照を持つが、遅延検証では式テキストの位置を別途記録する必要がある。
+- **大規模リファクタリング:** ValidateExpressionText の呼び出し ~20 箇所を削除し、代わりに式位置を記録するロジックが必要。
+
+**判断:** Phase 4a/4b で ~100-120 KB 削減が達成できれば、Parse 時の残り expression 関連は ~30-50 KB。その場合 Phase 5 の ROI は低下する。Phase 4a/4b の結果を見てから判断。
+
+### Phase 6: 複合ノード最適化（高リスク、低〜中効果）
+
+**目標:** Step / StepExec / Job 等の class インスタンス割り当てを削減。
+
+**推定削減:** Large -20 KB to -40 KB
+
+#### Phase 6a: StepExec Tagged Union
+
+ExecRun / ExecAction の 2 サブクラスを struct tagged union に統合。
+
+```csharp
+// 現行:
+abstract class StepExec { ... }
+sealed class ExecRun : StepExec { StringNodeId Shell; StringNodeId WorkingDirectory; StringNodeId Run; }
+sealed class ExecAction : StepExec { StringNodeId Uses; SliceMap<StringNodeId> With; SliceMap<EnvVar> Env; }
+
+// 新:
+readonly struct StepExecData
+{
+    public readonly StepExecKind Kind;  // Run or Action
+    // ExecRun fields
+    public readonly StringNodeId Shell;
+    public readonly StringNodeId WorkingDirectory;
+    public readonly StringNodeId Run;
+    // ExecAction fields
+    public readonly StringNodeId Uses;
+    public readonly SliceMap<StringNodeId> With;
+    public readonly SliceMap<EnvVar> Env;
+}
+```
+
+**利点:** 240 × class overhead 削減（ExecRun 64B + ExecAction 88B → StepExecData ~64B inline in Step）
+**問題点:**
+- `step.Exec is ExecAction action` パターンが全 Lint ルールで使用（~30 箇所）
+- WorkflowVisitor が ExecRun/ExecAction を区別して visit
+- Union 化で未使用フィールドのメモリ浪費（ExecRun は With/Env 不要）
+
+**推定削減:** ExecRun 120 × 64B + ExecAction 120 × 88B = 18,240B（Step 内の参照 8B × 240 = 1,920B も削減）→ ~20 KB
+
+#### Phase 6b: Step Dense Array
+
+Step を class → struct 化し、AstArena 内の dense array に格納。StepId handle で参照。
+
+**前提:** Phase 6a の StepExec tagged union が完了していること（Step 内に StepExecData を直接埋め込み）。
+
+**問題点:**
+- Step は nullable フィールドを多数持つ（Env?, Container?, Services?）
+- nullable class 参照 → nullable handle struct に変換が必要
+- WorkflowVisitor が `Step` を class 参照で受け取る
+- ~50 Lint ルールが Step のプロパティに直接アクセス
+
+**推定削減:** Step 240 × 80B + StepExec 240 × 76B avg = ~37 KB（ただし StepData struct のサイズが大きいと arena 配列自体が増加）
+
+#### Phase 6c: Job Dense Array
+
+Job 20 個の class → struct 化。Phase 6b と同様のアプローチ。
+
+**推定削減:** Job 20 × 160B = 3,200B（小効果）
+
+**Phase 6 全体の判断:** ROI が低い（~20-40 KB 削減に対し、~50 ルールファイル + Visitor 変更が必要）。Phase 4a/4b の結果次第で実施判断。
+
+---
+
+## 11. 優先順位と実装順序
+
+```
+Phase 4a (中リスク) ──→ Phase 4b (低リスク) ──→ ベンチマーク検証 ──→ Phase 5/6 判断
+     │                       │
+     ├─ ExpressionParser.ParseInto()   ├─ ValidateFunctionCall stackalloc
+     ├─ PooledBuffer.Reset()           ├─ ValidateInline (List受け入れ)
+     ├─ ValidateInline (Span受け入れ)  └─ ExprType[] 排除
+     └─ WP.ParseAndValidateExpression threading
+
+Phase 4a + 4b 同時実装が最も効率的（ValidateInline の設計に両者の変更を含む）
+```
+
+**期待される成果:**
+
+| Phase | 推定 Allocated (Large) | 推定削減 | 累積削減 (初期比) |
+|-------|----------------------|---------|------------------|
+| Phase 3 完了 (現状) | 221 KB | — | -41.3% |
+| Phase 4a + 4b 完了 | 110–130 KB | -90 to -110 KB | -65% to -71% |
+| Phase 5 (遅延検証) | 70–90 KB | -20 to -40 KB | -76% to -81% |
+| Phase 6a (StepExec union) | 50–70 KB | -20 KB | -81% to -87% |
+
+**Phase 4a + 4b で Large Parse を ~120 KB（初期比 -68%）にすることを次の目標とする。**
+
+---
+
+## 12. 検証計画（Phase 4+）
+
+Phase 4a/4b 完了時に以下を測定:
+
+1. **BenchmarkDotNet ParsingBenchmark** — Allocated bytes, Mean time（Small/Medium/Large）
+2. **ExpressionAllocProbe.cs** — 482 回 Parse + Validate の合計割り当て
+3. **AllocationBreakdown.cs** — クラスインスタンス vs Expression vs 構造配列の内訳
+4. **全テストパス** — `dotnet test` Green 確認
+5. **公開 API 互換性** — `ExpressionParser.Parse` / `ExpressionExtractor` / `LintConfig.ParseExpression` が変更されていないこと
+
+**成功基準:**
+
+| 指標 | Phase 3 (現状) | Phase 4 目標 |
+|------|---------------|-------------|
+| Large Parse Allocated | 221 KB | ≤ 130 KB |
+| Large Parse Mean | 16.3 ms | ≤ 16.3 ms（速度維持） |
+| Expression parse alloc (482回) | 96 KB | ≤ 10 KB |
+| 全テスト | 540/540 | 540/540 |
