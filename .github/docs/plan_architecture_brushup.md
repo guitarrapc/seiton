@@ -1,7 +1,7 @@
 # Seiton.Core アーキテクチャ改善計画
 
 > `src/Seiton.Core/` のコード品質レビュー結果と改善提案。
-> 対象: Parsing (37 files, ~10,500 lines), Linting (82 files, ~14,700 lines), Generated (6 files, ~725 lines)
+> 対象: Parsing (38 files, ~10,500 lines), Linting (82 files, ~14,700 lines), Generated (6 files, ~725 lines)
 
 ---
 
@@ -44,9 +44,18 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 **改善提案**
 
-1. キーディスパッチを `ReadOnlySpan<byte>` キーテーブル + delegate に一般化するヘルパーを導入し、mapping 走査の定型部分を共通化する。パース本体のカスタムロジックは delegate 内に残す。
+1. キーディスパッチを UTF-8 キーテーブル + 共通照合ヘルパーで一般化し、mapping 走査の「キー照合」定型を共通化する。パース本体の文脈依存ロジックは **呼び出し側の `switch`（静的ディスパッチ）** に残す（後述の実装状況）。
 2. `WorkflowParser.Primitives.cs` を 2 つに分割: `WorkflowParser.ScalarParsing.cs` (純粋スカラー変換) と `WorkflowParser.ExpressionIntegration.cs` (式パース連携)。
 3. `WorkflowParser.On.cs` のイベント種別ごとのパーサーを独立 static メソッドに抽出し、ファイルサイズを 800 行以下に保つ。
+
+**実装状況（§2.1 提案 1、2026-04-22 時点）**
+
+| 項目 | 内容 |
+|---|---|
+| 追加ファイル | `src/Seiton.Core/Parsing/Utf8MappingDispatch.cs` — `IUtf8OrderedKeyTable`（`KeyCount` / `Utf8Key(int)`）と `Utf8MappingDispatch.TryMatchFirstOrdered<TTable>`。キー行は空の `readonly struct` が静的メソッドで供給し、ジェネリック特殊化を期待。照合はヒープ割り当てなし。 |
+| 適用箇所 | `WorkflowParser.Jobs.cs` の `ParseJobNode`: `JobNodeMappingKey` 列挙子（ordinal = 重複検出用ビット番号）と `JobNodeKeyTable : IUtf8OrderedKeyTable` をロックステップで定義し、`TryMatchFirstOrdered<JobNodeKeyTable>` 成功後に `switch` で各キーのパース処理を実行。 |
+| 当初案（delegate）との差分 | `ReadOnlySpan<byte>` をキャプチャする delegate は使えないうえ、ホットパスでは `Invoke` の間接呼び出しが不利。.NET 10 では `ReadOnlySpan<ReadOnlySpan<byte>>` のような ref struct の入れ子も不可（CS9244）のため、**静的抽象インターフェイス + `Utf8Key(ordinal)` の switch** でテーブルを表現した。 |
+| 未実施 | 提案 2・3、および `ParseJobNode` 以外の partial（`On.cs` のイベント分岐、`runs-on` マッピング等）への同パターン適用は未着手。 |
 
 **リスク**: パーサーのリファクタは回帰バグの温床になるため、既存テストが全パス完了するまで変更を分割適用すること。
 
@@ -233,8 +242,8 @@ Online ルール（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion
 ## 4. 定量サマリ
 
 ```
-Seiton.Core 合計: 133 files, ~26,000 lines
-  Parsing: 37 files, ~10,500 lines
+Seiton.Core 合計: ~133 files, ~26,000 lines（§1 表記の概算。UTF-8 キー共通化で Parsing のみ +1 file）
+  Parsing: 38 files（前回 37 + Utf8MappingDispatch.cs）, ~10,500+ lines
   Linting: 82 files, ~14,700 lines
   Generated: 6 files, ~725 lines (自動生成、レビュー対象外)
 
@@ -242,7 +251,7 @@ Seiton.Core 合計: 133 files, ~26,000 lines
   WorkflowParser.On.cs         1,692 lines
   LintConfigLineParser.cs      1,289 lines
   ExpressionSemanticAnalyzer.cs 1,171 lines
-  WorkflowParser.Jobs.cs         953 lines
+  WorkflowParser.Jobs.cs       ~966 lines（ParseJobNode のキー共通化後）
   LintEngine.cs                  912 lines
   WorkflowParser.cs              902 lines
 ```
@@ -257,4 +266,28 @@ Seiton.Core 合計: 133 files, ~26,000 lines
 2. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
 3. **LintPerRuleAlloc.cs** — run-context ルール個別計測
 4. **全テストパス** — `dotnet test` Green 確認
-5. 本planの該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載
+5. 本 plan の該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載
+
+### 5.1 §2.1 提案 1（ParseJobNode キー共通化）の検証記録
+
+**単体テスト**
+
+- コマンド: `dotnet test --project tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj`
+- 結果: **474 件成功**（2026-04-22 実行）
+
+**ParsingBenchmark（WorkflowParser 全体パス; §2.1 変更の直接計測ではないが回帰の目安）**
+
+- コマンド: `dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj -- -f *ParseWorkflowFull* -j short -m`
+- 環境（ログより）: Windows 11, BenchmarkDotNet 0.15.6, .NET 10.0.6, Ryzen 9 7950X3D, `Job=ShortRun`（IterationCount=3, WarmupCount=3）
+- メソッド: `ParsingBenchmark.ParseWorkflowFull`（説明: `WorkflowParser.Parse (AST + rules)`）
+
+| Size | Mean | Allocated (managed) |
+|---|---:|---:|
+| Small | 28.79 μs | 4.87 KB |
+| Medium | 489.36 μs | 26.57 KB |
+| Large | 8.10 ms | 110.8 KB |
+
+**解釈**
+
+- ShortRun は反復回数が少なく誤差が大きいため、厳密な回帰比較には `medium` / `long` job や変更前コミットとの差分が望ましい。
+- 上記は「キー共通化後のスナップショット」として記録したものであり、**変更前ベースラインとの Ratio は未取得**。
