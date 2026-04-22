@@ -10,18 +10,18 @@
 | Medium (6 jobs × 8 steps) | 27,208 B |
 | Large (20 jobs × 12 steps) | 113,464 B |
 
-### 1.2 LintBenchmark（Phase L5 完了後）
+### 1.2 LintBenchmark（Phase L6 完了後）
 
 | Size | FixEnabled | Allocated |
 |------|-----------|-----------|
-| Small | False | 14.44 KB |
-| Small | True | 14.85 KB |
-| Medium | False | 93.23 KB |
-| Medium | True | 99.65 KB |
-| Large | False | 436.84 KB |
-| Large | True | 466.99 KB |
+| Small | False | 14.42 KB |
+| Small | True | 14.83 KB |
+| Medium | False | 92.91 KB |
+| Medium | True | 99.32 KB |
+| Large | False | 435.63 KB |
+| Large | True | 465.79 KB |
 
-**Phase L1-L5 全完了。元の Large FixEnabled=false 8,482.75 KB → 436.84 KB (-94.8%)。**
+**Phase L1-L6 全完了。元の Large FixEnabled=false 8,482.75 KB → 435.63 KB (-94.9%)。**
 
 **Lint の Large は Parse の ~75 倍のアロケーション。** Lint パイプラインの最適化が主要な改善機会。
 
@@ -330,25 +330,53 @@ ParseBenchmark: Large 110.8 KB（回帰なし）
 1. `UnpinnedUsesRule`: `_lastUnpinnedStepUsesSlice` / `_lastUnpinnedStepMessage` キャッシュ追加。同一 action ref バイト列なら `Decode()` + string interpolation をスキップ
 2. `CheckoutPersistCredentialsRule`: `_lastUsesSlice` / `_lastMessage` キャッシュ追加。`GetCachedMessage()` で `Decode()` + `BuildMessage()` をスキップ
 
-### Phase L6: ExprType の Utf8Slice 化（高リスク、中効果 — 検討段階）
+### Phase L6: ExprType の Utf8Slice 化 — ReadOnlyMemory<byte> によるゼロコピー化（低リスク、低効果）
 
-**目標:** `ObjectExprType` の `Dictionary<Utf8String, ExprType>` が per-key で `byte[]` をクローンしている問題を根本解決。
+**目標:** `ObjectExprType` の `Dictionary<Utf8String, ExprType>` が per-key で `byte[]` をクローンしている問題を解決。
 
 **現状の問題:**
 - `Utf8String` コンストラクタは `utf8.ToArray()` で毎回 byte[] をヒープ割り当て。
 - DynamicContextTypeBuilder が per-job で step/matrix/needs のキーを Utf8String 化 → 多数の byte[] clone。
 - BuiltinContextTypes の static 初期化でも Utf8String を使用。
 
-**改善案:**
-- `ObjectExprType` のプロパティ検索を `ReadOnlySpan<byte>` ベースに変更（既に `TryGetProperty(ReadOnlySpan<byte>)` で実装済み）。
-- Dictionary のキーを `Utf8String` → `int` (hash) にして、衝突時に source バイト比較する設計。
-- ただし ExprType は Lint ルール境界を超えて共有されるため、source bytes への参照ライフサイクル管理が困難。
+**採用した改善案: ReadOnlyMemory\<byte\> ベース**
+- `Utf8String` の内部ストレージを `byte[] _bytes` → `ReadOnlyMemory<byte> _memory` に変更。
+- `internal Utf8String(ReadOnlyMemory<byte> memory)` コンストラクタを追加（ゼロコピー）。
+- `Utf8Slice.ToUtf8StringZeroCopy(byte[] source)` ヘルパーで source YAML への直接参照を作成。
+- DynamicContextTypeBuilder の per-job メソッドで `new Utf8String(span)` → `slice.ToUtf8StringZeroCopy(utf8Yaml)` に変更。
+- NeedsGraphRule のサイクル検出でも同様にゼロコピー化。
+- 既存の `Utf8String(ReadOnlySpan<byte>)` コンストラクタは引き続きコピー（リテラル/static 初期化用）。
 
-**リスク:** ExprType は公開 API の一部。変更影響が広範。
+**完了条件:**
+- [x] `Utf8String` 内部ストレージが `ReadOnlyMemory<byte>` に変更
+- [x] DynamicContextTypeBuilder の per-job Utf8String 構築がゼロコピー化
+- [x] NeedsGraphRule のゼロコピー化
+- [x] `Utf8String.Span` / `Equals` / `GetHashCode` の動作が変わらない
+- [x] 全テスト通過（543/543）
 
-**推定削減:** ~20-40 KB（全 Utf8String byte[] clone の排除）
+**実測結果（Phase L6 完了後）:**
 
-**判断:** Phase L4 で部分改善後、残存コストを再計測してから判断。
+LintBenchmark:
+| Size | FixEnabled | L5後 | L6後 | 差分 |
+|------|-----------|------|------|------|
+| Small | False | 14.44 KB | 14.42 KB | -0.02 KB |
+| Small | True | 14.85 KB | 14.83 KB | -0.02 KB |
+| Medium | False | 93.23 KB | 92.91 KB | -0.32 KB |
+| Medium | True | 99.65 KB | 99.32 KB | -0.33 KB |
+| Large | False | **436.84 KB** | **435.63 KB** | **-1.21 KB** |
+| Large | True | 466.99 KB | 465.79 KB | -1.20 KB |
+
+効果は ~1 KB と小さい。per-key byte[] clone は各数バイト（step ID "build", "test" 等）× 20 jobs と小さく、残存アロケーションの大部分は Dictionary<Utf8String, ExprType> 自体のバケット配列成長 + Expression cache baseline + Parse baseline (~111 KB)。
+
+ただし設計として正しい改善（不要な byte[] clone の体系的排除）であり、Utf8String が source YAML の lifetime に依存するゼロコピー参照を保持できるようになった。
+
+ParseBenchmark: Large 110.9 KB（回帰なし）
+
+**変更内容:**
+1. `Utf8String.cs`: `byte[] _bytes` → `ReadOnlyMemory<byte> _memory`。`internal Utf8String(ReadOnlyMemory<byte>)` コンストラクタ追加
+2. `Utf8Slice.cs`: `ToUtf8StringZeroCopy(byte[] source)` メソッド追加
+3. `DynamicContextTypeBuilder.cs`: 5 箇所の `new Utf8String(span)` → `slice.ToUtf8StringZeroCopy(utf8Yaml)` に変更
+4. `NeedsGraphRule.cs`: 2 箇所の `new Utf8String(pair.Key.AsSpan(source))` → `pair.Key.ToUtf8StringZeroCopy(source)` に変更
 
 ---
 
@@ -396,9 +424,10 @@ Phase L1 (低リスク) ──→ Phase L3 (中リスク) ──→ Phase L4 (�
 | **Phase L3 (Expression cache)** ✅ | **-175 KB (実測)** | 中 | **546 KB** |
 | **Phase L4 (DynamicContextType)** ✅ | **-5 KB (実測)** | 中 | **541 KB** |
 | **Phase L5 (Diagnostic strings)** ✅ | **-104 KB (実測)** | 低 | **437 KB** |
-| **累積結果** | **-8,046 KB (-94.8%)** | — | **437 KB** |
+| **Phase L6 (ReadOnlyMemory)** ✅ | **-1 KB (実測)** | 低 | **436 KB** |
+| **累積結果** | **-8,047 KB (-94.9%)** | — | **436 KB** |
 
-**Phase L1-L5 全完了: 94.8% の削減達成（8,483 KB → 437 KB）。CPU 時間も -42% 改善。**
+**Phase L1-L6 全完了: 94.9% の削減達成（8,483 KB → 436 KB）。CPU 時間も -42% 改善。**
 
 ---
 

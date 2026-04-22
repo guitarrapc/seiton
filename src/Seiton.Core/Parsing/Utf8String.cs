@@ -2,21 +2,26 @@
 
 public readonly struct Utf8String : IEquatable<Utf8String>
 {
-    private readonly byte[] _bytes;
+    private readonly ReadOnlyMemory<byte> _memory;
 
     public Utf8String(ReadOnlySpan<byte> utf8)
     {
-        _bytes = utf8.ToArray();
+        _memory = utf8.ToArray();
+    }
+
+    internal Utf8String(ReadOnlyMemory<byte> memory)
+    {
+        _memory = memory;
     }
 
     private Utf8String(byte[] owned)
     {
-        _bytes = owned;
+        _memory = new ReadOnlyMemory<byte>(owned);
     }
 
-    public int Length => _bytes?.Length ?? 0;
+    public int Length => _memory.Length;
 
-    public ReadOnlySpan<byte> Span => _bytes is null ? ReadOnlySpan<byte>.Empty : _bytes;
+    public ReadOnlySpan<byte> Span => _memory.Span;
 
     public static Utf8String FromLowerAscii(ReadOnlySpan<byte> utf8)
     {

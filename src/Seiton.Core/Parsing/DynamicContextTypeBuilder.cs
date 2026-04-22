@@ -54,13 +54,13 @@ internal static class DynamicContextTypeBuilder
                 continue;
             }
 
-            var idBytes = arena.GetStringValue(step.Id);
-            if (idBytes.IsEmpty)
+            var idSlice = arena.GetStringSlice(step.Id);
+            if (idSlice.IsEmpty)
             {
                 continue;
             }
 
-            props[new Utf8String(idBytes)] = s_stepEntryType;
+            props[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = s_stepEntryType;
         }
 
         return props.Count == 0
@@ -82,7 +82,7 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(rows.Count);
         foreach (var row in rows)
         {
-            props[new Utf8String(row.Key.AsSpan(utf8Yaml))] = ExprType.Any;
+            props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.Any;
         }
 
         return (MatrixKeyUtf8, ExprType.Object(props, strict: true));
@@ -106,7 +106,8 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(needs.Length);
         for (var i = 0; i < needs.Length; i++)
         {
-            var needIdBytes = arena.GetStringSlice(needs[i]).AsSpan(utf8Yaml);
+            var needSlice = arena.GetStringSlice(needs[i]);
+            var needIdBytes = needSlice.AsSpan(utf8Yaml);
             if (needIdBytes.IsEmpty)
             {
                 continue;
@@ -122,7 +123,7 @@ internal static class DynamicContextTypeBuilder
                 },
                 strict: true);
 
-            props[new Utf8String(needIdBytes)] = needsEntryType;
+            props[needSlice.ToUtf8StringZeroCopy(utf8Yaml!)] = needsEntryType;
         }
 
         return props.Count == 0
@@ -159,7 +160,7 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(outputs.Count);
         foreach (var pair in outputs)
         {
-            props[new Utf8String(pair.Key.AsSpan(utf8Yaml))] = ExprType.String;
+            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
         }
 
         return ExprType.Object(props, strict: true);
@@ -223,7 +224,7 @@ internal static class DynamicContextTypeBuilder
                 DispatchInputType.Number => ExprType.Number,
                 _ => ExprType.String,
             };
-            props[new Utf8String(pair.Key.AsSpan(utf8Yaml))] = type;
+            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = type;
         }
 
         return ExprType.Object(props, strict: true);

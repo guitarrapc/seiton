@@ -55,14 +55,14 @@ public sealed class NeedsGraphRule : RuleBase
         var color = new Dictionary<Utf8String, byte>(_knownJobs.Count);
         foreach (var pair in _knownJobs)
         {
-            color[new Utf8String(pair.Key.AsSpan(source))] = 0;
+            color[pair.Key.ToUtf8StringZeroCopy(source)] = 0;
         }
 
         var stack = new Stack<(Utf8String Key, int NeighborIndex)>();
 
         foreach (var kvp in _knownJobs)
         {
-            var key = new Utf8String(kvp.Key.AsSpan(source));
+            var key = kvp.Key.ToUtf8StringZeroCopy(source);
             if (color[key] != 0)
             {
                 continue;
