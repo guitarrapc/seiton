@@ -79,10 +79,41 @@ public static class ExpressionSemanticAnalyzer
         return diagnostics.ToArray();
     }
 
+    /// <summary>
+    /// Internal fast path: validate expression using spans (no array allocation).
+    /// Diagnostics are appended directly to the caller's list.
+    /// </summary>
+    internal static void ValidateInline(
+        int rootNode,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics,
+        bool allowStatusCheckFunctions = false)
+    {
+        if (rootNode < 0)
+        {
+            return;
+        }
+
+        ValidateNode(rootNode, -1, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+    }
+
     public static ExprType InferType(
         int nodeId,
         ExpressionNode[] nodes,
         int[] arguments,
+        ReadOnlySpan<byte> expressionUtf8)
+    {
+        return InferTypeSpan(nodeId, nodes, arguments, expressionUtf8);
+    }
+
+    private static ExprType InferTypeSpan(
+        int nodeId,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -146,8 +177,8 @@ public static class ExpressionSemanticAnalyzer
     private static void ValidateNode(
         int nodeId,
         int parentId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         ExpressionValidationContext context,
@@ -232,8 +263,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateFunctionCall(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         bool allowStatusCheckFunctions,
@@ -296,7 +327,7 @@ public static class ExpressionSemanticAnalyzer
             var argIndex = node.ArgStart + i;
             if (argIndex >= 0 && argIndex < arguments.Length)
             {
-                argTypes[i] = InferType(arguments[argIndex], nodes, arguments, expressionUtf8);
+                argTypes[i] = InferTypeSpan(arguments[argIndex], nodes, arguments, expressionUtf8);
             }
             else
             {
@@ -352,8 +383,8 @@ public static class ExpressionSemanticAnalyzer
     private static void ValidateFormatPlaceholders(
         ExpressionNode functionCallNode,
         ReadOnlySpan<byte> functionNameUtf8,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -508,11 +539,11 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferMemberAccessType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (leftType is ObjectExprType objectType)
         {
             if (objectType.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propertyType))
@@ -536,12 +567,12 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferIndexAccessType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
-        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
 
         if (leftType is ArrayExprType arrayType)
         {
@@ -577,11 +608,11 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferWildcardType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (leftType is ArrayExprType arrayType)
         {
             return arrayType.ElementType;
@@ -597,8 +628,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferFunctionCallType(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
         if (node.Left < 0 || node.Left >= nodes.Length)
@@ -642,7 +673,7 @@ public static class ExpressionSemanticAnalyzer
         return ExprType.Any;
     }
 
-    private static ExprType? TryInferFromJsonLiteral(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    private static ExprType? TryInferFromJsonLiteral(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expressionUtf8)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -755,8 +786,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateCompareOp(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -766,8 +797,8 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
-        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
 
         if (IsNotComparableType(leftType))
         {
@@ -787,8 +818,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateUnaryOp(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -798,7 +829,7 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
-        var operandType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var operandType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (operandType is ObjectExprType or ArrayExprType)
         {
             diagnostics.Add(new Diagnostic(
@@ -810,13 +841,13 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateWildcardAccess(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (leftType is AnyExprType or ObjectExprType or ArrayExprType)
         {
             return;
@@ -830,14 +861,14 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateIndexAccess(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
-        var rightType = InferType(node.Right, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+        var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
 
         if (leftType is ArrayExprType && rightType is not (AnyExprType or NumberExprType))
         {
@@ -877,7 +908,7 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateVarsNamingConvention(
         ExpressionNode node,
-        ExpressionNode[] nodes,
+        ReadOnlySpan<ExpressionNode> nodes,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
@@ -958,13 +989,13 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidatePropertyAccess(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
     {
-        var leftType = InferType(node.Left, nodes, arguments, expressionUtf8);
+        var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         if (leftType is not ObjectExprType { Strict: true } strictObj)
         {
             return;
@@ -982,7 +1013,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    private static string GetChainRootName(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expressionUtf8)
+    private static string GetChainRootName(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expressionUtf8)
     {
         var current = nodeId;
         while (current >= 0 && current < nodes.Length)
@@ -1045,8 +1076,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidateNodePropertyAccess(
         int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         (byte[] NameUtf8, ExprType Type)[] overrides,
@@ -1095,8 +1126,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static void ValidatePropertyAccessWithOverrides(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         (byte[] NameUtf8, ExprType Type)[] overrides,
@@ -1122,8 +1153,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferTypeWithOverrides(
         int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         (byte[] NameUtf8, ExprType Type)[] overrides)
     {
@@ -1176,8 +1207,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferMemberAccessTypeWithOverrides(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         (byte[] NameUtf8, ExprType Type)[] overrides)
     {
@@ -1205,8 +1236,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferIndexAccessTypeWithOverrides(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         (byte[] NameUtf8, ExprType Type)[] overrides)
     {
@@ -1247,8 +1278,8 @@ public static class ExpressionSemanticAnalyzer
 
     private static ExprType InferWildcardTypeWithOverrides(
         ExpressionNode node,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         (byte[] NameUtf8, ExprType Type)[] overrides)
     {

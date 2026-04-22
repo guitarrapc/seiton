@@ -1,4 +1,5 @@
-﻿using static Seiton.Core.Parsing.SpanHelpers;
+﻿using System.Runtime.CompilerServices;
+using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 
@@ -19,6 +20,65 @@ public static class ExpressionParser
             Nodes: parser.NodesToArray(),
             Arguments: parser.ArgumentsToArray(),
             Diagnostics: parser.DiagnosticsToArray());
+    }
+
+    /// <summary>
+    /// Internal fast path: parse expression and validate semantics without allocating
+    /// ExpressionNode[] / int[] arrays. Parser uses ArrayPool-backed buffers internally
+    /// and passes spans directly to the semantic analyzer.
+    /// </summary>
+    internal static void ParseAndValidateInline(
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        List<Diagnostic> diagnostics,
+        bool allowStatusCheckFunctions = false)
+    {
+        using var parser = new Parser(expressionUtf8);
+        var root = parser.ParseExpression();
+        parser.SkipWhiteSpace();
+        if (!parser.End)
+        {
+            parser.AddError($"unexpected token at position {parser.Position}");
+        }
+
+        // Transfer parse diagnostics with location shifting
+        var parseDiags = parser.DiagnosticsAsSpan();
+        for (var i = 0; i < parseDiags.Length; i++)
+        {
+            var d = parseDiags[i];
+            diagnostics.Add(new Diagnostic(
+                d.Severity,
+                $"expression parse error: {d.Message}",
+                ShiftExpressionLocation(expressionLocation, d.Location.Start, d.Location.Length)));
+        }
+
+        // Validate with spans — no array allocation
+        if (root >= 0)
+        {
+            ExpressionSemanticAnalyzer.ValidateInline(
+                root,
+                parser.NodesAsSpan(),
+                parser.ArgsAsSpan(),
+                expressionUtf8,
+                expressionLocation,
+                context,
+                diagnostics,
+                allowStatusCheckFunctions);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static TextRange ShiftExpressionLocation(TextRange baseLocation, int relativeOffset, int length)
+    {
+        var safeLength = length <= 0 ? 1 : length;
+        return new TextRange(
+            Start: baseLocation.Start + relativeOffset,
+            Length: safeLength,
+            StartLine: baseLocation.StartLine,
+            StartColumn: baseLocation.StartColumn + relativeOffset,
+            EndLine: baseLocation.EndLine,
+            EndColumn: baseLocation.StartColumn + relativeOffset + safeLength - 1);
     }
 
     // PooledBuffer<T> is now shared — see PooledBuffer.cs
@@ -463,6 +523,12 @@ public static class ExpressionParser
         public int[] ArgumentsToArray() => _args.ToArray();
 
         public Diagnostic[] DiagnosticsToArray() => _diagnostics.ToArray();
+
+        public ReadOnlySpan<ExpressionNode> NodesAsSpan() => _nodes.AsSpan();
+
+        public ReadOnlySpan<int> ArgsAsSpan() => _args.AsSpan();
+
+        public ReadOnlySpan<Diagnostic> DiagnosticsAsSpan() => _diagnostics.AsSpan();
 
         public void Dispose()
         {

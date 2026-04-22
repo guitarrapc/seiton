@@ -573,6 +573,7 @@ Expression パーサーは AST とは独立だが、Expression 結果の格納�
 | Phase 1 完了 ✅ | 309 KB (実績) | 6.8 ms (実績) |
 | Phase 2 完了 ✅ | 328 KB (実績) | — |
 | Phase 3 完了 ✅ | 221 KB (実績) | — |
+| Phase 4a 完了 ✅ | 113 KB (実績) | — |
 
 ---
 
@@ -588,6 +589,7 @@ Phase 1 (低リスク) ✅ ──→ ベンチマーク検証 ✅ ──→ Phas
 ```
 
 Phase 1〜3 で累計 **-41.3% 削減**（377 KB → 221 KB）を達成。
+Phase 4a で累計 **-69.9% 削減**（377 KB → 113 KB）を達成。
 
 ---
 
@@ -728,135 +730,79 @@ WorkflowParser.ValidateExpressionText()
 
 ## 10. Phase 4+ 実装計画
 
-### Phase 4a: Expression バッファ再利用（中リスク、高効果）
+### Phase 4a: Expression バッファ再利用（中リスク、高効果） ✅ 完了
 
 **目標:** Expression パーサーの内部パスで ExpressionNode[] / int[] の ToArray() を排除し、PooledBuffer を直接再利用する。
 
-**推定削減:** Large -88 KB to -92 KB（ExpressionNode[] ~88 KB + int[] ~4 KB）
+**実施結果（ParsingBenchmark — WorkflowParser.Parse）:**
 
-**設計:**
+| Size | Before (Phase 3) | After (Phase 4a) | Reduction |
+|------|-------------------|-----------------|-----------|
+| Small (1 job × 3 steps) | 6,704 B | 4,984 B | -1,720 B (-25.7%) |
+| Medium (6 jobs × 8 steps) | 48,957 B | 27,208 B | -21,749 B (-44.4%) |
+| Large (20 jobs × 12 steps) | 221,313 B | 113,464 B | -107,849 B (-48.7%) |
 
-```csharp
-// 新: ExpressionParser に内部パス追加
-public static class ExpressionParser
-{
-    // 既存 public API（変更なし）
-    public static ExpressionParseResult Parse(ReadOnlySpan<byte> expressionUtf8) { ... }
+**累積削減（初期 → Phase 4a）:**
 
-    // 新: 内部パス — 呼び出し元提供の PooledBuffer に書き込み
-    internal static int ParseInto(
-        ReadOnlySpan<byte> expressionUtf8,
-        ref PooledBuffer<ExpressionNode> nodes,
-        ref PooledBuffer<int> args,
-        ref PooledBuffer<Diagnostic> diagnostics)
-    {
-        // PooledBuffer をリセット（配列は保持）
-        nodes.Reset();
-        args.Reset();
-        diagnostics.Reset();
+| Size | 初期値 | Phase 4a 後 | 累積削減 |
+|------|--------|-----------|----------|
+| Small | 12,080 B | 4,984 B | **-58.7%** |
+| Medium | 83,512 B | 27,208 B | **-67.4%** |
+| Large | 376,696 B | 113,464 B | **-69.9%** |
 
-        // Parser 内部で ref PooledBuffer を使用
-        var parser = new Parser(expressionUtf8, ref nodes, ref args, ref diagnostics);
-        var root = parser.ParseExpression();
-        parser.SkipWhiteSpace();
-        if (!parser.End) parser.AddError(...);
-        return root;
-    }
-}
-```
+**実施内容:**
+1. **`PooledBuffer<T>.Reset()` メソッド追加** (`PooledBuffer.cs`):
+   - `_count = 0` のみで配列を保持。ArrayPool 返却なしで即座に再利用可能。
+2. **`ExpressionParser.ParseAndValidateInline()` 追加** (`ExpressionParser.cs`):
+   - 既存の `Parser` ref struct を使いつつ、`ToArray()` を呼ばずに `NodesAsSpan()` / `ArgsAsSpan()` / `DiagnosticsAsSpan()` で `ReadOnlySpan` を返す。
+   - 位置シフト（`ShiftExpressionLocation`）を内部に持ち、parse diagnostic を呼び出し元の `List<Diagnostic>` に直接追加。
+   - Semantic validation も `ValidateInline` に spans で渡す。
+   - **Parser 内部の PooledBuffer は ArrayPool から借用（zero heap alloc）→ spans で消費 → Dispose で返却。一切の ToArray/new 配列なし。**
+3. **`ExpressionSemanticAnalyzer.ValidateInline()` 追加** (`ExpressionSemanticAnalyzer.cs`):
+   - `ReadOnlySpan<ExpressionNode>` / `ReadOnlySpan<int>` / `List<Diagnostic>` を受け取り、配列もリストも割り当てない。
+   - 全 ~20 private メソッドのシグネチャを `ExpressionNode[]` → `ReadOnlySpan<ExpressionNode>`、`int[]` → `ReadOnlySpan<int>` に変更。
+   - `ReadOnlySpan<T>` は `T[]` から暗黙変換されるため、既存の public API（`Validate()`, `InferType()`, `ValidateDynamicPropertyAccess()`）は変更不要。
+   - 内部の `InferType` 呼び出しを `InferTypeSpan` に改名（public `InferType` は array 受け取り → `InferTypeSpan` に委譲）。
+4. **`ExpressionScanHelpers.IsContextRootIdentifier()` シグネチャ変更**:
+   - `ExpressionNode[]` → `ReadOnlySpan<ExpressionNode>` に変更（Lint ルールからの array 呼び出しも暗黙変換で互換維持）。
+5. **`WorkflowParser.Primitives.ParseAndValidateExpression()` 簡略化**:
+   - 新しい `ExpressionParser.ParseAndValidateInline()` を直接呼び出す 1 行に置換。
+   - `ValidateExpressionText` / 呼び出し元のシグネチャ変更は不要。
 
-```csharp
-// WorkflowParser 側: パース全体で共有する PooledBuffer
-public static partial class WorkflowParser
-{
-    // ParseAndValidateExpression 内で毎回 Reset + 再利用
-    private static void ParseAndValidateExpression(
-        ReadOnlySpan<byte> expressionUtf8,
-        TextRange expressionLocation,
-        ExpressionValidationContext context,
-        List<Diagnostic> diagnostics,
-        ref PooledBuffer<ExpressionNode> exprNodes,
-        ref PooledBuffer<int> exprArgs,
-        ref PooledBuffer<Diagnostic> exprDiags,
-        bool allowStatusCheckFunctions = false)
-    {
-        var rootNode = ExpressionParser.ParseInto(
-            expressionUtf8, ref exprNodes, ref exprArgs, ref exprDiags);
+**公開 API への影響:** なし
+- `ExpressionParser.Parse()` — 変更なし（Lint ルール・`ExpressionExtractor`・`LintConfig.ParseExpression` から使用）
+- `ExpressionSemanticAnalyzer.Validate()` — 変更なし
+- `ExpressionSemanticAnalyzer.InferType()` — 変更なし（`FakeTernaryRule` から使用）
+- `ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess()` — 変更なし
 
-        // Parse diagnostics → caller's list
-        for (var i = 0; i < exprDiags.Count; i++) { ... }
+**完了条件の達成状況:**
+- [x] 内部パスで ExpressionNode[] / int[] の ToArray() が発生しない
+- [x] ValidateInline が new List\<Diagnostic\> を割り当てない
+- [x] 公開 API が変更されていない
+- [x] ベンチマーク: Large Parse Allocated 113 KB ≤ 140 KB 目標達成
+- [x] 全テスト通過（543/543）
 
-        // Validate with spans（配列割り当てなし）
-        ExpressionSemanticAnalyzer.ValidateInline(
-            rootNode, exprNodes.AsSpan(), exprArgs.AsSpan(),
-            expressionUtf8, expressionLocation, context,
-            diagnostics, allowStatusCheckFunctions);
-    }
-}
-```
-
-**変更ファイル:**
-1. `ExpressionParser.cs` — `ParseInto()` 追加、`Parser` ref struct に外部バッファ受け入れモード追加
-2. `PooledBuffer.cs` — `Reset()` メソッド追加（`_count = 0`, 配列保持）
-3. `ExpressionSemanticAnalyzer.cs` — `ValidateInline()` 追加（`ReadOnlySpan<ExpressionNode>` / `ReadOnlySpan<int>` 受け入れ）
-4. `WorkflowParser.Primitives.cs` — `ParseAndValidateExpression` に PooledBuffer 引数追加
-5. `WorkflowParser.cs` / `WorkflowParser.Steps.cs` / `WorkflowParser.Jobs.cs` — PooledBuffer のスレッディング
-
-**公開 API への影響:** なし（ExpressionParser.Parse / ExpressionExtractor / LintConfig.ParseExpression は変更不要）
+**Lessons Learned:**
+- **設計の転換: ParseInto ではなく ParseAndValidateInline:** 当初の計画では `ExpressionParser.ParseInto()` で PooledBuffer を呼び出し元にスレッディングする設計だったが、`Parser` ref struct が PooledBuffer を値で保持するため外部バッファの共有が困難。代わりに Parse + Validate を一体化した `ParseAndValidateInline()` を `ExpressionParser` に追加し、Parser 内部の PooledBuffer → AsSpan() → 直接 Validate の流れにすることで、バッファスレッディングの複雑さを完全に回避。
+- **ReadOnlySpan への一括変更は安全:** `ReadOnlySpan<T>` は `T[]` から暗黙変換されるため、private メソッドのシグネチャを変更しても public API の互換性は保たれる。これにより ~20 メソッドの一括変更が可能だった。
+- **推定を大幅に上回る削減:** 推定 -88～92 KB に対し実績 -108 KB。理由: ExpressionNode[] / int[] の ToArray() 以外に、`ExpressionSemanticAnalyzer.Validate` 内の `new List<Diagnostic>()` + `diagnostics.ToArray()` の排除も効いた（Phase 4b の効果を先取り）。
+- **ExprType は managed type で stackalloc 不可:** `ExprType` は class hierarchy（AnyExprType, BoolExprType 等）のため `stackalloc` できない。`new ExprType[argCount]` は残存（Phase 4b の候補からは除外）。
+- **ExpressionExtractor.ExtractParseAndValidate は変更不要:** このメソッドは公開 API プライバシーで `ExpressionParser.Parse()` を使い続ける。WorkflowParser 内部パスのみが `ParseAndValidateInline` を使用。
 
 **完了条件:**
-- [ ] `ExpressionParser.ParseInto` が ExpressionNode[] を割り当てない
-- [ ] `ValidateInline` が List\<Diagnostic\> を割り当てない
-- [ ] 公開 API `ExpressionParser.Parse` / `ExpressionExtractor` が変更されていない
-- [ ] ベンチマーク: Large Parse Allocated ≤ 140 KB
-- [ ] 全テスト通過
+- [x] `ExpressionParser.ParseAndValidateInline` が ExpressionNode[] を割り当てない
+- [x] `ValidateInline` が List\<Diagnostic\> を割り当てない
+- [x] 公開 API `ExpressionParser.Parse` / `ExpressionExtractor` が変更されていない
+- [x] ベンチマーク: Large Parse Allocated 113 KB ≤ 140 KB 目標達成
+- [x] 全テスト通過（543/543）
 
-### Phase 4b: Semantic Validator per-call 割り当て排除（低リスク、中効果）
+### Phase 4b: Semantic Validator per-call 割り当て排除（低リスク、中効果） ✅ Phase 4a に統合済み
 
-**目標:** ExpressionSemanticAnalyzer 内部の per-call ヒープ割り当てを排除。
+Phase 4a の `ValidateInline` 実装時に以下を同時に実施:
+- `List<Diagnostic>` の per-call 割り当て排除 → 呼び出し元の List に直接追加
+- `ExprType[]` stackalloc は ExprType が managed type のため不可 → `new ExprType[argCount]` のまま（関数呼び出し時のみで影響は限定的）
 
-**推定削減:** Large -15 KB to -25 KB（List\<Diagnostic\> ~15 KB + ExprType[] ~4 KB + その他）
-
-**設計:**
-
-```csharp
-// 変更 1: List<Diagnostic> を呼び出し元から受け取り
-internal static void ValidateInline(
-    int rootNode,
-    ReadOnlySpan<ExpressionNode> nodes,
-    ReadOnlySpan<int> arguments,
-    ReadOnlySpan<byte> expressionUtf8,
-    TextRange expressionLocation,
-    ExpressionValidationContext context,
-    List<Diagnostic> diagnostics,  // ← 呼び出し元の list に直接追加
-    bool allowStatusCheckFunctions = false)
-{
-    if (rootNode < 0) return;
-    ValidateNode(rootNode, -1, nodes, arguments, ...);
-}
-
-// 変更 2: ExprType[] → stackalloc
-private static void ValidateFunctionCall(...)
-{
-    // 現行: var argTypes = new ExprType[argCount];
-    // 新: stackalloc（関数引数は最大 ~16）
-    Span<ExprType> argTypes = argCount <= 16
-        ? stackalloc ExprType[argCount]
-        : new ExprType[argCount]; // fallback（到達しないはず）
-}
-```
-
-**変更ファイル:**
-1. `ExpressionSemanticAnalyzer.cs` — `ValidateInline()` 追加 / `ValidateFunctionCall` の stackalloc 化
-2. `WorkflowParser.Primitives.cs` — `ParseAndValidateExpression` が caller's diagnostics を渡す
-
-**Phase 4a との統合:** Phase 4a の `ValidateInline` に Phase 4b の変更を含める。同時実装が自然。
-
-**完了条件:**
-- [ ] `ValidateFunctionCall` 内の `new ExprType[]` が stackalloc に変更
-- [ ] 内部パスで `new List<Diagnostic>()` が 0 箇所
-- [ ] ベンチマーク: Phase 4a の目標に追加で -15 KB 以上
-- [ ] 全テスト通過
+Phase 4a の実績 -108 KB は当初の Phase 4a + 4b 合計予想 (-90～110 KB) をカバー。
 
 ### Phase 4c: （漸進的）ValidateDynamicPropertyAccess の改善
 
@@ -979,12 +925,12 @@ Phase 4a + 4b 同時実装が最も効率的（ValidateInline の設計に両者
 
 | Phase | 推定 Allocated (Large) | 推定削減 | 累積削減 (初期比) |
 |-------|----------------------|---------|------------------|
-| Phase 3 完了 (現状) | 221 KB | — | -41.3% |
-| Phase 4a + 4b 完了 | 110–130 KB | -90 to -110 KB | -65% to -71% |
+| Phase 3 完了 | 221 KB | — | -41.3% |
+| Phase 4a 完了 ✅ | **113 KB** (実績) | **-108 KB** | **-69.9%** |
 | Phase 5 (遅延検証) | 70–90 KB | -20 to -40 KB | -76% to -81% |
 | Phase 6a (StepExec union) | 50–70 KB | -20 KB | -81% to -87% |
 
-**Phase 4a + 4b で Large Parse を ~120 KB（初期比 -68%）にすることを次の目標とする。**
+**Phase 4a で Large Parse を 113 KB（初期比 -69.9%）に到達。目標の ~120 KB を達成。**
 
 ---
 
@@ -1000,9 +946,9 @@ Phase 4a/4b 完了時に以下を測定:
 
 **成功基準:**
 
-| 指標 | Phase 3 (現状) | Phase 4 目標 |
-|------|---------------|-------------|
-| Large Parse Allocated | 221 KB | ≤ 130 KB |
-| Large Parse Mean | 16.3 ms | ≤ 16.3 ms（速度維持） |
-| Expression parse alloc (482回) | 96 KB | ≤ 10 KB |
-| 全テスト | 540/540 | 540/540 |
+| 指標 | Phase 3 | Phase 4a (実績) | Phase 4 目標 |
+|------|---------|----------------|-------------|
+| Large Parse Allocated | 221 KB | **113 KB** ✅ | ≤ 130 KB |
+| Large Parse Mean | 16.3 ms | 17.9 ms | ≤ 16.3 ms |
+| Expression parse alloc (482回) | 96 KB | ~0 KB ✅ | ≤ 10 KB |
+| 全テスト | 540/540 | **543/543** ✅ | 540+/540+ |

@@ -36,6 +36,13 @@ internal struct PooledBuffer<T>
 
     public readonly ReadOnlySpan<T> AsSpan() => _items.AsSpan(0, _count);
 
+    /// <summary>
+    /// Resets the count to zero without releasing the pooled array.
+    /// The buffer can be reused immediately for the next parse.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Reset() => _count = 0;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Replace(int index, T item)
     {

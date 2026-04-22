@@ -75,7 +75,7 @@ internal static class ExpressionScanHelpers
         return (idx + 1, offset - lineStarts[idx] + 1);
     }
 
-    internal static bool IsContextRootIdentifier(int nodeId, int parentId, ExpressionNode[] nodes)
+    internal static bool IsContextRootIdentifier(int nodeId, int parentId, ReadOnlySpan<ExpressionNode> nodes)
     {
         if (parentId < 0)
         {

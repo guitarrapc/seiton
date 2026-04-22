@@ -527,18 +527,7 @@ public static partial class WorkflowParser
 
     private static void ParseAndValidateExpression(ReadOnlySpan<byte> expressionUtf8, TextRange expressionLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool allowStatusCheckFunctions = false)
     {
-        var parseResult = ExpressionParser.Parse(expressionUtf8);
-        for (var i = 0; i < parseResult.Diagnostics.Length; i++)
-        {
-            var parseDiagnostic = parseResult.Diagnostics[i];
-            diagnostics.Add(new Diagnostic(parseDiagnostic.Severity, $"expression parse error: {parseDiagnostic.Message}", ShiftLocation(expressionLocation, parseDiagnostic.Location.Start, parseDiagnostic.Location.Length)));
-        }
-
-        var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(parseResult, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions);
-        for (var i = 0; i < semanticDiagnostics.Length; i++)
-        {
-            diagnostics.Add(semanticDiagnostics[i]);
-        }
+        ExpressionParser.ParseAndValidateInline(expressionUtf8, expressionLocation, context, diagnostics, allowStatusCheckFunctions);
     }
 
     private static bool ContainsExpression(ReadOnlySpan<byte> valueUtf8)
