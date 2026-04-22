@@ -282,7 +282,7 @@ Alias resolution is a current-contract feature owned entirely by the adapter lay
 1. Accept UTF-8 input as `ReadOnlySpan<byte>`
 2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison
 3. Store `Utf8Slice` (offset + length) in AST, not `Span<T>`
-4. Use `Utf8String` (owned byte copy) for dictionary keys; never `System.String`
+4. Use `Utf8String` (`ReadOnlyMemory<byte>`-backed) for dictionary keys; never `System.String`
 5. Use generated static tables for metadata lookup
 6. Do not hold YAML library-specific types outside the adapter layer
 7. **`System.String` is banned on the normal success path** — AST node fields, dictionary keys, parse function return types, and intermediate values must use the UTF-8 type vocabulary defined in §0.2.4
@@ -317,36 +317,40 @@ The following types form the string representation layer for the C# implementati
 |---|---|---|---|
 | `ReadOnlySpan<byte>` | Non-owning, stack-only | Current parse position only | Transient key matching, value inspection in parse functions |
 | `Utf8Slice` | Non-owning (offset + length into input buffer) | Input buffer lifetime | AST scalar values (`StringNode.Value`, etc.) |
-| `Utf8String` | Owning (immutable `byte[]` copy) | Unbounded | Dictionary keys in AST, case-normalized identifiers |
+| `Utf8String` | Owning (`ReadOnlyMemory<byte>`) | Unbounded | Dictionary keys in AST, case-normalized identifiers |
 
 ```csharp
 /// Owned immutable UTF-8 byte sequence.
 /// Used as dictionary key where the value must outlive the current parse position.
-/// Implements IEquatable<Utf8String> and GetHashCode over raw bytes.
+/// Implements IEquatable<Utf8String> and GetHashCode over raw bytes (XXH64 truncated to 32-bit).
 /// No UTF-16 transcoding occurs.
 public readonly struct Utf8String : IEquatable<Utf8String>
 {
-    private readonly byte[] _bytes;
-    public ReadOnlySpan<byte> Span => _bytes;
-    public int Length => _bytes.Length;
+    private readonly ReadOnlyMemory<byte> _memory;
+    public ReadOnlySpan<byte> Span => _memory.Span;
+    public int Length => _memory.Length;
 
-    // Construction
-    public Utf8String(ReadOnlySpan<byte> utf8) => _bytes = utf8.ToArray();
+    // Copying construction (for static literals and parse-time keys)
+    public Utf8String(ReadOnlySpan<byte> utf8) => _memory = utf8.ToArray();
+
+    // Zero-copy construction (for linter hot paths referencing source YAML)
+    internal Utf8String(ReadOnlyMemory<byte> memory) => _memory = memory;
 
     // Equality and hashing operate directly on UTF-8 bytes
     public bool Equals(Utf8String other) => Span.SequenceEqual(other.Span);
-    public override int GetHashCode() => XxHash3.HashToUInt64(_bytes);
+    public override int GetHashCode() => XxHash64.Hash32(_memory.Span);
 }
 ```
 
 **Construction from parse context:**
 - From `ReadOnlySpan<byte>`: `new Utf8String(reader.GetScalarUtf8())` — copies the key bytes
-- From `Utf8Slice`: `slice.ToUtf8String(sourceBuffer)` — copies the referenced range
+- From `Utf8Slice` (copying): `slice.ToUtf8String(sourceBuffer)` — copies the referenced range
+- From `Utf8Slice` (zero-copy): `slice.ToUtf8StringZeroCopy(sourceArray)` — wraps `byte[].AsMemory()` without copying; valid only while the source `byte[]` is alive
 - Case-normalized: `Utf8String.FromLowerAscii(span)` — copies with ASCII lower-case conversion
 
 **Design rationale:**
 - `Utf8Slice` avoids allocation for the vast majority of AST scalar values (names, expressions, etc.) that are read but never used as lookup keys
-- `Utf8String` allocates a small `byte[]` copy only for dictionary keys (job IDs, env var names, input names, etc.) where hashing and ownership are required
+- `Utf8String` uses `ReadOnlyMemory<byte>` as its backing store. For static/literal keys (generated code, builtins), the copying constructor `Utf8String(ReadOnlySpan<byte>)` allocates a `byte[]`. For linter hot paths where the source YAML `byte[]` is guaranteed to outlive the `Utf8String`, the zero-copy constructor `Utf8String(ReadOnlyMemory<byte>)` wraps a slice of the existing array without allocation
 - `System.String` is never constructed on the normal path — the parser operates entirely in UTF-8 byte space
 
 ---

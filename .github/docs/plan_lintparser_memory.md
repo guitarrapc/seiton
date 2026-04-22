@@ -241,7 +241,7 @@ ParseBenchmark: Large 110.89 KB（回帰なし）
 
 **変更内容:**
 1. `Dictionary<long, ExpressionParseResult>` → `Dictionary<long, ExpressionCacheEntry>` where entry = `(int Offset, int Length, ExpressionParseResult Result)`
-2. キャッシュキー: offset ベース → FNV-1a 64-bit content hash（`ComputeContentHash`）
+2. キャッシュキー: offset ベース → XXH64 content hash（`ComputeContentHash`）
 3. Cache hit 時: `source.AsSpan(entry.Offset, entry.Length).SequenceEqual(expression)` で content equality 検証（collision guard）
 4. Hash collision 時: Parse without caching（極めて稀、6 entries で 64-bit hash）
 
