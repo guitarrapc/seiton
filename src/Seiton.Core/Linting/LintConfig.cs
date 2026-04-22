@@ -17,7 +17,7 @@ public sealed class LintConfig
     public string? FilePath { get; init; }
 
     private string? _sourceText;
-    private Dictionary<long, ExpressionParseResult>? _expressionCache;
+    private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
 
     /// <summary>
@@ -35,9 +35,9 @@ public sealed class LintConfig
     }
 
     /// <summary>
-    /// Parses an expression with deduplication. If the same byte range within Utf8Yaml
-    /// has already been parsed, returns the cached result. The expression span must
-    /// originate from Utf8Yaml.
+    /// Parses an expression with content-based deduplication. Expressions with identical
+    /// byte content at different source positions share the same parse result.
+    /// The expression span must originate from Utf8Yaml.
     /// </summary>
     public ExpressionParseResult ParseExpression(ReadOnlySpan<byte> expression)
     {
@@ -46,27 +46,47 @@ public sealed class LintConfig
             return ExpressionParser.Parse(expression);
         }
 
-        var key = ComputeCacheKey(Utf8Yaml, expression);
+        var key = ComputeContentHash(expression);
 
         _expressionCache ??= new();
-        if (_expressionCache.TryGetValue(key, out var cached))
+        if (_expressionCache.TryGetValue(key, out var entry))
         {
-            return cached;
+            // Verify content match (collision guard)
+            if (Utf8Yaml.AsSpan(entry.Offset, entry.Length).SequenceEqual(expression))
+            {
+                return entry.Result;
+            }
+
+            // Hash collision with different content — parse without caching (extremely rare)
+            return ExpressionParser.Parse(expression);
         }
 
         var result = ExpressionParser.Parse(expression);
-        _expressionCache[key] = result;
+        var offset = (int)Unsafe.ByteOffset(
+            ref MemoryMarshal.GetArrayDataReference(Utf8Yaml),
+            ref MemoryMarshal.GetReference(expression));
+        _expressionCache[key] = new ExpressionCacheEntry(offset, expression.Length, result);
         return result;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static long ComputeCacheKey(byte[] source, ReadOnlySpan<byte> span)
+    private static long ComputeContentHash(ReadOnlySpan<byte> span)
     {
-        var offset = (int)Unsafe.ByteOffset(
-            ref MemoryMarshal.GetArrayDataReference(source),
-            ref MemoryMarshal.GetReference(span));
-        return ((long)offset << 32) | (uint)span.Length;
+        // FNV-1a 64-bit hash on expression content
+        const ulong offsetBasis = 14695981039346656037;
+        const ulong prime = 1099511628211;
+
+        var hash = offsetBasis;
+        for (var i = 0; i < span.Length; i++)
+        {
+            hash ^= span[i];
+            hash *= prime;
+        }
+
+        return (long)hash;
     }
+
+    private readonly record struct ExpressionCacheEntry(int Offset, int Length, ExpressionParseResult Result);
 
     /// <summary>
     /// Returns the line-start offset array for Utf8Yaml, lazily built on first access.

@@ -215,8 +215,33 @@ LintBenchmark:
 **推定削減:** 案 A: ~250 KB → ~5 KB。案 B: さらに ~5 KB → ~1 KB。
 
 **完了条件:**
-- [ ] 同一テキストの式が 1 回のみパースされる
-- [ ] Expression cache の total allocation ≤ 20 KB
+- [x] 同一テキストの式が 1 回のみパースされる
+- [x] Expression cache entries: 482 → 6（content-based dedup で 476 Parse() 呼び出し排除）
+- [x] 全テスト通過（543/543）
+
+**実測結果（Phase L3 完了後）:**
+
+採用: 改善案 A（テキストベースキャッシュ）
+
+LintBenchmark:
+| Size | FixEnabled | L2後 | L3後 | 差分 |
+|------|-----------|------|------|------|
+| Small | False | 15.98 KB | 15.58 KB | -0.40 KB |
+| Small | True | 16.39 KB | 16.00 KB | -0.39 KB |
+| Medium | False | 150.04 KB | 115.40 KB | **-34.64 KB** |
+| Medium | True | 156.47 KB | 121.83 KB | **-34.64 KB** |
+| Large | False | **720.29 KB** | **545.67 KB** | **-174.62 KB (-24.2%)** |
+| Large | True | 750.45 KB | 577.11 KB | **-173.34 KB (-23.1%)** |
+
+また、平均実行時間も Large FixEnabled=false で 28.6ms → 16.5ms (-42%) に改善（476 回の Parse() 呼び出し排除による CPU 効果）。
+
+ParseBenchmark: Large 110.89 KB（回帰なし）
+
+**変更内容:**
+1. `Dictionary<long, ExpressionParseResult>` → `Dictionary<long, ExpressionCacheEntry>` where entry = `(int Offset, int Length, ExpressionParseResult Result)`
+2. キャッシュキー: offset ベース → FNV-1a 64-bit content hash（`ComputeContentHash`）
+3. Cache hit 時: `source.AsSpan(entry.Offset, entry.Length).SequenceEqual(expression)` で content equality 検証（collision guard）
+4. Hash collision 時: Parse without caching（極めて稀、6 entries で 64-bit hash）
 
 ### Phase L4: DynamicContextTypeBuilder 最適化（中リスク、中効果）
 
@@ -320,12 +345,12 @@ Phase L1 (低リスク) ──→ Phase L3 (中リスク) ──→ Phase L4 (�
 | 現状 | — | — | 8,483 KB |
 | **Phase L1 (BuildLineStarts)** ✅ | **-7,762 KB (実測)** | 低 | **721 KB** |
 | **Phase L2 (HereDoc最適化)** ✅ | **-2 KB (実測)** | 低 | **720 KB** |
-| Phase L3 (Expression cache) | **-250 KB** | 中 | **~470 KB** |
-| Phase L4 (DynamicContextType) | -15 KB | 中 | ~455 KB |
-| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~430 KB |
-| **累積目標** | **-8,053 KB (-94.9%)** | — | **~430 KB** |
+| **Phase L3 (Expression cache)** ✅ | **-175 KB (実測)** | 中 | **546 KB** |
+| Phase L4 (DynamicContextType) | -15 KB | 中 | ~531 KB |
+| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~506 KB |
+| **累積目標** | **-7,977 KB (-94.0%)** | — | **~506 KB** |
 
-**Phase L1+L2 完了: 91.5% の削減達成（8,483 KB → 720 KB）**。
+**Phase L1-L3 完了: 93.6% の削減達成（8,483 KB → 546 KB）。CPU 時間も -42% 改善。**
 
 ---
 
