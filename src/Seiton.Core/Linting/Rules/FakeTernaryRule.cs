@@ -21,14 +21,14 @@ public sealed class FakeTernaryRule : RuleBase
         ValidateCondition(step.If, null, step);
     }
 
-    private void ValidateCondition(StringNode? condition, Job? job, Step? step)
+    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
     {
-        if (condition is null || Config.Utf8Yaml is null)
+        if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = condition.Value.AsSpan(Config.Utf8Yaml);
+        var raw = Arena.GetStringValue(condition);
         if (raw.Length == 0)
         {
             return;
@@ -50,12 +50,12 @@ public sealed class FakeTernaryRule : RuleBase
         const string message = "avoid fake ternary pattern 'cond && a || b'; use a case expression (or equivalent explicit branching)";
         if (job is not null)
         {
-            AddJobWarning(job, message, condition.Range);
+            AddJobWarning(job, message, Arena.GetStringRange(condition));
         }
 
         if (step is not null)
         {
-            AddStepWarning(step, message, condition.Range);
+            AddStepWarning(step, message, Arena.GetStringRange(condition));
         }
     }
 

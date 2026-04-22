@@ -17,13 +17,13 @@ internal static class RunContextDirectUseAnalyzer
 
     // Expression Location
 
-    internal static TextRange BuildExpressionLocation(byte[] utf8Yaml, StringNode runNode, int bodyStart, int nextSearchStart)
+    internal static TextRange BuildExpressionLocation(AstArena arena, byte[] utf8Yaml, StringNodeId runNode, int bodyStart, int nextSearchStart)
     {
-        var absoluteStart = runNode.Value.Offset + bodyStart - 3;
+        var absoluteStart = arena.GetStringSlice(runNode).Offset + bodyStart - 3;
         var absoluteLength = nextSearchStart - (bodyStart - 3);
         if (absoluteStart < 0 || absoluteLength <= 0)
         {
-            return runNode.Range;
+            return arena.GetStringRange(runNode);
         }
 
         var lineStarts = BuildLineStarts(utf8Yaml);
@@ -40,35 +40,35 @@ internal static class RunContextDirectUseAnalyzer
 
     // Shell Detection
 
-    internal static bool IsPowerShell(Step step, byte[] utf8Yaml)
+    internal static bool IsPowerShell(AstArena arena, Step step, byte[] utf8Yaml)
     {
-        if (step.Exec is not ExecRun run || run.Shell is null || run.Shell.Expression is not null)
+        if (step.Exec is not ExecRun run || !run.Shell.HasValue || arena.GetStringExpression(run.Shell).HasValue)
         {
             return false;
         }
 
-        return IsPowerShell(run.Shell, utf8Yaml);
+        return IsPowerShell(arena, run.Shell, utf8Yaml);
     }
 
-    internal static bool IsPowerShell(StringNode? shellNode, byte[] utf8Yaml)
+    internal static bool IsPowerShell(AstArena arena, StringNodeId shellNode, byte[] utf8Yaml)
     {
-        if (shellNode is null || shellNode.Expression is not null)
+        if (!shellNode.HasValue || arena.GetStringExpression(shellNode).HasValue)
         {
             return false;
         }
 
-        var shell = Encoding.UTF8.GetString(shellNode.Value.AsSpan(utf8Yaml));
+        var shell = Encoding.UTF8.GetString(arena.GetStringValue(shellNode));
         return string.Equals(shell, "pwsh", StringComparison.OrdinalIgnoreCase)
             || string.Equals(shell, "powershell", StringComparison.OrdinalIgnoreCase);
     }
 
     // Env Value Expression Extraction
 
-    internal static bool TryExtractExpressionBody(StringNode node, byte[] utf8Yaml, out ReadOnlySpan<byte> expressionBody)
+    internal static bool TryExtractExpressionBody(AstArena arena, StringNodeId node, byte[] utf8Yaml, out ReadOnlySpan<byte> expressionBody)
     {
         expressionBody = [];
 
-        var value = TrimAsciiWhiteSpace(node.Value.AsSpan(utf8Yaml));
+        var value = TrimAsciiWhiteSpace(arena.GetStringValue(node));
         if (value.Length == 0)
         {
             return false;
@@ -79,12 +79,12 @@ internal static class RunContextDirectUseAnalyzer
             return true;
         }
 
-        if (node.Expression is null)
+        if (!arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(utf8Yaml));
+        var expression = TrimAsciiWhiteSpace(arena.GetStringValue(arena.GetStringExpression(node)));
         if (TryExtractEmbeddedExpressionBody(expression, out expressionBody))
         {
             return true;
@@ -265,7 +265,7 @@ internal static class RunContextDirectUseAnalyzer
 
     // Env-Mapping Resolution
 
-    internal static bool TryResolveShellVariableNameInEnv(Env? env, byte[] utf8Yaml, string targetName, SimpleReferenceParser parser, out string variableName)
+    internal static bool TryResolveShellVariableNameInEnv(AstArena arena, Env? env, byte[] utf8Yaml, string targetName, SimpleReferenceParser parser, out string variableName)
     {
         variableName = string.Empty;
         if (env?.Vars is null || env.Vars.Value.Count == 0)
@@ -278,14 +278,14 @@ internal static class RunContextDirectUseAnalyzer
         {
             var envVar = pair.Value;
             var envNameIndex = 0;
-            if (!TryReadIdentifier(envVar.Name.Value.AsSpan(utf8Yaml), ref envNameIndex, out var candidateVariable)
-                || envNameIndex != envVar.Name.Value.Length
+            if (!TryReadIdentifier(arena.GetStringValue(envVar.Name), ref envNameIndex, out var candidateVariable)
+                || envNameIndex != arena.GetStringSlice(envVar.Name).Length
                 || !IsSimpleIdentifier(candidateVariable))
             {
                 continue;
             }
 
-            if (!TryExtractExpressionBody(envVar.Value, utf8Yaml, out var body)
+            if (!TryExtractExpressionBody(arena, envVar.Value, utf8Yaml, out var body)
                 || !parser(body, out var candidateName)
                 || !string.Equals(candidateName, targetName, StringComparison.Ordinal))
             {
@@ -304,25 +304,26 @@ internal static class RunContextDirectUseAnalyzer
     }
 
     internal static bool TryResolveShellVariableName(
+        AstArena arena,
         Env? stepEnv, Env? jobEnv, Env? workflowEnv,
         byte[] utf8Yaml, string targetName, SimpleReferenceParser parser,
         out string variableName)
     {
         variableName = string.Empty;
         var matchCount = 0;
-        if (TryResolveShellVariableNameInEnv(stepEnv, utf8Yaml, targetName, parser, out var stepVariable))
+        if (TryResolveShellVariableNameInEnv(arena, stepEnv, utf8Yaml, targetName, parser, out var stepVariable))
         {
             variableName = stepVariable;
             matchCount++;
         }
 
-        if (TryResolveShellVariableNameInEnv(jobEnv, utf8Yaml, targetName, parser, out var jobVariable))
+        if (TryResolveShellVariableNameInEnv(arena, jobEnv, utf8Yaml, targetName, parser, out var jobVariable))
         {
             variableName = jobVariable;
             matchCount++;
         }
 
-        if (TryResolveShellVariableNameInEnv(workflowEnv, utf8Yaml, targetName, parser, out var workflowVariable))
+        if (TryResolveShellVariableNameInEnv(arena, workflowEnv, utf8Yaml, targetName, parser, out var workflowVariable))
         {
             variableName = workflowVariable;
             matchCount++;

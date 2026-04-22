@@ -25,7 +25,7 @@ public sealed class ArchivedUsesRule : RuleBase
             return;
         }
 
-        if (!TryGetOwnerRepo(job.WorkflowCall.Uses.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        if (!TryGetOwnerRepo(Arena.GetStringValue(job.WorkflowCall.Uses), out var ownerRepo))
         {
             return;
         }
@@ -48,7 +48,7 @@ public sealed class ArchivedUsesRule : RuleBase
             return;
         }
 
-        if (!TryGetOwnerRepo(action.Uses.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        if (!TryGetOwnerRepo(Arena.GetStringValue(action.Uses), out var ownerRepo))
         {
             return;
         }

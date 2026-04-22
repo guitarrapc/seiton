@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class LocalActionInputsRule : RuleBase
 {
-    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source)> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena)> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _runnerCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public override string Id => "local-action-inputs";
@@ -32,12 +32,12 @@ public sealed class LocalActionInputsRule : RuleBase
             return;
         }
 
-        if (step.Exec is not ExecAction action || !HasNodeValue(action.Uses))
+        if (step.Exec is not ExecAction action || !HasNodeValue(action.Uses, Arena))
         {
             return;
         }
 
-        var uses = action.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(action.Uses);
         if (!TryResolveLocalActionYamlPath(uses, out var actionYamlPath, out var invalidRef))
         {
             if (invalidRef)
@@ -53,14 +53,14 @@ public sealed class LocalActionInputsRule : RuleBase
             return;
         }
 
-        if (!TryGetCachedAction(actionYamlPath, out var meta, out var actionSource) || meta is null || actionSource is null)
+        if (!TryGetCachedAction(actionYamlPath, out var meta, out var actionSource, out var actionArena) || meta is null || actionSource is null || actionArena is null)
         {
             return;
         }
 
         if (_runnerCheckedPaths.Add(actionYamlPath))
         {
-            ValidateRunsUsing(step, action, meta, actionSource);
+            ValidateRunsUsing(step, action, meta, actionSource, actionArena);
         }
 
         if (meta.Inputs is null || meta.Inputs.Value.Count == 0)
@@ -73,7 +73,7 @@ public sealed class LocalActionInputsRule : RuleBase
                     AddStepError(
                         step,
                         $"local action does not declare inputs; unknown input '{inputName}'",
-                        pair.Value.Range);
+                        Arena.GetStringRange(pair.Value));
                 }
             }
 
@@ -87,14 +87,14 @@ public sealed class LocalActionInputsRule : RuleBase
                 var inputName = Decode(pair.Key);
                 if (!TryFindMetadataInput(actionSource, meta.Inputs.Value, inputName, out var inputDef))
                 {
-                    AddStepError(step, FormatUnknownInputMessage(actionSource, inputName, meta.Inputs.Value), pair.Value.Range);
+                    AddStepError(step, FormatUnknownInputMessage(actionSource, inputName, meta.Inputs.Value), Arena.GetStringRange(pair.Value));
                     continue;
                 }
 
-                if (inputDef.DeprecationMessage is not null && HasNodeValue(inputDef.DeprecationMessage))
+                if (inputDef.DeprecationMessage.HasValue && HasNodeValue(inputDef.DeprecationMessage, actionArena))
                 {
-                    var depText = DecodeSlice(actionSource, inputDef.DeprecationMessage.Value);
-                    AddStepWarning(step, $"input '{inputName}' is deprecated: {depText}", pair.Value.Range);
+                    var depText = DecodeSlice(actionSource, actionArena.GetStringSlice(inputDef.DeprecationMessage));
+                    AddStepWarning(step, $"input '{inputName}' is deprecated: {depText}", Arena.GetStringRange(pair.Value));
                 }
             }
         }
@@ -102,12 +102,16 @@ public sealed class LocalActionInputsRule : RuleBase
         foreach (var kv in meta.Inputs.Value)
         {
             var def = kv.Value;
-            if (def.Required?.Value != true)
+            if (def.Required.HasValue && actionArena.GetBoolValue(def.Required))
+            {
+                // required is true - check if default is set
+            }
+            else
             {
                 continue;
             }
 
-            if (def.Default is not null)
+            if (def.Default.HasValue)
             {
                 continue;
             }
@@ -125,12 +129,13 @@ public sealed class LocalActionInputsRule : RuleBase
         }
     }
 
-    private bool TryGetCachedAction(string actionYamlPath, out ActionMetadata? metadata, out byte[]? source)
+    private bool TryGetCachedAction(string actionYamlPath, out ActionMetadata? metadata, out byte[]? source, out AstArena? arena)
     {
         if (_cache.TryGetValue(actionYamlPath, out var entry))
         {
             metadata = entry.Metadata;
             source = entry.Source;
+            arena = entry.Arena;
             return true;
         }
 
@@ -141,35 +146,38 @@ public sealed class LocalActionInputsRule : RuleBase
         }
         catch
         {
-            _cache[actionYamlPath] = (null, null);
+            _cache[actionYamlPath] = (null, null, null);
             metadata = null;
             source = null;
+            arena = null;
             return true;
         }
 
         var parseResult = WorkflowParser.Parse(bytes, actionYamlPath);
         if (parseResult.HasFatalError || parseResult.ActionMetadata is null)
         {
-            _cache[actionYamlPath] = (null, null);
+            _cache[actionYamlPath] = (null, null, null);
             metadata = null;
             source = null;
+            arena = null;
             return true;
         }
 
-        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes);
+        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes, parseResult.Arena);
         metadata = parseResult.ActionMetadata;
         source = bytes;
+        arena = parseResult.Arena;
         return true;
     }
 
-    private void ValidateRunsUsing(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource)
+    private void ValidateRunsUsing(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena)
     {
-        if (meta.Runs?.Using is null || !HasNodeValue(meta.Runs.Using))
+        if (meta.Runs?.Using is null || !HasNodeValue(meta.Runs.Using, actionArena))
         {
             return;
         }
 
-        var span = meta.Runs.Using.Value.AsSpan(actionSource);
+        var span = actionArena.GetStringSlice(meta.Runs.Using).AsSpan(actionSource);
         if (span.IsEmpty)
         {
             return;
@@ -218,7 +226,7 @@ public sealed class LocalActionInputsRule : RuleBase
         return false;
     }
 
-    private static bool ContainsInputName(byte[] source, SliceMap<StringNode> provided, string name)
+    private static bool ContainsInputName(byte[] source, SliceMap<StringNodeId> provided, string name)
     {
         foreach (var kv in provided)
         {

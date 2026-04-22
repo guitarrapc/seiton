@@ -24,7 +24,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
             AddJobWarning(
                 job,
                 "job.if must not reference secrets context directly; map secrets to env variables and gate with non-secret signals",
-                job.If!.Range);
+                Arena.GetStringRange(job.If));
             return;
         }
 
@@ -41,11 +41,11 @@ public sealed class SecretsOutsideEnvRule : RuleBase
                 continue;
             }
 
-            var inputName = Decode(pair.Value.Name.Value);
+            var inputName = Decode(Arena.GetStringSlice(pair.Value.Name));
             AddJobWarning(
                 job,
                 $"reusable workflow input '{inputName}' must not consume secrets context directly outside env handoff",
-                value.Range);
+                Arena.GetStringRange(value));
             return;
         }
     }
@@ -62,7 +62,7 @@ public sealed class SecretsOutsideEnvRule : RuleBase
             AddStepWarning(
                 step,
                 "step.if must not reference secrets context directly; map secrets to env variables and gate with non-secret signals",
-                step.If!.Range);
+                Arena.GetStringRange(step.If));
             return;
         }
 
@@ -73,30 +73,30 @@ public sealed class SecretsOutsideEnvRule : RuleBase
                 AddStepWarning(
                     step,
                     "action uses must not interpolate secrets context directly outside env handoff",
-                    action.Uses.Range);
+                    Arena.GetStringRange(action.Uses));
                 return;
             }
         }
     }
 
-    private bool ContainsSecretsReference(StringNode? node)
+    private bool ContainsSecretsReference(StringNodeId node)
     {
-        if (Config.Utf8Yaml is null || node is null)
+        if (Config.Utf8Yaml is null || !node.HasValue)
         {
             return false;
         }
 
-        if (ContainsSecretsReferenceInValue(node.Value.AsSpan(Config.Utf8Yaml)))
+        if (ContainsSecretsReferenceInValue(Arena.GetStringValue(node)))
         {
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(Config.Utf8Yaml));
+        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
         return ContainsSecretsReferenceInExpression(expression);
     }
 

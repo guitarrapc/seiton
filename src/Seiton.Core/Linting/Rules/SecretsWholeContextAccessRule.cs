@@ -69,7 +69,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
         foreach (var pair in callInputs.Value)
         {
-            var inputName = Decode(pair.Value.Name.Value);
+            var inputName = Decode(Arena.GetStringSlice(pair.Value.Name));
             CheckNode(pair.Value.Value, sinkName: $"with.{inputName}", static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
         }
@@ -84,7 +84,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
             return;
         }
 
-        CheckNode(env.Expression, sinkName: "env", static (rule, location, s) =>
+        CheckNode(Arena.GetStringExpression(env.Expression), sinkName: "env", static (rule, location, s) =>
             rule.AddStepError(s, DiagnosticMessage, location), step);
 
         var vars = env.Vars;
@@ -95,7 +95,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
         foreach (var pair in vars.Value)
         {
-            var keyName = Decode(pair.Value.Name.Value);
+            var keyName = Decode(Arena.GetStringSlice(pair.Value.Name));
             CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, s) =>
                 rule.AddStepError(s, DiagnosticMessage, location), step);
         }
@@ -110,7 +110,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
             return;
         }
 
-        CheckNode(env.Expression, sinkName: "env", static (rule, location, j) =>
+        CheckNode(Arena.GetStringExpression(env.Expression), sinkName: "env", static (rule, location, j) =>
             rule.AddJobError(j, DiagnosticMessage, location), job);
 
         var vars = env.Vars;
@@ -121,7 +121,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
         foreach (var pair in vars.Value)
         {
-            var keyName = Decode(pair.Value.Name.Value);
+            var keyName = Decode(Arena.GetStringSlice(pair.Value.Name));
             CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
         }
@@ -130,17 +130,17 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
     // Core expression scanning
 
     private void CheckNode<TTarget>(
-        StringNode? node,
+        StringNodeId node,
         string sinkName,
         Action<SecretsWholeContextAccessRule, TextRange, TTarget> report,
         TTarget target)
     {
-        if (node is null || Config.Utf8Yaml is null)
+        if (!node.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var value = node.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(node);
         if (value.Length == 0)
         {
             return;
@@ -173,7 +173,7 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
                 continue;
             }
 
-            report(this, node.Range, target);
+            report(this, Arena.GetStringRange(node), target);
             return;
         }
     }

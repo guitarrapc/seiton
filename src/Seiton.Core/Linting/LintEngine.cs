@@ -68,10 +68,10 @@ public sealed class LintEngine
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
         var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
-        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression);
+        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, parseResult.Arena!);
         _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
-        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml);
+        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, parseResult.Arena!);
         _diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
 
         if (rules.Count == 0)
@@ -86,6 +86,7 @@ public sealed class LintEngine
         var effectiveConfig = new LintConfig
         {
             Utf8Yaml = utf8Yaml,
+            Arena = parseResult.Arena,
             FilePath = filePath,
             Rules = normalizedRules.Rules,
             Fix = config?.Fix ?? new FixConfig(),
@@ -390,15 +391,15 @@ public sealed class LintEngine
         return false;
     }
 
-    private static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow)
+    private static InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow, AstArena arena)
     {
         if (utf8Yaml.Length == 0)
         {
             return InlineSuppression.Empty;
         }
 
-        var knownJobIdSlices = BuildKnownJobIdSlices(workflow);
-        var jobScopes = BuildJobScopes(workflow);
+        var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
+        var jobScopes = BuildJobScopes(workflow, arena);
 
         // UTF-8 byte constants for directive parsing
         ReadOnlySpan<byte> seitonPrefixUtf8 = "seiton:"u8;
@@ -640,12 +641,12 @@ public sealed class LintEngine
             FilePath: filePath);
     }
 
-    private static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow)
+    private static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow, AstArena arena)
     {
         var count = 0;
         foreach (var pair in workflow.Jobs)
         {
-            if (!pair.Value.Id.Value.IsEmpty)
+            if (!arena.GetStringSlice(pair.Value.Id).IsEmpty)
                 count++;
         }
 
@@ -656,7 +657,7 @@ public sealed class LintEngine
         var i = 0;
         foreach (var pair in workflow.Jobs)
         {
-            var slice = pair.Value.Id.Value;
+            var slice = arena.GetStringSlice(pair.Value.Id);
             if (!slice.IsEmpty)
                 result[i++] = slice;
         }
@@ -664,12 +665,12 @@ public sealed class LintEngine
         return result;
     }
 
-    private static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow)
+    private static IReadOnlyList<JobScope> BuildJobScopes(Parsing.Ast.Workflow workflow, AstArena arena)
     {
         var scopes = new List<JobScope>(workflow.Jobs.Count);
         foreach (var pair in workflow.Jobs)
         {
-            var slice = pair.Value.Id.Value;
+            var slice = arena.GetStringSlice(pair.Value.Id);
             if (slice.IsEmpty)
             {
                 continue;
@@ -866,7 +867,7 @@ public sealed class LintEngine
         return new RulesNormalization(normalized, diagnostics.ToArray());
     }
 
-    private static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml)
+    private static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
     {
         var normalizedFilePath = NormalizePath(filePath);
         if (exclusions is null || exclusions.Count == 0)
@@ -874,7 +875,7 @@ public sealed class LintEngine
             return new ExclusionsNormalization([], normalizedFilePath, []);
         }
 
-        var knownJobIdSlices = BuildKnownJobIdSlices(workflow);
+        var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
         var normalized = new List<NormalizedExclusion>(exclusions.Count);
         var diagnostics = new List<Diagnostic>();
 

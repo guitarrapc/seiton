@@ -42,7 +42,7 @@ public sealed class OnlineAuditEngine(
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        var targets = CollectTargets(lintResult.Workflow, utf8Yaml, filePath);
+        var targets = CollectTargets(lintResult.Workflow, lintResult.ParseResult.Arena!, utf8Yaml, filePath);
         if (targets.Count == 0)
         {
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
@@ -128,27 +128,27 @@ public sealed class OnlineAuditEngine(
 
             var diagnostics = new List<Diagnostic>(4);
             var knownVulnerable = knownVulnerableActionsRule.Evaluate(target, advisory);
-            if (knownVulnerable.HasValue)
+            if (knownVulnerable is not null)
             {
                 diagnostics.Add(knownVulnerable.Value);
             }
 
-            if (resolution.HasValue)
+            if (resolution is not null)
             {
                 var impostorCommit = impostorCommitRule.Evaluate(target, resolution.Value);
-                if (impostorCommit.HasValue)
+                if (impostorCommit is not null)
                 {
                     diagnostics.Add(impostorCommit.Value);
                 }
 
                 var refConfusion = refConfusionRule.Evaluate(target, resolution.Value);
-                if (refConfusion.HasValue)
+                if (refConfusion is not null)
                 {
                     diagnostics.Add(refConfusion.Value);
                 }
 
                 var staleActionRef = staleActionRefsRule.Evaluate(target, resolution.Value);
-                if (staleActionRef.HasValue)
+                if (staleActionRef is not null)
                 {
                     diagnostics.Add(staleActionRef.Value);
                 }
@@ -177,7 +177,7 @@ public sealed class OnlineAuditEngine(
         return false;
     }
 
-    private static List<ActionAuditTarget> CollectTargets(Workflow workflow, byte[] utf8Yaml, string filePath)
+    private static List<ActionAuditTarget> CollectTargets(Workflow workflow, AstArena arena, byte[] utf8Yaml, string filePath)
     {
         var result = new List<ActionAuditTarget>();
         var jobs = workflow.Jobs;
@@ -193,7 +193,7 @@ public sealed class OnlineAuditEngine(
             var workflowCall = job.WorkflowCall;
             if (workflowCall is not null)
             {
-                TryAddTarget(result, workflowCall.Uses, utf8Yaml, filePath);
+                TryAddTarget(result, workflowCall.Uses, arena, utf8Yaml, filePath);
             }
 
             var steps = job.Steps;
@@ -206,7 +206,7 @@ public sealed class OnlineAuditEngine(
             {
                 if (steps[i].Exec is ExecAction action)
                 {
-                    TryAddTarget(result, action.Uses, utf8Yaml, filePath);
+                    TryAddTarget(result, action.Uses, arena, utf8Yaml, filePath);
                 }
             }
         }
@@ -214,9 +214,9 @@ public sealed class OnlineAuditEngine(
         return result;
     }
 
-    private static void TryAddTarget(List<ActionAuditTarget> targets, StringNode usesNode, byte[] utf8Yaml, string filePath)
+    private static void TryAddTarget(List<ActionAuditTarget> targets, StringNodeId usesNode, AstArena arena, byte[] utf8Yaml, string filePath)
     {
-        var usesText = Encoding.UTF8.GetString(usesNode.Value.AsSpan(utf8Yaml));
+        var usesText = Encoding.UTF8.GetString(arena.GetStringValue(usesNode));
         if (string.IsNullOrWhiteSpace(usesText)
             || usesText.StartsWith("./", StringComparison.Ordinal)
             || usesText.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
@@ -225,7 +225,7 @@ public sealed class OnlineAuditEngine(
             return;
         }
 
-        targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, usesNode.Range, filePath));
+        targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, arena.GetStringRange(usesNode), filePath));
     }
     private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
     {

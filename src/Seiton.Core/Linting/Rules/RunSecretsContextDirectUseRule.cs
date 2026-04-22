@@ -49,19 +49,19 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
         CheckRunNode(step, run.Run);
     }
 
-    private void CheckRunNode(Step step, StringNode runNode)
+    private void CheckRunNode(Step step, StringNodeId runNode)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var runText = runNode.Value.AsSpan(Config.Utf8Yaml);
+        var runText = Arena.GetStringValue(runNode);
         var searchStart = 0;
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
-            var location = BuildExpressionLocation(Config.Utf8Yaml, runNode, bodyStart, nextSearchStart);
+            var location = BuildExpressionLocation(Arena, Config.Utf8Yaml, runNode, bodyStart, nextSearchStart);
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -106,7 +106,7 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
         }
     }
 
-    private bool TryBuildFix(Step step, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -119,7 +119,7 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
             return false;
         }
 
-        if (!TryResolveShellVariableName(step.Env, _currentJob?.Env, _currentWorkflow?.Env,
+        if (!TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
             Config.Utf8Yaml, secretName,
             static (ReadOnlySpan<byte> expr, out string name) => TryParseSimpleContextReference(expr, "secrets"u8, out name),
             out var variableName))
@@ -127,11 +127,11 @@ public sealed class RunSecretsContextDirectUseRule : RuleBase
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(step, Config.Utf8Yaml)
+        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
             ? "$env:" + variableName
             : "${" + variableName + "}";
 
-        var absoluteOffset = runNode.Value.Offset + expressionBodyStart - 3;
+        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
         fix = new DiagnosticFix(
             "replace direct secrets context expansion with mapped shell variable",
             [new TextEdit(absoluteOffset, expressionLength, replacement)]);

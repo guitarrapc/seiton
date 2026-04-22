@@ -35,8 +35,8 @@ public sealed class DenyReadAllRule : RuleBase
         }
 
         var allNode = permissions.All;
-        var value = allNode.Value.AsSpan(Config.Utf8Yaml);
-        if (allNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
+        var value = Arena.GetStringValue(allNode);
+        if (Arena.GetStringExpression(allNode).HasValue || value.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -54,21 +54,21 @@ public sealed class DenyReadAllRule : RuleBase
 
         if (_currentWorkflow is not null)
         {
-            AddWorkflowError(_currentWorkflow, message, allNode.Range, fix);
+            AddWorkflowError(_currentWorkflow, message, Arena.GetStringRange(allNode), fix);
         }
         else if (_currentJob is not null)
         {
-            AddJobError(_currentJob, message, allNode.Range, fix);
+            AddJobError(_currentJob, message, Arena.GetStringRange(allNode), fix);
         }
     }
 
-    private static TextEdit BuildExplicitMappingReplacementEdit(StringNode allNode, byte[] utf8Yaml)
+    private TextEdit BuildExplicitMappingReplacementEdit(StringNodeId allNode, byte[] utf8Yaml)
     {
-        var start = allNode.Value.Offset;
-        var end = allNode.Value.Offset + allNode.Value.Length;
+        var start = Arena.GetStringSlice(allNode).Offset;
+        var end = Arena.GetStringSlice(allNode).Offset + Arena.GetStringSlice(allNode).Length;
         if (start < 0 || end > utf8Yaml.Length || start > end)
         {
-            return new TextEdit(allNode.Value.Offset, allNode.Value.Length, "{}");
+            return new TextEdit(Arena.GetStringSlice(allNode).Offset, Arena.GetStringSlice(allNode).Length, "{}");
         }
 
         if (start > 0 && end < utf8Yaml.Length)

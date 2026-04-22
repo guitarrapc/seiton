@@ -25,14 +25,14 @@ public sealed class TemplateInjectionRule : RuleBase
         }
     }
 
-    private void CheckSink(Step step, StringNode? valueNode, string sinkName)
+    private void CheckSink(Step step, StringNodeId valueNode, string sinkName)
     {
-        if (valueNode is null || Config.Utf8Yaml is null)
+        if (!valueNode.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var value = valueNode.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(valueNode);
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -58,7 +58,7 @@ public sealed class TemplateInjectionRule : RuleBase
             AddStepError(
                 step,
                 $"template injection risk: {sinkName} contains expression referencing untrusted github.event/github context data",
-                valueNode.Range);
+                Arena.GetStringRange(valueNode));
             return;
         }
     }

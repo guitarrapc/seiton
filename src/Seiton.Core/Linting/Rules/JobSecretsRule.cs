@@ -37,32 +37,32 @@ public sealed class JobSecretsRule : RuleBase
                 continue;
             }
 
-            var envName = Decode(envVar.Name.Value);
+            var envName = Decode(Arena.GetStringSlice(envVar.Name));
             AddJobError(
                 job,
                 $"job env '{envName}' must not set secrets.* or github.token when job has multiple steps; move secret mapping to step env",
-                envVar.Value.Range);
+                Arena.GetStringRange(envVar.Value));
         }
     }
 
-    private bool ContainsSecretsOrGitHubTokenReference(StringNode node)
+    private bool ContainsSecretsOrGitHubTokenReference(StringNodeId node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsReferenceInValue(node.Value.AsSpan(Config.Utf8Yaml)))
+        if (ContainsReferenceInValue(Arena.GetStringValue(node)))
         {
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(Config.Utf8Yaml));
+        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
         return ContainsReferenceInExpression(expression);
     }
 

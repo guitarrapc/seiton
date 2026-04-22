@@ -24,8 +24,9 @@ public sealed class ParserAdapterResilienceTests
             Event(YamlEventKind.StreamEnd),
         };
 
+        var arena = new AstArena(source);
         var reader = new FakeYamlStreamReader(events, source);
-        var result = WorkflowParser.ParseWithReader(ref reader, source);
+        var result = WorkflowParser.ParseWithReader(ref reader, arena, source);
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Workflow is not null).IsTrue();
@@ -49,8 +50,9 @@ public sealed class ParserAdapterResilienceTests
             Event(YamlEventKind.MappingEnd),
         };
 
+        var arena = new AstArena(source);
         var reader = new FakeYamlStreamReader(events, source);
-        var result = WorkflowParser.ParseWithReader(ref reader, source);
+        var result = WorkflowParser.ParseWithReader(ref reader, arena, source);
 
         await Assert.That(result.Diagnostics.Any(static x => x.Message.Contains("workflow contains duplicate key: on", StringComparison.Ordinal))).IsTrue();
     }

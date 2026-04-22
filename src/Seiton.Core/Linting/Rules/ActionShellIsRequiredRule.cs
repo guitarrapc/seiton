@@ -21,12 +21,12 @@ public sealed class ActionShellIsRequiredRule : RuleBase
             return;
         }
 
-        if (run.Shell is not null && !IsMissingShell(run.Shell.Value.AsSpan(Config.Utf8Yaml)))
+        if (run.Shell.HasValue && !IsMissingShell(Arena.GetStringValue(run.Shell)))
         {
             return;
         }
 
-        AddStepError(step, "shell is required if run is set", run.Run.Range);
+        AddStepError(step, "shell is required if run is set", Arena.GetStringRange(run.Run));
     }
 
     private static bool IsMissingShell(ReadOnlySpan<byte> value)

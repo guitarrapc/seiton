@@ -42,16 +42,16 @@ public sealed class EnvVarRule : RuleBase
         foreach (var pair in env.Vars)
         {
             var envVar = pair.Value;
-            if (IsPortableEnvName(envVar.Name.Value.AsSpan(Config.Utf8Yaml)))
+            if (IsPortableEnvName(Arena.GetStringValue(envVar.Name)))
             {
                 continue;
             }
 
-            var name = Decode(envVar.Name.Value);
+            var name = Decode(Arena.GetStringSlice(envVar.Name));
             report(
                 this,
                 $"{sinkName} key '{name}' is not portable; use [A-Z_][A-Z0-9_]* naming",
-                envVar.Name.Range,
+                Arena.GetStringRange(envVar.Name),
                 target);
         }
     }

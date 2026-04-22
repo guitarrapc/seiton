@@ -2,7 +2,7 @@
 
 public sealed class Permissions
 {
-    public StringNode? All { get; init; }
+    public StringNodeId All { get; init; }
 
     public SliceMap<PermissionScope>? Scopes { get; init; }
 
@@ -11,18 +11,18 @@ public sealed class Permissions
 
 public sealed class PermissionScope
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
     public Utf8Slice NameText { get; init; }
 
-    public StringNode Value { get; init; } = null!;
+    public StringNodeId Value { get; init; }
 
     public Utf8Slice ValueText { get; init; }
 }
 
 public sealed class Env
 {
-    public StringNode? Expression { get; init; }
+    public StringNodeId Expression { get; init; }
 
     public SliceMap<EnvVar>? Vars { get; init; }
 
@@ -31,9 +31,9 @@ public sealed class Env
 
 public sealed class EnvVar
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode Value { get; init; } = null!;
+    public StringNodeId Value { get; init; }
 }
 
 public sealed class Defaults
@@ -45,40 +45,40 @@ public sealed class Defaults
 
 public sealed class DefaultsRun
 {
-    public StringNode? Shell { get; init; }
+    public StringNodeId Shell { get; init; }
 
-    public StringNode? WorkingDirectory { get; init; }
+    public StringNodeId WorkingDirectory { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class Concurrency
 {
-    public StringNode Group { get; init; } = null!;
+    public StringNodeId Group { get; init; }
 
-    public BoolNode? CancelInProgress { get; init; }
+    public BoolNodeId CancelInProgress { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class Environment
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode? Url { get; init; }
+    public StringNodeId Url { get; init; }
 
-    public BoolNode? Deployment { get; init; }
+    public BoolNodeId Deployment { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class Runner
 {
-    public IReadOnlyList<StringNode>? Labels { get; init; }
+    public StringNodeId[]? Labels { get; init; }
 
-    public StringNode? LabelsExpr { get; init; }
+    public StringNodeId LabelsExpr { get; init; }
 
-    public StringNode? Group { get; init; }
+    public StringNodeId Group { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -87,16 +87,16 @@ public sealed class Strategy
 {
     public Matrix? Matrix { get; init; }
 
-    public BoolNode? FailFast { get; init; }
+    public BoolNodeId FailFast { get; init; }
 
-    public IntNode? MaxParallel { get; init; }
+    public IntNodeId MaxParallel { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class Matrix
 {
-    public StringNode? Expression { get; init; }
+    public StringNodeId Expression { get; init; }
 
     public IReadOnlyList<MatrixCombinations>? Include { get; init; }
 
@@ -109,16 +109,16 @@ public sealed class Matrix
 
 public sealed class MatrixRow
 {
-    public StringNode? Expression { get; init; }
+    public StringNodeId Expression { get; init; }
 
     public IReadOnlyList<RawYamlValue>? Values { get; init; }
 
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 }
 
 public sealed class MatrixCombinations
 {
-    public StringNode? Expression { get; init; }
+    public StringNodeId Expression { get; init; }
 
     public IReadOnlyList<SliceMap<RawYamlValue>>? Entries { get; init; }
 }
@@ -129,7 +129,7 @@ public abstract class RawYamlValue
 
 public sealed class RawYamlString : RawYamlValue
 {
-    public StringNode Value { get; init; } = null!;
+    public StringNodeId Value { get; init; }
 }
 
 public sealed class RawYamlArray : RawYamlValue
@@ -144,24 +144,24 @@ public sealed class RawYamlObject : RawYamlValue
 
 public sealed class Container
 {
-    public StringNode Image { get; init; } = null!;
+    public StringNodeId Image { get; init; }
 
     public Credentials? Credentials { get; init; }
 
     public Env? Env { get; init; }
 
-    public IReadOnlyList<StringNode>? Ports { get; init; }
+    public StringNodeId[]? Ports { get; init; }
 
-    public IReadOnlyList<StringNode>? Volumes { get; init; }
+    public StringNodeId[]? Volumes { get; init; }
 
-    public StringNode? Options { get; init; }
+    public StringNodeId Options { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class Services
 {
-    public StringNode? Expression { get; init; }
+    public StringNodeId Expression { get; init; }
 
     public SliceMap<Service>? ServiceMap { get; init; }
 
@@ -170,7 +170,7 @@ public sealed class Services
 
 public sealed class Service
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
     public Container Container { get; init; } = null!;
 
@@ -179,18 +179,18 @@ public sealed class Service
 
 public sealed class Credentials
 {
-    public StringNode? Username { get; init; }
+    public StringNodeId Username { get; init; }
 
-    public StringNode? Password { get; init; }
+    public StringNodeId Password { get; init; }
 
-    public StringNode? Expression { get; init; }
+    public StringNodeId Expression { get; init; }
 
     public TextRange Range { get; init; }
 }
 
 public sealed class WorkflowCall
 {
-    public StringNode Uses { get; init; } = null!;
+    public StringNodeId Uses { get; init; }
 
     public TextRange? UsesKeyRange { get; init; }
 
@@ -203,14 +203,14 @@ public sealed class WorkflowCall
 
 public sealed class WorkflowCallInput
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode Value { get; init; } = null!;
+    public StringNodeId Value { get; init; }
 }
 
 public sealed class WorkflowCallSecret
 {
-    public StringNode Name { get; init; } = null!;
+    public StringNodeId Name { get; init; }
 
-    public StringNode Value { get; init; } = null!;
+    public StringNodeId Value { get; init; }
 }

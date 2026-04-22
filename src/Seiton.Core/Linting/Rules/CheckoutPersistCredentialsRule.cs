@@ -21,13 +21,13 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return;
         }
 
-        var usesText = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var usesText = Arena.GetStringValue(actionExec.Uses);
         if (!PopularActions.TryGet(usesText, out var actionSpec) || actionSpec.Id != PopularActions.ActionId.ActionsCheckout)
         {
             return;
         }
 
-        var actionRef = Decode(actionExec.Uses.Value);
+        var actionRef = Decode(Arena.GetStringSlice(actionExec.Uses));
         var message = BuildMessage(actionRef);
 
         if (actionExec.Inputs is null || Config.Utf8Yaml is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, "persist-credentials"u8, out var persistCredentialsNode))
@@ -42,19 +42,19 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return;
         }
 
-        var value = persistCredentialsNode.Value.AsSpan(Config.Utf8Yaml);
-        if (persistCredentialsNode.Expression is null && value.IndexOf("${{"u8) < 0 && value.SequenceEqual("false"u8))
+        var value = Arena.GetStringValue(persistCredentialsNode);
+        if (!Arena.GetStringExpression(persistCredentialsNode).HasValue && value.IndexOf("${{"u8) < 0 && value.SequenceEqual("false"u8))
         {
             return;
         }
 
         if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildValueReplacementFix(Config, persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
         {
-            AddStepWarning(step, message, persistCredentialsNode.Range, valueFix);
+            AddStepWarning(step, message, Arena.GetStringRange(persistCredentialsNode), valueFix);
             return;
         }
 
-        AddStepWarning(step, message, persistCredentialsNode.Range);
+        AddStepWarning(step, message, Arena.GetStringRange(persistCredentialsNode));
     }
 
     private static string BuildMessage(string actionRef)
@@ -62,11 +62,11 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return $"action '{actionRef}' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, {FixHint}";
     }
 
-    private static bool TryBuildValueReplacementFix(LintConfig config, StringNode persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildValueReplacementFix(LintConfig config, StringNodeId persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
-        var value = persistCredentialsNode.Value.AsSpan(utf8Yaml);
-        if (persistCredentialsNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
+        var value = Arena.GetStringValue(persistCredentialsNode);
+        if (Arena.GetStringExpression(persistCredentialsNode).HasValue || value.IndexOf("${{"u8) >= 0)
         {
             return false;
         }
@@ -74,11 +74,11 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         var replacement = BuildReplacementText(persistCredentialsNode, utf8Yaml);
         fix = new DiagnosticFix(
             $"set with.{PersistCredentialsKey} to false; {FixHint}",
-            [new TextEdit(persistCredentialsNode.Value.Offset, persistCredentialsNode.Value.Length, replacement)]);
+            [new TextEdit(Arena.GetStringSlice(persistCredentialsNode).Offset, Arena.GetStringSlice(persistCredentialsNode).Length, replacement)]);
         return true;
     }
 
-    private static bool TryBuildMissingInputFix(LintConfig config, Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildMissingInputFix(LintConfig config, Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
@@ -87,7 +87,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return false;
         }
 
-        var usesLine = FindLineNumberFromOffset(utf8Yaml, actionExec.Uses.Value.Offset);
+        var usesLine = FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(actionExec.Uses).Offset);
         if (usesLine < 1)
         {
             return false;
@@ -139,17 +139,17 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return true;
     }
 
-    private static string BuildReplacementText(StringNode valueNode, byte[] utf8Yaml)
+    private string BuildReplacementText(StringNodeId valueNode, byte[] utf8Yaml)
     {
-        var valueStart = valueNode.Value.Offset;
-        var valueEnd = valueNode.Value.Offset + valueNode.Value.Length;
+        var valueStart = Arena.GetStringSlice(valueNode).Offset;
+        var valueEnd = Arena.GetStringSlice(valueNode).Offset + Arena.GetStringSlice(valueNode).Length;
         if (valueStart < 0 || valueEnd > utf8Yaml.Length || valueStart > valueEnd)
         {
             return "false";
         }
 
-        var valueSpan = valueNode.Value.AsSpan(utf8Yaml);
-        if (valueNode.Quoted)
+        var valueSpan = Arena.GetStringValue(valueNode);
+        if (Arena.GetStringQuoted(valueNode))
         {
             if (valueSpan.Length >= 2 && valueSpan[0] == (byte)'\'' && valueSpan[^1] == (byte)'\'')
             {
@@ -162,7 +162,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             }
         }
 
-        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, valueNode.Range, valueNode.Quoted);
+        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, Arena.GetStringRange(valueNode), Arena.GetStringQuoted(valueNode));
         if (style == ScalarQuoteStyle.Unquoted)
         {
             return "false";
@@ -246,12 +246,12 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return utf8Yaml.AsSpan(idx, keyBytes.Length).SequenceEqual(keyBytes);
     }
 
-    private static int FindFirstInputLine(byte[] utf8Yaml, SliceMap<StringNode> inputs)
+    private int FindFirstInputLine(byte[] utf8Yaml, SliceMap<StringNodeId> inputs)
     {
         var firstLine = int.MaxValue;
         foreach (var pair in inputs)
         {
-            var line = FindLineNumberFromOffset(utf8Yaml, pair.Value.Value.Offset);
+            var line = FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(pair.Value).Offset);
             if (line > 0 && line < firstLine)
             {
                 firstLine = line;

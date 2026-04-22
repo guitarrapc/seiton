@@ -41,7 +41,7 @@ public sealed class CredentialsRule : RuleBase
         foreach (var pair in serviceMap)
         {
             var service = pair.Value;
-            var serviceName = Decode(service.Name.Value);
+            var serviceName = Decode(Arena.GetStringSlice(service.Name));
             ValidateContainer(job, $"job.services.{serviceName}", service.Container);
         }
     }
@@ -54,12 +54,12 @@ public sealed class CredentialsRule : RuleBase
         }
 
         var imageNode = container.Image;
-        if (imageNode.Expression is not null || container.Credentials is not null || Config.Utf8Yaml is null)
+        if (Arena.GetStringExpression(imageNode).HasValue || container.Credentials is not null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var image = imageNode.Value.AsSpan(Config.Utf8Yaml);
+        var image = Arena.GetStringValue(imageNode);
         if (image.IndexOf("${{"u8) >= 0)
         {
             return;
@@ -70,9 +70,9 @@ public sealed class CredentialsRule : RuleBase
             return;
         }
 
-        var imageText = Decode(imageNode.Value);
+        var imageText = Decode(Arena.GetStringSlice(imageNode));
         var hostText = Encoding.UTF8.GetString(host);
-        AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", imageNode.Range);
+        AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", Arena.GetStringRange(imageNode));
     }
 
     private static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)

@@ -137,7 +137,7 @@ public sealed class PinRemediationEngine(
         }
 
         var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, sha, tagComment, utf8Yaml);
-        if (!fix.HasValue)
+        if (fix is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
@@ -167,7 +167,7 @@ public sealed class PinRemediationEngine(
         }
 
         var fix = PinFixFormatter.BuildImageDigestFix(diagnostic, digest, utf8Yaml);
-        if (!fix.HasValue)
+        if (fix is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }

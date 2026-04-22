@@ -75,14 +75,14 @@ public sealed class InsecureCommandsRule : RuleBase
                 continue;
             }
 
-            var valueText = Decode(pair.Value.Value.Value).Trim();
+            var valueText = Decode(Arena.GetStringSlice(pair.Value.Value)).Trim();
             if (!IsTruthy(valueText))
             {
                 continue;
             }
 
             envName = key;
-            location = pair.Value.Value.Range;
+            location = Arena.GetStringRange(pair.Value.Value);
             return true;
         }
 

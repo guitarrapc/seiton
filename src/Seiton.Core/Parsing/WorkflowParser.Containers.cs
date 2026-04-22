@@ -5,30 +5,29 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static Services? ParseServices<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Services? ParseServices<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.17: expression form is accepted as Services { Expression }
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var expression = ParseStringAndValidateExpression(
-                ref reader,
-                diagnostics,
+                ref reader, arena, diagnostics,
                 ExpressionValidationContext.Job,
                 out var svcErr,
                 out var svcMark,
                 parseWholeValueIfNoEmbedded: false);
             if (svcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", svcMark);
-            return expression is null
+            return !expression.HasValue
                 ? null
-                : new Services { Expression = expression, Range = expression.Range };
+                : new Services { Expression = expression, Range = arena.GetStringRange(expression) };
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mappingStart = reader.CurrentStart;
@@ -36,102 +35,97 @@ public static partial class WorkflowParser
         var map = new PooledBuffer<SliceMap<Service>.Entry>(8);
         try
         {
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
 
-        reader.Read(); // consume services mapping
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-        {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
+            reader.Read(); // consume services mapping
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
-                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be scalar", reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
+                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be scalar", reader.CurrentStart);
                     reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    continue;
                 }
-                continue;
-            }
 
-            var serviceName = reader.GetScalarSlice();
-            var serviceNameUtf8 = reader.GetScalarUtf8();
-            var serviceMark = reader.CurrentStart;
-            if (!TryRegisterDynamicKey(
-                source,
-                serviceNameUtf8,
-                serviceName.Offset,
-                serviceName.Length,
-                serviceMark,
-                diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: false,
-                "services"))
-            {
+                var serviceName = reader.GetScalarSlice();
+                var serviceNameUtf8 = reader.GetScalarUtf8();
+                var serviceMark = reader.CurrentStart;
+                if (!TryRegisterDynamicKey(
+                    source,
+                    serviceNameUtf8,
+                    serviceName.Offset,
+                    serviceName.Length,
+                    serviceMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "services"))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var serviceNameNode = arena.AddString(serviceName, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length));
                 reader.Read();
-                if (!reader.End)
+                if (reader.End)
                 {
-                    reader.SkipCurrentNode();
+                    break;
                 }
 
-                continue;
-            }
-
-            var serviceNameNode = new StringNode
-            {
-                Value = serviceName,
-                Quoted = reader.IsScalarQuoted(),
-                Range = BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length),
-            };
-            reader.Read();
-            if (reader.End)
-            {
-                break;
-            }
-
-            var container = ParseContainerLike(ref reader, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
-            if (container is not null)
-            {
-                map.Add(new SliceMap<Service>.Entry(serviceName, new Service
+                var container = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
+                if (container is not null)
                 {
-                    Name = serviceNameNode,
-                    Container = container,
-                    Range = serviceNameNode.Range,
-                }));
+                    map.Add(new SliceMap<Service>.Entry(serviceName, new Service
+                    {
+                        Name = serviceNameNode,
+                        Container = container,
+                        Range = arena.GetStringRange(serviceNameNode),
+                    }));
+                }
             }
-        }
 
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
-            reader.Read();
-        }
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            {
+                range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+                reader.Read();
+            }
 
-        return new Services
-        {
-            ServiceMap = new SliceMap<Service>(map.ToArray(), caseSensitive: false),
-            Range = range,
-        };
+            return new Services
+            {
+                ServiceMap = new SliceMap<Service>(map.ToArray(), caseSensitive: false),
+                Range = range,
+            };
         }
         finally { map.Dispose(); }
     }
 
-    private static Container? ParseContainerLike<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)
+    private static Container? ParseContainerLike<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var scalarImage = ParseString(ref reader, out var ctrErr, out var ctrMark);
+            var scalarImage = ParseString(ref reader, arena, out var ctrErr, out var ctrMark);
             if (ctrErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", ctrMark);
-            if (scalarImage is null)
+            if (!scalarImage.HasValue)
             {
-                return null;
+                return default;
             }
 
             return new Container
             {
                 Image = scalarImage,
-                Range = scalarImage.Range,
+                Range = arena.GetStringRange(scalarImage),
             };
         }
 
@@ -139,18 +133,18 @@ public static partial class WorkflowParser
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
         var hasImage = false;
-        StringNode? image = null;
+        StringNodeId image = default;
         Credentials? credentials = null;
         Env? env = null;
-        StringNode[]? ports = null;
-        StringNode[]? volumes = null;
-        StringNode? options = null;
+        StringNodeId[]? ports = null;
+        StringNodeId[]? volumes = null;
+        StringNodeId options = default;
         ulong seen = 0;
         reader.Read(); // consume mapping
 
@@ -190,7 +184,7 @@ public static partial class WorkflowParser
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
                 }
-                image = ParseString(ref reader, out var imgErr, out var imgMark);
+                image = ParseString(ref reader, arena, out var imgErr, out var imgMark);
                 if (imgErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", imgMark);
                 continue;
             }
@@ -204,7 +198,7 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                credentials = ParseCredentials(ref reader, diagnostics, source, jobId, serviceName, isService);
+                credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService);
                 continue;
             }
 
@@ -219,8 +213,7 @@ public static partial class WorkflowParser
 
                 // spec §2.8/§14: env accepts expression form (${{ }}) or mapping
                 env = ParseEnvNode(
-                    ref reader,
-                    diagnostics,
+                    ref reader, arena, diagnostics,
                     source,
                     $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
                     ExpressionValidationContext.Job);
@@ -238,7 +231,7 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                var values = ParseStringOrStringSequence(ref reader, diagnostics, out var pvErr, out var pvMark);
+                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark);
                 if (pvErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar", pvMark);
                 if (optionKey == "ports")
                 {
@@ -264,7 +257,7 @@ public static partial class WorkflowParser
                 {
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
                 }
-                options = ParseString(ref reader, out var optErr, out var optMark);
+                options = ParseString(ref reader, arena, out var optErr, out var optMark);
                 if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", optMark);
                 continue;
             }
@@ -289,7 +282,7 @@ public static partial class WorkflowParser
 
         return new Container
         {
-            Image = image ?? new StringNode { Value = default, Quoted = false, Range = default },
+            Image = image.HasValue ? image : arena.AddString(default, false, default),
             Credentials = credentials,
             Env = env,
             Ports = ports,
@@ -299,38 +292,37 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Credentials? ParseCredentials<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
+    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.18: expression form is accepted as Credentials { Expression }
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var expression = ParseStringAndValidateExpression(
-                ref reader,
-                diagnostics,
+                ref reader, arena, diagnostics,
                 ExpressionValidationContext.Job,
                 out var crExprErr,
                 out var crExprMark,
                 parseWholeValueIfNoEmbedded: false);
             if (crExprErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression", crExprMark);
-            return expression is null
+            return !expression.HasValue
                 ? null
-                : new Credentials { Expression = expression, Range = expression.Range };
+                : new Credentials { Expression = expression, Range = arena.GetStringRange(expression) };
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
         var hasUsername = false;
         var hasPassword = false;
-        StringNode? username = null;
-        StringNode? password = null;
+        StringNodeId username = default;
+        StringNodeId password = default;
         ulong seen = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -361,8 +353,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: username", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 hasUsername = true;
                 username = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
+                    ref reader, arena, diagnostics,
                     ExpressionValidationContext.Job,
                     out var unErr,
                     out var unMark,
@@ -377,8 +368,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: password", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 hasPassword = true;
                 password = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
+                    ref reader, arena, diagnostics,
                     ExpressionValidationContext.Job,
                     out var pwErr,
                     out var pwMark,
@@ -413,7 +403,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static void ParseStringMapping<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)
+    private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)

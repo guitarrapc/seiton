@@ -27,6 +27,7 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildStepsOverride(
         IReadOnlyList<Step>? steps,
+        AstArena arena,
         byte[] utf8Yaml)
     {
         var stepsKey = "steps"u8.ToArray();
@@ -39,12 +40,12 @@ internal static class DynamicContextTypeBuilder
         for (var i = 0; i < steps.Count; i++)
         {
             var step = steps[i];
-            if (step.Id is null)
+            if (!step.Id.HasValue)
             {
                 continue;
             }
 
-            var idBytes = step.Id.Value.AsSpan(utf8Yaml);
+            var idBytes = arena.GetStringValue(step.Id);
             if (idBytes.IsEmpty)
             {
                 continue;
@@ -62,11 +63,11 @@ internal static class DynamicContextTypeBuilder
     /// Builds the matrix context type override for a job.
     /// Returns a strict object keyed by matrix row names, or a loose object when no rows are declared.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix, byte[]? utf8Yaml = null)
+    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
     {
         var matrixKey = "matrix"u8.ToArray();
 
-        if (matrix is null || matrix.Expression is not null || matrix.Rows is not { Count: > 0 } rows || utf8Yaml is null)
+        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is not { Count: > 0 } rows || utf8Yaml is null)
         {
             return (matrixKey, s_looseDynamic);
         }
@@ -85,20 +86,21 @@ internal static class DynamicContextTypeBuilder
     /// Returns a strict object keyed by depended-on job IDs, or a loose object when needs is empty.
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverride(
-        IReadOnlyList<StringNode>? needs,
+        StringNodeId[]? needs,
         SliceMap<Job> allJobs,
+        AstArena arena,
         byte[]? utf8Yaml)
     {
         var needsKey = "needs"u8.ToArray();
-        if (needs is null || needs.Count == 0)
+        if (needs is null || needs.Length == 0)
         {
             return (needsKey, s_looseDynamic);
         }
 
-        var props = new Dictionary<Utf8String, ExprType>(needs.Count);
-        for (var i = 0; i < needs.Count; i++)
+        var props = new Dictionary<Utf8String, ExprType>(needs.Length);
+        for (var i = 0; i < needs.Length; i++)
         {
-            var needIdBytes = needs[i].Value.AsSpan(utf8Yaml);
+            var needIdBytes = arena.GetStringSlice(needs[i]).AsSpan(utf8Yaml);
             if (needIdBytes.IsEmpty)
             {
                 continue;

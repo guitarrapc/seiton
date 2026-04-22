@@ -32,4 +32,5 @@ public readonly record struct ParseResult(
     Workflow? Workflow,
     ActionMetadata? ActionMetadata,
     Diagnostic[] Diagnostics,
-    bool HasFatalError);
+    bool HasFatalError,
+    AstArena? Arena = null);

@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -28,15 +29,15 @@ public sealed class ShellNameRule : RuleBase
 
     public override void VisitStep(Step step)
     {
-        if (step.Exec is not ExecRun run || run.Shell is null || Config.Utf8Yaml is null)
+        if (step.Exec is not ExecRun run || !run.Shell.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var shellSpan = run.Shell.Value.AsSpan(Config.Utf8Yaml);
+        var shellSpan = Arena.GetStringValue(run.Shell);
 
         // Skip expression values ? cannot validate at static analysis time
-        if (run.Shell.Expression is not null || shellSpan.IndexOf("${{"u8) >= 0)
+        if (Arena.GetStringExpression(run.Shell).HasValue || shellSpan.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -46,7 +47,7 @@ public sealed class ShellNameRule : RuleBase
             return;
         }
 
-        AddStepError(step, BuildInvalidShellMessage(run.Shell), run.Shell.Range);
+        AddStepError(step, BuildInvalidShellMessage(run.Shell), Arena.GetStringRange(run.Shell));
     }
 
     private void CheckDefaultsRunShell(Defaults? defaults)
@@ -56,15 +57,16 @@ public sealed class ShellNameRule : RuleBase
             return;
         }
 
-        var shellNode = defaults.Run?.Shell;
-        if (shellNode is null)
+        var shellNodeNullable = defaults.Run?.Shell;
+        if (shellNodeNullable is null || !shellNodeNullable.Value.HasValue)
         {
             return;
         }
 
-        var shellSpan = shellNode.Value.AsSpan(Config.Utf8Yaml);
+        var shellNode = shellNodeNullable.Value;
+        var shellSpan = Arena.GetStringValue(shellNode);
 
-        if (shellNode.Expression is not null || shellSpan.IndexOf("${{"u8) >= 0)
+        if (Arena.GetStringExpression(shellNode).HasValue || shellSpan.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -73,18 +75,18 @@ public sealed class ShellNameRule : RuleBase
         {
             if (_currentWorkflow is not null)
             {
-                AddWorkflowError(_currentWorkflow, BuildInvalidShellMessage(shellNode), shellNode.Range);
+                AddWorkflowError(_currentWorkflow, BuildInvalidShellMessage(shellNode), Arena.GetStringRange(shellNode));
             }
             else if (_currentJob is not null)
             {
-                AddJobError(_currentJob, BuildInvalidShellMessage(shellNode), shellNode.Range);
+                AddJobError(_currentJob, BuildInvalidShellMessage(shellNode), Arena.GetStringRange(shellNode));
             }
         }
     }
 
-    private string BuildInvalidShellMessage(StringNode shellNode)
+    private string BuildInvalidShellMessage(StringNodeId shellNode)
     {
-        var shellText = Decode(shellNode.Value);
+        var shellText = Decode(Arena.GetStringSlice(shellNode));
         return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python";
     }
 

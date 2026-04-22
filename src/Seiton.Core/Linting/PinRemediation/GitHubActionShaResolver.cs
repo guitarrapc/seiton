@@ -52,7 +52,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
         if (_pinningConfig.MinAgeDays > 0 && !TryBuildVersionFamily(refStr, out _))
         {
-            if (result.TagDate.HasValue)
+            if (result.TagDate is not null)
             {
                 var age = DateTimeOffset.UtcNow - result.TagDate.Value;
                 if (age.TotalDays < _pinningConfig.MinAgeDays)
@@ -209,7 +209,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
                 }
 
                 var commitDate = await TryGetCommitDateWithFallbackAsync(owner, repo, commitSha, token, cancellationToken);
-                if (!commitDate.HasValue || commitDate.Value > cutoff)
+                if (commitDate is null || commitDate.Value > cutoff)
                 {
                     continue;
                 }
@@ -279,7 +279,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         {
             var ghesBaseUri = NormalizeApiBaseUri(_githubConfig.GhesApiUrl!);
             var ghesDate = await TryGetCommitDateAsync(ghesBaseUri, owner, repo, commitSha, token, cancellationToken);
-            if (ghesDate.HasValue)
+            if (ghesDate is not null)
             {
                 return ghesDate;
             }

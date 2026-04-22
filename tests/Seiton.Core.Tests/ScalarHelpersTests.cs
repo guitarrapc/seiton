@@ -7,102 +7,114 @@ public sealed class ScalarHelpersTests
     [Test]
     public async Task ParseString_Scalar_ReturnsNode()
     {
-        var reader = CreateReader("hello"u8, new[]
+        var source = "hello"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
         {
             Scalar(0, 5, ScalarTag.Str),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseString(ref reader, diagnostics, "expected string");
+        var node = WorkflowParser.ParseString(ref reader, arena, diagnostics, "expected string");
 
-        await Assert.That(node is not null).IsTrue();
-        await Assert.That(node!.Value.Length).IsEqualTo(5);
+        await Assert.That(node.HasValue).IsTrue();
+        await Assert.That(arena.GetStringValue(node).Length).IsEqualTo(5);
         await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
     public async Task ParseBool_BoolTag_ReturnsValue()
     {
-        var reader = CreateReader("true"u8, new[]
+        var source = "true"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
         {
             Scalar(0, 4, ScalarTag.Bool),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseBool(ref reader, diagnostics, "expected bool");
+        var node = WorkflowParser.ParseBool(ref reader, arena, diagnostics, "expected bool");
 
-        await Assert.That(node is not null).IsTrue();
-        await Assert.That(node!.Value).IsTrue();
+        await Assert.That(node.HasValue).IsTrue();
+        await Assert.That(arena.GetBoolValue(node)).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
     public async Task ParseInt_IntTag_ReturnsValue()
     {
-        var reader = CreateReader("123"u8, new[]
+        var source = "123"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
         {
             Scalar(0, 3, ScalarTag.Int),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseInt(ref reader, diagnostics, "expected int");
+        var node = WorkflowParser.ParseInt(ref reader, arena, diagnostics, "expected int");
 
-        await Assert.That(node is not null).IsTrue();
-        await Assert.That(node!.Value).IsEqualTo(123);
+        await Assert.That(node.HasValue).IsTrue();
+        await Assert.That(arena.GetIntValue(node)).IsEqualTo(123);
         await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
     public async Task ParseFloat_FloatTag_ReturnsValue()
     {
-        var reader = CreateReader("1.5"u8, new[]
+        var source = "1.5"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
         {
             Scalar(0, 3, ScalarTag.Float),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseFloat(ref reader, diagnostics, "expected float");
+        var node = WorkflowParser.ParseFloat(ref reader, arena, diagnostics, "expected float");
 
-        await Assert.That(node is not null).IsTrue();
-        await Assert.That(node!.Value).IsEqualTo(1.5d);
+        await Assert.That(node.HasValue).IsTrue();
+        await Assert.That(arena.GetFloatValue(node)).IsEqualTo(1.5d);
         await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
     public async Task ParseExpression_WholeExpression_Validates()
     {
-        var reader = CreateReader("github.ref"u8, new[]
+        var source = "github.ref"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
         {
             Scalar(0, 10, ScalarTag.Str),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseExpression(ref reader, diagnostics, ExpressionValidationContext.Workflow, "expected expression");
+        var node = WorkflowParser.ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Workflow, "expected expression");
 
-        await Assert.That(node is not null).IsTrue();
+        await Assert.That(node.HasValue).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
     public async Task MayParseExpression_EmbeddedExpression_ReturnsNode()
     {
-        var source = "prefix-${{ github.ref }}"u8;
+        var source = "prefix-${{ github.ref }}"u8.ToArray();
+        var arena = new AstArena(source);
         var reader = CreateReader(source, new[]
         {
             Scalar(0, source.Length, ScalarTag.Str),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.MayParseExpression(ref reader, diagnostics, ExpressionValidationContext.Workflow);
+        var node = WorkflowParser.MayParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Workflow);
 
-        await Assert.That(node is not null).IsTrue();
+        await Assert.That(node.HasValue).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
     public async Task ParseStringOrStringSequence_Sequence_ReturnsAll()
     {
-        var source = "ab"u8;
+        var source = "ab"u8.ToArray();
+        var arena = new AstArena(source);
         var reader = CreateReader(source, new[]
         {
             Event(YamlEventKind.SequenceStart),
@@ -112,7 +124,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, diagnostics, "expected sequence");
+        var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, arena, diagnostics, "expected sequence");
 
         await Assert.That(nodes.Length).IsEqualTo(2);
         await Assert.That(diagnostics).IsEmpty();
@@ -121,15 +133,17 @@ public sealed class ScalarHelpersTests
     [Test]
     public async Task ParseBool_WrongTag_ReportsError()
     {
-        var reader = CreateReader("not-bool"u8, new[]
+        var source = "not-bool"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
         {
             Scalar(0, 8, ScalarTag.Str),
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseBool(ref reader, diagnostics, "expected bool");
+        var node = WorkflowParser.ParseBool(ref reader, arena, diagnostics, "expected bool");
 
-        await Assert.That(node).IsNull();
+        await Assert.That(node.HasValue).IsFalse();
         await Assert.That(diagnostics.Count).IsEqualTo(1);
     }
 

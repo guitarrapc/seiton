@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -69,14 +70,14 @@ public sealed class OverprovisionedSecretsRule : RuleBase
         }
     }
 
-    private bool ContainsSecretsReference(StringNode node)
+    private bool ContainsSecretsReference(StringNodeId node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        var value = node.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(node);
         if (ContainsAsciiIgnoreCase(value, "secrets."u8)
             || ContainsAsciiIgnoreCase(value, "secrets["u8)
             || ContainsAsciiIgnoreCase(value, "tojson(secrets)"u8)
@@ -85,12 +86,12 @@ public sealed class OverprovisionedSecretsRule : RuleBase
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = node.Expression.Value.AsSpan(Config.Utf8Yaml);
+        var expression = Arena.GetStringValue(Arena.GetStringExpression(node));
         return ContainsAsciiIgnoreCase(expression, "secrets"u8);
     }
 }

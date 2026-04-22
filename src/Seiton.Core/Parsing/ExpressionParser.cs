@@ -1,6 +1,4 @@
-﻿using System.Buffers;
-
-using static Seiton.Core.Parsing.SpanHelpers;
+﻿using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 

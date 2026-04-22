@@ -167,9 +167,9 @@ public abstract class RuleBase : IRule
         return value.Length == 0 ? string.Empty : Encoding.UTF8.GetString(value.Span);
     }
 
-    protected static TextRange BuildJobLocation(Job job)
+    protected TextRange BuildJobLocation(Job job)
     {
-        var range = job.Id.Range;
+        var range = Arena.GetStringRange(job.Id);
         return new TextRange(
             Start: range.Start,
             Length: 0,
@@ -179,9 +179,9 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected static TextRange BuildEventLocation(Event ev)
+    protected TextRange BuildEventLocation(Event ev)
     {
-        var range = ev.EventName.Range;
+        var range = Arena.GetStringRange(ev.EventName);
         return new TextRange(
             Start: range.Start,
             Length: 0,
@@ -203,19 +203,21 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected static TextRange BuildUsesLocation(ExecAction action)
+    protected AstArena Arena => Config.Arena!;
+
+    protected TextRange BuildUsesLocation(ExecAction action)
     {
-        return action.UsesKeyRange ?? action.Uses.Range;
+        return action.UsesKeyRange ?? Arena.GetStringRange(action.Uses);
     }
 
-    protected static TextRange BuildUsesLocation(WorkflowCall workflowCall)
+    protected TextRange BuildUsesLocation(WorkflowCall workflowCall)
     {
-        return workflowCall.UsesKeyRange ?? workflowCall.Uses.Range;
+        return workflowCall.UsesKeyRange ?? Arena.GetStringRange(workflowCall.Uses);
     }
 
-    protected static bool HasNodeValue(StringNode? node)
+    protected static bool HasNodeValue(StringNodeId node, AstArena arena)
     {
-        return node is not null && node.Value.Length > 0;
+        return node.HasValue && arena.GetStringSlice(node).Length > 0;
     }
 
     protected static bool IsSha256DigestPinned(ReadOnlySpan<byte> image)

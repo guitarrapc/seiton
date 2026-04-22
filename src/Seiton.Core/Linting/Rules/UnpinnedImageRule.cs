@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -15,7 +16,7 @@ public sealed class UnpinnedImageRule : RuleBase
             return;
         }
 
-        ReportIfUnpinnedContainerImage(job, job.Container?.Image, "job.container");
+        ReportIfUnpinnedContainerImage(job, job.Container is not null ? job.Container.Image : default, "job.container");
 
         var serviceMap = job.Services?.ServiceMap;
         if (serviceMap is null || serviceMap.Value.Count == 0)
@@ -38,12 +39,12 @@ public sealed class UnpinnedImageRule : RuleBase
         }
 
         var usesNode = actionExec.Uses;
-        if (usesNode.Expression is not null)
+        if (Arena.GetStringExpression(usesNode).HasValue)
         {
             return;
         }
 
-        var uses = usesNode.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(usesNode);
         if (!uses.StartsWith("docker://"u8))
         {
             return;
@@ -55,24 +56,24 @@ public sealed class UnpinnedImageRule : RuleBase
             return;
         }
 
-        var usesText = Decode(usesNode.Value);
+        var usesText = Decode(Arena.GetStringSlice(usesNode));
         AddStepWarning(step, $"docker action uses '{usesText}' is not pinned by digest (expected @sha256:<64-hex>)");
     }
 
-    private void ReportIfUnpinnedContainerImage(Job job, StringNode? imageNode, string locationName)
+    private void ReportIfUnpinnedContainerImage(Job job, StringNodeId imageNode, string locationName)
     {
-        if (imageNode is null || imageNode.Expression is not null || Config.Utf8Yaml is null)
+        if (!imageNode.HasValue || Arena.GetStringExpression(imageNode).HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var image = imageNode.Value.AsSpan(Config.Utf8Yaml);
+        var image = Arena.GetStringValue(imageNode);
         if (image.IsEmpty || IsSha256DigestPinned(image))
         {
             return;
         }
 
-        var imageText = Decode(imageNode.Value);
-        AddJobWarning(job, $"{locationName} image '{imageText}' is not pinned by digest (expected @sha256:<64-hex>)", imageNode.Range);
+        var imageText = Decode(Arena.GetStringSlice(imageNode));
+        AddJobWarning(job, $"{locationName} image '{imageText}' is not pinned by digest (expected @sha256:<64-hex>)", Arena.GetStringRange(imageNode));
     }
 }

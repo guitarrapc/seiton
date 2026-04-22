@@ -17,7 +17,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             return;
         }
 
-        var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(actionExec.Uses);
         if (!IsCreateGitHubAppTokenAction(uses))
         {
             return;
@@ -60,7 +60,7 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
             return;
         }
 
-        var usesText = Decode(actionExec.Uses.Value);
+        var usesText = Decode(Arena.GetStringSlice(actionExec.Uses));
         var usesLocation = BuildUsesLocation(actionExec);
         if (!hasRepositoryConstraint && !hasPermissionConstraint)
         {

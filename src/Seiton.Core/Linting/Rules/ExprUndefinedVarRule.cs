@@ -42,12 +42,13 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
 
         var yaml = Config.Utf8Yaml;
-        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix, yaml);
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix, Arena, yaml);
         var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverride(
             job.Needs,
             _currentWorkflow?.Jobs ?? default,
+            Arena,
             yaml);
-        var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, yaml);
+        var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml);
 
         // job scope: matrix, needs, inputs available (steps is NOT available in job scope)
         _jobScopeOverrides = [matrixOverride, needsOverride, _inputsOverride];
@@ -69,7 +70,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
         foreach (var pair in callInputs.Value)
         {
             var input = pair.Value;
-            var inputName = Decode(input.Name.Value);
+            var inputName = Decode(Arena.GetStringSlice(input.Name));
             CheckNode(input.Value, ExpressionValidationContext.Job, $"job.with.{inputName}", static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
         }
@@ -113,7 +114,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
             return;
         }
 
-        CheckNode(env.Expression, context, sinkName, report, target);
+        CheckNode(Arena.GetStringExpression(env.Expression), context, sinkName, report, target);
 
         var vars = env.Vars;
         if (vars is null || vars.Value.Count == 0)
@@ -124,24 +125,24 @@ public sealed class ExprUndefinedVarRule : RuleBase
         foreach (var pair in vars.Value)
         {
             var envVar = pair.Value;
-            var keyName = Decode(envVar.Name.Value);
+            var keyName = Decode(Arena.GetStringSlice(envVar.Name));
             CheckNode(envVar.Value, context, $"{sinkName}.{keyName}", report, target);
         }
     }
 
     private void CheckNode<TTarget>(
-        StringNode? node,
+        StringNodeId node,
         ExpressionValidationContext context,
         string sinkName,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
-        if (node is null || Config.Utf8Yaml is null)
+        if (!node.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var value = node.Value.AsSpan(Config.Utf8Yaml);
+        var value = Arena.GetStringValue(node);
         if (value.Length == 0)
         {
             return;
@@ -152,7 +153,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
 
         if (parseWholeValue && !hasEmbeddedExpression)
         {
-            ValidateExpression(value, context, sinkName, node.Range, report, target);
+            ValidateExpression(value, context, sinkName, Arena.GetStringRange(node), report, target);
             return;
         }
 
@@ -166,7 +167,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
                 continue;
             }
 
-            ValidateExpression(expression, context, sinkName, node.Range, report, target);
+            ValidateExpression(expression, context, sinkName, Arena.GetStringRange(node), report, target);
         }
     }
 

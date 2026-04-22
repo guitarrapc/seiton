@@ -27,13 +27,13 @@ public sealed class PermissionsRule : RuleBase
             return;
         }
 
-        if (permissions.All is not null)
+        if (permissions.All.HasValue)
         {
-            var value = Decode(permissions.All.Value);
+            var value = Decode(Arena.GetStringSlice(permissions.All));
             if (!string.Equals(value, "read-all", StringComparison.Ordinal)
                 && !string.Equals(value, "write-all", StringComparison.Ordinal))
             {
-                AddError($"permissions scalar must be 'read-all' or 'write-all', but got '{value}'", permissions.All.Range, workflow, job);
+                AddError($"permissions scalar must be 'read-all' or 'write-all', but got '{value}'", Arena.GetStringRange(permissions.All), workflow, job);
             }
         }
 
@@ -54,7 +54,7 @@ public sealed class PermissionsRule : RuleBase
             }
 
             var scopeName = Decode(scope.NameText);
-            AddError($"permissions.{scopeName} must be one of 'read', 'write', or 'none', but got '{value}'", scope.Value.Range, workflow, job);
+            AddError($"permissions.{scopeName} must be one of 'read', 'write', or 'none', but got '{value}'", Arena.GetStringRange(scope.Value), workflow, job);
         }
     }
 

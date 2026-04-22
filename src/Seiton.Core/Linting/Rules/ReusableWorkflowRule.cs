@@ -27,8 +27,8 @@ public sealed class ReusableWorkflowRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
-        var hasUses = HasNodeValue(workflowCall.Uses);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var hasUses = HasNodeValue(workflowCall.Uses, Arena);
 
         if (!hasUses)
         {
@@ -51,8 +51,8 @@ public sealed class ReusableWorkflowRule : RuleBase
         ReportIfPresent(job, job.Env is not null, "env", jobId);
         ReportIfPresent(job, job.Defaults is not null, "defaults", jobId);
         ReportIfPresent(job, job.Steps is not null && job.Steps.Count > 0, "steps", jobId);
-        ReportIfPresent(job, job.TimeoutMinutes is not null, "timeout-minutes", jobId);
-        ReportIfPresent(job, job.ContinueOnError is not null, "continue-on-error", jobId);
+        ReportIfPresent(job, job.TimeoutMinutes.HasValue, "timeout-minutes", jobId);
+        ReportIfPresent(job, job.ContinueOnError.HasValue, "continue-on-error", jobId);
         ReportIfPresent(job, job.Container is not null, "container", jobId);
         ReportIfPresent(job, job.Services is not null, "services", jobId);
 
@@ -69,7 +69,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             return;
         }
 
-        var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(workflowCall.Uses);
         if (!TryResolveLocalWorkflowPath(uses, out var resolvedPath, out var relativePath, out var invalidRefFormat))
         {
             if (invalidRefFormat)
@@ -143,7 +143,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             return null;
         }
 
-        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes);
+        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes, parseResult.Arena!);
         localWorkflowContracts[resolvedPath] = contract;
         return contract;
     }
@@ -160,7 +160,7 @@ public sealed class ReusableWorkflowRule : RuleBase
                     AddJobError(
                         job,
                         $"job '{jobId}' passes unknown reusable workflow input '{inputName}'",
-                        pair.Value.Name.Range);
+                        Arena.GetStringRange(pair.Value.Name));
                     continue;
                 }
 
@@ -190,13 +190,13 @@ public sealed class ReusableWorkflowRule : RuleBase
         }
 
         var value = providedInput.Value;
-        var valueSpan = value.Value.AsSpan(Config.Utf8Yaml);
-        if (value.Expression is not null || valueSpan.IndexOf("${{"u8) >= 0)
+        var valueSpan = Arena.GetStringValue(value);
+        if (Arena.GetStringExpression(value).HasValue || valueSpan.IndexOf("${{"u8) >= 0)
         {
             return;
         }
 
-        var valueText = Decode(value.Value);
+        var valueText = Decode(Arena.GetStringSlice(value));
         if (expected.Type == WorkflowCallInputType.Boolean)
         {
             if (IsBooleanLiteral(valueText))
@@ -207,7 +207,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             AddJobError(
                 job,
                 $"job '{jobId}' input '{expected.Name}' expects boolean but got '{valueText}'",
-                value.Range);
+                Arena.GetStringRange(value));
             return;
         }
 
@@ -221,7 +221,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             AddJobError(
                 job,
                 $"job '{jobId}' input '{expected.Name}' expects number but got '{valueText}'",
-                value.Range);
+                Arena.GetStringRange(value));
         }
     }
 
@@ -240,7 +240,7 @@ public sealed class ReusableWorkflowRule : RuleBase
                 AddJobError(
                     job,
                     $"job '{jobId}' passes unknown reusable workflow secret '{secretName}'",
-                    pair.Value.Name.Range);
+                    Arena.GetStringRange(pair.Value.Name));
             }
         }
 
@@ -413,7 +413,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         public HashSet<string> RequiredSecrets { get; } = new(StringComparer.Ordinal);
 
-        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent, byte[] source)
+        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent, byte[] source, AstArena arena)
         {
             var contract = new LocalWorkflowContract();
 
@@ -425,8 +425,8 @@ public sealed class ReusableWorkflowRule : RuleBase
                     var inputName = Decode(input.Id);
                     contract.Inputs[inputName] = new InputContract(inputName, input.Type);
 
-                    var hasDefault = input.Default is not null;
-                    if (input.Required?.Value == true && !hasDefault)
+                    var hasDefault = input.Default.HasValue;
+                    if (input.Required.HasValue && arena.GetBoolValue(input.Required) && !hasDefault)
                     {
                         contract.RequiredInputs.Add(inputName);
                     }
@@ -439,7 +439,7 @@ public sealed class ReusableWorkflowRule : RuleBase
                 {
                     var secretName = Encoding.UTF8.GetString(pair.Key.AsSpan(source));
                     contract.Secrets.Add(secretName);
-                    if (pair.Value.Required?.Value == true)
+                    if (pair.Value.Required.HasValue && arena.GetBoolValue(pair.Value.Required))
                     {
                         contract.RequiredSecrets.Add(secretName);
                     }

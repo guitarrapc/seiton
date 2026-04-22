@@ -17,14 +17,14 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var uses = workflowCall.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(workflowCall.Uses);
         var usesLocation = BuildUsesLocation(workflowCall);
-        var usesRefLocation = BuildRefLocation(workflowCall.Uses.Value, uses, Config.Utf8Yaml, usesLocation);
+        var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(workflowCall.Uses), uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                var localJobId = Decode(job.Id.Value);
+                var localJobId = Decode(Arena.GetStringSlice(job.Id));
                 AddJobWarning(
                     job,
                     $"job '{localJobId}' local reusable workflow uses must not contain '@ref'",
@@ -36,8 +36,8 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         if (!HasRemoteActionUsesFormat(uses))
         {
-            var formatJobId = Decode(job.Id.Value);
-            var invalidUsesText = Decode(workflowCall.Uses.Value);
+            var formatJobId = Decode(Arena.GetStringSlice(job.Id));
+            var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobWarning(
                 job,
                 $"job '{formatJobId}' reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
@@ -50,8 +50,8 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
-        var usesText = Decode(workflowCall.Uses.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
         AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
     }
 
@@ -62,9 +62,9 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var uses = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
-        var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
-        var usesRefLocation = BuildRefLocation(actionExec.Uses.Value, uses, Config.Utf8Yaml, usesLocation);
+        var uses = Arena.GetStringValue(actionExec.Uses);
+        var usesLocation = actionExec.UsesKeyRange ?? Arena.GetStringRange(actionExec.Uses);
+        var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(actionExec.Uses), uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("docker://"u8))
         {
             if (uses.Length <= "docker://"u8.Length)
@@ -89,7 +89,7 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         if (!HasRemoteActionUsesFormat(uses))
         {
-            var invalidUsesText = Decode(actionExec.Uses.Value);
+            var invalidUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
             AddStepWarning(
                 step,
                 $"action uses '{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
@@ -102,7 +102,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var usesText = Decode(actionExec.Uses.Value);
+        var usesText = Decode(Arena.GetStringSlice(actionExec.Uses));
         AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
     }
 

@@ -34,7 +34,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
             return;
         }
 
-        var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
+        var runText = Arena.GetStringValue(run.Run);
         if (!ContainsPublishCommand(runText) || currentJobHasIdTokenWrite)
         {
             return;
@@ -43,7 +43,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
         AddStepWarning(
             step,
             "publish-like command detected without id-token: write permission; use trusted publishing (OIDC) instead of long-lived registry secrets",
-            run.Run.Range);
+            Arena.GetStringRange(run.Run));
     }
 
     private bool HasIdTokenWrite(Permissions? permissions)
@@ -53,9 +53,9 @@ public sealed class UseTrustedPublishingRule : RuleBase
             return false;
         }
 
-        if (permissions.All is not null)
+        if (permissions.All.HasValue)
         {
-            var scalar = Decode(permissions.All.Value);
+            var scalar = Decode(Arena.GetStringSlice(permissions.All));
             if (string.Equals(scalar, "write-all", StringComparison.OrdinalIgnoreCase))
             {
                 return true;

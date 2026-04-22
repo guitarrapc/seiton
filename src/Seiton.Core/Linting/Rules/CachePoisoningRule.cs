@@ -37,20 +37,20 @@ public sealed class CachePoisoningRule : RuleBase
             return;
         }
 
-        var uses = action.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(action.Uses);
         if (!IsCacheAction(uses))
         {
             return;
         }
 
-        var actionRef = Decode(action.Uses.Value);
+        var actionRef = Decode(Arena.GetStringSlice(action.Uses));
         AddStepWarning(
             step,
             $"cache action '{actionRef}' runs in a workflow with untrusted triggers; isolate cache scope and avoid restore-key fallback across trust boundaries",
             BuildUsesLocation(action));
     }
 
-    private static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -59,7 +59,7 @@ public sealed class CachePoisoningRule : RuleBase
                 continue;
             }
 
-            var hook = webhook.Hook.Value.AsSpan(utf8Yaml);
+            var hook = Arena.GetStringValue(webhook.Hook);
             if (WebhookTypes.TryGet(hook, out _, out var spec)
                 && spec.Id is WebhookTypes.EventId.PullRequest
                     or WebhookTypes.EventId.PullRequestTarget

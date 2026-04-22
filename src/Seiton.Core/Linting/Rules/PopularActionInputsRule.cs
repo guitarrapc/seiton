@@ -22,13 +22,13 @@ public sealed class PopularActionInputsRule : RuleBase
             return;
         }
 
-        var usesText = actionExec.Uses.Value.AsSpan(Config.Utf8Yaml);
+        var usesText = Arena.GetStringValue(actionExec.Uses);
         if (!PopularActions.TryGet(usesText, out var actionSpec))
         {
             return;
         }
 
-        var actionName = Decode(actionExec.Uses.Value);
+        var actionName = Decode(Arena.GetStringSlice(actionExec.Uses));
         foreach (var pair in actionExec.Inputs.Value)
         {
             if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))

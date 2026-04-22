@@ -2,9 +2,9 @@
 
 public sealed class Workflow
 {
-    public StringNode? Name { get; init; }
+    public StringNodeId Name { get; init; }
 
-    public StringNode? RunName { get; init; }
+    public StringNodeId RunName { get; init; }
 
     public IReadOnlyList<Event> On { get; init; } = [];
 

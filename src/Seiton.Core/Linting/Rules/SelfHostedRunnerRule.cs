@@ -37,29 +37,29 @@ public sealed class SelfHostedRunnerRule : RuleBase
         }
 
         var labels = job.RunsOn.Labels;
-        for (var i = 0; i < labels.Count; i++)
+        for (var i = 0; i < labels.Length; i++)
         {
             var label = labels[i];
-            if (label.Expression is not null)
+            if (Arena.GetStringExpression(label).HasValue)
             {
                 continue;
             }
 
-            if (!RunnerLabels.IsSelfHostedLabel(label.Value.AsSpan(Config.Utf8Yaml)))
+            if (!RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(label)))
             {
                 continue;
             }
 
-            var jobId = Decode(job.Id.Value);
+            var jobId = Decode(Arena.GetStringSlice(job.Id));
             AddJobWarning(
                 job,
                 $"job '{jobId}' uses self-hosted runner under untrusted triggers; add strict job guards and isolate self-hosted execution paths",
-                label.Range);
+                Arena.GetStringRange(label));
             return;
         }
     }
 
-    private static bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -68,7 +68,7 @@ public sealed class SelfHostedRunnerRule : RuleBase
                 continue;
             }
 
-            var hook = webhook.Hook.Value.AsSpan(utf8Yaml);
+            var hook = Arena.GetStringValue(webhook.Hook);
             if (WebhookTypes.TryGet(hook, out _, out var spec)
                 && spec.Id is WebhookTypes.EventId.PullRequest
                     or WebhookTypes.EventId.PullRequestTarget

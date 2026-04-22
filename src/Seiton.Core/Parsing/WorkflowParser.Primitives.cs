@@ -1,6 +1,5 @@
 ﻿using System.Buffers.Text;
 using System.Text;
-using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -8,15 +7,15 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    internal static BoolNode? ParseBool<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static BoolNodeId ParseBool<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseBool(ref reader, out var needsError, out var errorMark);
+        var node = ParseBool(ref reader, arena, out var needsError, out var errorMark);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    internal static BoolNode? ParseBool<TReader>(ref TReader reader, out bool needsError, out TextPosition errorMark)
+    internal static BoolNodeId ParseBool<TReader>(ref TReader reader, AstArena arena, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -24,7 +23,7 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return null;
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -32,7 +31,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mark = reader.CurrentStart;
@@ -43,27 +42,23 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = mark;
             reader.Read();
-            return null;
+            return default;
         }
 
-        var node = new BoolNode
-        {
-            Value = value,
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
+        var node = arena.AddBool(value, BuildScalarLocation(mark, valueUtf8.Length));
         reader.Read();
         return node;
     }
 
-    internal static StringNode? MayParseExpression<TReader>(
-        ref TReader reader,
+    internal static StringNodeId MayParseExpression<TReader>(
+        ref TReader reader, AstArena arena,
         List<Diagnostic> diagnostics,
         ExpressionValidationContext context)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End || reader.CurrentKind != YamlEventKind.Scalar)
         {
-            return null;
+            return default;
         }
 
         var slice = reader.GetScalarSlice();
@@ -72,12 +67,7 @@ public static partial class WorkflowParser
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
         var hasExpression = valueUtf8.IndexOf("${{"u8) >= 0;
-        var node = new StringNode
-        {
-            Value = slice,
-            Quoted = reader.IsScalarQuoted(),
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
+        var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
 
         if (hasExpression)
         {
@@ -90,18 +80,18 @@ public static partial class WorkflowParser
         }
 
         reader.Read();
-        return hasExpression ? node : null;
+        return hasExpression ? node : default;
     }
 
-    internal static StringNode? ParseString<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
+    internal static StringNodeId ParseString<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseString(ref reader, out var needsError, out var errorMark, allowEmpty);
+        var node = ParseString(ref reader, arena, out var needsError, out var errorMark, allowEmpty);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    internal static StringNode? ParseString<TReader>(ref TReader reader, out bool needsError, out TextPosition errorMark, bool allowEmpty = false)
+    internal static StringNodeId ParseString<TReader>(ref TReader reader, AstArena arena, out bool needsError, out TextPosition errorMark, bool allowEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -109,7 +99,7 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return null;
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -117,7 +107,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         // Use GetScalarSlice().Offset to derive position for non-empty scalars: the slice offset is
@@ -136,26 +126,21 @@ public static partial class WorkflowParser
             errorMark = mark;
         }
 
-        var node = new StringNode
-        {
-            Value = slice,
-            Quoted = reader.IsScalarQuoted(),
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
+        var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
 
         reader.Read();
         return node;
     }
 
-    internal static StringNode? ParseExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+    internal static StringNodeId ParseExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseExpression(ref reader, diagnostics, context, out var needsError, out var errorMark);
+        var node = ParseExpression(ref reader, arena, diagnostics, context, out var needsError, out var errorMark);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    internal static StringNode? ParseExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+    internal static StringNodeId ParseExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -163,7 +148,7 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return null;
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -171,7 +156,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var slice = reader.GetScalarSlice();
@@ -187,26 +172,21 @@ public static partial class WorkflowParser
             parseWholeValueIfNoEmbedded: true,
             allowStatusCheckFunctions: true);
 
-        var node = new StringNode
-        {
-            Value = slice,
-            Quoted = reader.IsScalarQuoted(),
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
+        var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
 
         reader.Read();
         return node;
     }
 
-    private static StringNode? ParseStringAndValidateExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage, bool parseWholeValueIfNoEmbedded)
+    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage, bool parseWholeValueIfNoEmbedded)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseStringAndValidateExpression(ref reader, diagnostics, context, out var needsError, out var errorMark, parseWholeValueIfNoEmbedded);
+        var node = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out var needsError, out var errorMark, parseWholeValueIfNoEmbedded);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    private static StringNode? ParseStringAndValidateExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark, bool parseWholeValueIfNoEmbedded)
+    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark, bool parseWholeValueIfNoEmbedded)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -214,7 +194,7 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return null;
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -222,7 +202,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var slice = reader.GetScalarSlice();
@@ -238,26 +218,21 @@ public static partial class WorkflowParser
             diagnostics,
             parseWholeValueIfNoEmbedded);
 
-        var node = new StringNode
-        {
-            Value = slice,
-            Quoted = reader.IsScalarQuoted(),
-            Range = range,
-        };
+        var node = arena.AddString(slice, reader.IsScalarQuoted(), range);
 
         reader.Read();
         return node;
     }
 
-    internal static StringNode[] ParseStringOrStringSequence<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var nodes = ParseStringOrStringSequence(ref reader, diagnostics, out var needsError, out var errorMark, allowEmpty, allowElemEmpty);
+        var nodes = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var needsError, out var errorMark, allowEmpty, allowElemEmpty);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return nodes;
     }
 
-    internal static StringNode[] ParseStringOrStringSequence<TReader>(ref TReader reader, List<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -270,8 +245,8 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var single = ParseString(ref reader, out needsError, out errorMark, allowEmpty);
-            return single is null ? [] : [single];
+            var single = ParseString(ref reader, arena, out needsError, out errorMark, allowEmpty);
+            return !single.HasValue ? [] : [single];
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -282,20 +257,20 @@ public static partial class WorkflowParser
             return [];
         }
 
-        var list = new PooledBuffer<StringNode>(4);
+        var list = new PooledBuffer<StringNodeId>(4);
         try
         {
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                var node = ParseString(ref reader, out needsError, out errorMark, allowElemEmpty);
+                var node = ParseString(ref reader, arena, out needsError, out errorMark, allowElemEmpty);
                 if (needsError)
                 {
                     // Element-level error: use the same errorMessage pattern
                     // The caller will provide the error message, so just propagate the first error
                     break;
                 }
-                if (node is not null)
+                if (node.HasValue)
                 {
                     list.Add(node);
                 }
@@ -317,15 +292,15 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    internal static FloatNode? ParseFloat<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static FloatNodeId ParseFloat<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseFloat(ref reader, out var needsError, out var errorMark);
+        var node = ParseFloat(ref reader, arena, out var needsError, out var errorMark);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    internal static FloatNode? ParseFloat<TReader>(ref TReader reader, out bool needsError, out TextPosition errorMark)
+    internal static FloatNodeId ParseFloat<TReader>(ref TReader reader, AstArena arena, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -333,7 +308,7 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return null;
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -341,7 +316,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mark = reader.CurrentStart;
@@ -352,27 +327,23 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = mark;
             reader.Read();
-            return null;
+            return default;
         }
 
-        var node = new FloatNode
-        {
-            Value = value,
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
+        var node = arena.AddFloat(value, BuildScalarLocation(mark, valueUtf8.Length));
         reader.Read();
         return node;
     }
 
-    internal static IntNode? ParseInt<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
+    internal static IntNodeId ParseInt<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseInt(ref reader, out var needsError, out var errorMark);
+        var node = ParseInt(ref reader, arena, out var needsError, out var errorMark);
         if (needsError) AddError(diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    internal static IntNode? ParseInt<TReader>(ref TReader reader, out bool needsError, out TextPosition errorMark)
+    internal static IntNodeId ParseInt<TReader>(ref TReader reader, AstArena arena, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -380,7 +351,7 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return null;
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
@@ -388,7 +359,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mark = reader.CurrentStart;
@@ -399,14 +370,10 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = mark;
             reader.Read();
-            return null;
+            return default;
         }
 
-        var node = new IntNode
-        {
-            Value = value,
-            Range = BuildScalarLocation(mark, valueUtf8.Length),
-        };
+        var node = arena.AddInt(value, BuildScalarLocation(mark, valueUtf8.Length));
         reader.Read();
         return node;
     }
@@ -461,10 +428,10 @@ public static partial class WorkflowParser
     }
 
 
-    private static void ParseConditionalExpression<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
+    private static void ParseConditionalExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        _ = ParseExpression(ref reader, diagnostics, context, shapeError);
+        _ = ParseExpression(ref reader, arena, diagnostics, context, shapeError);
     }
 
     private static void ValidateExpressionText(ReadOnlySpan<byte> valueUtf8, TextRange valueLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool parseWholeValueIfNoEmbedded, bool allowStatusCheckFunctions = false)

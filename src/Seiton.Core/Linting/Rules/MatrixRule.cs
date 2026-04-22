@@ -18,7 +18,7 @@ public sealed class MatrixRule : RuleBase
             return;
         }
 
-        if (matrix.Expression is not null || matrix.Rows is null || matrix.Rows.Value.Count == 0)
+        if (Arena.GetStringExpression(matrix.Expression).HasValue || matrix.Rows is null || matrix.Rows.Value.Count == 0)
         {
             return;
         }
@@ -35,7 +35,7 @@ public sealed class MatrixRule : RuleBase
         foreach (var pair in rows)
         {
             var row = pair.Value;
-            if (row.Expression is not null)
+            if (Arena.GetStringExpression(row.Expression).HasValue)
             {
                 continue;
             }
@@ -43,12 +43,12 @@ public sealed class MatrixRule : RuleBase
             var values = row.Values;
             if (values is null || values.Count == 0)
             {
-                var jobId = Decode(job.Id.Value);
-                var axisName = Decode(row.Name.Value);
+                var jobId = Decode(Arena.GetStringSlice(job.Id));
+                var axisName = Decode(Arena.GetStringSlice(row.Name));
                 AddJobWarning(
                     job,
                     $"job '{jobId}' strategy.matrix axis '{axisName}' has no values; remove the axis or provide at least one value",
-                    row.Name.Range);
+                    Arena.GetStringRange(row.Name));
                 continue;
             }
 
@@ -69,7 +69,7 @@ public sealed class MatrixRule : RuleBase
                 continue;
             }
 
-            var jobIdForMessage = Decode(job.Id.Value);
+            var jobIdForMessage = Decode(Arena.GetStringSlice(job.Id));
             AddJobWarning(
                 job,
                 $"job '{jobIdForMessage}' strategy.matrix expands to more than {MaxRecommendedCombinations} combinations; consider reducing matrix fan-out",
@@ -88,7 +88,7 @@ public sealed class MatrixRule : RuleBase
         for (var i = 0; i < combinations.Count; i++)
         {
             var combo = combinations[i];
-            if (combo.Expression is not null || combo.Entries is null)
+            if (Arena.GetStringExpression(combo.Expression).HasValue || combo.Entries is null)
             {
                 continue;
             }
@@ -103,7 +103,7 @@ public sealed class MatrixRule : RuleBase
                         continue;
                     }
 
-                    var jobId = Decode(job.Id.Value);
+                    var jobId = Decode(Arena.GetStringSlice(job.Id));
                     var axisName = Decode(pair.Key);
                     AddJobWarning(
                         job,

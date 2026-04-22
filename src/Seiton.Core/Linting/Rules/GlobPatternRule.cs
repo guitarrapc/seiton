@@ -17,7 +17,7 @@ public sealed class GlobPatternRule : RuleBase
             return;
         }
 
-        var eventName = webhookEv.EventName.Value.AsSpan(Config.Utf8Yaml);
+        var eventName = Arena.GetStringValue(webhookEv.EventName);
         if (!WebhookTypes.TryGet(eventName, out var normalizedEventName, out var spec))
         {
             return;
@@ -37,14 +37,14 @@ public sealed class GlobPatternRule : RuleBase
 
     private void ValidateOptionAllowList(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
     {
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Types is not null && webhookEv.Types.Count > 0, "types"u8, webhookEv.Types?[0].Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Branches is not null, "branches"u8, webhookEv.Branches?.Name.Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.BranchesIgnore is not null, "branches-ignore"u8, webhookEv.BranchesIgnore?.Name.Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Tags is not null, "tags"u8, webhookEv.Tags?.Name.Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.TagsIgnore is not null, "tags-ignore"u8, webhookEv.TagsIgnore?.Name.Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Paths is not null, "paths"u8, webhookEv.Paths?.Name.Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.PathsIgnore is not null, "paths-ignore"u8, webhookEv.PathsIgnore?.Name.Range);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Workflows is not null && webhookEv.Workflows.Count > 0, "workflows"u8, webhookEv.Workflows?[0].Range);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Types is not null && webhookEv.Types.Length > 0, "types"u8, webhookEv.Types is not null && webhookEv.Types.Length > 0 ? Arena.GetStringRange(webhookEv.Types[0]) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Branches is not null, "branches"u8, webhookEv.Branches is not null ? Arena.GetStringRange(webhookEv.Branches.Name) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.BranchesIgnore is not null, "branches-ignore"u8, webhookEv.BranchesIgnore is not null ? Arena.GetStringRange(webhookEv.BranchesIgnore.Name) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Tags is not null, "tags"u8, webhookEv.Tags is not null ? Arena.GetStringRange(webhookEv.Tags.Name) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.TagsIgnore is not null, "tags-ignore"u8, webhookEv.TagsIgnore is not null ? Arena.GetStringRange(webhookEv.TagsIgnore.Name) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Paths is not null, "paths"u8, webhookEv.Paths is not null ? Arena.GetStringRange(webhookEv.Paths.Name) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.PathsIgnore is not null, "paths-ignore"u8, webhookEv.PathsIgnore is not null ? Arena.GetStringRange(webhookEv.PathsIgnore.Name) : null);
+        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Workflows is not null && webhookEv.Workflows.Length > 0, "workflows"u8, webhookEv.Workflows is not null && webhookEv.Workflows.Length > 0 ? Arena.GetStringRange(webhookEv.Workflows[0]) : null);
     }
 
     private void ValidateOptionAllowList(
@@ -69,7 +69,7 @@ public sealed class GlobPatternRule : RuleBase
 
     private void ValidateTypeValues(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
     {
-        if (webhookEv.Types is null || webhookEv.Types.Count == 0)
+        if (webhookEv.Types is null || webhookEv.Types.Length == 0)
         {
             return;
         }
@@ -79,15 +79,15 @@ public sealed class GlobPatternRule : RuleBase
             AddEventError(
                 webhookEv,
                 $"event '{eventName}' does not support 'types'",
-                webhookEv.Types[0].Range);
+                Arena.GetStringRange(webhookEv.Types[0]));
             return;
         }
 
-        for (var i = 0; i < webhookEv.Types.Count; i++)
+        for (var i = 0; i < webhookEv.Types.Length; i++)
         {
             var typeNode = webhookEv.Types[i];
-            var typeValue = typeNode.Value.AsSpan(Config.Utf8Yaml);
-            if (typeNode.Expression is not null || typeValue.IndexOf("${{"u8) >= 0)
+            var typeValue = Arena.GetStringValue(typeNode);
+            if (Arena.GetStringExpression(typeNode).HasValue || typeValue.IndexOf("${{"u8) >= 0)
             {
                 continue;
             }
@@ -97,11 +97,11 @@ public sealed class GlobPatternRule : RuleBase
                 continue;
             }
 
-            var typeText = Decode(typeNode.Value);
+            var typeText = Decode(Arena.GetStringSlice(typeNode));
             AddEventError(
                 webhookEv,
                 $"event '{eventName}' has unsupported activity type '{typeText}'",
-                typeNode.Range);
+                Arena.GetStringRange(typeNode));
         }
     }
 
@@ -112,7 +112,7 @@ public sealed class GlobPatternRule : RuleBase
             AddEventError(
                 webhookEv,
                 "event filter 'branches' and 'branches-ignore' cannot be used together",
-                webhookEv.BranchesIgnore.Name.Range);
+                Arena.GetStringRange(webhookEv.BranchesIgnore.Name));
         }
 
         if (webhookEv.Tags is not null && webhookEv.TagsIgnore is not null)
@@ -120,7 +120,7 @@ public sealed class GlobPatternRule : RuleBase
             AddEventError(
                 webhookEv,
                 "event filter 'tags' and 'tags-ignore' cannot be used together",
-                webhookEv.TagsIgnore.Name.Range);
+                Arena.GetStringRange(webhookEv.TagsIgnore.Name));
         }
 
         if (webhookEv.Paths is not null && webhookEv.PathsIgnore is not null)
@@ -128,7 +128,7 @@ public sealed class GlobPatternRule : RuleBase
             AddEventError(
                 webhookEv,
                 "event filter 'paths' and 'paths-ignore' cannot be used together",
-                webhookEv.PathsIgnore.Name.Range);
+                Arena.GetStringRange(webhookEv.PathsIgnore.Name));
         }
     }
 
@@ -139,23 +139,23 @@ public sealed class GlobPatternRule : RuleBase
             return;
         }
 
-        var filterName = Decode(filter.Name.Value);
-        for (var i = 0; i < filter.Values.Count; i++)
+        var filterName = Decode(Arena.GetStringSlice(filter.Name));
+        for (var i = 0; i < filter.Values.Length; i++)
         {
             var valueNode = filter.Values[i];
-            var pattern = valueNode.Value.AsSpan(Config.Utf8Yaml);
-            if (valueNode.Expression is not null || pattern.IndexOf("${{"u8) >= 0)
+            var pattern = Arena.GetStringValue(valueNode);
+            if (Arena.GetStringExpression(valueNode).HasValue || pattern.IndexOf("${{"u8) >= 0)
             {
                 continue;
             }
 
             if (TryGetInvalidReason(pattern, out var reason))
             {
-                var patternText = Decode(valueNode.Value);
+                var patternText = Decode(Arena.GetStringSlice(valueNode));
                 AddEventError(
                     webhookEv,
                     $"event filter '{filterName}' has invalid glob pattern '{patternText}': {reason}",
-                    valueNode.Range);
+                    Arena.GetStringRange(valueNode));
             }
         }
     }

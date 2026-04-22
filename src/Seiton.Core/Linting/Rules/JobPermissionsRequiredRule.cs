@@ -17,7 +17,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
         var message = $"job '{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
         if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(Config, job, Config.Utf8Yaml, out var fix))
         {
@@ -28,7 +28,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
         AddJobWarning(job, message);
     }
 
-    private static bool TryBuildPermissionsInsertFix(LintConfig config, Job job, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildPermissionsInsertFix(LintConfig config, Job job, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
@@ -37,7 +37,7 @@ public sealed class JobPermissionsRequiredRule : RuleBase
             return false;
         }
 
-        var jobLine = job.Id.Range.StartLine;
+        var jobLine = Arena.GetStringRange(job.Id).StartLine;
         if (jobLine < 1)
         {
             return false;

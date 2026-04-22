@@ -21,14 +21,14 @@ public sealed class IfCondRule : RuleBase
         ValidateCondition(step.If, null, step);
     }
 
-    private void ValidateCondition(StringNode? condition, Job? job, Step? step)
+    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
     {
-        if (condition is null || Config.Utf8Yaml is null)
+        if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = condition.Value.AsSpan(Config.Utf8Yaml);
+        var raw = Arena.GetStringValue(condition);
         if (raw.Length == 0)
         {
             return;
@@ -41,12 +41,12 @@ public sealed class IfCondRule : RuleBase
         {
             if (job is not null)
             {
-                AddJobWarning(job, "job if condition contains syntax errors", condition.Range);
+                AddJobWarning(job, "job if condition contains syntax errors", Arena.GetStringRange(condition));
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, "step if condition contains syntax errors", condition.Range);
+                AddStepWarning(step, "step if condition contains syntax errors", Arena.GetStringRange(condition));
             }
 
             return;
@@ -57,12 +57,12 @@ public sealed class IfCondRule : RuleBase
             var boolText = value ? "true" : "false";
             if (job is not null)
             {
-                AddJobWarning(job, $"job if condition is always {boolText}", condition.Range);
+                AddJobWarning(job, $"job if condition is always {boolText}", Arena.GetStringRange(condition));
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, $"step if condition is always {boolText}", condition.Range);
+                AddStepWarning(step, $"step if condition is always {boolText}", Arena.GetStringRange(condition));
             }
         }
     }

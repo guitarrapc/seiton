@@ -12,6 +12,8 @@ public sealed class LintConfig
 
     public byte[]? Utf8Yaml { get; init; }
 
+    public AstArena? Arena { get; init; }
+
     public string? FilePath { get; init; }
 
     private string? _sourceText;

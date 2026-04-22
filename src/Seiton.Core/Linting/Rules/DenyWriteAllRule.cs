@@ -36,8 +36,8 @@ public sealed class DenyWriteAllRule : RuleBase
         }
 
         var allNode = permissions.All;
-        var value = allNode.Value.AsSpan(Config.Utf8Yaml);
-        if (allNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
+        var value = Arena.GetStringValue(allNode);
+        if (Arena.GetStringExpression(allNode).HasValue || value.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -50,30 +50,30 @@ public sealed class DenyWriteAllRule : RuleBase
         var replacement = BuildReplacementText(allNode, Config.Utf8Yaml);
         var fix = new DiagnosticFix(
             "replace write-all with read-all",
-            [new TextEdit(allNode.Value.Offset, allNode.Value.Length, replacement)]);
+            [new TextEdit(Arena.GetStringSlice(allNode).Offset, Arena.GetStringSlice(allNode).Length, replacement)]);
         var message = "permissions scalar 'write-all' is forbidden; use least-privilege scopes or 'read-all'";
 
         if (_currentWorkflow is not null)
         {
-            AddWorkflowError(_currentWorkflow, message, allNode.Range, fix);
+            AddWorkflowError(_currentWorkflow, message, Arena.GetStringRange(allNode), fix);
         }
         else if (_currentJob is not null)
         {
-            AddJobError(_currentJob, message, allNode.Range, fix);
+            AddJobError(_currentJob, message, Arena.GetStringRange(allNode), fix);
         }
     }
 
-    private static string BuildReplacementText(StringNode allNode, byte[] utf8Yaml)
+    private string BuildReplacementText(StringNodeId allNode, byte[] utf8Yaml)
     {
-        var valueStart = allNode.Value.Offset;
-        var valueEnd = allNode.Value.Offset + allNode.Value.Length;
+        var valueStart = Arena.GetStringSlice(allNode).Offset;
+        var valueEnd = Arena.GetStringSlice(allNode).Offset + Arena.GetStringSlice(allNode).Length;
         if (valueStart < 0 || valueEnd > utf8Yaml.Length || valueStart > valueEnd)
         {
             return "read-all";
         }
 
-        var valueSpan = allNode.Value.AsSpan(utf8Yaml);
-        if (allNode.Quoted)
+        var valueSpan = Arena.GetStringValue(allNode);
+        if (Arena.GetStringQuoted(allNode))
         {
             if (valueSpan.Length >= 2 && valueSpan[0] == (byte)'\'' && valueSpan[^1] == (byte)'\'')
             {
@@ -86,7 +86,7 @@ public sealed class DenyWriteAllRule : RuleBase
             }
         }
 
-        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, allNode.Range, allNode.Quoted);
+        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, Arena.GetStringRange(allNode), Arena.GetStringQuoted(allNode));
         if (style == ScalarQuoteStyle.Unquoted)
         {
             return "read-all";

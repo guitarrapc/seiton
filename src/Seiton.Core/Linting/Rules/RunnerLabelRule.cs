@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Generated;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -25,7 +26,7 @@ public sealed class RunnerLabelRule : RuleBase
     public override void VisitJobPre(Job job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || runsOn.LabelsExpr is not null || runsOn.Labels is null || Config.Utf8Yaml is null)
+        if (runsOn is null || runsOn.LabelsExpr.HasValue || runsOn.Labels is null || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -35,37 +36,37 @@ public sealed class RunnerLabelRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
-        for (var i = 0; i < runsOn.Labels.Count; i++)
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        for (var i = 0; i < runsOn.Labels.Length; i++)
         {
             var label = runsOn.Labels[i];
-            if (label.Expression is not null)
+            if (Arena.GetStringExpression(label).HasValue)
             {
                 continue;
             }
 
-            var labelUtf8 = label.Value.AsSpan(Config.Utf8Yaml);
+            var labelUtf8 = Arena.GetStringValue(label);
             if (labelUtf8.IsEmpty || RunnerLabels.IsKnownHostedLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
             {
                 continue;
             }
 
-            var labelText = Decode(label.Value);
-            AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is not a known GitHub-hosted runner label", label.Range);
+            var labelText = Decode(Arena.GetStringSlice(label));
+            AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(label));
         }
     }
 
-    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNode> labels)
+    private bool ContainsSelfHostedLabel(StringNodeId[] labels)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        for (var i = 0; i < labels.Count; i++)
+        for (var i = 0; i < labels.Length; i++)
         {
             var label = labels[i];
-            var labelUtf8 = label.Value.AsSpan(Config.Utf8Yaml);
+            var labelUtf8 = Arena.GetStringValue(label);
             if (RunnerLabels.IsSelfHostedLabel(labelUtf8))
             {
                 return true;

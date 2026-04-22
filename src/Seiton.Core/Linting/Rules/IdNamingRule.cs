@@ -28,7 +28,7 @@ public sealed class IdNamingRule : RuleBase
 
     public override void VisitStep(Step step)
     {
-        if (Config.Utf8Yaml is null || step.Id is null)
+        if (Config.Utf8Yaml is null || !step.Id.HasValue)
         {
             return;
         }
@@ -44,10 +44,10 @@ public sealed class IdNamingRule : RuleBase
         _seenStepIdSlices = null;
     }
 
-    private void ValidateId(StringNode idNode, string kind)
+    private void ValidateId(StringNodeId idNode, string kind)
     {
-        var value = idNode.Value.AsSpan(Config.Utf8Yaml);
-        if (idNode.Expression is not null || value.IndexOf("${{"u8) >= 0)
+        var value = Arena.GetStringValue(idNode);
+        if (Arena.GetStringExpression(idNode).HasValue || value.IndexOf("${{"u8) >= 0)
         {
             return;
         }
@@ -57,16 +57,16 @@ public sealed class IdNamingRule : RuleBase
             return;
         }
 
-        var idText = Decode(idNode.Value);
+        var idText = Decode(Arena.GetStringSlice(idNode));
         var message = $"{kind} '{idText}' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]";
 
         if (_currentJob is not null)
         {
-            AddJobError(_currentJob, message, idNode.Range);
+            AddJobError(_currentJob, message, Arena.GetStringRange(idNode));
         }
         else if (_currentStep is not null)
         {
-            AddStepError(_currentStep, message, idNode.Range);
+            AddStepError(_currentStep, message, Arena.GetStringRange(idNode));
         }
     }
 
@@ -105,12 +105,12 @@ public sealed class IdNamingRule : RuleBase
 
     private void ValidateStepIdUniqueness(Step step)
     {
-        if (step.Id is null || _seenStepIdSlices is null || Config.Utf8Yaml is null)
+        if (!step.Id.HasValue || _seenStepIdSlices is null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var idSpan = step.Id.Value.AsSpan(Config.Utf8Yaml);
+        var idSpan = Arena.GetStringValue(step.Id);
         if (idSpan.Length == 0)
         {
             return;
@@ -121,13 +121,13 @@ public sealed class IdNamingRule : RuleBase
             var seenSpan = _seenStepIdSlices[i].AsSpan(Config.Utf8Yaml);
             if (SpanEqualsIgnoreCaseAscii(seenSpan, idSpan))
             {
-                var idText = Decode(step.Id.Value);
-                AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", step.Id.Range);
+                var idText = Decode(Arena.GetStringSlice(step.Id));
+                AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", Arena.GetStringRange(step.Id));
                 return;
             }
         }
 
-        _seenStepIdSlices.Add(step.Id.Value);
+        _seenStepIdSlices.Add(Arena.GetStringSlice(step.Id));
     }
 
     private static bool SpanEqualsIgnoreCaseAscii(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

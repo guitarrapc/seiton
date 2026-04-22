@@ -31,14 +31,14 @@ public sealed class RefVersionMismatchRule : RuleBase
         CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    private void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
+    private void CheckUses(StringNodeId usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = usesNode.Value.AsSpan(Config.Utf8Yaml);
+        var uses = Arena.GetStringValue(usesNode);
         if (!TryParseActionReference(uses, out var actionPath, out var reference)
             || IsFullCommitSha(reference)
             || !TryExtractVersionMajor(reference, out var refMajor)

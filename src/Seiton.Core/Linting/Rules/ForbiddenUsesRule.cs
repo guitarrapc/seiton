@@ -53,14 +53,14 @@ public sealed class ForbiddenUsesRule : RuleBase
         CheckUses(action.Uses, BuildUsesLocation(action), null, step);
     }
 
-    private void CheckUses(StringNode usesNode, TextRange location, Job? job, Step? step)
+    private void CheckUses(StringNodeId usesNode, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null || !HasPolicy())
         {
             return;
         }
 
-        if (!TryGetOwnerRepo(usesNode.Value.AsSpan(Config.Utf8Yaml), out var ownerRepo))
+        if (!TryGetOwnerRepo(Arena.GetStringValue(usesNode), out var ownerRepo))
         {
             return;
         }

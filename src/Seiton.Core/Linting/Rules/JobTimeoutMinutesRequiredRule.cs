@@ -12,7 +12,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
 
     public override void VisitJobPre(Job job)
     {
-        if (!IsExecutableJob(job) || job.TimeoutMinutes is not null)
+        if (!IsExecutableJob(job) || job.TimeoutMinutes.HasValue)
         {
             return;
         }
@@ -22,7 +22,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
             return;
         }
 
-        var jobId = Decode(job.Id.Value);
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
         var message = $"job '{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
         if (Config.Fix.Enabled
             && Config.Utf8Yaml is not null
@@ -53,7 +53,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
 
         for (var i = 0; i < steps.Count; i++)
         {
-            if (steps[i].TimeoutMinutes is null)
+            if (!steps[i].TimeoutMinutes.HasValue)
             {
                 return false;
             }
@@ -62,7 +62,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
         return true;
     }
 
-    private static bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
+    private bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
     {
         fix = default;
         if (timeoutMinutes <= 0)
@@ -75,7 +75,7 @@ public sealed class JobTimeoutMinutesRequiredRule : RuleBase
             return false;
         }
 
-        var jobLine = job.Id.Range.StartLine;
+        var jobLine = Arena.GetStringRange(job.Id).StartLine;
         if (jobLine < 1)
         {
             return false;

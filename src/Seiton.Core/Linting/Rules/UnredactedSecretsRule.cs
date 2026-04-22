@@ -72,7 +72,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             return;
         }
 
-        var runText = run.Run.Value.AsSpan(Config.Utf8Yaml);
+        var runText = Arena.GetStringValue(run.Run);
         if (FindAndReportSecretVar(runText, _stepVarNames, run, step)) return;
         if (FindAndReportSecretVar(runText, _jobVarNames, run, step)) return;
         FindAndReportSecretVar(runText, _workflowVarNames, run, step);
@@ -105,13 +105,13 @@ public sealed class UnredactedSecretsRule : RuleBase
         return false;
     }
 
-    private TextRange BuildRunTextLocation(StringNode runNode, int relativeOffset, int tokenLength)
+    private TextRange BuildRunTextLocation(StringNodeId runNode, int relativeOffset, int tokenLength)
     {
-        var absoluteStart = runNode.Value.Offset + relativeOffset;
+        var absoluteStart = Arena.GetStringSlice(runNode).Offset + relativeOffset;
         var absoluteLength = tokenLength;
         if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
         {
-            return runNode.Range;
+            return Arena.GetStringRange(runNode);
         }
 
         var lineStarts = BuildLineStarts(Config.Utf8Yaml);
@@ -141,7 +141,7 @@ public sealed class UnredactedSecretsRule : RuleBase
                 continue;
             }
 
-            var name = Decode(envVar.Name.Value);
+            var name = Decode(Arena.GetStringSlice(envVar.Name));
             if (IsSimpleIdentifier(name))
             {
                 names.Add(name);
@@ -149,24 +149,24 @@ public sealed class UnredactedSecretsRule : RuleBase
         }
     }
 
-    private bool ContainsSecretsReference(StringNode node)
+    private bool ContainsSecretsReference(StringNodeId node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsSecretsReferenceInValue(node.Value.AsSpan(Config.Utf8Yaml)))
+        if (ContainsSecretsReferenceInValue(Arena.GetStringValue(node)))
         {
             return true;
         }
 
-        if (node.Expression is null)
+        if (!Arena.GetStringExpression(node).HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(node.Expression.Value.AsSpan(Config.Utf8Yaml));
+        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
         return ContainsSecretsReferenceInExpression(expression);
     }
 

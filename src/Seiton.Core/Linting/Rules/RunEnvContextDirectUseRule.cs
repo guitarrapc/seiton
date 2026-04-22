@@ -23,19 +23,19 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         CheckRunNode(step, run, run.Run);
     }
 
-    private void CheckRunNode(Step step, ExecRun run, StringNode runNode)
+    private void CheckRunNode(Step step, ExecRun run, StringNodeId runNode)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var runText = runNode.Value.AsSpan(Config.Utf8Yaml);
+        var runText = Arena.GetStringValue(runNode);
         var searchStart = 0;
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
-            var location = BuildExpressionLocation(Config.Utf8Yaml, runNode, bodyStart, nextSearchStart);
+            var location = BuildExpressionLocation(Arena, Config.Utf8Yaml, runNode, bodyStart, nextSearchStart);
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -80,7 +80,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
         }
     }
 
-    private bool TryBuildFix(ExecRun run, StringNode runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(ExecRun run, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -88,7 +88,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             return false;
         }
 
-        var absoluteOffset = runNode.Value.Offset + expressionBodyStart - 3;
+        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
         if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
         {
             return false;
@@ -99,7 +99,7 @@ public sealed class RunEnvContextDirectUseRule : RuleBase
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(run.Shell, Config.Utf8Yaml)
+        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, run.Shell, Config.Utf8Yaml)
             ? "$env:" + variableName
             : "${" + variableName + "}";
 

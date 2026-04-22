@@ -5,14 +5,14 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static SliceMap<ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, "action inputs must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var map = new PooledBuffer<SliceMap<ActionMetadataInput>.Entry>(8);
@@ -59,14 +59,9 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                var nameNode = new StringNode
-                {
-                    Value = idSlice,
-                    Quoted = reader.IsScalarQuoted(),
-                    Range = BuildScalarLocation(idMark, idUtf8.Length),
-                };
+                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
                 reader.Read();
-                map.Add(new SliceMap<ActionMetadataInput>.Entry(idSlice, ParseActionMetadataInput(ref reader, diagnostics, nameNode)));
+                map.Add(new SliceMap<ActionMetadataInput>.Entry(idSlice, ParseActionMetadataInput(ref reader, arena, diagnostics, nameNode)));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -79,13 +74,13 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static ActionMetadataInput ParseActionMetadataInput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+    private static ActionMetadataInput ParseActionMetadataInput<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        StringNode? description = null;
-        BoolNode? required = null;
-        StringNode? defaultValue = null;
-        StringNode? deprecationMessage = null;
+        StringNodeId description = default;
+        BoolNodeId required = default;
+        StringNodeId defaultValue = default;
+        StringNodeId deprecationMessage = default;
         ulong seen = 0;
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -99,7 +94,7 @@ public static partial class WorkflowParser
                 Required = required,
                 Default = defaultValue,
                 DeprecationMessage = deprecationMessage,
-                Range = nameNode.Range,
+                Range = arena.GetStringRange(nameNode),
             };
         }
 
@@ -135,7 +130,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action input contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, diagnostics, "action input description must be scalar");
+                description = ParseString(ref reader, arena, diagnostics, "action input description must be scalar");
                 continue;
             }
 
@@ -143,7 +138,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action input contains duplicate key: required", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                required = ParseBoolNode(ref reader, diagnostics, "action input required must be bool");
+                required = ParseBoolNode(ref reader, arena, diagnostics, "action input required must be bool");
                 continue;
             }
 
@@ -151,7 +146,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "action input contains duplicate key: default", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                defaultValue = ParseString(ref reader, diagnostics, "action input default must be scalar", allowEmpty: true);
+                defaultValue = ParseString(ref reader, arena, diagnostics, "action input default must be scalar", allowEmpty: true);
                 continue;
             }
 
@@ -159,7 +154,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "action input contains duplicate key: deprecationMessage", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                deprecationMessage = ParseString(ref reader, diagnostics, "action input deprecationMessage must be scalar");
+                deprecationMessage = ParseString(ref reader, arena, diagnostics, "action input deprecationMessage must be scalar");
                 continue;
             }
 
@@ -184,18 +179,18 @@ public static partial class WorkflowParser
             Required = required,
             Default = defaultValue,
             DeprecationMessage = deprecationMessage,
-            Range = nameNode.Range,
+            Range = arena.GetStringRange(nameNode),
         };
     }
 
-    private static SliceMap<ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, "action outputs must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var map = new PooledBuffer<SliceMap<ActionMetadataOutput>.Entry>(8);
@@ -242,14 +237,9 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                var nameNode = new StringNode
-                {
-                    Value = idSlice,
-                    Quoted = reader.IsScalarQuoted(),
-                    Range = BuildScalarLocation(idMark, idUtf8.Length),
-                };
+                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
                 reader.Read();
-                map.Add(new SliceMap<ActionMetadataOutput>.Entry(idSlice, ParseActionMetadataOutput(ref reader, diagnostics, nameNode)));
+                map.Add(new SliceMap<ActionMetadataOutput>.Entry(idSlice, ParseActionMetadataOutput(ref reader, arena, diagnostics, nameNode)));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -262,18 +252,18 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static ActionMetadataOutput ParseActionMetadataOutput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
+    private static ActionMetadataOutput ParseActionMetadataOutput<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        StringNode? description = null;
-        StringNode? value = null;
+        StringNodeId description = default;
+        StringNodeId value = default;
         ulong seen = 0;
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, "action output must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new ActionMetadataOutput { Name = nameNode, Description = description, Value = value, Range = nameNode.Range };
+            return new ActionMetadataOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
 
         reader.Read();
@@ -308,7 +298,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action output contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, diagnostics, "action output description must be scalar");
+                description = ParseString(ref reader, arena, diagnostics, "action output description must be scalar");
                 continue;
             }
 
@@ -317,8 +307,7 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action output contains duplicate key: value", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 value = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
+                    ref reader, arena, diagnostics,
                     ExpressionValidationContext.Step,
                     "action output value must be scalar",
                     parseWholeValueIfNoEmbedded: false);
@@ -344,23 +333,23 @@ public static partial class WorkflowParser
             Name = nameNode,
             Description = description,
             Value = value,
-            Range = nameNode.Range,
+            Range = arena.GetStringRange(nameNode),
         };
     }
 
-    private static ActionMetadataBranding? ParseActionMetadataBranding<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+    private static ActionMetadataBranding? ParseActionMetadataBranding<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, "action branding must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mappingStart = reader.CurrentStart;
-        StringNode? icon = null;
-        StringNode? color = null;
+        StringNodeId icon = default;
+        StringNodeId color = default;
         ulong seen = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -394,7 +383,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action branding contains duplicate key: icon", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                icon = ParseString(ref reader, diagnostics, "action branding icon must be scalar");
+                icon = ParseString(ref reader, arena, diagnostics, "action branding icon must be scalar");
                 continue;
             }
 
@@ -402,7 +391,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action branding contains duplicate key: color", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                color = ParseString(ref reader, diagnostics, "action branding color must be scalar");
+                color = ParseString(ref reader, arena, diagnostics, "action branding color must be scalar");
                 continue;
             }
 
@@ -430,26 +419,26 @@ public static partial class WorkflowParser
         };
     }
 
-    private static ActionMetadataRuns? ParseActionMetadataRuns<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static ActionMetadataRuns? ParseActionMetadataRuns<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(diagnostics, "action runs must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return null;
+            return default;
         }
 
         var mappingStart = reader.CurrentStart;
-        StringNode? usingNode = null;
-        StringNode? main = null;
-        StringNode? pre = null;
-        StringNode? post = null;
-        StringNode? preIf = null;
-        StringNode? postIf = null;
-        StringNode? image = null;
-        StringNode? entrypoint = null;
-        IReadOnlyList<StringNode>? args = null;
+        StringNodeId usingNode = default;
+        StringNodeId main = default;
+        StringNodeId pre = default;
+        StringNodeId post = default;
+        StringNodeId preIf = default;
+        StringNodeId postIf = default;
+        StringNodeId image = default;
+        StringNodeId entrypoint = default;
+        StringNodeId[]? args = null;
         Env? env = null;
         IReadOnlyList<Step>? steps = null;
         ulong seen = 0;
@@ -485,7 +474,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action runs contains duplicate key: using", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                usingNode = ParseString(ref reader, diagnostics, "action runs using must be scalar");
+                usingNode = ParseString(ref reader, arena, diagnostics, "action runs using must be scalar");
                 continue;
             }
 
@@ -493,7 +482,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action runs contains duplicate key: main", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                main = ParseString(ref reader, diagnostics, "action runs main must be scalar");
+                main = ParseString(ref reader, arena, diagnostics, "action runs main must be scalar");
                 continue;
             }
 
@@ -501,7 +490,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "action runs contains duplicate key: pre", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                pre = ParseString(ref reader, diagnostics, "action runs pre must be scalar");
+                pre = ParseString(ref reader, arena, diagnostics, "action runs pre must be scalar");
                 continue;
             }
 
@@ -509,7 +498,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "action runs contains duplicate key: post", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                post = ParseString(ref reader, diagnostics, "action runs post must be scalar");
+                post = ParseString(ref reader, arena, diagnostics, "action runs post must be scalar");
                 continue;
             }
 
@@ -518,8 +507,7 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, "action runs contains duplicate key: pre-if", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 preIf = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
+                    ref reader, arena, diagnostics,
                     ExpressionValidationContext.Step,
                     "action runs pre-if must be scalar",
                     parseWholeValueIfNoEmbedded: false);
@@ -531,8 +519,7 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, "action runs contains duplicate key: post-if", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 postIf = ParseStringAndValidateExpression(
-                    ref reader,
-                    diagnostics,
+                    ref reader, arena, diagnostics,
                     ExpressionValidationContext.Step,
                     "action runs post-if must be scalar",
                     parseWholeValueIfNoEmbedded: false);
@@ -543,7 +530,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, "action runs contains duplicate key: image", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                image = ParseString(ref reader, diagnostics, "action runs image must be scalar");
+                image = ParseString(ref reader, arena, diagnostics, "action runs image must be scalar");
                 continue;
             }
 
@@ -551,7 +538,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, "action runs contains duplicate key: entrypoint", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                entrypoint = ParseString(ref reader, diagnostics, "action runs entrypoint must be scalar");
+                entrypoint = ParseString(ref reader, arena, diagnostics, "action runs entrypoint must be scalar");
                 continue;
             }
 
@@ -561,7 +548,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, 8)) { AddError(diagnostics, "action runs contains duplicate key: args", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (!reader.End)
                 {
-                    args = ParseActionRunsArgs(ref reader, diagnostics);
+                    args = ParseActionRunsArgs(ref reader, arena, diagnostics);
                 }
 
                 continue;
@@ -574,8 +561,7 @@ public static partial class WorkflowParser
                 if (!reader.End)
                 {
                     env = ParseEnvNode(
-                        ref reader,
-                        diagnostics,
+                        ref reader, arena, diagnostics,
                         source,
                         "action runs env must be mapping",
                         ExpressionValidationContext.Step);
@@ -598,7 +584,7 @@ public static partial class WorkflowParser
                     else
                     {
                         Utf8Slice emptyJobId = default;
-                        steps = ParseSteps(ref reader, diagnostics, source, emptyJobId);
+                        steps = ParseSteps(ref reader, arena, diagnostics, source, emptyJobId);
                     }
                 }
 
@@ -638,19 +624,19 @@ public static partial class WorkflowParser
         };
     }
 
-    private static IReadOnlyList<StringNode>? ParseActionRunsArgs<TReader>(ref TReader reader, List<Diagnostic> diagnostics)
+    private static StringNodeId[]? ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
         {
-            var list = new PooledBuffer<StringNode>(4);
+            var list = new PooledBuffer<StringNodeId>(4);
             try
             {
                 reader.Read();
                 while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
                 {
-                    var s = ParseString(ref reader, diagnostics, "action runs args entry must be scalar");
-                    if (s is not null)
+                    var s = ParseString(ref reader, arena, diagnostics, "action runs args entry must be scalar");
+                    if (s.HasValue)
                     {
                         list.Add(s);
                     }
@@ -668,12 +654,12 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var single = ParseString(ref reader, diagnostics, "action runs args must be scalar or sequence");
-            return single is null ? null : [single];
+            var single = ParseString(ref reader, arena, diagnostics, "action runs args must be scalar or sequence");
+            return !single.HasValue ? null : [single];
         }
 
         AddError(diagnostics, "action runs args must be scalar or sequence", reader.CurrentStart);
         reader.SkipCurrentNode();
-        return null;
+        return default;
     }
 }

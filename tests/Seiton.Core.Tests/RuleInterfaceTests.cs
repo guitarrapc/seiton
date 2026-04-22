@@ -66,10 +66,13 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RuleInterface_CanBeUsedWithWorkflowVisitor()
     {
+        var sourceBytes = Array.Empty<byte>();
+        var arena = new AstArena(sourceBytes);
+
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
             (new Utf8String("build"u8), new Job
             {
-                Id = new StringNode { Value = new Utf8Slice(0, 0) },
+                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
                 Steps =
                 [
                     new Step
@@ -77,7 +80,7 @@ public sealed class RuleInterfaceTests
                         Exec = new ExecRun
                         {
                             Kind = StepExecKind.Run,
-                            Run = new StringNode { Value = new Utf8Slice(0, 0) },
+                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
                         },
                     },
                 ],
@@ -89,12 +92,12 @@ public sealed class RuleInterfaceTests
             [
                 new WebhookEvent
                 {
-                    EventName = new StringNode { Value = new Utf8Slice(0, 0) },
-                    Hook = new StringNode { Value = new Utf8Slice(0, 0) },
+                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
+                    Hook = arena.AddString(new Utf8Slice(0, 0), false, default),
                 },
                 new ScheduledEvent
                 {
-                    EventName = new StringNode { Value = new Utf8Slice(0, 0) },
+                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
                 },
             ],
             Jobs = jobs,
@@ -130,18 +133,20 @@ public sealed class RuleInterfaceTests
               - run: echo hello
         """;
 
+        var sourceBytes = Encoding.UTF8.GetBytes(source);
+        var arena = new AstArena(sourceBytes);
+
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
             (new Utf8String("build"u8), new Job
             {
-                Id = new StringNode
-                {
-                    Value = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
-                    Range = new TextRange(0, 0, 1, 1, 1, 1),
-                },
+                Id = arena.AddString(
+                    new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+                    false,
+                    new TextRange(0, 0, 1, 1, 1, 1)),
                 RunsOn = new Runner(),
                 WorkflowCall = new WorkflowCall
                 {
-                    Uses = new StringNode { Value = new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length) },
+                    Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
                 },
                 Steps =
                 [
@@ -150,7 +155,7 @@ public sealed class RuleInterfaceTests
                         Exec = new ExecRun
                         {
                             Kind = StepExecKind.Run,
-                            Run = new StringNode { Value = new Utf8Slice(0, 0) },
+                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
                         },
                     },
                 ],
@@ -163,7 +168,7 @@ public sealed class RuleInterfaceTests
 
         var visitor = new WorkflowVisitor();
         var rule = new SyntaxRule();
-        rule.SetConfig(new LintConfig { Utf8Yaml = Encoding.UTF8.GetBytes(source) });
+        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
         visitor.Visit(workflow);
@@ -185,19 +190,19 @@ public sealed class RuleInterfaceTests
         var buildKeyOffset = inputKeyOffset + inputKeyLength + 1;
         var buildKeyLength = "build".Length;
 
-        var inputsEntries = new SliceMap<StringNode>.Entry[]
+        var arena = new AstArena(sourceBytes);
+        var inputsEntries = new SliceMap<StringNodeId>.Entry[]
         {
-            new(new Utf8Slice(inputKeyOffset, inputKeyLength), new StringNode { Value = new Utf8Slice(0, 0) }),
+            new(new Utf8Slice(inputKeyOffset, inputKeyLength), arena.AddString(new Utf8Slice(0, 0), false, default)),
         };
 
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
             (new Utf8String("build"u8), new Job
             {
-                Id = new StringNode
-                {
-                    Value = new Utf8Slice(buildKeyOffset, buildKeyLength),
-                    Range = new TextRange(0, 0, 1, 1, 1, 1),
-                },
+                Id = arena.AddString(
+                    new Utf8Slice(buildKeyOffset, buildKeyLength),
+                    false,
+                    new TextRange(0, 0, 1, 1, 1, 1)),
                 RunsOn = new Runner(),
                 Steps =
                 [
@@ -206,12 +211,11 @@ public sealed class RuleInterfaceTests
                         Exec = new ExecAction
                         {
                             Kind = StepExecKind.Action,
-                            Uses = new StringNode
-                            {
-                                Value = new Utf8Slice(0, usesEnd),
-                                Range = new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1),
-                            },
-                            Inputs = new SliceMap<StringNode>(inputsEntries, caseSensitive: false),
+                            Uses = arena.AddString(
+                                new Utf8Slice(0, usesEnd),
+                                false,
+                                new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1)),
+                            Inputs = new SliceMap<StringNodeId>(inputsEntries, caseSensitive: false),
                         },
                         Range = new TextRange(0, 0, 1, 1, 1, 1),
                     },
@@ -225,7 +229,7 @@ public sealed class RuleInterfaceTests
 
         var visitor = new WorkflowVisitor();
         var rule = new SyntaxRule();
-        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes });
+        rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
         visitor.Visit(workflow);

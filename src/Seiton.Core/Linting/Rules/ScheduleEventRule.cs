@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -29,24 +30,24 @@ public sealed class ScheduleEventRule : RuleBase
 
     private void ValidateScheduleEntry(ScheduledEvent scheduleEvent, ScheduleEntry entry)
     {
-        if (entry.Cron is not null && !IsExpressionOrInterpolation(entry.Cron))
+        if (entry.Cron.HasValue && !IsExpressionOrInterpolation(entry.Cron))
         {
             ValidateCron(scheduleEvent, entry.Cron);
         }
 
-        if (entry.Timezone is not null && !IsExpressionOrInterpolation(entry.Timezone))
+        if (entry.Timezone.HasValue && !IsExpressionOrInterpolation(entry.Timezone))
         {
             ValidateTimezone(scheduleEvent, entry.Timezone);
         }
     }
 
-    private void ValidateCron(ScheduledEvent scheduleEvent, StringNode cronNode)
+    private void ValidateCron(ScheduledEvent scheduleEvent, StringNodeId cronNode)
     {
         var yaml = Config.Utf8Yaml!;
-        var cronUtf8 = cronNode.Value.AsSpan(yaml);
+        var cronUtf8 = Arena.GetStringSlice(cronNode).AsSpan(yaml);
         if (!TryParseCronUtf8(cronUtf8, out var cron, out var reason))
         {
-            AddEventError(scheduleEvent, $"on.schedule cron '{Decode(cronNode.Value)}' is invalid: {reason}", cronNode.Range);
+            AddEventError(scheduleEvent, $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' is invalid: {reason}", Arena.GetStringRange(cronNode));
             return;
         }
 
@@ -59,15 +60,15 @@ public sealed class ScheduleEventRule : RuleBase
         {
             AddEventError(
                 scheduleEvent,
-                $"on.schedule cron '{Decode(cronNode.Value)}' runs too frequently; the shortest interval is once every {MinIntervalMinutes} minutes",
-                cronNode.Range);
+                $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' runs too frequently; the shortest interval is once every {MinIntervalMinutes} minutes",
+                Arena.GetStringRange(cronNode));
         }
     }
 
-    private void ValidateTimezone(ScheduledEvent scheduleEvent, StringNode timezoneNode)
+    private void ValidateTimezone(ScheduledEvent scheduleEvent, StringNodeId timezoneNode)
     {
         var yaml = Config.Utf8Yaml!;
-        var span = TrimAscii(timezoneNode.Value.AsSpan(yaml));
+        var span = TrimAscii(Arena.GetStringSlice(timezoneNode).AsSpan(yaml));
         if (span.IsEmpty)
         {
             return;
@@ -75,7 +76,7 @@ public sealed class ScheduleEventRule : RuleBase
 
         if (IsUtcOrLocalUtf8(span))
         {
-            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(timezoneNode.Value)}' is invalid", timezoneNode.Range);
+            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
             return;
         }
 
@@ -87,14 +88,14 @@ public sealed class ScheduleEventRule : RuleBase
         {
             if (!LooksLikeIanaTimezoneUtf8(span))
             {
-                AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(timezoneNode.Value)}' is invalid", timezoneNode.Range);
+                AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
             }
         }
     }
 
-    private bool IsExpressionOrInterpolation(StringNode node)
+    private bool IsExpressionOrInterpolation(StringNodeId node)
     {
-        return node.Expression is not null || node.Value.AsSpan(Config.Utf8Yaml!).IndexOf("${{"u8) >= 0;
+        return Arena.GetStringExpression(node).HasValue || Arena.GetStringSlice(node).AsSpan(Config.Utf8Yaml!).IndexOf("${{"u8) >= 0;
     }
 
     private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> span)
