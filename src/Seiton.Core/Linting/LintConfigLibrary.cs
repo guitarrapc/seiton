@@ -188,47 +188,7 @@ public static class LintConfigLibrary
 
         var diagnostics = new List<Diagnostic>();
         var normalized = new Dictionary<string, RuleConfig>(StringComparer.Ordinal);
-
-        foreach (var pair in rules)
-        {
-            if (!RuleCatalog.TryResolveRuleId(pair.Key, out var resolvedRuleId))
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    BuildUnknownRuleIdMessage(pair.Key),
-                    new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
-                    FilePath: filePath));
-                continue;
-            }
-
-            var config = pair.Value;
-            if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"rule '{resolvedRuleId}' is non-disableable",
-                    new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
-                    FilePath: filePath));
-                config = config with { Enabled = true };
-            }
-
-            if (config.Severity is not null
-                && RuleCatalog.TryGetMinimumSeverity(resolvedRuleId, out var minimumSeverity)
-                && config.Severity.Value < minimumSeverity)
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"rule '{resolvedRuleId}' minimum severity is '{minimumSeverity}', but '{config.Severity.Value}' was specified",
-                    new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
-                    FilePath: filePath));
-                config = config with { Severity = null };
-            }
-
-            config = RuleSpecificConfigNormalizer.Normalize(config, resolvedRuleId, filePath, diagnostics);
-
-            normalized[resolvedRuleId] = config;
-        }
-
+        RuleNormalizer.NormalizeRuleEntries(rules, filePath, diagnostics, normalized);
         return new NormalizedRules(normalized, diagnostics.ToArray());
     }
 
@@ -256,31 +216,7 @@ public static class LintConfigLibrary
             }
 
             var ruleIds = new HashSet<string>(StringComparer.Ordinal);
-            for (var j = 0; j < exclusion.Rules.Count; j++)
-            {
-                var ruleId = exclusion.Rules[j];
-                if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
-                {
-                    diagnostics.Add(new Diagnostic(
-                        DiagnosticSeverity.Error,
-                        BuildUnknownRuleIdMessage(ruleId),
-                        new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
-                        FilePath: filePath));
-                    continue;
-                }
-
-                if (RuleCatalog.IsNonDisableable(resolvedRuleId))
-                {
-                    diagnostics.Add(new Diagnostic(
-                        DiagnosticSeverity.Error,
-                        $"rule '{resolvedRuleId}' is non-disableable",
-                        new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
-                        FilePath: filePath));
-                    continue;
-                }
-
-                ruleIds.Add(resolvedRuleId);
-            }
+            ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, ruleIds);
 
             if (ruleIds.Count == 0)
             {
@@ -413,17 +349,6 @@ public static class LintConfigLibrary
         }
 
         return normalized;
-    }
-
-    private static string BuildUnknownRuleIdMessage(string input)
-    {
-        var suggestion = RuleCatalog.SuggestRuleId(input);
-        if (suggestion is null)
-        {
-            return $"unknown rule-id '{input}'";
-        }
-
-        return $"unknown rule-id '{input}'. did you mean '{suggestion}'?";
     }
 
     private readonly record struct NormalizedRules(

@@ -15,7 +15,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 | カテゴリ | 深刻度 | 対象エリア |
 |---|---|---|
 | 責務の集中・肥大化 | High | WorkflowParser partials, LintEngine |
-| ポリシーロジックの重複 | High | LintEngine ↔ LintConfigLibrary |
+| ポリシーロジックの重複 | High | LintEngine ↔ LintConfigLibrary（§2.2: `RuleNormalizer` / `ExclusionNormalizer` で共通化済） |
 | 診断メッセージへの構造的依存 | High | PinRemediation |
 | IPass のドキュメントカインド非対称性 | Medium | WorkflowVisitor, IPass |
 | 設定パーサーの維持コスト | Medium | LintConfigLineParser |
@@ -104,6 +104,23 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 1. 共通の `RuleNormalizer` internal static クラスを導入し、rule-id 解決 + non-disableable + minimum-severity + specific-config 正規化を一元化する。
 2. LintEngine 側は `RuleNormalizer` + job-id 検証のみ追加、LintConfigLibrary 側は `RuleNormalizer` のみ呼び出す構成にする。
 3. 同様に `ExclusionNormalizer` を導入し、共通部分 (rule-id 解決、non-disableable チェック) を一元化する。
+
+**実装状況（§2.2、2026-04-23 時点）**
+
+| 項目 | 内容 |
+|---|---|
+| 追加 | `src/Seiton.Core/Linting/RuleNormalizer.cs` — `BuildUnknownRuleIdMessage`（LintEngine と同一文言: `Did you mean`）、`NormalizeRuleEntries`（`RuleSpecificConfigNormalizer` まで含む）。`src/Seiton.Core/Linting/ExclusionNormalizer.cs` — `CollectResolvedExclusionRules`。 |
+| 呼び出し | `LintEngine.NormalizeRules` / `LintConfigLibrary.NormalizeRules` は `RuleNormalizer.NormalizeRuleEntries` に委譲。`NormalizeExclusions` のルール ID ループは `ExclusionNormalizer.CollectResolvedExclusionRules` に委譲。インライン抑制の `AddRuleIds` は `RuleNormalizer.BuildUnknownRuleIdMessage` を参照。 |
+| 意図的な差分の維持 | 空の `files` パターン、ジョブ ID 検証（LintEngine のみ `utf8Yaml` + `AstArena`）、`LintExclusion` の trim / jobs 正規化（LintConfigLibrary のみ）は各呼び出し側のまま。 |
+| 付随変更 | 設定バリデーション経由の unknown rule メッセージが LintEngine 側と同じ大文字 `Did you mean` に揃う（従来は小文字 `did you mean`）。 |
+
+**ベンチマーク・計測（同一マシン、BenchmarkDotNet `ShortRun`、Release、実装後）**
+
+- **LintBenchmark**（`LintEngine.Check`、Allocated / op）: Small `FixEnabled=false` **14.41 KB**、Small `true` **14.83 KB**、Medium `false` **92.88 KB**、Medium `true` **99.3 KB**、Large `false` **435.71 KB**、Large `true` **465.79 KB**。本変更は設定正規化の重複排除のみで、上記は「回帰監視用の採取値」（baseline 比は別途 CI/ローカルで比較）。
+- **ParsingBenchmark**（`WorkflowParser.Parse (AST + rules)` のみ、Allocated / op）: Small **4984 B**、Medium **27 220 B**、Large **113 464 B**。パーサー非変更のため理論上は差なし；採取値で回帰なしを確認。
+- **LintPerRuleAlloc.cs**（Large 20×12、`GC.GetTotalAllocatedBytes`）: baseline（全ルール無効）**230 520 B**、ALL RULES **450 792 B**、最大単体は `expr-undefined-var` **320 680 B**（実行ログに準拠）。
+
+**テスト:** `dotnet test -c Release` — **553 件 Green**（実装直後）。
 
 ---
 
