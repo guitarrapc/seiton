@@ -43,9 +43,8 @@ High-level behavior:
 
 Current profile note (C# runtime):
 
-- If finalized kind is `action-metadata`, C# currently returns parser diagnostics only and does not execute workflow rule passes.
-- Workflow rule execution is currently scoped to finalized `workflow` inputs.
-- This preserves workflow-first rule semantics while action-metadata rule-set parity is implemented incrementally.
+- If finalized kind is `action-metadata`, the linter traverses the action-metadata AST (`VisitActionMetadataPre` → `runs.steps` via `VisitStep` → `VisitActionMetadataPost`). Rules opt in via `SupportsDocumentKind`; workflow-only rules are skipped for this input kind.
+- Workflow inputs use the workflow traversal sequence in §4.2; action-metadata inputs do not receive `VisitWorkflowPre`/`VisitEvent`/`VisitJobPre`/`VisitJobPost` (no synthetic empty `Workflow` is injected).
 
 ---
 
@@ -60,9 +59,10 @@ Current profile note (C# runtime):
 
 ## 4. Rule Execution Model
 
-Canonical pass traversal sequence:
+Canonical pass traversal sequences:
 
-`WorkflowPre -> Event -> JobPre -> Step -> JobPost -> WorkflowPost`
+- **Workflow document:** `WorkflowPre -> Event -> JobPre -> Step -> JobPost -> WorkflowPost`
+- **Action-metadata document:** `ActionMetadataPre -> Step (runs.steps) -> ActionMetadataPost`
 
 ### 4.1 Pass Hooks
 
@@ -70,12 +70,16 @@ A pass exposes the following callbacks:
 
 - `VisitWorkflowPre(workflow)`
 - `VisitWorkflowPost(workflow)`
+- `VisitActionMetadataPre(actionMetadata)`
+- `VisitActionMetadataPost(actionMetadata)`
 - `VisitEvent(event)`
 - `VisitJobPre(job)`
 - `VisitJobPost(job)`
 - `VisitStep(step)`
 
 ### 4.2 Traversal Order
+
+**Workflow**
 
 ```
 VisitWorkflowPre(workflow)
@@ -87,6 +91,16 @@ VisitWorkflowPre(workflow)
       VisitStep(step)
     VisitJobPost(job)
 VisitWorkflowPost(workflow)
+```
+
+**Action metadata** (`action.yml` / `action.yaml`)
+
+```
+VisitActionMetadataPre(metadata)
+  if metadata.Runs.Steps is present:
+    for each step in metadata.Runs.Steps:
+      VisitStep(step)
+VisitActionMetadataPost(metadata)
 ```
 
 ### 4.3 Rule Contract

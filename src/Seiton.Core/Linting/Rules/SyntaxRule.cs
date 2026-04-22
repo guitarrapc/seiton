@@ -63,6 +63,22 @@ public sealed class SyntaxRule : IRule
         }
     }
 
+    public void VisitActionMetadataPre(ActionMetadata metadata)
+    {
+        for (var i = 0; i < rules.Length; i++)
+        {
+            rules[i].VisitActionMetadataPre(metadata);
+        }
+    }
+
+    public void VisitActionMetadataPost(ActionMetadata metadata)
+    {
+        for (var i = 0; i < rules.Length; i++)
+        {
+            rules[i].VisitActionMetadataPost(metadata);
+        }
+    }
+
     public void VisitEvent(Event ev)
     {
         for (var i = 0; i < rules.Length; i++)

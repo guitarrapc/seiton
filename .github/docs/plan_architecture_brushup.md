@@ -17,7 +17,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 | 責務の集中・肥大化 | High | WorkflowParser partials, LintEngine |
 | ポリシーロジックの重複 | High | LintEngine ↔ LintConfigLibrary（§2.2: `RuleNormalizer` / `ExclusionNormalizer` で共通化済） |
 | 診断メッセージへの構造的依存 | High | PinRemediation（§2.3: `Diagnostic.Metadata` + `PinDiagnosticMetadata` で解消済） |
-| IPass のドキュメントカインド非対称性 | Medium | WorkflowVisitor, IPass |
+| IPass の ActionMetadata 非対称性 | Medium | WorkflowVisitor, IPass（§2.4: 専用フック + 仕様同期済） |
 | 設定パーサーの維持コスト | Medium | LintConfigLineParser |
 | アクション参照パース処理の分散 | Medium | Rules 内の ad-hoc 解析 vs ActionRefHelpers |
 | Online ルールとローカルルールの契約差異 | Medium | OnlineAuditEngine vs IRule |
@@ -177,6 +177,17 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 2. `WorkflowVisitor.VisitActionMetadata()` を更新し、新フックを使う。ダミー Workflow の注入を廃止する。
 3. 既存の `VisitWorkflowPre` で `diagnostics.Clear()` している `RuleBase` のパターンは `VisitActionMetadataPre` にも適用する。
 4. `Seiton_Linter_spec.md` も同期更新する。
+
+**実装状況（§2.4、2026-04-23 時点）**
+
+| 項目 | 内容 |
+|---|---|
+| `IPass` | `VisitActionMetadataPre` / `VisitActionMetadataPost` を追加（既定実装は no-op。`RuleBase` が `VisitActionMetadataPre` で `diagnostics.Clear()`）。 |
+| `WorkflowVisitor` | `VisitActionMetadata` は上記フックのみ使用。**`EmptyLintWorkflow` による `VisitWorkflowPre` / `VisitWorkflowPost` の呼び出しを廃止**。 |
+| `SyntaxRule` | 子ルールへ `VisitActionMetadataPre` / `Post` を転送。 |
+| `LintEngine` | action-metadata のみの入力では引き続き inline suppression / exclusion 用に **`EmptyWorkflowForSuppression`** を使用（ジョブスコープは workflow AST に依存）。visitor 側のダミー workflow は削除済み。 |
+| 仕様 | `Seiton_Linter_spec.md` §4.1 / §4.2 / プロファイル注記を更新。 |
+| テスト | `WorkflowVisitorTests.VisitActionMetadata_TraversesInExpectedOrder` を追加。 |
 
 ---
 

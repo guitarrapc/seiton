@@ -59,11 +59,51 @@ public sealed class WorkflowVisitorTests
         await Assert.That(trace.SequenceEqual(expected)).IsTrue();
     }
 
+    [Test]
+    public async Task VisitActionMetadata_TraversesInExpectedOrder()
+    {
+        var sourceBytes = Array.Empty<byte>();
+        var arena = new AstArena(sourceBytes);
+
+        var metadata = new ActionMetadata
+        {
+            Runs = new ActionMetadataRuns
+            {
+                Steps =
+                [
+                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
+                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
+                ],
+            },
+        };
+
+        var trace = new List<string>();
+        var pass = new RecordingPass(trace);
+        var visitor = new WorkflowVisitor();
+        visitor.AddPass(pass);
+
+        visitor.VisitActionMetadata(metadata);
+
+        var expected = new[]
+        {
+            "action-metadata-pre",
+            "step",
+            "step",
+            "action-metadata-post",
+        };
+
+        await Assert.That(trace.SequenceEqual(expected)).IsTrue();
+    }
+
     private sealed class RecordingPass(List<string> trace) : IPass
     {
         public void VisitWorkflowPre(Workflow workflow) => trace.Add("workflow-pre");
 
         public void VisitWorkflowPost(Workflow workflow) => trace.Add("workflow-post");
+
+        public void VisitActionMetadataPre(ActionMetadata metadata) => trace.Add("action-metadata-pre");
+
+        public void VisitActionMetadataPost(ActionMetadata metadata) => trace.Add("action-metadata-post");
 
         public void VisitEvent(Event ev) => trace.Add("event");
 

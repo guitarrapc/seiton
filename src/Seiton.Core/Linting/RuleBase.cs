@@ -36,6 +36,15 @@ public abstract class RuleBase : IRule
     {
     }
 
+    public virtual void VisitActionMetadataPre(ActionMetadata metadata)
+    {
+        diagnostics.Clear();
+    }
+
+    public virtual void VisitActionMetadataPost(ActionMetadata metadata)
+    {
+    }
+
     public virtual void VisitEvent(Event ev)
     {
     }
