@@ -18,16 +18,16 @@ public sealed class MatrixRule : RuleBase
             return;
         }
 
-        if (matrix.Expression is not null || matrix.Rows is null || matrix.Rows.Count == 0)
+        if (matrix.Expression is not null || matrix.Rows is null || matrix.Rows.Value.Count == 0)
         {
             return;
         }
 
-        ValidateRows(job, matrix.Rows);
+        ValidateRows(job, matrix.Rows.Value);
         ValidateCombinations(job, matrix, matrix.Exclude, "exclude");
     }
 
-    private void ValidateRows(Job job, IReadOnlyDictionary<Utf8String, MatrixRow> rows)
+    private void ValidateRows(Job job, SliceMap<MatrixRow> rows)
     {
         long combinations = 1;
         var combinationWarningReported = false;
@@ -98,7 +98,7 @@ public sealed class MatrixRule : RuleBase
                 var entry = combo.Entries[entryIndex];
                 foreach (var pair in entry)
                 {
-                    if (matrix.Rows.ContainsKey(pair.Key))
+                    if (Config.Utf8Yaml is not null && matrix.Rows.Value.ContainsKey(Config.Utf8Yaml, pair.Key))
                     {
                         continue;
                     }

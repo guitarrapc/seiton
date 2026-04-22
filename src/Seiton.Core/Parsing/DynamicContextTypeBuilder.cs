@@ -62,11 +62,11 @@ internal static class DynamicContextTypeBuilder
     /// Builds the matrix context type override for a job.
     /// Returns a strict object keyed by matrix row names, or a loose object when no rows are declared.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix)
+    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix, byte[]? utf8Yaml = null)
     {
         var matrixKey = "matrix"u8.ToArray();
 
-        if (matrix is null || matrix.Expression is not null || matrix.Rows is not { Count: > 0 } rows)
+        if (matrix is null || matrix.Expression is not null || matrix.Rows is not { Count: > 0 } rows || utf8Yaml is null)
         {
             return (matrixKey, s_looseDynamic);
         }
@@ -74,7 +74,7 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(rows.Count);
         foreach (var row in rows)
         {
-            props[row.Key] = ExprType.Any;
+            props[new Utf8String(row.Key.AsSpan(utf8Yaml))] = ExprType.Any;
         }
 
         return (matrixKey, ExprType.Object(props, strict: true));
@@ -86,8 +86,8 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverride(
         IReadOnlyList<StringNode>? needs,
-        IReadOnlyDictionary<Utf8String, Job> allJobs,
-        byte[] utf8Yaml)
+        SliceMap<Job> allJobs,
+        byte[]? utf8Yaml)
     {
         var needsKey = "needs"u8.ToArray();
         if (needs is null || needs.Count == 0)
@@ -104,7 +104,8 @@ internal static class DynamicContextTypeBuilder
                 continue;
             }
 
-            var outputsType = FindJobOutputsType(needIdBytes, allJobs);
+            var outputsType = FindJobOutputsType(needIdBytes, allJobs, utf8Yaml);
+
             var needsEntryType = ExprType.Object(
                 new Dictionary<Utf8String, ExprType>
                 {
@@ -123,22 +124,26 @@ internal static class DynamicContextTypeBuilder
 
     private static ExprType FindJobOutputsType(
         ReadOnlySpan<byte> jobIdBytes,
-        IReadOnlyDictionary<Utf8String, Job> allJobs)
+        SliceMap<Job> allJobs,
+        byte[]? utf8Yaml)
     {
-        foreach (var pair in allJobs)
+        if (utf8Yaml is not null)
         {
-            if (EqualsAsciiIgnoreCase(pair.Key.Span, jobIdBytes))
+            foreach (var pair in allJobs)
             {
-                return BuildJobOutputsType(pair.Value);
+                if (EqualsAsciiIgnoreCase(pair.Key.AsSpan(utf8Yaml), jobIdBytes))
+                {
+                    return BuildJobOutputsType(pair.Value, utf8Yaml);
+                }
             }
         }
 
         return ExprType.Object(dynamicPropertyType: ExprType.String);
     }
 
-    private static ObjectExprType BuildJobOutputsType(Job job)
+    private static ObjectExprType BuildJobOutputsType(Job job, byte[]? utf8Yaml)
     {
-        if (job.Outputs is not { Count: > 0 } outputs)
+        if (job.Outputs is not { Count: > 0 } outputs || utf8Yaml is null)
         {
             return ExprType.Object(dynamicPropertyType: ExprType.String);
         }
@@ -146,7 +151,7 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(outputs.Count);
         foreach (var pair in outputs)
         {
-            props[pair.Key] = ExprType.String;
+            props[new Utf8String(pair.Key.AsSpan(utf8Yaml))] = ExprType.String;
         }
 
         return ExprType.Object(props, strict: true);
@@ -156,7 +161,7 @@ internal static class DynamicContextTypeBuilder
     /// Builds the inputs context type override for a workflow.
     /// Returns a strict object keyed by input names when workflow_call or workflow_dispatch inputs are defined.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildInputsOverride(IReadOnlyList<Event> on)
+    internal static (byte[] NameUtf8, ExprType Type) BuildInputsOverride(IReadOnlyList<Event> on, byte[]? utf8Yaml = null)
     {
         var inputsKey = "inputs"u8.ToArray();
         for (var i = 0; i < on.Count; i++)
@@ -169,9 +174,10 @@ internal static class DynamicContextTypeBuilder
             }
 
             if (ev is WorkflowDispatchEvent dispatchEvent
-                && dispatchEvent.Inputs is { Count: > 0 } dispatchInputs)
+                && dispatchEvent.Inputs is { Count: > 0 } dispatchInputs
+                && utf8Yaml is not null)
             {
-                return (inputsKey, BuildWorkflowDispatchInputsType(dispatchInputs));
+                return (inputsKey, BuildWorkflowDispatchInputsType(dispatchInputs, utf8Yaml));
             }
         }
 
@@ -198,7 +204,8 @@ internal static class DynamicContextTypeBuilder
     }
 
     private static ObjectExprType BuildWorkflowDispatchInputsType(
-        IReadOnlyDictionary<Utf8String, DispatchInput> inputs)
+        SliceMap<DispatchInput> inputs,
+        byte[] utf8Yaml)
     {
         var props = new Dictionary<Utf8String, ExprType>(inputs.Count);
         foreach (var pair in inputs)
@@ -209,7 +216,7 @@ internal static class DynamicContextTypeBuilder
                 DispatchInputType.Number => ExprType.Number,
                 _ => ExprType.String,
             };
-            props[pair.Key] = type;
+            props[new Utf8String(pair.Key.AsSpan(utf8Yaml))] = type;
         }
 
         return ExprType.Object(props, strict: true);

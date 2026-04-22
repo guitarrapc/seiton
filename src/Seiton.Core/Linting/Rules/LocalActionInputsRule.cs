@@ -63,11 +63,11 @@ public sealed class LocalActionInputsRule : RuleBase
             ValidateRunsUsing(step, action, meta, actionSource);
         }
 
-        if (meta.Inputs is null || meta.Inputs.Count == 0)
+        if (meta.Inputs is null || meta.Inputs.Value.Count == 0)
         {
             if (action.Inputs is not null)
             {
-                foreach (var pair in action.Inputs)
+                foreach (var pair in action.Inputs.Value)
                 {
                     var inputName = Decode(pair.Key);
                     AddStepError(
@@ -82,12 +82,12 @@ public sealed class LocalActionInputsRule : RuleBase
 
         if (action.Inputs is not null)
         {
-            foreach (var pair in action.Inputs)
+            foreach (var pair in action.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
-                if (!TryFindMetadataInput(meta.Inputs, inputName, out var inputDef))
+                if (!TryFindMetadataInput(actionSource, meta.Inputs.Value, inputName, out var inputDef))
                 {
-                    AddStepError(step, FormatUnknownInputMessage(inputName, meta.Inputs), pair.Value.Range);
+                    AddStepError(step, FormatUnknownInputMessage(actionSource, inputName, meta.Inputs.Value), pair.Value.Range);
                     continue;
                 }
 
@@ -99,7 +99,7 @@ public sealed class LocalActionInputsRule : RuleBase
             }
         }
 
-        foreach (var kv in meta.Inputs)
+        foreach (var kv in meta.Inputs.Value)
         {
             var def = kv.Value;
             if (def.Required?.Value != true)
@@ -112,8 +112,8 @@ public sealed class LocalActionInputsRule : RuleBase
                 continue;
             }
 
-            var name = Decode(kv.Key);
-            if (action.Inputs is not null && ContainsInputName(action.Inputs, name))
+            var name = DecodeSlice(actionSource, kv.Key);
+            if (action.Inputs is not null && ContainsInputName(Config.Utf8Yaml!, action.Inputs.Value, name))
             {
                 continue;
             }
@@ -200,13 +200,14 @@ public sealed class LocalActionInputsRule : RuleBase
     }
 
     private static bool TryFindMetadataInput(
-        IReadOnlyDictionary<Utf8String, ActionMetadataInput> inputs,
+        byte[] source,
+        SliceMap<ActionMetadataInput> inputs,
         string name,
         out ActionMetadataInput input)
     {
         foreach (var kv in inputs)
         {
-            if (string.Equals(Decode(kv.Key), name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(DecodeSlice(source, kv.Key), name, StringComparison.OrdinalIgnoreCase))
             {
                 input = kv.Value;
                 return true;
@@ -217,11 +218,11 @@ public sealed class LocalActionInputsRule : RuleBase
         return false;
     }
 
-    private static bool ContainsInputName(IReadOnlyDictionary<Utf8String, StringNode> provided, string name)
+    private static bool ContainsInputName(byte[] source, SliceMap<StringNode> provided, string name)
     {
         foreach (var kv in provided)
         {
-            if (string.Equals(Decode(kv.Key), name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(DecodeSlice(source, kv.Key), name, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -230,12 +231,12 @@ public sealed class LocalActionInputsRule : RuleBase
         return false;
     }
 
-    private static string FormatUnknownInputMessage(string inputName, IReadOnlyDictionary<Utf8String, ActionMetadataInput> declared)
+    private static string FormatUnknownInputMessage(byte[] source, string inputName, SliceMap<ActionMetadataInput> declared)
     {
         var names = new List<string>(declared.Count);
         foreach (var kv in declared)
         {
-            names.Add(Decode(kv.Key));
+            names.Add(DecodeSlice(source, kv.Key));
         }
 
         names.Sort(StringComparer.Ordinal);

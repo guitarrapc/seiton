@@ -57,28 +57,36 @@ public static partial class WorkflowParser
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
             var parseResult = ParseCore(ref parseReader, utf8Yaml, parseMode);
 
-            var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 2);
-            diagnostics.AddRange(parseResult.Diagnostics);
-
-            if (isAmbiguous)
+            var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2);
+            try
             {
-                AddError(diagnostics, "document kind is ambiguous: root has both 'jobs' and 'runs'", new TextPosition(0, 1, 1));
-            }
-
-            if (hasHintMismatch)
-            {
-                AddError(diagnostics, "path hint suggests action-metadata but root structure indicates workflow", new TextPosition(0, 1, 1));
-            }
-
-            if (!string.IsNullOrEmpty(filePath) && diagnostics.Count > 0)
-            {
-                for (var i = 0; i < diagnostics.Count; i++)
+                for (var i = 0; i < parseResult.Diagnostics.Length; i++)
                 {
-                    diagnostics[i] = diagnostics[i] with { FilePath = filePath };
+                    diagnostics.Add(parseResult.Diagnostics[i]);
                 }
-            }
 
-            parseResult = parseResult with { Diagnostics = diagnostics.ToArray() };
+                if (isAmbiguous)
+                {
+                    AddError(ref diagnostics, "document kind is ambiguous: root has both 'jobs' and 'runs'", new TextPosition(0, 1, 1));
+                }
+
+                if (hasHintMismatch)
+                {
+                    AddError(ref diagnostics, "path hint suggests action-metadata but root structure indicates workflow", new TextPosition(0, 1, 1));
+                }
+
+                if (!string.IsNullOrEmpty(filePath) && diagnostics.Count > 0)
+                {
+                    var span = diagnostics.AsSpan();
+                    for (var i = 0; i < span.Length; i++)
+                    {
+                        diagnostics.Replace(i, span[i] with { FilePath = filePath });
+                    }
+                }
+
+                parseResult = parseResult with { Diagnostics = diagnostics.ToArray() };
+            }
+            finally { diagnostics.Dispose(); }
 
             return new ClassifiedParseResult(
                 parseResult,
@@ -184,11 +192,11 @@ public static partial class WorkflowParser
         var hasOn = false;
         var hasJobs = false;
         Event[] onEvents = [];
-        Dictionary<Utf8String, Job> jobs = [];
+        SliceMap<Job> jobs = default;
         ulong seen = 0;
         StringNode? actionDescription = null;
-        Dictionary<Utf8String, ActionMetadataInput>? actionInputs = null;
-        Dictionary<Utf8String, ActionMetadataOutput>? actionOutputs = null;
+        SliceMap<ActionMetadataInput>? actionInputs = null;
+        SliceMap<ActionMetadataOutput>? actionOutputs = null;
         ActionMetadataRuns? actionRuns = null;
         ActionMetadataBranding? actionBranding = null;
         ulong actionSeen = 0;
@@ -476,90 +484,93 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        var scopes = new Dictionary<Utf8String, PermissionScope>();
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        reader.Read(); // consume MappingStart
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        var scopes = new PooledBuffer<SliceMap<PermissionScope>.Entry>(8);
+        try
         {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            reader.Read(); // consume MappingStart
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
-                AddError(diagnostics, error, reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
+                    AddError(diagnostics, error, reader.CurrentStart);
                     reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    continue;
                 }
-                continue;
+
+                var keyMark = reader.CurrentStart;
+                var keySlice = reader.GetScalarSlice();
+                var keyUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterDynamicKey(
+                    source,
+                    keyUtf8,
+                    keySlice.Offset,
+                    keySlice.Length,
+                    keyMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "permissions"))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var keyNode = new StringNode
+                {
+                    Value = keySlice,
+                    Quoted = reader.IsScalarQuoted(),
+                    Range = BuildScalarLocation(keyMark, keyUtf8.Length),
+                };
+
+                reader.Read(); // consume key
+                if (reader.End)
+                {
+                    break;
+                }
+
+                var valueSlice = reader.CurrentKind == YamlEventKind.Scalar
+                    ? reader.GetScalarSlice()
+                    : default;
+                var valueNode = ParseString(ref reader, diagnostics, error);
+                if (valueNode is null)
+                {
+                    continue;
+                }
+
+                scopes.Add(new SliceMap<PermissionScope>.Entry(keySlice, new PermissionScope
+                {
+                    Name = keyNode,
+                    NameText = keySlice,
+                    Value = valueNode,
+                    ValueText = valueSlice,
+                }));
             }
 
-            var keyMark = reader.CurrentStart;
-            var keySlice = reader.GetScalarSlice();
-            var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                keyUtf8,
-                keySlice.Offset,
-                keySlice.Length,
-                keyMark,
-                diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: false,
-                "permissions"))
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
             {
+                range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
                 reader.Read();
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
             }
 
-            var keyText = new Utf8String(keyUtf8);
-            var keyNode = new StringNode
+            return new Permissions
             {
-                Value = keySlice,
-                Quoted = reader.IsScalarQuoted(),
-                Range = BuildScalarLocation(keyMark, keyUtf8.Length),
-            };
-
-            reader.Read(); // consume key
-            if (reader.End)
-            {
-                break;
-            }
-
-            var valueText = reader.CurrentKind == YamlEventKind.Scalar
-                ? new Utf8String(reader.GetScalarUtf8())
-                : default;
-            var valueNode = ParseString(ref reader, diagnostics, error);
-            if (valueNode is null)
-            {
-                continue;
-            }
-
-            scopes[keyText] = new PermissionScope
-            {
-                Name = keyNode,
-                NameText = keyText,
-                Value = valueNode,
-                ValueText = valueText,
+                Scopes = new SliceMap<PermissionScope>(scopes.ToArray(), caseSensitive: true),
+                Range = range,
             };
         }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
-            reader.Read();
-        }
-
-        return new Permissions
-        {
-            Scopes = scopes,
-            Range = range,
-        };
+        finally { scopes.Dispose(); }
     }
 
     private static Env? ParseEnvNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext expressionContext)
@@ -586,84 +597,88 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        var vars = new Dictionary<Utf8String, EnvVar>();
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        reader.Read(); // consume MappingStart
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        var vars = new PooledBuffer<SliceMap<EnvVar>.Entry>(8);
+        try
         {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            reader.Read(); // consume MappingStart
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
-                AddError(diagnostics, error, reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
+                    AddError(diagnostics, error, reader.CurrentStart);
                     reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    continue;
                 }
-                continue;
+
+                var keyMark = reader.CurrentStart;
+                var keySlice = reader.GetScalarSlice();
+                var keyUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterDynamicKey(
+                    source,
+                    keyUtf8,
+                    keySlice.Offset,
+                    keySlice.Length,
+                    keyMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    error))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var keyNode = new StringNode
+                {
+                    Value = keySlice,
+                    Quoted = reader.IsScalarQuoted(),
+                    Range = BuildScalarLocation(keyMark, keyUtf8.Length),
+                };
+
+                reader.Read(); // consume key
+                if (reader.End)
+                {
+                    break;
+                }
+
+                var valueNode = ParseStringAndValidateExpression(ref reader, diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
+                if (valueNode is null)
+                {
+                    continue;
+                }
+
+                vars.Add(new SliceMap<EnvVar>.Entry(keySlice, new EnvVar
+                {
+                    Name = keyNode,
+                    Value = valueNode,
+                }));
             }
 
-            var keyMark = reader.CurrentStart;
-            var keySlice = reader.GetScalarSlice();
-            var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                keyUtf8,
-                keySlice.Offset,
-                keySlice.Length,
-                keyMark,
-                diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: false,
-                error))
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
             {
+                range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
                 reader.Read();
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
             }
 
-            var keyNode = new StringNode
+            return new Env
             {
-                Value = keySlice,
-                Quoted = reader.IsScalarQuoted(),
-                Range = BuildScalarLocation(keyMark, keyUtf8.Length),
-            };
-
-            reader.Read(); // consume key
-            if (reader.End)
-            {
-                break;
-            }
-
-            var valueNode = ParseStringAndValidateExpression(ref reader, diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
-            if (valueNode is null)
-            {
-                continue;
-            }
-
-            vars[keySlice.ToUtf8String(source)] = new EnvVar
-            {
-                Name = keyNode,
-                Value = valueNode,
+                Vars = new SliceMap<EnvVar>(vars.ToArray(), caseSensitive: true),
+                Range = range,
             };
         }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
-            reader.Read();
-        }
-
-        return new Env
-        {
-            Vars = vars,
-            Range = range,
-        };
+        finally { vars.Dispose(); }
     }
 
     private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string error)
@@ -963,76 +978,79 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, Job> ParseJobsMapping<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<Job> ParseJobsMapping<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var jobs = new Dictionary<Utf8String, Job>();
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        // current is MappingStart
-        reader.Read();
-
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        var jobs = new PooledBuffer<SliceMap<Job>.Entry>(8);
+        try
         {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
-            {
-                AddError(diagnostics, "job id must be scalar", reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                {
-                    reader.SkipCurrentNode();
-                }
-                continue;
-            }
-
-            var jobIdMark = reader.CurrentStart;
-            var jobId = reader.GetScalarSlice();
-            var jobIdUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                jobIdUtf8,
-                jobId.Offset,
-                jobId.Length,
-                jobIdMark,
-                diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: false,
-                "jobs"))
-            {
-                reader.Read(); // consume key
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
-            }
-
-            var jobIdNode = new StringNode
-            {
-                Value = jobId,
-                Quoted = reader.IsScalarQuoted(),
-                Range = BuildScalarLocation(jobIdMark, jobIdUtf8.Length),
-            };
-            var jobKey = Utf8String.FromLowerAscii(jobIdUtf8);
-            reader.Read(); // consume job id
-
-            if (reader.End)
-            {
-                break;
-            }
-
-            var job = ParseJobNode(ref reader, diagnostics, source, jobId, jobIdMark, jobIdNode);
-            jobs[jobKey] = job;
-        }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            // current is MappingStart
             reader.Read();
-        }
 
-        return jobs;
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            {
+                if (reader.CurrentKind != YamlEventKind.Scalar)
+                {
+                    AddError(diagnostics, "job id must be scalar", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    continue;
+                }
+
+                var jobIdMark = reader.CurrentStart;
+                var jobId = reader.GetScalarSlice();
+                var jobIdUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterDynamicKey(
+                    source,
+                    jobIdUtf8,
+                    jobId.Offset,
+                    jobId.Length,
+                    jobIdMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "jobs"))
+                {
+                    reader.Read(); // consume key
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var jobIdNode = new StringNode
+                {
+                    Value = jobId,
+                    Quoted = reader.IsScalarQuoted(),
+                    Range = BuildScalarLocation(jobIdMark, jobIdUtf8.Length),
+                };
+                reader.Read(); // consume job id
+
+                if (reader.End)
+                {
+                    break;
+                }
+
+                var job = ParseJobNode(ref reader, diagnostics, source, jobId, jobIdMark, jobIdNode);
+                jobs.Add(new SliceMap<Job>.Entry(jobId, job));
+            }
+
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            {
+                reader.Read();
+            }
+
+            return new SliceMap<Job>(jobs.ToArray(), caseSensitive: false);
+        }
+        finally { jobs.Dispose(); }
     }
 
 }

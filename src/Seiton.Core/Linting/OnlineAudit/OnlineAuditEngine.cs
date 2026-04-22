@@ -181,7 +181,7 @@ public sealed class OnlineAuditEngine(
     {
         var result = new List<ActionAuditTarget>();
         var jobs = workflow.Jobs;
-        if (jobs is null || jobs.Count == 0)
+        if (jobs.Count == 0)
         {
             return result;
         }

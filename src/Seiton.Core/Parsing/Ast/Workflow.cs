@@ -16,7 +16,7 @@ public sealed class Workflow
 
     public Concurrency? Concurrency { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, Job> Jobs { get; init; } = new Dictionary<Utf8String, Job>();
+    public SliceMap<Job> Jobs { get; init; }
 
     public TextRange Range { get; init; }
 }

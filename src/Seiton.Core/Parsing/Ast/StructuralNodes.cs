@@ -4,7 +4,7 @@ public sealed class Permissions
 {
     public StringNode? All { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, PermissionScope>? Scopes { get; init; }
+    public SliceMap<PermissionScope>? Scopes { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -13,18 +13,18 @@ public sealed class PermissionScope
 {
     public StringNode Name { get; init; } = null!;
 
-    public Utf8String NameText { get; init; }
+    public Utf8Slice NameText { get; init; }
 
     public StringNode Value { get; init; } = null!;
 
-    public Utf8String ValueText { get; init; }
+    public Utf8Slice ValueText { get; init; }
 }
 
 public sealed class Env
 {
     public StringNode? Expression { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, EnvVar>? Vars { get; init; }
+    public SliceMap<EnvVar>? Vars { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -102,7 +102,7 @@ public sealed class Matrix
 
     public IReadOnlyList<MatrixCombinations>? Exclude { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, MatrixRow>? Rows { get; init; }
+    public SliceMap<MatrixRow>? Rows { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -120,7 +120,7 @@ public sealed class MatrixCombinations
 {
     public StringNode? Expression { get; init; }
 
-    public IReadOnlyList<IReadOnlyDictionary<Utf8String, RawYamlValue>>? Entries { get; init; }
+    public IReadOnlyList<SliceMap<RawYamlValue>>? Entries { get; init; }
 }
 
 public abstract class RawYamlValue
@@ -139,7 +139,7 @@ public sealed class RawYamlArray : RawYamlValue
 
 public sealed class RawYamlObject : RawYamlValue
 {
-    public IReadOnlyDictionary<Utf8String, RawYamlValue> Properties { get; init; } = new Dictionary<Utf8String, RawYamlValue>();
+    public SliceMap<RawYamlValue> Properties { get; init; }
 }
 
 public sealed class Container
@@ -163,7 +163,7 @@ public sealed class Services
 {
     public StringNode? Expression { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, Service>? ServiceMap { get; init; }
+    public SliceMap<Service>? ServiceMap { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -194,9 +194,9 @@ public sealed class WorkflowCall
 
     public TextRange? UsesKeyRange { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, WorkflowCallInput>? Inputs { get; init; }
+    public SliceMap<WorkflowCallInput>? Inputs { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, WorkflowCallSecret>? Secrets { get; init; }
+    public SliceMap<WorkflowCallSecret>? Secrets { get; init; }
 
     public bool InheritSecrets { get; init; }
 }

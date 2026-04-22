@@ -9,7 +9,7 @@ public sealed class NeedsGraphRule : RuleBase
 
     public override string Name => "Needs Graph Rule";
 
-    private IReadOnlyDictionary<Utf8String, Job> _knownJobs = new Dictionary<Utf8String, Job>();
+    private SliceMap<Job> _knownJobs;
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -28,8 +28,7 @@ public sealed class NeedsGraphRule : RuleBase
         {
             var need = job.Needs[i];
             var needSpan = need.Value.AsSpan(Config.Utf8Yaml);
-            var needKey = Utf8String.FromLowerAscii(needSpan);
-            if (!_knownJobs.ContainsKey(needKey))
+            if (!_knownJobs.ContainsKey(Config.Utf8Yaml, needSpan))
             {
                 var jobId = Decode(job.Id.Value);
                 var needText = Decode(need.Value);
@@ -50,29 +49,38 @@ public sealed class NeedsGraphRule : RuleBase
             return;
         }
 
+        var source = Config.Utf8Yaml;
+
         // DFS cycle detection using colors: 0=unvisited, 1=in-progress (gray), 2=done (black)
         var color = new Dictionary<Utf8String, byte>(_knownJobs.Count);
-        foreach (var key in _knownJobs.Keys)
+        foreach (var pair in _knownJobs)
         {
-            color[key] = 0;
+            color[new Utf8String(pair.Key.AsSpan(source))] = 0;
         }
 
         var stack = new Stack<(Utf8String Key, int NeighborIndex)>();
 
         foreach (var kvp in _knownJobs)
         {
-            if (color[kvp.Key] != 0)
+            var key = new Utf8String(kvp.Key.AsSpan(source));
+            if (color[key] != 0)
             {
                 continue;
             }
 
-            color[kvp.Key] = 1;
-            stack.Push((kvp.Key, 0));
+            color[key] = 1;
+            stack.Push((key, 0));
 
             while (stack.Count > 0)
             {
                 var (currentKey, ni) = stack.Peek();
-                var currentJob = _knownJobs[currentKey];
+                if (!_knownJobs.TryGetValue(source, currentKey.Span, out var currentJob))
+                {
+                    stack.Pop();
+                    color[currentKey] = 2;
+                    continue;
+                }
+
                 var needs = currentJob.Needs;
 
                 if (needs is null || ni >= needs.Count)
@@ -92,7 +100,7 @@ public sealed class NeedsGraphRule : RuleBase
 
                 if (!color.TryGetValue(needKey, out var neighborColor))
                 {
-                    continue; // unknown job reference ? already reported in VisitJobPre
+                    continue; // unknown job reference — already reported in VisitJobPre
                 }
 
                 if (neighborColor == 1) // gray: back-edge = cycle

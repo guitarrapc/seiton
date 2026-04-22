@@ -27,7 +27,7 @@ public sealed class ExprUndefinedVarRule : RuleBase
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
-        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On);
+        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
         _jobScopeOverrides = null;
         _stepScopeOverrides = null;
     }
@@ -42,10 +42,10 @@ public sealed class ExprUndefinedVarRule : RuleBase
         }
 
         var yaml = Config.Utf8Yaml;
-        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix);
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix, yaml);
         var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverride(
             job.Needs,
-            _currentWorkflow?.Jobs ?? new Dictionary<Utf8String, Job>(0),
+            _currentWorkflow?.Jobs ?? default,
             yaml);
         var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, yaml);
 
@@ -61,12 +61,12 @@ public sealed class ExprUndefinedVarRule : RuleBase
             rule.AddJobError(targetJob, message, location), job);
 
         var callInputs = job.WorkflowCall?.Inputs;
-        if (callInputs is null || callInputs.Count == 0)
+        if (callInputs is null || callInputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in callInputs)
+        foreach (var pair in callInputs.Value)
         {
             var input = pair.Value;
             var inputName = Decode(input.Name.Value);
@@ -88,12 +88,12 @@ public sealed class ExprUndefinedVarRule : RuleBase
         CheckEnv(step.Env, ExpressionValidationContext.Step, "step.env", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
-        if (step.Exec is not ExecAction action || action.Inputs is null || action.Inputs.Count == 0)
+        if (step.Exec is not ExecAction action || action.Inputs is null || action.Inputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in action.Inputs)
+        foreach (var pair in action.Inputs.Value)
         {
             var inputName = Decode(pair.Key);
             CheckNode(pair.Value, ExpressionValidationContext.Step, $"step.with.{inputName}", static (rule, message, location, targetStep) =>
@@ -116,12 +116,12 @@ public sealed class ExprUndefinedVarRule : RuleBase
         CheckNode(env.Expression, context, sinkName, report, target);
 
         var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
+        if (vars is null || vars.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars)
+        foreach (var pair in vars.Value)
         {
             var envVar = pair.Value;
             var keyName = Decode(envVar.Name.Value);

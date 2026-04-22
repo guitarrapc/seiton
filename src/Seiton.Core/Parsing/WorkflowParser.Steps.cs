@@ -8,7 +8,9 @@ public static partial class WorkflowParser
     private static Step[] ParseSteps<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var steps = new List<Step>(8);
+        var steps = new PooledBuffer<Step>(8);
+        try
+        {
         reader.Read(); // consume SequenceStart
 
         var stepIndex = 0;
@@ -28,6 +30,8 @@ public static partial class WorkflowParser
         }
 
         return steps.ToArray();
+        }
+        finally { steps.Dispose(); }
     }
 
     private static Step? ParseStep<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
@@ -53,7 +57,7 @@ public static partial class WorkflowParser
         TextRange? usesKeyRange = null;
         StringNode? shellNode = null;
         StringNode? workingDirectoryNode = null;
-        Dictionary<Utf8String, StringNode>? withInputs = null;
+        SliceMap<StringNode>? withInputs = null;
         StringNode? dockerEntrypoint = null;
         StringNode? dockerArgs = null;
 
@@ -314,7 +318,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, StringNode>? ParseStepWithInputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNode? entrypoint, out StringNode? args)
+    private static SliceMap<StringNode>? ParseStepWithInputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNode? entrypoint, out StringNode? args)
         where TReader : IYamlStreamReader, allows ref struct
     {
         entrypoint = null;
@@ -327,7 +331,9 @@ public static partial class WorkflowParser
             return null;
         }
 
-        var map = new Dictionary<Utf8String, StringNode>();
+        var map = new PooledBuffer<SliceMap<StringNode>.Entry>(8);
+        try
+        {
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
@@ -343,8 +349,8 @@ public static partial class WorkflowParser
             }
 
             var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
-            var key = Utf8String.FromLowerAscii(keyUtf8);
             var isEntrypoint = keyUtf8.SequenceEqual("entrypoint"u8);
             var isArgs = keyUtf8.SequenceEqual("args"u8);
 
@@ -368,7 +374,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            map[key] = value;
+            map.Add(new SliceMap<StringNode>.Entry(keySlice, value));
             if (isEntrypoint)
             {
                 entrypoint = value;
@@ -384,7 +390,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return map;
+        return new SliceMap<StringNode>(map.ToArray(), caseSensitive: false);
+        }
+        finally { map.Dispose(); }
     }
 
 }

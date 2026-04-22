@@ -51,7 +51,7 @@ public sealed class ScheduleEntry
 
 public sealed class WorkflowDispatchEvent : Event
 {
-    public IReadOnlyDictionary<Utf8String, DispatchInput>? Inputs { get; init; }
+    public SliceMap<DispatchInput>? Inputs { get; init; }
 }
 
 public sealed class DispatchInput
@@ -85,9 +85,9 @@ public sealed class WorkflowCallEvent : Event
 {
     public IReadOnlyList<WorkflowCallEventInput>? Inputs { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, WorkflowCallEventSecret>? Secrets { get; init; }
+    public SliceMap<WorkflowCallEventSecret>? Secrets { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, WorkflowCallEventOutput>? Outputs { get; init; }
+    public SliceMap<WorkflowCallEventOutput>? Outputs { get; init; }
 }
 
 public sealed class WorkflowCallEventInput

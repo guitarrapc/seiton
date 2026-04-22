@@ -16,12 +16,12 @@ public sealed class DispatchInputsRule : RuleBase
             return;
         }
 
-        if (dispatch.Inputs.Count > 25)
+        if (dispatch.Inputs.Value.Count > 25)
         {
             AddEventError(dispatch, "workflow_dispatch event cannot define more than 25 inputs", BuildEventLocation(dispatch));
         }
 
-        foreach (var (_, input) in dispatch.Inputs)
+        foreach (var (_, input) in dispatch.Inputs.Value)
         {
             ValidateInput(dispatch, input);
         }

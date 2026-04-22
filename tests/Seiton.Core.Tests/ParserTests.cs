@@ -118,7 +118,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
 
-        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Steps is not null).IsTrue();
         await Assert.That(job.Steps!.Count).IsEqualTo(3);
 
@@ -166,10 +166,10 @@ public sealed class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.Permissions is not null).IsTrue();
         await Assert.That(result.Workflow.Permissions!.Scopes is not null).IsTrue();
-        await Assert.That(result.Workflow.Permissions.Scopes!.Count).IsEqualTo(2);
+        await Assert.That(result.Workflow.Permissions.Scopes!.Value.Count).IsEqualTo(2);
         await Assert.That(result.Workflow.Env is not null).IsTrue();
         await Assert.That(result.Workflow.Env!.Vars is not null).IsTrue();
-        await Assert.That(result.Workflow.Env.Vars!.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.Env.Vars!.Value.Count).IsEqualTo(1);
         await Assert.That(result.Workflow.Defaults is not null).IsTrue();
         await Assert.That(result.Workflow.Defaults!.Run.Shell is not null).IsTrue();
         await Assert.That(result.Workflow.Defaults.Run.WorkingDirectory is not null).IsTrue();
@@ -711,10 +711,11 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "services-expression.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "services-expression.yml");
 
         await Assert.That(result.Workflow is not null).IsTrue();
-        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Services is not null).IsTrue();
         await Assert.That(job.Services!.Expression is not null).IsTrue();
         await Assert.That(job.Services.ServiceMap).IsNull();
@@ -736,10 +737,11 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "credentials-expression.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "credentials-expression.yml");
 
         await Assert.That(result.Workflow is not null).IsTrue();
-        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Container is not null).IsTrue();
         await Assert.That(job.Container!.Credentials is not null).IsTrue();
         await Assert.That(job.Container.Credentials!.Expression is not null).IsTrue();
@@ -763,10 +765,11 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-env-expression.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "container-env-expression.yml");
 
         await Assert.That(result.Workflow is not null).IsTrue();
-        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Container is not null).IsTrue();
         await Assert.That(job.Container!.Env is not null).IsTrue();
         await Assert.That(job.Container.Env!.Expression is not null).IsTrue();
@@ -790,14 +793,15 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "service-env-expression.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "service-env-expression.yml");
 
         await Assert.That(result.Workflow is not null).IsTrue();
-        var job = result.Workflow!.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Services is not null).IsTrue();
         await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
-        await Assert.That(job.Services.ServiceMap!.Count).IsEqualTo(1);
-        var redis = job.Services.ServiceMap.Values.First();
+        await Assert.That(job.Services.ServiceMap!.Value.Count).IsEqualTo(1);
+        var redis = job.Services.ServiceMap.Value.Values().First();
         await Assert.That(redis.Container.Env is not null).IsTrue();
         await Assert.That(redis.Container.Env!.Expression is not null).IsTrue();
         await Assert.That(redis.Container.Env.Vars).IsNull();
@@ -826,10 +830,9 @@ public sealed class ParserTests
         await Assert.That(result.Workflow.On[0]).IsTypeOf<WorkflowDispatchEvent>();
         var evt = (WorkflowDispatchEvent)result.Workflow.On[0];
         await Assert.That(evt.Inputs is not null).IsTrue();
-        await Assert.That(evt.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(evt.Inputs!.Value.Count).IsEqualTo(1);
         var key = Utf8String.FromLowerAscii("target"u8);
-        await Assert.That(evt.Inputs.ContainsKey(key)).IsTrue();
-        var input = evt.Inputs[key];
+        evt.Inputs.Value.TryGetValue(Encoding.UTF8.GetBytes(yaml), key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Required is not null).IsTrue();
         await Assert.That(input.Required!.Value).IsTrue();
@@ -859,12 +862,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "dispatch-choice-empty.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "dispatch-choice-empty.yml");
 
         await Assert.That(result.Workflow is not null).IsTrue();
         var evt = (WorkflowDispatchEvent)result.Workflow!.On[0];
         var key = Utf8String.FromLowerAscii("operation"u8);
-        var input = evt.Inputs![key];
+        evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options!.Count).IsEqualTo(3);
         // no parse errors: '' is a valid choice option
@@ -906,10 +910,10 @@ public sealed class ParserTests
         await Assert.That(evt.Inputs!.Count).IsEqualTo(1);
         await Assert.That(evt.Inputs[0].Type).IsEqualTo(WorkflowCallInputType.String);
         await Assert.That(evt.Secrets is not null).IsTrue();
-        await Assert.That(evt.Secrets!.Count).IsEqualTo(1);
+        await Assert.That(evt.Secrets!.Value.Count).IsEqualTo(1);
         await Assert.That(evt.Outputs is not null).IsTrue();
-        await Assert.That(evt.Outputs!.Count).IsEqualTo(1);
-        await Assert.That(evt.Outputs.Values.First().Value is not null).IsTrue();
+        await Assert.That(evt.Outputs!.Value.Count).IsEqualTo(1);
+        await Assert.That(evt.Outputs.Value.Values().First().Value is not null).IsTrue();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -1577,11 +1581,11 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-scalar.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        var step = result.Workflow!.Jobs.Values.First().Steps![0];
+        var step = result.Workflow!.Jobs.Values().First().Steps![0];
         var execAction = (ExecAction)step.Exec;
         // ref input value should be resolved to "ubuntu-latest"
         await Assert.That(execAction.Inputs).IsNotNull();
-        var refValue = execAction.Inputs!.Values.First();
+        var refValue = execAction.Inputs!.Value.Values().First();
         await Assert.That(refValue.Value.Length).IsGreaterThan(0);
     }
 
@@ -1636,11 +1640,11 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-mapping.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        var steps = result.Workflow!.Jobs.Values.First().Steps!;
+        var steps = result.Workflow!.Jobs.Values().First().Steps!;
         await Assert.That(steps[0].Env).IsNotNull();
         await Assert.That(steps[1].Env).IsNotNull();
         // Both steps should have env vars from the anchor
-        await Assert.That(steps[1].Env!.Vars!.Count).IsGreaterThan(0);
+        await Assert.That(steps[1].Env!.Vars!.Value.Count).IsGreaterThan(0);
     }
 
     [Test]
@@ -1661,7 +1665,7 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-step.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        var steps = result.Workflow!.Jobs.Values.First().Steps!;
+        var steps = result.Workflow!.Jobs.Values().First().Steps!;
         await Assert.That(steps.Count).IsEqualTo(2);
         await Assert.That(((ExecAction)steps[0].Exec).Uses.Value.Length).IsGreaterThan(0);
         await Assert.That(((ExecAction)steps[1].Exec).Uses.Value.Length).IsGreaterThan(0);
@@ -1685,7 +1689,7 @@ public sealed class ParserTests
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(2);
-        foreach (var job in result.Workflow.Jobs.Values)
+        foreach (var job in result.Workflow.Jobs.Values())
         {
             await Assert.That(job.RunsOn).IsNotNull();
             await Assert.That(job.Steps).IsNotNull();
@@ -1712,9 +1716,9 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-env.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        var job = result.Workflow!.Jobs.Values.First();
+        var job = result.Workflow!.Jobs.Values().First();
         await Assert.That(job.Env).IsNotNull();
-        await Assert.That(job.Env!.Vars!.Count).IsGreaterThan(0);
+        await Assert.That(job.Env!.Vars!.Value.Count).IsGreaterThan(0);
     }
 
     [Test]
@@ -1735,7 +1739,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-if.yml");
         await Assert.That(result.HasFatalError).IsFalse();
-        var steps = result.Workflow!.Jobs.Values.First().Steps!;
+        var steps = result.Workflow!.Jobs.Values().First().Steps!;
         await Assert.That(steps[0].If).IsNotNull();
         await Assert.That(steps[1].If).IsNotNull();
     }
@@ -1867,14 +1871,15 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-ast-basic.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-ast-basic.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
         var key = Utf8String.FromLowerAscii("build"u8);
-        await Assert.That(result.Workflow.Jobs.ContainsKey(key)).IsTrue();
-        var job = result.Workflow.Jobs[key];
+        await Assert.That(result.Workflow.Jobs.ContainsKey(bytes, key.Span)).IsTrue();
+        var job = result.Workflow.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Name is not null).IsTrue();
         await Assert.That(job.RunsOn is not null).IsTrue();
         await Assert.That(job.RunsOn!.Labels is not null).IsTrue();
@@ -1884,7 +1889,7 @@ public sealed class ParserTests
         await Assert.That(job.ContinueOnError!.Value).IsFalse();
         await Assert.That(job.Env is not null).IsTrue();
         await Assert.That(job.Outputs is not null).IsTrue();
-        await Assert.That(job.Outputs!.Count).IsEqualTo(1);
+        await Assert.That(job.Outputs!.Value.Count).IsEqualTo(1);
     }
 
     [Test]
@@ -1901,17 +1906,18 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-ast-reuse.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-ast-reuse.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var key = Utf8String.FromLowerAscii("reuse"u8);
-        await Assert.That(result.Workflow!.Jobs.ContainsKey(key)).IsTrue();
-        var job = result.Workflow.Jobs[key];
+        await Assert.That(result.Workflow!.Jobs.ContainsKey(bytes, key.Span)).IsTrue();
+        var job = result.Workflow.Jobs.Get(bytes, "reuse"u8);
         await Assert.That(job.WorkflowCall is not null).IsTrue();
         await Assert.That(job.WorkflowCall!.Uses.Value.Length).IsGreaterThan(0);
         await Assert.That(job.WorkflowCall.Inputs is not null).IsTrue();
-        await Assert.That(job.WorkflowCall.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(job.WorkflowCall.Inputs!.Value.Count).IsEqualTo(1);
         await Assert.That(job.WorkflowCall.InheritSecrets).IsTrue();
     }
 
@@ -1991,12 +1997,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-ast-strategy-container-services.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-ast-strategy-container-services.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var key = Utf8String.FromLowerAscii("build"u8);
-        var job = result.Workflow!.Jobs[key];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Strategy is not null).IsTrue();
         await Assert.That(job.Strategy!.FailFast is not null).IsTrue();
         await Assert.That(job.Strategy.MaxParallel is not null).IsTrue();
@@ -2006,7 +2013,7 @@ public sealed class ParserTests
         await Assert.That(job.Container.Credentials is not null).IsTrue();
         await Assert.That(job.Services is not null).IsTrue();
         await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
-        await Assert.That(job.Services.ServiceMap!.Count).IsEqualTo(1);
+        await Assert.That(job.Services.ServiceMap!.Value.Count).IsEqualTo(1);
     }
 
     [Test]
@@ -2033,11 +2040,12 @@ public sealed class ParserTests
 
         var lines = yaml.Split('\n');
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-image-range.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "container-image-range.yml");
 
         await Assert.That(result.Workflow is not null).IsTrue();
         var key = Utf8String.FromLowerAscii("build"u8);
-        var job = result.Workflow!.Jobs[key];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
 
         // container image line: "    image: golang:1.25" - find the actual line number
         var expectedContainerImageLine = -1;
@@ -2059,7 +2067,7 @@ public sealed class ParserTests
         await Assert.That(job.Container!.Image.Range.StartLine).IsEqualTo(expectedContainerImageLine);
 
         await Assert.That(job.Services is not null).IsTrue();
-        var redis = job.Services!.ServiceMap!.Values.First();
+        var redis = job.Services!.ServiceMap!.Value.Values().First();
         await Assert.That(redis.Container.Image.Range.StartLine).IsEqualTo(expectedServiceImageLine);
     }
 
@@ -2078,12 +2086,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-runs-on-mapping.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-runs-on-mapping.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var jobKey = Utf8String.FromLowerAscii("build"u8);
-        var runner = result.Workflow!.Jobs[jobKey].RunsOn;
+        var runner = result.Workflow!.Jobs.Get(bytes, "build"u8).RunsOn;
         await Assert.That(runner is not null).IsTrue();
         await Assert.That(runner!.Group is not null).IsTrue();
         await Assert.That(runner.Labels is not null).IsTrue();
@@ -2104,12 +2113,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-runs-on-expression.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-runs-on-expression.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var jobKey = Utf8String.FromLowerAscii("build"u8);
-        var runner = result.Workflow!.Jobs[jobKey].RunsOn;
+        var runner = result.Workflow!.Jobs.Get(bytes, "build"u8).RunsOn;
         await Assert.That(runner is not null).IsTrue();
         await Assert.That(runner!.LabelsExpr is not null).IsTrue();
         await Assert.That(runner.Labels).IsNull();
@@ -2166,12 +2176,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-ast.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "step-run-ast.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var jobKey = Utf8String.FromLowerAscii("build"u8);
-        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        var step = result.Workflow!.Jobs.Get(bytes, "build"u8).Steps![0];
         await Assert.That(step.Name is not null).IsTrue();
         await Assert.That(step.Exec).IsTypeOf<ExecRun>();
         var exec = (ExecRun)step.Exec;
@@ -2195,17 +2206,18 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-uses-ast.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "step-uses-ast.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var jobKey = Utf8String.FromLowerAscii("build"u8);
-        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        var step = result.Workflow!.Jobs.Get(bytes, "build"u8).Steps![0];
         await Assert.That(step.Exec).IsTypeOf<ExecAction>();
         var exec = (ExecAction)step.Exec;
         await Assert.That(exec.Uses.Value.Length).IsGreaterThan(0);
         await Assert.That(exec.Inputs is not null).IsTrue();
-        await Assert.That(exec.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(exec.Inputs!.Value.Count).IsEqualTo(1);
     }
 
     [Test]
@@ -2228,14 +2240,14 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var jobKey = Utf8String.FromLowerAscii("build"u8);
-        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        var step = result.Workflow!.Jobs.Get(bytes, "build"u8).Steps![0];
         await Assert.That(step.Exec).IsTypeOf<ExecAction>();
 
         var exec = (ExecAction)step.Exec;
         var uses = Encoding.UTF8.GetString(exec.Uses.Value.AsSpan(bytes));
         await Assert.That(uses).IsEqualTo("actions/checkout@v4");
         await Assert.That(exec.Inputs is not null).IsTrue();
-        await Assert.That(exec.Inputs!.ContainsKey(Utf8String.FromLowerAscii("fetch-depht"u8))).IsTrue();
+        await Assert.That(exec.Inputs!.Value.ContainsKey(bytes, "fetch-depht"u8)).IsTrue();
     }
 
     [Test]
@@ -2254,12 +2266,13 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-docker-ast.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "step-docker-ast.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
         var jobKey = Utf8String.FromLowerAscii("build"u8);
-        var step = result.Workflow!.Jobs[jobKey].Steps![0];
+        var step = result.Workflow!.Jobs.Get(bytes, "build"u8).Steps![0];
         await Assert.That(step.Exec).IsTypeOf<ExecAction>();
         var exec = (ExecAction)step.Exec;
         await Assert.That(exec.Entrypoint is not null).IsTrue();
@@ -2869,7 +2882,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "ast-comprehensive.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "ast-comprehensive.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
@@ -2897,19 +2911,20 @@ public sealed class ParserTests
 
         var dispatch = (WorkflowDispatchEvent)workflow.On.First(static e => e is WorkflowDispatchEvent);
         await Assert.That(dispatch.Inputs is not null).IsTrue();
-        await Assert.That(dispatch.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(dispatch.Inputs!.Value.Count).IsEqualTo(1);
         var targetKey = Utf8String.FromLowerAscii("target"u8);
-        await Assert.That(dispatch.Inputs.ContainsKey(targetKey)).IsTrue();
-        await Assert.That(dispatch.Inputs[targetKey].Type).IsEqualTo(DispatchInputType.Choice);
+        await Assert.That(dispatch.Inputs.Value.ContainsKey(bytes, targetKey.Span)).IsTrue();
+        dispatch.Inputs.Value.TryGetValue(bytes, targetKey.Span, out var dispatchTargetInput);
+        await Assert.That(dispatchTargetInput.Type).IsEqualTo(DispatchInputType.Choice);
 
         var callEvent = (WorkflowCallEvent)workflow.On.First(static e => e is WorkflowCallEvent);
         await Assert.That(callEvent.Inputs is not null).IsTrue();
         await Assert.That(callEvent.Inputs!.Count).IsEqualTo(1);
         await Assert.That(callEvent.Inputs[0].Type).IsEqualTo(WorkflowCallInputType.String);
         await Assert.That(callEvent.Secrets is not null).IsTrue();
-        await Assert.That(callEvent.Secrets!.Count).IsEqualTo(1);
+        await Assert.That(callEvent.Secrets!.Value.Count).IsEqualTo(1);
         await Assert.That(callEvent.Outputs is not null).IsTrue();
-        await Assert.That(callEvent.Outputs!.Count).IsEqualTo(1);
+        await Assert.That(callEvent.Outputs!.Value.Count).IsEqualTo(1);
 
         var imageVersionEvent = (ImageVersionEvent)workflow.On.First(static e => e is ImageVersionEvent);
         await Assert.That(imageVersionEvent.Names is not null).IsTrue();
@@ -2919,10 +2934,10 @@ public sealed class ParserTests
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
         var callKey = Utf8String.FromLowerAscii("call"u8);
-        await Assert.That(workflow.Jobs.ContainsKey(buildKey)).IsTrue();
-        await Assert.That(workflow.Jobs.ContainsKey(callKey)).IsTrue();
+        await Assert.That(workflow.Jobs.ContainsKey(bytes, buildKey.Span)).IsTrue();
+        await Assert.That(workflow.Jobs.ContainsKey(bytes, callKey.Span)).IsTrue();
 
-        var buildJob = workflow.Jobs[buildKey];
+        var buildJob = workflow.Jobs.Get(bytes, "build"u8);
         await Assert.That(buildJob.Needs is not null).IsTrue();
         await Assert.That(buildJob.RunsOn is not null).IsTrue();
         await Assert.That(buildJob.Environment is not null).IsTrue();
@@ -2950,9 +2965,9 @@ public sealed class ParserTests
         await Assert.That(actionStep.Exec).IsTypeOf<ExecAction>();
         var actionExec = (ExecAction)actionStep.Exec;
         await Assert.That(actionExec.Inputs is not null).IsTrue();
-        await Assert.That(actionExec.Inputs!.Count).IsEqualTo(1);
+        await Assert.That(actionExec.Inputs!.Value.Count).IsEqualTo(1);
 
-        var callJob = workflow.Jobs[callKey];
+        var callJob = workflow.Jobs.Get(bytes, callKey.Span);
         await Assert.That(callJob.WorkflowCall is not null).IsTrue();
         await Assert.That(callJob.WorkflowCall!.Inputs is not null).IsTrue();
         await Assert.That(callJob.WorkflowCall.Secrets is not null).IsTrue();
@@ -2994,7 +3009,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "ast-ranges.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "ast-ranges.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
@@ -3014,7 +3030,7 @@ public sealed class ParserTests
         await Assert.That(workflow.Concurrency is not null).IsTrue();
         await Assert.That(HasRange(workflow.Concurrency!.Range)).IsTrue();
 
-        var buildJob = workflow.Jobs[Utf8String.FromLowerAscii("build"u8)];
+        var buildJob = workflow.Jobs.Get(bytes, "build"u8);
         await Assert.That(HasRange(buildJob.Range)).IsTrue();
         await Assert.That(buildJob.Strategy is not null).IsTrue();
         await Assert.That(HasRange(buildJob.Strategy!.Range)).IsTrue();
@@ -3056,13 +3072,14 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "ast-matrix-rawyaml.yml");
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "ast-matrix-rawyaml.yml");
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.Workflow is not null).IsTrue();
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
-        var job = result.Workflow!.Jobs[buildKey];
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Strategy is not null).IsTrue();
         await Assert.That(job.Strategy!.Matrix is not null).IsTrue();
 
@@ -3070,7 +3087,7 @@ public sealed class ParserTests
         await Assert.That(matrix.Include is not null).IsTrue();
         await Assert.That(matrix.Exclude is not null).IsTrue();
         await Assert.That(matrix.Rows is not null).IsTrue();
-        var axisRow = matrix.Rows!.Values.FirstOrDefault(static r => r.Values is not null && r.Values.Count == 3);
+        var axisRow = matrix.Rows!.Value.Values().FirstOrDefault(static r => r.Values is not null && r.Values.Count == 3);
         await Assert.That(axisRow is not null).IsTrue();
         axisRow ??= new MatrixRow { Name = new StringNode { Value = default, Quoted = false, Range = default } };
         await Assert.That(axisRow.Values is not null).IsTrue();
@@ -3084,13 +3101,15 @@ public sealed class ParserTests
         await Assert.That(includeEntries.Count).IsEqualTo(1);
         var includeEntry = includeEntries[0];
         var metaKey = Utf8String.FromLowerAscii("meta"u8);
-        await Assert.That(includeEntry.ContainsKey(metaKey)).IsTrue();
-        await Assert.That(includeEntry[metaKey]).IsTypeOf<RawYamlObject>();
+        await Assert.That(includeEntry.ContainsKey(bytes, metaKey.Span)).IsTrue();
+        var metaRaw = includeEntry.Get(bytes, "meta"u8);
+        await Assert.That(metaRaw).IsTypeOf<RawYamlObject>();
 
-        var metaObject = (RawYamlObject)includeEntry[metaKey];
+        var metaObject = (RawYamlObject)metaRaw;
         var versionsKey = Utf8String.FromLowerAscii("versions"u8);
-        await Assert.That(metaObject.Properties.ContainsKey(versionsKey)).IsTrue();
-        await Assert.That(metaObject.Properties[versionsKey]).IsTypeOf<RawYamlArray>();
+        await Assert.That(metaObject.Properties.ContainsKey(bytes, versionsKey.Span)).IsTrue();
+        var versionsRaw = metaObject.Properties.Get(bytes, "versions"u8);
+        await Assert.That(versionsRaw).IsTypeOf<RawYamlArray>();
     }
 
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)

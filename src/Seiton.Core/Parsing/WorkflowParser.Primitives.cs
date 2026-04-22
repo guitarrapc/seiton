@@ -282,35 +282,39 @@ public static partial class WorkflowParser
             return [];
         }
 
-        var list = new List<StringNode>(4);
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-        {
-            var node = ParseString(ref reader, out needsError, out errorMark, allowElemEmpty);
-            if (needsError)
-            {
-                // Element-level error: use the same errorMessage pattern
-                // The caller will provide the error message, so just propagate the first error
-                break;
-            }
-            if (node is not null)
-            {
-                list.Add(node);
-            }
-        }
-
-        // Continue reading remaining elements even after error
-        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-        {
-            reader.SkipCurrentNode();
-        }
-
-        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        var list = new PooledBuffer<StringNode>(4);
+        try
         {
             reader.Read();
-        }
+            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+            {
+                var node = ParseString(ref reader, out needsError, out errorMark, allowElemEmpty);
+                if (needsError)
+                {
+                    // Element-level error: use the same errorMessage pattern
+                    // The caller will provide the error message, so just propagate the first error
+                    break;
+                }
+                if (node is not null)
+                {
+                    list.Add(node);
+                }
+            }
 
-        return list.ToArray();
+            // Continue reading remaining elements even after error
+            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+            {
+                reader.SkipCurrentNode();
+            }
+
+            if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+            {
+                reader.Read();
+            }
+
+            return list.ToArray();
+        }
+        finally { list.Dispose(); }
     }
 
     internal static FloatNode? ParseFloat<TReader>(ref TReader reader, List<Diagnostic> diagnostics, string errorMessage)
@@ -693,6 +697,19 @@ public static partial class WorkflowParser
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, TextPosition mark)
+    {
+        var location = new TextRange(
+            Start: mark.Position,
+            Length: 0,
+            StartLine: mark.Line,
+            StartColumn: mark.Col,
+            EndLine: mark.Line,
+            EndColumn: mark.Col);
+
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+    }
+
+    private static void AddError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark)
     {
         var location = new TextRange(
             Start: mark.Position,

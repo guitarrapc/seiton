@@ -39,9 +39,9 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
         CheckEnvForStep(step.Env, step);
 
         // Check step with: inputs (only for use:actions steps)
-        if (step.Exec is ExecAction action && action.Inputs is not null && action.Inputs.Count > 0)
+        if (step.Exec is ExecAction action && action.Inputs is not null && action.Inputs.Value.Count > 0)
         {
-            foreach (var pair in action.Inputs)
+            foreach (var pair in action.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
                 CheckNode(pair.Value, sinkName: $"with.{inputName}", static (rule, location, s) =>
@@ -62,12 +62,12 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
 
         // Check job with: (reusable-workflow call inputs)
         var callInputs = job.WorkflowCall?.Inputs;
-        if (callInputs is null || callInputs.Count == 0)
+        if (callInputs is null || callInputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in callInputs)
+        foreach (var pair in callInputs.Value)
         {
             var inputName = Decode(pair.Value.Name.Value);
             CheckNode(pair.Value.Value, sinkName: $"with.{inputName}", static (rule, location, j) =>
@@ -88,12 +88,12 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
             rule.AddStepError(s, DiagnosticMessage, location), step);
 
         var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
+        if (vars is null || vars.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars)
+        foreach (var pair in vars.Value)
         {
             var keyName = Decode(pair.Value.Name.Value);
             CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, s) =>
@@ -114,12 +114,12 @@ public sealed class SecretsWholeContextAccessRule : RuleBase
             rule.AddJobError(j, DiagnosticMessage, location), job);
 
         var vars = env.Vars;
-        if (vars is null || vars.Count == 0)
+        if (vars is null || vars.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars)
+        foreach (var pair in vars.Value)
         {
             var keyName = Decode(pair.Value.Name.Value);
             CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, j) =>

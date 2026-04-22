@@ -6,9 +6,9 @@ public sealed class ActionMetadata
 
     public StringNode? Description { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, ActionMetadataInput>? Inputs { get; init; }
+    public SliceMap<ActionMetadataInput>? Inputs { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, ActionMetadataOutput>? Outputs { get; init; }
+    public SliceMap<ActionMetadataOutput>? Outputs { get; init; }
 
     public ActionMetadataRuns? Runs { get; init; }
 

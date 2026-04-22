@@ -14,7 +14,7 @@ public static partial class WorkflowParser
         Permissions? permissionsNode = null;
         Seiton.Core.Parsing.Ast.Environment? environmentNode = null;
         Concurrency? concurrencyNode = null;
-        Dictionary<Utf8String, StringNode>? outputsNode = null;
+        SliceMap<StringNode>? outputsNode = null;
         Env? envNode = null;
         Defaults? defaultsNode = null;
         StringNode? ifNode = null;
@@ -473,13 +473,13 @@ public static partial class WorkflowParser
         if (!hasUses && workflowCallNode is not null)
         {
             // spec §3.10 post-validation: `with` is only valid for reusable workflow calls via `uses`
-            if (workflowCallNode.Inputs is not null && workflowCallNode.Inputs.Count > 0)
+            if (workflowCallNode.Inputs is not null && workflowCallNode.Inputs.Value.Count > 0)
             {
                 AddError(diagnostics, $"job '{decodedJobId}' key 'with' requires uses", jobIdMark);
             }
 
             // spec §3.10 post-validation: `secrets` is only valid for reusable workflow calls via `uses`
-            if ((workflowCallNode.Secrets is not null && workflowCallNode.Secrets.Count > 0) || workflowCallNode.InheritSecrets)
+            if ((workflowCallNode.Secrets is not null && workflowCallNode.Secrets.Value.Count > 0) || workflowCallNode.InheritSecrets)
             {
                 AddError(diagnostics, $"job '{decodedJobId}' key 'secrets' requires uses", jobIdMark);
             }
@@ -799,7 +799,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, StringNode>? ParseOutputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static SliceMap<StringNode>? ParseOutputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -809,7 +809,9 @@ public static partial class WorkflowParser
             return null;
         }
 
-        var outputs = new Dictionary<Utf8String, StringNode>();
+        var outputs = new PooledBuffer<SliceMap<StringNode>.Entry>(8);
+        try
+        {
         Span<long> keyStore = stackalloc long[64];
         var keyCount = 0;
         reader.Read();
@@ -851,7 +853,6 @@ public static partial class WorkflowParser
             }
 
             var keyNode = new StringNode { Value = keySlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(reader.CurrentStart, keyUtf8.Length) };
-            var key = Utf8String.FromLowerAscii(keyUtf8);
             reader.Read();
             if (reader.End)
             {
@@ -860,7 +861,7 @@ public static partial class WorkflowParser
 
             var value = ParseStringAndValidateExpression(ref reader, diagnostics, ExpressionValidationContext.JobOutput, out var outErr, out var outMark, parseWholeValueIfNoEmbedded: false);
             if (outErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar", outMark);
-            outputs[key] = value ?? keyNode;
+            outputs.Add(new SliceMap<StringNode>.Entry(keySlice, value ?? keyNode));
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -868,10 +869,12 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return outputs;
+        return new SliceMap<StringNode>(outputs.ToArray(), caseSensitive: false);
+        }
+        finally { outputs.Dispose(); }
     }
 
-    private static Dictionary<Utf8String, WorkflowCallInput>? ParseWorkflowCallInputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static SliceMap<WorkflowCallInput>? ParseWorkflowCallInputsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -881,7 +884,9 @@ public static partial class WorkflowParser
             return null;
         }
 
-        var map = new Dictionary<Utf8String, WorkflowCallInput>();
+        var map = new PooledBuffer<SliceMap<WorkflowCallInput>.Entry>(8);
+        try
+        {
         Span<long> keyStore = stackalloc long[64];
         var keyCount = 0;
         reader.Read();
@@ -912,7 +917,6 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var key = Utf8String.FromLowerAscii(nameUtf8);
             var nameNode = new StringNode { Value = nameSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(nameMark, nameUtf8.Length) };
             reader.Read();
             if (reader.End)
@@ -935,7 +939,7 @@ public static partial class WorkflowParser
 
             if (valueNode is not null)
             {
-                map[key] = new WorkflowCallInput { Name = nameNode, Value = valueNode };
+                map.Add(new SliceMap<WorkflowCallInput>.Entry(nameSlice, new WorkflowCallInput { Name = nameNode, Value = valueNode }));
             }
         }
 
@@ -944,10 +948,12 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return map;
+        return new SliceMap<WorkflowCallInput>(map.ToArray(), caseSensitive: false);
+        }
+        finally { map.Dispose(); }
     }
 
-    private static Dictionary<Utf8String, WorkflowCallSecret>? ParseWorkflowCallSecretsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, out bool inheritSecrets)
+    private static SliceMap<WorkflowCallSecret>? ParseWorkflowCallSecretsNode<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, out bool inheritSecrets)
         where TReader : IYamlStreamReader, allows ref struct
     {
         inheritSecrets = false;
@@ -974,7 +980,9 @@ public static partial class WorkflowParser
             return null;
         }
 
-        var map = new Dictionary<Utf8String, WorkflowCallSecret>();
+        var map = new PooledBuffer<SliceMap<WorkflowCallSecret>.Entry>(8);
+        try
+        {
         Span<long> keyStore = stackalloc long[64];
         var keyCount = 0;
         reader.Read();
@@ -1005,7 +1013,6 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var key = Utf8String.FromLowerAscii(nameUtf8);
             var nameNode = new StringNode { Value = nameSlice, Quoted = reader.IsScalarQuoted(), Range = BuildScalarLocation(nameMark, nameUtf8.Length) };
             reader.Read();
             if (reader.End)
@@ -1024,7 +1031,7 @@ public static partial class WorkflowParser
 
             if (valueNode is not null)
             {
-                map[key] = new WorkflowCallSecret { Name = nameNode, Value = valueNode };
+                map.Add(new SliceMap<WorkflowCallSecret>.Entry(nameSlice, new WorkflowCallSecret { Name = nameNode, Value = valueNode }));
             }
         }
 
@@ -1033,7 +1040,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return map;
+        return new SliceMap<WorkflowCallSecret>(map.ToArray(), caseSensitive: false);
+        }
+        finally { map.Dispose(); }
     }
 
     private static void ParseJobSecrets<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)

@@ -5,7 +5,7 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static Dictionary<Utf8String, ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -15,65 +15,68 @@ public static partial class WorkflowParser
             return null;
         }
 
-        var map = new Dictionary<Utf8String, ActionMetadataInput>();
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        var map = new PooledBuffer<SliceMap<ActionMetadataInput>.Entry>(8);
+        try
         {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            reader.Read();
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
-                AddError(diagnostics, "action inputs key must be scalar", reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
+                    AddError(diagnostics, "action inputs key must be scalar", reader.CurrentStart);
                     reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
                 }
 
-                continue;
+                var idMark = reader.CurrentStart;
+                var idSlice = reader.GetScalarSlice();
+                var idUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterDynamicKey(
+                    source,
+                    idUtf8,
+                    idSlice.Offset,
+                    idSlice.Length,
+                    idMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "action inputs"))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var nameNode = new StringNode
+                {
+                    Value = idSlice,
+                    Quoted = reader.IsScalarQuoted(),
+                    Range = BuildScalarLocation(idMark, idUtf8.Length),
+                };
+                reader.Read();
+                map.Add(new SliceMap<ActionMetadataInput>.Entry(idSlice, ParseActionMetadataInput(ref reader, diagnostics, nameNode)));
             }
 
-            var idMark = reader.CurrentStart;
-            var idSlice = reader.GetScalarSlice();
-            var idUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                idUtf8,
-                idSlice.Offset,
-                idSlice.Length,
-                idMark,
-                diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: false,
-                "action inputs"))
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
             {
                 reader.Read();
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
             }
 
-            var id = Utf8String.FromLowerAscii(idUtf8);
-            var nameNode = new StringNode
-            {
-                Value = idSlice,
-                Quoted = reader.IsScalarQuoted(),
-                Range = BuildScalarLocation(idMark, idUtf8.Length),
-            };
-            reader.Read();
-            map[id] = ParseActionMetadataInput(ref reader, diagnostics, nameNode);
+            return new SliceMap<ActionMetadataInput>(map.ToArray(), caseSensitive: false);
         }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            reader.Read();
-        }
-
-        return map;
+        finally { map.Dispose(); }
     }
 
     private static ActionMetadataInput ParseActionMetadataInput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
@@ -185,7 +188,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Dictionary<Utf8String, ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -195,65 +198,68 @@ public static partial class WorkflowParser
             return null;
         }
 
-        var map = new Dictionary<Utf8String, ActionMetadataOutput>();
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        var map = new PooledBuffer<SliceMap<ActionMetadataOutput>.Entry>(8);
+        try
         {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            reader.Read();
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
-                AddError(diagnostics, "action outputs key must be scalar", reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
+                    AddError(diagnostics, "action outputs key must be scalar", reader.CurrentStart);
                     reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
                 }
 
-                continue;
+                var idMark = reader.CurrentStart;
+                var idSlice = reader.GetScalarSlice();
+                var idUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterDynamicKey(
+                    source,
+                    idUtf8,
+                    idSlice.Offset,
+                    idSlice.Length,
+                    idMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "action outputs"))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var nameNode = new StringNode
+                {
+                    Value = idSlice,
+                    Quoted = reader.IsScalarQuoted(),
+                    Range = BuildScalarLocation(idMark, idUtf8.Length),
+                };
+                reader.Read();
+                map.Add(new SliceMap<ActionMetadataOutput>.Entry(idSlice, ParseActionMetadataOutput(ref reader, diagnostics, nameNode)));
             }
 
-            var idMark = reader.CurrentStart;
-            var idSlice = reader.GetScalarSlice();
-            var idUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                idUtf8,
-                idSlice.Offset,
-                idSlice.Length,
-                idMark,
-                diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: false,
-                "action outputs"))
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
             {
                 reader.Read();
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
             }
 
-            var id = Utf8String.FromLowerAscii(idUtf8);
-            var nameNode = new StringNode
-            {
-                Value = idSlice,
-                Quoted = reader.IsScalarQuoted(),
-                Range = BuildScalarLocation(idMark, idUtf8.Length),
-            };
-            reader.Read();
-            map[id] = ParseActionMetadataOutput(ref reader, diagnostics, nameNode);
+            return new SliceMap<ActionMetadataOutput>(map.ToArray(), caseSensitive: false);
         }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            reader.Read();
-        }
-
-        return map;
+        finally { map.Dispose(); }
     }
 
     private static ActionMetadataOutput ParseActionMetadataOutput<TReader>(ref TReader reader, List<Diagnostic> diagnostics, StringNode nameNode)
@@ -637,23 +643,27 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
         {
-            var list = new List<StringNode>(4);
-            reader.Read();
-            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-            {
-                var s = ParseString(ref reader, diagnostics, "action runs args entry must be scalar");
-                if (s is not null)
-                {
-                    list.Add(s);
-                }
-            }
-
-            if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+            var list = new PooledBuffer<StringNode>(4);
+            try
             {
                 reader.Read();
-            }
+                while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+                {
+                    var s = ParseString(ref reader, diagnostics, "action runs args entry must be scalar");
+                    if (s is not null)
+                    {
+                        list.Add(s);
+                    }
+                }
 
-            return list;
+                if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+                {
+                    reader.Read();
+                }
+
+                return list.ToArray();
+            }
+            finally { list.Dispose(); }
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar)

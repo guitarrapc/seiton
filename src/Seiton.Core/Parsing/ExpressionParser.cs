@@ -23,52 +23,7 @@ public static class ExpressionParser
             Diagnostics: parser.DiagnosticsToArray());
     }
 
-    /// <summary>
-    /// ArrayPool-backed growable buffer. Encapsulates Rent/Return lifecycle and growth.
-    /// </summary>
-    private struct PooledBuffer<T>
-    {
-        private T[] _items;
-        private int _count;
-
-        public PooledBuffer(int initialCapacity)
-        {
-            _items = ArrayPool<T>.Shared.Rent(initialCapacity);
-            _count = 0;
-        }
-
-        public int Count => _count;
-
-        public int Add(T item)
-        {
-            if (_count == _items.Length)
-            {
-                Grow();
-            }
-
-            _items[_count] = item;
-            return _count++;
-        }
-
-        public T[] ToArray() => _count == 0 ? [] : _items.AsSpan(0, _count).ToArray();
-
-        private void Grow()
-        {
-            var old = _items;
-            _items = ArrayPool<T>.Shared.Rent(old.Length * 2);
-            old.AsSpan(0, _count).CopyTo(_items);
-            ArrayPool<T>.Shared.Return(old);
-        }
-
-        public void Dispose()
-        {
-            if (_items is not null)
-            {
-                ArrayPool<T>.Shared.Return(_items);
-                _items = null!;
-            }
-        }
-    }
+    // PooledBuffer<T> is now shared — see PooledBuffer.cs
 
     private ref struct Parser
     {

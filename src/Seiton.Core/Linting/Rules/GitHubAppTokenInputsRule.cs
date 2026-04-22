@@ -28,9 +28,9 @@ public sealed class GitHubAppTokenInputsRule : RuleBase
         var hasOwner = false;
         if (actionExec.Inputs is not null)
         {
-            foreach (var pair in actionExec.Inputs)
+            foreach (var pair in actionExec.Inputs.Value)
             {
-                var key = pair.Key.Span;
+                var key = pair.Key.AsSpan(Config.Utf8Yaml);
                 if (IsRepositoryConstraintKey(key))
                 {
                     hasRepositoryConstraint = true;

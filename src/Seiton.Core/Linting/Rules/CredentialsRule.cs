@@ -33,7 +33,7 @@ public sealed class CredentialsRule : RuleBase
         ValidateContainer(job, "job.container", job.Container);
 
         var serviceMap = job.Services?.ServiceMap;
-        if (serviceMap is null || serviceMap.Count == 0)
+        if (serviceMap is null || serviceMap.Value.Count == 0)
         {
             return;
         }

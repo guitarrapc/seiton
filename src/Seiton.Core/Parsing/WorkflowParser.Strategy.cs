@@ -184,7 +184,9 @@ public static partial class WorkflowParser
         var range = BuildScalarLocation(mappingStart, 1);
         MatrixCombinations[]? include = null;
         MatrixCombinations[]? exclude = null;
-        Dictionary<Utf8String, MatrixRow>? rows = null;
+        var rowBuffer = new PooledBuffer<SliceMap<MatrixRow>.Entry>(8);
+        try
+        {
         Span<long> keyStore = stackalloc long[64];
         var keyCount = 0;
 
@@ -228,10 +230,6 @@ public static partial class WorkflowParser
 
             var isInclude = keyUtf8.SequenceEqual("include"u8);
             var isExclude = keyUtf8.SequenceEqual("exclude"u8);
-            // Capture a stable copy of the key bytes before advancing the reader.
-            // reader.GetScalarUtf8() returns a span into VYaml's volatile internal buffer;
-            // after subsequent Read() calls the buffer content changes, making the span stale.
-            var rowKey = Utf8String.FromLowerAscii(keyUtf8);
             reader.Read();
             if (reader.End)
             {
@@ -259,7 +257,7 @@ public static partial class WorkflowParser
 
             if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
             {
-                var keyTextForDiagnostic = Encoding.UTF8.GetString(rowKey.Span);
+                var keyTextForDiagnostic = DecodeUtf8(source, keySlice);
                 AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentStart);
             }
 
@@ -280,26 +278,25 @@ public static partial class WorkflowParser
                     out var rowErr,
                     out var rowMark,
                     parseWholeValueIfNoEmbedded: false);
-                if (rowErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(rowKey.Span)} must be sequence or scalar", rowMark);
+                if (rowErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{DecodeUtf8(source, keySlice)} must be sequence or scalar", rowMark);
                 rowExpr = valueNode;
                 rowValues = valueNode is null ? [] : [new RawYamlString { Value = valueNode }];
             }
             else if (reader.CurrentKind == YamlEventKind.SequenceStart)
             {
-                rowValues = ParseRawYamlArray(ref reader, diagnostics, source, jobId, rowKey.Span);
+                rowValues = ParseRawYamlArray(ref reader, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length));
             }
             else
             {
                 reader.SkipCurrentNode();
             }
 
-            rows ??= new Dictionary<Utf8String, MatrixRow>();
-            rows[rowKey] = new MatrixRow
+            rowBuffer.Add(new SliceMap<MatrixRow>.Entry(keySlice, new MatrixRow
             {
                 Name = rowName,
                 Expression = rowExpr,
                 Values = rowValues,
-            };
+            }));
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -312,9 +309,11 @@ public static partial class WorkflowParser
         {
             Include = include,
             Exclude = exclude,
-            Rows = rows,
+            Rows = rowBuffer.Count > 0 ? new SliceMap<MatrixRow>(rowBuffer.ToArray(), caseSensitive: false) : null,
             Range = range,
         };
+        }
+        finally { rowBuffer.Dispose(); }
     }
 
     private static MatrixCombinations[] ParseMatrixCombinations<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
@@ -347,32 +346,36 @@ public static partial class WorkflowParser
             return [];
         }
 
-        var entries = new List<IReadOnlyDictionary<Utf8String, RawYamlValue>>();
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-        {
-            if (reader.CurrentKind != YamlEventKind.MappingStart)
-            {
-                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} item must be mapping", reader.CurrentStart);
-                reader.SkipCurrentNode();
-                continue;
-            }
-
-            entries.Add(ParseRawYamlObject(ref reader, diagnostics, source, jobId));
-        }
-
-        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        var entries = new PooledBuffer<SliceMap<RawYamlValue>>(4);
+        try
         {
             reader.Read();
-        }
-
-        return
-        [
-            new MatrixCombinations
+            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                Entries = entries,
+                if (reader.CurrentKind != YamlEventKind.MappingStart)
+                {
+                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} item must be mapping", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    continue;
+                }
+
+                entries.Add(ParseRawYamlObject(ref reader, diagnostics, source, jobId));
             }
-        ];
+
+            if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+            {
+                reader.Read();
+            }
+
+            return
+            [
+                new MatrixCombinations
+                {
+                    Entries = entries.ToArray(),
+                }
+            ];
+        }
+        finally { entries.Dispose(); }
     }
 
     private static IReadOnlyList<RawYamlValue> ParseRawYamlArray<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8)
@@ -385,19 +388,23 @@ public static partial class WorkflowParser
             return [];
         }
 
-        var values = new List<RawYamlValue>();
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-        {
-            values.Add(ParseRawYamlValue(ref reader, diagnostics, source, jobId));
-        }
-
-        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        var values = new PooledBuffer<RawYamlValue>(4);
+        try
         {
             reader.Read();
-        }
+            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+            {
+                values.Add(ParseRawYamlValue(ref reader, diagnostics, source, jobId));
+            }
 
-        return values;
+            if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+            {
+                reader.Read();
+            }
+
+            return values.ToArray();
+        }
+        finally { values.Dispose(); }
     }
 
     private static RawYamlValue ParseRawYamlValue<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
@@ -432,10 +439,12 @@ public static partial class WorkflowParser
         return new RawYamlString { Value = new StringNode { Value = default, Quoted = false, Range = default } };
     }
 
-    private static IReadOnlyDictionary<Utf8String, RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static SliceMap<RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var map = new Dictionary<Utf8String, RawYamlValue>();
+        var map = new PooledBuffer<SliceMap<RawYamlValue>.Entry>(8);
+        try
+        {
         Span<long> keyStore = stackalloc long[64];
         var keyCount = 0;
         reader.Read();
@@ -476,14 +485,13 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var key = Utf8String.FromLowerAscii(keyUtf8);
             reader.Read();
             if (reader.End)
             {
                 break;
             }
 
-            map[key] = ParseRawYamlValue(ref reader, diagnostics, source, jobId);
+            map.Add(new SliceMap<RawYamlValue>.Entry(keySlice, ParseRawYamlValue(ref reader, diagnostics, source, jobId)));
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -491,7 +499,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return map;
+        return new SliceMap<RawYamlValue>(map.ToArray(), caseSensitive: false);
+        }
+        finally { map.Dispose(); }
     }
 
 }

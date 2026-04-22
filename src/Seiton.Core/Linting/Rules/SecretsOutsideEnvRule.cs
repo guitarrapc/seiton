@@ -28,12 +28,12 @@ public sealed class SecretsOutsideEnvRule : RuleBase
             return;
         }
 
-        if (job.WorkflowCall?.Inputs is null || job.WorkflowCall.Inputs.Count == 0)
+        if (job.WorkflowCall?.Inputs is null || job.WorkflowCall.Inputs.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in job.WorkflowCall.Inputs)
+        foreach (var pair in job.WorkflowCall.Inputs.Value)
         {
             var value = pair.Value.Value;
             if (!ContainsSecretsReference(value))

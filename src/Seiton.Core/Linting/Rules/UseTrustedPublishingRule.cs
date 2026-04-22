@@ -62,7 +62,7 @@ public sealed class UseTrustedPublishingRule : RuleBase
             }
         }
 
-        if (permissions.Scopes is null || permissions.Scopes.Count == 0)
+        if (permissions.Scopes is null || permissions.Scopes.Value.Count == 0)
         {
             return false;
         }

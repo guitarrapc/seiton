@@ -33,24 +33,24 @@ public sealed class OverprovisionedSecretsRule : RuleBase
 
     public override void VisitJobPre(Job job)
     {
-        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Count > _maxJobSecrets)
+        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Value.Count > _maxJobSecrets)
         {
             AddJobWarning(
                 job,
-                $"reusable workflow call passes {job.WorkflowCall.Secrets.Count} explicit secrets; map only minimum required secrets",
+                $"reusable workflow call passes {job.WorkflowCall.Secrets.Value.Count} explicit secrets; map only minimum required secrets",
                 BuildUsesLocation(job.WorkflowCall));
         }
     }
 
     public override void VisitStep(Step step)
     {
-        if (Config.Utf8Yaml is null || step.Env?.Vars is null || step.Env.Vars.Count == 0)
+        if (Config.Utf8Yaml is null || step.Env?.Vars is null || step.Env.Vars.Value.Count == 0)
         {
             return;
         }
 
         var secretVarCount = 0;
-        foreach (var pair in step.Env.Vars)
+        foreach (var pair in step.Env.Vars.Value)
         {
             if (!ContainsSecretsReference(pair.Value.Value))
             {

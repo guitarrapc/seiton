@@ -66,6 +66,23 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RuleInterface_CanBeUsedWithWorkflowVisitor()
     {
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = new StringNode { Value = new Utf8Slice(0, 0) },
+                Steps =
+                [
+                    new Step
+                    {
+                        Exec = new ExecRun
+                        {
+                            Kind = StepExecKind.Run,
+                            Run = new StringNode { Value = new Utf8Slice(0, 0) },
+                        },
+                    },
+                ],
+            }));
+
         var workflow = new Workflow
         {
             On =
@@ -80,24 +97,7 @@ public sealed class RuleInterfaceTests
                     EventName = new StringNode { Value = new Utf8Slice(0, 0) },
                 },
             ],
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode { Value = new Utf8Slice(0, 0) },
-                    Steps =
-                    [
-                        new Step
-                        {
-                            Exec = new ExecRun
-                            {
-                                Kind = StepExecKind.Run,
-                                Run = new StringNode { Value = new Utf8Slice(0, 0) },
-                            },
-                        },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var rule = new CountingRule();
@@ -130,35 +130,35 @@ public sealed class RuleInterfaceTests
               - run: echo hello
         """;
 
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = new StringNode
+                {
+                    Value = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+                    Range = new TextRange(0, 0, 1, 1, 1, 1),
+                },
+                RunsOn = new Runner(),
+                WorkflowCall = new WorkflowCall
+                {
+                    Uses = new StringNode { Value = new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length) },
+                },
+                Steps =
+                [
+                    new Step
+                    {
+                        Exec = new ExecRun
+                        {
+                            Kind = StepExecKind.Run,
+                            Run = new StringNode { Value = new Utf8Slice(0, 0) },
+                        },
+                    },
+                ],
+            }));
+
         var workflow = new Workflow
         {
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode
-                    {
-                        Value = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
-                        Range = new TextRange(0, 0, 1, 1, 1, 1),
-                    },
-                    RunsOn = new Runner(),
-                    WorkflowCall = new WorkflowCall
-                    {
-                        Uses = new StringNode { Value = new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length) },
-                    },
-                    Steps =
-                    [
-                        new Step
-                        {
-                            Exec = new ExecRun
-                            {
-                                Kind = StepExecKind.Run,
-                                Run = new StringNode { Value = new Utf8Slice(0, 0) },
-                            },
-                        },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var visitor = new WorkflowVisitor();
@@ -176,43 +176,51 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task SyntaxRule_ReportsUnknownInputForPopularAction()
     {
-        var source = "actions/checkout@v4";
+        // Source buffer must contain all key-like text that SliceMap entries reference
+        var source = "actions/checkout@v4\0fetch-depht\0build";
         var sourceBytes = Encoding.UTF8.GetBytes(source);
+        var usesEnd = "actions/checkout@v4".Length;
+        var inputKeyOffset = usesEnd + 1; // skip \0
+        var inputKeyLength = "fetch-depht".Length;
+        var buildKeyOffset = inputKeyOffset + inputKeyLength + 1;
+        var buildKeyLength = "build".Length;
+
+        var inputsEntries = new SliceMap<StringNode>.Entry[]
+        {
+            new(new Utf8Slice(inputKeyOffset, inputKeyLength), new StringNode { Value = new Utf8Slice(0, 0) }),
+        };
+
+        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
+            (new Utf8String("build"u8), new Job
+            {
+                Id = new StringNode
+                {
+                    Value = new Utf8Slice(buildKeyOffset, buildKeyLength),
+                    Range = new TextRange(0, 0, 1, 1, 1, 1),
+                },
+                RunsOn = new Runner(),
+                Steps =
+                [
+                    new Step
+                    {
+                        Exec = new ExecAction
+                        {
+                            Kind = StepExecKind.Action,
+                            Uses = new StringNode
+                            {
+                                Value = new Utf8Slice(0, usesEnd),
+                                Range = new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1),
+                            },
+                            Inputs = new SliceMap<StringNode>(inputsEntries, caseSensitive: false),
+                        },
+                        Range = new TextRange(0, 0, 1, 1, 1, 1),
+                    },
+                ],
+            }));
 
         var workflow = new Workflow
         {
-            Jobs = new Dictionary<Utf8String, Job>
-            {
-                [new Utf8String("build"u8)] = new Job
-                {
-                    Id = new StringNode
-                    {
-                        Value = new Utf8Slice(0, 0),
-                        Range = new TextRange(0, 0, 1, 1, 1, 1),
-                    },
-                    RunsOn = new Runner(),
-                    Steps =
-                    [
-                        new Step
-                        {
-                            Exec = new ExecAction
-                            {
-                                Kind = StepExecKind.Action,
-                                Uses = new StringNode
-                                {
-                                    Value = new Utf8Slice(0, sourceBytes.Length),
-                                    Range = new TextRange(0, sourceBytes.Length, 1, 1, 1, sourceBytes.Length + 1),
-                                },
-                                Inputs = new Dictionary<Utf8String, StringNode>
-                                {
-                                    [new Utf8String("fetch-depht"u8)] = new StringNode { Value = new Utf8Slice(0, 0) },
-                                },
-                            },
-                            Range = new TextRange(0, 0, 1, 1, 1, 1),
-                        },
-                    ],
-                },
-            },
+            Jobs = jobs,
         };
 
         var visitor = new WorkflowVisitor();

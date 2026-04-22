@@ -30,7 +30,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         var actionRef = Decode(actionExec.Uses.Value);
         var message = BuildMessage(actionRef);
 
-        if (actionExec.Inputs is null || !actionExec.Inputs.TryGetValue(Utf8String.FromLowerAscii("persist-credentials"u8), out var persistCredentialsNode))
+        if (actionExec.Inputs is null || Config.Utf8Yaml is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, "persist-credentials"u8, out var persistCredentialsNode))
         {
             if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildMissingInputFix(Config, step, actionExec, Config.Utf8Yaml, out var missingFix))
             {
@@ -101,7 +101,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
         var keyIndent = GetStepKeyIndentation(utf8Yaml, usesLine);
 
-        if (actionExec.Inputs is not null && actionExec.Inputs.Count > 0)
+        if (actionExec.Inputs is not null && actionExec.Inputs.Value.Count > 0)
         {
             var withLine = FindWithLine(utf8Yaml, usesLine, stepEndLine, keyIndent);
             if (withLine < 0 || LineContainsFlowMappingAt(utf8Yaml, withLine, keyIndent))
@@ -109,7 +109,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
                 return false;
             }
 
-            var firstInputLine = FindFirstInputLine(utf8Yaml, actionExec.Inputs);
+            var firstInputLine = FindFirstInputLine(utf8Yaml, actionExec.Inputs.Value);
             if (firstInputLine < 1)
             {
                 return false;
@@ -246,7 +246,7 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
         return utf8Yaml.AsSpan(idx, keyBytes.Length).SequenceEqual(keyBytes);
     }
 
-    private static int FindFirstInputLine(byte[] utf8Yaml, IReadOnlyDictionary<Utf8String, StringNode> inputs)
+    private static int FindFirstInputLine(byte[] utf8Yaml, SliceMap<StringNode> inputs)
     {
         var firstLine = int.MaxValue;
         foreach (var pair in inputs)

@@ -33,7 +33,9 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        var map = new Dictionary<Utf8String, Service>();
+        var map = new PooledBuffer<SliceMap<Service>.Entry>(8);
+        try
+        {
         Span<long> keyStore = stackalloc long[64];
         var keyCount = 0;
 
@@ -90,12 +92,12 @@ public static partial class WorkflowParser
             var container = ParseContainerLike(ref reader, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
             if (container is not null)
             {
-                map[Utf8String.FromLowerAscii(serviceNameUtf8)] = new Service
+                map.Add(new SliceMap<Service>.Entry(serviceName, new Service
                 {
                     Name = serviceNameNode,
                     Container = container,
                     Range = serviceNameNode.Range,
-                };
+                }));
             }
         }
 
@@ -107,9 +109,11 @@ public static partial class WorkflowParser
 
         return new Services
         {
-            ServiceMap = map,
+            ServiceMap = new SliceMap<Service>(map.ToArray(), caseSensitive: false),
             Range = range,
         };
+        }
+        finally { map.Dispose(); }
     }
 
     private static Container? ParseContainerLike<TReader>(ref TReader reader, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)

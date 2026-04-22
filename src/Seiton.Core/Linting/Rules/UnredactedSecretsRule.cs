@@ -128,12 +128,12 @@ public sealed class UnredactedSecretsRule : RuleBase
 
     private void AddSecretMappedVars(Env? env, List<string> names)
     {
-        if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        foreach (var pair in env.Vars)
+        foreach (var pair in env.Vars.Value)
         {
             var envVar = pair.Value;
             if (!ContainsSecretsReference(envVar.Value))

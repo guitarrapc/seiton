@@ -268,13 +268,13 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool TryResolveShellVariableNameInEnv(Env? env, byte[] utf8Yaml, string targetName, SimpleReferenceParser parser, out string variableName)
     {
         variableName = string.Empty;
-        if (env?.Vars is null || env.Vars.Count == 0)
+        if (env?.Vars is null || env.Vars.Value.Count == 0)
         {
             return false;
         }
 
         var matches = 0;
-        foreach (var pair in env.Vars)
+        foreach (var pair in env.Vars.Value)
         {
             var envVar = pair.Value;
             var envNameIndex = 0;

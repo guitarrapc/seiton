@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -31,12 +32,12 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         if (!hasUses)
         {
-            if (workflowCall.Inputs is not null && workflowCall.Inputs.Count > 0)
+            if (workflowCall.Inputs is not null && workflowCall.Inputs.Value.Count > 0)
             {
                 AddJobError(job, $"job '{jobId}' key 'with' requires uses");
             }
 
-            if ((workflowCall.Secrets is not null && workflowCall.Secrets.Count > 0) || workflowCall.InheritSecrets)
+            if ((workflowCall.Secrets is not null && workflowCall.Secrets.Value.Count > 0) || workflowCall.InheritSecrets)
             {
                 AddJobError(job, $"job '{jobId}' key 'secrets' requires uses");
             }
@@ -46,7 +47,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         ReportIfPresent(job, job.RunsOn is not null, "runs-on", jobId);
         ReportIfPresent(job, job.Environment is not null, "environment", jobId);
-        ReportIfPresent(job, job.Outputs is not null && job.Outputs.Count > 0, "outputs", jobId);
+        ReportIfPresent(job, job.Outputs is not null && job.Outputs.Value.Count > 0, "outputs", jobId);
         ReportIfPresent(job, job.Env is not null, "env", jobId);
         ReportIfPresent(job, job.Defaults is not null, "defaults", jobId);
         ReportIfPresent(job, job.Steps is not null && job.Steps.Count > 0, "steps", jobId);
@@ -142,7 +143,7 @@ public sealed class ReusableWorkflowRule : RuleBase
             return null;
         }
 
-        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent);
+        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes);
         localWorkflowContracts[resolvedPath] = contract;
         return contract;
     }
@@ -151,7 +152,7 @@ public sealed class ReusableWorkflowRule : RuleBase
     {
         if (workflowCall.Inputs is not null)
         {
-            foreach (var pair in workflowCall.Inputs)
+            foreach (var pair in workflowCall.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
                 if (!contract.Inputs.TryGetValue(inputName, out var expected))
@@ -169,7 +170,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         foreach (var requiredInput in contract.RequiredInputs)
         {
-            if (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs, requiredInput))
+            if (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs.Value, requiredInput))
             {
                 continue;
             }
@@ -228,7 +229,7 @@ public sealed class ReusableWorkflowRule : RuleBase
     {
         if (workflowCall.Secrets is not null)
         {
-            foreach (var pair in workflowCall.Secrets)
+            foreach (var pair in workflowCall.Secrets.Value)
             {
                 var secretName = Decode(pair.Key);
                 if (contract.Secrets.Contains(secretName))
@@ -250,7 +251,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         foreach (var requiredSecret in contract.RequiredSecrets)
         {
-            if (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets, requiredSecret))
+            if (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets.Value, requiredSecret))
             {
                 continue;
             }
@@ -298,7 +299,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return true;
     }
 
-    private static bool ContainsInput(IReadOnlyDictionary<Utf8String, WorkflowCallInput> providedInputs, string requiredInput)
+    private bool ContainsInput(SliceMap<WorkflowCallInput> providedInputs, string requiredInput)
     {
         foreach (var pair in providedInputs)
         {
@@ -311,7 +312,7 @@ public sealed class ReusableWorkflowRule : RuleBase
         return false;
     }
 
-    private static bool ContainsSecret(IReadOnlyDictionary<Utf8String, WorkflowCallSecret> providedSecrets, string requiredSecret)
+    private bool ContainsSecret(SliceMap<WorkflowCallSecret> providedSecrets, string requiredSecret)
     {
         foreach (var pair in providedSecrets)
         {
@@ -412,7 +413,7 @@ public sealed class ReusableWorkflowRule : RuleBase
 
         public HashSet<string> RequiredSecrets { get; } = new(StringComparer.Ordinal);
 
-        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent)
+        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent, byte[] source)
         {
             var contract = new LocalWorkflowContract();
 
@@ -434,9 +435,9 @@ public sealed class ReusableWorkflowRule : RuleBase
 
             if (workflowCallEvent.Secrets is not null)
             {
-                foreach (var pair in workflowCallEvent.Secrets)
+                foreach (var pair in workflowCallEvent.Secrets.Value)
                 {
-                    var secretName = Decode(pair.Key);
+                    var secretName = Encoding.UTF8.GetString(pair.Key.AsSpan(source));
                     contract.Secrets.Add(secretName);
                     if (pair.Value.Required?.Value == true)
                     {

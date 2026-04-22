@@ -16,7 +16,7 @@ public sealed class Job
 
     public Concurrency? Concurrency { get; init; }
 
-    public IReadOnlyDictionary<Utf8String, StringNode>? Outputs { get; init; }
+    public SliceMap<StringNode>? Outputs { get; init; }
 
     public Env? Env { get; init; }
 

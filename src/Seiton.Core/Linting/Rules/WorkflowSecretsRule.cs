@@ -26,7 +26,7 @@ public sealed class WorkflowSecretsRule : RuleBase
 
     private void CheckEnv(Env? env, Workflow workflow)
     {
-        if (env?.Vars is null || env.Vars.Count == 0 || Config.Utf8Yaml is null)
+        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }

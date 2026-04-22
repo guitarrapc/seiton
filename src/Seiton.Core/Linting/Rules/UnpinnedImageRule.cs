@@ -18,12 +18,12 @@ public sealed class UnpinnedImageRule : RuleBase
         ReportIfUnpinnedContainerImage(job, job.Container?.Image, "job.container");
 
         var serviceMap = job.Services?.ServiceMap;
-        if (serviceMap is null || serviceMap.Count == 0)
+        if (serviceMap is null || serviceMap.Value.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in serviceMap)
+        foreach (var pair in serviceMap.Value)
         {
             var service = pair.Value;
             ReportIfUnpinnedContainerImage(job, service.Container.Image, "job.services");
