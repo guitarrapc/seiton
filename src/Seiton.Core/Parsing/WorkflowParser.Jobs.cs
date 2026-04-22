@@ -82,6 +82,32 @@ public static partial class WorkflowParser
         _ => "job key",
     };
 
+    private enum RunsOnMappingKey : byte
+    {
+        Labels = 0,
+        Group = 1,
+    }
+
+    /// <summary>Mapping form of <c>runs-on</c>; ordinal = duplicate-tracking bit index.</summary>
+    private readonly struct RunsOnKeyTable : IUtf8OrderedKeyTable
+    {
+        public static int KeyCount => 2;
+
+        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
+        {
+            0 => "labels"u8,
+            1 => "group"u8,
+            _ => ReadOnlySpan<byte>.Empty,
+        };
+    }
+
+    private static string RunsOnDuplicateKeyName(RunsOnMappingKey key) => key switch
+    {
+        RunsOnMappingKey.Labels => "labels",
+        RunsOnMappingKey.Group => "group",
+        _ => "runs-on key",
+    };
+
     private static Job ParseJobNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition jobIdMark, StringNodeId jobIdNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -642,42 +668,51 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                if (keyUtf8.SequenceEqual("labels"u8))
+                if (Utf8MappingDispatch.TryMatchFirstOrdered<RunsOnKeyTable>(keyUtf8, out var runsOnKeyOrd))
                 {
+                    var roKey = (RunsOnMappingKey)runsOnKeyOrd;
                     reader.Read();
-                    if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "runs-on contains duplicate key: labels", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                    if (!reader.End)
+                    if (!TrySetBit(ref seen, runsOnKeyOrd))
                     {
-                        if (reader.CurrentKind == YamlEventKind.Scalar)
-                        {
-                            var valueUtf8 = reader.GetScalarUtf8();
-                            if (ContainsExpression(valueUtf8))
-                            {
-                                labelsExpr = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
-                                if (lblExprErr) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblExprMark);
-                            }
-                            else
-                            {
-                                labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr1, out var lblMark1);
-                                if (lblErr1) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
-                            }
-                        }
-                        else
-                        {
-                            labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2);
-                            if (lblErr2) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
-                        }
+                        AddError(diagnostics, $"runs-on contains duplicate key: {RunsOnDuplicateKeyName(roKey)}", keyMark);
+                        if (!reader.End) reader.SkipCurrentNode();
+                        continue;
                     }
 
-                    continue;
-                }
+                    switch (roKey)
+                    {
+                        case RunsOnMappingKey.Labels:
+                            if (!reader.End)
+                            {
+                                if (reader.CurrentKind == YamlEventKind.Scalar)
+                                {
+                                    var valueUtf8 = reader.GetScalarUtf8();
+                                    if (ContainsExpression(valueUtf8))
+                                    {
+                                        labelsExpr = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
+                                        if (lblExprErr) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblExprMark);
+                                    }
+                                    else
+                                    {
+                                        labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr1, out var lblMark1);
+                                        if (lblErr1) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
+                                    }
+                                }
+                                else
+                                {
+                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2);
+                                    if (lblErr2) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
+                                }
+                            }
 
-                if (keyUtf8.SequenceEqual("group"u8))
-                {
-                    reader.Read();
-                    if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "runs-on contains duplicate key: group", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                    group = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
-                    if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
+                            break;
+
+                        case RunsOnMappingKey.Group:
+                            group = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
+                            if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
+                            break;
+                    }
+
                     continue;
                 }
 

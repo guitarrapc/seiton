@@ -35,7 +35,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 - ~~`WorkflowParser.On.cs` (1,692 行)~~ → **責務別に 7 partial**（`On.Core` / `On.Schedule` / `On.WorkflowDispatch` / `On.WorkflowCall` / `On.RepositoryDispatch` / `On.ImageVersion` / `On.Webhook`）へ分割済み。
 - `WorkflowParser.Jobs.cs` の `ParseJobNode` はキー共通化で整理済み（以下 実装状況）。
-- 各 partial で同じ「キーチェック → パース → エラー → スキップ」パターンが手書きで反復されている。
+- ~~各 partial で同じ「キーチェック → パース → エラー → スキップ」パターンが手書きで反復されている。~~ → **ジョブ／runs-on マッピング／ステップ**では `Utf8MappingDispatch` + `switch` に寄せ済み（下表）。`WorkflowParser.cs` ルート、`Strategy`、`Containers`、`ActionMetadata` 等は従来どおり手書き分岐のまま（必要なら同パターンで段階的に拡張可能）。
 - ~~`WorkflowParser.Primitives.cs`~~ → **`WorkflowParser.ScalarParsing.cs`** / **`WorkflowParser.ExpressionIntegration.cs`** に分割済み（旧ファイルは削除）。
 
 **コンセプトとの乖離**
@@ -53,9 +53,9 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 | 項目 | 内容 |
 |---|---|
 | 追加ファイル | `src/Seiton.Core/Parsing/Utf8MappingDispatch.cs` — `IUtf8OrderedKeyTable`（`KeyCount` / `Utf8Key(int)`）と `Utf8MappingDispatch.TryMatchFirstOrdered<TTable>`。キー行は空の `readonly struct` が静的メソッドで供給し、ジェネリック特殊化を期待。照合はヒープ割り当てなし。 |
-| 適用箇所 | `WorkflowParser.Jobs.cs` の `ParseJobNode`: `JobNodeMappingKey` 列挙子（ordinal = 重複検出用ビット番号）と `JobNodeKeyTable : IUtf8OrderedKeyTable` をロックステップで定義し、`TryMatchFirstOrdered<JobNodeKeyTable>` 成功後に `switch` で各キーのパース処理を実行。 |
+| 適用箇所 | `WorkflowParser.Jobs.cs`: **`ParseJobNode`**（`JobNodeMappingKey` / `JobNodeKeyTable`、ordinal = 重複ビット）、**`ParseRunsOnNode` の mapping 形**（`RunsOnMappingKey` / `RunsOnKeyTable`、`labels`・`group`）。`WorkflowParser.Steps.cs`: **`ParseStep`**（`StepMappingKey` / `StepMappingKeyTable`、11 キー。重複検出は従来どおり未導入）。 |
 | 当初案（delegate）との差分 | `ReadOnlySpan<byte>` をキャプチャする delegate は使えないうえ、ホットパスでは `Invoke` の間接呼び出しが不利。.NET 10 では `ReadOnlySpan<ReadOnlySpan<byte>>` のような ref struct の入れ子も不可（CS9244）のため、**静的抽象インターフェイス + `Utf8Key(ordinal)` の switch** でテーブルを表現した。 |
-| 未実施 | `ParseJobNode` 以外（`runs-on` マッピング等）へのキー共通化は未着手。 |
+| 残り（任意） | ルート `WorkflowParser` マッピング、`Strategy`、`Containers`、`On.*` 内の細かいマッピング、`ActionMetadata` などへの同パターン適用は未着手。優先度は低く、差分が大きい箇所から順に検討でよい。 |
 
 **実装状況（§2.1 提案 2、Primitives 分割）**
 

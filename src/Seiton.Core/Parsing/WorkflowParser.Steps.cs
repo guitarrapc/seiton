@@ -5,6 +5,42 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    private enum StepMappingKey : byte
+    {
+        Run = 0,
+        Uses = 1,
+        Name = 2,
+        Id = 3,
+        If = 4,
+        With = 5,
+        Shell = 6,
+        WorkingDirectory = 7,
+        TimeoutMinutes = 8,
+        ContinueOnError = 9,
+        Env = 10,
+    }
+
+    private readonly struct StepMappingKeyTable : IUtf8OrderedKeyTable
+    {
+        public static int KeyCount => 11;
+
+        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
+        {
+            0 => "run"u8,
+            1 => "uses"u8,
+            2 => "name"u8,
+            3 => "id"u8,
+            4 => "if"u8,
+            5 => "with"u8,
+            6 => "shell"u8,
+            7 => "working-directory"u8,
+            8 => "timeout-minutes"u8,
+            9 => "continue-on-error"u8,
+            10 => "env"u8,
+            _ => ReadOnlySpan<byte>.Empty,
+        };
+    }
+
     private static Step[] ParseSteps<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -78,163 +114,151 @@ public static partial class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
 
-            if (keyUtf8.SequenceEqual("run"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<StepMappingKeyTable>(keyUtf8, out var stepKeyOrd))
             {
+                var keyLen = keyUtf8.Length;
                 reader.Read();
-                hasRun = true;
-                if (!reader.End)
+                switch ((StepMappingKey)stepKeyOrd)
                 {
-                    runNode = ParseStringAndValidateExpression(
-                        ref reader, arena, diagnostics,
-                        ExpressionValidationContext.Step,
-                        out var runErr,
-                        out var runMark,
-                        parseWholeValueIfNoEmbedded: false);
-                    if (runErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar", runMark);
-                }
-                continue;
-            }
+                    case StepMappingKey.Run:
+                        hasRun = true;
+                        if (!reader.End)
+                        {
+                            runNode = ParseStringAndValidateExpression(
+                                ref reader, arena, diagnostics,
+                                ExpressionValidationContext.Step,
+                                out var runErr,
+                                out var runMark,
+                                parseWholeValueIfNoEmbedded: false);
+                            if (runErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] run must be scalar", runMark);
+                        }
 
-            if (keyUtf8.SequenceEqual("uses"u8))
-            {
-                usesKeyRange = BuildScalarLocation(keyMark, keyUtf8.Length);
-                reader.Read();
-                hasUses = true;
-                if (!reader.End)
-                {
-                    usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
-                    if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar", usesMark);
-                }
-                continue;
-            }
+                        break;
 
-            if (keyUtf8.SequenceEqual("name"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
-                    if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] name must be scalar", nameMark);
-                }
-                continue;
-            }
+                    case StepMappingKey.Uses:
+                        usesKeyRange = BuildScalarLocation(keyMark, keyLen);
+                        hasUses = true;
+                        if (!reader.End)
+                        {
+                            usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
+                            if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] uses must be scalar", usesMark);
+                        }
 
-            if (keyUtf8.SequenceEqual("id"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    idNode = ParseString(ref reader, arena, out var idErr, out var idMark);
-                    if (idErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar", idMark);
-                }
-                continue;
-            }
+                        break;
 
-            if (keyUtf8.SequenceEqual("if"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    ifNode = ParseExpression(
-                        ref reader, arena, diagnostics,
-                        ExpressionValidationContext.Step,
-                        out var ifErr,
-                        out var ifMark);
-                    if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar", ifMark);
-                }
-                continue;
-            }
+                    case StepMappingKey.Name:
+                        if (!reader.End)
+                        {
+                            nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
+                            if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] name must be scalar", nameMark);
+                        }
 
-            if (keyUtf8.SequenceEqual("with"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    withInputs = ParseStepWithInputsNode(
-                        ref reader, arena, diagnostics,
-                        source,
-                        jobId,
-                        stepIndex,
-                        out var entrypoint,
-                        out var args);
-                    dockerEntrypoint = entrypoint;
-                    dockerArgs = args;
-                }
-                continue;
-            }
+                        break;
 
-            if (keyUtf8.SequenceEqual("shell"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    shellNode = ParseString(ref reader, arena, out var shellErr, out var shellMark);
-                    if (shellErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] shell must be scalar", shellMark);
-                }
-                continue;
-            }
+                    case StepMappingKey.Id:
+                        if (!reader.End)
+                        {
+                            idNode = ParseString(ref reader, arena, out var idErr, out var idMark);
+                            if (idErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar", idMark);
+                        }
 
-            if (keyUtf8.SequenceEqual("working-directory"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    workingDirectoryNode = ParseStringAndValidateExpression(
-                        ref reader, arena, diagnostics,
-                        ExpressionValidationContext.Step,
-                        out var wdErr,
-                        out var wdMark,
-                        parseWholeValueIfNoEmbedded: false);
-                    if (wdErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] working-directory must be scalar", wdMark);
-                }
-                continue;
-            }
+                        break;
 
-            if (keyUtf8.SequenceEqual("timeout-minutes"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var tmErr, out var tmMark);
-                    if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number or expression", tmMark);
-                    if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be greater than 0", keyMark);
-                    }
-                }
-                continue;
-            }
+                    case StepMappingKey.If:
+                        if (!reader.End)
+                        {
+                            ifNode = ParseExpression(
+                                ref reader, arena, diagnostics,
+                                ExpressionValidationContext.Step,
+                                out var ifErr,
+                                out var ifMark);
+                            if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar", ifMark);
+                        }
 
-            if (keyUtf8.SequenceEqual("continue-on-error"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var coeErr, out var coeMark);
-                    if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] continue-on-error must be bool or expression", coeMark);
-                }
-                continue;
-            }
+                        break;
 
-            if (keyUtf8.SequenceEqual("env"u8))
-            {
-                reader.Read();
-                if (!reader.End)
-                {
-                    if (reader.CurrentKind != YamlEventKind.MappingStart)
-                    {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                    }
-                    else
-                    {
-                        envNode = ParseEnvNode(
-                            ref reader, arena, diagnostics,
-                            source,
-                            $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
-                            ExpressionValidationContext.Step);
-                    }
+                    case StepMappingKey.With:
+                        if (!reader.End)
+                        {
+                            withInputs = ParseStepWithInputsNode(
+                                ref reader, arena, diagnostics,
+                                source,
+                                jobId,
+                                stepIndex,
+                                out var entrypoint,
+                                out var args);
+                            dockerEntrypoint = entrypoint;
+                            dockerArgs = args;
+                        }
+
+                        break;
+
+                    case StepMappingKey.Shell:
+                        if (!reader.End)
+                        {
+                            shellNode = ParseString(ref reader, arena, out var shellErr, out var shellMark);
+                            if (shellErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] shell must be scalar", shellMark);
+                        }
+
+                        break;
+
+                    case StepMappingKey.WorkingDirectory:
+                        if (!reader.End)
+                        {
+                            workingDirectoryNode = ParseStringAndValidateExpression(
+                                ref reader, arena, diagnostics,
+                                ExpressionValidationContext.Step,
+                                out var wdErr,
+                                out var wdMark,
+                                parseWholeValueIfNoEmbedded: false);
+                            if (wdErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] working-directory must be scalar", wdMark);
+                        }
+
+                        break;
+
+                    case StepMappingKey.TimeoutMinutes:
+                        if (!reader.End)
+                        {
+                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var tmErr, out var tmMark);
+                            if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number or expression", tmMark);
+                            if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
+                            {
+                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be greater than 0", keyMark);
+                            }
+                        }
+
+                        break;
+
+                    case StepMappingKey.ContinueOnError:
+                        if (!reader.End)
+                        {
+                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var coeErr, out var coeMark);
+                            if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] continue-on-error must be bool or expression", coeMark);
+                        }
+
+                        break;
+
+                    case StepMappingKey.Env:
+                        if (!reader.End)
+                        {
+                            if (reader.CurrentKind != YamlEventKind.MappingStart)
+                            {
+                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else
+                            {
+                                envNode = ParseEnvNode(
+                                    ref reader, arena, diagnostics,
+                                    source,
+                                    $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
+                                    ExpressionValidationContext.Step);
+                            }
+                        }
+
+                        break;
                 }
+
                 continue;
             }
 
