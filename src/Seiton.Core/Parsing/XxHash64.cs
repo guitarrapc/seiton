@@ -1,11 +1,13 @@
 ﻿using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Seiton.Core.Parsing;
 
 /// <summary>
 /// Self-contained XXH64 non-cryptographic hash (xxHash specification v0.7.0+).
 /// Scalar-only, zero-allocation, no external dependencies.
+/// Uses ref-based pointer arithmetic to avoid Span.Slice bounds checks in hot loops.
 /// </summary>
 internal static class XxHash64
 {
@@ -19,6 +21,7 @@ internal static class XxHash64
     public static ulong Hash(ReadOnlySpan<byte> data, ulong seed = 0)
     {
         var length = data.Length;
+        ref byte r0 = ref MemoryMarshal.GetReference(data);
         ulong h64;
 
         if (length >= 32)
@@ -31,10 +34,10 @@ internal static class XxHash64
             var offset = 0;
             do
             {
-                v1 = Round(v1, BinaryPrimitives.ReadUInt64LittleEndian(data.Slice(offset)));
-                v2 = Round(v2, BinaryPrimitives.ReadUInt64LittleEndian(data.Slice(offset + 8)));
-                v3 = Round(v3, BinaryPrimitives.ReadUInt64LittleEndian(data.Slice(offset + 16)));
-                v4 = Round(v4, BinaryPrimitives.ReadUInt64LittleEndian(data.Slice(offset + 24)));
+                v1 = Round(v1, ReadUInt64(ref r0, offset));
+                v2 = Round(v2, ReadUInt64(ref r0, offset + 8));
+                v3 = Round(v3, ReadUInt64(ref r0, offset + 16));
+                v4 = Round(v4, ReadUInt64(ref r0, offset + 24));
                 offset += 32;
             }
             while (offset + 32 <= length);
@@ -45,37 +48,40 @@ internal static class XxHash64
             h64 = MergeRound(h64, v3);
             h64 = MergeRound(h64, v4);
 
-            // Process remaining bytes after the last 32-byte block
-            data = data.Slice(offset);
+            // Advance past processed 32-byte blocks
+            r0 = ref Unsafe.Add(ref r0, offset);
+            length -= offset;
         }
         else
         {
             h64 = seed + Prime5;
         }
 
-        h64 += (ulong)length;
+        h64 += (ulong)data.Length;
 
         // Remaining 8-byte chunks
-        while (data.Length >= 8)
+        var rem = 0;
+        while (rem + 8 <= length)
         {
-            h64 ^= Round(0, BinaryPrimitives.ReadUInt64LittleEndian(data));
+            h64 ^= Round(0, ReadUInt64(ref r0, rem));
             h64 = RotateLeft(h64, 27) * Prime1 + Prime4;
-            data = data.Slice(8);
+            rem += 8;
         }
 
         // Remaining 4-byte chunk
-        if (data.Length >= 4)
+        if (rem + 4 <= length)
         {
-            h64 ^= BinaryPrimitives.ReadUInt32LittleEndian(data) * Prime1;
+            h64 ^= ReadUInt32(ref r0, rem) * Prime1;
             h64 = RotateLeft(h64, 23) * Prime2 + Prime3;
-            data = data.Slice(4);
+            rem += 4;
         }
 
         // Remaining bytes
-        for (var i = 0; i < data.Length; i++)
+        while (rem < length)
         {
-            h64 ^= data[i] * Prime5;
+            h64 ^= Unsafe.Add(ref r0, rem) * Prime5;
             h64 = RotateLeft(h64, 11) * Prime1;
+            rem++;
         }
 
         // Final avalanche
@@ -116,4 +122,14 @@ internal static class XxHash64
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong RotateLeft(ulong value, int count)
         => (value << count) | (value >> (64 - count));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong ReadUInt64(ref byte origin, int offset)
+        => BinaryPrimitives.ReadUInt64LittleEndian(
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref origin, offset), 8));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong ReadUInt32(ref byte origin, int offset)
+        => BinaryPrimitives.ReadUInt32LittleEndian(
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref origin, offset), 4));
 }

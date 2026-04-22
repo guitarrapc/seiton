@@ -139,17 +139,19 @@ internal static class XxHash64
 
 **LintBenchmark Allocated** (ベースラインは直前の L5/L6 メモリ最適化後):
 
-| Size | FixEnabled | Before (L6後) | After (XXH64) | 差分 |
+| Size | FixEnabled | Before (L6後) | After (XXH64 + ref最適化) | 差分 |
 |---|---|---|---|---|
-| Small | False | 14.42 KB | 14.42 KB | ±0 |
+| Small | False | 14.42 KB | 14.41 KB | -0.01 KB |
 | Small | True | 14.83 KB | 14.83 KB | ±0 |
-| Medium | False | 92.91 KB | 92.90 KB | -0.01 KB |
-| Medium | True | 99.32 KB | 99.33 KB | ±0 |
-| Large | False | 435.63 KB | 436.31 KB | ±0 (ノイズ) |
-| Large | True | 465.79 KB | 467.33 KB | ±0 (ノイズ) |
+| Medium | False | 92.91 KB | 92.88 KB | -0.03 KB |
+| Medium | True | 99.32 KB | 99.30 KB | -0.02 KB |
+| Large | False | 435.63 KB | 435.63 KB | ±0 |
+| Large | True | 465.79 KB | 467.95 KB | ±0 (ノイズ) |
 
 > ハッシュ関数の変更はアロケーション量にほぼ影響しない (期待通り)。
 > XXH64 はスタック上の固定長変数のみ使用し、ヒープ割り当てゼロ。
+
+**実装最適化**: `Span.Slice()` (毎回境界チェック + 新 Span 構築) を `ref byte` + `Unsafe.Add` (純粋なポインタ算術、bounds check なし) に置き換え済み。
 
 **ParsingBenchmark**: 回帰なし。WorkflowParser.Parse は誤差範囲内で安定。
 
