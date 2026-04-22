@@ -40,7 +40,7 @@ public sealed class ScheduledEvent : Event
     public IReadOnlyList<ScheduleEntry> Schedules { get; init; } = [];
 }
 
-public sealed class ScheduleEntry
+public readonly struct ScheduleEntry
 {
     public StringNodeId Cron { get; init; }
 
@@ -115,7 +115,7 @@ public enum WorkflowCallInputType
     String,
 }
 
-public sealed class WorkflowCallEventSecret
+public readonly struct WorkflowCallEventSecret
 {
     public StringNodeId Name { get; init; }
 
@@ -126,7 +126,7 @@ public sealed class WorkflowCallEventSecret
     public TextRange Range { get; init; }
 }
 
-public sealed class WorkflowCallEventOutput
+public readonly struct WorkflowCallEventOutput
 {
     public StringNodeId Name { get; init; }
 

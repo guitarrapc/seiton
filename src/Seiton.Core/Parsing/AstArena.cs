@@ -1,4 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Seiton.Core.Parsing;
 
@@ -6,6 +8,7 @@ namespace Seiton.Core.Parsing;
 /// Type-safe handle referencing a string scalar node stored in <see cref="AstArena"/>.
 /// Default value (<c>default</c>) represents "no value" (equivalent to <c>null</c> on the old <c>StringNode?</c>).
 /// </summary>
+[DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly struct StringNodeId : IEquatable<StringNodeId>
 {
     // 0 = None (default), positive = valid (actual index = _raw - 1)
@@ -34,11 +37,13 @@ public readonly struct StringNodeId : IEquatable<StringNodeId>
     public static bool operator ==(StringNodeId left, StringNodeId right) => left._raw == right._raw;
     public static bool operator !=(StringNodeId left, StringNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"StringNodeId({Index})" : "StringNodeId(None)";
+    private string DebugDisplay => HasValue ? $"String[{Index}]" : "(none)";
 }
 
 /// <summary>
 /// Type-safe handle referencing a bool scalar node stored in <see cref="AstArena"/>.
 /// </summary>
+[DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly struct BoolNodeId : IEquatable<BoolNodeId>
 {
     private readonly int _raw;
@@ -66,11 +71,13 @@ public readonly struct BoolNodeId : IEquatable<BoolNodeId>
     public static bool operator ==(BoolNodeId left, BoolNodeId right) => left._raw == right._raw;
     public static bool operator !=(BoolNodeId left, BoolNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"BoolNodeId({Index})" : "BoolNodeId(None)";
+    private string DebugDisplay => HasValue ? $"Bool[{Index}]" : "(none)";
 }
 
 /// <summary>
 /// Type-safe handle referencing an int scalar node stored in <see cref="AstArena"/>.
 /// </summary>
+[DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly struct IntNodeId : IEquatable<IntNodeId>
 {
     private readonly int _raw;
@@ -98,11 +105,13 @@ public readonly struct IntNodeId : IEquatable<IntNodeId>
     public static bool operator ==(IntNodeId left, IntNodeId right) => left._raw == right._raw;
     public static bool operator !=(IntNodeId left, IntNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"IntNodeId({Index})" : "IntNodeId(None)";
+    private string DebugDisplay => HasValue ? $"Int[{Index}]" : "(none)";
 }
 
 /// <summary>
 /// Type-safe handle referencing a float scalar node stored in <see cref="AstArena"/>.
 /// </summary>
+[DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly struct FloatNodeId : IEquatable<FloatNodeId>
 {
     private readonly int _raw;
@@ -130,15 +139,21 @@ public readonly struct FloatNodeId : IEquatable<FloatNodeId>
     public static bool operator ==(FloatNodeId left, FloatNodeId right) => left._raw == right._raw;
     public static bool operator !=(FloatNodeId left, FloatNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"FloatNodeId({Index})" : "FloatNodeId(None)";
+    private string DebugDisplay => HasValue ? $"Float[{Index}]" : "(none)";
 }
 
 /// <summary>
 /// Dense flat store for all scalar AST node data. Scalar node properties on composite AST nodes
 /// (Job, Step, Event, etc.) are replaced by lightweight handle structs that index into this arena.
+/// Supports ThreadStatic pooling via <see cref="Rent"/>/<see cref="Dispose"/> to reuse backing arrays
+/// across parse calls and eliminate repeated array allocations.
 /// </summary>
-public sealed class AstArena
+[DebuggerDisplay("AstArena: {_stringCount} strings, {_boolCount} bools, {_intCount} ints, {_floatCount} floats")]
+public sealed class AstArena : IDisposable
 {
-    private readonly byte[] _source;
+    [ThreadStatic] private static AstArena? s_cached;
+
+    private byte[] _source;
 
     private StringNodeData[] _strings;
     private int _stringCount;
@@ -152,7 +167,7 @@ public sealed class AstArena
     private FloatNodeData[] _floats;
     private int _floatCount;
 
-    public AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
+    internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
         _strings = new StringNodeData[stringCapacity];
@@ -162,15 +177,54 @@ public sealed class AstArena
     }
 
     /// <summary>
-    /// Creates an arena with initial capacities estimated from the YAML source size.
+    /// Rents an arena from the ThreadStatic cache or creates a new one.
+    /// The returned arena must be disposed after use to return it to the cache.
     /// </summary>
-    public static AstArena CreateForSource(byte[] source)
+    public static AstArena Rent(byte[] source)
     {
-        // Heuristic: ~1 string node per 20 source bytes, bools ~1/200, ints/floats rare.
+        var arena = s_cached;
+        if (arena is not null)
+        {
+            s_cached = null;
+            arena.ResetForSource(source);
+            return arena;
+        }
+
+        return CreateNew(source);
+    }
+
+    /// <summary>
+    /// Returns the arena to the ThreadStatic cache for reuse.
+    /// After disposal, handles obtained from this arena must not be resolved.
+    /// </summary>
+    public void Dispose()
+    {
+        _stringCount = 0;
+        _boolCount = 0;
+        _intCount = 0;
+        _floatCount = 0;
+        _source = [];
+        s_cached ??= this;
+    }
+
+    private static AstArena CreateNew(byte[] source)
+    {
         var stringCap = Math.Max(64, source.Length / 20);
         var boolCap = Math.Max(8, source.Length / 200);
         var intCap = Math.Max(4, source.Length / 500);
-        return new AstArena(source, stringCap, boolCap, intCap);
+        return new AstArena(source, stringCap, boolCap, intCap, 4);
+    }
+
+    private void ResetForSource(byte[] source)
+    {
+        _source = source;
+        _stringCount = 0;
+        _boolCount = 0;
+        _intCount = 0;
+        _floatCount = 0;
+        EnsureMinCapacity(ref _strings, Math.Max(64, source.Length / 20));
+        EnsureMinCapacity(ref _bools, Math.Max(8, source.Length / 200));
+        EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
     }
 
     public byte[] Source => _source;
@@ -342,6 +396,35 @@ public sealed class AstArena
         var newArray = new T[array.Length * 2];
         Array.Copy(array, newArray, array.Length);
         array = newArray;
+    }
+
+    private static void EnsureMinCapacity<T>(ref T[] array, int minCapacity)
+    {
+        if (array.Length < minCapacity)
+        {
+            array = new T[minCapacity];
+        }
+    }
+
+    // ---- Debug helpers (§6.2 debugging experience) ----
+
+    /// <summary>
+    /// Returns a human-readable representation of the string value for a handle.
+    /// Intended for debugger watch windows and diagnostic output.
+    /// </summary>
+    public string DebugGetStringText(StringNodeId id)
+    {
+        if (!id.HasValue) return "(none)";
+        var span = _strings[id.Index].Value.AsSpan(_source);
+        return span.Length == 0 ? "(empty)" : Encoding.UTF8.GetString(span);
+    }
+
+    /// <summary>
+    /// Returns a diagnostic summary of arena utilization.
+    /// </summary>
+    public string DebugDump()
+    {
+        return $"AstArena: strings={_stringCount}/{_strings.Length}, bools={_boolCount}/{_bools.Length}, ints={_intCount}/{_ints.Length}, floats={_floatCount}/{_floats.Length}, source={_source.Length}B";
     }
 
     private struct StringNodeData(Utf8Slice value, bool quoted, StringNodeId expression, TextRange range)

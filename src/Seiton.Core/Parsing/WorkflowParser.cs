@@ -55,7 +55,7 @@ public static partial class WorkflowParser
 
             var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
-            var arena = AstArena.CreateForSource(utf8Yaml);
+            var arena = AstArena.Rent(utf8Yaml);
             var parseResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode);
 
             var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2);

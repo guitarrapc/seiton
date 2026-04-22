@@ -9,7 +9,7 @@ public sealed class Permissions
     public TextRange Range { get; init; }
 }
 
-public sealed class PermissionScope
+public readonly struct PermissionScope
 {
     public StringNodeId Name { get; init; }
 
@@ -29,7 +29,7 @@ public sealed class Env
     public TextRange Range { get; init; }
 }
 
-public sealed class EnvVar
+public readonly struct EnvVar
 {
     public StringNodeId Name { get; init; }
 
@@ -201,14 +201,14 @@ public sealed class WorkflowCall
     public bool InheritSecrets { get; init; }
 }
 
-public sealed class WorkflowCallInput
+public readonly struct WorkflowCallInput
 {
     public StringNodeId Name { get; init; }
 
     public StringNodeId Value { get; init; }
 }
 
-public sealed class WorkflowCallSecret
+public readonly struct WorkflowCallSecret
 {
     public StringNodeId Name { get; init; }
 

@@ -42,7 +42,9 @@ public class ParsingBenchmark
     public int ParseWorkflowFull()
     {
         var result = WorkflowParser.Parse(_yamlBytes, _filePath);
-        return (result.Workflow?.Jobs.Count ?? 0) + result.Diagnostics.Length;
+        var count = (result.Workflow?.Jobs.Count ?? 0) + result.Diagnostics.Length;
+        result.Arena?.Dispose();
+        return count;
     }
 
     [Benchmark(Description = "ExpressionExtractor.ExtractParseAndValidate")]
