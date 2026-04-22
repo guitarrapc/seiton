@@ -114,7 +114,7 @@ public sealed class UnredactedSecretsRule : RuleBase
             return Arena.GetStringRange(runNode);
         }
 
-        var lineStarts = BuildLineStarts(Config.Utf8Yaml);
+        var lineStarts = Config.GetLineStarts();
         var start = OffsetToLineColumn(lineStarts, absoluteStart);
         var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
         return new TextRange(

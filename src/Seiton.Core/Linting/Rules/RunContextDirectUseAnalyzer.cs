@@ -17,7 +17,7 @@ internal static class RunContextDirectUseAnalyzer
 
     // Expression Location
 
-    internal static TextRange BuildExpressionLocation(AstArena arena, byte[] utf8Yaml, StringNodeId runNode, int bodyStart, int nextSearchStart)
+    internal static TextRange BuildExpressionLocation(AstArena arena, byte[] utf8Yaml, StringNodeId runNode, int bodyStart, int nextSearchStart, int[] lineStarts)
     {
         var absoluteStart = arena.GetStringSlice(runNode).Offset + bodyStart - 3;
         var absoluteLength = nextSearchStart - (bodyStart - 3);
@@ -26,7 +26,6 @@ internal static class RunContextDirectUseAnalyzer
             return arena.GetStringRange(runNode);
         }
 
-        var lineStarts = BuildLineStarts(utf8Yaml);
         var start = OffsetToLineColumn(lineStarts, absoluteStart);
         var end = OffsetToLineColumn(lineStarts, absoluteStart + absoluteLength - 1);
         return new TextRange(

@@ -42,20 +42,28 @@ internal static class ExpressionScanHelpers
 
     internal static int[] BuildLineStarts(byte[] source)
     {
-        var starts = new List<int>(64) { 0 };
-        for (var i = 0; i < source.Length; i++)
+        var starts = new PooledBuffer<int>(source.Length / 20 + 16);
+        try
         {
-            if (source[i] == (byte)'\n')
+            starts.Add(0);
+            for (var i = 0; i < source.Length; i++)
             {
-                var next = i + 1;
-                if (next < source.Length)
+                if (source[i] == (byte)'\n')
                 {
-                    starts.Add(next);
+                    var next = i + 1;
+                    if (next < source.Length)
+                    {
+                        starts.Add(next);
+                    }
                 }
             }
-        }
 
-        return starts.ToArray();
+            return starts.ToArray();
+        }
+        finally
+        {
+            starts.Dispose();
+        }
     }
 
     internal static (int Line, int Column) OffsetToLineColumn(int[] lineStarts, int offset)

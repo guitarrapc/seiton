@@ -18,6 +18,7 @@ public sealed class LintConfig
 
     private string? _sourceText;
     private Dictionary<long, ExpressionParseResult>? _expressionCache;
+    private int[]? _lineStarts;
 
     /// <summary>
     /// Returns the decoded UTF-8 source text, lazily initialized on first access.
@@ -65,6 +66,21 @@ public sealed class LintConfig
             ref MemoryMarshal.GetArrayDataReference(source),
             ref MemoryMarshal.GetReference(span));
         return ((long)offset << 32) | (uint)span.Length;
+    }
+
+    /// <summary>
+    /// Returns the line-start offset array for Utf8Yaml, lazily built on first access.
+    /// Shared across all rules in a single lint run.
+    /// </summary>
+    public int[] GetLineStarts()
+    {
+        if (_lineStarts is not null)
+        {
+            return _lineStarts;
+        }
+
+        _lineStarts = Utf8Yaml is null ? [] : ExpressionScanHelpers.BuildLineStarts(Utf8Yaml);
+        return _lineStarts;
     }
 
     // rules section: rule-id -> RuleConfig
