@@ -6,7 +6,12 @@ on:
       benchmark:
         description: "Benchmark filter"
         required: true
-        default: "*"
+        default: "*Benchmark*"
+        type: choice
+        options:
+          - "*Benchmark*"
+          - "*LintBenchmark*"
+          - "*ParsingBenchmark*"
 
 jobs:
   benchmark:
@@ -34,7 +39,6 @@ jobs:
         id: benchmark
         run: |
           dotnet run -c Release --no-build --no-launch-profile --project ./src/Seiton.Benchmark/Seiton.Benchmark.csproj -- --filter "${FILTER}"
-          echo "${{ inputs.benchmark }}"
           echo "result=success" >> "$GITHUB_OUTPUT"
         env:
           FILTER: ${{ inputs.benchmark }}
