@@ -16,7 +16,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 |---|---|---|
 | 責務の集中・肥大化 | High | WorkflowParser partials, LintEngine |
 | ポリシーロジックの重複 | High | LintEngine ↔ LintConfigLibrary（§2.2: `RuleNormalizer` / `ExclusionNormalizer` で共通化済） |
-| 診断メッセージへの構造的依存 | High | PinRemediation |
+| 診断メッセージへの構造的依存 | High | PinRemediation（§2.3: `Diagnostic.Metadata` + `PinDiagnosticMetadata` で解消済） |
 | IPass のドキュメントカインド非対称性 | Medium | WorkflowVisitor, IPass |
 | 設定パーサーの維持コスト | Medium | LintConfigLineParser |
 | アクション参照パース処理の分散 | Medium | Rules 内の ad-hoc 解析 vs ActionRefHelpers |
@@ -143,6 +143,17 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 1. `Diagnostic` に `Metadata` プロパティ (`IReadOnlyDictionary<string, string>?` 等) を追加し、ルール側が `uses-ref` や `image-ref` を構造化データとして付与する。
 2. `PinFixFormatter` / `PinRemediationEngine` は `Metadata` からアクション参照を取得し、メッセージパースを廃止する。
 3. `TryExtractQuotedValue` の重複定義を排除する。
+
+**実装状況（§2.3、2026-04-23 時点）**
+
+| 項目 | 内容 |
+|---|---|
+| `Diagnostic` | `Metadata`（`IReadOnlyDictionary<string, string>?`、末尾オプション）を追加。既存の `new Diagnostic(...)` は既定で `null`。 |
+| `PinDiagnosticMetadata` | `src/Seiton.Core/Linting/PinRemediation/PinDiagnosticMetadata.cs` — キー `uses-ref` / `image-ref`、`ForUsesRef` / `ForImageRef`、`TryGetUsesRef` / `TryGetImageRef`（公開 API、テスト・CLI から利用可）。 |
+| ルール | `UnpinnedUsesRule`（再利用 workflow の `uses`、リモート `uses` の未ピン）、`UnpinnedImageRule`（`docker://` ステップ、`job.container` / services イメージ）が該当診断にメタデータを付与。`RuleBase` にメタデータ付き `AddStepWarning` / `AddJobWarning` オーバーロード。 |
+| Pin 修復 | `PinFixFormatter` / `PinRemediationEngine` はメタデータのみ参照；`TryExtractQuotedValue` 削除。 |
+| 割り当て | 初版は診断ごとに `Dictionary` を new しており、同一 `uses` が多いワークフローで `LintBenchmark` の Allocated が悪化。**`PinSingleEntryReadOnlyDictionary`**（1 エントリ専用）＋**同一参照文字列のメタデータを `ConcurrentDictionary` で共有**（`ForUsesRef` / `ForImageRef`）で抑制。`Diagnostic.Metadata` フィールド自体のコスト（`ParsingBenchmark` のわずかな増分）は別。 |
+| テスト | `PinFixFormatterTests`（メタデータ欠落時は fix なし）、`PinRemediationEngineTests` 等を更新。**`dotnet test` Green**。 |
 
 ---
 

@@ -124,7 +124,7 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
         }
 
-        if (!TryExtractQuotedValue(diagnostic.Message, out var usesRef)
+        if (!PinDiagnosticMetadata.TryGetUsesRef(diagnostic, out var usesRef)
             || !TryParseActionReference(usesRef, out var owner, out var repo, out var currentRef))
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
@@ -155,7 +155,7 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
         }
 
-        if (!TryExtractQuotedValue(diagnostic.Message, out var imageRef))
+        if (!PinDiagnosticMetadata.TryGetImageRef(diagnostic, out var imageRef))
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
@@ -175,24 +175,5 @@ public sealed class PinRemediationEngine(
         return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
     }
 
-    private static bool TryExtractQuotedValue(string message, out string value)
-    {
-        var first = message.IndexOf('\'');
-        if (first < 0)
-        {
-            value = string.Empty;
-            return false;
-        }
-
-        var second = message.IndexOf('\'', first + 1);
-        if (second <= first)
-        {
-            value = string.Empty;
-            return false;
-        }
-
-        value = message[(first + 1)..second];
-        return !string.IsNullOrEmpty(value);
-    }
     private readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
 }

@@ -13,7 +13,7 @@ public static class PinFixFormatter
         string tagComment,
         byte[] utf8Yaml)
     {
-        if (!TryExtractQuotedValue(diagnostic.Message, out var usesRef))
+        if (!PinDiagnosticMetadata.TryGetUsesRef(diagnostic, out var usesRef))
         {
             return null;
         }
@@ -47,7 +47,7 @@ public static class PinFixFormatter
         string digest,
         byte[] utf8Yaml)
     {
-        if (!TryExtractQuotedValue(diagnostic.Message, out var imageRef))
+        if (!PinDiagnosticMetadata.TryGetImageRef(diagnostic, out var imageRef))
         {
             return null;
         }
@@ -69,25 +69,6 @@ public static class PinFixFormatter
             : null;
     }
 
-    private static bool TryExtractQuotedValue(string message, out string value)
-    {
-        var first = message.IndexOf('\'');
-        if (first < 0)
-        {
-            value = string.Empty;
-            return false;
-        }
-
-        var second = message.IndexOf('\'', first + 1);
-        if (second <= first)
-        {
-            value = string.Empty;
-            return false;
-        }
-
-        value = message[(first + 1)..second];
-        return !string.IsNullOrEmpty(value);
-    }
     private static bool TryBuildReplacementFix(
         Diagnostic diagnostic,
         string oldValue,

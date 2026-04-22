@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing;
 
+using System.Collections.Generic;
 using Seiton.Core.Parsing.Ast;
 
 public enum DiagnosticSeverity
@@ -26,7 +27,8 @@ public readonly record struct Diagnostic(
     TextRange[]? RelatedLocations = null,
     string? Help = null,
     string? FilePath = null,
-    DiagnosticFix? Fix = null);
+    DiagnosticFix? Fix = null,
+    IReadOnlyDictionary<string, string>? Metadata = null);
 
 public readonly record struct ParseResult(
     Workflow? Workflow,

@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting.PinRemediation;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -57,7 +58,7 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
         var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
-        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
+        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
     }
 
     public override void VisitStep(Step step)
@@ -109,7 +110,7 @@ public sealed class UnpinnedUsesRule : RuleBase
 
         var usesSlice = Arena.GetStringSlice(actionExec.Uses);
         var message = GetUnpinnedStepMessage(usesSlice);
-        AddStepWarning(step, message, usesRefLocation);
+        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(Decode(usesSlice)));
     }
 
     private string GetUnpinnedStepMessage(Utf8Slice usesSlice)

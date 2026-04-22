@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting.PinRemediation;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -57,7 +58,8 @@ public sealed class UnpinnedImageRule : RuleBase
         }
 
         var usesText = Decode(Arena.GetStringSlice(usesNode));
-        AddStepWarning(step, $"docker action uses '{usesText}' is not pinned by digest (expected @sha256:<64-hex>)");
+        var usesLocation = actionExec.UsesKeyRange ?? Arena.GetStringRange(usesNode);
+        AddStepWarning(step, $"docker action uses '{usesText}' is not pinned by digest (expected @sha256:<64-hex>)", usesLocation, PinDiagnosticMetadata.ForImageRef(usesText));
     }
 
     private void ReportIfUnpinnedContainerImage(Job job, StringNodeId imageNode, string locationName)
@@ -74,6 +76,6 @@ public sealed class UnpinnedImageRule : RuleBase
         }
 
         var imageText = Decode(Arena.GetStringSlice(imageNode));
-        AddJobWarning(job, $"{locationName} image '{imageText}' is not pinned by digest (expected @sha256:<64-hex>)", Arena.GetStringRange(imageNode));
+        AddJobWarning(job, $"{locationName} image '{imageText}' is not pinned by digest (expected @sha256:<64-hex>)", Arena.GetStringRange(imageNode), PinDiagnosticMetadata.ForImageRef(imageText));
     }
 }

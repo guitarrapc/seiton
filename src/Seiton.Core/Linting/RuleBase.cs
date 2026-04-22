@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -71,6 +72,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
     }
 
+    protected void AddStepWarning(Step step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata);
+    }
+
     protected void AddStepInfo(Step step, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Info, message, location);
@@ -104,6 +110,11 @@ public abstract class RuleBase : IRule
     protected void AddJobWarning(Job job, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
+    }
+
+    protected void AddJobWarning(Job job, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata);
     }
 
     protected void AddEventWarning(Event ev, string message)
@@ -141,7 +152,12 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
-    private void AddDiagnostic(DiagnosticSeverity severity, string message, TextRange location, DiagnosticFix? fix = null)
+    private void AddDiagnostic(
+        DiagnosticSeverity severity,
+        string message,
+        TextRange location,
+        DiagnosticFix? fix = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         diagnostics.Add(new Diagnostic(
             severity,
@@ -149,7 +165,8 @@ public abstract class RuleBase : IRule
             location,
             RuleId: Id,
             FilePath: Config.FilePath,
-            Fix: fix));
+            Fix: fix,
+            Metadata: metadata));
     }
 
     protected string Decode(Utf8Slice slice)
