@@ -483,4 +483,35 @@ public static partial class WorkflowParser
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
     }
+
+    /// <summary>Parses a YAML bool scalar into <see cref="BoolNodeId"/> (used by <c>on.*</c> metadata and action metadata).</summary>
+    private static BoolNodeId ParseBoolNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.End)
+        {
+            return default;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return default;
+        }
+
+        var mark = reader.CurrentStart;
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        if (!TryParseBool(valueUtf8, tag, out var value))
+        {
+            AddError(diagnostics, errorMessage, mark);
+            reader.Read();
+            return default;
+        }
+
+        var node = arena.AddBool(value, BuildScalarLocation(mark, valueUtf8.Length));
+        reader.Read();
+        return node;
+    }
 }

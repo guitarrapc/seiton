@@ -1,7 +1,7 @@
 # Seiton.Core アーキテクチャ改善計画
 
 > `src/Seiton.Core/` のコード品質レビュー結果と改善提案。
-> 対象: Parsing (39 files, ~10,500 lines), Linting (82 files, ~14,700 lines), Generated (6 files, ~725 lines)
+> 対象: Parsing (45 files, ~10,500 lines), Linting (82 files, ~14,700 lines), Generated (6 files, ~725 lines)
 
 ---
 
@@ -31,10 +31,10 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 **問題**
 
-`WorkflowParser` は 7 つの partial ファイルに分割されているが、合計 ~6,000 行の static partial class であり、以下の問題がある。
+`WorkflowParser` は複数の partial に分割されているが、合計 ~6,000 行の static partial class であり、以下の問題があった。
 
-- `WorkflowParser.On.cs` (1,692 行) が最大で、イベントごとのパース分岐が長大。
-- `WorkflowParser.Jobs.cs` (953 行) の `ParseJobNode` がキーディスパッチの繰り返しで認知的負荷が高い。
+- ~~`WorkflowParser.On.cs` (1,692 行)~~ → **責務別に 7 partial**（`On.Core` / `On.Schedule` / `On.WorkflowDispatch` / `On.WorkflowCall` / `On.RepositoryDispatch` / `On.ImageVersion` / `On.Webhook`）へ分割済み。
+- `WorkflowParser.Jobs.cs` の `ParseJobNode` はキー共通化で整理済み（以下 実装状況）。
 - 各 partial で同じ「キーチェック → パース → エラー → スキップ」パターンが手書きで反復されている。
 - ~~`WorkflowParser.Primitives.cs`~~ → **`WorkflowParser.ScalarParsing.cs`** / **`WorkflowParser.ExpressionIntegration.cs`** に分割済み（旧ファイルは削除）。
 
@@ -46,7 +46,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 1. キーディスパッチを UTF-8 キーテーブル + 共通照合ヘルパーで一般化し、mapping 走査の「キー照合」定型を共通化する。パース本体の文脈依存ロジックは **呼び出し側の `switch`（静的ディスパッチ）** に残す（後述の実装状況）。
 2. ~~`WorkflowParser.Primitives.cs` を 2 つに分割~~ **実施済み**: `WorkflowParser.ScalarParsing.cs`（純粋スカラー変換・`TryParse*`・位置ヘルパー・マッピング補助・`AddError` 等）と `WorkflowParser.ExpressionIntegration.cs`（`ParseExpression` / `ValidateExpressionText` / `ExpressionParser` 連携等）。
-3. `WorkflowParser.On.cs` のイベント種別ごとのパーサーを独立 static メソッドに抽出し、ファイルサイズを 800 行以下に保つ。
+3. ~~`WorkflowParser.On.cs` のイベント種別ごとのパーサーを切り出す~~ **実施済み（責務分離優先）**: 単一ファイルを廃止し、イベント種別・役割ごとに partial を分割。行数上限は目的とせず、**編集単位をイベント／サブドメインに揃える**。
 
 **実装状況（§2.1 提案 1、2026-04-22 時点）**
 
@@ -55,15 +55,28 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 | 追加ファイル | `src/Seiton.Core/Parsing/Utf8MappingDispatch.cs` — `IUtf8OrderedKeyTable`（`KeyCount` / `Utf8Key(int)`）と `Utf8MappingDispatch.TryMatchFirstOrdered<TTable>`。キー行は空の `readonly struct` が静的メソッドで供給し、ジェネリック特殊化を期待。照合はヒープ割り当てなし。 |
 | 適用箇所 | `WorkflowParser.Jobs.cs` の `ParseJobNode`: `JobNodeMappingKey` 列挙子（ordinal = 重複検出用ビット番号）と `JobNodeKeyTable : IUtf8OrderedKeyTable` をロックステップで定義し、`TryMatchFirstOrdered<JobNodeKeyTable>` 成功後に `switch` で各キーのパース処理を実行。 |
 | 当初案（delegate）との差分 | `ReadOnlySpan<byte>` をキャプチャする delegate は使えないうえ、ホットパスでは `Invoke` の間接呼び出しが不利。.NET 10 では `ReadOnlySpan<ReadOnlySpan<byte>>` のような ref struct の入れ子も不可（CS9244）のため、**静的抽象インターフェイス + `Utf8Key(ordinal)` の switch** でテーブルを表現した。 |
-| 未実施 | 提案 3、および `ParseJobNode` 以外の partial（`On.cs` のイベント分岐、`runs-on` マッピング等）へのキー共通化は未着手。 |
+| 未実施 | `ParseJobNode` 以外（`runs-on` マッピング等）へのキー共通化は未着手。 |
 
 **実装状況（§2.1 提案 2、Primitives 分割）**
 
 | ファイル | 主な責務 |
 |---|---|
-| `WorkflowParser.ScalarParsing.cs` | `ParseBool` / `ParseString` / `ParseInt` / `ParseFloat` / `ParseStringOrStringSequence`、`TryParseBool|Int64|Double`、`BuildScalarLocation` / `BuildCompositeLocation` / `ShiftLocation` / `BuildLocationFromSourceSlice`、`TrySetBit`、`IsMergeKey`、`TryRegisterDynamicKey`、`DecodeUtf8`、`FormatContainerSectionName`、`AddError`。 |
+| `WorkflowParser.ScalarParsing.cs` | `ParseBool` / `ParseString` / `ParseInt` / `ParseFloat` / `ParseStringOrStringSequence`、`ParseBoolNode`（`on.*` / action-metadata 用）、`TryParseBool|Int64|Double`、`BuildScalarLocation` / `BuildCompositeLocation` / `ShiftLocation` / `BuildLocationFromSourceSlice`、`TrySetBit`、`IsMergeKey`、`TryRegisterDynamicKey`、`DecodeUtf8`、`FormatContainerSectionName`、`AddError`。 |
 | `WorkflowParser.ExpressionIntegration.cs` | `MayParseExpression`、`ParseExpression`、`ParseStringAndValidateExpression`、`ParseFloatOrExpression`、`ParseConditionalExpression`、`ValidateExpressionText`、`ParseAndValidateExpression`（`ExpressionParser.ParseAndValidateInline` 委譲）、`ContainsExpression`。 |
 | 削除 | `WorkflowParser.Primitives.cs`（内容は上記 2 ファイルへ移動。`partial class` のため API 互換）。 |
+
+**実装状況（§2.1 提案 3、`on` パーサー分割）**
+
+| ファイル | 責務（概略） |
+|---|---|
+| `WorkflowParser.On.Core.cs` | `ParseOnEvents`（scalar / sequence / mapping）、`BuildSimpleEvent`、`ParseOnEventWithOptions`、`IsSpecialOnEvent`、`IsNullLikeOnEventOptionsScalar`、`ValidateKnownOnEvent`、`ReadOnEventInfo`。 |
+| `WorkflowParser.On.Schedule.cs` | `on.schedule` — `ParseScheduleEvent`、`ParseScheduleEntry`。 |
+| `WorkflowParser.On.WorkflowDispatch.cs` | `on.workflow_dispatch` — 本体・`inputs`・`DispatchInput` フィールド。 |
+| `WorkflowParser.On.WorkflowCall.cs` | `on.workflow_call` — inputs / secrets / outputs と各子マッピング。 |
+| `WorkflowParser.On.RepositoryDispatch.cs` | `on.repository_dispatch`。 |
+| `WorkflowParser.On.ImageVersion.cs` | `on.image_version`。 |
+| `WorkflowParser.On.Webhook.cs` | 汎用 webhook — `ParseWebhookEventWithOptions`、`ParseOnTypesNodes`、`ParseStringSequence`、`ParseOnEventOptions`、`ParseOnTypes`。 |
+| 削除 | 単体 `WorkflowParser.On.cs`（論理は上記へ移譲。`partial` のため呼び出し互換）。 |
 
 **リスク**: パーサーのリファクタは回帰バグの温床になるため、既存テストが全パス完了するまで変更を分割適用すること。
 
@@ -251,12 +264,12 @@ Online ルール（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion
 
 ```
 Seiton.Core 合計: ~133 files, ~26,000 lines（§1 表記の概算）
-  Parsing: 39 files, ~10,500+ lines（`Utf8MappingDispatch.cs` 追加、`Primitives` → `ScalarParsing` + `ExpressionIntegration`）
+  Parsing: 45 files, ~10,500+ lines（`Utf8MappingDispatch`、`Primitives` 分割、`On` を 7 partial に分割）
   Linting: 82 files, ~14,700 lines
   Generated: 6 files, ~725 lines (自動生成、レビュー対象外)
 
 巨大ファイル (>800 lines):
-  WorkflowParser.On.cs         1,692 lines
+  WorkflowParser.On.Webhook.cs   ~445 lines（旧 On.cs から webhook 汎用部）
   LintConfigLineParser.cs      1,289 lines
   ExpressionSemanticAnalyzer.cs 1,171 lines
   WorkflowParser.Jobs.cs       ~966 lines（ParseJobNode のキー共通化後）
