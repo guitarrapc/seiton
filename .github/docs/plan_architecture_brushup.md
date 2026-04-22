@@ -18,7 +18,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 | ポリシーロジックの重複 | High | LintEngine ↔ LintConfigLibrary（§2.2: `RuleNormalizer` / `ExclusionNormalizer` で共通化済） |
 | 診断メッセージへの構造的依存 | High | PinRemediation（§2.3: `Diagnostic.Metadata` + `PinDiagnosticMetadata` で解消済） |
 | IPass の ActionMetadata 非対称性 | Medium | WorkflowVisitor, IPass（§2.4: 専用フック + 仕様同期済） |
-| 設定パーサーの維持コスト | Medium | LintConfigLineParser |
+| 設定パーサーの維持コスト | Medium | `LintConfigVYamlParser` + DOM 変換（§2.5: 行パーサー廃止済） |
 | アクション参照パース処理の分散 | Medium | Rules 内の ad-hoc 解析 vs ActionRefHelpers |
 | Online ルールとローカルルールの契約差異 | Medium | OnlineAuditEngine vs IRule |
 | ユーティリティの責務混在 | Low | WorkflowParser.ScalarParsing / ExpressionIntegration, SpanHelpers |
@@ -195,21 +195,46 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 **問題**
 
-`LintConfigLineParser` (1,289 行) は YAML の部分的なセマンティクスを手書きの行パーサーで再実装している。
+`LintConfigLineParser` (~1,289 行) は YAML の部分的なセマンティクスを手書きの行パーサーで再実装していた。
 インデントベースのステートマシンと多数の switch 分岐で構成されており、以下の懸念がある。
 
 - YAML のエッジケース（フロースタイル、マルチラインスカラー、コメント位置）に対応しきれない可能性。
 - 設定仕様に新しいセクションやキーを追加するたびに大きな変更が必要。
 - パーサー部分のテストカバレッジに依存した正確性。
+- 全文 `Split('\n')` と UTF-16 行処理により、ワークフロー本体と異なり UTF-8 / VYaml 方針と割り当て特性が揃わない。
 
 **コンセプトとの乖離**
 
-Parser 仕様が VYaml アダプター経由で YAML 解析を行う方針と、設定ファイルだけ独自行パーサーを使う方針の二重基準になっている。
+Parser 仕様が VYaml アダプター経由で YAML 解析を行う方針と、設定ファイルだけ独自行パーサーを使う方針の二重基準になっていた。
 
 **改善提案**
 
-1. 短期: 変更なし（現在の方式が動作しており、テストで保護されている）。
-2. 中期: VYaml の streaming API または VYaml のデシリアライズ機能を使った設定パーサーに置き換えを検討する。lint 設定のスキーマは小さいため、パフォーマンス要件は低く VYaml デシリアライズでも十分。
+1. ~~短期: 変更なし~~
+2. **VYaml `YamlSerializer.Deserialize<Dictionary<string, object?>>` でルートを読み、`LintConfigYamlDomConverter` で既存の `LintConfigParseResult`（rules / exclusions / fix / network）に変換する。** ルール本体の `RuleSpecificConfig` 組み立ては `LintConfigRuleBodyMaterializer` に抽出し、旧行パーサーと同じ検証メッセージを維持。
+3. `LintConfigLibrary.Validate` は UTF-8 バイト列を一度だけ生成し、`LintConfigVYamlParser.Parse` に渡す。
+
+**実装状況（§2.5、2026-04-23 時点）**
+
+| 項目 | 内容 |
+|---|---|
+| 削除 | `LintConfigLineParser.cs` |
+| 追加 | `LintConfigVYamlParser.cs`（VYaml デシリアライズ + 例外時診断）、`LintConfigYamlDomConverter.cs`（DOM→既存モデル）、`LintConfigParseResult.cs`、`LintConfigRuleBodyMaterializer.cs` |
+| API | 外部公開 API は `LintConfigLibrary` のみ（従来どおり）。 |
+| テスト | 既存 `LintConfigLibraryTests` および全ソリューション **`dotnet test` 555 件 Green**。 |
+
+**ベンチマーク（`Seiton.Benchmark.LintConfigParseBenchmark`、BenchmarkDotNet 0.15.6、ShortRun、MemoryDiagnoser）**
+
+| Size (入力) | メソッド | Mean (概算) | Allocated (概算) |
+|---|---|---:|---:|
+| `Template`（`GenerateTemplateYaml`） | `LintConfigVYamlParser.Parse` | ~4.9 μs | ~2.1 KB |
+| `Template` | `LintConfigLibrary.Validate`（parse + normalize） | ~6.1 μs | ~10.0 KB |
+| `Full`（統合テスト相当のフル YAML） | `LintConfigVYamlParser.Parse` | ~22 μs | ~26.8 KB |
+| `Full` | `LintConfigLibrary.Validate` | ~25 μs | ~38.8 KB |
+| `FullRepeated`（`Full` を 10 回連結） | `LintConfigVYamlParser.Parse` | ~29 μs | ~21.0 KB |
+| `FullRepeated` | `LintConfigLibrary.Validate` | ~35 μs | ~67.6 KB |
+
+- **Parse** 行は VYaml + DOM のみ（`Validate` に比べ割り当て小）。**Validate** 行は `Encoding.UTF8.GetString`（ベンチ内）・ルール／除外の正規化・`LintConfig` 構築を含む。
+- 旧行パーサーは削除済みのため同一バイナリでの A/B 比較はしない。行パーサーはテキスト全面展開と行配列割り当てが支配的で、上記 **Parse** 行より重くなりやすい構造だった。
 
 ---
 
@@ -294,7 +319,7 @@ Online ルール（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion
 | 4 | §2.4 IPass ActionMetadata フック追加 | action-metadata ルール拡充の基盤整備 |
 | 5 | §2.1 WorkflowParser パターン共通化 | パーサーの保守性向上 |
 | 6 | §2.7 Online ルール契約の明文化 | 設計意図の明確化 |
-| 7 | §2.5 LintConfigLineParser 検討 | 中期の保守性向上 |
+| 7 | §2.5 Lint 設定の VYaml 化（完了） | 保守性・YAML 互換・UTF-8 方針との整合 |
 | 8 | §2.8 ユーティリティ整理 | 凝集度の微改善 |
 
 ---
@@ -309,7 +334,6 @@ Seiton.Core 合計: ~133 files, ~26,000 lines（§1 表記の概算）
 
 巨大ファイル (>800 lines):
   WorkflowParser.On.Webhook.cs   ~445 lines（旧 On.cs から webhook 汎用部）
-  LintConfigLineParser.cs      1,289 lines
   ExpressionSemanticAnalyzer.cs 1,171 lines
   WorkflowParser.Jobs.cs       ~966 lines（ParseJobNode のキー共通化後）
   LintEngine.cs                  912 lines
@@ -323,10 +347,11 @@ Seiton.Core 合計: ~133 files, ~26,000 lines（§1 表記の概算）
 各 Phase 完了時に以下を測定:
 
 1. **BenchmarkDotNet LintBenchmark** — Allocated (Small/Medium/Large, FixEnabled=false/true)
-2. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
-3. **LintPerRuleAlloc.cs** — run-context ルール個別計測
-4. **全テストパス** — `dotnet test` Green 確認
-5. 本 plan の該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載
+2. **BenchmarkDotNet LintConfigParseBenchmark** — 設定 YAML の Parse / Validate（§2.5）
+3. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
+4. **LintPerRuleAlloc.cs** — run-context ルール個別計測
+5. **全テストパス** — `dotnet test` Green 確認
+6. 本 plan の該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載
 
 ### 5.1 §2.1 提案 1（ParseJobNode キー共通化）の検証記録
 

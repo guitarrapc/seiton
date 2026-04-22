@@ -148,8 +148,8 @@ public static class LintConfigLibrary
         ArgumentNullException.ThrowIfNull(yamlText);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var parser = new LintConfigLineParser(yamlText, filePath);
-        var parseResult = parser.Parse();
+        var utf8Yaml = Encoding.UTF8.GetBytes(yamlText);
+        var parseResult = LintConfigVYamlParser.Parse(utf8Yaml.AsMemory(), filePath);
 
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 16);
         diagnostics.AddRange(parseResult.Diagnostics);
@@ -168,7 +168,7 @@ public static class LintConfigLibrary
 
         var config = new LintConfig
         {
-            Utf8Yaml = Encoding.UTF8.GetBytes(yamlText),
+            Utf8Yaml = utf8Yaml,
             FilePath = filePath,
             Rules = normalizedRules.Rules,
             Exclusions = normalizedExclusions.Exclusions,
