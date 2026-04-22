@@ -122,9 +122,18 @@ internal static class XxHash64
 2. **XXH64 リファレンスベクタ検証**: 公式テストベクタ (空入力、1 byte、14 bytes、100+ bytes) と一致することを確認するユニットテストを追加
 3. **Expression キャッシュ動作**: `LintConfig.ParseExpression` のキャッシュヒット・ミス挙動が変わらないこと
 
-### ステップ 5: ベンチマーク (任意)
+### ステップ 5: ベンチマーク
 
 サンドボックスで FNV-1a vs XXH64 のマイクロベンチマークを実行し、想定通りの速度向上を確認する。
+
+## 検証計画
+
+各 Phase 完了時に以下を測定:
+
+1. **BenchmarkDotNet LintBenchmark** — Allocated (Small/Medium/Large, FixEnabled=false/true)
+2. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
+3. **LintPerRuleAlloc.cs** — run-context ルール個別計測
+4. **全テストパス** — `dotnet test` Green 確認
 
 ## 影響範囲
 
