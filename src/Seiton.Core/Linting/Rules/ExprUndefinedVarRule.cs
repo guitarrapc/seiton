@@ -20,8 +20,10 @@ public sealed class ExprUndefinedVarRule : RuleBase
     // job-specific types so that property-access errors can be detected.
     private Workflow? _currentWorkflow;
     private (byte[] NameUtf8, ExprType Type) _inputsOverride;
-    private (byte[] NameUtf8, ExprType Type)[]? _jobScopeOverrides;
-    private (byte[] NameUtf8, ExprType Type)[]? _stepScopeOverrides;
+    // Reusable fixed-size override arrays to avoid per-job allocation
+    private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[3];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[4];
+    private bool _hasOverrides;
     private readonly List<Diagnostic> _propertyDiagnostics = new();
 
     public override void VisitWorkflowPre(Workflow workflow)
@@ -29,16 +31,14 @@ public sealed class ExprUndefinedVarRule : RuleBase
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
-        _jobScopeOverrides = null;
-        _stepScopeOverrides = null;
+        _hasOverrides = false;
     }
 
     public override void VisitJobPre(Job job)
     {
         if (Config.Utf8Yaml is null)
         {
-            _jobScopeOverrides = null;
-            _stepScopeOverrides = null;
+            _hasOverrides = false;
             return;
         }
 
@@ -52,9 +52,15 @@ public sealed class ExprUndefinedVarRule : RuleBase
         var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml);
 
         // job scope: matrix, needs, inputs available (steps is NOT available in job scope)
-        _jobScopeOverrides = [matrixOverride, needsOverride, _inputsOverride];
+        _jobScopeOverrides[0] = matrixOverride;
+        _jobScopeOverrides[1] = needsOverride;
+        _jobScopeOverrides[2] = _inputsOverride;
         // step scope: also includes steps
-        _stepScopeOverrides = [stepsOverride, matrixOverride, needsOverride, _inputsOverride];
+        _stepScopeOverrides[0] = stepsOverride;
+        _stepScopeOverrides[1] = matrixOverride;
+        _stepScopeOverrides[2] = needsOverride;
+        _stepScopeOverrides[3] = _inputsOverride;
+        _hasOverrides = true;
 
         CheckNode(job.If, ExpressionValidationContext.Job, "job.if", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
@@ -199,11 +205,12 @@ public sealed class ExprUndefinedVarRule : RuleBase
             target);
 
         // Phase 2: also validate property access against dynamic context types
-        var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
-        if (overrides is null || overrides.Length == 0)
+        if (!_hasOverrides)
         {
             return;
         }
+
+        var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
 
         var propertyDiagnostics = _propertyDiagnostics;
         propertyDiagnostics.Clear();

@@ -262,8 +262,32 @@ ParseBenchmark: Large 110.89 KB（回帰なし）
 **推定削減:** 案 1+2 で ~10-15 KB。案 3 は Phase L6 に依存。
 
 **完了条件:**
-- [ ] per-job byte[] コピーが排除
-- [ ] Override array が per-job 割り当てされない
+- [x] per-job byte[] コピーが排除（`static readonly byte[]` キー化）
+- [x] Override array が per-job 割り当てされない（固定長フィールド配列に上書き再利用）
+- [x] needs entry の "result"/"outputs" Utf8String も static 化
+- [x] 全テスト通過（543/543）
+
+**実測結果（Phase L4 完了後）:**
+
+LintBenchmark:
+| Size | FixEnabled | L3後 | L4後 | 差分 |
+|------|-----------|------|------|------|
+| Small | False | 15.58 KB | 15.30 KB | -0.28 KB |
+| Small | True | 16.00 KB | 15.71 KB | -0.29 KB |
+| Medium | False | 115.40 KB | 113.87 KB | -1.53 KB |
+| Medium | True | 121.83 KB | 120.30 KB | -1.53 KB |
+| Large | False | **545.67 KB** | **540.63 KB** | **-5.04 KB** |
+| Large | True | 577.11 KB | 572.08 KB | -5.03 KB |
+
+per-rule: expr-undefined-var = 433.3 KB（前回と同じ — 残存分は Utf8String byte[] clone + Dictionary 成長）
+
+ParseBenchmark: Large 110.89 KB（回帰なし）
+
+**変更内容:**
+1. `DynamicContextTypeBuilder` に `static readonly byte[]` キー追加（`StepsKeyUtf8`, `MatrixKeyUtf8`, `NeedsKeyUtf8`, `InputsKeyUtf8`）
+2. `DynamicContextTypeBuilder` に `static readonly Utf8String` 追加（`s_resultKey`, `s_outputsKey`）
+3. `ExprUndefinedVarRule`: `_jobScopeOverrides` / `_stepScopeOverrides` を `readonly` 固定長配列フィールドに変更、per-job で要素上書き再利用
+4. `_hasOverrides` フラグで null チェック代替
 
 ### Phase L5: Diagnostic メッセージ文字列の最適化（低リスク、低効果）
 
@@ -346,11 +370,11 @@ Phase L1 (低リスク) ──→ Phase L3 (中リスク) ──→ Phase L4 (�
 | **Phase L1 (BuildLineStarts)** ✅ | **-7,762 KB (実測)** | 低 | **721 KB** |
 | **Phase L2 (HereDoc最適化)** ✅ | **-2 KB (実測)** | 低 | **720 KB** |
 | **Phase L3 (Expression cache)** ✅ | **-175 KB (実測)** | 中 | **546 KB** |
-| Phase L4 (DynamicContextType) | -15 KB | 中 | ~531 KB |
-| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~506 KB |
-| **累積目標** | **-7,977 KB (-94.0%)** | — | **~506 KB** |
+| **Phase L4 (DynamicContextType)** ✅ | **-5 KB (実測)** | 中 | **541 KB** |
+| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~516 KB |
+| **累積目標** | **-7,967 KB (-93.9%)** | — | **~516 KB** |
 
-**Phase L1-L3 完了: 93.6% の削減達成（8,483 KB → 546 KB）。CPU 時間も -42% 改善。**
+**Phase L1-L4 完了: 93.6% の削減達成（8,483 KB → 541 KB）。CPU 時間も -42% 改善。**
 
 ---
 
