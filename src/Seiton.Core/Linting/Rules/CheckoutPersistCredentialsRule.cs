@@ -10,6 +10,10 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
     private const string PersistCredentialsKey = "persist-credentials";
     private const string FixHint = "review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...";
 
+    // Cache last-produced message to avoid repeated string allocation for the same action ref
+    private Utf8Slice _lastUsesSlice;
+    private string? _lastMessage;
+
     public override string Id => "checkout-persist-credentials";
 
     public override string Name => "Checkout Persist Credentials Rule";
@@ -27,8 +31,8 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
             return;
         }
 
-        var actionRef = Decode(Arena.GetStringSlice(actionExec.Uses));
-        var message = BuildMessage(actionRef);
+        var usesSlice = Arena.GetStringSlice(actionExec.Uses);
+        var message = GetCachedMessage(usesSlice);
 
         if (actionExec.Inputs is null || Config.Utf8Yaml is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, "persist-credentials"u8, out var persistCredentialsNode))
         {
@@ -60,6 +64,24 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
     private static string BuildMessage(string actionRef)
     {
         return $"action '{actionRef}' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, {FixHint}";
+    }
+
+    private string GetCachedMessage(Utf8Slice usesSlice)
+    {
+        if (_lastMessage is not null
+            && usesSlice.Length == _lastUsesSlice.Length
+            && Config.Utf8Yaml is not null
+            && usesSlice.AsSpan(Config.Utf8Yaml).SequenceEqual(_lastUsesSlice.AsSpan(Config.Utf8Yaml)))
+        {
+            _lastUsesSlice = usesSlice;
+            return _lastMessage;
+        }
+
+        var actionRef = Decode(usesSlice);
+        var msg = BuildMessage(actionRef);
+        _lastUsesSlice = usesSlice;
+        _lastMessage = msg;
+        return msg;
     }
 
     private bool TryBuildValueReplacementFix(LintConfig config, StringNodeId persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)

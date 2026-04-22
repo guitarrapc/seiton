@@ -10,16 +10,18 @@
 | Medium (6 jobs × 8 steps) | 27,208 B |
 | Large (20 jobs × 12 steps) | 113,464 B |
 
-### 1.2 LintBenchmark（Phase 4c 完了後）
+### 1.2 LintBenchmark（Phase L5 完了後）
 
 | Size | FixEnabled | Allocated |
 |------|-----------|-----------|
-| Small | False | 18.85 KB |
-| Small | True | 19.27 KB |
-| Medium | False | 521.65 KB |
-| Medium | True | 528.07 KB |
-| Large | False | 8,482.75 KB |
-| Large | True | 8,512.91 KB |
+| Small | False | 14.44 KB |
+| Small | True | 14.85 KB |
+| Medium | False | 93.23 KB |
+| Medium | True | 99.65 KB |
+| Large | False | 436.84 KB |
+| Large | True | 466.99 KB |
+
+**Phase L1-L5 全完了。元の Large FixEnabled=false 8,482.75 KB → 436.84 KB (-94.8%)。**
 
 **Lint の Large は Parse の ~75 倍のアロケーション。** Lint パイプラインの最適化が主要な改善機会。
 
@@ -304,7 +306,29 @@ ParseBenchmark: Large 110.89 KB（回帰なし）
 **推定削減:** ~20-30 KB（Large で unpinned-uses 120 × ~100B + checkout 120 × ~100B の重複排除）
 
 **完了条件:**
-- [ ] 同一メッセージ文字列が共有される
+- [x] 同一メッセージ文字列が共有される
+- [x] 同一 action ref の `Decode()` 文字列もキャッシュにより排除
+- [x] 全テスト通過（543/543）
+
+**実測結果（Phase L5 完了後）:**
+
+LintBenchmark:
+| Size | FixEnabled | L4後 | L5後 | 差分 |
+|------|-----------|------|------|------|
+| Small | False | 15.30 KB | 14.44 KB | -0.86 KB |
+| Small | True | 15.71 KB | 14.85 KB | -0.86 KB |
+| Medium | False | 113.87 KB | 93.23 KB | **-20.64 KB** |
+| Medium | True | 120.30 KB | 99.65 KB | **-20.65 KB** |
+| Large | False | **540.63 KB** | **436.84 KB** | **-103.79 KB (-19.2%)** |
+| Large | True | 572.08 KB | 466.99 KB | **-105.09 KB (-18.4%)** |
+
+推定 -25 KB を大幅に上回る -104 KB の削減。理由: メッセージ文字列だけでなく、`Decode()` が生成する action ref 文字列（119 × `"actions/checkout@v4"` × 2 rules ≈ 各 ~40B × 238 回 ≈ ~9.5 KB）+ interpolated message 文字列（119 × ~200B × 2 rules ≈ ~47 KB）も排除。
+
+ParseBenchmark: Large 110.8 KB（回帰なし）
+
+**変更内容:**
+1. `UnpinnedUsesRule`: `_lastUnpinnedStepUsesSlice` / `_lastUnpinnedStepMessage` キャッシュ追加。同一 action ref バイト列なら `Decode()` + string interpolation をスキップ
+2. `CheckoutPersistCredentialsRule`: `_lastUsesSlice` / `_lastMessage` キャッシュ追加。`GetCachedMessage()` で `Decode()` + `BuildMessage()` をスキップ
 
 ### Phase L6: ExprType の Utf8Slice 化（高リスク、中効果 — 検討段階）
 
@@ -371,10 +395,10 @@ Phase L1 (低リスク) ──→ Phase L3 (中リスク) ──→ Phase L4 (�
 | **Phase L2 (HereDoc最適化)** ✅ | **-2 KB (実測)** | 低 | **720 KB** |
 | **Phase L3 (Expression cache)** ✅ | **-175 KB (実測)** | 中 | **546 KB** |
 | **Phase L4 (DynamicContextType)** ✅ | **-5 KB (実測)** | 中 | **541 KB** |
-| Phase L5 (Diagnostic strings) | -25 KB | 低 | ~516 KB |
-| **累積目標** | **-7,967 KB (-93.9%)** | — | **~516 KB** |
+| **Phase L5 (Diagnostic strings)** ✅ | **-104 KB (実測)** | 低 | **437 KB** |
+| **累積結果** | **-8,046 KB (-94.8%)** | — | **437 KB** |
 
-**Phase L1-L4 完了: 93.6% の削減達成（8,483 KB → 541 KB）。CPU 時間も -42% 改善。**
+**Phase L1-L5 全完了: 94.8% の削減達成（8,483 KB → 437 KB）。CPU 時間も -42% 改善。**
 
 ---
 

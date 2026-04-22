@@ -5,6 +5,11 @@ namespace Seiton.Core.Linting.Rules;
 
 public sealed class UnpinnedUsesRule : RuleBase
 {
+    // Cache last-produced "not pinned" message to avoid repeated string allocation
+    // for the same action ref (common: all steps use the same action)
+    private Utf8Slice _lastUnpinnedStepUsesSlice;
+    private string? _lastUnpinnedStepMessage;
+
     public override string Id => "unpinned-uses";
 
     public override string Name => "Unpinned Uses Rule";
@@ -102,8 +107,35 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        var usesText = Decode(Arena.GetStringSlice(actionExec.Uses));
-        AddStepWarning(step, $"action uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation);
+        var usesSlice = Arena.GetStringSlice(actionExec.Uses);
+        var message = GetUnpinnedStepMessage(usesSlice);
+        AddStepWarning(step, message, usesRefLocation);
+    }
+
+    private string GetUnpinnedStepMessage(Utf8Slice usesSlice)
+    {
+        if (_lastUnpinnedStepMessage is not null
+            && usesSlice.Offset == _lastUnpinnedStepUsesSlice.Offset
+            && usesSlice.Length == _lastUnpinnedStepUsesSlice.Length)
+        {
+            return _lastUnpinnedStepMessage;
+        }
+
+        // Different slice — check content equality for same-text-different-position
+        if (_lastUnpinnedStepMessage is not null
+            && Config.Utf8Yaml is not null
+            && usesSlice.Length == _lastUnpinnedStepUsesSlice.Length
+            && usesSlice.AsSpan(Config.Utf8Yaml).SequenceEqual(_lastUnpinnedStepUsesSlice.AsSpan(Config.Utf8Yaml)))
+        {
+            _lastUnpinnedStepUsesSlice = usesSlice;
+            return _lastUnpinnedStepMessage;
+        }
+
+        var usesText = Decode(usesSlice);
+        var msg = $"action uses '{usesText}' is not pinned to a full-length commit SHA";
+        _lastUnpinnedStepUsesSlice = usesSlice;
+        _lastUnpinnedStepMessage = msg;
+        return msg;
     }
 
     private static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
