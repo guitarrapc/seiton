@@ -92,45 +92,60 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("matrix"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<StrategyKeyTable>(keyUtf8, out var strategyKeyOrdinal))
             {
                 reader.Read(); // consume key
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "strategy contains duplicate key: matrix", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (reader.End)
+                var sk = (StrategyMappingKey)strategyKeyOrdinal;
+                if (!TrySetBit(ref seen, strategyKeyOrdinal))
                 {
-                    break;
-                }
-
-                matrix = ParseMatrix(ref reader, arena, diagnostics, source, jobId);
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("fail-fast"u8))
-            {
-                reader.Read(); // consume key
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "strategy contains duplicate key: fail-fast", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var ffErr, out var ffMark);
-                    if (ffErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression", ffMark);
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("max-parallel"u8))
-            {
-                reader.Read(); // consume key
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "strategy contains duplicate key: max-parallel", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    maxParallel = ParseInt(ref reader, arena, out var mpErr, out var mpMark);
-                    if (mpErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer", mpMark);
-                    if (maxParallel.HasValue && arena.GetIntValue(maxParallel) <= 0)
+                    var dupName = sk == StrategyMappingKey.Matrix ? "matrix" : sk == StrategyMappingKey.FailFast ? "fail-fast" : "max-parallel";
+                    AddError(diagnostics, $"strategy contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
                     {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be greater than 0", keyMark);
+                        reader.SkipCurrentNode();
                     }
+
+                    continue;
                 }
-                continue;
+
+                switch (sk)
+                {
+                    case StrategyMappingKey.Matrix:
+                        if (reader.End)
+                        {
+                            goto strategy_mapping_done;
+                        }
+
+                        matrix = ParseMatrix(ref reader, arena, diagnostics, source, jobId);
+                        continue;
+                    case StrategyMappingKey.FailFast:
+                        if (!reader.End)
+                        {
+                            failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var ffErr, out var ffMark);
+                            if (ffErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression", ffMark);
+                        }
+
+                        continue;
+                    case StrategyMappingKey.MaxParallel:
+                        if (!reader.End)
+                        {
+                            maxParallel = ParseInt(ref reader, arena, out var mpErr, out var mpMark);
+                            if (mpErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer", mpMark);
+                            if (maxParallel.HasValue && arena.GetIntValue(maxParallel) <= 0)
+                            {
+                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be greater than 0", keyMark);
+                            }
+                        }
+
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
@@ -142,6 +157,7 @@ public static partial class WorkflowParser
             }
         }
 
+        strategy_mapping_done:
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
@@ -227,8 +243,14 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                var isInclude = keyUtf8.SequenceEqual("include"u8);
-                var isExclude = keyUtf8.SequenceEqual("exclude"u8);
+                var isInclude = false;
+                var isExclude = false;
+                if (Utf8MappingDispatch.TryMatchFirstOrdered<MatrixIncludeExcludeKeyTable>(keyUtf8, out var incExcOrdinal))
+                {
+                    isExclude = incExcOrdinal == 0;
+                    isInclude = incExcOrdinal == 1;
+                }
+
                 reader.Read();
                 if (reader.End)
                 {

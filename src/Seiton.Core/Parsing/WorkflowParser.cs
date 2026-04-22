@@ -147,13 +147,16 @@ public static partial class WorkflowParser
             }
 
             var keyUtf8 = reader.GetScalarUtf8();
-            if (keyUtf8.SequenceEqual("jobs"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<RootStructuralHintKeyTable>(keyUtf8, out var hintOrdinal))
             {
-                hasJobs = true;
-            }
-            else if (keyUtf8.SequenceEqual("runs"u8))
-            {
-                hasRuns = true;
+                if (hintOrdinal == 0)
+                {
+                    hasJobs = true;
+                }
+                else
+                {
+                    hasRuns = true;
+                }
             }
 
             reader.Read();
@@ -224,112 +227,105 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("name"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowRootKeyTable>(keyUtf8, out var workflowKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "workflow contains duplicate key: name", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                nameNode = ParseString(ref reader, arena, diagnostics, "name must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("run-name"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "workflow contains duplicate key: run-name", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                runNameNode = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Workflow,
-                    "run-name must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("on"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "workflow contains duplicate key: on", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasOn = true;
-                if (!reader.End)
+                var wk = (WorkflowRootMappingKey)workflowKeyOrdinal;
+                if (!TrySetBit(ref seen, workflowKeyOrdinal))
                 {
-                    if (reader.CurrentKind is not YamlEventKind.Scalar and not YamlEventKind.MappingStart and not YamlEventKind.SequenceStart)
+                    AddError(diagnostics, $"workflow contains duplicate key: {WorkflowRootDuplicateKeyName(wk)}", keyMark);
+                    if (!reader.End)
                     {
-                        AddError(diagnostics, "on must be scalar, mapping, or sequence", reader.CurrentStart);
                         reader.SkipCurrentNode();
                     }
-                    else
-                    {
-                        onEvents = ParseOnEvents(ref reader, arena, diagnostics, source);
-                    }
-                }
-                continue;
-            }
 
-            if (keyUtf8.SequenceEqual("jobs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "workflow contains duplicate key: jobs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasJobs = true;
-                if (!reader.End)
-                {
-                    if (reader.CurrentKind != YamlEventKind.MappingStart)
-                    {
-                        AddError(diagnostics, "jobs must be mapping", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                    }
-                    else
-                    {
-                        jobs = ParseJobsMapping(ref reader, arena, diagnostics, source);
-                    }
+                    continue;
                 }
-                continue;
-            }
 
-            if (keyUtf8.SequenceEqual("env"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, "workflow contains duplicate key: env", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
+                switch (wk)
                 {
-                    envNode = ParseEnvNode(
-                        ref reader, arena, diagnostics,
-                        source,
-                        "workflow env must be mapping",
-                        ExpressionValidationContext.Workflow);
-                }
-                continue;
-            }
+                    case WorkflowRootMappingKey.Name:
+                        nameNode = ParseString(ref reader, arena, diagnostics, "name must be scalar");
+                        continue;
+                    case WorkflowRootMappingKey.RunName:
+                        runNameNode = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.Workflow,
+                            "run-name must be scalar",
+                            parseWholeValueIfNoEmbedded: false);
+                        continue;
+                    case WorkflowRootMappingKey.On:
+                        hasOn = true;
+                        if (!reader.End)
+                        {
+                            if (reader.CurrentKind is not YamlEventKind.Scalar and not YamlEventKind.MappingStart and not YamlEventKind.SequenceStart)
+                            {
+                                AddError(diagnostics, "on must be scalar, mapping, or sequence", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else
+                            {
+                                onEvents = ParseOnEvents(ref reader, arena, diagnostics, source);
+                            }
+                        }
 
-            if (keyUtf8.SequenceEqual("permissions"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, "workflow contains duplicate key: permissions", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    permissionsNode = ParsePermissionsNode(ref reader, arena, diagnostics, source, "workflow permissions must be scalar or mapping");
-                }
-                continue;
-            }
+                        continue;
+                    case WorkflowRootMappingKey.Jobs:
+                        hasJobs = true;
+                        if (!reader.End)
+                        {
+                            if (reader.CurrentKind != YamlEventKind.MappingStart)
+                            {
+                                AddError(diagnostics, "jobs must be mapping", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else
+                            {
+                                jobs = ParseJobsMapping(ref reader, arena, diagnostics, source);
+                            }
+                        }
 
-            if (keyUtf8.SequenceEqual("defaults"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, "workflow contains duplicate key: defaults", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, "workflow defaults must be mapping");
-                }
-                continue;
-            }
+                        continue;
+                    case WorkflowRootMappingKey.Env:
+                        if (!reader.End)
+                        {
+                            envNode = ParseEnvNode(
+                                ref reader, arena, diagnostics,
+                                source,
+                                "workflow env must be mapping",
+                                ExpressionValidationContext.Workflow);
+                        }
 
-            if (keyUtf8.SequenceEqual("concurrency"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, "workflow contains duplicate key: concurrency", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be scalar or mapping", ExpressionValidationContext.Workflow);
+                        continue;
+                    case WorkflowRootMappingKey.Permissions:
+                        if (!reader.End)
+                        {
+                            permissionsNode = ParsePermissionsNode(ref reader, arena, diagnostics, source, "workflow permissions must be scalar or mapping");
+                        }
+
+                        continue;
+                    case WorkflowRootMappingKey.Defaults:
+                        if (!reader.End)
+                        {
+                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, "workflow defaults must be mapping");
+                        }
+
+                        continue;
+                    case WorkflowRootMappingKey.Concurrency:
+                        if (!reader.End)
+                        {
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be scalar or mapping", ExpressionValidationContext.Workflow);
+                        }
+
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
                 }
-                continue;
             }
 
             if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("author"u8))
@@ -343,60 +339,63 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("description"u8))
+            if (parseMode == ParseMode.ActionMetadata &&
+                Utf8MappingDispatch.TryMatchFirstOrdered<ActionMetadataRootKeyTable>(keyUtf8, out var actionKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref actionSeen, 0)) { AddError(diagnostics, "action metadata contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                actionDescription = ParseString(ref reader, arena, diagnostics, "action description must be scalar");
-                continue;
-            }
-
-            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("inputs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref actionSeen, 1)) { AddError(diagnostics, "action metadata contains duplicate key: inputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
+                var ak = (ActionMetadataRootMappingKey)actionKeyOrdinal;
+                if (!TrySetBit(ref actionSeen, actionKeyOrdinal))
                 {
-                    actionInputs = ParseActionMetadataInputs(ref reader, arena, diagnostics, source);
+                    AddError(diagnostics, $"action metadata contains duplicate key: {ActionMetadataRootDuplicateKeyName(ak)}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
                 }
 
-                continue;
-            }
-
-            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("outputs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref actionSeen, 2)) { AddError(diagnostics, "action metadata contains duplicate key: outputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
+                switch (ak)
                 {
-                    actionOutputs = ParseActionMetadataOutputs(ref reader, arena, diagnostics, source);
+                    case ActionMetadataRootMappingKey.Description:
+                        actionDescription = ParseString(ref reader, arena, diagnostics, "action description must be scalar");
+                        continue;
+                    case ActionMetadataRootMappingKey.Inputs:
+                        if (!reader.End)
+                        {
+                            actionInputs = ParseActionMetadataInputs(ref reader, arena, diagnostics, source);
+                        }
+
+                        continue;
+                    case ActionMetadataRootMappingKey.Outputs:
+                        if (!reader.End)
+                        {
+                            actionOutputs = ParseActionMetadataOutputs(ref reader, arena, diagnostics, source);
+                        }
+
+                        continue;
+                    case ActionMetadataRootMappingKey.Runs:
+                        if (!reader.End)
+                        {
+                            actionRuns = ParseActionMetadataRuns(ref reader, arena, diagnostics, source);
+                        }
+
+                        continue;
+                    case ActionMetadataRootMappingKey.Branding:
+                        if (!reader.End)
+                        {
+                            actionBranding = ParseActionMetadataBranding(ref reader, arena, diagnostics);
+                        }
+
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
                 }
-
-                continue;
-            }
-
-            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("runs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref actionSeen, 3)) { AddError(diagnostics, "action metadata contains duplicate key: runs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    actionRuns = ParseActionMetadataRuns(ref reader, arena, diagnostics, source);
-                }
-
-                continue;
-            }
-
-            if (parseMode == ParseMode.ActionMetadata && keyUtf8.SequenceEqual("branding"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref actionSeen, 4)) { AddError(diagnostics, "action metadata contains duplicate key: branding", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    actionBranding = ParseActionMetadataBranding(ref reader, arena, diagnostics);
-                }
-
-                continue;
             }
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
@@ -710,7 +709,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("run"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowDefaultsOuterKeyTable>(keyUtf8, out _))
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "workflow defaults contains duplicate key: run", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
@@ -753,20 +752,38 @@ public static partial class WorkflowParser
                         continue;
                     }
 
-                    if (runKeyUtf8.SequenceEqual("shell"u8))
+                    if (Utf8MappingDispatch.TryMatchFirstOrdered<DefaultsRunKeyTable>(runKeyUtf8, out var runKeyOrdinal))
                     {
                         reader.Read();
-                        if (!TrySetBit(ref runSeen, 0)) { AddError(diagnostics, "workflow defaults.run contains duplicate key: shell", runKeyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                        shellNode = ParseString(ref reader, arena, diagnostics, "workflow defaults.run.shell must be scalar");
-                        continue;
-                    }
+                        var drk = (DefaultsRunMappingKey)runKeyOrdinal;
+                        if (!TrySetBit(ref runSeen, runKeyOrdinal))
+                        {
+                            var dupName = drk == DefaultsRunMappingKey.Shell ? "shell" : "working-directory";
+                            AddError(diagnostics, $"workflow defaults.run contains duplicate key: {dupName}", runKeyMark);
+                            if (!reader.End)
+                            {
+                                reader.SkipCurrentNode();
+                            }
 
-                    if (runKeyUtf8.SequenceEqual("working-directory"u8))
-                    {
-                        reader.Read();
-                        if (!TrySetBit(ref runSeen, 1)) { AddError(diagnostics, "workflow defaults.run contains duplicate key: working-directory", runKeyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                        workingDirectoryNode = ParseString(ref reader, arena, diagnostics, "workflow defaults.run.working-directory must be scalar");
-                        continue;
+                            continue;
+                        }
+
+                        switch (drk)
+                        {
+                            case DefaultsRunMappingKey.Shell:
+                                shellNode = ParseString(ref reader, arena, diagnostics, "workflow defaults.run.shell must be scalar");
+                                continue;
+                            case DefaultsRunMappingKey.WorkingDirectory:
+                                workingDirectoryNode = ParseString(ref reader, arena, diagnostics, "workflow defaults.run.working-directory must be scalar");
+                                continue;
+                            default:
+                                if (!reader.End)
+                                {
+                                    reader.SkipCurrentNode();
+                                }
+
+                                continue;
+                        }
                     }
 
                     var unknownRunKey = Encoding.UTF8.GetString(runKeyUtf8);
@@ -867,20 +884,38 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("group"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ConcurrencyKeyTable>(keyUtf8, out var concurrencyKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "concurrency contains duplicate key: group", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                groupNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.group must be scalar", parseWholeValueIfNoEmbedded: false);
-                continue;
-            }
+                var ck = (ConcurrencyMappingKey)concurrencyKeyOrdinal;
+                if (!TrySetBit(ref seen, concurrencyKeyOrdinal))
+                {
+                    var dupName = ck == ConcurrencyMappingKey.Group ? "group" : "cancel-in-progress";
+                    AddError(diagnostics, $"concurrency contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("cancel-in-progress"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "concurrency contains duplicate key: cancel-in-progress", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
-                continue;
+                    continue;
+                }
+
+                switch (ck)
+                {
+                    case ConcurrencyMappingKey.Group:
+                        groupNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.group must be scalar", parseWholeValueIfNoEmbedded: false);
+                        continue;
+                    case ConcurrencyMappingKey.CancelInProgress:
+                        cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);

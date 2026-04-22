@@ -43,7 +43,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("types"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<OnRepositoryDispatchKeyTable>(keyUtf8, out _))
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.repository_dispatch contains duplicate key: types", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }

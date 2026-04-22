@@ -50,28 +50,16 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            // Pre-compute key identity before advancing reader (spans may be invalidated after Read)
-            var isTypes = keyUtf8.SequenceEqual("types"u8);
-            var isBranches = keyUtf8.SequenceEqual("branches"u8);
-            var isBranchesIgnore = keyUtf8.SequenceEqual("branches-ignore"u8);
-            var isTags = keyUtf8.SequenceEqual("tags"u8);
-            var isTagsIgnore = keyUtf8.SequenceEqual("tags-ignore"u8);
-            var isPaths = keyUtf8.SequenceEqual("paths"u8);
-            var isPathsIgnore = keyUtf8.SequenceEqual("paths-ignore"u8);
-            var isWorkflows = keyUtf8.SequenceEqual("workflows"u8);
+            var knownOption = Utf8MappingDispatch.TryMatchFirstOrdered<OnWebhookEventOptionKeyTable>(keyUtf8, out var whOptOrdinal);
+            var whOpt = (OnWebhookEventOptionMappingKey)whOptOrdinal;
+            string? unknownKeyText = !knownOption ? Encoding.UTF8.GetString(keyUtf8) : null;
             var isOptionNotAllowed = eventInfo.IsKnown && !eventInfo.Spec.IsOptionAllowed(keyUtf8);
-
-            // Decode unknown key string while span is still valid (diagnostic path only)
-            string? unknownKeyText = (!isTypes && !isBranches && !isBranchesIgnore && !isTags && !isTagsIgnore
-                && !isPaths && !isPathsIgnore && !isWorkflows)
-                ? Encoding.UTF8.GetString(keyUtf8)
-                : null;
 
             reader.Read(); // consume key - after this keyUtf8 may be invalid
 
             if (reader.End) { break; }
 
-            if (isTypes)
+            if (knownOption && whOpt == OnWebhookEventOptionMappingKey.Types)
             {
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: types", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeOptionSupported())
@@ -93,78 +81,67 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (isBranches)
+            if (knownOption)
             {
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasBranches = true;
-                var filterNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches"u8.Length));
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var brErr, out var brMark);
-                if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar", brMark);
-                branches = new WebhookEventFilter { Name = filterNameNode, Values = values };
-                continue;
-            }
-
-            if (isBranchesIgnore)
-            {
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasBranchesIgnore = true;
-                var filterNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches-ignore"u8.Length));
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var biErr, out var biMark);
-                if (biErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar", biMark);
-                branchesIgnore = new WebhookEventFilter { Name = filterNameNode, Values = values };
-                continue;
-            }
-
-            if (isTags)
-            {
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasTags = true;
-                var filterNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags"u8.Length));
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tErr, out var tMark);
-                if (tErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar", tMark);
-                tags = new WebhookEventFilter { Name = filterNameNode, Values = values };
-                continue;
-            }
-
-            if (isTagsIgnore)
-            {
-                if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasTagsIgnore = true;
-                var filterNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags-ignore"u8.Length));
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tiErr, out var tiMark);
-                if (tiErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar", tiMark);
-                tagsIgnore = new WebhookEventFilter { Name = filterNameNode, Values = values };
-                continue;
-            }
-
-            if (isPaths)
-            {
-                if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasPaths = true;
-                var filterNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths"u8.Length));
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pErr, out var pMark);
-                if (pErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar", pMark);
-                paths = new WebhookEventFilter { Name = filterNameNode, Values = values };
-                continue;
-            }
-
-            if (isPathsIgnore)
-            {
-                if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasPathsIgnore = true;
-                var filterNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths-ignore"u8.Length));
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var piErr, out var piMark);
-                if (piErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar", piMark);
-                pathsIgnore = new WebhookEventFilter { Name = filterNameNode, Values = values };
-                continue;
-            }
-
-            if (isWorkflows)
-            {
-                if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: workflows", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                workflows = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var wErr, out var wMark);
-                if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar", wMark);
-                continue;
+                switch (whOpt)
+                {
+                    case OnWebhookEventOptionMappingKey.Branches:
+                        if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        hasBranches = true;
+                        var branchesNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches"u8.Length));
+                        var brValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var brErr, out var brMark);
+                        if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar", brMark);
+                        branches = new WebhookEventFilter { Name = branchesNameNode, Values = brValues };
+                        continue;
+                    case OnWebhookEventOptionMappingKey.BranchesIgnore:
+                        if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        hasBranchesIgnore = true;
+                        var branchesIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches-ignore"u8.Length));
+                        var biValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var biErr, out var biMark);
+                        if (biErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar", biMark);
+                        branchesIgnore = new WebhookEventFilter { Name = branchesIgnoreNameNode, Values = biValues };
+                        continue;
+                    case OnWebhookEventOptionMappingKey.Tags:
+                        if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        hasTags = true;
+                        var tagsNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags"u8.Length));
+                        var tValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tErr, out var tMark);
+                        if (tErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar", tMark);
+                        tags = new WebhookEventFilter { Name = tagsNameNode, Values = tValues };
+                        continue;
+                    case OnWebhookEventOptionMappingKey.TagsIgnore:
+                        if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        hasTagsIgnore = true;
+                        var tagsIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags-ignore"u8.Length));
+                        var tiValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tiErr, out var tiMark);
+                        if (tiErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar", tiMark);
+                        tagsIgnore = new WebhookEventFilter { Name = tagsIgnoreNameNode, Values = tiValues };
+                        continue;
+                    case OnWebhookEventOptionMappingKey.Paths:
+                        if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        hasPaths = true;
+                        var pathsNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths"u8.Length));
+                        var pValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pErr, out var pMark);
+                        if (pErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar", pMark);
+                        paths = new WebhookEventFilter { Name = pathsNameNode, Values = pValues };
+                        continue;
+                    case OnWebhookEventOptionMappingKey.PathsIgnore:
+                        if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        hasPathsIgnore = true;
+                        var pathsIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths-ignore"u8.Length));
+                        var piValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var piErr, out var piMark);
+                        if (piErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar", piMark);
+                        pathsIgnore = new WebhookEventFilter { Name = pathsIgnoreNameNode, Values = piValues };
+                        continue;
+                    case OnWebhookEventOptionMappingKey.Workflows:
+                        if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: workflows", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        workflows = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var wErr, out var wMark);
+                        if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar", wMark);
+                        continue;
+                    default:
+                        if (!reader.End) { reader.SkipCurrentNode(); }
+                        continue;
+                }
             }
 
             AddError(diagnostics, $"unexpected on.{eventInfo.Name} option: {unknownKeyText}", keyMark);
@@ -330,8 +307,10 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            var extMatch = Utf8MappingDispatch.TryMatchFirstOrdered<OnEventOptionsExtendedKeyTable>(keyUtf8, out var extOrd);
+            var extKey = (OnEventOptionsExtendedMappingKey)extOrd;
 
-            if (keyUtf8.SequenceEqual("types"u8))
+            if (extMatch && extKey == OnEventOptionsExtendedMappingKey.Types)
             {
                 reader.Read();
                 if (reader.End)
@@ -362,75 +341,77 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("branches"u8))
+            if (extMatch)
             {
-                reader.Read();
-                hasBranches = true;
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("branches-ignore"u8))
-            {
-                reader.Read();
-                hasBranchesIgnore = true;
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("tags"u8))
-            {
-                reader.Read();
-                hasTags = true;
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("tags-ignore"u8))
-            {
-                reader.Read();
-                hasTagsIgnore = true;
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("paths"u8))
-            {
-                reader.Read();
-                hasPaths = true;
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("paths-ignore"u8))
-            {
-                reader.Read();
-                hasPathsIgnore = true;
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("workflows"u8))
-            {
-                reader.Read();
-                ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("inputs"u8) || keyUtf8.SequenceEqual("secrets"u8) || keyUtf8.SequenceEqual("outputs"u8))
-            {
-                var key = keyUtf8.SequenceEqual("inputs"u8)
-                    ? "inputs"
-                    : keyUtf8.SequenceEqual("secrets"u8)
-                        ? "secrets"
-                        : "outputs";
-                reader.Read();
-                if (reader.CurrentKind != YamlEventKind.MappingStart)
+                switch (extKey)
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name}.{key} must be mapping", reader.CurrentStart);
+                    case OnEventOptionsExtendedMappingKey.Types:
+                        reader.Read();
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.Branches:
+                        reader.Read();
+                        hasBranches = true;
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.BranchesIgnore:
+                        reader.Read();
+                        hasBranchesIgnore = true;
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.Tags:
+                        reader.Read();
+                        hasTags = true;
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.TagsIgnore:
+                        reader.Read();
+                        hasTagsIgnore = true;
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.Paths:
+                        reader.Read();
+                        hasPaths = true;
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.PathsIgnore:
+                        reader.Read();
+                        hasPathsIgnore = true;
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.Workflows:
+                        reader.Read();
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar");
+                        continue;
+                    case OnEventOptionsExtendedMappingKey.Inputs:
+                    case OnEventOptionsExtendedMappingKey.Secrets:
+                    case OnEventOptionsExtendedMappingKey.Outputs:
+                        reader.Read();
+                        var iosName = extKey == OnEventOptionsExtendedMappingKey.Inputs
+                            ? "inputs"
+                            : extKey == OnEventOptionsExtendedMappingKey.Secrets
+                                ? "secrets"
+                                : "outputs";
+                        if (reader.CurrentKind != YamlEventKind.MappingStart)
+                        {
+                            AddError(diagnostics, $"on.{eventInfo.Name}.{iosName} must be mapping", reader.CurrentStart);
+                        }
+
+                        reader.SkipCurrentNode();
+                        continue;
+                    default:
+                        reader.Read();
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
                 }
-                reader.SkipCurrentNode();
-                continue;
             }
 
             if (reader.End)

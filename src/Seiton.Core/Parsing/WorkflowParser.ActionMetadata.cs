@@ -126,36 +126,51 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("description"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ActionMetadataInputOptionKeyTable>(keyUtf8, out var inputOptOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action input contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, arena, diagnostics, "action input description must be scalar");
-                continue;
-            }
+                var iok = (ActionMetadataInputOptionKey)inputOptOrdinal;
+                if (!TrySetBit(ref seen, inputOptOrdinal))
+                {
+                    var dupName = iok switch
+                    {
+                        ActionMetadataInputOptionKey.Description => "description",
+                        ActionMetadataInputOptionKey.Required => "required",
+                        ActionMetadataInputOptionKey.Default => "default",
+                        ActionMetadataInputOptionKey.DeprecationMessage => "deprecationMessage",
+                        _ => "option",
+                    };
+                    AddError(diagnostics, $"action input contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("required"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action input contains duplicate key: required", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                required = ParseBoolNode(ref reader, arena, diagnostics, "action input required must be bool");
-                continue;
-            }
+                    continue;
+                }
 
-            if (keyUtf8.SequenceEqual("default"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "action input contains duplicate key: default", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                defaultValue = ParseString(ref reader, arena, diagnostics, "action input default must be scalar", allowEmpty: true);
-                continue;
-            }
+                switch (iok)
+                {
+                    case ActionMetadataInputOptionKey.Description:
+                        description = ParseString(ref reader, arena, diagnostics, "action input description must be scalar");
+                        continue;
+                    case ActionMetadataInputOptionKey.Required:
+                        required = ParseBoolNode(ref reader, arena, diagnostics, "action input required must be bool");
+                        continue;
+                    case ActionMetadataInputOptionKey.Default:
+                        defaultValue = ParseString(ref reader, arena, diagnostics, "action input default must be scalar", allowEmpty: true);
+                        continue;
+                    case ActionMetadataInputOptionKey.DeprecationMessage:
+                        deprecationMessage = ParseString(ref reader, arena, diagnostics, "action input deprecationMessage must be scalar");
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
 
-            if (keyUtf8.SequenceEqual("deprecationMessage"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "action input contains duplicate key: deprecationMessage", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                deprecationMessage = ParseString(ref reader, arena, diagnostics, "action input deprecationMessage must be scalar");
-                continue;
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -294,24 +309,42 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("description"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ActionMetadataOutputOptionKeyTable>(keyUtf8, out var outputOptOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action output contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, arena, diagnostics, "action output description must be scalar");
-                continue;
-            }
+                var ook = (ActionMetadataOutputOptionKey)outputOptOrdinal;
+                if (!TrySetBit(ref seen, outputOptOrdinal))
+                {
+                    var dupName = ook == ActionMetadataOutputOptionKey.Description ? "description" : "value";
+                    AddError(diagnostics, $"action output contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("value"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action output contains duplicate key: value", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                value = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Step,
-                    "action output value must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
-                continue;
+                    continue;
+                }
+
+                switch (ook)
+                {
+                    case ActionMetadataOutputOptionKey.Description:
+                        description = ParseString(ref reader, arena, diagnostics, "action output description must be scalar");
+                        continue;
+                    case ActionMetadataOutputOptionKey.Value:
+                        value = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.Step,
+                            "action output value must be scalar",
+                            parseWholeValueIfNoEmbedded: false);
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -379,20 +412,38 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("icon"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ActionMetadataBrandingKeyTable>(keyUtf8, out var brandingOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action branding contains duplicate key: icon", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                icon = ParseString(ref reader, arena, diagnostics, "action branding icon must be scalar");
-                continue;
-            }
+                var bk = (ActionMetadataBrandingKey)brandingOrdinal;
+                if (!TrySetBit(ref seen, brandingOrdinal))
+                {
+                    var dupName = bk == ActionMetadataBrandingKey.Icon ? "icon" : "color";
+                    AddError(diagnostics, $"action branding contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("color"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action branding contains duplicate key: color", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                color = ParseString(ref reader, arena, diagnostics, "action branding color must be scalar");
-                continue;
+                    continue;
+                }
+
+                switch (bk)
+                {
+                    case ActionMetadataBrandingKey.Icon:
+                        icon = ParseString(ref reader, arena, diagnostics, "action branding icon must be scalar");
+                        continue;
+                    case ActionMetadataBrandingKey.Color:
+                        color = ParseString(ref reader, arena, diagnostics, "action branding color must be scalar");
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -470,125 +521,97 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("using"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ActionMetadataRunsKeyTable>(keyUtf8, out var runsKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "action runs contains duplicate key: using", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                usingNode = ParseString(ref reader, arena, diagnostics, "action runs using must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("main"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "action runs contains duplicate key: main", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                main = ParseString(ref reader, arena, diagnostics, "action runs main must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("pre"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "action runs contains duplicate key: pre", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                pre = ParseString(ref reader, arena, diagnostics, "action runs pre must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("post"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "action runs contains duplicate key: post", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                post = ParseString(ref reader, arena, diagnostics, "action runs post must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("pre-if"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, "action runs contains duplicate key: pre-if", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                preIf = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Step,
-                    "action runs pre-if must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("post-if"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, "action runs contains duplicate key: post-if", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                postIf = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Step,
-                    "action runs post-if must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("image"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, "action runs contains duplicate key: image", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                image = ParseString(ref reader, arena, diagnostics, "action runs image must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("entrypoint"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, "action runs contains duplicate key: entrypoint", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                entrypoint = ParseString(ref reader, arena, diagnostics, "action runs entrypoint must be scalar");
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("args"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 8)) { AddError(diagnostics, "action runs contains duplicate key: args", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
+                var rk = (ActionMetadataRunsMappingKey)runsKeyOrdinal;
+                if (!TrySetBit(ref seen, runsKeyOrdinal))
                 {
-                    args = ParseActionRunsArgs(ref reader, arena, diagnostics);
-                }
-
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("env"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 9)) { AddError(diagnostics, "action runs contains duplicate key: env", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    env = ParseEnvNode(
-                        ref reader, arena, diagnostics,
-                        source,
-                        "action runs env must be mapping",
-                        ExpressionValidationContext.Step);
-                }
-
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("steps"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 10)) { AddError(diagnostics, "action runs contains duplicate key: steps", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (!reader.End)
-                {
-                    if (reader.CurrentKind != YamlEventKind.SequenceStart)
+                    AddError(diagnostics, $"action runs contains duplicate key: {ActionMetadataRunsDuplicateKeyName(rk)}", keyMark);
+                    if (!reader.End)
                     {
-                        AddError(diagnostics, "action runs steps must be sequence", reader.CurrentStart);
                         reader.SkipCurrentNode();
                     }
-                    else
-                    {
-                        Utf8Slice emptyJobId = default;
-                        steps = ParseSteps(ref reader, arena, diagnostics, source, emptyJobId);
-                    }
+
+                    continue;
                 }
 
-                continue;
+                switch (rk)
+                {
+                    case ActionMetadataRunsMappingKey.Using:
+                        usingNode = ParseString(ref reader, arena, diagnostics, "action runs using must be scalar");
+                        continue;
+                    case ActionMetadataRunsMappingKey.Main:
+                        main = ParseString(ref reader, arena, diagnostics, "action runs main must be scalar");
+                        continue;
+                    case ActionMetadataRunsMappingKey.Pre:
+                        pre = ParseString(ref reader, arena, diagnostics, "action runs pre must be scalar");
+                        continue;
+                    case ActionMetadataRunsMappingKey.Post:
+                        post = ParseString(ref reader, arena, diagnostics, "action runs post must be scalar");
+                        continue;
+                    case ActionMetadataRunsMappingKey.PreIf:
+                        preIf = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.Step,
+                            "action runs pre-if must be scalar",
+                            parseWholeValueIfNoEmbedded: false);
+                        continue;
+                    case ActionMetadataRunsMappingKey.PostIf:
+                        postIf = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.Step,
+                            "action runs post-if must be scalar",
+                            parseWholeValueIfNoEmbedded: false);
+                        continue;
+                    case ActionMetadataRunsMappingKey.Image:
+                        image = ParseString(ref reader, arena, diagnostics, "action runs image must be scalar");
+                        continue;
+                    case ActionMetadataRunsMappingKey.Entrypoint:
+                        entrypoint = ParseString(ref reader, arena, diagnostics, "action runs entrypoint must be scalar");
+                        continue;
+                    case ActionMetadataRunsMappingKey.Args:
+                        if (!reader.End)
+                        {
+                            args = ParseActionRunsArgs(ref reader, arena, diagnostics);
+                        }
+
+                        continue;
+                    case ActionMetadataRunsMappingKey.Env:
+                        if (!reader.End)
+                        {
+                            env = ParseEnvNode(
+                                ref reader, arena, diagnostics,
+                                source,
+                                "action runs env must be mapping",
+                                ExpressionValidationContext.Step);
+                        }
+
+                        continue;
+                    case ActionMetadataRunsMappingKey.Steps:
+                        if (!reader.End)
+                        {
+                            if (reader.CurrentKind != YamlEventKind.SequenceStart)
+                            {
+                                AddError(diagnostics, "action runs steps must be sequence", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else
+                            {
+                                Utf8Slice emptyJobId = default;
+                                steps = ParseSteps(ref reader, arena, diagnostics, source, emptyJobId);
+                            }
+                        }
+
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);

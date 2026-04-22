@@ -45,20 +45,38 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("names"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<OnImageVersionKeyTable>(keyUtf8, out var ivOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.image_version contains duplicate key: names", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be sequence of scalar");
-                continue;
-            }
+                var ivk = (OnImageVersionMappingKey)ivOrdinal;
+                if (!TrySetBit(ref seen, ivOrdinal))
+                {
+                    var dupName = ivk == OnImageVersionMappingKey.Names ? "names" : "versions";
+                    AddError(diagnostics, $"on.image_version contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("versions"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.image_version contains duplicate key: versions", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be sequence of scalar");
-                continue;
+                    continue;
+                }
+
+                switch (ivk)
+                {
+                    case OnImageVersionMappingKey.Names:
+                        names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be sequence of scalar");
+                        continue;
+                    case OnImageVersionMappingKey.Versions:
+                        versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be sequence of scalar");
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);

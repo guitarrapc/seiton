@@ -46,28 +46,41 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("inputs"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowCallEventKeyTable>(keyUtf8, out var wceOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_call contains duplicate key: inputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                inputs = ParseWorkflowCallInputs(ref reader, arena, diagnostics, source);
-                continue;
-            }
+                var wck = (WorkflowCallEventMappingKey)wceOrdinal;
+                if (!TrySetBit(ref seen, wceOrdinal))
+                {
+                    var dupName = wck == WorkflowCallEventMappingKey.Inputs ? "inputs" : wck == WorkflowCallEventMappingKey.Secrets ? "secrets" : "outputs";
+                    AddError(diagnostics, $"on.workflow_call contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("secrets"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.workflow_call contains duplicate key: secrets", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                secrets = ParseWorkflowCallSecrets(ref reader, arena, diagnostics, source);
-                continue;
-            }
+                    continue;
+                }
 
-            if (keyUtf8.SequenceEqual("outputs"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "on.workflow_call contains duplicate key: outputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                outputs = ParseWorkflowCallOutputs(ref reader, arena, diagnostics, source);
-                continue;
+                switch (wck)
+                {
+                    case WorkflowCallEventMappingKey.Inputs:
+                        inputs = ParseWorkflowCallInputs(ref reader, arena, diagnostics, source);
+                        continue;
+                    case WorkflowCallEventMappingKey.Secrets:
+                        secrets = ParseWorkflowCallSecrets(ref reader, arena, diagnostics, source);
+                        continue;
+                    case WorkflowCallEventMappingKey.Outputs:
+                        outputs = ParseWorkflowCallOutputs(ref reader, arena, diagnostics, source);
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -205,37 +218,52 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("description"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowCallInputFieldKeyTable>(keyUtf8, out var wcifOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_call input contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, arena, diagnostics, "on.workflow_call input description must be scalar");
-                continue;
-            }
+                var ifk = (WorkflowCallInputFieldKey)wcifOrdinal;
+                if (!TrySetBit(ref seen, wcifOrdinal))
+                {
+                    var dupName = ifk switch
+                    {
+                        WorkflowCallInputFieldKey.Description => "description",
+                        WorkflowCallInputFieldKey.Required => "required",
+                        WorkflowCallInputFieldKey.Default => "default",
+                        WorkflowCallInputFieldKey.Type => "type",
+                        _ => "option",
+                    };
+                    AddError(diagnostics, $"on.workflow_call input contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("required"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.workflow_call input contains duplicate key: required", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_call input required must be bool");
-                continue;
-            }
+                    continue;
+                }
 
-            if (keyUtf8.SequenceEqual("default"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "on.workflow_call input contains duplicate key: default", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_call input default must be scalar", allowEmpty: true);
-                continue;
-            }
+                switch (ifk)
+                {
+                    case WorkflowCallInputFieldKey.Description:
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call input description must be scalar");
+                        continue;
+                    case WorkflowCallInputFieldKey.Required:
+                        required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_call input required must be bool");
+                        continue;
+                    case WorkflowCallInputFieldKey.Default:
+                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_call input default must be scalar", allowEmpty: true);
+                        continue;
+                    case WorkflowCallInputFieldKey.Type:
+                        type = ParseWorkflowCallInputType(ref reader, arena, diagnostics);
+                        hasType = true;
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
 
-            if (keyUtf8.SequenceEqual("type"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "on.workflow_call input contains duplicate key: type", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                type = ParseWorkflowCallInputType(ref reader, arena, diagnostics);
-                hasType = true;
-                continue;
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -284,10 +312,22 @@ public static partial class WorkflowParser
         }
 
         var valueUtf8 = reader.GetScalarUtf8();
-        var type = valueUtf8.SequenceEqual("boolean"u8) ? WorkflowCallInputType.Boolean
-            : valueUtf8.SequenceEqual("number"u8) ? WorkflowCallInputType.Number
-            : valueUtf8.SequenceEqual("string"u8) ? WorkflowCallInputType.String
-            : WorkflowCallInputType.Invalid;
+        WorkflowCallInputType type;
+        if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowCallInputTypeScalarKeyTable>(valueUtf8, out var typeOrd))
+        {
+            type = typeOrd switch
+            {
+                0 => WorkflowCallInputType.Boolean,
+                1 => WorkflowCallInputType.Number,
+                2 => WorkflowCallInputType.String,
+                _ => WorkflowCallInputType.Invalid,
+            };
+        }
+        else
+        {
+            type = WorkflowCallInputType.Invalid;
+        }
+
         if (type == WorkflowCallInputType.Invalid)
         {
             AddError(diagnostics, "on.workflow_call input type must be one of boolean, number, string", reader.CurrentStart);
@@ -403,20 +443,38 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("description"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowCallSecretFieldKeyTable>(keyUtf8, out var wcsfOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_call secret contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, arena, diagnostics, "on.workflow_call secret description must be scalar");
-                continue;
-            }
+                var sfk = (WorkflowCallSecretFieldKey)wcsfOrdinal;
+                if (!TrySetBit(ref seen, wcsfOrdinal))
+                {
+                    var dupName = sfk == WorkflowCallSecretFieldKey.Description ? "description" : "required";
+                    AddError(diagnostics, $"on.workflow_call secret contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("required"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.workflow_call secret contains duplicate key: required", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_call secret required must be bool");
-                continue;
+                    continue;
+                }
+
+                switch (sfk)
+                {
+                    case WorkflowCallSecretFieldKey.Description:
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call secret description must be scalar");
+                        continue;
+                    case WorkflowCallSecretFieldKey.Required:
+                        required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_call secret required must be bool");
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -549,24 +607,42 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("description"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowCallOutputFieldKeyTable>(keyUtf8, out var wcofOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_call output contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, arena, diagnostics, "on.workflow_call output description must be scalar");
-                continue;
-            }
+                var ofk = (WorkflowCallOutputFieldKey)wcofOrdinal;
+                if (!TrySetBit(ref seen, wcofOrdinal))
+                {
+                    var dupName = ofk == WorkflowCallOutputFieldKey.Description ? "description" : "value";
+                    AddError(diagnostics, $"on.workflow_call output contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("value"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.workflow_call output contains duplicate key: value", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                value = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.WorkflowCallOutput,
-                    "on.workflow_call output value must be scalar",
-                    parseWholeValueIfNoEmbedded: false);
-                continue;
+                    continue;
+                }
+
+                switch (ofk)
+                {
+                    case WorkflowCallOutputFieldKey.Description:
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call output description must be scalar");
+                        continue;
+                    case WorkflowCallOutputFieldKey.Value:
+                        value = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.WorkflowCallOutput,
+                            "on.workflow_call output value must be scalar",
+                            parseWholeValueIfNoEmbedded: false);
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);

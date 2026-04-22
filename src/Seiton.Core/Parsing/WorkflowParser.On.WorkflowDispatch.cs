@@ -43,7 +43,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("inputs"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<OnWorkflowDispatchTopKeyTable>(keyUtf8, out _))
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_dispatch contains duplicate key: inputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
@@ -179,45 +179,55 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("description"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<WorkflowDispatchInputFieldKeyTable>(keyUtf8, out var dispatchFieldOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_dispatch input contains duplicate key: description", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                description = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input description must be scalar");
-                continue;
-            }
+                var fk = (WorkflowDispatchInputFieldKey)dispatchFieldOrdinal;
+                if (!TrySetBit(ref seen, dispatchFieldOrdinal))
+                {
+                    var dupName = fk switch
+                    {
+                        WorkflowDispatchInputFieldKey.Description => "description",
+                        WorkflowDispatchInputFieldKey.Required => "required",
+                        WorkflowDispatchInputFieldKey.Default => "default",
+                        WorkflowDispatchInputFieldKey.Type => "type",
+                        WorkflowDispatchInputFieldKey.Options => "options",
+                        _ => "option",
+                    };
+                    AddError(diagnostics, $"on.workflow_dispatch input contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("required"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.workflow_dispatch input contains duplicate key: required", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_dispatch input required must be bool");
-                continue;
-            }
+                    continue;
+                }
 
-            if (keyUtf8.SequenceEqual("default"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "on.workflow_dispatch input contains duplicate key: default", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input default must be scalar", allowEmpty: true);
-                continue;
-            }
+                switch (fk)
+                {
+                    case WorkflowDispatchInputFieldKey.Description:
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input description must be scalar");
+                        continue;
+                    case WorkflowDispatchInputFieldKey.Required:
+                        required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_dispatch input required must be bool");
+                        continue;
+                    case WorkflowDispatchInputFieldKey.Default:
+                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input default must be scalar", allowEmpty: true);
+                        continue;
+                    case WorkflowDispatchInputFieldKey.Type:
+                        type = ParseDispatchInputType(ref reader, arena, diagnostics);
+                        continue;
+                    case WorkflowDispatchInputFieldKey.Options:
+                        options = ParseStringOrStringSequence(ref reader, arena, diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar", allowElemEmpty: true);
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
 
-            if (keyUtf8.SequenceEqual("type"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, "on.workflow_dispatch input contains duplicate key: type", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                type = ParseDispatchInputType(ref reader, arena, diagnostics);
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("options"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, "on.workflow_dispatch input contains duplicate key: options", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                // allowElemEmpty: true because choice-type inputs legitimately use '' as the "no selection" option
-                options = ParseStringOrStringSequence(ref reader, arena, diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar", allowElemEmpty: true);
-                continue;
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
@@ -257,12 +267,23 @@ public static partial class WorkflowParser
         }
 
         var valueUtf8 = reader.GetScalarUtf8();
-        var type = valueUtf8.SequenceEqual("string"u8) ? DispatchInputType.String
-            : valueUtf8.SequenceEqual("number"u8) ? DispatchInputType.Number
-            : valueUtf8.SequenceEqual("boolean"u8) ? DispatchInputType.Boolean
-            : valueUtf8.SequenceEqual("choice"u8) ? DispatchInputType.Choice
-            : valueUtf8.SequenceEqual("environment"u8) ? DispatchInputType.Environment
-            : DispatchInputType.None;
+        DispatchInputType type;
+        if (Utf8MappingDispatch.TryMatchFirstOrdered<DispatchInputTypeScalarKeyTable>(valueUtf8, out var typeOrd))
+        {
+            type = typeOrd switch
+            {
+                0 => DispatchInputType.Boolean,
+                1 => DispatchInputType.Choice,
+                2 => DispatchInputType.Environment,
+                3 => DispatchInputType.Number,
+                4 => DispatchInputType.String,
+                _ => DispatchInputType.None,
+            };
+        }
+        else
+        {
+            type = DispatchInputType.None;
+        }
 
         if (type == DispatchInputType.None)
         {

@@ -35,7 +35,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 - ~~`WorkflowParser.On.cs` (1,692 行)~~ → **責務別に 7 partial**（`On.Core` / `On.Schedule` / `On.WorkflowDispatch` / `On.WorkflowCall` / `On.RepositoryDispatch` / `On.ImageVersion` / `On.Webhook`）へ分割済み。
 - `WorkflowParser.Jobs.cs` の `ParseJobNode` はキー共通化で整理済み（以下 実装状況）。
-- ~~各 partial で同じ「キーチェック → パース → エラー → スキップ」パターンが手書きで反復されている。~~ → **ジョブ／runs-on マッピング／ステップ**では `Utf8MappingDispatch` + `switch` に寄せ済み（下表）。`WorkflowParser.cs` ルート、`Strategy`、`Containers`、`ActionMetadata` 等は従来どおり手書き分岐のまま（必要なら同パターンで段階的に拡張可能）。
+- ~~各 partial で同じ「キーチェック → パース → エラー → スキップ」パターンが手書きで反復されている。~~ → **ジョブ／runs-on／ステップに加え**、ルート `WorkflowParser`（`TryReadRootStructuralHints` / `ParseCore` / `defaults` / `concurrency`）、`Strategy`（`matrix` トップレベル。`include`/`exclude` は動的キー登録後の判定）、`Containers`（本体・`credentials`）、`ActionMetadata`（input / output / branding / runs）、`On.*` の小さなマッピング（`schedule`、`workflow_dispatch`、`workflow_call`、`repository_dispatch`、`image_version`、webhook オプション）でも `Utf8MappingDispatch` + `IUtf8OrderedKeyTable` + `switch` に寄せ済み（下表）。
 - ~~`WorkflowParser.Primitives.cs`~~ → **`WorkflowParser.ScalarParsing.cs`** / **`WorkflowParser.ExpressionIntegration.cs`** に分割済み（旧ファイルは削除）。
 
 **コンセプトとの乖離**
@@ -52,10 +52,10 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 
 | 項目 | 内容 |
 |---|---|
-| 追加ファイル | `src/Seiton.Core/Parsing/Utf8MappingDispatch.cs` — `IUtf8OrderedKeyTable`（`KeyCount` / `Utf8Key(int)`）と `Utf8MappingDispatch.TryMatchFirstOrdered<TTable>`。キー行は空の `readonly struct` が静的メソッドで供給し、ジェネリック特殊化を期待。照合はヒープ割り当てなし。 |
-| 適用箇所 | `WorkflowParser.Jobs.cs`: **`ParseJobNode`**（`JobNodeMappingKey` / `JobNodeKeyTable`、ordinal = 重複ビット）、**`ParseRunsOnNode` の mapping 形**（`RunsOnMappingKey` / `RunsOnKeyTable`、`labels`・`group`）。`WorkflowParser.Steps.cs`: **`ParseStep`**（`StepMappingKey` / `StepMappingKeyTable`、11 キー。重複検出は従来どおり未導入）。 |
+| 追加ファイル | `Utf8MappingDispatch.cs`（共通）。キーテーブル用 partial: **`WorkflowParser.MappingKeys.WorkflowRoot.cs`**（ルート workflow / action メタ、`defaults` 外側・`run` 内側、`concurrency`、構造ヒント `jobs`/`runs`）、**`WorkflowParser.MappingKeys.Extended.cs`**（strategy、container、credentials、action metadata 各マッピング、on.schedule / workflow_dispatch / workflow_call / repository_dispatch / image_version、webhook オプション拡張テーブル、dispatch・workflow_call 入力の型スカラー用テーブル等）。 |
+| 適用箇所 | **`WorkflowParser.Jobs.cs`**: `ParseJobNode`、`ParseRunsOnNode` mapping 形。**`WorkflowParser.Steps.cs`**: `ParseStep`。**`WorkflowParser.cs`**: ルート `ParseCore`、`TryReadRootStructuralHints`、`ParseDefaultsNode`、`ParseConcurrencyNode`。**`WorkflowParser.Strategy.cs`**: `ParseStrategy`、行列の `include`/`exclude` 判定。**`WorkflowParser.Containers.cs`**: `ParseContainerLike`、`ParseCredentials`。**`WorkflowParser.ActionMetadata.cs`**: input / output / branding / runs。**`WorkflowParser.On.*.cs`**: schedule エントリ、workflow_dispatch（トップ・入力フィールド・型スカラー）、workflow_call（イベント・入力・秘密・出力・型スカラー）、repository_dispatch、image_version、webhook（`ParseWebhookEventWithOptions` / `ParseOnEventOptions`。後者は `types` → `IsOptionAllowed` → 拡張テーブルの順序を維持）。 |
 | 当初案（delegate）との差分 | `ReadOnlySpan<byte>` をキャプチャする delegate は使えないうえ、ホットパスでは `Invoke` の間接呼び出しが不利。.NET 10 では `ReadOnlySpan<ReadOnlySpan<byte>>` のような ref struct の入れ子も不可（CS9244）のため、**静的抽象インターフェイス + `Utf8Key(ordinal)` の switch** でテーブルを表現した。 |
-| 残り（任意） | ルート `WorkflowParser` マッピング、`Strategy`、`Containers`、`On.*` 内の細かいマッピング、`ActionMetadata` などへの同パターン適用は未着手。優先度は低く、差分が大きい箇所から順に検討でよい。 |
+| 残り（任意） | 動的キー主体のマッピング（`permissions`、`env`、行列の可変軸、`ParseRawYamlObject` 等）や null リテラル分岐は従来どおり。必要なら個別にテーブル化を検討。 |
 
 **実装状況（§2.1 提案 2、Primitives 分割）**
 

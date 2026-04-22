@@ -80,24 +80,43 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("cron"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<OnScheduleEntryKeyTable>(keyUtf8, out var schedKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.schedule contains duplicate key: cron", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be scalar");
-                if (cron.HasValue)
+                var sk = (OnScheduleEntryMappingKey)schedKeyOrdinal;
+                if (!TrySetBit(ref seen, schedKeyOrdinal))
                 {
-                    range = arena.GetStringRange(cron);
-                }
-                continue;
-            }
+                    var dupName = sk == OnScheduleEntryMappingKey.Cron ? "cron" : "timezone";
+                    AddError(diagnostics, $"on.schedule contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("timezone"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "on.schedule contains duplicate key: timezone", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be scalar");
-                continue;
+                    continue;
+                }
+
+                switch (sk)
+                {
+                    case OnScheduleEntryMappingKey.Cron:
+                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be scalar");
+                        if (cron.HasValue)
+                        {
+                            range = arena.GetStringRange(cron);
+                        }
+
+                        continue;
+                    case OnScheduleEntryMappingKey.Timezone:
+                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be scalar");
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);

@@ -170,96 +170,76 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("image"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ContainerKeyTable>(keyUtf8, out var containerKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: image", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                var ck = (ContainerMappingKey)containerKeyOrdinal;
+                if (!TrySetBit(ref seen, containerKeyOrdinal))
+                {
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
                 if (reader.End)
                 {
                     break;
                 }
 
-                hasImage = true;
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                switch (ck)
                 {
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
-                }
-                image = ParseString(ref reader, arena, out var imgErr, out var imgMark);
-                if (imgErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", imgMark);
-                continue;
-            }
+                    case ContainerMappingKey.Image:
+                        hasImage = true;
+                        if (reader.CurrentKind != YamlEventKind.Scalar)
+                        {
+                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
+                        }
 
-            if (keyUtf8.SequenceEqual("credentials"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: credentials", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (reader.End)
-                {
-                    break;
-                }
+                        image = ParseString(ref reader, arena, out var imgErr, out var imgMark);
+                        if (imgErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", imgMark);
+                        continue;
+                    case ContainerMappingKey.Credentials:
+                        credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService);
+                        continue;
+                    case ContainerMappingKey.Env:
+                        env = ParseEnvNode(
+                            ref reader, arena, diagnostics,
+                            source,
+                            $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
+                            ExpressionValidationContext.Job);
+                        continue;
+                    case ContainerMappingKey.Ports:
+                    case ContainerMappingKey.Volumes:
+                        var optionKey = ck == ContainerMappingKey.Ports ? "ports" : "volumes";
+                        var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark);
+                        if (pvErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar", pvMark);
+                        if (ck == ContainerMappingKey.Ports)
+                        {
+                            ports = values;
+                        }
+                        else
+                        {
+                            volumes = values;
+                        }
 
-                credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService);
-                continue;
-            }
+                        continue;
+                    case ContainerMappingKey.Options:
+                        if (reader.CurrentKind != YamlEventKind.Scalar)
+                        {
+                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
+                        }
 
-            if (keyUtf8.SequenceEqual("env"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: env", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (reader.End)
-                {
-                    break;
+                        options = ParseString(ref reader, arena, out var optErr, out var optMark);
+                        if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", optMark);
+                        continue;
+                    default:
+                        reader.SkipCurrentNode();
+                        continue;
                 }
-
-                // spec §2.8/§14: env accepts expression form (${{ }}) or mapping
-                env = ParseEnvNode(
-                    ref reader, arena, diagnostics,
-                    source,
-                    $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
-                    ExpressionValidationContext.Job);
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("ports"u8) || keyUtf8.SequenceEqual("volumes"u8))
-            {
-                var optionKey = keyUtf8.SequenceEqual("ports"u8) ? "ports" : "volumes";
-                var bit = optionKey == "ports" ? 3 : 4;
-                reader.Read();
-                if (!TrySetBit(ref seen, bit)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {optionKey}", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var values = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark);
-                if (pvErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{optionKey} must be scalar or sequence of scalar", pvMark);
-                if (optionKey == "ports")
-                {
-                    ports = values;
-                }
-                else
-                {
-                    volumes = values;
-                }
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("options"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: options", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                if (reader.End)
-                {
-                    break;
-                }
-
-                if (reader.CurrentKind != YamlEventKind.Scalar)
-                {
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
-                }
-                options = ParseString(ref reader, arena, out var optErr, out var optMark);
-                if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", optMark);
-                continue;
             }
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
@@ -347,34 +327,52 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (keyUtf8.SequenceEqual("username"u8))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<CredentialsKeyTable>(keyUtf8, out var credKeyOrdinal))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: username", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasUsername = true;
-                username = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Job,
-                    out var unErr,
-                    out var unMark,
-                    parseWholeValueIfNoEmbedded: false);
-                if (unErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar", unMark);
-                continue;
-            }
+                var crk = (CredentialsMappingKey)credKeyOrdinal;
+                if (!TrySetBit(ref seen, credKeyOrdinal))
+                {
+                    var dupName = crk == CredentialsMappingKey.Username ? "username" : "password";
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
 
-            if (keyUtf8.SequenceEqual("password"u8))
-            {
-                reader.Read();
-                if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: password", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                hasPassword = true;
-                password = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Job,
-                    out var pwErr,
-                    out var pwMark,
-                    parseWholeValueIfNoEmbedded: false);
-                if (pwErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar", pwMark);
-                continue;
+                    continue;
+                }
+
+                switch (crk)
+                {
+                    case CredentialsMappingKey.Username:
+                        hasUsername = true;
+                        username = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.Job,
+                            out var unErr,
+                            out var unMark,
+                            parseWholeValueIfNoEmbedded: false);
+                        if (unErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar", unMark);
+                        continue;
+                    case CredentialsMappingKey.Password:
+                        hasPassword = true;
+                        password = ParseStringAndValidateExpression(
+                            ref reader, arena, diagnostics,
+                            ExpressionValidationContext.Job,
+                            out var pwErr,
+                            out var pwMark,
+                            parseWholeValueIfNoEmbedded: false);
+                        if (pwErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar", pwMark);
+                        continue;
+                    default:
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                }
             }
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
