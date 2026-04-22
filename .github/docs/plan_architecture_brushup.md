@@ -19,7 +19,7 @@ Parser/Linter の責務分離、Adapter パターンによる YAML ライブラ�
 | 診断メッセージへの構造的依存 | High | PinRemediation（§2.3: `Diagnostic.Metadata` + `PinDiagnosticMetadata` で解消済） |
 | IPass の ActionMetadata 非対称性 | Medium | WorkflowVisitor, IPass（§2.4: 専用フック + 仕様同期済） |
 | 設定パーサーの維持コスト | Medium | `LintConfigVYamlParser` + DOM 変換（§2.5: 行パーサー廃止済） |
-| アクション参照パース処理の分散 | Medium | Rules 内の ad-hoc 解析 vs ActionRefHelpers |
+| アクション参照パース処理の分散 | Medium | `ActionRefHelpers` + `ParsedActionRef` に集約済（§2.6） |
 | Online ルールとローカルルールの契約差異 | Medium | OnlineAuditEngine vs IRule |
 | ユーティリティの責務混在 | Low | WorkflowParser.ScalarParsing / ExpressionIntegration, SpanHelpers |
 
@@ -240,23 +240,39 @@ Parser 仕様が VYaml アダプター経由で YAML 解析を行う方針と、
 
 ### 2.6 [Medium] アクション参照パース処理の分散
 
-**問題**
+**問題（整理前）**
 
-`ActionRefHelpers` に共通のアクション参照パース・マッチングユーティリティが存在するが、以下のルールが ad-hoc に独自の参照パースロジックを持っている。
+`ActionRefHelpers` に共通ユーティリティがあった一方、`ForbiddenUsesRule` / `UnpinnedUsesRule` / `RefVersionMismatchRule` が remote `uses` の検証・分割・バージョン抽出をそれぞれ重複実装していた。
 
-- `ForbiddenUsesRule`: 独自の owner/repo パース、ワイルドカードマッチ。
-- `UnpinnedUsesRule`: 部分的に ActionRefHelpers を使うが、ローカルアクション検証で独自のファイルシステムアクセスも持つ。
-- `RefVersionMismatchRule`: 独自の tag バージョンパース。
+**実装内容（完了）**
 
-**コンセプトとの乖離**
+1. **`ParsedActionRef`**（`readonly ref struct`）— UTF-8 `uses` と最終 `@` 位置を保持し、`ActionPath` / `Ref` をスパンで公開。
+2. **`TryParseRemoteUses`** — remote 形状の検証と分割を単一路に統一（`UnpinnedUsesRule` の旧 `HasRemoteActionUsesFormat` 相当を置換）。
+3. **`TryGetOwnerRepoPolicyKey(actionPath, scratch, out ReadOnlySpan<byte> key)`** / **`WildcardMatchUsesPolicy(ReadOnlySpan<byte> text, ReadOnlySpan<byte> pattern)`** — `forbidden-uses` 用のキーはスクラッチへ UTF-8 書き込み（ヒープなし）、ワイルドカードは UTF-8 バイト列で比較。
+4. **`TryExtractRefVersionMajor` / `TryExtractPathVersionMajor`** — `ref-version-mismatch` 用の major 抽出を `ActionRefHelpers` に移動。
+5. 各ルールは上記 API のみを呼び出し、ad-hoc パースを削除。`UnpinnedUsesRule` のローカル `uses`（`./` 等）とファイルシステム解決は従来どおりルール側（本項の対象外）。
 
-同一ドメインの処理が複数箇所に分散しており、パース結果の正規化が一貫していない。
+**パフォーマンス・割り当て（マイクロベンチマーク）**
 
-**改善提案**
+同一バイナリでの「分散前／一元化後」の A/B は持たない（旧実装の重複削除が主目的）。一元化後のホットパスコストを **`ActionRefParseBenchmark`**（`src/Seiton.Benchmark/ActionRefParseBenchmark.cs`）で計測した。
 
-1. `ActionRefHelpers` に `ParsedActionRef` 構造体（owner, repo, ref, refKind, path 等）を定義し、パース結果を一元的に返す。
-2. 各ルールは `ParsedActionRef` を消費するのみとし、ad-hoc パースを排除する。
-3. ワイルドカードマッチも `ActionRefHelpers` に集約する。
+- **環境**: Windows 11 (10.0.26200), BenchmarkDotNet 0.15.6, .NET 10.0.6, AMD Ryzen 9 7950X3D, `Job=ShortRun`（IterationCount=3, WarmupCount=3）
+- **コマンド**: `dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj -- --filter *ActionRefParseBenchmark*`
+
+| メソッド（BDN 表示名） | Mean | Allocated (managed / op) | 備考 |
+|---|---:|---:|---|
+| `TryParseRemoteUses`（`actions/checkout@v4`） | ~14.5 ns | **0** | スパンのみ、ヒープ割り当てなし |
+| `TryParseRemoteUses`（サブパス + `.yml`） | ~15.6 ns | **0** | 同上 |
+| 解析 + `TryGetOwnerRepoPolicyKey`（`stackalloc` スクラッチ、forbidden-uses 相当） | ~31.6 ns | **0** | キーは `ReadOnlySpan<byte>`（スクラッチのスライス） |
+| `TryParseActionReference(string)`（短い `uses`、stackalloc 経路） | ~54.8 ns | **~112 B** | UTF-8 化 + `owner`/`repo`/`ref` の `string` |
+| 解析 + ref/path major（ref-version-mismatch 相当） | ~72.0 ns | **~24 B** | `int.TryParse` 用の一時 `string`（桁抽出） |
+
+**解釈**
+
+- **Parse 相当**（`TryParseRemoteUses`）はルール共通の最軽量層で、**割り当てゼロ**を維持できる。
+- **forbidden-uses キー**はスクラッチ上の UTF-8 で完結し、**通常パスではキーのヒープ割り当ては不要**（極端に長い `owner/repo` のみ `ArrayPool`）。診断メッセージは警告時のみ `Encoding.UTF8.GetString`。ポリシー文字列はマッチ時に `stackalloc` へ UTF-8 化（バッファ不足時のみ `GetBytes`）。
+- **`TryParseActionReference(string)`** は API 都合で **`string` 割り当て**が残る。
+- **ref-version-mismatch** 経路は major 抽出の `Encoding.UTF8.GetString` が小さな割り当てを生む；旧実装も同種の抽出を含んでいたため、**意図した挙動の共有**が主成果。
 
 ---
 
@@ -315,7 +331,7 @@ Online ルール（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion
 |---|---|---|
 | 1 | §2.2 ポリシーロジック一元化 | ルール正規化の一貫性保証、変更コスト削減 |
 | 2 | §2.3 Diagnostic.Metadata 導入 | Fix 生成の堅牢性向上、メッセージ変更耐性 |
-| 3 | §2.6 ActionRef パース一元化 | ルール間の参照解析一貫性、重複排除 |
+| 3 | §2.6 ActionRef パース一元化（完了） | ルール間の参照解析一貫性、重複排除 |
 | 4 | §2.4 IPass ActionMetadata フック追加 | action-metadata ルール拡充の基盤整備 |
 | 5 | §2.1 WorkflowParser パターン共通化 | パーサーの保守性向上 |
 | 6 | §2.7 Online ルール契約の明文化 | 設計意図の明確化 |
@@ -348,10 +364,11 @@ Seiton.Core 合計: ~133 files, ~26,000 lines（§1 表記の概算）
 
 1. **BenchmarkDotNet LintBenchmark** — Allocated (Small/Medium/Large, FixEnabled=false/true)
 2. **BenchmarkDotNet LintConfigParseBenchmark** — 設定 YAML の Parse / Validate（§2.5）
-3. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
-4. **LintPerRuleAlloc.cs** — run-context ルール個別計測
-5. **全テストパス** — `dotnet test` Green 確認
-6. 本 plan の該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載
+3. **BenchmarkDotNet ActionRefParseBenchmark** — `ActionRefHelpers` の Parse / ポリシーキー / major 抽出（§2.6）
+4. **BenchmarkDotNet ParsingBenchmark** — 回帰なしを確認
+5. **LintPerRuleAlloc.cs** — run-context ルール個別計測
+6. **全テストパス** — `dotnet test` Green 確認
+7. 本 plan の該当箇所を更新して、実装内容と乖離がないかレビュー、実装内容とベンチマーク結果の記載
 
 ### 5.1 §2.1 提案 1（ParseJobNode キー共通化）の検証記録
 

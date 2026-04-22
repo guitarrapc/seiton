@@ -1,12 +1,16 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Buffers;
+using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
-using static Seiton.Core.Parsing.SpanHelpers;
+using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class ForbiddenUsesRule : RuleBase
 {
+    private const int OwnerRepoPolicyKeyStackBytes = 512;
+
     private static readonly string[] DefaultDenyPatterns = ["bad-org/*"];
 
     private IReadOnlyList<string> allowPatterns = [];
@@ -40,7 +44,7 @@ public sealed class ForbiddenUsesRule : RuleBase
             return;
         }
 
-        CheckUses(job.WorkflowCall.Uses, BuildUsesLocation(job.WorkflowCall), job, null);
+        CheckUses(Arena.GetStringValue(job.WorkflowCall.Uses), BuildUsesLocation(job.WorkflowCall), job, null);
     }
 
     public override void VisitStep(Step step)
@@ -50,54 +54,93 @@ public sealed class ForbiddenUsesRule : RuleBase
             return;
         }
 
-        CheckUses(action.Uses, BuildUsesLocation(action), null, step);
+        CheckUses(Arena.GetStringValue(action.Uses), BuildUsesLocation(action), null, step);
     }
 
-    private void CheckUses(StringNodeId usesNode, TextRange location, Job? job, Step? step)
+    private void CheckUses(ReadOnlySpan<byte> uses, TextRange location, Job? job, Step? step)
     {
         if (Config.Utf8Yaml is null || !HasPolicy())
         {
             return;
         }
 
-        if (!TryGetOwnerRepo(Arena.GetStringValue(usesNode), out var ownerRepo))
+        if (!TryParseRemoteUses(uses, out var parsed))
         {
             return;
         }
 
-        var matchedDeny = MatchAny(ownerRepo, denyPatterns);
-        var matchedAllow = MatchAny(ownerRepo, allowPatterns);
-
-        if (denyPatterns.Count > 0)
+        if (!TryParseOwnerRepoSegments(parsed.ActionPath, out var own, out var rep))
         {
-            if (!matchedDeny || matchedAllow)
+            return;
+        }
+
+        var need = own.Length + 1 + rep.Length;
+
+        void Evaluate(ReadOnlySpan<byte> ownerRepoKey)
+        {
+            var matchedDeny = MatchAny(ownerRepoKey, denyPatterns);
+            var matchedAllow = MatchAny(ownerRepoKey, allowPatterns);
+
+            if (denyPatterns.Count > 0)
+            {
+                if (!matchedDeny || matchedAllow)
+                {
+                    return;
+                }
+
+                var message = $"uses reference '{Encoding.UTF8.GetString(ownerRepoKey)}' is denied by forbidden-uses policy";
+                if (step is not null)
+                {
+                    AddStepWarning(step, message, location);
+                }
+                else if (job is not null)
+                {
+                    AddJobWarning(job, message, location);
+                }
+
+                return;
+            }
+
+            if (allowPatterns.Count > 0 && !matchedAllow)
+            {
+                var message = $"uses reference '{Encoding.UTF8.GetString(ownerRepoKey)}' is not in forbidden-uses allow policy";
+                if (step is not null)
+                {
+                    AddStepWarning(step, message, location);
+                }
+                else if (job is not null)
+                {
+                    AddJobWarning(job, message, location);
+                }
+            }
+        }
+
+        if (need <= OwnerRepoPolicyKeyStackBytes)
+        {
+            Span<byte> keyScratch = stackalloc byte[OwnerRepoPolicyKeyStackBytes];
+            if (!TryGetOwnerRepoPolicyKey(parsed.ActionPath, keyScratch, out var ownerRepoKey))
             {
                 return;
             }
 
-            var message = $"uses reference '{ownerRepo}' is denied by forbidden-uses policy";
-            if (step is not null)
-            {
-                AddStepWarning(step, message, location);
-            }
-            else if (job is not null)
-            {
-                AddJobWarning(job, message, location);
-            }
-
-            return;
+            Evaluate(ownerRepoKey);
         }
-
-        if (allowPatterns.Count > 0 && !matchedAllow)
+        else
         {
-            var message = $"uses reference '{ownerRepo}' is not in forbidden-uses allow policy";
-            if (step is not null)
+            var rentedKey = ArrayPool<byte>.Shared.Rent(need);
+            try
             {
-                AddStepWarning(step, message, location);
+                var span = rentedKey.AsSpan(0, need);
+                if (!TryGetOwnerRepoPolicyKey(parsed.ActionPath, span, out var ownerRepoKey))
+                {
+                    return;
+                }
+
+                Evaluate(ownerRepoKey);
             }
-            else if (job is not null)
+            finally
             {
-                AddJobWarning(job, message, location);
+                ArrayPool<byte>.Shared.Return(rentedKey);
             }
         }
     }
@@ -107,104 +150,34 @@ public sealed class ForbiddenUsesRule : RuleBase
         return allowPatterns.Count > 0 || denyPatterns.Count > 0;
     }
 
-    private static bool MatchAny(string ownerRepo, IReadOnlyList<string> patterns)
+    private static bool MatchAny(ReadOnlySpan<byte> ownerRepoKeyUtf8, IReadOnlyList<string> patterns)
     {
         if (patterns.Count == 0)
         {
             return false;
         }
 
+        Span<byte> patternScratch = stackalloc byte[512];
         for (var i = 0; i < patterns.Count; i++)
         {
-            if (WildcardMatch(ownerRepo, patterns[i]))
+            var pat = patterns[i];
+            if (Encoding.UTF8.TryGetBytes(pat, patternScratch, out var patLen))
             {
-                return true;
+                if (WildcardMatchUsesPolicy(ownerRepoKeyUtf8, patternScratch[..patLen]))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                var bytes = Encoding.UTF8.GetBytes(pat);
+                if (WildcardMatchUsesPolicy(ownerRepoKeyUtf8, bytes))
+                {
+                    return true;
+                }
             }
         }
 
         return false;
-    }
-
-    private static bool WildcardMatch(string text, string pattern)
-    {
-        var textIndex = 0;
-        var patternIndex = 0;
-        var starIndex = -1;
-        var matchIndex = 0;
-
-        while (textIndex < text.Length)
-        {
-            if (patternIndex < pattern.Length
-                && (pattern[patternIndex] == '?' || pattern[patternIndex] == text[textIndex]))
-            {
-                patternIndex++;
-                textIndex++;
-                continue;
-            }
-
-            if (patternIndex < pattern.Length && pattern[patternIndex] == '*')
-            {
-                starIndex = patternIndex;
-                matchIndex = textIndex;
-                patternIndex++;
-                continue;
-            }
-
-            if (starIndex >= 0)
-            {
-                patternIndex = starIndex + 1;
-                matchIndex++;
-                textIndex = matchIndex;
-                continue;
-            }
-
-            return false;
-        }
-
-        while (patternIndex < pattern.Length && pattern[patternIndex] == '*')
-        {
-            patternIndex++;
-        }
-
-        return patternIndex == pattern.Length;
-    }
-
-    private static bool TryGetOwnerRepo(ReadOnlySpan<byte> uses, out string ownerRepo)
-    {
-        ownerRepo = string.Empty;
-        if (uses.IsEmpty || uses.StartsWith("./"u8) || uses.StartsWith("docker://"u8))
-        {
-            return false;
-        }
-
-        var at = uses.LastIndexOf((byte)'@');
-        if (at <= 0 || at + 1 >= uses.Length)
-        {
-            return false;
-        }
-
-        var path = uses[..at];
-        var slash1 = path.IndexOf((byte)'/');
-        if (slash1 <= 0 || slash1 + 1 >= path.Length)
-        {
-            return false;
-        }
-
-        var rest = path[(slash1 + 1)..];
-        var slash2 = rest.IndexOf((byte)'/');
-        if (slash2 == 0)
-        {
-            return false;
-        }
-
-        var owner = path[..slash1];
-        var repo = slash2 < 0 ? rest : rest[..slash2];
-        if (owner.Length == 0 || repo.Length == 0)
-        {
-            return false;
-        }
-
-        ownerRepo = string.Concat(NormalizeAsciiLower(owner), "/", NormalizeAsciiLower(repo));
-        return true;
     }
 }

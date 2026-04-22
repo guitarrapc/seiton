@@ -2,6 +2,8 @@
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 public sealed class UnpinnedUsesRule : RuleBase
@@ -40,7 +42,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        if (!HasRemoteActionUsesFormat(uses))
+        if (!TryParseRemoteUses(uses, out var parsedJob))
         {
             var formatJobId = Decode(Arena.GetStringSlice(job.Id));
             var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
@@ -51,7 +53,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        if (IsFullLengthCommitShaPinned(uses))
+        if (IsFullCommitSha(parsedJob.Ref))
         {
             return;
         }
@@ -93,7 +95,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        if (!HasRemoteActionUsesFormat(uses))
+        if (!TryParseRemoteUses(uses, out var parsedStep))
         {
             var invalidUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
             AddStepWarning(
@@ -103,7 +105,7 @@ public sealed class UnpinnedUsesRule : RuleBase
             return;
         }
 
-        if (IsFullLengthCommitShaPinned(uses))
+        if (IsFullCommitSha(parsedStep.Ref))
         {
             return;
         }
@@ -230,65 +232,6 @@ public sealed class UnpinnedUsesRule : RuleBase
         {
             AddStepWarning(step, $"local action path '{relativePath}' is missing action.yml or action.yaml", location);
         }
-    }
-
-    private static bool HasRemoteActionUsesFormat(ReadOnlySpan<byte> uses)
-    {
-        var at = uses.LastIndexOf((byte)'@');
-        if (at <= 0 || at + 1 >= uses.Length)
-        {
-            return false;
-        }
-
-        var left = uses[..at];
-        var firstSlash = left.IndexOf((byte)'/');
-        if (firstSlash <= 0 || firstSlash + 1 >= left.Length)
-        {
-            return false;
-        }
-
-        var secondSegment = left[(firstSlash + 1)..];
-        if (secondSegment.IsEmpty)
-        {
-            return false;
-        }
-
-        var nextSlash = secondSegment.IndexOf((byte)'/');
-        if (nextSlash == 0)
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool IsFullLengthCommitShaPinned(ReadOnlySpan<byte> uses)
-    {
-        var at = uses.LastIndexOf((byte)'@');
-        if (at < 0 || at + 1 >= uses.Length)
-        {
-            return false;
-        }
-
-        var reference = uses[(at + 1)..];
-        if (reference.Length != 40)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < reference.Length; i++)
-        {
-            var b = reference[i];
-            var isDigit = b is >= (byte)'0' and <= (byte)'9';
-            var isLowerHex = b is >= (byte)'a' and <= (byte)'f';
-            var isUpperHex = b is >= (byte)'A' and <= (byte)'F';
-            if (!isDigit && !isLowerHex && !isUpperHex)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
