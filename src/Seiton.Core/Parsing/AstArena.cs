@@ -9,7 +9,7 @@ namespace Seiton.Core.Parsing;
 /// Default value (<c>default</c>) represents "no value" (equivalent to <c>null</c> on the old <c>StringNode?</c>).
 /// </summary>
 [DebuggerDisplay("{DebugDisplay,nq}")]
-public readonly struct StringNodeId : IEquatable<StringNodeId>
+public readonly record struct StringNodeId : IEquatable<StringNodeId>
 {
     // 0 = None (default), positive = valid (actual index = _raw - 1)
     private readonly int _raw;
@@ -31,11 +31,6 @@ public readonly struct StringNodeId : IEquatable<StringNodeId>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static StringNodeId FromIndex(int index) => new(index + 1);
 
-    public bool Equals(StringNodeId other) => _raw == other._raw;
-    public override bool Equals(object? obj) => obj is StringNodeId other && Equals(other);
-    public override int GetHashCode() => _raw;
-    public static bool operator ==(StringNodeId left, StringNodeId right) => left._raw == right._raw;
-    public static bool operator !=(StringNodeId left, StringNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"StringNodeId({Index})" : "StringNodeId(None)";
     private string DebugDisplay => HasValue ? $"String[{Index}]" : "(none)";
 }
@@ -44,7 +39,7 @@ public readonly struct StringNodeId : IEquatable<StringNodeId>
 /// Type-safe handle referencing a bool scalar node stored in <see cref="AstArena"/>.
 /// </summary>
 [DebuggerDisplay("{DebugDisplay,nq}")]
-public readonly struct BoolNodeId : IEquatable<BoolNodeId>
+public readonly record struct BoolNodeId : IEquatable<BoolNodeId>
 {
     private readonly int _raw;
 
@@ -65,11 +60,6 @@ public readonly struct BoolNodeId : IEquatable<BoolNodeId>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static BoolNodeId FromIndex(int index) => new(index + 1);
 
-    public bool Equals(BoolNodeId other) => _raw == other._raw;
-    public override bool Equals(object? obj) => obj is BoolNodeId other && Equals(other);
-    public override int GetHashCode() => _raw;
-    public static bool operator ==(BoolNodeId left, BoolNodeId right) => left._raw == right._raw;
-    public static bool operator !=(BoolNodeId left, BoolNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"BoolNodeId({Index})" : "BoolNodeId(None)";
     private string DebugDisplay => HasValue ? $"Bool[{Index}]" : "(none)";
 }
@@ -78,7 +68,7 @@ public readonly struct BoolNodeId : IEquatable<BoolNodeId>
 /// Type-safe handle referencing an int scalar node stored in <see cref="AstArena"/>.
 /// </summary>
 [DebuggerDisplay("{DebugDisplay,nq}")]
-public readonly struct IntNodeId : IEquatable<IntNodeId>
+public readonly record struct IntNodeId : IEquatable<IntNodeId>
 {
     private readonly int _raw;
 
@@ -99,11 +89,6 @@ public readonly struct IntNodeId : IEquatable<IntNodeId>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static IntNodeId FromIndex(int index) => new(index + 1);
 
-    public bool Equals(IntNodeId other) => _raw == other._raw;
-    public override bool Equals(object? obj) => obj is IntNodeId other && Equals(other);
-    public override int GetHashCode() => _raw;
-    public static bool operator ==(IntNodeId left, IntNodeId right) => left._raw == right._raw;
-    public static bool operator !=(IntNodeId left, IntNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"IntNodeId({Index})" : "IntNodeId(None)";
     private string DebugDisplay => HasValue ? $"Int[{Index}]" : "(none)";
 }
@@ -112,7 +97,7 @@ public readonly struct IntNodeId : IEquatable<IntNodeId>
 /// Type-safe handle referencing a float scalar node stored in <see cref="AstArena"/>.
 /// </summary>
 [DebuggerDisplay("{DebugDisplay,nq}")]
-public readonly struct FloatNodeId : IEquatable<FloatNodeId>
+public readonly record struct FloatNodeId : IEquatable<FloatNodeId>
 {
     private readonly int _raw;
 
@@ -133,11 +118,6 @@ public readonly struct FloatNodeId : IEquatable<FloatNodeId>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static FloatNodeId FromIndex(int index) => new(index + 1);
 
-    public bool Equals(FloatNodeId other) => _raw == other._raw;
-    public override bool Equals(object? obj) => obj is FloatNodeId other && Equals(other);
-    public override int GetHashCode() => _raw;
-    public static bool operator ==(FloatNodeId left, FloatNodeId right) => left._raw == right._raw;
-    public static bool operator !=(FloatNodeId left, FloatNodeId right) => left._raw != right._raw;
     public override string ToString() => HasValue ? $"FloatNodeId({Index})" : "FloatNodeId(None)";
     private string DebugDisplay => HasValue ? $"Float[{Index}]" : "(none)";
 }
