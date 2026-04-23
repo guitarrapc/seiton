@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags hardcoded credentials or non-secret references in container registry credentials.</summary>
 public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
 {
     private HashSet<string> additionalPublicRegistries = [];

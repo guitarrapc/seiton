@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>permissions:</c> scope names and access level values.</summary>
 public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
 {
     public override string Name => "Permissions Rule";

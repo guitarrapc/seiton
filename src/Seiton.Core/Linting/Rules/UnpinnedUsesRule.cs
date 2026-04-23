@@ -6,6 +6,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references not pinned to a full commit SHA.</summary>
 public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 {
     // Cache last-produced "not pinned" message to avoid repeated string allocation

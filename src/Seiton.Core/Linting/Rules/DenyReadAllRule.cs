@@ -3,6 +3,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags workflow-level <c>permissions: read-all</c> which grants overly broad read access.</summary>
 public sealed class DenyReadAllRule() : RuleBase(RuleId.DenyReadAll)
 {
     public override string Name => "Deny Read-All Rule";

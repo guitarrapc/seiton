@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates cross-key structural constraints on job definitions (e.g. <c>steps</c> vs <c>uses</c> mutual exclusion).</summary>
 public sealed class JobStructureRule() : RuleBase(RuleId.JobStructure)
 {
     public override string Name => "Job Structure Rule";

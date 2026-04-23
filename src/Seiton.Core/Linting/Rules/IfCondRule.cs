@@ -5,6 +5,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Checks <c>if:</c> conditions for common mistakes (e.g. missing expression delimiters, always-true patterns).</summary>
 public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 {
     public override string Name => "If Condition Rule";

@@ -4,6 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Recommends trusted publishing (OIDC) over credential-based publishing for supported package registries.</summary>
 public sealed class UseTrustedPublishingRule() : RuleBase(RuleId.UseTrustedPublishing)
 {
     private bool workflowHasIdTokenWrite;

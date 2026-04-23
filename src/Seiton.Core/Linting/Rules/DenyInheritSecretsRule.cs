@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags reusable workflow calls using <c>secrets: inherit</c> which exposes all caller secrets.</summary>
 public sealed class DenyInheritSecretsRule() : RuleBase(RuleId.DenyInheritSecrets)
 {
     public override string Name => "Deny Inherit Secrets Rule";

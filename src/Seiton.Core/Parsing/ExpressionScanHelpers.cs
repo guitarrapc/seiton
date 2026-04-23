@@ -4,6 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 
+/// <summary>Byte-level scanning utilities for locating <c>${{ ... }}</c> expression boundaries in UTF-8 YAML.</summary>
 internal static class ExpressionScanHelpers
 {
     internal static bool TryFindExpression(

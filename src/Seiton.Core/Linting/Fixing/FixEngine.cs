@@ -3,6 +3,10 @@ using System.Text;
 
 namespace Seiton.Core.Linting.Fixing;
 
+/// <summary>
+/// Applies auto-fix edits from diagnostics to YAML source bytes, then re-lints to validate
+/// that fixes did not introduce new errors.
+/// </summary>
 public static class FixEngine
 {
     private enum DiffKind
@@ -559,6 +563,7 @@ public static class FixEngine
     private readonly record struct DiffOp(DiffKind Kind, string Text);
 }
 
+/// <summary>Result of applying auto-fixes and re-linting, containing before/after diagnostics and the patched YAML.</summary>
 public readonly record struct RevalidationResult(
     LintResult Before,
     LintResult After,

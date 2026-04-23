@@ -5,6 +5,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags jobs that expose too many secrets via <c>env:</c> (exceeding configurable thresholds).</summary>
 public sealed class OverprovisionedSecretsRule() : RuleBase(RuleId.OverprovisionedSecrets)
 {
     internal const int DefaultMaxStepEnvSecrets = 5;

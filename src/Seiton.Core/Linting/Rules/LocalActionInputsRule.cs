@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates that local/composite action invocations provide required inputs and don't pass unknown ones.</summary>
 public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 {
     private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena)> _cache = new(StringComparer.OrdinalIgnoreCase);

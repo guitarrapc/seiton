@@ -3,6 +3,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Requires composite action <c>run:</c> steps to explicitly declare <c>shell:</c>.</summary>
 public sealed class ActionShellIsRequiredRule() : RuleBase(RuleId.ActionShellIsRequired)
 {
     public override string Name => "Action Shell Is Required Rule";

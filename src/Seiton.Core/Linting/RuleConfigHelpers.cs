@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Linting;
 
+/// <summary>Shared utilities for building normalized string sets from rule configuration lists.</summary>
 internal static class RuleConfigHelpers
 {
     internal static HashSet<string> BuildNormalizedSet(IReadOnlyList<string>? values)

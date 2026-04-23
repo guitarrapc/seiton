@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>workflow_dispatch</c> input definitions for structural correctness.</summary>
 public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 {
     public override string Name => "Dispatch Inputs Rule";

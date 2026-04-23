@@ -4,6 +4,7 @@ using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Requires each job to declare explicit <c>permissions:</c> for least-privilege enforcement.</summary>
 public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermissionsRequired)
 {
     public override string Name => "Job Permissions Required Rule";

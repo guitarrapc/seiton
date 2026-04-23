@@ -4,6 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates inputs for GitHub App token generation actions.</summary>
 public sealed class GitHubAppTokenInputsRule() : RuleBase(RuleId.GitHubAppTokenInputs)
 {
     public override string Name => "GitHub App Token Inputs Rule";

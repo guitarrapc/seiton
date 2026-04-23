@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates that <c>shell:</c> values are recognized shell names.</summary>
 public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
 {
     public override string Name => "Shell Name Rule";

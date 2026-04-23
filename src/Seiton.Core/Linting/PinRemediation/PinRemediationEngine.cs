@@ -4,6 +4,10 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
+/// <summary>
+/// Orchestrates network-based pinning remediation: resolves action SHAs and image digests,
+/// then attaches auto-fix edits to unpinned-uses/unpinned-image diagnostics.
+/// </summary>
 public sealed class PinRemediationEngine(
     IActionShaResolver? actionShaResolver,
     IImageDigestResolver? imageDigestResolver,

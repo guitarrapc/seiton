@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags <c>runs-on: *-latest</c> labels which may cause unexpected runner image changes.</summary>
 public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
 {
     public override string Name => "Runner No Latest Rule";

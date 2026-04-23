@@ -8,6 +8,7 @@ public readonly record struct ExpressionOccurrence(
     Utf8Slice Slice,
     TextRange Location);
 
+/// <summary>Extracts, parses, and optionally validates <c>${{ ... }}</c> expressions from UTF-8 YAML source bytes.</summary>
 public static class ExpressionExtractor
 {
     /// <summary>Extracts all <c>${{ ... }}</c> expression occurrences from the UTF-8 YAML bytes.</summary>

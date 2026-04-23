@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting;
 
+/// <summary>Conversion methods between <see cref="RuleId"/> enum values and their kebab-case string identifiers.</summary>
 internal static class RuleIdExtensions
 {
     private static readonly FrozenDictionary<string, RuleId> NameToRuleId = BuildNameToRuleId();

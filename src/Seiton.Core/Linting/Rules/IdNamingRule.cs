@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Checks that job and step <c>id:</c> values follow naming conventions.</summary>
 public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 {
     public override string Name => "Id Naming Rule";

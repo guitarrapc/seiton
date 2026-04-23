@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Surfaces parser diagnostics as lint-level syntax errors (bridges parsing and linting layers).</summary>
 public sealed class SyntaxRule : IRule
 {
     private readonly IRule[] rules = RuleCatalog.CreateDefaultRules();

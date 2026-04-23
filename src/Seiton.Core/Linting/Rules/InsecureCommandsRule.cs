@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags use of <c>ACTIONS_ALLOW_UNSECURE_COMMANDS</c> which enables deprecated insecure workflow commands.</summary>
 public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
 {
     public override string Name => "Insecure Commands Rule";

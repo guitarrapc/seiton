@@ -6,6 +6,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags security concerns with self-hosted runner usage (e.g. dangerous triggers on public repos).</summary>
 public sealed class SelfHostedRunnerRule() : RuleBase(RuleId.SelfHostedRunner)
 {
     private bool hasUntrustedTrigger;

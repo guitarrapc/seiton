@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags workflows triggered by dangerous events (e.g. <c>pull_request_target</c>, <c>workflow_run</c>) that may execute untrusted code.</summary>
 public sealed class DangerousTriggersRule() : RuleBase(RuleId.DangerousTriggers)
 {
     private static readonly WebhookTypes.EventId[] DangerousEventIds =

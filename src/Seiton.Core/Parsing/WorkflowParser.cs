@@ -4,6 +4,10 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
 
+/// <summary>
+/// Hand-written pull-parser that converts UTF-8 YAML into the typed workflow/action metadata AST.
+/// Partial class split by section: Jobs, Steps, Strategy, Events, Containers, etc.
+/// </summary>
 public static partial class WorkflowParser
 {
     private delegate string? Utf8ScalarValidator(ReadOnlySpan<byte> valueUtf8);

@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting;
 
+/// <summary>Result of validating and normalizing seiton configuration YAML.</summary>
 public readonly record struct LintConfigValidationResult(LintConfig? Config, Diagnostic[] Diagnostics)
 {
     /// <summary>Gets whether the validation produced no error-level diagnostics.</summary>

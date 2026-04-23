@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>schedule:</c> cron expressions for syntax and common mistakes.</summary>
 public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 {
     private const int MinIntervalMinutes = 5;

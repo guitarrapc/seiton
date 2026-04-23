@@ -9,6 +9,7 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags expressions that reference undefined context variables (e.g. <c>steps.missing-id.outputs.x</c>).</summary>
 public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 {
     public override string Name => "Expr Undefined Var Rule";

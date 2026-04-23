@@ -5,6 +5,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references where the SHA comment tag doesn't match the actual ref version.</summary>
 public sealed class RefVersionMismatchRule() : RuleBase(RuleId.RefVersionMismatch)
 {
     public override string Name => "Ref Version Mismatch Rule";

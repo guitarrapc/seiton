@@ -7,6 +7,10 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting;
 
+/// <summary>
+/// Core lint engine that parses a workflow/action YAML file, runs all enabled rules via
+/// <see cref="WorkflowVisitor"/> traversal, and returns aggregated <see cref="LintResult"/> diagnostics.
+/// </summary>
 public sealed class LintEngine
 {
     private static readonly Workflow EmptyWorkflowForSuppression = new() { Range = default };

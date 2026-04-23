@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
+/// <summary>Resolves GitHub Actions references to commit SHAs via the GitHub API for pinning remediation.</summary>
 public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningConfig pinningConfig, GitHubNetworkConfig githubConfig) : IActionShaResolver
 {
     private static readonly Uri PublicApiBaseUri = new("https://api.github.com/");

@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates environment variable name conventions in <c>env:</c> blocks.</summary>
 public sealed class EnvVarRule() : RuleBase(RuleId.EnvVar)
 {
     public override string Name => "Env Var Rule";

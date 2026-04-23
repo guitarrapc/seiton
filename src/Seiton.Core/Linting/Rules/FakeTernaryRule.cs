@@ -5,6 +5,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags the <c>&amp;&amp; ... || ...</c> fake ternary pattern which has surprising short-circuit behavior.</summary>
 public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
 {
     public override string Name => "Fake Ternary Rule";

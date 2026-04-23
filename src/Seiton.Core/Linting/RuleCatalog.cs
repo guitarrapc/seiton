@@ -4,6 +4,10 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
+/// <summary>
+/// Central registry of all lint rules: factory methods, priorities, policy flags (non-disableable, opt-in),
+/// minimum severities, and allowed per-rule configuration keys.
+/// </summary>
 internal static class RuleCatalog
 {
     private const string CanonicalPrefix = "seiton-lint-rule-";
@@ -44,6 +48,7 @@ internal static class RuleCatalog
         (RuleId.DenyInheritSecrets, 26, static () => new DenyInheritSecretsRule()),
         (RuleId.JobTimeoutMinutesRequired, 27, static () => new JobTimeoutMinutesRequiredRule()),
         (RuleId.GitHubAppTokenInputs, 28, static () => new GitHubAppTokenInputsRule()),
+        // Online rules start here (29+), but are included in the default factories for priority ordering and canonical ID assignment.
         (RuleId.CachePoisoning, 33, static () => new CachePoisoningRule()),
         (RuleId.SelfHostedRunner, 34, static () => new SelfHostedRunnerRule()),
         (RuleId.UnredactedSecrets, 35, static () => new UnredactedSecretsRule()),

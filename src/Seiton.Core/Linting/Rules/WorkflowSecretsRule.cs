@@ -6,6 +6,7 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>workflow_call</c> secrets declarations and usage across jobs.</summary>
 public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
 {
     public override string Name => "Workflow Secrets Rule";

@@ -4,6 +4,7 @@ using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Requires each job to declare an explicit <c>timeout-minutes</c> value.</summary>
 public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeoutMinutesRequired)
 {
     public override string Name => "Job Timeout Minutes Required Rule";

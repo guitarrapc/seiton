@@ -3,6 +3,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 
+/// <summary>Parses GitHub Actions expression strings (content between <c>${{</c> and <c>}}</c>) into a flat AST.</summary>
 public static class ExpressionParser
 {
     /// <summary>Parses a GitHub Actions expression (the content between <c>${{</c> and <c>}}</c>) into an AST.</summary>

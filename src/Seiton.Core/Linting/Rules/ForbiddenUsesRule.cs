@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references matching configurable allow/deny lists.</summary>
 public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
 {
     private const int OwnerRepoPolicyKeyStackBytes = 512;

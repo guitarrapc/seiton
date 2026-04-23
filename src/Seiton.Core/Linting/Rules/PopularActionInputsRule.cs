@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates input names for well-known popular actions against their declared schemas.</summary>
 public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInputs)
 {
     public override string Name => "Popular Action Inputs Rule";

@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references where the ref could be confused between branches and tags.</summary>
 public sealed class RefConfusionRule() : OnlineRuleBase(RuleId.RefConfusion)
 {
     public override string Name => "Ref Confusion";

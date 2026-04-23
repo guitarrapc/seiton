@@ -5,6 +5,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates reusable workflow call semantics (<c>uses:</c>/<c>with:</c>/<c>secrets:</c> at job level).</summary>
 public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 {
     private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);

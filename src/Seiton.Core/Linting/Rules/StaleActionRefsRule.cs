@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references to known-stale versions when newer versions are available.</summary>
 public sealed class StaleActionRefsRule() : OnlineRuleBase(RuleId.StaleActionRefs)
 {
     public override string Name => "Stale Action Refs";

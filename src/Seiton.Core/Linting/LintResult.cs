@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting;
 
+/// <summary>Combined parse and lint result for a single YAML document.</summary>
 public readonly record struct LintResult(
     ParseResult ParseResult,
     Diagnostic[] Diagnostics)
@@ -97,6 +98,7 @@ public readonly record struct LintResult(
     }
 }
 
+/// <summary>Aggregated counts and per-rule breakdown of suppressed diagnostics.</summary>
 public readonly record struct SuppressionSummary(
     int TotalSuppressed,
     IReadOnlyDictionary<string, int> SuppressedByRule,
@@ -106,6 +108,7 @@ public readonly record struct SuppressionSummary(
     public static SuppressionSummary Empty { get; } = new(0, new Dictionary<string, int>(StringComparer.Ordinal), []);
 }
 
+/// <summary>A single suppression event recording which rule was suppressed and where.</summary>
 public readonly record struct SuppressionRecord(
     string RuleId,
     SuppressionSource Source,

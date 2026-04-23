@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags direct use of <c>secrets.*</c> context in <c>run:</c> scripts where environment variables should be used instead.</summary>
 public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecretsContextDirectUse)
 {
     private Workflow? _currentWorkflow;

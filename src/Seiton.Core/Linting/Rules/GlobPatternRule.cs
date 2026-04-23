@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates glob patterns in branch/path/tag filters for syntax errors.</summary>
 public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 {
     public override string Name => "Glob Pattern Rule";

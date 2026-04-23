@@ -4,6 +4,9 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
+/// <summary>
+/// Entry point for loading, parsing, validating, and normalizing seiton configuration YAML.
+/// </summary>
 public static class LintConfigLibrary
 {
     /// <summary>Gets the ordered list of recommended relative paths for the seiton configuration file.</summary>

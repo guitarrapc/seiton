@@ -216,6 +216,7 @@ public sealed class OnlineAuditEngine(
     private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
 }
 
+/// <summary>An action reference identified for online audit during AST traversal.</summary>
 public readonly record struct ActionAuditTarget(
     string UsesText,
     string Owner,
@@ -228,6 +229,7 @@ public readonly record struct ActionAuditTarget(
     public bool IsCommitSha => IsFullCommitSha(Reference);
 }
 
+/// <summary>Aggregated result of an online audit pass: diagnostics, skip/fail counts.</summary>
 public readonly record struct OnlineAuditResult(
     Diagnostic[] Diagnostics,
     int AddedCount,

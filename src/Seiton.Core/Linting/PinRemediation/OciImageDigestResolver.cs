@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
+/// <summary>Resolves OCI container image tags to content-addressable digests via registry APIs.</summary>
 public sealed class OciImageDigestResolver : IImageDigestResolver
 {
     private static readonly string[] ManifestAcceptHeaders =

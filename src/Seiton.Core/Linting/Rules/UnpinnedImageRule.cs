@@ -4,6 +4,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags container images not pinned to a digest (<c>@sha256:...</c>).</summary>
 public sealed class UnpinnedImageRule() : RuleBase(RuleId.UnpinnedImage)
 {
     public override string Name => "Unpinned Image Rule";

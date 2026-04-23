@@ -5,6 +5,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
+/// <summary>Builds <see cref="DiagnosticFix"/> edits that pin action references to commit SHAs or image digests.</summary>
 public static class PinFixFormatter
 {
     /// <summary>Builds a <see cref="DiagnosticFix"/> that pins an action reference to the resolved commit SHA.</summary>

@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting;
 
+/// <summary>Visitor callbacks invoked by <see cref="WorkflowVisitor"/> during AST traversal.</summary>
 public interface IPass
 {
     /// <summary>Called once before traversing the workflow's events, jobs, and steps.</summary>

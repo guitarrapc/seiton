@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>needs:</c> job dependency graphs for undefined references and cycles.</summary>
 public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 {
     public override string Name => "Needs Graph Rule";

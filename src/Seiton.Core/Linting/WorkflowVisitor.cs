@@ -2,6 +2,9 @@
 
 namespace Seiton.Core.Linting;
 
+/// <summary>
+/// Walks the workflow/action metadata AST and dispatches events to registered <see cref="IPass"/> implementations.
+/// </summary>
 public sealed class WorkflowVisitor
 {
     private readonly List<IPass> passes = [];

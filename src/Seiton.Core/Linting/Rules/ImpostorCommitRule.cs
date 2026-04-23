@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references pinned to commit SHAs that may be impostor commits (not on any branch/tag).</summary>
 public sealed class ImpostorCommitRule() : OnlineRuleBase(RuleId.ImpostorCommit)
 {
     public override string Name => "Impostor Commit";

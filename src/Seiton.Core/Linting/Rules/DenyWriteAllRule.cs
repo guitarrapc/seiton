@@ -4,6 +4,7 @@ using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags workflow-level <c>permissions: write-all</c> which grants overly broad write access.</summary>
 public sealed class DenyWriteAllRule() : RuleBase(RuleId.DenyWriteAll)
 {
     public override string Name => "Deny Write-All Rule";

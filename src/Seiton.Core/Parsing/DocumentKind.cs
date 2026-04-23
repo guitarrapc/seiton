@@ -20,6 +20,7 @@ public readonly record struct ClassifiedParseResult(
     ParseResult ParseResult,
     DocumentKindClassification Classification);
 
+/// <summary>Classifies YAML documents as workflow or action metadata based on file path and structural hints.</summary>
 public static class DocumentKindClassifier
 {
     /// <summary>Determines the document kind hint from the file path (e.g. <c>action.yml</c> → <see cref="DocumentKind.ActionMetadata"/>).</summary>

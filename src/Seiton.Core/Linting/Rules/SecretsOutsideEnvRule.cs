@@ -6,6 +6,7 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags direct use of <c>secrets.*</c> outside <c>env:</c> blocks where they should be bound.</summary>
 public sealed class SecretsOutsideEnvRule() : RuleBase(RuleId.SecretsOutsideEnv)
 {
     public override string Name => "Secrets Outside Env Rule";

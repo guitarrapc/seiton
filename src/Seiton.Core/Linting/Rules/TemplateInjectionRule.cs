@@ -6,6 +6,7 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Detects expressions in <c>run:</c> scripts that may be vulnerable to template injection attacks.</summary>
 public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 {
     public override string Name => "Template Injection Rule";

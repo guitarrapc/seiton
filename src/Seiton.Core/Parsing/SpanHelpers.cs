@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Parsing;
 
+/// <summary>Low-level span comparison and ASCII manipulation utilities for the UTF-8 parser.</summary>
 internal static class SpanHelpers
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

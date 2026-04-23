@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.OnlineAudit;
 
+/// <summary>Resolves GitHub Actions references via the GitHub API to check commit/branch/tag existence.</summary>
 public interface IActionRefResolver
 {
     /// <summary>Resolves a GitHub Actions reference to determine commit existence, branch, and tag status.</summary>
@@ -17,12 +18,14 @@ public interface IActionRefResolver
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Result of resolving a GitHub Actions reference against the GitHub API.</summary>
 public readonly record struct ActionRefResolution(
     bool CommitExists,
     bool HasBranchReference,
     bool HasTagReference,
     bool IsTaggedCommit);
 
+/// <summary>Default implementation of <see cref="IActionRefResolver"/> using the GitHub REST API.</summary>
 public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig githubConfig) : IActionRefResolver
 {
     private static readonly Uri PublicApiBaseUri = new("https://api.github.com/");

@@ -2,6 +2,7 @@
 
 namespace Seiton.Core.Linting;
 
+/// <summary>A lint rule that inspects workflow/action AST nodes during visitor traversal and collects diagnostics.</summary>
 public interface IRule : IPass
 {
     /// <summary>Gets the unique identifier for this rule.</summary>

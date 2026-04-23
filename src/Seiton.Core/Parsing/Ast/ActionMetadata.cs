@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
+/// <summary>AST node representing an <c>action.yml</c> / <c>action.yaml</c> metadata file.</summary>
 public sealed class ActionMetadata
 {
     public StringNodeId Name { get; init; }

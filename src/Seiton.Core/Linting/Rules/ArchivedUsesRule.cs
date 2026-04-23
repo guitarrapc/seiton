@@ -4,6 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags action references to archived (read-only) GitHub repositories.</summary>
 public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
 {
     private static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)

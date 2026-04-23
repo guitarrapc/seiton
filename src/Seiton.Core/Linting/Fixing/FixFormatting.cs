@@ -10,6 +10,10 @@ public enum ScalarQuoteStyle
     DoubleQuoted,
 }
 
+/// <summary>
+/// Utilities for YAML-aware text formatting: line ending detection, indentation measurement,
+/// scalar quoting, and comment construction used when building auto-fix edits.
+/// </summary>
 public static class FixFormatting
 {
     /// <summary>Detects the dominant line ending (CRLF or LF) in the given UTF-8 YAML bytes.</summary>

@@ -6,6 +6,7 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>secrets:</c> references in reusable workflow calls match declared secrets.</summary>
 public sealed class JobSecretsRule() : RuleBase(RuleId.JobSecrets)
 {
     public override string Name => "Job Secrets Rule";

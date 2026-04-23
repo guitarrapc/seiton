@@ -18,6 +18,10 @@ public enum ExpressionValidationContext
     Step,
 }
 
+/// <summary>
+/// Performs semantic analysis on parsed expression ASTs: context availability, function validation,
+/// type inference, and property access checks.
+/// </summary>
 public static class ExpressionSemanticAnalyzer
 {
     internal readonly record struct FuncOverload(ExprType ReturnType, ExprType[] Parameters, ExprType? VariadicParameter = null)

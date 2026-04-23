@@ -1,10 +1,14 @@
-using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Seiton.Core.Linting;
 
+/// <summary>
+/// The fully normalized configuration model for the lint engine, including rule overrides, exclusions,
+/// fix settings, and network options. Produced by <see cref="LintConfigLibrary.Validate"/>.
+/// </summary>
 public sealed class LintConfig
 {
     /// <summary>Gets an empty configuration instance with default values.</summary>
@@ -104,6 +108,7 @@ public sealed class LintConfig
     public RuleConfig? GetRuleConfig(RuleId ruleId) => GetRuleConfig(ruleId.ToId());
 }
 
+/// <summary>Per-rule configuration: enabled state, severity override, and rule-specific options.</summary>
 public sealed record RuleConfig
 {
     /// <summary>Gets whether the rule is enabled. Defaults to <c>true</c>.</summary>
@@ -135,13 +140,16 @@ public sealed record RuleConfig
     public int? MaxJobSecrets { get; init; }
 }
 
+/// <summary>A list that extends (appends to) a rule's built-in defaults, matching the YAML <c>extend:</c> key.</summary>
 public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
+/// <summary>An exclusion entry that suppresses rules for matching files/jobs.</summary>
 public sealed record LintExclusion(
     string Files,
     IReadOnlyList<string> Rules,
     IReadOnlyList<string>? Jobs = null);
 
+/// <summary>Configuration for the <c>fix:</c> section controlling auto-fix behavior.</summary>
 public sealed record FixConfig
 {
     /// <summary>
@@ -158,12 +166,14 @@ public sealed record FixConfig
     public FixImagesConfig Images { get; init; } = new();
 }
 
+/// <summary>Default values applied by the fix engine (e.g. <c>job-timeout-minutes</c>).</summary>
 public sealed record FixDefaultsConfig
 {
     /// <summary>Gets the default job timeout in minutes to apply during fix, if any.</summary>
     public int? JobTimeoutMinutes { get; init; }
 }
 
+/// <summary>Configuration for action/workflow pinning remediation.</summary>
 public sealed record FixPinningConfig
 {
     /// <summary>Gets whether network access is enabled for SHA resolution.</summary>
@@ -176,6 +186,7 @@ public sealed record FixPinningConfig
     public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
 }
 
+/// <summary>Configuration for container image pinning remediation.</summary>
 public sealed record FixImagesConfig
 {
     private static readonly IReadOnlyList<string> DefaultExcludeImages = ["scratch"];
@@ -207,6 +218,7 @@ public sealed record FixImagesConfig
     }
 }
 
+/// <summary>Network behavior configuration (timeouts, concurrency, error handling).</summary>
 public sealed record NetworkConfig
 {
     /// <summary>Gets the error handling mode for network failures.</summary>
@@ -221,6 +233,7 @@ public sealed record NetworkConfig
 
 public enum NetworkErrorMode { Skip, Fail }
 
+/// <summary>GitHub-specific network settings (GHES API URL, fallback behavior).</summary>
 public sealed record GitHubNetworkConfig
 {
     /// <summary>Gets the GitHub Enterprise Server API URL, if using GHES.</summary>

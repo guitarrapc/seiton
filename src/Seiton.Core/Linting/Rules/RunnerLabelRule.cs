@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>runs-on:</c> labels against known GitHub-hosted and self-hosted runner labels.</summary>
 public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 {
     private HashSet<string> additionalKnownHostedLabels = [];

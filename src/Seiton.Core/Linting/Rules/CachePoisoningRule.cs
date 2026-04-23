@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Detects cache-poisoning risks where untrusted triggers use caching actions without adequate protection.</summary>
 public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
 {
     private bool hasUntrustedTrigger;

@@ -5,6 +5,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags <c>actions/checkout</c> usage without <c>persist-credentials: false</c>.</summary>
 public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutPersistCredentials)
 {
     private const string PersistCredentialsKey = "persist-credentials";

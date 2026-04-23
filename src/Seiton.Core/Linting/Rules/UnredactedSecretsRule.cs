@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags workflow patterns that may leak secrets through unredacted output commands.</summary>
 public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
 {
     private Workflow? currentWorkflow;

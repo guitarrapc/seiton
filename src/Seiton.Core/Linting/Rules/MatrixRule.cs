@@ -3,6 +3,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Validates <c>strategy.matrix</c> definitions for structural correctness.</summary>
 public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
 {
     private const long MaxRecommendedCombinations = 256;

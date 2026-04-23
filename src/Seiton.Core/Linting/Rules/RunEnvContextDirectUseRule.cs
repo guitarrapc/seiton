@@ -7,6 +7,7 @@ using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags direct use of <c>env.*</c> context in <c>run:</c> scripts where shell environment variables should be used instead.</summary>
 public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContextDirectUse)
 {
     public override string Name => "Run Env Context Direct Use Rule";

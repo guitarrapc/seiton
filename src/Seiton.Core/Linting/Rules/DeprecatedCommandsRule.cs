@@ -4,6 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
+/// <summary>Flags use of deprecated workflow commands (e.g. <c>::set-output</c>, <c>::set-env</c>) in run scripts.</summary>
 public sealed class DeprecatedCommandsRule() : RuleBase(RuleId.DeprecatedCommands)
 {
     public override string Name => "Deprecated Commands Rule";

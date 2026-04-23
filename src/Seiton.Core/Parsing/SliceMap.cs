@@ -10,6 +10,7 @@ namespace Seiton.Core.Parsing;
 /// </summary>
 public readonly struct SliceMap<TValue>
 {
+    /// <summary>A key-value pair stored in the map.</summary>
     public readonly struct Entry(Utf8Slice key, TValue value)
     {
         public readonly Utf8Slice Key = key;
@@ -96,6 +97,7 @@ public readonly struct SliceMap<TValue>
     /// <summary>Returns an enumerator over all entries.</summary>
     public Enumerator GetEnumerator() => new(_entries);
 
+    /// <summary>Forward-only enumerator over <see cref="SliceMap{TValue}"/> entries.</summary>
     public struct Enumerator
     {
         private readonly Entry[]? _entries;

@@ -4,6 +4,9 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting;
 
+/// <summary>
+/// Base class for lint rules providing diagnostic collection, config access, and default visitor no-ops.
+/// </summary>
 public abstract class RuleBase : IRule
 {
     private readonly List<Diagnostic> diagnostics = [];
