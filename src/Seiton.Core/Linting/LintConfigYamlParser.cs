@@ -1,19 +1,46 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Globalization;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
+using VYaml.Serialization;
 
 namespace Seiton.Core.Linting;
 
 /// <summary>
-/// Converts a VYaml-deserialized object graph (<see cref="Dictionary{TKey,TValue}"/> / lists / scalars)
-/// into <see cref="LintConfigParseResult"/> with the same semantics as the former line-based parser.
+/// Parses lint configuration YAML into <see cref="LintConfigParseResult"/>.
+/// VYaml dynamic deserialization is used internally; the untyped DOM never leaves this class.
 /// </summary>
-internal static class LintConfigYamlDomConverter
+internal static class LintConfigYamlParser
 {
     private const int DomLine = 1;
 
-    public static LintConfigParseResult Convert(Dictionary<string, object?> root, string filePath)
+    public static LintConfigParseResult Parse(ReadOnlyMemory<byte> utf8Yaml, string filePath)
+    {
+        Dictionary<string, object?> root;
+        try
+        {
+            root = YamlSerializer.Deserialize<Dictionary<string, object?>>(utf8Yaml)
+                ?? new Dictionary<string, object?>();
+        }
+        catch (Exception ex)
+        {
+            var d = new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"invalid lint config YAML: {ex.Message}",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath);
+            return new LintConfigParseResult(
+                new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase),
+                [],
+                new FixConfig(),
+                new NetworkConfig(),
+                [d]);
+        }
+
+        return Convert(root, filePath);
+    }
+
+    private static LintConfigParseResult Convert(Dictionary<string, object?> root, string filePath)
     {
         var diagnostics = new List<Diagnostic>();
         var rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase);

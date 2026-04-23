@@ -149,7 +149,7 @@ public static class LintConfigLibrary
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlText);
-        var parseResult = LintConfigVYamlParser.Parse(utf8Yaml.AsMemory(), filePath);
+        var parseResult = LintConfigYamlParser.Parse(utf8Yaml.AsMemory(), filePath);
 
         var diagnostics = new List<Diagnostic>(parseResult.Diagnostics.Length + 16);
         diagnostics.AddRange(parseResult.Diagnostics);
