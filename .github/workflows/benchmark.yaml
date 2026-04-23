@@ -12,6 +12,8 @@ on:
           - "*Benchmark*"
           - "*LintBenchmark*"
           - "*ParsingBenchmark*"
+          - "*LintConfigBenchmark*"
+          - "*RuleCatalogBenchmark*"
 
 jobs:
   benchmark:
