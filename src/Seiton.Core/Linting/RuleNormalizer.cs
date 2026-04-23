@@ -38,7 +38,7 @@ internal static class RuleNormalizer
 
             var config = pair.Value;
             var resolvedRuleIdString = resolvedRuleId.ToId();
-            if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleIdString))
+            if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
@@ -49,7 +49,7 @@ internal static class RuleNormalizer
             }
 
             if (config.Severity is not null
-                && RuleCatalog.TryGetMinimumSeverity(resolvedRuleIdString, out var minimumSeverity)
+                && RuleCatalog.TryGetMinimumSeverity(resolvedRuleId, out var minimumSeverity)
                 && config.Severity.Value < minimumSeverity)
             {
                 diagnostics.Add(new Diagnostic(
@@ -60,7 +60,7 @@ internal static class RuleNormalizer
                 config = config with { Severity = null };
             }
 
-            config = RuleConfigNormalizer.Normalize(config, resolvedRuleId, filePath, diagnostics);
+            config = RuleConfigNormalizer.Normalize(config, filePath, diagnostics);
             destination[resolvedRuleIdString] = config;
         }
     }

@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting.Rules;
+﻿using System.Collections.Frozen;
+using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
@@ -88,6 +89,8 @@ internal static class RuleCatalog
 
     private static readonly IReadOnlyDictionary<RuleId, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
+    private static readonly FrozenDictionary<string, int> PriorityByRuleIdString = BuildPriorityLookup();
+
     public static IRule[] CreateDefaultRules()
     {
         var rules = new IRule[DefaultRuleFactories.Length];
@@ -127,15 +130,7 @@ internal static class RuleCatalog
             return int.MaxValue;
         }
 
-        for (var i = 0; i < AllRuleMetadata.Length; i++)
-        {
-            if (string.Equals(AllRuleMetadata[i].Id.ToId(), ruleId, StringComparison.Ordinal))
-            {
-                return AllRuleMetadata[i].Priority;
-            }
-        }
-
-        return int.MaxValue - 1;
+        return PriorityByRuleIdString.TryGetValue(ruleId, out var priority) ? priority : int.MaxValue - 1;
     }
 
     public static bool TryResolveRuleId(string? idOrCanonical, out RuleId resolvedRuleId)
@@ -217,6 +212,11 @@ internal static class RuleCatalog
             && NonDisableableRuleIds.Contains(resolvedRuleId);
     }
 
+    public static bool IsNonDisableable(RuleId ruleId)
+    {
+        return NonDisableableRuleIds.Contains(ruleId);
+    }
+
     public static bool TryGetMinimumSeverity(string? ruleId, out DiagnosticSeverity minimumSeverity)
     {
         minimumSeverity = default;
@@ -226,6 +226,11 @@ internal static class RuleCatalog
         }
 
         return MinimumSeverities.TryGetValue(resolvedRuleId, out minimumSeverity);
+    }
+
+    public static bool TryGetMinimumSeverity(RuleId ruleId, out DiagnosticSeverity minimumSeverity)
+    {
+        return MinimumSeverities.TryGetValue(ruleId, out minimumSeverity);
     }
 
     public static bool TryGetAllowedConfigKeys(RuleId ruleId, out IReadOnlySet<string> allowedKeys)
@@ -269,6 +274,17 @@ internal static class RuleCatalog
         }
 
         return set;
+    }
+
+    private static FrozenDictionary<string, int> BuildPriorityLookup()
+    {
+        var dict = new Dictionary<string, int>(AllRuleMetadata.Length, StringComparer.Ordinal);
+        for (var i = 0; i < AllRuleMetadata.Length; i++)
+        {
+            dict[AllRuleMetadata[i].Id.ToId()] = AllRuleMetadata[i].Priority;
+        }
+
+        return dict.ToFrozenDictionary(dict.Comparer);
     }
 
     private static IReadOnlyDictionary<RuleId, string> BuildReverseCanonicalRuleIdMap()

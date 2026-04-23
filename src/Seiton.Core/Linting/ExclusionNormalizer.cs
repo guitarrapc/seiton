@@ -19,18 +19,17 @@ internal static class ExclusionNormalizer
             var ruleId = ruleIds[j];
             if (RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
             {
-                var resolvedRuleIdString = resolvedRuleId.ToId();
-                if (RuleCatalog.IsNonDisableable(resolvedRuleIdString))
+                if (RuleCatalog.IsNonDisableable(resolvedRuleId))
                 {
                     diagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Error,
-                        $"rule '{resolvedRuleIdString}' is non-disableable",
+                        $"rule '{resolvedRuleId.ToId()}' is non-disableable",
                         new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
                         FilePath: filePath));
                     continue;
                 }
 
-                normalizedRuleIds.Add(resolvedRuleIdString);
+                normalizedRuleIds.Add(resolvedRuleId.ToId());
                 continue;
             }
 
