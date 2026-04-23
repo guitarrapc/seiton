@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting.PinRemediation;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -19,7 +19,6 @@ public sealed class LintConfig
     /// <summary>Gets the file path of the document being linted.</summary>
     public string? FilePath { get; init; }
 
-    private string? _sourceText;
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
 

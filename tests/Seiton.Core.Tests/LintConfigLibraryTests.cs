@@ -313,7 +313,7 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsTrue();
         await Assert.That(result.Config).IsNotNull();
-        await Assert.That(result.Config!.Exclusions).HasCount().EqualTo(1);
+        await Assert.That(result.Config!.Exclusions).Count().IsEqualTo(1);
 
         var excl = result.Config.Exclusions![0];
         await Assert.That(excl.Files).IsEqualTo(".github/workflows/release.yml");
