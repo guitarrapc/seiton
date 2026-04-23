@@ -6,7 +6,7 @@ namespace Seiton.Benchmark;
 [MemoryDiagnoser]
 [RankColumn]
 [Orderer(BenchmarkDotNet.Order.SummaryOrderPolicy.FastestToSlowest)]
-public class LintBenchmark
+public class CoreLintBenchmark
 {
     public enum WorkflowSize
     {

@@ -6,12 +6,13 @@ on:
       benchmark:
         description: "Benchmark filter"
         required: true
-        default: "*Benchmark*"
+        default: "*Core*Benchmark*"
         type: choice
         options:
           - "*Benchmark*"
-          - "*LintBenchmark*"
-          - "*ParsingBenchmark*"
+          - "*Core*Benchmark*"
+          - "*CoreLintBenchmark*"
+          - "*CoreParsingBenchmark*"
           - "*LintConfigBenchmark*"
           - "*RuleCatalogBenchmark*"
 

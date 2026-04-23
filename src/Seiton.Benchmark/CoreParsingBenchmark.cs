@@ -8,7 +8,7 @@ namespace Seiton.Benchmark;
 [MemoryDiagnoser]
 [RankColumn]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
-public class ParsingBenchmark
+public class CoreParsingBenchmark
 {
     public enum WorkflowSize
     {
@@ -52,33 +52,6 @@ public class ParsingBenchmark
     {
         var result = ExpressionExtractor.ExtractParseAndValidate(_yamlBytes, ExpressionValidationContext.Step);
         return result.Occurrences.Length + result.Diagnostics.Length;
-    }
-
-    [Benchmark(Description = "VYaml raw event scan")]
-    public int ScanWithVYamlRaw()
-    {
-        var parser = YamlParser.FromBytes(_yamlBytes.AsMemory());
-        var eventCount = 0;
-        while (parser.Read())
-        {
-            eventCount++;
-        }
-
-        return eventCount;
-    }
-
-    [Benchmark(Description = "VYaml scan + adapter-like mapping")]
-    public int ScanWithVYamlMapped()
-    {
-        var parser = YamlParser.FromBytes(_yamlBytes.AsMemory());
-        var mappedCount = 0;
-        while (parser.Read())
-        {
-            _ = MapEventKind(parser.CurrentEventType);
-            mappedCount++;
-        }
-
-        return mappedCount;
     }
 
     private static int MapEventKind(ParseEventType eventType)
