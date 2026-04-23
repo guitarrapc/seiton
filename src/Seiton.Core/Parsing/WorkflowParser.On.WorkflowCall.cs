@@ -1,7 +1,6 @@
-// on.workflow_call — inputs, secrets, outputs for reusable workflow triggers.
+﻿// on.workflow_call — inputs, secrets, outputs for reusable workflow triggers.
 
 using System.Text;
-using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;

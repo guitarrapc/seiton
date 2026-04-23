@@ -1,7 +1,6 @@
 ﻿using System.Buffers;
 using System.Globalization;
 using System.Text;
-using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
@@ -60,20 +59,6 @@ internal static class ActionRefHelpers
         }
 
         parsed = new ParsedActionRef(uses, at);
-        return true;
-    }
-
-    internal static bool TryParseActionReference(ReadOnlySpan<byte> uses, out ReadOnlySpan<byte> actionPath, out ReadOnlySpan<byte> reference)
-    {
-        if (!TryParseRemoteUses(uses, out var parsed))
-        {
-            actionPath = default;
-            reference = default;
-            return false;
-        }
-
-        actionPath = parsed.ActionPath;
-        reference = parsed.Ref;
         return true;
     }
 
@@ -188,8 +173,7 @@ internal static class ActionRefHelpers
         return true;
     }
 
-    private static byte AsciiLowerByte(byte b) =>
-        b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
+    private static byte AsciiLowerByte(byte b) => b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
 
     /// <summary>
     /// Path-style wildcard used by <c>forbidden-uses</c> (<c>*</c> / <c>?</c>; <c>*</c> may span <c>/</c>).
@@ -469,12 +453,7 @@ internal static class ActionRefHelpers
         return GlobMatchCore(normalizedPattern, normalizedPath, 0, 0, cache);
     }
 
-    private static bool GlobMatchCore(
-        string pattern,
-        string path,
-        int patternIndex,
-        int pathIndex,
-        Dictionary<(int PatternIndex, int PathIndex), bool> cache)
+    private static bool GlobMatchCore(string pattern, string path, int patternIndex, int pathIndex, Dictionary<(int PatternIndex, int PathIndex), bool> cache)
     {
         if (cache.TryGetValue((patternIndex, pathIndex), out var cached))
         {

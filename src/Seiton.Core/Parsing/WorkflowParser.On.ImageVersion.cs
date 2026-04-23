@@ -1,7 +1,6 @@
-// on.image_version — names and versions lists.
+﻿// on.image_version — names and versions lists.
 
 using System.Text;
-using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;

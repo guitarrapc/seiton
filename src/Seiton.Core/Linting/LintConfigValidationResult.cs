@@ -2,9 +2,7 @@
 
 namespace Seiton.Core.Linting;
 
-public readonly record struct LintConfigValidationResult(
-    LintConfig? Config,
-    Diagnostic[] Diagnostics)
+public readonly record struct LintConfigValidationResult(LintConfig? Config, Diagnostic[] Diagnostics)
 {
     public bool IsValid
     {

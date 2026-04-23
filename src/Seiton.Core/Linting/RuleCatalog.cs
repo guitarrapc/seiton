@@ -195,37 +195,9 @@ internal static class RuleCatalog
         return bestDistance <= 4 ? bestCandidate : null;
     }
 
-    public static string[] GetDefaultRuleIds()
-    {
-        var ids = new string[DefaultRuleFactories.Length];
-        for (var i = 0; i < DefaultRuleFactories.Length; i++)
-        {
-            ids[i] = DefaultRuleFactories[i].Id.ToId();
-        }
-
-        return ids;
-    }
-
-    public static bool IsNonDisableable(string? ruleId)
-    {
-        return TryResolveRuleId(ruleId, out var resolvedRuleId)
-            && NonDisableableRuleIds.Contains(resolvedRuleId);
-    }
-
     public static bool IsNonDisableable(RuleId ruleId)
     {
         return NonDisableableRuleIds.Contains(ruleId);
-    }
-
-    public static bool TryGetMinimumSeverity(string? ruleId, out DiagnosticSeverity minimumSeverity)
-    {
-        minimumSeverity = default;
-        if (!TryResolveRuleId(ruleId, out var resolvedRuleId))
-        {
-            return false;
-        }
-
-        return MinimumSeverities.TryGetValue(resolvedRuleId, out minimumSeverity);
     }
 
     public static bool TryGetMinimumSeverity(RuleId ruleId, out DiagnosticSeverity minimumSeverity)

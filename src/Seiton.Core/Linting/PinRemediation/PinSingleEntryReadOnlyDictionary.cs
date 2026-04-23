@@ -1,5 +1,4 @@
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections;
 
 namespace Seiton.Core.Linting.PinRemediation;
 

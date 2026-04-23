@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 

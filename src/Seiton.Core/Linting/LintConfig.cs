@@ -2,7 +2,6 @@
 using Seiton.Core.Parsing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Seiton.Core.Linting;
 
@@ -19,20 +18,6 @@ public sealed class LintConfig
     private string? _sourceText;
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
-
-    /// <summary>
-    /// Returns the decoded UTF-8 source text, lazily initialized on first access.
-    /// Multiple rules requesting source text will share the same decoded string.
-    /// </summary>
-    public string? GetSourceText()
-    {
-        if (Utf8Yaml is null)
-        {
-            return null;
-        }
-
-        return _sourceText ??= Encoding.UTF8.GetString(Utf8Yaml);
-    }
 
     /// <summary>
     /// Parses an expression with content-based deduplication. Expressions with identical
