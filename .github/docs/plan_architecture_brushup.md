@@ -331,6 +331,14 @@ Online ルール（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion
 - `RuleBase` の SHA チェック (`IsSha256DigestPinned`, `IsFullCommitSha`) は複数ルールと `ActionRefHelpers` で共通利用されるべきロジックであり、`ActionRefHelpers` に移動を検討する（既に一部は存在する）。
 - それ以外は現状維持で問題ない。分割による効果がコスト（import 変更、テスト調整）を上回る段階で実施する。
 
+**実装ステータス: 完了**
+
+- `IsSha256DigestPinned` を `RuleBase`（`protected static`）から `ActionRefHelpers`（`internal static`）に移動。
+- `IsFullCommitSha` は既に `ActionRefHelpers` にのみ定義されており移動不要だった。
+- `UnpinnedImageRule` の呼び出し元 2 箇所を `ActionRefHelpers.IsSha256DigestPinned` に変更。
+- `SpanHelpers.cs` は計画通り現状維持。
+- 全 558 テスト通過を確認。
+
 ---
 
 ### 2.9 [Low] VYamlStreamAdapter の複雑性

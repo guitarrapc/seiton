@@ -52,7 +52,7 @@ public sealed class UnpinnedImageRule : RuleBase
         }
 
         var image = uses["docker://"u8.Length..];
-        if (IsSha256DigestPinned(image))
+        if (ActionRefHelpers.IsSha256DigestPinned(image))
         {
             return;
         }
@@ -70,7 +70,7 @@ public sealed class UnpinnedImageRule : RuleBase
         }
 
         var image = Arena.GetStringValue(imageNode);
-        if (image.IsEmpty || IsSha256DigestPinned(image))
+        if (image.IsEmpty || ActionRefHelpers.IsSha256DigestPinned(image))
         {
             return;
         }
