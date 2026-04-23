@@ -14,6 +14,43 @@ internal static class LintConfigYamlParser
 {
     private const int DomLine = 1;
 
+    private static readonly FixConfig DefaultFix = new();
+    private static readonly NetworkConfig DefaultNetwork = new();
+
+    [Flags]
+    private enum RuleKeyFlags : ushort
+    {
+        None = 0,
+        Events = 1 << 0,
+        KnownHostedLabels = 1 << 1,
+        PublicRegistries = 1 << 2,
+        UntrustedTriggers = 1 << 3,
+        OutputCommands = 1 << 4,
+        AssumeEvents = 1 << 5,
+        Allow = 1 << 6,
+        Deny = 1 << 7,
+        MaxStepEnvSecrets = 1 << 8,
+        MaxJobSecrets = 1 << 9,
+    }
+
+    /// <summary>
+    /// Single source of truth for flag↔YAML key name mapping.
+    /// When adding a new rule-specific key, add a row here and a corresponding case in AddRule().
+    /// </summary>
+    private static readonly (RuleKeyFlags Flag, string KeyName)[] RuleKeyFlagEntries =
+    [
+        (RuleKeyFlags.Events, "events"),
+        (RuleKeyFlags.KnownHostedLabels, "known-hosted-labels"),
+        (RuleKeyFlags.PublicRegistries, "public-registries"),
+        (RuleKeyFlags.UntrustedTriggers, "untrusted-triggers"),
+        (RuleKeyFlags.OutputCommands, "output-commands"),
+        (RuleKeyFlags.AssumeEvents, "assume-events"),
+        (RuleKeyFlags.Allow, "allow"),
+        (RuleKeyFlags.Deny, "deny"),
+        (RuleKeyFlags.MaxStepEnvSecrets, "max-step-env-secrets"),
+        (RuleKeyFlags.MaxJobSecrets, "max-job-secrets"),
+    ];
+
     /// <summary>Parses lint configuration YAML bytes into a <see cref="LintConfigParseResult"/>.</summary>
     public static LintConfigParseResult Parse(ReadOnlyMemory<byte> utf8Yaml, string filePath)
     {
@@ -46,8 +83,8 @@ internal static class LintConfigYamlParser
         var diagnostics = new List<Diagnostic>();
         var rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase);
         var exclusions = new List<LintExclusion>();
-        var fix = new FixConfig();
-        var network = new NetworkConfig();
+        var fix = DefaultFix;
+        var network = DefaultNetwork;
 
         foreach (var key in root.Keys)
         {
@@ -154,7 +191,7 @@ internal static class LintConfigYamlParser
         IReadOnlyList<string>? deny = null;
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
-        var seenRuleSpecificKeys = new HashSet<string>(StringComparer.Ordinal);
+        var seenKeyFlags = RuleKeyFlags.None;
 
         foreach (var (key, value) in body)
         {
@@ -183,39 +220,39 @@ internal static class LintConfigYamlParser
 
                     break;
                 case "events":
-                    seenRuleSpecificKeys.Add("events");
+                    seenKeyFlags |= RuleKeyFlags.Events;
                     events = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "known-hosted-labels":
-                    seenRuleSpecificKeys.Add("known-hosted-labels");
+                    seenKeyFlags |= RuleKeyFlags.KnownHostedLabels;
                     knownHostedLabels = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "public-registries":
-                    seenRuleSpecificKeys.Add("public-registries");
+                    seenKeyFlags |= RuleKeyFlags.PublicRegistries;
                     publicRegistries = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "untrusted-triggers":
-                    seenRuleSpecificKeys.Add("untrusted-triggers");
+                    seenKeyFlags |= RuleKeyFlags.UntrustedTriggers;
                     untrustedTriggers = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "output-commands":
-                    seenRuleSpecificKeys.Add("output-commands");
+                    seenKeyFlags |= RuleKeyFlags.OutputCommands;
                     outputCommands = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "assume-events":
-                    seenRuleSpecificKeys.Add("assume-events");
+                    seenKeyFlags |= RuleKeyFlags.AssumeEvents;
                     assumeEvents = NullIfEmpty(ParseStringList(value, "assume-events", diagnostics, filePath));
                     break;
                 case "allow":
-                    seenRuleSpecificKeys.Add("allow");
+                    seenKeyFlags |= RuleKeyFlags.Allow;
                     allow = NullIfEmpty(ParseStringList(value, "allow", diagnostics, filePath));
                     break;
                 case "deny":
-                    seenRuleSpecificKeys.Add("deny");
+                    seenKeyFlags |= RuleKeyFlags.Deny;
                     deny = NullIfEmpty(ParseStringList(value, "deny", diagnostics, filePath));
                     break;
                 case "max-step-env-secrets":
-                    seenRuleSpecificKeys.Add("max-step-env-secrets");
+                    seenKeyFlags |= RuleKeyFlags.MaxStepEnvSecrets;
                     if (!TryCoerceInt(value, out var ms) || ms < 0)
                     {
                         diagnostics.Add(Diag("max-step-env-secrets must be a non-negative integer", DomLine, 5, 22, filePath));
@@ -227,7 +264,7 @@ internal static class LintConfigYamlParser
 
                     break;
                 case "max-job-secrets":
-                    seenRuleSpecificKeys.Add("max-job-secrets");
+                    seenKeyFlags |= RuleKeyFlags.MaxJobSecrets;
                     if (!TryCoerceInt(value, out var mj) || mj < 0)
                     {
                         diagnostics.Add(Diag("max-job-secrets must be a non-negative integer", DomLine, 5, 17, filePath));
@@ -244,7 +281,7 @@ internal static class LintConfigYamlParser
             }
         }
 
-        ValidateAllowedKeys(ruleId, seenRuleSpecificKeys, DomLine, diagnostics, filePath);
+        ValidateAllowedKeys(ruleId, seenKeyFlags, DomLine, diagnostics, filePath);
 
         var config = new RuleConfig
         {
@@ -297,10 +334,10 @@ internal static class LintConfigYamlParser
             return [];
         }
 
-        var result = new List<string>(list.Count);
+        var result = new string[list.Count];
         for (var i = 0; i < list.Count; i++)
         {
-            result.Add(Unquote(ScalarToString(list[i])));
+            result[i] = Unquote(ScalarToString(list[i]));
         }
 
         return result;
@@ -318,11 +355,16 @@ internal static class LintConfigYamlParser
 
     private static void ValidateAllowedKeys(
         string ruleId,
-        IReadOnlySet<string> seenKeys,
+        RuleKeyFlags seenFlags,
         int lineNumber,
         List<Diagnostic> diagnostics,
         string filePath)
     {
+        if (seenFlags == RuleKeyFlags.None)
+        {
+            return;
+        }
+
         if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
         {
             return;
@@ -333,15 +375,16 @@ internal static class LintConfigYamlParser
             return;
         }
 
-        foreach (var key in seenKeys)
+        for (var i = 0; i < RuleKeyFlagEntries.Length; i++)
         {
-            if (!allowed.Contains(key))
+            var (flag, keyName) = RuleKeyFlagEntries[i];
+            if ((seenFlags & flag) != 0 && !allowed.Contains(keyName))
             {
                 diagnostics.Add(Diag(
-                    $"rule '{resolvedRuleId.ToId()}' does not accept '{key}' config key",
+                    $"rule '{resolvedRuleId.ToId()}' does not accept '{keyName}' config key",
                     lineNumber,
                     3,
-                    key.Length,
+                    keyName.Length,
                     filePath));
             }
         }
@@ -417,6 +460,8 @@ internal static class LintConfigYamlParser
         return new FixDefaultsConfig { JobTimeoutMinutes = jobTimeoutMinutes };
     }
 
+    private static readonly IReadOnlyList<string> DefaultExcludeBranches = ["main", "master"];
+
     private static FixPinningConfig ParseFixPinning(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
     {
         var enableNetwork = false;
@@ -466,10 +511,13 @@ internal static class LintConfigYamlParser
         {
             EnableNetwork = enableNetwork,
             MinAgeDays = minAgeDays,
-            ExcludeBranches = excludeBranches.Count > 0 ? excludeBranches : new FixPinningConfig().ExcludeBranches,
+            ExcludeBranches = excludeBranches.Count > 0 ? excludeBranches : DefaultExcludeBranches,
             IgnoreActions = ignoreActions,
         };
     }
+
+    private static readonly IReadOnlyList<string> DefaultExcludeImages = ["scratch"];
+    private static readonly IReadOnlyList<string> DefaultExcludeTags = ["latest"];
 
     private static FixImagesConfig ParseFixImages(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
     {
@@ -511,8 +559,8 @@ internal static class LintConfigYamlParser
         return new FixImagesConfig
         {
             EnableNetwork = enableNetwork,
-            ExcludeImages = excludeImages.Count > 0 ? excludeImages : new FixImagesConfig().ExcludeImages,
-            ExcludeTags = excludeTags.Count > 0 ? excludeTags : new FixImagesConfig().ExcludeTags,
+            ExcludeImages = excludeImages.Count > 0 ? excludeImages : DefaultExcludeImages,
+            ExcludeTags = excludeTags.Count > 0 ? excludeTags : DefaultExcludeTags,
             IgnoreImages = ignoreImages,
         };
     }
