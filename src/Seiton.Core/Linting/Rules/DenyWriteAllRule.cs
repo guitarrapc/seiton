@@ -4,10 +4,8 @@ using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class DenyWriteAllRule : RuleBase
+public sealed class DenyWriteAllRule() : RuleBase(RuleId.DenyWriteAll)
 {
-    public override string Id => "deny-write-all";
-
     public override string Name => "Deny Write-All Rule";
 
     private Workflow? _currentWorkflow;

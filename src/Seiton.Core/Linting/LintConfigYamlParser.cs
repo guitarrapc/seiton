@@ -337,7 +337,7 @@ internal static class LintConfigYamlParser
             if (!allowed.Contains(key))
             {
                 diagnostics.Add(Diag(
-                    $"rule '{resolvedRuleId}' does not accept '{key}' config key",
+                    $"rule '{resolvedRuleId.ToId()}' does not accept '{key}' config key",
                     lineNumber,
                     3,
                     key.Length,

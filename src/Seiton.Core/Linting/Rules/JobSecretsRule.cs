@@ -6,10 +6,8 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class JobSecretsRule : RuleBase
+public sealed class JobSecretsRule() : RuleBase(RuleId.JobSecrets)
 {
-    public override string Id => "job-secrets";
-
     public override string Name => "Job Secrets Rule";
 
     public override void VisitJobPre(Job job)

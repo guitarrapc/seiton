@@ -7,11 +7,9 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RunnerLabelRule : RuleBase
+public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 {
     private HashSet<string> additionalKnownHostedLabels = [];
-
-    public override string Id => "runner-label";
 
     public override string Name => "Runner Label Rule";
 

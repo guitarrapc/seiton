@@ -4,10 +4,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RunnerNoLatestRule : RuleBase
+public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
 {
-    public override string Id => "runner-no-latest";
-
     public override string Name => "Runner No Latest Rule";
 
     public override void VisitJobPre(Job job)

@@ -6,10 +6,8 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class SecretsOutsideEnvRule : RuleBase
+public sealed class SecretsOutsideEnvRule() : RuleBase(RuleId.SecretsOutsideEnv)
 {
-    public override string Id => "secrets-outside-env";
-
     public override string Name => "Secrets Outside Env Rule";
 
     public override void VisitJobPre(Job job)

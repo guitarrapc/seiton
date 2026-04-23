@@ -7,11 +7,9 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class CredentialsRule : RuleBase
+public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
 {
     private HashSet<string> additionalPublicRegistries = [];
-
-    public override string Id => "credentials";
 
     public override string Name => "Credentials Rule";
 

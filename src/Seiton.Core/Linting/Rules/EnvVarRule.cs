@@ -3,10 +3,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class EnvVarRule : RuleBase
+public sealed class EnvVarRule() : RuleBase(RuleId.EnvVar)
 {
-    public override string Id => "env-var";
-
     public override string Name => "Env Var Rule";
 
     public override void VisitWorkflowPre(Workflow workflow)

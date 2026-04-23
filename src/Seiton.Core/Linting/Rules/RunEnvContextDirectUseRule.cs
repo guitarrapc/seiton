@@ -7,10 +7,8 @@ using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RunEnvContextDirectUseRule : RuleBase
+public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContextDirectUse)
 {
-    public override string Id => "run-env-context-direct-use";
-
     public override string Name => "Run Env Context Direct Use Rule";
 
     public override void VisitStep(Step step)

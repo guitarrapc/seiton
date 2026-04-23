@@ -4,12 +4,10 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class LocalActionInputsRule : RuleBase
+public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 {
     private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena)> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _runnerCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
-
-    public override string Id => "local-action-inputs";
 
     public override string Name => "Local Action Inputs Rule";
 

@@ -3,10 +3,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class PermissionsRule : RuleBase
+public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
 {
-    public override string Id => "permissions";
-
     public override string Name => "Permissions Rule";
 
     public override void VisitWorkflowPre(Workflow workflow)

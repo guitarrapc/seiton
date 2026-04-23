@@ -5,10 +5,8 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class FakeTernaryRule : RuleBase
+public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
 {
-    public override string Id => "fake-ternary";
-
     public override string Name => "Fake Ternary Rule";
 
     public override void VisitJobPre(Job job)

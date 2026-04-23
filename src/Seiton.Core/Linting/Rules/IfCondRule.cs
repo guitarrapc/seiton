@@ -5,10 +5,8 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class IfCondRule : RuleBase
+public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 {
-    public override string Id => "if-cond";
-
     public override string Name => "If Condition Rule";
 
     public override void VisitJobPre(Job job)

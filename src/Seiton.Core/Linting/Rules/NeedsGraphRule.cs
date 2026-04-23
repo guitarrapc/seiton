@@ -3,10 +3,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class NeedsGraphRule : RuleBase
+public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 {
-    public override string Id => "needs-graph";
-
     public override string Name => "Needs Graph Rule";
 
     private SliceMap<Job> _knownJobs;

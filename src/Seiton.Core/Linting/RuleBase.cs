@@ -10,7 +10,9 @@ public abstract class RuleBase : IRule
     private readonly List<Diagnostic> diagnostics = [];
     protected LintConfig Config { get; private set; } = LintConfig.Empty;
 
-    public abstract string Id { get; }
+    public RuleId Id { get; }
+
+    protected RuleBase(RuleId id) => Id = id;
 
     public abstract string Name { get; }
 
@@ -182,7 +184,7 @@ public abstract class RuleBase : IRule
             severity,
             message,
             location,
-            RuleId: Id,
+            RuleId: Id.ToId(),
             FilePath: Config.FilePath,
             Fix: fix,
             Metadata: metadata));

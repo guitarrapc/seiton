@@ -3,10 +3,8 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class DenyReadAllRule : RuleBase
+public sealed class DenyReadAllRule() : RuleBase(RuleId.DenyReadAll)
 {
-    public override string Id => "deny-read-all";
-
     public override string Name => "Deny Read-All Rule";
 
     private Workflow? _currentWorkflow;

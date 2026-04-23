@@ -4,10 +4,8 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class DeprecatedCommandsRule : RuleBase
+public sealed class DeprecatedCommandsRule() : RuleBase(RuleId.DeprecatedCommands)
 {
-    public override string Id => "deprecated-commands";
-
     public override string Name => "Deprecated Commands Rule";
 
     public override void VisitStep(Step step)

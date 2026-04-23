@@ -4,14 +4,12 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ScheduleEventRule : RuleBase
+public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 {
     private const int MinIntervalMinutes = 5;
 
     private const uint AllDomMask = uint.MaxValue ^ 1u;
     private const byte AllDowNormMask = 0x7F;
-
-    public override string Id => "schedule-event";
 
     public override string Name => "Schedule Event Rule";
 

@@ -2,12 +2,8 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ImpostorCommitRule : OnlineRuleBase
+public sealed class ImpostorCommitRule() : OnlineRuleBase(RuleId.ImpostorCommit)
 {
-    public const string RuleId = "impostor-commit";
-
-    public override string Id => RuleId;
-
     public override string Name => "Impostor Commit";
 
     public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)

@@ -4,7 +4,7 @@ namespace Seiton.Core.Linting;
 
 public interface IRule : IPass
 {
-    string Id { get; }
+    RuleId Id { get; }
 
     string Name { get; }
 

@@ -490,3 +490,180 @@ network.github.ghes-fallback            → GitHubNetworkConfig.GhesFallback
 - `AsMap()`/`AsList()` の boxing 型チェックは冗長だが、config パースは hot path ではないため実害なし
 - フロースタイル (`{key: value}`) やアンカー/エイリアスなど YAML 仕様への準拠を維持できるメリットが大きい
 - 将来の YAML 機能追加時にパーサー側の対応が不要
+
+## 6. RuleId enum 化
+
+### 6.1 動機
+
+Phase 1-7 で Config モデルをフラット化したが、ルール ID は依然として `string` リテラルがコードベース全体に散在している:
+
+- 各ルール (48+4) が `override string Id => "kebab-case-name"` で宣言
+- `RuleCatalog` に 56+ 箇所の string リテラル (登録テーブル、ポリシーマップ、許可キーマップ)
+- `LintEngine` の `IsRuleEnabled`, `TryGetSeverityOverride` 等が `string?` パラメータ
+- タイポがコンパイル時に検出できない
+
+**enum にすることで得られるもの:**
+- コンパイル時のルール ID 安全性 (タイポ不可、switch 網羅性チェック CS8524)
+- 各ルールから `override string Id` プロパティが不要になる (コンストラクタで渡す)
+- `RuleCatalog` の Dictionary ルックアップが enum (int) ベースに改善
+- Online ルールの `const string RuleId` パターンも不要に
+
+### 6.2 設計
+
+#### 境界の定義
+
+| レイヤー | 型 | 理由 |
+|---|---|---|
+| `IRule.Id` | `RuleId` (enum) | 内部ルールシステムの型安全性 |
+| `RuleCatalog` 内部データ | `RuleId` | enum 配列/Set/Dictionary で高速ルックアップ |
+| `LintConfig.Rules` dict key | **`string` (変更なし)** | YAML パーサー出力と共通。変更の波及が大きく利点が少ない |
+| `Diagnostic.RuleId` | **`string?` (変更なし)** | パーサー診断と共用の boundary 型。SARIF 出力にそのまま流れる |
+| `LintExclusion.Rules` | **`IReadOnlyList<string>` (変更なし)** | YAML ユーザー入力のまま正規化 |
+| SARIF/CLI 出力 | `string` | 外部仕様 |
+
+**変換ポイント:**
+- `RuleBase` 診断発行時: `Id.ToId()` → `Diagnostic.RuleId` (string)
+- `RuleNormalizer`: `TryResolveRuleId(string) → RuleId` で解決、`resolvedId.ToId()` で dict キーに戻す
+- `LintConfig.GetRuleConfig(RuleId)`: オーバーロード追加、内部で `ruleId.ToId()` → 既存 string dict ルックアップ
+- `LintEngine.IsRuleEnabled(rule.Id, ...)`: `rule.Id` は `RuleId` だが `Id.ToId()` で string dict を参照
+
+`LintConfig.Rules` の dict key を `string` のまま維持する設計により、`LintConfigYamlParser`, `LintEngine` の dict ルックアップ、テストの dict 構築コード (`Rules = new Dictionary<string, RuleConfig> { ["rule-id"] = ... }`) は **変更不要**。
+
+#### RuleId enum
+
+```csharp
+public enum RuleId { JobStructure, ReusableWorkflow, ..., LocalActionInputs }  // 52 values
+```
+
+enum の int 値はメンバー追加順 (auto-increment)。Priority とは独立。
+
+#### RuleIdExtensions
+
+```csharp
+internal static class RuleIdExtensions
+{
+    // NativeAOT 安全。string リテラル返却 (interned, zero-alloc)
+    public static string ToId(this RuleId id) => id switch
+    {
+        RuleId.DangerousTriggers => "dangerous-triggers",
+        ...
+    };
+
+    // YAML パース境界での string→enum 変換。FrozenDictionary で O(1)
+    public static bool TryParse(string value, out RuleId ruleId) => ...;
+}
+```
+
+#### RuleBase 変更
+
+```csharp
+// Before
+public abstract class RuleBase : IRule
+{
+    public abstract string Id { get; }
+    ...
+    RuleId: Id,  // Diagnostic 発行時
+}
+
+// After
+public abstract class RuleBase : IRule
+{
+    public RuleId Id { get; }
+    protected RuleBase(RuleId id) => Id = id;
+    ...
+    RuleId: Id.ToId(),  // Diagnostic 発行時
+}
+```
+
+#### 各ルールの変更
+
+```csharp
+// Before
+public sealed class DangerousTriggersRule : RuleBase
+{
+    public override string Id => "dangerous-triggers";
+    public override string Name => "Dangerous Triggers Rule";
+}
+
+// After
+public sealed class DangerousTriggersRule() : RuleBase(RuleId.DangerousTriggers)
+{
+    public override string Name => "Dangerous Triggers Rule";
+}
+```
+
+`SetConfig()` 内の `config.GetRuleConfig(Id)` は `GetRuleConfig(RuleId)` オーバーロードにより変更不要。
+
+#### RuleCatalog 変更
+
+```csharp
+// Tuple 型を enum に
+private static readonly (RuleId Id, int Priority, Func<IRule> Factory)[] DefaultRuleFactories = [...];
+
+// ポリシーマップを enum キーに
+private static readonly HashSet<RuleId> NonDisableableRuleIds = [RuleId.DenyWriteAll, RuleId.DenyReadAll];
+
+// TryResolveRuleId の返却型を enum に
+public static bool TryResolveRuleId(string? input, out RuleId resolvedRuleId) { ... }
+
+// string 引数版も維持 (Diagnostic.RuleId 等の boundary 用)
+public static int GetPriority(string? ruleId) { ... }
+public static int GetPriority(RuleId ruleId) { ... }
+```
+
+### 6.3 実行計画
+
+#### Phase 8: RuleId enum + RuleIdExtensions (新規ファイル)
+
+**作業:** `RuleId.cs`, `RuleIdExtensions.cs` を `src/Seiton.Core/Linting/` に追加。52 メンバーの enum + `ToId()` switch + `TryParse()` FrozenDictionary。既存コードへの影響なし。
+
+#### Phase 9: IRule.Id + RuleBase + 全ルールクラス
+
+**作業:**
+1. `IRule.Id` を `string` → `RuleId` に変更
+2. `RuleBase` を abstract プロパティからコンストラクタ注入に変更。Diagnostic 発行で `Id.ToId()` を使用
+3. `OnlineRuleBase` にコンストラクタ追加
+4. 48 default ルール + 4 online ルール: `override string Id` 削除、primary constructor で `RuleId.Xxx` を渡す
+5. Online ルールの `const string RuleId` フィールド削除
+
+#### Phase 10: RuleCatalog
+
+**作業:**
+1. tuple 型を `(RuleId, int, Func<IRule/IOnlineRule>)` に変更
+2. `AllRuleMetadata` を `(RuleId, int)[]` に変更
+3. `NonDisableableRuleIds` → `HashSet<RuleId>`、`MinimumSeverities` → `Dictionary<RuleId, DiagnosticSeverity>`
+4. `AllowedRuleConfigKeys` → `Dictionary<RuleId, IReadOnlySet<string>>`
+5. `TryResolveRuleId` 返却型を `RuleId` に変更
+6. `CanonicalRuleIdToRuleId` → `Dictionary<string, RuleId>`
+7. public メソッドの `string?` パラメータ版は `RuleId` 版とオーバーロードで維持 (boundary 用)
+
+#### Phase 11: LintConfig + RuleNormalizer + LintEngine 等
+
+**作業:**
+1. `LintConfig.GetRuleConfig(RuleId)` オーバーロード追加 (`ruleId.ToId()` で既存 string dict 参照)
+2. `RuleNormalizer`: `TryResolveRuleId` の out が `RuleId` に変わるため `resolvedRuleId.ToId()` で dict キー生成
+3. `RuleConfigNormalizer`: `ruleId` パラメータ型変更 (string → RuleId)
+4. `LintEngine`: `IsRuleEnabled(rule.Id, ...)` — `rule.Id` は `RuleId` になるが内部で `Id.ToId()` で string dict 参照
+5. `PinRemediationEngine`: `const string` → `RuleId` enum 値に変更
+
+#### Phase 12: テスト + ビルド検証
+
+**作業:**
+- テスト内の `RuleConfig` 構築 (`new Dictionary<string, RuleConfig> { ["rule-id"] = ... }`) → **変更不要** (dict key は string のまま)
+- テスト内の `Diagnostic.RuleId == "..."` アサーション → **変更不要** (Diagnostic.RuleId は string のまま)
+- テスト内で `rule.Id` を直接参照している箇所のみ `RuleId` enum に更新
+- `dotnet build` + `dotnet test` で全テスト通過を確認
+
+### 6.4 影響範囲
+
+| カテゴリ | 変更量 | 備考 |
+|---|---|---|
+| 新規ファイル | 2 | `RuleId.cs`, `RuleIdExtensions.cs` |
+| ルールクラス | 52 | 機械的変更 (override Id 削除 + constructor) |
+| `IRule.cs`, `RuleBase.cs`, `OnlineRuleBase.cs` | 3 | interface + base class |
+| `RuleCatalog.cs` | 1 | enum 化 (中規模) |
+| `LintConfig.cs` | 1 | overload 追加のみ |
+| `RuleNormalizer.cs`, `RuleConfigNormalizer.cs` | 2 | パラメータ型変更 |
+| `LintEngine.cs` | 1 | 小規模 |
+| `PinRemediationEngine.cs` | 1 | const 変更 |
+| テスト | 最小限 | dict key/Diagnostic.RuleId が string のまま |

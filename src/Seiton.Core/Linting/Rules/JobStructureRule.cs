@@ -2,10 +2,8 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class JobStructureRule : RuleBase
+public sealed class JobStructureRule() : RuleBase(RuleId.JobStructure)
 {
-    public override string Id => "job-structure";
-
     public override string Name => "Job Structure Rule";
 
     public override void VisitJobPre(Job job)

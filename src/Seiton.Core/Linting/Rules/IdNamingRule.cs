@@ -3,10 +3,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class IdNamingRule : RuleBase
+public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 {
-    public override string Id => "id-naming";
-
     public override string Name => "Id Naming Rule";
 
     private Job? _currentJob;

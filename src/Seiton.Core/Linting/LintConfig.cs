@@ -110,6 +110,8 @@ public sealed class LintConfig
             return null;
         return config;
     }
+
+    public RuleConfig? GetRuleConfig(RuleId ruleId) => GetRuleConfig(ruleId.ToId());
 }
 
 public sealed record RuleConfig

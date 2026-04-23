@@ -6,10 +6,8 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class WorkflowSecretsRule : RuleBase
+public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
 {
-    public override string Id => "workflow-secrets";
-
     public override string Name => "Workflow Secrets Rule";
 
     public override void VisitWorkflowPre(Workflow workflow)

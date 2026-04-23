@@ -3,10 +3,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class InsecureCommandsRule : RuleBase
+public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
 {
-    public override string Id => "insecure-commands";
-
     public override string Name => "Insecure Commands Rule";
 
     public override void VisitWorkflowPre(Workflow workflow)

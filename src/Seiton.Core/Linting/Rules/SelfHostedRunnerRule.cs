@@ -6,12 +6,10 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class SelfHostedRunnerRule : RuleBase
+public sealed class SelfHostedRunnerRule() : RuleBase(RuleId.SelfHostedRunner)
 {
     private bool hasUntrustedTrigger;
     private HashSet<string> additionalUntrustedTriggers = [];
-
-    public override string Id => "self-hosted-runner";
 
     public override string Name => "Self Hosted Runner Rule";
 

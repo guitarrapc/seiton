@@ -5,11 +5,9 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ReusableWorkflowRule : RuleBase
+public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 {
     private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
-
-    public override string Id => "reusable-workflow";
 
     public override string Name => "Reusable Workflow Rule";
 

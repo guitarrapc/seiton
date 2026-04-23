@@ -4,10 +4,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class UnpinnedImageRule : RuleBase
+public sealed class UnpinnedImageRule() : RuleBase(RuleId.UnpinnedImage)
 {
-    public override string Id => "unpinned-image";
-
     public override string Name => "Unpinned Image Rule";
 
     public override void VisitJobPre(Job job)

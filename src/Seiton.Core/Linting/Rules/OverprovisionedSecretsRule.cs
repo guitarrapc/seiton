@@ -5,15 +5,13 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class OverprovisionedSecretsRule : RuleBase
+public sealed class OverprovisionedSecretsRule() : RuleBase(RuleId.OverprovisionedSecrets)
 {
     internal const int DefaultMaxStepEnvSecrets = 5;
     internal const int DefaultMaxJobSecrets = 5;
 
     private int _maxStepEnvSecrets = DefaultMaxStepEnvSecrets;
     private int _maxJobSecrets = DefaultMaxJobSecrets;
-
-    public override string Id => "overprovisioned-secrets";
 
     public override string Name => "Overprovisioned Secrets Rule";
 

@@ -4,7 +4,7 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ArchivedUsesRule : RuleBase
+public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
 {
     private static readonly HashSet<string> ArchivedRepositories = new(StringComparer.Ordinal)
     {
@@ -13,8 +13,6 @@ public sealed class ArchivedUsesRule : RuleBase
         "actions-rs/audit-check",
         "actions-rs/clippy-check",
     };
-
-    public override string Id => "archived-uses";
 
     public override string Name => "Archived Uses Rule";
 

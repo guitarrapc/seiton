@@ -113,7 +113,7 @@ public sealed class LintEngine
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
-            if (!IsRuleEnabled(rule.Id, effectiveConfig.Rules))
+            if (!IsRuleEnabled(rule.Id.ToId(), effectiveConfig.Rules))
             {
                 continue;
             }
@@ -133,7 +133,7 @@ public sealed class LintEngine
         for (var i = 0; i < _onlineRules.Count; i++)
         {
             var onlineRule = _onlineRules[i];
-            if (!IsRuleEnabled(onlineRule.Id, effectiveConfig.Rules))
+            if (!IsRuleEnabled(onlineRule.Id.ToId(), effectiveConfig.Rules))
             {
                 continue;
             }
@@ -260,7 +260,7 @@ public sealed class LintEngine
             return false;
         }
 
-        return rules.TryGetValue(resolvedRuleId, out config);
+        return rules.TryGetValue(resolvedRuleId.ToId(), out config);
     }
 
     private static bool TryGetSuppressionRecord(
@@ -767,17 +767,18 @@ public sealed class LintEngine
 
                 if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
                 {
-                    if (RuleCatalog.IsNonDisableable(internalRuleId))
+                    var internalRuleIdString = internalRuleId.ToId();
+                    if (RuleCatalog.IsNonDisableable(internalRuleIdString))
                     {
                         configurationDiagnostics.Add(new Diagnostic(
                             DiagnosticSeverity.Error,
-                            $"rule '{internalRuleId}' is non-disableable",
+                            $"rule '{internalRuleIdString}' is non-disableable",
                             new TextRange(tokenAbsStart, trimmedToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + trimmedToken.Length),
                             FilePath: filePath));
                     }
                     else
                     {
-                        target[internalRuleId] = new SuppressionAnchor(lineNumber, tokenColumn);
+                        target[internalRuleIdString] = new SuppressionAnchor(lineNumber, tokenColumn);
                     }
                 }
                 else

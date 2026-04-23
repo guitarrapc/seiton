@@ -16,6 +16,8 @@ public abstract class OnlineRuleBase : RuleBase, IOnlineRule
 {
     private readonly List<ActionAuditTarget> _targets = [];
 
+    protected OnlineRuleBase(RuleId id) : base(id) { }
+
     public IReadOnlyList<ActionAuditTarget> CollectedTargets => _targets;
 
     public override bool SupportsDocumentKind(DocumentKind documentKind)

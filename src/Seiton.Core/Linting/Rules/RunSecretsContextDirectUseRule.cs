@@ -7,12 +7,10 @@ using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RunSecretsContextDirectUseRule : RuleBase
+public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecretsContextDirectUse)
 {
     private Workflow? _currentWorkflow;
     private Job? _currentJob;
-
-    public override string Id => "run-secrets-context-direct-use";
 
     public override string Name => "Run Secrets Context Direct Use Rule";
 

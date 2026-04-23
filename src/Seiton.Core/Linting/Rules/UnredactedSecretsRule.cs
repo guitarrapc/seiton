@@ -7,7 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class UnredactedSecretsRule : RuleBase
+public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
 {
     private Workflow? currentWorkflow;
     private Job? currentJob;
@@ -15,8 +15,6 @@ public sealed class UnredactedSecretsRule : RuleBase
     private readonly List<string> _workflowVarNames = [];
     private readonly List<string> _jobVarNames = [];
     private readonly List<string> _stepVarNames = [];
-
-    public override string Id => "unredacted-secrets";
 
     public override string Name => "Unredacted Secrets Rule";
 

@@ -6,10 +6,8 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class TemplateInjectionRule : RuleBase
+public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 {
-    public override string Id => "template-injection";
-
     public override string Name => "Template Injection Rule";
 
     public override void VisitStep(Step step)

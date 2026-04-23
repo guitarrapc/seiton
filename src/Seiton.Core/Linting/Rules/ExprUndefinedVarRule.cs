@@ -9,10 +9,8 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ExprUndefinedVarRule : RuleBase
+public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 {
-    public override string Id => "expr-undefined-var";
-
     public override string Name => "Expr Undefined Var Rule";
 
     // Phase 2: per-workflow and per-job dynamic context type overrides.

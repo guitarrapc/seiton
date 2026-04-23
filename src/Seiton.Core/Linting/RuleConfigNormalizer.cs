@@ -9,7 +9,7 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal static class RuleConfigNormalizer
 {
-    public static RuleConfig Normalize(RuleConfig config, string ruleId, string filePath, List<Diagnostic> diagnostics)
+    public static RuleConfig Normalize(RuleConfig config, RuleId ruleId, string filePath, List<Diagnostic> diagnostics)
     {
         var events = NormalizeExtendableList(config.Events, "events extend entry must not be empty", filePath, diagnostics);
         var knownHostedLabels = NormalizeExtendableList(config.KnownHostedLabels, "known-hosted-labels extend entry must not be empty", filePath, diagnostics);

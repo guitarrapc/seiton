@@ -3,11 +3,9 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class MatrixRule : RuleBase
+public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
 {
     private const long MaxRecommendedCombinations = 256;
-
-    public override string Id => "matrix";
 
     public override string Name => "Matrix Rule";
 

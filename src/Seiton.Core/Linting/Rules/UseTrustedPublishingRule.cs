@@ -4,12 +4,10 @@ using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class UseTrustedPublishingRule : RuleBase
+public sealed class UseTrustedPublishingRule() : RuleBase(RuleId.UseTrustedPublishing)
 {
     private bool workflowHasIdTokenWrite;
     private bool currentJobHasIdTokenWrite;
-
-    public override string Id => "use-trusted-publishing";
 
     public override string Name => "Use Trusted Publishing Rule";
 

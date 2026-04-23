@@ -6,14 +6,12 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class UnpinnedUsesRule : RuleBase
+public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 {
     // Cache last-produced "not pinned" message to avoid repeated string allocation
     // for the same action ref (common: all steps use the same action)
     private Utf8Slice _lastUnpinnedStepUsesSlice;
     private string? _lastUnpinnedStepMessage;
-
-    public override string Id => "unpinned-uses";
 
     public override string Name => "Unpinned Uses Rule";
 

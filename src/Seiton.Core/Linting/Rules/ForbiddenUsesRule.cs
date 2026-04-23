@@ -7,7 +7,7 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ForbiddenUsesRule : RuleBase
+public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
 {
     private const int OwnerRepoPolicyKeyStackBytes = 512;
 
@@ -15,8 +15,6 @@ public sealed class ForbiddenUsesRule : RuleBase
 
     private IReadOnlyList<string> allowPatterns = [];
     private IReadOnlyList<string> denyPatterns = DefaultDenyPatterns;
-
-    public override string Id => "forbidden-uses";
 
     public override string Name => "Forbidden Uses Rule";
 

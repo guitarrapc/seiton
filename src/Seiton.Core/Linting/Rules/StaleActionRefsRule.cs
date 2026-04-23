@@ -2,12 +2,8 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class StaleActionRefsRule : OnlineRuleBase
+public sealed class StaleActionRefsRule() : OnlineRuleBase(RuleId.StaleActionRefs)
 {
-    public const string RuleId = "stale-action-refs";
-
-    public override string Id => RuleId;
-
     public override string Name => "Stale Action Refs";
 
     public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)

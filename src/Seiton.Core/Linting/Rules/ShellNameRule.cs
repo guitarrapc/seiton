@@ -3,10 +3,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ShellNameRule : RuleBase
+public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
 {
-    public override string Id => "shell-name";
-
     public override string Name => "Shell Name Rule";
 
     private Workflow? _currentWorkflow;

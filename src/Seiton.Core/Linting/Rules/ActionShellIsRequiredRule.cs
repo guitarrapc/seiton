@@ -3,10 +3,8 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class ActionShellIsRequiredRule : RuleBase
+public sealed class ActionShellIsRequiredRule() : RuleBase(RuleId.ActionShellIsRequired)
 {
-    public override string Id => "action-shell-is-required";
-
     public override string Name => "Action Shell Is Required Rule";
 
     public override bool SupportsDocumentKind(DocumentKind documentKind)

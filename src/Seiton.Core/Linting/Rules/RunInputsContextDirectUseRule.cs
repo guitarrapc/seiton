@@ -7,12 +7,10 @@ using static Seiton.Core.Linting.Rules.RunContextDirectUseAnalyzer;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RunInputsContextDirectUseRule : RuleBase
+public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsContextDirectUse)
 {
     private Workflow? _currentWorkflow;
     private Job? _currentJob;
-
-    public override string Id => "run-inputs-context-direct-use";
 
     public override string Name => "Run Inputs Context Direct Use Rule";
 

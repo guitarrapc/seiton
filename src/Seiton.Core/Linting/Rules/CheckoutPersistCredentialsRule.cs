@@ -5,7 +5,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class CheckoutPersistCredentialsRule : RuleBase
+public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutPersistCredentials)
 {
     private const string PersistCredentialsKey = "persist-credentials";
     private const string FixHint = "review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...";
@@ -13,8 +13,6 @@ public sealed class CheckoutPersistCredentialsRule : RuleBase
     // Cache last-produced message to avoid repeated string allocation for the same action ref
     private Utf8Slice _lastUsesSlice;
     private string? _lastMessage;
-
-    public override string Id => "checkout-persist-credentials";
 
     public override string Name => "Checkout Persist Credentials Rule";
 

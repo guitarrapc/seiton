@@ -7,7 +7,7 @@ public sealed class SyntaxRule : IRule
 {
     private readonly IRule[] rules = RuleCatalog.CreateDefaultRules();
 
-    public string Id => "syntax";
+    public RuleId Id => RuleId.Syntax;
 
     public string Name => "Syntax Rule";
 

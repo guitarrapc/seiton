@@ -2,12 +2,8 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class KnownVulnerableActionsRule : OnlineRuleBase
+public sealed class KnownVulnerableActionsRule() : OnlineRuleBase(RuleId.KnownVulnerableActions)
 {
-    public const string RuleId = "known-vulnerable-actions";
-
-    public override string Id => RuleId;
-
     public override string Name => "Known Vulnerable Actions";
 
     public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)

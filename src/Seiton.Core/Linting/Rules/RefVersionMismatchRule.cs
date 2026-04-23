@@ -5,10 +5,8 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RefVersionMismatchRule : RuleBase
+public sealed class RefVersionMismatchRule() : RuleBase(RuleId.RefVersionMismatch)
 {
-    public override string Id => "ref-version-mismatch";
-
     public override string Name => "Ref Version Mismatch Rule";
 
     public override void VisitJobPre(Job job)

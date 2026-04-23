@@ -11,13 +11,11 @@ namespace Seiton.Core.Linting.Rules;
 /// ${{ format('{0}', secrets) }}), rather than accessing a specific key (secrets.MY_KEY).
 /// Exposing the whole secrets context leaks every secret at once and is a high-severity supply-chain risk.
 /// </summary>
-public sealed class SecretsWholeContextAccessRule : RuleBase
+public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWholeContextAccess)
 {
     private const string DiagnosticMessage =
         "expression must not reference the entire ${{ secrets }} context object; " +
         "use ${{ secrets.SPECIFIC_KEY }} to access individual secrets, then map them to env variables";
-
-    public override string Id => "secrets-whole-context-access";
 
     public override string Name => "Secrets Whole Context Access Rule";
 

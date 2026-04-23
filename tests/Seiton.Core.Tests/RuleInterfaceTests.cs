@@ -110,7 +110,7 @@ public sealed class RuleInterfaceTests
         visitor.AddPass(rule);
         visitor.Visit(workflow);
 
-        await Assert.That(rule.Id).IsEqualTo("test-rule");
+        await Assert.That(rule.Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rule.Name).IsEqualTo("Test Rule");
         await Assert.That(rule.WorkflowPreCount).IsEqualTo(1);
         await Assert.That(rule.EventCount).IsEqualTo(2);
@@ -296,54 +296,54 @@ public sealed class RuleInterfaceTests
         var rules = RuleCatalog.CreateDefaultRules();
 
         await Assert.That(rules.Length).IsEqualTo(48);
-        await Assert.That(rules[0].Id).IsEqualTo("job-structure");
-        await Assert.That(rules[1].Id).IsEqualTo("reusable-workflow");
-        await Assert.That(rules[2].Id).IsEqualTo("permissions");
-        await Assert.That(rules[3].Id).IsEqualTo("popular-action-inputs");
-        await Assert.That(rules[4].Id).IsEqualTo("unpinned-uses");
-        await Assert.That(rules[5].Id).IsEqualTo("unpinned-image");
-        await Assert.That(rules[6].Id).IsEqualTo("dangerous-triggers");
-        await Assert.That(rules[7].Id).IsEqualTo("job-permissions-required");
-        await Assert.That(rules[8].Id).IsEqualTo("needs-graph");
-        await Assert.That(rules[9].Id).IsEqualTo("shell-name");
-        await Assert.That(rules[10].Id).IsEqualTo("runner-label");
-        await Assert.That(rules[11].Id).IsEqualTo("id-naming");
-        await Assert.That(rules[12].Id).IsEqualTo("glob-pattern");
-        await Assert.That(rules[13].Id).IsEqualTo("dispatch-inputs");
-        await Assert.That(rules[14].Id).IsEqualTo("schedule-event");
-        await Assert.That(rules[15].Id).IsEqualTo("deny-write-all");
-        await Assert.That(rules[16].Id).IsEqualTo("credentials");
-        await Assert.That(rules[17].Id).IsEqualTo("template-injection");
-        await Assert.That(rules[18].Id).IsEqualTo("expr-undefined-var");
-        await Assert.That(rules[19].Id).IsEqualTo("run-env-context-direct-use");
-        await Assert.That(rules[20].Id).IsEqualTo("runner-no-latest");
-        await Assert.That(rules[21].Id).IsEqualTo("run-secrets-context-direct-use");
-        await Assert.That(rules[22].Id).IsEqualTo("run-inputs-context-direct-use");
-        await Assert.That(rules[23].Id).IsEqualTo("secrets-whole-context-access");
-        await Assert.That(rules[24].Id).IsEqualTo("checkout-persist-credentials");
-        await Assert.That(rules[25].Id).IsEqualTo("deny-read-all");
-        await Assert.That(rules[26].Id).IsEqualTo("deny-inherit-secrets");
-        await Assert.That(rules[27].Id).IsEqualTo("job-timeout-minutes-required");
-        await Assert.That(rules[28].Id).IsEqualTo("github-app-token-inputs");
-        await Assert.That(rules[29].Id).IsEqualTo("cache-poisoning");
-        await Assert.That(rules[30].Id).IsEqualTo("self-hosted-runner");
-        await Assert.That(rules[31].Id).IsEqualTo("unredacted-secrets");
-        await Assert.That(rules[32].Id).IsEqualTo("secrets-outside-env");
-        await Assert.That(rules[33].Id).IsEqualTo("workflow-secrets");
-        await Assert.That(rules[34].Id).IsEqualTo("job-secrets");
-        await Assert.That(rules[35].Id).IsEqualTo("action-shell-is-required");
-        await Assert.That(rules[36].Id).IsEqualTo("matrix");
-        await Assert.That(rules[37].Id).IsEqualTo("env-var");
-        await Assert.That(rules[38].Id).IsEqualTo("deprecated-commands");
-        await Assert.That(rules[39].Id).IsEqualTo("if-cond");
-        await Assert.That(rules[40].Id).IsEqualTo("fake-ternary");
-        await Assert.That(rules[41].Id).IsEqualTo("archived-uses");
-        await Assert.That(rules[42].Id).IsEqualTo("insecure-commands");
-        await Assert.That(rules[43].Id).IsEqualTo("overprovisioned-secrets");
-        await Assert.That(rules[44].Id).IsEqualTo("forbidden-uses");
-        await Assert.That(rules[45].Id).IsEqualTo("ref-version-mismatch");
-        await Assert.That(rules[46].Id).IsEqualTo("use-trusted-publishing");
-        await Assert.That(rules[47].Id).IsEqualTo("local-action-inputs");
+        await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
+        await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
+        await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
+        await Assert.That(rules[3].Id).IsEqualTo(RuleId.PopularActionInputs);
+        await Assert.That(rules[4].Id).IsEqualTo(RuleId.UnpinnedUses);
+        await Assert.That(rules[5].Id).IsEqualTo(RuleId.UnpinnedImage);
+        await Assert.That(rules[6].Id).IsEqualTo(RuleId.DangerousTriggers);
+        await Assert.That(rules[7].Id).IsEqualTo(RuleId.JobPermissionsRequired);
+        await Assert.That(rules[8].Id).IsEqualTo(RuleId.NeedsGraph);
+        await Assert.That(rules[9].Id).IsEqualTo(RuleId.ShellName);
+        await Assert.That(rules[10].Id).IsEqualTo(RuleId.RunnerLabel);
+        await Assert.That(rules[11].Id).IsEqualTo(RuleId.IdNaming);
+        await Assert.That(rules[12].Id).IsEqualTo(RuleId.GlobPattern);
+        await Assert.That(rules[13].Id).IsEqualTo(RuleId.DispatchInputs);
+        await Assert.That(rules[14].Id).IsEqualTo(RuleId.ScheduleEvent);
+        await Assert.That(rules[15].Id).IsEqualTo(RuleId.DenyWriteAll);
+        await Assert.That(rules[16].Id).IsEqualTo(RuleId.Credentials);
+        await Assert.That(rules[17].Id).IsEqualTo(RuleId.TemplateInjection);
+        await Assert.That(rules[18].Id).IsEqualTo(RuleId.ExprUndefinedVar);
+        await Assert.That(rules[19].Id).IsEqualTo(RuleId.RunEnvContextDirectUse);
+        await Assert.That(rules[20].Id).IsEqualTo(RuleId.RunnerNoLatest);
+        await Assert.That(rules[21].Id).IsEqualTo(RuleId.RunSecretsContextDirectUse);
+        await Assert.That(rules[22].Id).IsEqualTo(RuleId.RunInputsContextDirectUse);
+        await Assert.That(rules[23].Id).IsEqualTo(RuleId.SecretsWholeContextAccess);
+        await Assert.That(rules[24].Id).IsEqualTo(RuleId.CheckoutPersistCredentials);
+        await Assert.That(rules[25].Id).IsEqualTo(RuleId.DenyReadAll);
+        await Assert.That(rules[26].Id).IsEqualTo(RuleId.DenyInheritSecrets);
+        await Assert.That(rules[27].Id).IsEqualTo(RuleId.JobTimeoutMinutesRequired);
+        await Assert.That(rules[28].Id).IsEqualTo(RuleId.GitHubAppTokenInputs);
+        await Assert.That(rules[29].Id).IsEqualTo(RuleId.CachePoisoning);
+        await Assert.That(rules[30].Id).IsEqualTo(RuleId.SelfHostedRunner);
+        await Assert.That(rules[31].Id).IsEqualTo(RuleId.UnredactedSecrets);
+        await Assert.That(rules[32].Id).IsEqualTo(RuleId.SecretsOutsideEnv);
+        await Assert.That(rules[33].Id).IsEqualTo(RuleId.WorkflowSecrets);
+        await Assert.That(rules[34].Id).IsEqualTo(RuleId.JobSecrets);
+        await Assert.That(rules[35].Id).IsEqualTo(RuleId.ActionShellIsRequired);
+        await Assert.That(rules[36].Id).IsEqualTo(RuleId.Matrix);
+        await Assert.That(rules[37].Id).IsEqualTo(RuleId.EnvVar);
+        await Assert.That(rules[38].Id).IsEqualTo(RuleId.DeprecatedCommands);
+        await Assert.That(rules[39].Id).IsEqualTo(RuleId.IfCond);
+        await Assert.That(rules[40].Id).IsEqualTo(RuleId.FakeTernary);
+        await Assert.That(rules[41].Id).IsEqualTo(RuleId.ArchivedUses);
+        await Assert.That(rules[42].Id).IsEqualTo(RuleId.InsecureCommands);
+        await Assert.That(rules[43].Id).IsEqualTo(RuleId.OverprovisionedSecrets);
+        await Assert.That(rules[44].Id).IsEqualTo(RuleId.ForbiddenUses);
+        await Assert.That(rules[45].Id).IsEqualTo(RuleId.RefVersionMismatch);
+        await Assert.That(rules[46].Id).IsEqualTo(RuleId.UseTrustedPublishing);
+        await Assert.That(rules[47].Id).IsEqualTo(RuleId.LocalActionInputs);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -403,12 +403,12 @@ public sealed class RuleInterfaceTests
     public async Task RuleCatalog_OnlineAuditRules_AreKnownForResolutionAndCanonicalIds()
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
-        await Assert.That(knownVulnerable).IsEqualTo("known-vulnerable-actions");
+        await Assert.That(knownVulnerable).IsEqualTo(RuleId.KnownVulnerableActions);
         await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-049");
 
         await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-050", out var impostorCommit)).IsTrue();
-        await Assert.That(impostorCommit).IsEqualTo("impostor-commit");
+        await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
         await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-051");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-052");
     }
@@ -5866,8 +5866,8 @@ public sealed class RuleInterfaceTests
 
         var engine = new LintEngine(
         [
-            new DuplicateDiagnosticRule("permissions"),
-                new DuplicateDiagnosticRule("job-structure"),
+            new DuplicateDiagnosticRule(RuleId.Permissions),
+                new DuplicateDiagnosticRule(RuleId.JobStructure),
         ]);
 
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "priority-dedup.yml");
@@ -6883,14 +6883,14 @@ public sealed class RuleInterfaceTests
     {
         private readonly List<Diagnostic> diagnostics = [];
 
-        public DuplicateDiagnosticRule(string id)
+        public DuplicateDiagnosticRule(RuleId id)
         {
             Id = id;
         }
 
-        public string Id { get; }
+        public RuleId Id { get; }
 
-        public string Name => $"Duplicate-{Id}";
+        public string Name => $"Duplicate-{Id.ToId()}";
 
         public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 
@@ -6907,7 +6907,7 @@ public sealed class RuleInterfaceTests
                     DiagnosticSeverity.Error,
                     "shared duplicate diagnostic",
                     new TextRange(0, 0, 1, 1, 1, 1),
-                    RuleId: Id));
+                    RuleId: Id.ToId()));
         }
 
         public void VisitWorkflowPost(Workflow workflow)
@@ -6933,7 +6933,7 @@ public sealed class RuleInterfaceTests
 
     private sealed class ConfigCaptureRule : IRule
     {
-        public string Id => "config-capture";
+        public RuleId Id => RuleId.JobStructure;
 
         public string Name => "Config Capture Rule";
 
@@ -6978,7 +6978,7 @@ public sealed class RuleInterfaceTests
     {
         private LintConfig? config;
 
-        public string Id => "test-rule";
+        public RuleId Id => RuleId.JobStructure;
 
         public string Name => "Test Rule";
 

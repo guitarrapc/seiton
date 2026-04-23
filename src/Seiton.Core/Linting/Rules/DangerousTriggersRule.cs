@@ -7,7 +7,7 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class DangerousTriggersRule : RuleBase
+public sealed class DangerousTriggersRule() : RuleBase(RuleId.DangerousTriggers)
 {
     private static readonly WebhookTypes.EventId[] DangerousEventIds =
     [
@@ -16,8 +16,6 @@ public sealed class DangerousTriggersRule : RuleBase
     ];
 
     private HashSet<string> additionalDangerousEvents = [];
-
-    public override string Id => "dangerous-triggers";
 
     public override string Name => "Dangerous Triggers Rule";
 

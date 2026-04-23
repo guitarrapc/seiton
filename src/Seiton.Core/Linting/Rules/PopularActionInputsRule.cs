@@ -4,10 +4,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class PopularActionInputsRule : RuleBase
+public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInputs)
 {
-    public override string Id => "popular-action-inputs";
-
     public override string Name => "Popular Action Inputs Rule";
 
     public override void VisitStep(Step step)

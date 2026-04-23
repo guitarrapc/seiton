@@ -2,12 +2,8 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RefConfusionRule : OnlineRuleBase
+public sealed class RefConfusionRule() : OnlineRuleBase(RuleId.RefConfusion)
 {
-    public const string RuleId = "ref-confusion";
-
-    public override string Id => RuleId;
-
     public override string Name => "Ref Confusion";
 
     public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)

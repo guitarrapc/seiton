@@ -1,7 +1,6 @@
 ﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
-using Seiton.Core.Linting.Rules;
 
 namespace Seiton.Core.Tests;
 
@@ -11,10 +10,10 @@ public sealed class OnlineAuditEngineTests
     {
         Rules = new Dictionary<string, RuleConfig>(StringComparer.Ordinal)
         {
-            [KnownVulnerableActionsRule.RuleId] = new() { Enabled = true },
-            [ImpostorCommitRule.RuleId] = new() { Enabled = true },
-            [RefConfusionRule.RuleId] = new() { Enabled = true },
-            [StaleActionRefsRule.RuleId] = new() { Enabled = true },
+            [RuleId.KnownVulnerableActions.ToId()] = new() { Enabled = true },
+            [RuleId.ImpostorCommit.ToId()] = new() { Enabled = true },
+            [RuleId.RefConfusion.ToId()] = new() { Enabled = true },
+            [RuleId.StaleActionRefs.ToId()] = new() { Enabled = true },
         },
     };
 
@@ -264,10 +263,10 @@ public sealed class OnlineAuditEngineTests
         var ruleIds = engine.ActiveOnlineRules.Select(r => r.Id).OrderBy(id => id).ToArray();
         await Assert.That(ruleIds).IsEquivalentTo(new[]
         {
-            ImpostorCommitRule.RuleId,
-            KnownVulnerableActionsRule.RuleId,
-            RefConfusionRule.RuleId,
-            StaleActionRefsRule.RuleId,
+            RuleId.ImpostorCommit,
+            RuleId.KnownVulnerableActions,
+            RuleId.RefConfusion,
+            RuleId.StaleActionRefs,
         });
     }
 

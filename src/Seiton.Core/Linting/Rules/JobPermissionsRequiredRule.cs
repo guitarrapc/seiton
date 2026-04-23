@@ -4,10 +4,8 @@ using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class JobPermissionsRequiredRule : RuleBase
+public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermissionsRequired)
 {
-    public override string Id => "job-permissions-required";
-
     public override string Name => "Job Permissions Required Rule";
 
     public override void VisitJobPre(Job job)

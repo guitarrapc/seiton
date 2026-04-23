@@ -4,10 +4,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class DispatchInputsRule : RuleBase
+public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 {
-    public override string Id => "dispatch-inputs";
-
     public override string Name => "Dispatch Inputs Rule";
 
     public override void VisitEvent(Event ev)

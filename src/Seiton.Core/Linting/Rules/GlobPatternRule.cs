@@ -4,10 +4,8 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class GlobPatternRule : RuleBase
+public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 {
-    public override string Id => "glob-pattern";
-
     public override string Name => "Glob Pattern Rule";
 
     public override void VisitEvent(Event ev)

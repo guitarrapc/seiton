@@ -2,10 +2,8 @@
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class DenyInheritSecretsRule : RuleBase
+public sealed class DenyInheritSecretsRule() : RuleBase(RuleId.DenyInheritSecrets)
 {
-    public override string Id => "deny-inherit-secrets";
-
     public override string Name => "Deny Inherit Secrets Rule";
 
     public override void VisitJobPre(Job job)

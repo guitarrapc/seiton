@@ -37,30 +37,31 @@ internal static class RuleNormalizer
             }
 
             var config = pair.Value;
-            if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
+            var resolvedRuleIdString = resolvedRuleId.ToId();
+            if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleIdString))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"rule '{resolvedRuleId}' is non-disableable",
+                    $"rule '{resolvedRuleIdString}' is non-disableable",
                     new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
                     FilePath: filePath));
                 config = config with { Enabled = true };
             }
 
             if (config.Severity is not null
-                && RuleCatalog.TryGetMinimumSeverity(resolvedRuleId, out var minimumSeverity)
+                && RuleCatalog.TryGetMinimumSeverity(resolvedRuleIdString, out var minimumSeverity)
                 && config.Severity.Value < minimumSeverity)
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"rule '{resolvedRuleId}' minimum severity is '{minimumSeverity}', but '{config.Severity.Value}' was specified",
+                    $"rule '{resolvedRuleIdString}' minimum severity is '{minimumSeverity}', but '{config.Severity.Value}' was specified",
                     new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
                     FilePath: filePath));
                 config = config with { Severity = null };
             }
 
             config = RuleConfigNormalizer.Normalize(config, resolvedRuleId, filePath, diagnostics);
-            destination[resolvedRuleId] = config;
+            destination[resolvedRuleIdString] = config;
         }
     }
 }

@@ -7,12 +7,10 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class CachePoisoningRule : RuleBase
+public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
 {
     private bool hasUntrustedTrigger;
     private HashSet<string> additionalUntrustedTriggers = [];
-
-    public override string Id => "cache-poisoning";
 
     public override string Name => "Cache Poisoning Rule";
 

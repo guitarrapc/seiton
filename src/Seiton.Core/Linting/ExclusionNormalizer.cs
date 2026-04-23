@@ -1,4 +1,4 @@
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
@@ -19,17 +19,18 @@ internal static class ExclusionNormalizer
             var ruleId = ruleIds[j];
             if (RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
             {
-                if (RuleCatalog.IsNonDisableable(resolvedRuleId))
+                var resolvedRuleIdString = resolvedRuleId.ToId();
+                if (RuleCatalog.IsNonDisableable(resolvedRuleIdString))
                 {
                     diagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Error,
-                        $"rule '{resolvedRuleId}' is non-disableable",
+                        $"rule '{resolvedRuleIdString}' is non-disableable",
                         new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
                         FilePath: filePath));
                     continue;
                 }
 
-                normalizedRuleIds.Add(resolvedRuleId);
+                normalizedRuleIds.Add(resolvedRuleIdString);
                 continue;
             }
 
