@@ -18,8 +18,8 @@ public sealed class CredentialsRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalPublicRegistries = config.GetRuleConfig(Id)?.Specific is CredentialsSpecificConfig specific
-            ? BuildNormalizedSet(specific.PublicRegistries)
+        additionalPublicRegistries = config.GetRuleConfig(Id)?.PublicRegistries?.Extend is { Count: > 0 } registries
+            ? BuildNormalizedSet(registries)
             : [];
     }
 

@@ -23,8 +23,8 @@ public sealed class UnredactedSecretsRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalOutputCommands = config.GetRuleConfig(Id)?.Specific is UnredactedSecretsSpecificConfig specific
-            ? BuildNormalizedSet(specific.OutputCommands)
+        additionalOutputCommands = config.GetRuleConfig(Id)?.OutputCommands?.Extend is { Count: > 0 } commands
+            ? BuildNormalizedSet(commands)
             : [];
     }
 

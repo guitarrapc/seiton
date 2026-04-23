@@ -114,37 +114,28 @@ public sealed class LintConfig
 
 public sealed record RuleConfig
 {
-    // Shared keys (formerly RuleOption)
+    // Shared keys
     public bool Enabled { get; init; } = true;
     public DiagnosticSeverity? Severity { get; init; }
 
-    // Discriminated-union style, typed rule-specific payload.
-    // This is the authoritative per-rule customization shape after normalization.
-    public RuleSpecificConfig Specific { get; init; } = RuleSpecificConfig.None;
+    // Extend-style rule-specific options (YAML: key.extend[])
+    public ExtendableList? Events { get; init; }
+    public ExtendableList? KnownHostedLabels { get; init; }
+    public ExtendableList? PublicRegistries { get; init; }
+    public ExtendableList? UntrustedTriggers { get; init; }
+    public ExtendableList? OutputCommands { get; init; }
+
+    // Direct list rule-specific options (YAML: key[])
+    public IReadOnlyList<string>? AssumeEvents { get; init; }
+    public IReadOnlyList<string>? Allow { get; init; }
+    public IReadOnlyList<string>? Deny { get; init; }
+
+    // Scalar rule-specific options
+    public int? MaxStepEnvSecrets { get; init; }
+    public int? MaxJobSecrets { get; init; }
 }
 
-public abstract record RuleSpecificConfig
-{
-    private sealed record NoneRuleSpecificConfig : RuleSpecificConfig;
-
-    public static RuleSpecificConfig None { get; } = new NoneRuleSpecificConfig();
-}
-
-public sealed record DangerousTriggersSpecificConfig(IReadOnlyList<string> Events) : RuleSpecificConfig;
-
-public sealed record RunnerLabelSpecificConfig(IReadOnlyList<string> KnownHostedLabels) : RuleSpecificConfig;
-
-public sealed record CredentialsSpecificConfig(IReadOnlyList<string> PublicRegistries) : RuleSpecificConfig;
-
-public sealed record UntrustedTriggersSpecificConfig(IReadOnlyList<string> UntrustedTriggers) : RuleSpecificConfig;
-
-public sealed record UnredactedSecretsSpecificConfig(IReadOnlyList<string> OutputCommands) : RuleSpecificConfig;
-
-public sealed record ExprUndefinedVarSpecificConfig(IReadOnlyList<string> AssumeEvents) : RuleSpecificConfig;
-
-public sealed record ForbiddenUsesSpecificConfig(IReadOnlyList<string>? Allow, IReadOnlyList<string>? Deny) : RuleSpecificConfig;
-
-public sealed record OverprovisionedSecretsSpecificConfig(int MaxStepEnvSecrets, int MaxJobSecrets) : RuleSpecificConfig;
+public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
 public sealed record LintExclusion(
     string Files,

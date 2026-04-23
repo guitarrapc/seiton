@@ -24,8 +24,8 @@ public sealed class DangerousTriggersRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalDangerousEvents = config.GetRuleConfig(Id)?.Specific is DangerousTriggersSpecificConfig specific
-            ? BuildNormalizedSet(specific.Events)
+        additionalDangerousEvents = config.GetRuleConfig(Id)?.Events?.Extend is { Count: > 0 } events
+            ? BuildNormalizedSet(events)
             : [];
     }
 

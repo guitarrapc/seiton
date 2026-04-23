@@ -1,4 +1,4 @@
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 
@@ -16,7 +16,7 @@ internal static class RuleNormalizer
     }
 
     /// <summary>
-    /// Resolves rule IDs, enforces non-disableable and minimum-severity policy, and runs <see cref="RuleSpecificConfigNormalizer"/>.
+    /// Resolves rule IDs, enforces non-disableable and minimum-severity policy, and runs <see cref="RuleConfigNormalizer"/>.
     /// </summary>
     public static void NormalizeRuleEntries(
         IReadOnlyDictionary<string, RuleConfig> rules,
@@ -59,7 +59,7 @@ internal static class RuleNormalizer
                 config = config with { Severity = null };
             }
 
-            config = RuleSpecificConfigNormalizer.Normalize(config, resolvedRuleId, filePath, diagnostics);
+            config = RuleConfigNormalizer.Normalize(config, resolvedRuleId, filePath, diagnostics);
             destination[resolvedRuleId] = config;
         }
     }

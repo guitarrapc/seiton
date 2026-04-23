@@ -20,10 +20,11 @@ public sealed class OverprovisionedSecretsRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        if (config.GetRuleConfig(Id)?.Specific is OverprovisionedSecretsSpecificConfig specific)
+        var ruleConfig = config.GetRuleConfig(Id);
+        if (ruleConfig?.MaxStepEnvSecrets is not null || ruleConfig?.MaxJobSecrets is not null)
         {
-            _maxStepEnvSecrets = specific.MaxStepEnvSecrets;
-            _maxJobSecrets = specific.MaxJobSecrets;
+            _maxStepEnvSecrets = ruleConfig.MaxStepEnvSecrets ?? DefaultMaxStepEnvSecrets;
+            _maxJobSecrets = ruleConfig.MaxJobSecrets ?? DefaultMaxJobSecrets;
         }
         else
         {

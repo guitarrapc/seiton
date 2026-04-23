@@ -24,11 +24,11 @@ public sealed class ForbiddenUsesRule : RuleBase
     {
         base.SetConfig(config);
         var ruleConfig = config.GetRuleConfig(Id);
-        if (ruleConfig?.Specific is ForbiddenUsesSpecificConfig specific)
+        if (ruleConfig?.Allow is not null || ruleConfig?.Deny is not null)
         {
-            allowPatterns = specific.Allow ?? [];
-            denyPatterns = specific.Deny is { Count: > 0 }
-                ? specific.Deny
+            allowPatterns = ruleConfig.Allow ?? [];
+            denyPatterns = ruleConfig.Deny is { Count: > 0 }
+                ? ruleConfig.Deny
                 : DefaultDenyPatterns;
             return;
         }

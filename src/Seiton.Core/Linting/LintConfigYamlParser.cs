@@ -143,14 +143,14 @@ internal static class LintConfigYamlParser
 
         var enabled = true;
         DiagnosticSeverity? severity = null;
-        IReadOnlyList<string> events = [];
-        IReadOnlyList<string> knownHostedLabels = [];
-        IReadOnlyList<string> publicRegistries = [];
-        IReadOnlyList<string> untrustedTriggers = [];
-        IReadOnlyList<string> outputCommands = [];
-        IReadOnlyList<string> assumeEvents = [];
-        IReadOnlyList<string> allow = [];
-        IReadOnlyList<string> deny = [];
+        ExtendableList? events = null;
+        ExtendableList? knownHostedLabels = null;
+        ExtendableList? publicRegistries = null;
+        ExtendableList? untrustedTriggers = null;
+        ExtendableList? outputCommands = null;
+        IReadOnlyList<string>? assumeEvents = null;
+        IReadOnlyList<string>? allow = null;
+        IReadOnlyList<string>? deny = null;
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
         var seenRuleSpecificKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -183,35 +183,35 @@ internal static class LintConfigYamlParser
                     break;
                 case "events":
                     seenRuleSpecificKeys.Add("events");
-                    events = ParseExtendableList(value, diagnostics, filePath);
+                    events = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "known-hosted-labels":
                     seenRuleSpecificKeys.Add("known-hosted-labels");
-                    knownHostedLabels = ParseExtendableList(value, diagnostics, filePath);
+                    knownHostedLabels = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "public-registries":
                     seenRuleSpecificKeys.Add("public-registries");
-                    publicRegistries = ParseExtendableList(value, diagnostics, filePath);
+                    publicRegistries = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "untrusted-triggers":
                     seenRuleSpecificKeys.Add("untrusted-triggers");
-                    untrustedTriggers = ParseExtendableList(value, diagnostics, filePath);
+                    untrustedTriggers = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "output-commands":
                     seenRuleSpecificKeys.Add("output-commands");
-                    outputCommands = ParseExtendableList(value, diagnostics, filePath);
+                    outputCommands = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
                     break;
                 case "assume-events":
                     seenRuleSpecificKeys.Add("assume-events");
-                    assumeEvents = ParseStringList(value, "assume-events", diagnostics, filePath);
+                    assumeEvents = NullIfEmpty(ParseStringList(value, "assume-events", diagnostics, filePath));
                     break;
                 case "allow":
                     seenRuleSpecificKeys.Add("allow");
-                    allow = ParseStringList(value, "allow", diagnostics, filePath);
+                    allow = NullIfEmpty(ParseStringList(value, "allow", diagnostics, filePath));
                     break;
                 case "deny":
                     seenRuleSpecificKeys.Add("deny");
-                    deny = ParseStringList(value, "deny", diagnostics, filePath);
+                    deny = NullIfEmpty(ParseStringList(value, "deny", diagnostics, filePath));
                     break;
                 case "max-step-env-secrets":
                     seenRuleSpecificKeys.Add("max-step-env-secrets");
@@ -243,26 +243,22 @@ internal static class LintConfigYamlParser
             }
         }
 
+        ValidateAllowedKeys(ruleId, seenRuleSpecificKeys, DomLine, diagnostics, filePath);
+
         var config = new RuleConfig
         {
             Enabled = enabled,
             Severity = severity,
-            Specific = LintConfigRuleBodyMaterializer.BuildSpecific(
-                ruleId,
-                seenRuleSpecificKeys,
-                events,
-                knownHostedLabels,
-                publicRegistries,
-                untrustedTriggers,
-                outputCommands,
-                assumeEvents,
-                allow,
-                deny,
-                maxStepEnvSecrets,
-                maxJobSecrets,
-                DomLine,
-                diagnostics,
-                filePath),
+            Events = events,
+            KnownHostedLabels = knownHostedLabels,
+            PublicRegistries = publicRegistries,
+            UntrustedTriggers = untrustedTriggers,
+            OutputCommands = outputCommands,
+            AssumeEvents = assumeEvents,
+            Allow = allow,
+            Deny = deny,
+            MaxStepEnvSecrets = maxStepEnvSecrets,
+            MaxJobSecrets = maxJobSecrets,
         };
 
         if (!rules.TryAdd(ruleId, config))
@@ -307,6 +303,47 @@ internal static class LintConfigYamlParser
         }
 
         return result;
+    }
+
+    private static ExtendableList? ToExtendableList(IReadOnlyList<string> values)
+    {
+        return values.Count > 0 ? new ExtendableList(values) : null;
+    }
+
+    private static IReadOnlyList<string>? NullIfEmpty(IReadOnlyList<string> values)
+    {
+        return values.Count > 0 ? values : null;
+    }
+
+    private static void ValidateAllowedKeys(
+        string ruleId,
+        IReadOnlySet<string> seenKeys,
+        int lineNumber,
+        List<Diagnostic> diagnostics,
+        string filePath)
+    {
+        if (!RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
+        {
+            return;
+        }
+
+        if (!RuleCatalog.TryGetAllowedConfigKeys(resolvedRuleId, out var allowed))
+        {
+            return;
+        }
+
+        foreach (var key in seenKeys)
+        {
+            if (!allowed.Contains(key))
+            {
+                diagnostics.Add(Diag(
+                    $"rule '{resolvedRuleId}' does not accept '{key}' config key",
+                    lineNumber,
+                    3,
+                    key.Length,
+                    filePath));
+            }
+        }
     }
 
     private static FixConfig ParseFix(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)

@@ -19,8 +19,8 @@ public sealed class CachePoisoningRule : RuleBase
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalUntrustedTriggers = config.GetRuleConfig(Id)?.Specific is UntrustedTriggersSpecificConfig specific
-            ? BuildNormalizedSet(specific.UntrustedTriggers)
+        additionalUntrustedTriggers = config.GetRuleConfig(Id)?.UntrustedTriggers?.Extend is { Count: > 0 } triggers
+            ? BuildNormalizedSet(triggers)
             : [];
     }
 
