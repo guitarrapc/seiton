@@ -12,6 +12,7 @@ public enum ScalarQuoteStyle
 
 public static class FixFormatting
 {
+    /// <summary>Detects the dominant line ending (CRLF or LF) in the given UTF-8 YAML bytes.</summary>
     public static string DetectDominantLineEnding(byte[] utf8Yaml)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -37,6 +38,7 @@ public static class FixFormatting
         return crlfCount > lfCount ? "\r\n" : "\n";
     }
 
+    /// <summary>Infers the indentation string for an insertion point, using a sibling or parent line as reference.</summary>
     public static string InferIndentation(string sourceText, int? siblingLineNumber, int parentLineNumber)
     {
         ArgumentNullException.ThrowIfNull(sourceText);
@@ -55,6 +57,7 @@ public static class FixFormatting
         return GetLineIndentation(sourceText, parentLineNumber) + InferIndentationUnit(sourceText);
     }
 
+    /// <summary>Tries to infer indentation within a scope, returning <c>false</c> if mixed indentation is detected.</summary>
     public static bool TryInferIndentation(
         string sourceText,
         int? siblingLineNumber,
@@ -97,6 +100,7 @@ public static class FixFormatting
         return true;
     }
 
+    /// <summary>Returns the leading whitespace of the specified 1-based <paramref name="lineNumber"/>.</summary>
     public static string GetLineIndentation(string sourceText, int lineNumber)
     {
         ArgumentNullException.ThrowIfNull(sourceText);
@@ -104,7 +108,7 @@ public static class FixFormatting
 
         var line = GetCharLine(sourceText, lineNumber);
         var count = 0;
-        while (count < line.Length && (line[count] == ' ' || line[count] == '	'))
+        while (count < line.Length && (line[count] == ' ' || line[count] == '\t'))
         {
             count++;
         }
@@ -112,6 +116,7 @@ public static class FixFormatting
         return count == 0 ? string.Empty : new string(line[..count]);
     }
 
+    /// <summary>Returns the leading whitespace of the specified 1-based <paramref name="lineNumber"/> from UTF-8 bytes.</summary>
     public static string GetLineIndentation(byte[] utf8Yaml, int lineNumber)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -127,6 +132,7 @@ public static class FixFormatting
         return count == 0 ? string.Empty : Encoding.UTF8.GetString(line[..count]);
     }
 
+    /// <summary>Infers the smallest indentation unit (spaces or tab) used in the source text.</summary>
     public static string InferIndentationUnit(string sourceText)
     {
         ArgumentNullException.ThrowIfNull(sourceText);
@@ -165,6 +171,7 @@ public static class FixFormatting
         return bestSpaceCount > 0 ? new string(' ', bestSpaceCount) : "  ";
     }
 
+    /// <summary>Infers the smallest indentation unit (spaces or tab) used in UTF-8 YAML bytes.</summary>
     public static string InferIndentationUnit(byte[] utf8Yaml)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -201,6 +208,7 @@ public static class FixFormatting
         return bestSpaceCount > 0 ? new string(' ', bestSpaceCount) : "  ";
     }
 
+    /// <summary>Detects the quote style (unquoted, single-quoted, or double-quoted) of a YAML scalar at the given range.</summary>
     public static ScalarQuoteStyle DetectQuoteStyle(byte[] utf8Yaml, TextRange range, bool quoted)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -396,6 +404,7 @@ public static class FixFormatting
         return true;
     }
 
+    /// <summary>Tries to infer indentation within a scope from UTF-8 bytes, returning <c>false</c> if mixed indentation is detected.</summary>
     public static bool TryInferIndentation(
         byte[] utf8Yaml,
         int? siblingLineNumber,

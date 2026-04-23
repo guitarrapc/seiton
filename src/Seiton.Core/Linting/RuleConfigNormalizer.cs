@@ -9,6 +9,9 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal static class RuleConfigNormalizer
 {
+    /// <summary>
+    /// Normalizes all non-null rule-specific properties (trim, dedup, lowercase, registry validation) and emits diagnostics for invalid entries.
+    /// </summary>
     public static RuleConfig Normalize(RuleConfig config, string filePath, List<Diagnostic> diagnostics)
     {
         var events = NormalizeExtendableList(config.Events, "events extend entry must not be empty", filePath, diagnostics);

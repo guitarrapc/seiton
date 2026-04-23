@@ -12,6 +12,7 @@ public static class FixEngine
         Insert,
     }
 
+    /// <summary>Applies fixes from diagnostics, re-lints the result, and validates that no new errors were introduced.</summary>
     public static RevalidationResult ApplyAndRelint(
         LintEngine lintEngine,
         byte[] utf8Yaml,
@@ -43,6 +44,7 @@ public static class FixEngine
         return new RevalidationResult(before, after, updatedUtf8Yaml);
     }
 
+    /// <summary>Builds a unified diff string by applying the given <paramref name="fixes"/> to the YAML.</summary>
     public static string BuildUnifiedDiff(
         byte[] utf8Yaml,
         IEnumerable<DiagnosticFix> fixes,
@@ -61,6 +63,7 @@ public static class FixEngine
         return BuildUnifiedDiffCore(utf8Yaml, updatedUtf8Yaml, filePath, contextLines);
     }
 
+    /// <summary>Builds a unified diff string by applying fixes from the given diagnostics.</summary>
     public static string BuildUnifiedDiff(
         byte[] utf8Yaml,
         IEnumerable<Diagnostic> diagnosticsWithFix,
@@ -79,6 +82,7 @@ public static class FixEngine
         return BuildUnifiedDiffCore(utf8Yaml, updatedUtf8Yaml, filePath, contextLines);
     }
 
+    /// <summary>Writes a unified diff to <paramref name="writer"/> by applying the given <paramref name="fixes"/>.</summary>
     public static void WriteUnifiedDiff(
         TextWriter writer,
         byte[] utf8Yaml,
@@ -96,6 +100,7 @@ public static class FixEngine
         writer.Write(diff);
     }
 
+    /// <summary>Writes a unified diff to <paramref name="writer"/> by applying fixes from the given diagnostics.</summary>
     public static void WriteUnifiedDiff(
         TextWriter writer,
         byte[] utf8Yaml,
@@ -113,6 +118,7 @@ public static class FixEngine
         writer.Write(diff);
     }
 
+    /// <summary>Applies fixes, re-lints, and optionally verifies that specific rule IDs were cleared.</summary>
     public static RevalidationResult ApplyAndRelint(
         LintEngine lintEngine,
         byte[] utf8Yaml,
@@ -156,6 +162,7 @@ public static class FixEngine
         return new RevalidationResult(before, after, updatedUtf8Yaml);
     }
 
+    /// <summary>Applies the given <paramref name="fixes"/> to the YAML and returns the updated bytes.</summary>
     public static byte[] Apply(byte[] utf8Yaml, IEnumerable<DiagnosticFix> fixes)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -173,6 +180,7 @@ public static class FixEngine
         return Apply(utf8Yaml, edits);
     }
 
+    /// <summary>Extracts fixes from the given diagnostics, applies them, and returns the updated bytes.</summary>
     public static byte[] Apply(byte[] utf8Yaml, IEnumerable<Diagnostic> diagnosticsWithFix)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -192,6 +200,7 @@ public static class FixEngine
         return Apply(utf8Yaml, fixes);
     }
 
+    /// <summary>Applies the given text <paramref name="edits"/> to the YAML bytes and returns the result.</summary>
     public static byte[] Apply(byte[] utf8Yaml, IReadOnlyList<TextEdit> edits)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);

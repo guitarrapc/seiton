@@ -224,6 +224,7 @@ public readonly record struct ActionAuditTarget(
     TextRange Location,
     string FilePath)
 {
+    /// <summary>Gets whether the reference is a full 40-character commit SHA.</summary>
     public bool IsCommitSha => IsFullCommitSha(Reference);
 }
 

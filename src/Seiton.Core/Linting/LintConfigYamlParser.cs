@@ -14,6 +14,7 @@ internal static class LintConfigYamlParser
 {
     private const int DomLine = 1;
 
+    /// <summary>Parses lint configuration YAML bytes into a <see cref="LintConfigParseResult"/>.</summary>
     public static LintConfigParseResult Parse(ReadOnlyMemory<byte> utf8Yaml, string filePath)
     {
         Dictionary<string, object?> root;

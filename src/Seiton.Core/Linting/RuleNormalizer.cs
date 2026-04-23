@@ -7,6 +7,7 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal static class RuleNormalizer
 {
+    /// <summary>Builds an error message for an unknown rule ID, with a suggestion if a close match exists.</summary>
     public static string BuildUnknownRuleIdMessage(string unknownRuleId)
     {
         var suggested = RuleCatalog.SuggestRuleId(unknownRuleId);

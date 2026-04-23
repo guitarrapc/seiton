@@ -6,6 +6,7 @@
 /// </summary>
 public interface IActionShaResolver
 {
+    /// <summary>Resolves the given action reference to a commit SHA and tag comment. Returns nulls if skipped by configuration.</summary>
     Task<(string? Sha, string? TagComment)> ResolveAsync(
         string owner,
         string repo,

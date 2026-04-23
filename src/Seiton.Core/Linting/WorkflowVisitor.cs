@@ -6,17 +6,20 @@ public sealed class WorkflowVisitor
 {
     private readonly List<IPass> passes = [];
 
+    /// <summary>Registers a pass to be invoked during visitor traversal.</summary>
     public void AddPass(IPass pass)
     {
         ArgumentNullException.ThrowIfNull(pass);
         passes.Add(pass);
     }
 
+    /// <summary>Removes all registered passes.</summary>
     public void Reset()
     {
         passes.Clear();
     }
 
+    /// <summary>Traverses the given <paramref name="workflow"/>, invoking all registered passes for each event, job, and step.</summary>
     public void Visit(Workflow workflow)
     {
         ArgumentNullException.ThrowIfNull(workflow);
@@ -66,6 +69,7 @@ public sealed class WorkflowVisitor
         }
     }
 
+    /// <summary>Traverses the given action <paramref name="metadata"/>, invoking all registered passes for each step in <c>runs.steps</c>.</summary>
     public void VisitActionMetadata(ActionMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);

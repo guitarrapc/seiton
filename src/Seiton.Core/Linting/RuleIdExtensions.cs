@@ -6,6 +6,7 @@ internal static class RuleIdExtensions
 {
     private static readonly FrozenDictionary<string, RuleId> NameToRuleId = BuildNameToRuleId();
 
+    /// <summary>Converts a <see cref="RuleId"/> enum value to its kebab-case string identifier.</summary>
     public static string ToId(this RuleId id) => id switch
     {
         RuleId.JobStructure => "job-structure",
@@ -64,6 +65,7 @@ internal static class RuleIdExtensions
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };
 
+    /// <summary>Attempts to parse a kebab-case string into a <see cref="RuleId"/> enum value.</summary>
     public static bool TryParse(string value, out RuleId ruleId)
     {
         return NameToRuleId.TryGetValue(value, out ruleId);

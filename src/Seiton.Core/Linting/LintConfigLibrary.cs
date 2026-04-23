@@ -6,6 +6,7 @@ namespace Seiton.Core.Linting;
 
 public static class LintConfigLibrary
 {
+    /// <summary>Gets the ordered list of recommended relative paths for the seiton configuration file.</summary>
     public static IReadOnlyList<string> RecommendedRelativePaths { get; } =
     [
         ".github/seiton.yaml",
@@ -14,6 +15,7 @@ public static class LintConfigLibrary
         "seiton.yml",
     ];
 
+    /// <summary>Generates a commented-out template YAML string for a new seiton configuration file.</summary>
     public static string GenerateTemplateYaml()
     {
         return """
@@ -109,6 +111,7 @@ public static class LintConfigLibrary
         """;
     }
 
+    /// <summary>Searches <paramref name="repositoryRoot"/> for the first existing configuration file at a recommended path.</summary>
     public static string? FindRecommendedConfigPath(string repositoryRoot)
     {
         ArgumentException.ThrowIfNullOrEmpty(repositoryRoot);
@@ -125,6 +128,7 @@ public static class LintConfigLibrary
         return null;
     }
 
+    /// <summary>Reads and validates the configuration file at <paramref name="configPath"/>.</summary>
     public static LintConfigValidationResult ValidateFile(string configPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(configPath);
@@ -143,6 +147,7 @@ public static class LintConfigLibrary
         return Validate(yamlText, configPath);
     }
 
+    /// <summary>Parses and validates the given YAML text as a seiton configuration.</summary>
     public static LintConfigValidationResult Validate(string yamlText, string filePath)
     {
         ArgumentNullException.ThrowIfNull(yamlText);

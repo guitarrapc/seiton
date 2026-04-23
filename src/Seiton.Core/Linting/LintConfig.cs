@@ -7,12 +7,16 @@ namespace Seiton.Core.Linting;
 
 public sealed class LintConfig
 {
+    /// <summary>Gets an empty configuration instance with default values.</summary>
     public static LintConfig Empty { get; } = new();
 
+    /// <summary>Gets the raw UTF-8 YAML bytes being linted (used for expression caching and fix generation).</summary>
     public byte[]? Utf8Yaml { get; init; }
 
+    /// <summary>Gets the AST arena from the parse result (used for per-run shared data).</summary>
     public AstArena? Arena { get; init; }
 
+    /// <summary>Gets the file path of the document being linted.</summary>
     public string? FilePath { get; init; }
 
     private string? _sourceText;
@@ -77,18 +81,19 @@ public sealed class LintConfig
         return _lineStarts;
     }
 
-    // rules section: rule-id -> RuleConfig
+    /// <summary>Gets the rule configurations keyed by rule ID string.</summary>
     public IReadOnlyDictionary<string, RuleConfig>? Rules { get; init; }
 
-    // exclusions section
+    /// <summary>Gets the list of exclusion entries from the config.</summary>
     public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
 
-    // fix section
+    /// <summary>Gets the fix configuration section.</summary>
     public FixConfig Fix { get; init; } = new();
 
-    // network section
+    /// <summary>Gets the network configuration section.</summary>
     public NetworkConfig Network { get; init; } = new();
 
+    /// <summary>Looks up the rule configuration for the specified <paramref name="ruleId"/>.</summary>
     public RuleConfig? GetRuleConfig(string ruleId)
     {
         if (Rules is null || !Rules.TryGetValue(ruleId, out var config))
@@ -96,29 +101,38 @@ public sealed class LintConfig
         return config;
     }
 
+    /// <summary>Looks up the rule configuration for the specified <paramref name="ruleId"/> enum value.</summary>
     public RuleConfig? GetRuleConfig(RuleId ruleId) => GetRuleConfig(ruleId.ToId());
 }
 
 public sealed record RuleConfig
 {
-    // Shared keys
+    /// <summary>Gets whether the rule is enabled. Defaults to <c>true</c>.</summary>
     public bool Enabled { get; init; } = true;
+    /// <summary>Gets the user-specified severity override, if any.</summary>
     public DiagnosticSeverity? Severity { get; init; }
 
-    // Extend-style rule-specific options (YAML: key.extend[])
+    /// <summary>Gets the extendable event list for <c>dangerous-triggers</c>.</summary>
     public ExtendableList? Events { get; init; }
+    /// <summary>Gets the extendable label list for <c>runner-label</c>.</summary>
     public ExtendableList? KnownHostedLabels { get; init; }
+    /// <summary>Gets the extendable registry list for <c>credentials</c>.</summary>
     public ExtendableList? PublicRegistries { get; init; }
+    /// <summary>Gets the extendable trigger list for <c>cache-poisoning</c>.</summary>
     public ExtendableList? UntrustedTriggers { get; init; }
+    /// <summary>Gets the extendable output command list for <c>unredacted-secrets</c>.</summary>
     public ExtendableList? OutputCommands { get; init; }
 
-    // Direct list rule-specific options (YAML: key[])
+    /// <summary>Gets the assume-events list for <c>expr-undefined-var</c>.</summary>
     public IReadOnlyList<string>? AssumeEvents { get; init; }
+    /// <summary>Gets the allow patterns for <c>forbidden-uses</c>.</summary>
     public IReadOnlyList<string>? Allow { get; init; }
+    /// <summary>Gets the deny patterns for <c>forbidden-uses</c>.</summary>
     public IReadOnlyList<string>? Deny { get; init; }
 
-    // Scalar rule-specific options
+    /// <summary>Gets the max step env secrets threshold for <c>overprovisioned-secrets</c>.</summary>
     public int? MaxStepEnvSecrets { get; init; }
+    /// <summary>Gets the max job secrets threshold for <c>overprovisioned-secrets</c>.</summary>
     public int? MaxJobSecrets { get; init; }
 }
 
@@ -137,21 +151,29 @@ public sealed record FixConfig
     /// </summary>
     public bool Enabled { get; init; } = false;
 
+    /// <summary>Gets the defaults sub-section of the fix configuration.</summary>
     public FixDefaultsConfig Defaults { get; init; } = new();
+    /// <summary>Gets the pinning sub-section of the fix configuration.</summary>
     public FixPinningConfig Pinning { get; init; } = new();
+    /// <summary>Gets the images sub-section of the fix configuration.</summary>
     public FixImagesConfig Images { get; init; } = new();
 }
 
 public sealed record FixDefaultsConfig
 {
+    /// <summary>Gets the default job timeout in minutes to apply during fix, if any.</summary>
     public int? JobTimeoutMinutes { get; init; }
 }
 
 public sealed record FixPinningConfig
 {
+    /// <summary>Gets whether network access is enabled for SHA resolution.</summary>
     public bool EnableNetwork { get; init; } = false;
+    /// <summary>Gets the minimum age in days for an action reference to be eligible for pinning.</summary>
     public int MinAgeDays { get; init; } = 14;
+    /// <summary>Gets the branches excluded from pinning fix application.</summary>
     public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
+    /// <summary>Gets the action patterns to ignore during pinning.</summary>
     public IReadOnlyList<IgnoreActionEntry> IgnoreActions { get; init; } = [];
 }
 
@@ -160,17 +182,21 @@ public sealed record FixImagesConfig
     private static readonly IReadOnlyList<string> DefaultExcludeImages = ["scratch"];
     private static readonly IReadOnlyList<string> DefaultExcludeTags = ["latest"];
 
+    /// <summary>Gets whether network access is enabled for OCI image digest resolution.</summary>
     public bool EnableNetwork { get; init; } = false;
 
     private IReadOnlyList<string> _excludeImages = DefaultExcludeImages;
 
+    /// <summary>Gets the image names to exclude from digest pinning. Always includes <c>scratch</c>.</summary>
     public IReadOnlyList<string> ExcludeImages
     {
         get => _excludeImages;
         init => _excludeImages = EnforceScratch(value);
     }
 
+    /// <summary>Gets the tags to exclude from digest pinning.</summary>
     public IReadOnlyList<string> ExcludeTags { get; init; } = DefaultExcludeTags;
+    /// <summary>Gets the image glob patterns to ignore entirely.</summary>
     public IReadOnlyList<string> IgnoreImages { get; init; } = [];
 
     private static IReadOnlyList<string> EnforceScratch(IReadOnlyList<string> values)
@@ -184,9 +210,13 @@ public sealed record FixImagesConfig
 
 public sealed record NetworkConfig
 {
+    /// <summary>Gets the error handling mode for network failures.</summary>
     public NetworkErrorMode OnError { get; init; } = NetworkErrorMode.Skip;
+    /// <summary>Gets the timeout in seconds for network requests.</summary>
     public int TimeoutSeconds { get; init; } = 30;
+    /// <summary>Gets the maximum number of concurrent network requests.</summary>
     public int MaxConcurrency { get; init; } = 4;
+    /// <summary>Gets the GitHub-specific network configuration.</summary>
     public GitHubNetworkConfig GitHub { get; init; } = new();
 }
 
@@ -194,6 +224,8 @@ public enum NetworkErrorMode { Skip, Fail }
 
 public sealed record GitHubNetworkConfig
 {
+    /// <summary>Gets the GitHub Enterprise Server API URL, if using GHES.</summary>
     public string? GhesApiUrl { get; init; } = null;
+    /// <summary>Gets whether to fall back to the public GitHub API when GHES fails.</summary>
     public bool GhesFallback { get; init; } = false;
 }

@@ -7,6 +7,7 @@ namespace Seiton.Core.Linting.PinRemediation;
 
 public static class PinFixFormatter
 {
+    /// <summary>Builds a <see cref="DiagnosticFix"/> that pins an action reference to the resolved commit SHA.</summary>
     public static DiagnosticFix? BuildActionsShaFix(
         Diagnostic diagnostic,
         string sha40,
@@ -42,6 +43,7 @@ public static class PinFixFormatter
             : null;
     }
 
+    /// <summary>Builds a <see cref="DiagnosticFix"/> that pins an image reference to the resolved digest.</summary>
     public static DiagnosticFix? BuildImageDigestFix(
         Diagnostic diagnostic,
         string digest,

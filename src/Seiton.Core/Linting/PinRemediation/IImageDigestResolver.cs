@@ -6,6 +6,7 @@
 /// </summary>
 public interface IImageDigestResolver
 {
+    /// <summary>Resolves the given image reference to an OCI digest string. Returns <c>null</c> if skipped by configuration.</summary>
     Task<string?> ResolveAsync(
         string imageRef,
         CancellationToken cancellationToken = default);

@@ -28,12 +28,14 @@ public sealed class LintEngine
     /// </summary>
     public IReadOnlyList<IOnlineRule> ActiveOnlineRules => _activeOnlineRules;
 
+    /// <summary>Creates a new <see cref="LintEngine"/> with the default rule set from <see cref="RuleCatalog"/>.</summary>
     public LintEngine()
     {
         rules.AddRange(RuleCatalog.CreateDefaultRules());
         _onlineRules.AddRange(RuleCatalog.CreateOnlineRules());
     }
 
+    /// <summary>Creates a new <see cref="LintEngine"/> with the specified <paramref name="rules"/>.</summary>
     public LintEngine(IEnumerable<IRule> rules)
     {
         ArgumentNullException.ThrowIfNull(rules);
@@ -44,6 +46,7 @@ public sealed class LintEngine
         }
     }
 
+    /// <summary>Adds a rule to the engine. Online rules are registered separately for async resolution.</summary>
     public void AddRule(IRule rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
@@ -57,11 +60,13 @@ public sealed class LintEngine
         }
     }
 
+    /// <summary>Parses and lints the given YAML with no explicit configuration.</summary>
     public LintResult Check(byte[] utf8Yaml, string filePath)
     {
         return Check(utf8Yaml, filePath, config: null);
     }
 
+    /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);

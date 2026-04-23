@@ -4,6 +4,7 @@ namespace Seiton.Core.Linting;
 
 public readonly record struct LintConfigValidationResult(LintConfig? Config, Diagnostic[] Diagnostics)
 {
+    /// <summary>Gets whether the validation produced no error-level diagnostics.</summary>
     public bool IsValid
     {
         get

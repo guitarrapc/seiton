@@ -26,6 +26,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     private readonly string[] _normalizedIgnoreImages;
     private volatile DockerAuthConfig? _dockerAuthConfig;
 
+    /// <summary>Creates a new <see cref="OciImageDigestResolver"/> with the specified HTTP client and image configuration.</summary>
     public OciImageDigestResolver(HttpClient httpClient, FixImagesConfig config)
         : this(httpClient, config, dockerConfigPath: null)
     {
@@ -41,6 +42,13 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         _normalizedIgnoreImages = NormalizeEntries(config.IgnoreImages);
     }
 
+    /// <summary>
+    /// Resolves the given OCI image reference to a pinned digest reference by querying the registry API.
+    /// </summary>
+    /// <param name="imageRef"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="InvalidOperationException"></exception>
     public async Task<string?> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
     {
         if (!TryParseImageReference(imageRef, out var parsed))

@@ -91,6 +91,7 @@ internal static class RuleCatalog
 
     private static readonly FrozenDictionary<string, int> PriorityByRuleIdString = BuildPriorityLookup();
 
+    /// <summary>Creates a new array of all default (non-online) rule instances.</summary>
     public static IRule[] CreateDefaultRules()
     {
         var rules = new IRule[DefaultRuleFactories.Length];
@@ -102,6 +103,7 @@ internal static class RuleCatalog
         return rules;
     }
 
+    /// <summary>Creates a new array of all online rule instances.</summary>
     public static IOnlineRule[] CreateOnlineRules()
     {
         var rules = new IOnlineRule[OnlineRuleFactories.Length];
@@ -113,6 +115,7 @@ internal static class RuleCatalog
         return rules;
     }
 
+    /// <summary>Returns whether the specified rule is opt-in only (disabled by default).</summary>
     public static bool IsOptIn(string? ruleId)
     {
         if (string.IsNullOrEmpty(ruleId))
@@ -123,6 +126,7 @@ internal static class RuleCatalog
         return RuleIdExtensions.TryParse(ruleId, out var parsed) && OptInOnlyRuleIds.Contains(parsed);
     }
 
+    /// <summary>Returns the priority of the rule (lower values run first). Returns <see cref="int.MaxValue"/> for unknown IDs.</summary>
     public static int GetPriority(string? ruleId)
     {
         if (string.IsNullOrEmpty(ruleId))
@@ -133,6 +137,7 @@ internal static class RuleCatalog
         return PriorityByRuleIdString.TryGetValue(ruleId, out var priority) ? priority : int.MaxValue - 1;
     }
 
+    /// <summary>Resolves a kebab-case ID or canonical ID (e.g. <c>seiton-lint-rule-001</c>) to a <see cref="RuleId"/>.</summary>
     public static bool TryResolveRuleId(string? idOrCanonical, out RuleId resolvedRuleId)
     {
         resolvedRuleId = default;
@@ -155,6 +160,7 @@ internal static class RuleCatalog
         return true;
     }
 
+    /// <summary>Returns the canonical ID (<c>seiton-lint-rule-NNN</c>) for the given rule, or <c>null</c> if not found.</summary>
     public static string? GetCanonicalRuleId(string? ruleId)
     {
         if (string.IsNullOrWhiteSpace(ruleId))
@@ -170,6 +176,7 @@ internal static class RuleCatalog
         return null;
     }
 
+    /// <summary>Suggests a similar rule ID for a possible typo, or returns <c>null</c> if no close match is found.</summary>
     public static string? SuggestRuleId(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
@@ -195,16 +202,19 @@ internal static class RuleCatalog
         return bestDistance <= 4 ? bestCandidate : null;
     }
 
+    /// <summary>Returns whether the specified rule cannot be disabled by user configuration.</summary>
     public static bool IsNonDisableable(RuleId ruleId)
     {
         return NonDisableableRuleIds.Contains(ruleId);
     }
 
+    /// <summary>Gets the minimum severity enforced for the specified rule, if any.</summary>
     public static bool TryGetMinimumSeverity(RuleId ruleId, out DiagnosticSeverity minimumSeverity)
     {
         return MinimumSeverities.TryGetValue(ruleId, out minimumSeverity);
     }
 
+    /// <summary>Gets the set of allowed rule-specific configuration keys for the specified rule.</summary>
     public static bool TryGetAllowedConfigKeys(RuleId ruleId, out IReadOnlySet<string> allowedKeys)
     {
         return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys!);

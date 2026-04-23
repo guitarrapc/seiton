@@ -8,6 +8,9 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal static class ExclusionNormalizer
 {
+    /// <summary>
+    /// Resolves and validates each rule ID in <paramref name="ruleIds"/>, adding normalized IDs to <paramref name="normalizedRuleIds"/> and emitting diagnostics for unknown or non-disableable rules.
+    /// </summary>
     public static void CollectResolvedExclusionRules(
         IReadOnlyList<string> ruleIds,
         string filePath,

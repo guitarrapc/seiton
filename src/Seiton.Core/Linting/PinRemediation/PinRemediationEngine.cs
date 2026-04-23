@@ -20,6 +20,7 @@ public sealed class PinRemediationEngine(
     private readonly FixImagesConfig _imagesConfig = imagesConfig ?? new FixImagesConfig();
     private readonly NetworkConfig _networkConfig = networkConfig ?? new NetworkConfig();
 
+    /// <summary>Resolves unpinned action and image references in the given diagnostics, producing fixes where possible.</summary>
     public async Task<RemediationResult> RemediateAsync(
         IReadOnlyList<Diagnostic> diagnostics,
         byte[] utf8Yaml,
