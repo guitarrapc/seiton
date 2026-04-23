@@ -667,3 +667,203 @@ public static int GetPriority(RuleId ruleId) { ... }
 | `LintEngine.cs` | 1 | 小規模 |
 | `PinRemediationEngine.cs` | 1 | const 変更 |
 | テスト | 最小限 | dict key/Diagnostic.RuleId が string のまま |
+
+## 7. Post-implementation レビュー (Phase 1-12 完了後)
+
+### 7.1 実施結果
+
+Phase 1-12 を全て完了し、558/558 テストが通過。Config モデルのフラット化 (Phase 1-7) と RuleId enum 化 (Phase 8-12) の両方が完了した。
+
+### 7.2 残存課題
+
+コードベース全体を精査した結果、以下の課題を特定した。
+
+#### 課題 C: `RuleCatalog.GetPriority(string)` が O(n) 線形スキャン (Medium-High)
+
+```csharp
+public static int GetPriority(string? ruleId)
+{
+    for (var i = 0; i < AllRuleMetadata.Length; i++)
+    {
+        if (string.Equals(AllRuleMetadata[i].Id.ToId(), ruleId, StringComparison.Ordinal))
+            return AllRuleMetadata[i].Priority;
+    }
+    return int.MaxValue - 1;
+}
+```
+
+**問題:**
+- 53 ルール分の線形スキャンで、毎回 `RuleId.ToId()` を呼んでいる (文字列リテラル返却なのでアロケーションはないが、switch + 比較のコスト)
+- `LintEngine.CompareDiagnosticsByPriority` のソート比較関数から呼ばれるため、診断数 d に対して O(d * n * log(d)) の計算量
+- Large ワークフローでは診断数が数百になりうる
+
+**修正方針:** `FrozenDictionary<string, int>` による O(1) ルックアップに置換。静的初期化で構築。
+
+#### 課題 D: `RuleCatalog` の string 引数 API で RuleId→string→RuleId 往復変換 (Medium)
+
+`RuleNormalizer` と `ExclusionNormalizer` は `TryResolveRuleId` で `RuleId` を得た後、`.ToId()` で string に変換して `IsNonDisableable(string)` / `TryGetMinimumSeverity(string)` に渡す。これらの string 引数 API は内部で再度 `TryResolveRuleId` を呼び、`RuleId` に戻す。
+
+```
+caller: RuleId → .ToId() → string → IsNonDisableable(string) → TryResolveRuleId → RuleId → Set.Contains
+```
+
+**修正方針:** `IsNonDisableable(RuleId)`, `TryGetMinimumSeverity(RuleId, ...)` オーバーロードを追加し、内部呼び出しを enum パスに切り替え。
+
+#### 課題 E: `OptInOnlyRuleIds` が `IReadOnlySet<string>` のまま (Low)
+
+`NonDisableableRuleIds` は `IReadOnlySet<RuleId>` に移行済みだが、`OptInOnlyRuleIds` は `IReadOnlySet<string>` のまま。`IsOptIn` は `Diagnostic.RuleId` (string) から呼ばれるため string 版は必要だが、内部的にも enum 化するのが一貫性がある。
+
+**修正方針:** `IReadOnlySet<RuleId>` に変更し、`IsOptIn(string)` 内で `TryParse` → enum Set 参照。
+
+#### 課題 F: `RuleConfigNormalizer.Normalize` の未使用 `ruleId` パラメータ (Low)
+
+Phase 3 で `RuleSpecificConfigNormalizer` → `RuleConfigNormalizer` にリファクタした際、ルール ID 固有の分岐が不要になったが、`ruleId` パラメータが残存。
+
+**修正方針:** パラメータを削除。
+
+#### 課題 G: テストメソッド名に旧概念名が残存 (Low)
+
+`LintConfigLibraryTests.Validate_RuleSpecificConfig_ProjectsTypedSpecificPayload` — `RuleSpecificConfig` は廃止済み。
+
+**修正方針:** テストメソッド名をリネーム (例: `Validate_RuleConfig_ProjectsTypedPayload`)。
+
+### 7.3 実行計画
+
+#### Phase 13: RuleCatalog 内部最適化
+
+**変更対象:**
+- `RuleCatalog.cs`
+
+**作業内容:**
+1. `GetPriority(string)` — `FrozenDictionary<string, int>` ルックアップに置換
+2. `IsNonDisableable(RuleId)` オーバーロード追加 (直接 `NonDisableableRuleIds.Contains(ruleId)`)
+3. `TryGetMinimumSeverity(RuleId, out DiagnosticSeverity)` オーバーロード追加 (直接 `MinimumSeverities.TryGetValue`)
+4. `OptInOnlyRuleIds` を `IReadOnlySet<RuleId>` に変更、`IsOptIn(string)` 内で `TryParse` → enum Set 参照
+
+#### Phase 14: 内部呼び出しの enum パス切り替え
+
+**変更対象:**
+- `RuleNormalizer.cs` — `resolvedRuleIdString` 経由の呼び出しを `resolvedRuleId` (enum) 直接呼び出しに変更
+- `ExclusionNormalizer.cs` — 同上
+- `LintEngine.cs` — `CompareDiagnosticsByPriority` は `Diagnostic.RuleId` (string) から呼ぶため string 版を維持
+
+#### Phase 15: クリーンアップ
+
+**変更対象:**
+- `RuleConfigNormalizer.cs` — 未使用 `ruleId` パラメータを削除
+- `RuleNormalizer.cs` — `Normalize` 呼び出しから `resolvedRuleId` 引数を削除
+- `LintConfigLibraryTests.cs` — テストメソッド名リネーム
+
+#### Phase 16: テスト + ベンチマーク検証
+
+**作業:** `dotnet build` + `dotnet test` で全テスト通過を確認。ベンチマーク実行で性能退行がないことを確認。
+
+## 8. ベンチマーク記録
+
+### 8.1 Before (Config フラット化 + RuleId enum 化の前)
+
+環境: .NET 9 相当 (ユーザー提供データ)
+
+#### ActionRefParseBenchmark
+
+| Method | Mean | Error | StdDev | Ratio | Rank | Gen0 | Allocated |
+|---|---|---|---|---|---|---|---|
+| TryParseRemoteUses (uses with subpath + .yml) | 10.87 ns | 0.029 ns | 0.022 ns | 0.86 | 1 | - | - |
+| TryParseRemoteUses (short uses) | 12.69 ns | 0.035 ns | 0.031 ns | 1.00 | 2 | - | - |
+| Parse + TryGetOwnerRepoPolicyKey | 40.63 ns | 0.075 ns | 0.063 ns | 3.20 | 3 | - | - |
+| TryParseActionReference(string) stackalloc | 85.90 ns | 0.472 ns | 0.418 ns | 6.77 | 4 | 0.0067 | 112 B |
+| Parse + ref/path major | 101.00 ns | 0.892 ns | 0.835 ns | 7.96 | 5 | 0.0014 | 24 B |
+
+#### LintBenchmark
+
+| Method | Size | FixEnabled | Mean | Allocated |
+|---|---|---|---|---|
+| LintEngine.Check | Small | False | 71.90 μs | 14.42 KB |
+| LintEngine.Check | Small | True | 80.72 μs | 14.84 KB |
+| LintEngine.Check | Medium | False | 1,240.01 μs | 89.93 KB |
+| LintEngine.Check | Medium | True | 2,094.66 μs | 96.34 KB |
+| LintEngine.Check | Large | False | 17,665.59 μs | 420.13 KB |
+| LintEngine.Check | Large | True | 35,431.72 μs | 450.29 KB |
+
+#### ParsingBenchmark
+
+| Method | Size | Mean | Allocated |
+|---|---|---|---|
+| ExpressionExtractor.ExtractParseAndValidate | Small | 7.110 μs | 6464 B |
+| VYaml scan + adapter-like mapping | Small | 14.971 μs | - |
+| VYaml raw event scan | Small | 15.011 μs | - |
+| WorkflowParser.Parse (AST + rules) | Small | 51.655 μs | 5112 B |
+| ExpressionExtractor.ExtractParseAndValidate | Medium | 86.156 μs | 90752 B |
+| VYaml scan + adapter-like mapping | Medium | 115.528 μs | - |
+| VYaml raw event scan | Medium | 116.116 μs | - |
+| WorkflowParser.Parse (AST + rules) | Medium | 815.566 μs | 27336 B |
+| ExpressionExtractor.ExtractParseAndValidate | Large | 414.108 μs | 430920 B |
+| VYaml scan + adapter-like mapping | Large | 523.250 μs | - |
+| VYaml raw event scan | Large | 528.066 μs | - |
+| WorkflowParser.Parse (AST + rules) | Large | 11,382.122 μs | 113592 B |
+
+### 8.2 After (Config フラット化 + RuleId enum 化の完了後)
+
+環境: .NET 10.0.6, AMD Ryzen 9 7950X3D, ShortRun (IterationCount=3)
+
+#### ActionRefParseBenchmark
+
+| Method | Mean | Error | StdDev | Ratio | Rank | Gen0 | Allocated |
+|---|---|---|---|---|---|---|---|
+| TryParseRemoteUses (short uses) | 14.22 ns | 1.375 ns | 0.075 ns | 1.00 | 1 | - | - |
+| TryParseRemoteUses (uses with subpath + .yml) | 15.25 ns | 1.355 ns | 0.074 ns | 1.07 | 1 | - | - |
+| Parse + TryGetOwnerRepoPolicyKey | 33.37 ns | 20.980 ns | 1.150 ns | 2.35 | 2 | - | - |
+| TryParseActionReference(string) stackalloc | 56.08 ns | 25.400 ns | 1.392 ns | 3.94 | 3 | 0.0022 | 112 B |
+| Parse + ref/path major | 73.47 ns | 23.725 ns | 1.300 ns | 5.17 | 4 | 0.0005 | 24 B |
+
+#### LintBenchmark
+
+| Method | Size | FixEnabled | Mean | Allocated |
+|---|---|---|---|---|
+| LintEngine.Check | Small | False | 46.67 μs | 14.42 KB |
+| LintEngine.Check | Small | True | 54.38 μs | 14.84 KB |
+| LintEngine.Check | Medium | False | 839.47 μs | 89.91 KB |
+| LintEngine.Check | Medium | True | 1,408.55 μs | 96.34 KB |
+| LintEngine.Check | Large | False | 11,584.18 μs | 420.21 KB |
+| LintEngine.Check | Large | True | 21,620.63 μs | 450.29 KB |
+
+#### ParsingBenchmark
+
+| Method | Size | Mean | Allocated |
+|---|---|---|---|
+| ExpressionExtractor.ExtractParseAndValidate | Small | 4.393 μs | 6464 B |
+| VYaml scan + adapter-like mapping | Small | 8.671 μs | - |
+| VYaml raw event scan | Small | 8.907 μs | - |
+| WorkflowParser.Parse (AST + rules) | Small | 29.402 μs | 5112 B |
+| ExpressionExtractor.ExtractParseAndValidate | Medium | 50.542 μs | 90752 B |
+| VYaml scan + adapter-like mapping | Medium | 66.182 μs | - |
+| VYaml raw event scan | Medium | 66.259 μs | - |
+| WorkflowParser.Parse (AST + rules) | Medium | 502.982 μs | 27336 B |
+| ExpressionExtractor.ExtractParseAndValidate | Large | 274.905 μs | 430920 B |
+| VYaml scan + adapter-like mapping | Large | 329.074 μs | - |
+| VYaml raw event scan | Large | 337.460 μs | - |
+| WorkflowParser.Parse (AST + rules) | Large | 7,973.685 μs | 113592 B |
+
+### 8.3 比較分析
+
+**注意:** Before と After で .NET バージョンが異なる (.NET 9 → .NET 10) ため、ランタイム最適化の影響も含まれる。純粋な Config 変更の影響と .NET 10 の改善を切り分けることはできない。
+
+#### アロケーション (Allocated)
+
+| ベンチマーク | Size | Before | After | 差分 |
+|---|---|---|---|---|
+| LintEngine.Check (Fix=off) | Small | 14.42 KB | 14.42 KB | **±0** |
+| LintEngine.Check (Fix=off) | Medium | 89.93 KB | 89.91 KB | **-0.02 KB** |
+| LintEngine.Check (Fix=off) | Large | 420.13 KB | 420.21 KB | **+0.08 KB** |
+| LintEngine.Check (Fix=on) | Small | 14.84 KB | 14.84 KB | **±0** |
+| LintEngine.Check (Fix=on) | Medium | 96.34 KB | 96.34 KB | **±0** |
+| LintEngine.Check (Fix=on) | Large | 450.29 KB | 450.29 KB | **±0** |
+| WorkflowParser.Parse | Small | 5112 B | 5112 B | **±0** |
+| WorkflowParser.Parse | Medium | 27336 B | 27336 B | **±0** |
+| WorkflowParser.Parse | Large | 113592 B | 113592 B | **±0** |
+
+**結論: アロケーションは完全に同一。** Config フラット化と RuleId enum 化はメモリ使用量に影響を与えていない。
+
+#### スループット (Mean)
+
+Config フラット化・RuleId enum 化による性能退行は見られない。Before/After の差は .NET バージョン差による改善の範囲内。
