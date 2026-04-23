@@ -95,10 +95,9 @@ RuleConfig {
 - VYaml の `YamlSerializer.Deserialize<Dictionary<string,object?>>()` で一度 untyped DOM に変換してから手動ウォークする二段構え。DOM 化のコストと、`AsMap()`/`AsList()` のようなユーティリティでの boxing 型チェックが必要。
 - パーサーのどこを読めば「このセクションはこういう YAML 構造を期待している」が分かるかが一目で分からない。`AddRule()` 内のフラットな switch/case がその唯一の情報源。
 
-sandbox の `NewLintConfigLibrary.cs` プロトタイプでは、VYaml DOM → 行ベースパーサー (`LintConfigLineParser`) への移行を試みている。このプロトタイプでは:
-- `RuleSpecificConfig` discriminated union を廃止し、`RuleConfig` にルール固有プロパティを直接持たせている (`Events`, `KnownHostedLabels`, `Allow`, `Deny` 等)
+sandbox の `NewLintConfigLibrary.cs` プロトタイプでは以下の案を試していたが、行ベースパーサー部分は YAML 仕様 (フロースタイル、アンカー等) を捨てるため破棄済み。一方、Config モデル側の改善 (フラットプロパティ + `ExtendableList`) は有効で、パーサー技術と独立に採用できる:
+- `RuleSpecificConfig` discriminated union を廃止し、`RuleConfig` にルール固有プロパティを直接持たせる (`Events`, `KnownHostedLabels`, `Allow`, `Deny` 等)
 - `ExtendableList` record を導入して YAML の `extend:` セマンティクスを型で表現
-- 行ベースパーサーでインデントレベルごとにセクションを明確に分離
 
 ## 2. 設計方針
 
@@ -116,19 +115,18 @@ VYaml は以下の選択肢を提供する:
 
 | 方式 | 概要 | 適合性 |
 |---|---|---|
-| `YamlSerializer.Deserialize<Dictionary<string,object?>>()` | untyped DOM 経由 | **現行方式。** boxing + 型チェック冗長 |
-| `YamlSerializer.Deserialize<T>()` + `[YamlObject]` source gen | 型付きデシリアライズ | Config YAML はキーが hyphenated (kebab-case) で、`[YamlObject]` は rename mapping が限定的。fix/network は相性良いが rules セクションは dynamic key (rule-id) があり不適 |
-| `YamlParser` pull parser (ref struct) | event ベースの手動パース | 最も柔軟。lint config 程度なら string 変換許容。ただし config YAML は小さく、パフォーマンスが主要関心事ではない |
-| 行ベース自前パーサー | sandbox プロトタイプ方式 | VYaml 不要で最もシンプル。config YAML はインデントが固定で YAML の高度な機能 (アンカー、フロースタイル等) を使わないため十分 |
+| `YamlSerializer.Deserialize<Dictionary<string,object?>>()` | untyped DOM 経由 | **現行方式。** 問題の本質はここではない |
+| `YamlSerializer.Deserialize<T>()` + `[YamlObject]` source gen | 型付きデシリアライズ | rules セクションの dynamic key (rule-id) に不適 |
+| `YamlParser` pull parser (ref struct) | event ベースの手動パース | config パースにはオーバーエンジニアリング |
+| 行ベース自前パーサー | sandbox で試作・破棄済み | **不採用。** フロースタイル・アンカー等の YAML 仕様を捨てるトレードオフが悪い |
 
-**推奨: 行ベースパーサー (`LintConfigLineParser`) を採用する。**
+**決定: 現行の VYaml DOM パースを維持する。**
 
 理由:
-- Config YAML はユーザーが手書きする小さなファイルで、アンカー/エイリアス/フロースタイルは使わない前提
-- 行ベースパーサーはセクション構造がインデントレベルで明確に分離され、「どの YAML を読もうとしているか」がコードから直読できる
-- VYaml DOM 経由の `AsMap()`/`AsList()` boxing 型チェックが不要になる
-- sandbox プロトタイプで実証済み
-- VYaml pull parser (ref struct) は高性能だが、config パースにはオーバーエンジニアリング
+- 問題の本質はパーサー技術ではなく、パース後の **モデル構造** と **マテリアライズ パイプライン**
+- VYaml DOM は YAML 仕様に準拠しており、フロースタイル (`{key: value}`) やアンカー/エイリアスを正しく扱える。この仕様準拠を捨てるべきではない
+- `AsMap()`/`AsList()` ユーティリティは冗長だが、config パースは hot path ではなく実害はない
+- パーサー内の `Convert()` → `AddRule()` のセクション構造自体は今のままで十分読みやすい。問題は `AddRule()` の **出口** (ローカル変数の収集 → 14 引数のマテリアライザー呼び出し) にある
 
 ### 2.3 Config モデル設計
 
@@ -222,12 +220,27 @@ var events = config.GetRuleConfig(Id)?.Events?.Extend is { } list
 
 `RuleCatalog.BuildAllowedRuleConfigKeys()` は引き続き使うが、キー名が `RuleConfig` のプロパティ名 (の kebab-case) と一致するため、追加忘れを防ぎやすくなる。
 
-### 2.5 正規化の統合
+### 2.5 マテリアライズの統合
 
-現行は `LintConfigRuleBodyMaterializer` + `RuleSpecificConfigNormalizer` の 2 段階で rule-specific config を構築・正規化するが、新方式では:
+現行パイプライン:
+```
+AddRule() switch → ~10 ローカル変数に収集
+  → LintConfigRuleBodyMaterializer.BuildSpecific(ruleId, 14 args)
+    → switch(ruleId) で RuleSpecificConfig サブクラスを new
+      → RuleConfig.Specific にセット
+        → 後で RuleSpecificConfigNormalizer が switch(Specific type) で正規化
+```
 
-- `LintConfigRuleBodyMaterializer` を**廃止** — パーサーが直接 `RuleConfig` のプロパティに値をセットするため不要
-- `RuleSpecificConfigNormalizer` を**リネーム/リファクタ** — `RuleConfig` のフラットプロパティを正規化する `RuleConfigNormalizer` に変更。switch が rule-specific ではなくプロパティベースになり、ルール固有の知識が減る
+フラットモデルでは中間段が消える:
+```
+AddRule() switch → RuleConfig のプロパティに直接セット
+  → RuleConfigNormalizer が non-null プロパティを正規化
+```
+
+具体的な変更:
+- **`LintConfigRuleBodyMaterializer` を廃止** — `AddRule()` の switch/case 内で `RuleConfig` のプロパティを直接構築するため、ローカル変数の収集と 14 引数リレーが不要
+- **`AddRule()` の許可キー検証を統合** — 現行は materializer 内で `RuleCatalog.TryGetAllowedConfigKeys()` を呼んでいたが、`AddRule()` 内の `seenRuleSpecificKeys` チェックに一本化。materializer への依存が消える
+- **`RuleSpecificConfigNormalizer` → `RuleConfigNormalizer` にリファクタ** — discriminated union のパターンマッチ (`case DangerousTriggersSpecificConfig`) ではなく、プロパティ存在チェック (`config.Events is not null`) に変更。ruleId ごとの分岐が原則不要になる
 
 ## 3. 実行計画
 
@@ -243,21 +256,59 @@ var events = config.GetRuleConfig(Id)?.Events?.Extend is { } list
 
 **影響:** コンパイルエラーが多数出るが、後続フェーズで解消
 
-### Phase 2: パーサーの置換
+### Phase 2: パーサーの簡素化と Materializer 廃止
 
 **変更対象:**
-- `LintConfigYamlParser.cs` (書き換え)
+- `LintConfigYamlParser.cs` (`AddRule()` 内部の書き換え)
 - `LintConfigRuleBodyMaterializer.cs` (削除)
 
 **作業内容:**
-1. `LintConfigYamlParser` を行ベースの `LintConfigLineParser` に置換 (sandbox プロトタイプベース)
-2. `LintConfigRuleBodyMaterializer` を削除 (パーサーが直接 `RuleConfig` プロパティに値をセット)
-3. `LintConfigParseResult` は構造はそのまま (パーサーの出力型)
+1. `AddRule()` の switch/case が `RuleConfig` プロパティを直接セットするように変更
+2. `LintConfigRuleBodyMaterializer` を削除
+3. 許可キー検証 (`seenRuleSpecificKeys` + `RuleCatalog.TryGetAllowedConfigKeys()`) を `AddRule()` 末尾に移動
+4. `LintConfigParseResult` は構造そのまま
 
-**設計ポイント:**
-- セクションごとに `ParseRulesSection()`, `ParseRuleBody()`, `ParseFixSection()`, `ParseNetworkSection()`, `ParseExclusionsSection()` と明確に分離
-- 各 Parse メソッドがどのインデントレベルのどのキーを期待するかがコードから直読できる
-- `AddRule()` 内のフラットな switch は残るが、収集先が `RuleConfig` のプロパティに直接マッピングされるので、ローカル変数の受け渡しが不要
+**Before (AddRule 出口):**
+```csharp
+// ~10 個のローカル変数を収集した後:
+var config = new RuleConfig
+{
+    Enabled = enabled,
+    Severity = severity,
+    Specific = LintConfigRuleBodyMaterializer.BuildSpecific(
+        ruleId, seenRuleSpecificKeys,
+        events, knownHostedLabels, publicRegistries,
+        untrustedTriggers, outputCommands, assumeEvents,
+        allow, deny, maxStepEnvSecrets, maxJobSecrets,
+        DomLine, diagnostics, filePath),
+};
+```
+
+**After (AddRule 出口):**
+```csharp
+// switch/case で直接プロパティを埋めた後:
+var config = new RuleConfig
+{
+    Enabled = enabled,
+    Severity = severity,
+    Events = events,
+    KnownHostedLabels = knownHostedLabels,
+    PublicRegistries = publicRegistries,
+    UntrustedTriggers = untrustedTriggers,
+    OutputCommands = outputCommands,
+    AssumeEvents = assumeEvents,
+    Allow = allow,
+    Deny = deny,
+    MaxStepEnvSecrets = maxStepEnvSecrets,
+    MaxJobSecrets = maxJobSecrets,
+};
+// 許可キー検証をここで実行
+ValidateAllowedKeys(ruleId, seenRuleSpecificKeys, ...);
+```
+
+ローカル変数は残るが、それらを 14 引数で別メソッドにリレーする必要がなくなるのが本質的な改善。
+
+**VYaml DOM パース部分 (`Convert()`, `ParseFix`, `ParseNetwork` 等) は変更なし。**
 
 ### Phase 3: 正規化の統合
 
@@ -321,24 +372,24 @@ if (config.GetRuleConfig(Id)?.Events?.Extend is { Count: > 0 } events)
 **作業内容:**
 1. `LintConfigRuleBodyMaterializer.cs` の削除 (Phase 2 で使わなくなった)
 2. `RuleSpecificConfig` 関連の全サブクラス削除確認 (Phase 1 で実施済み)
-3. sandbox プロトタイプの `NewLintConfigLibrary.cs` 等は参照用として残す (or 削除)
+3. `RuleConfigHelpers.cs` — `BuildNormalizedSet()` がルール側で引き続き使われる場合は残す
 
 ## 4. 変更後の全体像
 
 ### 4.1 ファイル構成
 
-| ファイル | 責務 |
-|---|---|
-| `LintConfig.cs` | Config モデル (LintConfig, RuleConfig, ExtendableList, FixConfig, NetworkConfig 等) |
-| `LintConfigYamlParser.cs` | 行ベースパーサー (LintConfigLineParser) |
-| `LintConfigParseResult.cs` | パーサー出力型 (変更なし) |
-| `LintConfigValidationResult.cs` | バリデーション結果型 (変更なし) |
-| `RuleConfigNormalizer.cs` | RuleConfig のプロパティ正規化 (旧 RuleSpecificConfigNormalizer) |
-| `RuleNormalizer.cs` | rule-id 解決 + ポリシー適用 + RuleConfigNormalizer 呼び出し (微修正) |
-| `ExclusionNormalizer.cs` | exclusion rule-id 解決 (変更なし) |
-| `RuleCatalog.cs` | ルール定義 + 許可キー (変更なし) |
-| `LintConfigLibrary.cs` | Validate エントリポイント (微修正) |
-| ~~`LintConfigRuleBodyMaterializer.cs`~~ | **削除** |
+| ファイル | 責務 | 変更 |
+|---|---|---|
+| `LintConfig.cs` | Config モデル (LintConfig, RuleConfig, ExtendableList, FixConfig, NetworkConfig 等) | **大** (モデル再設計) |
+| `LintConfigYamlParser.cs` | VYaml DOM パーサー (現行維持、`AddRule()` 出口を簡素化) | **中** (`AddRule` 修正) |
+| `LintConfigParseResult.cs` | パーサー出力型 | 変更なし |
+| `LintConfigValidationResult.cs` | バリデーション結果型 | 変更なし |
+| `RuleConfigNormalizer.cs` | RuleConfig のプロパティ正規化 (旧 `RuleSpecificConfigNormalizer`) | **中** (リネーム+リファクタ) |
+| `RuleNormalizer.cs` | rule-id 解決 + ポリシー適用 + RuleConfigNormalizer 呼び出し | **小** |
+| `ExclusionNormalizer.cs` | exclusion rule-id 解決 | 変更なし |
+| `RuleCatalog.cs` | ルール定義 + 許可キー | 変更なし |
+| `LintConfigLibrary.cs` | Validate エントリポイント | **小** |
+| ~~`LintConfigRuleBodyMaterializer.cs`~~ | | **削除** |
 
 ### 4.2 新規ルール固有キー追加時の変更箇所
 
@@ -358,34 +409,33 @@ if (config.GetRuleConfig(Id)?.Events?.Extend is { Count: > 0 } events)
 ### 4.3 データフロー (変更後)
 
 ```
-YAML text (string)
+YAML bytes
+  ↓ YamlSerializer.Deserialize<Dictionary<string, object?>>()  ← 現行維持
+  ↓ (untyped DOM)
   ↓
-LintConfigLineParser(yamlText, filePath)
-  ├─ ParseRulesSection()
-  │    └─ ParseRuleBody(ruleId) → RuleConfig { Enabled, Severity, Events?, Allow?, ... }
-  ├─ ParseExclusionsSection()
-  │    └─ ParseExclusionItem() → LintExclusion
-  ├─ ParseFixSection()
-  │    ├─ ParseFixDefaultsSection()
-  │    ├─ ParseFixPinningSection()
-  │    └─ ParseFixImagesSection()
-  └─ ParseNetworkSection()
-       └─ ParseNetworkGitHubSection()
+LintConfigYamlParser.Convert()                                  ← 現行維持
+  ├─ rules セクション → AddRule() で switch(key)
+  │    ↓ RuleConfig のプロパティに直接セット       ← ★変更点: ローカル変数リレー廃止
+  │    ↓ 許可キー検証を AddRule() 内で実行         ← ★変更点: Materializer 廃止
+  │    ↓ RuleConfig { Enabled, Severity, Events?, Allow?, ... }
+  ├─ exclusions → AddExclusion()                                ← 変更なし
+  ├─ fix → ParseFix/Pinning/Images                              ← 変更なし
+  └─ network → ParseNetwork/GitHub                              ← 変更なし
   ↓
 LintConfigParseResult { Rules, Exclusions, Fix, Network, Diagnostics }
   ↓
 LintConfigLibrary.Validate()
   ├─ NormalizeRules() → RuleNormalizer.NormalizeRuleEntries()
-  │    → RuleConfigNormalizer.Normalize() (プロパティベースの正規化)
-  ├─ NormalizeExclusions()
-  ├─ NormalizeFix()
-  └─ NormalizeNetwork()
+  │    → RuleConfigNormalizer.Normalize()         ← ★変更点: プロパティベース正規化
+  ├─ NormalizeExclusions()                                      ← 変更なし
+  ├─ NormalizeFix()                                             ← 変更なし
+  └─ NormalizeNetwork()                                         ← 変更なし
   ↓
 LintConfig (最終形)
   ↓
 LintEngine.Check()
   ↓ rule.SetConfig(effectiveConfig)
-  ↓ 各ルールが GetRuleConfig(Id)?.Events?.Extend 等で直接アクセス
+  ↓ 各ルールが GetRuleConfig(Id)?.Events?.Extend 等で直接アクセス ← ★変更点
 ```
 
 ### 4.4 Config モデル↔YAML 対応表
@@ -427,10 +477,6 @@ network.github.ghes-fallback            → GitHubNetworkConfig.GhesFallback
 
 ## 5. リスクと判断
 
-### 行ベースパーサーの制限
-- アンカー (`&`)/エイリアス (`*`) やフロースタイル (`{key: value}`) は非対応
-- Config YAML でこれらの機能を使うユースケースは想定しない。もし将来必要になれば VYaml pull parser に移行可能
-
 ### RuleConfig のプロパティ膨張
 - ルール固有キーが増えると `RuleConfig` のプロパティ数が増える
 - 現状 9 ルール分のオプションで 10 プロパティ程度。50 ルール以上に対応する規模にはならない見込み
@@ -439,3 +485,8 @@ network.github.ghes-fallback            → GitHubNetworkConfig.GhesFallback
 ### 後方互換性
 - YAML フォーマット自体は変わらない (ユーザーの config ファイルは無変更)
 - 公開 API (`LintConfig`, `RuleConfig`) の形状が変わるため、外部から直接 Config を構築しているコード (テスト、ベンチマーク) は更新が必要
+
+### VYaml DOM パースの維持
+- `AsMap()`/`AsList()` の boxing 型チェックは冗長だが、config パースは hot path ではないため実害なし
+- フロースタイル (`{key: value}`) やアンカー/エイリアスなど YAML 仕様への準拠を維持できるメリットが大きい
+- 将来の YAML 機能追加時にパーサー側の対応が不要
