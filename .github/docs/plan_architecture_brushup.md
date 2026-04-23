@@ -296,6 +296,26 @@ Online ルール（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion
 2. 中期: `OnlineAuditEngine` の出力診断にも suppression / severity override を適用するフィルタを LintEngine 側に追加する。
 3. 長期: Online ルールも `IRule` ファクトリ登録し、`WorkflowVisitor` で traversal + 後段の非同期 resolve を組み合わせる設計を検討する。
 
+**実装状況（§2.7、2026-04-23 時点）**
+
+| 項目 | 内容 |
+|---|---|
+| `IOnlineRule` | `IRule` を拡張し、`CollectedTargets`（traversal 中に収集した `ActionAuditTarget` リスト）と `EvaluateTarget`（解決後の評価メソッド）を追加。 |
+| `OnlineRuleBase` | `RuleBase` を拡張した抽象基底クラス。`VisitJobPre` で reusable workflow `uses:`、`VisitStep` で step `uses:` からリモートアクション参照を収集。ローカル (`./`) と Docker (`docker://`) 参照はスキップ。 |
+| 4 ルール | `KnownVulnerableActionsRule` / `ImpostorCommitRule` / `RefConfusionRule` / `StaleActionRefsRule` は `OnlineRuleBase` を拡張。各ルールの `EvaluateTarget` が従来の `Evaluate` ロジックを継承し、`RuleBase.AddError` / `AddWarning` 経由で診断を追加。 |
+| `RuleCatalog` | `AdditionalRuleMetadata` を廃止し、`OnlineRuleFactories`（ファクトリ付き）に移行。`CreateOnlineRules()` を追加。`IsOptIn()` で opt-in ルール判定（online ルールはデフォルト無効）。`AllRuleMetadata` は local + online 両方を含む。 |
+| `RuleBase` | `AddError(message, location)` / `AddWarning(message, location)` を追加（AST ノードなしで診断追加可能）。 |
+| `LintEngine` | `_onlineRules` / `_activeOnlineRules` フィールド追加。デフォルトコンストラクタで `RuleCatalog.CreateOnlineRules()` を生成。`Check()` で online ルールも `WorkflowVisitor` に追加し、traversal 中にターゲットを収集。`IsRuleEnabled` は `RuleCatalog.IsOptIn()` で opt-in ルールのデフォルト無効を判定。`ActiveOnlineRules` プロパティで外部公開。 |
+| `OnlineAuditEngine` | `AuditAsync(LintResult, IReadOnlyList<IOnlineRule>, CancellationToken)` に変更。内部ルールインスタンスと `CollectTargets` を廃止。online ルールの `CollectedTargets` からユニークターゲットを集約し、非同期解決後に各ルールの `EvaluateTarget` を呼び出し、`GetDiagnostics()` 経由で診断を収集。 |
+| テスト | `OnlineAuditEngineTests` 全テストを新 API に移行。`EnableAllOnlineRules()` ヘルパーで opt-in 有効化。opt-in 無効時のパススルーテスト、`ActiveOnlineRules` 件数テスト、ターゲット収集テストを追加。**558 件 Green**。 |
+
+**設計ポイント**
+
+- **Phase 分離**: (1) `LintEngine.Check()` 同期 traversal でターゲット収集（診断なし）→ (2) `OnlineAuditEngine.AuditAsync()` 非同期解決 + 評価 + 診断収集。
+- **ターゲット重複排除**: 4 ルールが独立に同一ターゲットを収集するが、`OnlineAuditEngine` が `UsesText` ベースで重複排除してネットワーク解決は一度のみ。
+- **Opt-in 制御**: `RuleCatalog.IsOptIn()` + `LintEngine.IsRuleEnabled()` で、config 未指定時は online ルール無効。`rules.<rule-id>.enabled: true` で有効化。
+- **Suppression**: online ルール診断は現時点では `OnlineAuditEngine` 側で直接収集され、`LintEngine` の suppression パイプラインを通らない。suppression 統合は今後の課題。
+
 ---
 
 ### 2.8 [Low] ユーティリティの責務混在

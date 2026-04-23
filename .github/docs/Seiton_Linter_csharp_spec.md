@@ -259,8 +259,8 @@ Scope notes:
 
 - Parser diagnostics remain primary for YAML shape and required-key errors.
 - Rule diagnostics add policy and metadata checks over parsed AST.
-- `LintEngine` defaults to `RuleCatalog.CreateDefaultRules()`, applies priority sort, then deduplicates identical diagnostics.
-- Network-assisted rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are cataloged in `RuleCatalog` for rule-id resolution and priority ordering, but C# emits them through `OnlineAuditEngine` rather than the default local `IRule` pass set.
+- `LintEngine` defaults to `RuleCatalog.CreateDefaultRules()` for local rules and `RuleCatalog.CreateOnlineRules()` for network-assisted rules, applies priority sort, then deduplicates identical diagnostics.
+- Network-assisted rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are registered in `RuleCatalog` with `IOnlineRule` factories. They extend `OnlineRuleBase` (which extends `RuleBase`) and participate in `WorkflowVisitor` traversal to collect `ActionAuditTarget` references. Post-traversal, `OnlineAuditEngine.AuditAsync` resolves targets asynchronously and calls `EvaluateTarget` on each rule. These rules are opt-in (disabled by default; enabled via `rules.<rule-id>.enabled: true`).
 - Rule ID stability and compatibility policy follow `Seiton_Linter_spec.md` §4.4.
 
 ### 3.5 Phase 14 Catalog Additions
@@ -279,7 +279,7 @@ The language-agnostic rule catalog includes the following Phase 14 rule IDs.
 Status contract:
 
 - These rule IDs are normative at the shared-spec level.
-- C# runtime maps all eight IDs in `RuleCatalog`; `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` are default local rules, while the four network-assisted rules are emitted by `OnlineAuditEngine`.
+- C# runtime maps all eight IDs in `RuleCatalog`; `deny-read-all` / `deny-inherit-secrets` / `job-timeout-minutes-required` / `github-app-token-inputs` are default local rules, while the four network-assisted rules are registered as `IOnlineRule` factories (`OnlineRuleFactories`) and participate in visitor traversal + post-traversal async resolution via `OnlineAuditEngine`.
 
 ### 3.6 Planned High-Priority Candidate Rules
 

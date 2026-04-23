@@ -1,24 +1,24 @@
 ﻿using Seiton.Core.Linting.OnlineAudit;
-using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class KnownVulnerableActionsRule
+public sealed class KnownVulnerableActionsRule : OnlineRuleBase
 {
     public const string RuleId = "known-vulnerable-actions";
 
-    public Diagnostic? Evaluate(ActionAuditTarget target, ActionAdvisory? advisory)
+    public override string Id => RuleId;
+
+    public override string Name => "Known Vulnerable Actions";
+
+    public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)
     {
         if (advisory is null)
         {
-            return null;
+            return;
         }
 
-        return new Diagnostic(
-            DiagnosticSeverity.Error,
+        AddError(
             $"action uses '{target.UsesText}' matches vulnerable advisory '{advisory.AdvisoryId}': {advisory.Summary}",
-            target.Location,
-            RuleId,
-            FilePath: target.FilePath);
+            target.Location);
     }
 }

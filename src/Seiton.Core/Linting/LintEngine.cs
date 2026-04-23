@@ -12,17 +12,26 @@ public sealed class LintEngine
     private static readonly Workflow EmptyWorkflowForSuppression = new() { Range = default };
 
     private readonly List<IRule> rules = [];
+    private readonly List<IOnlineRule> _onlineRules = [];
     private readonly List<Diagnostic> _diagnostics = new(16);
     private readonly WorkflowVisitor _visitor = new();
     private readonly List<IRule> _activeRules = new(16);
+    private readonly List<IOnlineRule> _activeOnlineRules = new(4);
     private readonly List<Diagnostic> _ruleDiagnostics = new(64);
     private readonly HashSet<DiagnosticIdentity> _seen = new();
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
 
+    /// <summary>
+    /// Online rules that were activated during the most recent <see cref="Check"/> call.
+    /// Pass to <see cref="OnlineAudit.OnlineAuditEngine.AuditAsync"/> for post-traversal async resolution.
+    /// </summary>
+    public IReadOnlyList<IOnlineRule> ActiveOnlineRules => _activeOnlineRules;
+
     public LintEngine()
     {
         rules.AddRange(RuleCatalog.CreateDefaultRules());
+        _onlineRules.AddRange(RuleCatalog.CreateOnlineRules());
     }
 
     public LintEngine(IEnumerable<IRule> rules)
@@ -38,7 +47,14 @@ public sealed class LintEngine
     public void AddRule(IRule rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
-        rules.Add(rule);
+        if (rule is IOnlineRule onlineRule)
+        {
+            _onlineRules.Add(onlineRule);
+        }
+        else
+        {
+            rules.Add(rule);
+        }
     }
 
     public LintResult Check(byte[] utf8Yaml, string filePath)
@@ -74,7 +90,7 @@ public sealed class LintEngine
         var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, parseResult.Arena!);
         _diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
 
-        if (rules.Count == 0)
+        if (rules.Count == 0 && _onlineRules.Count == 0)
         {
             return new LintResult(parseResult, _diagnostics.ToArray())
             {
@@ -112,7 +128,27 @@ public sealed class LintEngine
             _activeRules.Add(rule);
         }
 
-        if (_activeRules.Count == 0)
+        // Activate online rules for visitor traversal (target collection)
+        _activeOnlineRules.Clear();
+        for (var i = 0; i < _onlineRules.Count; i++)
+        {
+            var onlineRule = _onlineRules[i];
+            if (!IsRuleEnabled(onlineRule.Id, effectiveConfig.Rules))
+            {
+                continue;
+            }
+
+            if (!onlineRule.SupportsDocumentKind(classifiedParseResult.Classification.FinalKind))
+            {
+                continue;
+            }
+
+            onlineRule.SetConfig(effectiveConfig);
+            _visitor.AddPass(onlineRule);
+            _activeOnlineRules.Add(onlineRule);
+        }
+
+        if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
             return new LintResult(parseResult, _diagnostics.ToArray())
             {
@@ -187,7 +223,8 @@ public sealed class LintEngine
     {
         if (!TryGetRuleConfig(ruleId, rules, out var ruleConfig))
         {
-            return true;
+            // No config found: local rules are enabled by default, opt-in rules are disabled.
+            return !RuleCatalog.IsOptIn(ruleId);
         }
 
         return ruleConfig!.Enabled;

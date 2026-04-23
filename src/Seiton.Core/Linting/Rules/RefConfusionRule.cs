@@ -1,24 +1,24 @@
 ﻿using Seiton.Core.Linting.OnlineAudit;
-using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class RefConfusionRule
+public sealed class RefConfusionRule : OnlineRuleBase
 {
     public const string RuleId = "ref-confusion";
 
-    public Diagnostic? Evaluate(ActionAuditTarget target, ActionRefResolution resolution)
+    public override string Id => RuleId;
+
+    public override string Name => "Ref Confusion";
+
+    public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)
     {
-        if (target.IsCommitSha || !resolution.HasBranchReference || !resolution.HasTagReference)
+        if (resolution is null || target.IsCommitSha || !resolution.Value.HasBranchReference || !resolution.Value.HasTagReference)
         {
-            return null;
+            return;
         }
 
-        return new Diagnostic(
-            DiagnosticSeverity.Error,
+        AddError(
             $"action uses '{target.UsesText}' references ambiguous symbolic ref '{target.Reference}' present as both branch and tag in '{target.Owner}/{target.Repo}'",
-            target.Location,
-            RuleId,
-            FilePath: target.FilePath);
+            target.Location);
     }
 }

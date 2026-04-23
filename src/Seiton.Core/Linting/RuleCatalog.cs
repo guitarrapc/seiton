@@ -64,13 +64,17 @@ internal static class RuleCatalog
         ("local-action-inputs", 51, static () => new LocalActionInputsRule()),
     ];
 
-    private static readonly (string Id, int Priority)[] AdditionalRuleMetadata =
+    // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
+    // traversal for target collection and post-traversal async resolution by OnlineAuditEngine.
+    private static readonly (string Id, int Priority, Func<IOnlineRule> Factory)[] OnlineRuleFactories =
     [
-        ("known-vulnerable-actions", 29),
-        ("impostor-commit", 30),
-        ("ref-confusion", 31),
-        ("stale-action-refs", 32),
+        (KnownVulnerableActionsRule.RuleId, 29, static () => new KnownVulnerableActionsRule()),
+        (ImpostorCommitRule.RuleId, 30, static () => new ImpostorCommitRule()),
+        (RefConfusionRule.RuleId, 31, static () => new RefConfusionRule()),
+        (StaleActionRefsRule.RuleId, 32, static () => new StaleActionRefsRule()),
     ];
+
+    private static readonly IReadOnlySet<string> OptInOnlyRuleIds = BuildOptInOnlyRuleIdSet();
 
     private static readonly (string Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
@@ -93,6 +97,27 @@ internal static class RuleCatalog
         }
 
         return rules;
+    }
+
+    public static IOnlineRule[] CreateOnlineRules()
+    {
+        var rules = new IOnlineRule[OnlineRuleFactories.Length];
+        for (var i = 0; i < OnlineRuleFactories.Length; i++)
+        {
+            rules[i] = OnlineRuleFactories[i].Factory();
+        }
+
+        return rules;
+    }
+
+    public static bool IsOptIn(string? ruleId)
+    {
+        if (string.IsNullOrEmpty(ruleId))
+        {
+            return false;
+        }
+
+        return OptInOnlyRuleIds.Contains(ruleId);
     }
 
     public static int GetPriority(string? ruleId)
@@ -248,18 +273,29 @@ internal static class RuleCatalog
 
     private static (string Id, int Priority)[] BuildAllRuleMetadata()
     {
-        var metadata = new (string Id, int Priority)[DefaultRuleFactories.Length + AdditionalRuleMetadata.Length];
+        var metadata = new (string Id, int Priority)[DefaultRuleFactories.Length + OnlineRuleFactories.Length];
         for (var i = 0; i < DefaultRuleFactories.Length; i++)
         {
             metadata[i] = (DefaultRuleFactories[i].Id, DefaultRuleFactories[i].Priority);
         }
 
-        for (var i = 0; i < AdditionalRuleMetadata.Length; i++)
+        for (var i = 0; i < OnlineRuleFactories.Length; i++)
         {
-            metadata[DefaultRuleFactories.Length + i] = AdditionalRuleMetadata[i];
+            metadata[DefaultRuleFactories.Length + i] = (OnlineRuleFactories[i].Id, OnlineRuleFactories[i].Priority);
         }
 
         return metadata;
+    }
+
+    private static IReadOnlySet<string> BuildOptInOnlyRuleIdSet()
+    {
+        var set = new HashSet<string>(OnlineRuleFactories.Length, StringComparer.Ordinal);
+        for (var i = 0; i < OnlineRuleFactories.Length; i++)
+        {
+            set.Add(OnlineRuleFactories[i].Id);
+        }
+
+        return set;
     }
 
     private static IReadOnlyDictionary<string, string> BuildReverseCanonicalRuleIdMap()

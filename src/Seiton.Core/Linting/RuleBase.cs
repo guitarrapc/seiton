@@ -61,6 +61,16 @@ public abstract class RuleBase : IRule
     {
     }
 
+    protected void AddError(string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location);
+    }
+
+    protected void AddWarning(string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location);
+    }
+
     protected void AddJobError(Job job, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, BuildJobLocation(job));

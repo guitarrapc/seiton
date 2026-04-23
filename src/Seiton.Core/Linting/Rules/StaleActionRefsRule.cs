@@ -1,24 +1,24 @@
 ﻿using Seiton.Core.Linting.OnlineAudit;
-using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting.Rules;
 
-public sealed class StaleActionRefsRule
+public sealed class StaleActionRefsRule : OnlineRuleBase
 {
     public const string RuleId = "stale-action-refs";
 
-    public Diagnostic? Evaluate(ActionAuditTarget target, ActionRefResolution resolution)
+    public override string Id => RuleId;
+
+    public override string Name => "Stale Action Refs";
+
+    public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)
     {
-        if (!target.IsCommitSha || !resolution.CommitExists || resolution.IsTaggedCommit)
+        if (resolution is null || !target.IsCommitSha || !resolution.Value.CommitExists || resolution.Value.IsTaggedCommit)
         {
-            return null;
+            return;
         }
 
-        return new Diagnostic(
-            DiagnosticSeverity.Warning,
+        AddWarning(
             $"action uses '{target.UsesText}' pins commit '{target.Reference}' that is not associated with any current tag in '{target.Owner}/{target.Repo}'",
-            target.Location,
-            RuleId,
-            FilePath: target.FilePath);
+            target.Location);
     }
 }

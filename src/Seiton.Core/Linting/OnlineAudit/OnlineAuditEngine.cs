@@ -9,6 +9,10 @@ using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting.OnlineAudit;
 
+/// <summary>
+/// Performs post-traversal async resolution for <see cref="IOnlineRule"/> instances
+/// whose targets were collected during <see cref="WorkflowVisitor"/> traversal.
+/// </summary>
 public sealed class OnlineAuditEngine(
     IActionAdvisoryProvider? actionAdvisoryProvider,
     IActionRefResolver? actionRefResolver,
@@ -17,22 +21,18 @@ public sealed class OnlineAuditEngine(
     private readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
     private readonly IActionRefResolver? refResolver = actionRefResolver;
     private readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
-    private readonly KnownVulnerableActionsRule knownVulnerableActionsRule = new();
-    private readonly ImpostorCommitRule impostorCommitRule = new();
-    private readonly RefConfusionRule refConfusionRule = new();
-    private readonly StaleActionRefsRule staleActionRefsRule = new();
     private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
 
+    /// <summary>
+    /// Resolve targets collected by <paramref name="onlineRules"/> during visitor traversal,
+    /// evaluate each rule, and return aggregated diagnostics.
+    /// </summary>
     public async Task<OnlineAuditResult> AuditAsync(
         LintResult lintResult,
-        byte[] utf8Yaml,
-        string filePath,
+        IReadOnlyList<IOnlineRule> onlineRules,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
-        ArgumentNullException.ThrowIfNull(utf8Yaml);
-
-        if (lintResult.Workflow is null)
+        if (onlineRules.Count == 0)
         {
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
@@ -42,15 +42,17 @@ public sealed class OnlineAuditEngine(
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        var targets = CollectTargets(lintResult.Workflow, lintResult.ParseResult.Arena!, utf8Yaml, filePath);
+        // Collect unique targets from all online rules (deduplicate by UsesText)
+        var targets = CollectUniqueTargets(onlineRules);
         if (targets.Count == 0)
         {
             return new OnlineAuditResult(lintResult.Diagnostics, AddedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
+        // Resolve all unique targets with concurrency control
         var maxConcurrency = Math.Max(1, networkConfig.MaxConcurrency);
         using var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
-        var outcomes = new AuditOutcome[targets.Count];
+        var resolutions = new TargetResolution[targets.Count];
         var tasks = new Task[targets.Count];
         for (var i = 0; i < targets.Count; i++)
         {
@@ -60,7 +62,7 @@ public sealed class OnlineAuditEngine(
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    outcomes[index] = await AuditTargetAsync(targets[index], cancellationToken);
+                    resolutions[index] = await ResolveTargetAsync(targets[index], cancellationToken);
                 }
                 finally
                 {
@@ -71,35 +73,81 @@ public sealed class OnlineAuditEngine(
 
         await Task.WhenAll(tasks);
 
-        var diagnostics = new List<Diagnostic>(lintResult.Diagnostics.Length + targets.Count * 2);
-        diagnostics.AddRange(lintResult.Diagnostics);
-        var addedCount = 0;
+        // Build resolution lookup for evaluation
+        var resolutionLookup = new Dictionary<string, TargetResolution>(targets.Count, StringComparer.Ordinal);
         var skippedCount = 0;
         var failedCount = 0;
-        for (var i = 0; i < outcomes.Length; i++)
+        for (var i = 0; i < targets.Count; i++)
         {
-            var outcome = outcomes[i];
-            diagnostics.AddRange(outcome.Diagnostics);
-            addedCount += outcome.Diagnostics.Length;
-            if (outcome.Skipped)
+            resolutionLookup[targets[i].UsesText] = resolutions[i];
+            if (resolutions[i].Skipped)
             {
                 skippedCount++;
             }
 
-            if (outcome.Failed)
+            if (resolutions[i].Failed)
             {
                 failedCount++;
+            }
+        }
+
+        // Evaluate all online rules with resolved data
+        for (var i = 0; i < onlineRules.Count; i++)
+        {
+            var rule = onlineRules[i];
+            var collected = rule.CollectedTargets;
+            for (var j = 0; j < collected.Count; j++)
+            {
+                var target = collected[j];
+                if (resolutionLookup.TryGetValue(target.UsesText, out var resolution)
+                    && !resolution.Failed && !resolution.Skipped)
+                {
+                    rule.EvaluateTarget(target, resolution.Advisory, resolution.RefResolution);
+                }
+            }
+        }
+
+        // Collect diagnostics from all online rules
+        var diagnostics = new List<Diagnostic>(lintResult.Diagnostics.Length + targets.Count * 2);
+        diagnostics.AddRange(lintResult.Diagnostics);
+        var addedCount = 0;
+        for (var i = 0; i < onlineRules.Count; i++)
+        {
+            var ruleDiags = onlineRules[i].GetDiagnostics();
+            for (var j = 0; j < ruleDiags.Count; j++)
+            {
+                diagnostics.Add(ruleDiags[j]);
+                addedCount++;
             }
         }
 
         return new OnlineAuditResult(diagnostics.ToArray(), addedCount, skippedCount, failedCount);
     }
 
-    private async Task<AuditOutcome> AuditTargetAsync(ActionAuditTarget target, CancellationToken cancellationToken)
+    private static List<ActionAuditTarget> CollectUniqueTargets(IReadOnlyList<IOnlineRule> onlineRules)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var targets = new List<ActionAuditTarget>();
+        for (var i = 0; i < onlineRules.Count; i++)
+        {
+            var collected = onlineRules[i].CollectedTargets;
+            for (var j = 0; j < collected.Count; j++)
+            {
+                if (seen.Add(collected[j].UsesText))
+                {
+                    targets.Add(collected[j]);
+                }
+            }
+        }
+
+        return targets;
+    }
+
+    private async Task<TargetResolution> ResolveTargetAsync(ActionAuditTarget target, CancellationToken cancellationToken)
     {
         if (ShouldIgnore(target))
         {
-            return new AuditOutcome([], Skipped: true, Failed: false);
+            return new TargetResolution(null, null, Skipped: true, Failed: false);
         }
 
         var timeout = networkConfig.TimeoutSeconds > 0
@@ -126,39 +174,11 @@ public sealed class OnlineAuditEngine(
                 resolution = await refResolver.ResolveAsync(target.Owner, target.Repo, target.Reference, cts.Token);
             }
 
-            var diagnostics = new List<Diagnostic>(4);
-            var knownVulnerable = knownVulnerableActionsRule.Evaluate(target, advisory);
-            if (knownVulnerable is not null)
-            {
-                diagnostics.Add(knownVulnerable.Value);
-            }
-
-            if (resolution is not null)
-            {
-                var impostorCommit = impostorCommitRule.Evaluate(target, resolution.Value);
-                if (impostorCommit is not null)
-                {
-                    diagnostics.Add(impostorCommit.Value);
-                }
-
-                var refConfusion = refConfusionRule.Evaluate(target, resolution.Value);
-                if (refConfusion is not null)
-                {
-                    diagnostics.Add(refConfusion.Value);
-                }
-
-                var staleActionRef = staleActionRefsRule.Evaluate(target, resolution.Value);
-                if (staleActionRef is not null)
-                {
-                    diagnostics.Add(staleActionRef.Value);
-                }
-            }
-
-            return new AuditOutcome(diagnostics.ToArray(), Skipped: false, Failed: false);
+            return new TargetResolution(advisory, resolution, Skipped: false, Failed: false);
         }
         catch when (networkConfig.OnError == NetworkErrorMode.Skip)
         {
-            return new AuditOutcome([], Skipped: false, Failed: true);
+            return new TargetResolution(null, null, Skipped: false, Failed: true);
         }
     }
 
@@ -177,56 +197,6 @@ public sealed class OnlineAuditEngine(
         return false;
     }
 
-    private static List<ActionAuditTarget> CollectTargets(Workflow workflow, AstArena arena, byte[] utf8Yaml, string filePath)
-    {
-        var result = new List<ActionAuditTarget>();
-        var jobs = workflow.Jobs;
-        if (jobs.Count == 0)
-        {
-            return result;
-        }
-
-        foreach (var pair in jobs)
-        {
-            var job = pair.Value;
-
-            var workflowCall = job.WorkflowCall;
-            if (workflowCall is not null)
-            {
-                TryAddTarget(result, workflowCall.Uses, arena, utf8Yaml, filePath);
-            }
-
-            var steps = job.Steps;
-            if (steps is null || steps.Count == 0)
-            {
-                continue;
-            }
-
-            for (var i = 0; i < steps.Count; i++)
-            {
-                if (steps[i].Exec is ExecAction action)
-                {
-                    TryAddTarget(result, action.Uses, arena, utf8Yaml, filePath);
-                }
-            }
-        }
-
-        return result;
-    }
-
-    private static void TryAddTarget(List<ActionAuditTarget> targets, StringNodeId usesNode, AstArena arena, byte[] utf8Yaml, string filePath)
-    {
-        var usesText = Encoding.UTF8.GetString(arena.GetStringValue(usesNode));
-        if (string.IsNullOrWhiteSpace(usesText)
-            || usesText.StartsWith("./", StringComparison.Ordinal)
-            || usesText.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
-            || !TryParseActionReference(usesText, out var owner, out var repo, out var reference))
-        {
-            return;
-        }
-
-        targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, arena.GetStringRange(usesNode), filePath));
-    }
     private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
     {
         if (entries.Count == 0)
@@ -245,7 +215,7 @@ public sealed class OnlineAuditEngine(
         return compiled;
     }
 
-    private readonly record struct AuditOutcome(Diagnostic[] Diagnostics, bool Skipped, bool Failed);
+    private readonly record struct TargetResolution(ActionAdvisory? Advisory, ActionRefResolution? RefResolution, bool Skipped, bool Failed);
     private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
 }
 
