@@ -768,7 +768,7 @@ public sealed class LintEngine
                 if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
                 {
                     var internalRuleIdString = internalRuleId.ToId();
-                    if (RuleCatalog.IsNonDisableable(internalRuleIdString))
+                    if (RuleCatalog.IsNonDisableable(internalRuleId))
                     {
                         configurationDiagnostics.Add(new Diagnostic(
                             DiagnosticSeverity.Error,

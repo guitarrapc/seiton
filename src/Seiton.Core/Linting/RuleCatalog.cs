@@ -75,7 +75,7 @@ internal static class RuleCatalog
         (RuleId.StaleActionRefs, 32, static () => new StaleActionRefsRule()),
     ];
 
-    private static readonly IReadOnlySet<string> OptInOnlyRuleIds = BuildOptInOnlyRuleIdSet();
+    private static readonly IReadOnlySet<RuleId> OptInOnlyRuleIds = BuildOptInOnlyRuleIdSet();
 
     private static readonly (RuleId Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
@@ -120,7 +120,7 @@ internal static class RuleCatalog
             return false;
         }
 
-        return OptInOnlyRuleIds.Contains(ruleId);
+        return RuleIdExtensions.TryParse(ruleId, out var parsed) && OptInOnlyRuleIds.Contains(parsed);
     }
 
     public static int GetPriority(string? ruleId)
@@ -265,12 +265,12 @@ internal static class RuleCatalog
         return metadata;
     }
 
-    private static IReadOnlySet<string> BuildOptInOnlyRuleIdSet()
+    private static IReadOnlySet<RuleId> BuildOptInOnlyRuleIdSet()
     {
-        var set = new HashSet<string>(OnlineRuleFactories.Length, StringComparer.Ordinal);
+        var set = new HashSet<RuleId>(OnlineRuleFactories.Length);
         for (var i = 0; i < OnlineRuleFactories.Length; i++)
         {
-            set.Add(OnlineRuleFactories[i].Id.ToId());
+            set.Add(OnlineRuleFactories[i].Id);
         }
 
         return set;

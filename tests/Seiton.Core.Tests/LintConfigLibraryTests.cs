@@ -571,7 +571,7 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
-    public async Task Validate_RuleSpecificConfig_ProjectsTypedSpecificPayload()
+    public async Task Validate_RuleSpecificConfig_ProjectsTypedFields()
     {
         var yaml = """
         rules:

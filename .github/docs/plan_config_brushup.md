@@ -867,3 +867,135 @@ Phase 3 で `RuleSpecificConfigNormalizer` → `RuleConfigNormalizer` にリフ�
 #### スループット (Mean)
 
 Config フラット化・RuleId enum 化による性能退行は見られない。Before/After の差は .NET バージョン差による改善の範囲内。
+
+## 9. 課題実装記録 (Phase 13-16)
+
+### 9.1 課題 C: `GetPriority(string)` O(1) 化
+
+**変更ファイル:** `RuleCatalog.cs`
+
+**実装内容:**
+1. `FrozenDictionary<string, int> PriorityByRuleIdString` を静的フィールドとして追加
+2. `BuildPriorityLookup()` で `AllRuleMetadata` から `RuleId.ToId() → Priority` の辞書を構築し `ToFrozenDictionary()` で凍結
+3. `GetPriority(string)` を線形スキャンから `PriorityByRuleIdString.TryGetValue()` に置換
+4. `using System.Collections.Frozen;` 追加
+
+**効果:** O(n) → O(1)。LintEngine のソート比較で呼ばれるため、診断数 d に対して O(d * log(d)) → O(d * log(d)) だが定数倍が大幅改善。
+
+### 9.2 課題 D: RuleId→string→RuleId 往復変換の排除
+
+**変更ファイル:** `RuleCatalog.cs`, `RuleNormalizer.cs`, `ExclusionNormalizer.cs`, `LintEngine.cs`
+
+**実装内容:**
+1. `RuleCatalog` に `IsNonDisableable(RuleId)` オーバーロード追加 — 直接 `NonDisableableRuleIds.Contains(ruleId)`
+2. `RuleCatalog` に `TryGetMinimumSeverity(RuleId, out DiagnosticSeverity)` オーバーロード追加 — 直接 `MinimumSeverities.TryGetValue()`
+3. `RuleNormalizer.NormalizeRuleEntries()` — `IsNonDisableable(resolvedRuleIdString)` → `IsNonDisableable(resolvedRuleId)` (enum)
+4. `RuleNormalizer.NormalizeRuleEntries()` — `TryGetMinimumSeverity(resolvedRuleIdString, ...)` → `TryGetMinimumSeverity(resolvedRuleId, ...)` (enum)
+5. `ExclusionNormalizer.NormalizeExclusions()` — `IsNonDisableable(resolvedRuleIdString)` → `IsNonDisableable(resolvedRuleId)` (enum)
+6. `LintEngine` 行 771 — `IsNonDisableable(internalRuleIdString)` → `IsNonDisableable(internalRuleId)` (enum)
+
+**効果:** 内部パスで `RuleId → .ToId() → string → TryResolveRuleId → RuleId` の往復が不要に。string 引数 API は `Diagnostic.RuleId` (string 境界) 用に維持。
+
+### 9.3 課題 E: `OptInOnlyRuleIds` の RuleId enum 化
+
+**変更ファイル:** `RuleCatalog.cs`
+
+**実装内容:**
+1. `OptInOnlyRuleIds` の型を `IReadOnlySet<string>` → `IReadOnlySet<RuleId>` に変更
+2. `BuildOptInOnlyRuleIdSet()` を `HashSet<RuleId>` 構築に変更 (`.ToId()` 呼び出し削除、`StringComparer` 不要に)
+3. `IsOptIn(string)` 内で `RuleIdExtensions.TryParse()` → `OptInOnlyRuleIds.Contains(parsed)` に変更
+
+**効果:** `NonDisableableRuleIds` と同様に enum ベースの Set 参照で一貫性確保。初期化時の文字列アロケーション削減。
+
+### 9.4 課題 F: `RuleConfigNormalizer.Normalize` 未使用パラメータ削除
+
+**変更ファイル:** `RuleConfigNormalizer.cs`, `RuleNormalizer.cs`
+
+**実装内容:**
+1. `RuleConfigNormalizer.Normalize(RuleConfig config, RuleId ruleId, string filePath, List<Diagnostic> diagnostics)` から `RuleId ruleId` パラメータを削除
+2. `RuleNormalizer.NormalizeRuleEntries()` の呼び出し側から `resolvedRuleId` 引数を削除
+
+**効果:** Phase 3 リファクタリング時の残存パラメータを除去。API の意図が明確に。
+
+### 9.5 課題 G: テストメソッド名リネーム
+
+**変更ファイル:** `LintConfigLibraryTests.cs`
+
+**実装内容:**
+- `Validate_RuleSpecificConfig_ProjectsTypedSpecificPayload` → `Validate_RuleSpecificConfig_ProjectsTypedFields` にリネーム
+
+**効果:** 廃止済みの `SpecificPayload` 概念名をフラット化後の実態に合わせた命名に修正。
+
+### 9.6 テスト結果
+
+全 558 テスト通過 (0 失敗, 0 スキップ)。
+
+### 9.7 ベンチマーク結果 (Phase 13-16 完了後)
+
+環境: .NET 10.0.6, AMD Ryzen 9 7950X3D, ShortRun (IterationCount=3)
+
+#### ActionRefParseBenchmark
+
+| Method | Mean | Error | StdDev | Ratio | Rank | Gen0 | Allocated |
+|---|---|---|---|---|---|---|---|
+| TryParseRemoteUses (short uses) | 14.15 ns | 2.356 ns | 0.129 ns | 1.00 | 1 | - | - |
+| TryParseRemoteUses (uses with subpath + .yml) | 15.46 ns | 7.787 ns | 0.427 ns | 1.09 | 1 | - | - |
+| Parse + TryGetOwnerRepoPolicyKey | 31.50 ns | 9.350 ns | 0.513 ns | 2.23 | 2 | - | - |
+| TryParseActionReference(string) stackalloc | 55.72 ns | 35.199 ns | 1.929 ns | 3.94 | 3 | 0.0022 | 112 B |
+| Parse + ref/path major | 75.80 ns | 32.723 ns | 1.794 ns | 5.36 | 4 | 0.0005 | 24 B |
+
+#### LintBenchmark
+
+| Method | Size | FixEnabled | Mean | Allocated |
+|---|---|---|---|---|
+| LintEngine.Check | Small | False | 44.72 μs | 14.42 KB |
+| LintEngine.Check | Small | True | 51.63 μs | 14.84 KB |
+| LintEngine.Check | Medium | False | 809.89 μs | 89.91 KB |
+| LintEngine.Check | Medium | True | 1,394.83 μs | 96.34 KB |
+| LintEngine.Check | Large | False | 11,084.86 μs | 420.21 KB |
+| LintEngine.Check | Large | True | 22,827.94 μs | 450.29 KB |
+
+#### ParsingBenchmark
+
+| Method | Size | Mean | Allocated |
+|---|---|---|---|
+| ExpressionExtractor.ExtractParseAndValidate | Small | 4.712 μs | 6464 B |
+| VYaml scan + adapter-like mapping | Small | 9.911 μs | - |
+| VYaml raw event scan | Small | 9.489 μs | - |
+| WorkflowParser.Parse (AST + rules) | Small | 31.780 μs | 5112 B |
+| ExpressionExtractor.ExtractParseAndValidate | Medium | 56.206 μs | 90752 B |
+| VYaml scan + adapter-like mapping | Medium | 66.437 μs | - |
+| VYaml raw event scan | Medium | 66.228 μs | - |
+| WorkflowParser.Parse (AST + rules) | Medium | 564.449 μs | 27336 B |
+| ExpressionExtractor.ExtractParseAndValidate | Large | 285.557 μs | 430920 B |
+| VYaml scan + adapter-like mapping | Large | 329.615 μs | - |
+| VYaml raw event scan | Large | 331.022 μs | - |
+| WorkflowParser.Parse (AST + rules) | Large | 7,501.437 μs | 113592 B |
+
+### 9.8 Phase 13-16 前後比較 (8.2 vs 9.7)
+
+#### アロケーション
+
+| ベンチマーク | Size | 8.2 After | 9.7 Post-opt | 差分 |
+|---|---|---|---|---|
+| LintEngine.Check (Fix=off) | Small | 14.42 KB | 14.42 KB | **±0** |
+| LintEngine.Check (Fix=off) | Medium | 89.91 KB | 89.91 KB | **±0** |
+| LintEngine.Check (Fix=off) | Large | 420.21 KB | 420.21 KB | **±0** |
+| WorkflowParser.Parse | Small | 5112 B | 5112 B | **±0** |
+| WorkflowParser.Parse | Medium | 27336 B | 27336 B | **±0** |
+| WorkflowParser.Parse | Large | 113592 B | 113592 B | **±0** |
+
+**結論:** アロケーション完全一致。最適化はゼロアロケーション変更のみ。
+
+#### スループット
+
+| ベンチマーク | Size | 8.2 After | 9.7 Post-opt | 変化率 |
+|---|---|---|---|---|
+| LintEngine.Check (Fix=off) | Small | 46.67 μs | 44.72 μs | **-4.2%** |
+| LintEngine.Check (Fix=off) | Medium | 839.47 μs | 809.89 μs | **-3.5%** |
+| LintEngine.Check (Fix=off) | Large | 11,584.18 μs | 11,084.86 μs | **-4.3%** |
+| WorkflowParser.Parse | Small | 29.402 μs | 31.780 μs | +8.1% (誤差範囲) |
+| WorkflowParser.Parse | Medium | 502.982 μs | 564.449 μs | +12.2% (誤差範囲) |
+| WorkflowParser.Parse | Large | 7,973.685 μs | 7,501.437 μs | **-5.9%** |
+
+**結論:** Lint パスで 3-4% の改善傾向。GetPriority O(1) 化と往復変換排除の効果と考えられる。Parser は変更なしのため差はノイズ。ShortRun (N=3) のため統計的有意性は限定的。
