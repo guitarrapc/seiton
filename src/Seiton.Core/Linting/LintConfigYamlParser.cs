@@ -17,22 +17,6 @@ internal static class LintConfigYamlParser
     private static readonly FixConfig DefaultFix = new();
     private static readonly NetworkConfig DefaultNetwork = new();
 
-    [Flags]
-    private enum RuleKeyFlags : ushort
-    {
-        None = 0,
-        Events = 1 << 0,
-        KnownHostedLabels = 1 << 1,
-        PublicRegistries = 1 << 2,
-        UntrustedTriggers = 1 << 3,
-        OutputCommands = 1 << 4,
-        AssumeEvents = 1 << 5,
-        Allow = 1 << 6,
-        Deny = 1 << 7,
-        MaxStepEnvSecrets = 1 << 8,
-        MaxJobSecrets = 1 << 9,
-    }
-
     /// <summary>
     /// Single source of truth for flag↔YAML key name mapping.
     /// When adding a new rule-specific key, add a row here and a corresponding case in AddRule().
@@ -370,7 +354,13 @@ internal static class LintConfigYamlParser
             return;
         }
 
-        if (!RuleCatalog.TryGetAllowedConfigKeys(resolvedRuleId, out var allowed))
+        if (!RuleCatalog.TryGetAllowedConfigKeys(resolvedRuleId, out var allowedFlags))
+        {
+            return;
+        }
+
+        var disallowed = seenFlags & ~allowedFlags;
+        if (disallowed == RuleKeyFlags.None)
         {
             return;
         }
@@ -378,7 +368,7 @@ internal static class LintConfigYamlParser
         for (var i = 0; i < RuleKeyFlagEntries.Length; i++)
         {
             var (flag, keyName) = RuleKeyFlagEntries[i];
-            if ((seenFlags & flag) != 0 && !allowed.Contains(keyName))
+            if ((disallowed & flag) != 0)
             {
                 diagnostics.Add(Diag(
                     $"rule '{resolvedRuleId.ToId()}' does not accept '{keyName}' config key",

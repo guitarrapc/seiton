@@ -141,7 +141,7 @@ public abstract class RawYamlValue
 {
 }
 
-/// <summary>A raw YAML string value.</summary>
+/// <summary>A raw YAML scalar text value.</summary>
 public sealed class RawYamlString : RawYamlValue
 {
     public StringNodeId Value { get; init; }

@@ -92,7 +92,7 @@ internal static class RuleCatalog
 
     private static readonly IReadOnlyDictionary<RuleId, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
 
-    private static readonly IReadOnlyDictionary<RuleId, IReadOnlySet<string>> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
+    private static readonly IReadOnlyDictionary<RuleId, RuleKeyFlags> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
     private static readonly FrozenDictionary<string, int> PriorityByRuleIdString = BuildPriorityLookup();
 
@@ -220,9 +220,9 @@ internal static class RuleCatalog
     }
 
     /// <summary>Gets the set of allowed rule-specific configuration keys for the specified rule.</summary>
-    public static bool TryGetAllowedConfigKeys(RuleId ruleId, out IReadOnlySet<string> allowedKeys)
+    public static bool TryGetAllowedConfigKeys(RuleId ruleId, out RuleKeyFlags allowedKeys)
     {
-        return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys!);
+        return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys);
     }
 
     private static IReadOnlyDictionary<string, RuleId> BuildCanonicalRuleIdMap()
@@ -303,36 +303,25 @@ internal static class RuleCatalog
         };
     }
 
-    private static IReadOnlyDictionary<RuleId, IReadOnlySet<string>> BuildAllowedRuleConfigKeys()
+    private static IReadOnlyDictionary<RuleId, RuleKeyFlags> BuildAllowedRuleConfigKeys()
     {
-        var empty = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal);
-        var map = new Dictionary<RuleId, IReadOnlySet<string>>();
-
-        // Pre-build named sets for rules that have specific config keys
-        var events = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "events" };
-        var knownHostedLabels = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "known-hosted-labels" };
-        var publicRegistries = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "public-registries" };
-        var untrustedTriggers = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "untrusted-triggers" };
-        var outputCommands = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "output-commands" };
-        var assumeEvents = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "assume-events" };
-        var allowDeny = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "allow", "deny" };
-        var secretThresholds = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal) { "max-step-env-secrets", "max-job-secrets" };
+        var map = new Dictionary<RuleId, RuleKeyFlags>();
 
         for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
             var id = AllRuleMetadata[i].Id;
             map[id] = id switch
             {
-                RuleId.DangerousTriggers => events,
-                RuleId.RunnerLabel => knownHostedLabels,
-                RuleId.Credentials => publicRegistries,
-                RuleId.CachePoisoning => untrustedTriggers,
-                RuleId.SelfHostedRunner => untrustedTriggers,
-                RuleId.UnredactedSecrets => outputCommands,
-                RuleId.ExprUndefinedVar => assumeEvents,
-                RuleId.ForbiddenUses => allowDeny,
-                RuleId.OverprovisionedSecrets => secretThresholds,
-                _ => empty,
+                RuleId.DangerousTriggers => RuleKeyFlags.Events,
+                RuleId.RunnerLabel => RuleKeyFlags.KnownHostedLabels,
+                RuleId.Credentials => RuleKeyFlags.PublicRegistries,
+                RuleId.CachePoisoning => RuleKeyFlags.UntrustedTriggers,
+                RuleId.SelfHostedRunner => RuleKeyFlags.UntrustedTriggers,
+                RuleId.UnredactedSecrets => RuleKeyFlags.OutputCommands,
+                RuleId.ExprUndefinedVar => RuleKeyFlags.AssumeEvents,
+                RuleId.ForbiddenUses => RuleKeyFlags.Allow | RuleKeyFlags.Deny,
+                RuleId.OverprovisionedSecrets => RuleKeyFlags.MaxStepEnvSecrets | RuleKeyFlags.MaxJobSecrets,
+                _ => RuleKeyFlags.None,
             };
         }
 
