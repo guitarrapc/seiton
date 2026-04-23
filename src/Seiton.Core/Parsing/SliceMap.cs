@@ -15,6 +15,7 @@ public readonly struct SliceMap<TValue>
         public readonly Utf8Slice Key = key;
         public readonly TValue Value = value;
 
+        /// <summary>Deconstructs into key and value.</summary>
         public void Deconstruct(out Utf8Slice key, out TValue value)
         {
             key = Key;
@@ -31,12 +32,14 @@ public readonly struct SliceMap<TValue>
         _caseSensitive = caseSensitive;
     }
 
+    /// <summary>Gets the number of entries in the map.</summary>
     public int Count
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => _entries?.Length ?? 0;
     }
 
+    /// <summary>Looks up a value by raw UTF-8 key bytes against the YAML <paramref name="source"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(ReadOnlySpan<byte> source, ReadOnlySpan<byte> key, out TValue value)
     {
@@ -56,6 +59,7 @@ public readonly struct SliceMap<TValue>
         return false;
     }
 
+    /// <summary>Returns whether the map contains the given key.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsKey(ReadOnlySpan<byte> source, ReadOnlySpan<byte> key)
         => TryGetValue(source, key, out _);
@@ -67,6 +71,7 @@ public readonly struct SliceMap<TValue>
     public bool ContainsKey(ReadOnlySpan<byte> source, Utf8Slice key)
         => ContainsKey(source, key.AsSpan(source));
 
+    /// <summary>Looks up the index of the entry with the given key.</summary>
     public bool TryGetIndex(ReadOnlySpan<byte> source, ReadOnlySpan<byte> key, out int index)
     {
         if (_entries is not null)
@@ -85,8 +90,10 @@ public readonly struct SliceMap<TValue>
         return false;
     }
 
+    /// <summary>Returns the entries as a span for iteration.</summary>
     public ReadOnlySpan<Entry> Entries => _entries ?? [];
 
+    /// <summary>Returns an enumerator over all entries.</summary>
     public Enumerator GetEnumerator() => new(_entries);
 
     public struct Enumerator

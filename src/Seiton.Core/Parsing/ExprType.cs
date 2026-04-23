@@ -120,10 +120,13 @@ public sealed class ObjectExprType : ExprType
         Strict = strict;
     }
 
+    /// <summary>Gets the statically known property map, or <c>null</c> if untyped.</summary>
     public IReadOnlyDictionary<Utf8String, ExprType>? Properties => properties;
 
+    /// <summary>Gets the type used for dynamically named properties (e.g. <c>env.*</c>), or <c>null</c>.</summary>
     public ExprType? DynamicPropertyType { get; }
 
+    /// <summary>Gets whether accessing an unknown property on this object should be an error.</summary>
     public bool Strict { get; }
 
     public override string TypeName => "object";
@@ -138,6 +141,7 @@ public sealed class ObjectExprType : ExprType
         return target is ObjectExprType;
     }
 
+    /// <summary>Resolves a property by UTF-8 name (case-insensitive), falling back to <see cref="DynamicPropertyType"/>.</summary>
     public bool TryGetProperty(ReadOnlySpan<byte> nameUtf8, out ExprType propertyType)
     {
         if (properties is not null)

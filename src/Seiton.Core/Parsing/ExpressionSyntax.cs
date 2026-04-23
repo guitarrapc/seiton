@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing;
 
+/// <summary>Kind of node in the expression AST.</summary>
 public enum ExpressionNodeKind
 {
     Identifier,
@@ -15,6 +16,7 @@ public enum ExpressionNodeKind
     Binary,
 }
 
+/// <summary>Operator kind for unary and binary expression nodes.</summary>
 public enum ExpressionOperator
 {
     None,
@@ -29,6 +31,7 @@ public enum ExpressionOperator
     Not,
 }
 
+/// <summary>A single node in the expression AST (flat array representation).</summary>
 public readonly record struct ExpressionNode(
     ExpressionNodeKind Kind,
     int Left,
@@ -38,11 +41,13 @@ public readonly record struct ExpressionNode(
     Utf8Slice Token,
     ExpressionOperator Operator);
 
+/// <summary>Result of parsing a GitHub Actions expression string.</summary>
 public readonly record struct ExpressionParseResult(
     int RootNode,
     ExpressionNode[] Nodes,
     int[] Arguments,
     Diagnostic[] Diagnostics)
 {
+    /// <summary>Gets whether the parse produced a valid root node.</summary>
     public bool HasRoot => RootNode >= 0;
 }

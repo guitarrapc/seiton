@@ -5,6 +5,7 @@ namespace Seiton.Core.Parsing;
 
 public static class ExpressionParser
 {
+    /// <summary>Parses a GitHub Actions expression (the content between <c>${{</c> and <c>}}</c>) into an AST.</summary>
     public static ExpressionParseResult Parse(ReadOnlySpan<byte> expressionUtf8)
     {
         using var parser = new Parser(expressionUtf8);

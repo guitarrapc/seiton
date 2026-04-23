@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
+/// <summary>AST node representing a single job in a workflow.</summary>
 public sealed class Job
 {
     public StringNodeId Id { get; init; }

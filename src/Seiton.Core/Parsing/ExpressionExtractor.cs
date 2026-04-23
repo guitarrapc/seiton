@@ -3,12 +3,14 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Parsing;
 
+/// <summary>A located <c>${{ ... }}</c> expression occurrence within the YAML source.</summary>
 public readonly record struct ExpressionOccurrence(
     Utf8Slice Slice,
     TextRange Location);
 
 public static class ExpressionExtractor
 {
+    /// <summary>Extracts all <c>${{ ... }}</c> expression occurrences from the UTF-8 YAML bytes.</summary>
     public static ExpressionOccurrence[] Extract(byte[] utf8Yaml)
     {
         var expressions = new List<ExpressionOccurrence>();
@@ -52,6 +54,7 @@ public static class ExpressionExtractor
         return expressions.ToArray();
     }
 
+    /// <summary>Extracts all expressions and parses each one, returning occurrences and parse diagnostics.</summary>
     public static (ExpressionOccurrence[] Occurrences, Diagnostic[] Diagnostics) ExtractAndParse(byte[] utf8Yaml)
     {
         var occurrences = Extract(utf8Yaml);
@@ -73,6 +76,7 @@ public static class ExpressionExtractor
         return (occurrences, diagnostics.ToArray());
     }
 
+    /// <summary>Extracts, parses, and semantically validates all expressions in the given context.</summary>
     public static (ExpressionOccurrence[] Occurrences, Diagnostic[] Diagnostics) ExtractParseAndValidate(
         byte[] utf8Yaml,
         ExpressionValidationContext context)

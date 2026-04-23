@@ -7,6 +7,7 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Parsing;
 
+/// <summary>Identifies which part of the workflow an expression appears in, for context-sensitive validation.</summary>
 public enum ExpressionValidationContext
 {
     Workflow,
@@ -62,6 +63,7 @@ public static class ExpressionSemanticAnalyzer
         return false;
     }
 
+    /// <summary>Validates expression semantics (undefined contexts, unknown functions, type mismatches) and returns diagnostics.</summary>
     public static Diagnostic[] Validate(
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
@@ -101,6 +103,7 @@ public static class ExpressionSemanticAnalyzer
         ValidateNode(rootNode, -1, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
     }
 
+    /// <summary>Infers the static type of the expression node at <paramref name="nodeId"/>.</summary>
     public static ExprType InferType(
         int nodeId,
         ExpressionNode[] nodes,
@@ -141,6 +144,7 @@ public static class ExpressionSemanticAnalyzer
         };
     }
 
+    /// <summary>Looks up the min/max argument count for a built-in expression function by its UTF-8 name.</summary>
     public static bool TryGetFunctionArity(ReadOnlySpan<byte> nameUtf8, out int minArgs, out int maxArgs)
     {
         if (TryGetFunctionSpec(nameUtf8, out var spec))

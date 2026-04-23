@@ -17,6 +17,7 @@ public sealed class ActionMetadata
     public TextRange Range { get; init; }
 }
 
+/// <summary>An input parameter declared in action metadata.</summary>
 public sealed class ActionMetadataInput
 {
     public StringNodeId Name { get; init; }
@@ -32,6 +33,7 @@ public sealed class ActionMetadataInput
     public TextRange Range { get; init; }
 }
 
+/// <summary>An output parameter declared in action metadata.</summary>
 public sealed class ActionMetadataOutput
 {
     public StringNodeId Name { get; init; }
@@ -43,6 +45,7 @@ public sealed class ActionMetadataOutput
     public TextRange Range { get; init; }
 }
 
+/// <summary>The <c>runs:</c> section of action metadata defining the execution entry points.</summary>
 public sealed class ActionMetadataRuns
 {
     public StringNodeId Using { get; init; }
@@ -70,6 +73,8 @@ public sealed class ActionMetadataRuns
     public TextRange Range { get; init; }
 }
 
+/// <summary>The <c>branding:</c> section of action metadata (icon and color).</summary>
+/// <summary>The <c>branding:</c> section of action metadata (icon and color).</summary>
 public sealed class ActionMetadataBranding
 {
     public StringNodeId Icon { get; init; }

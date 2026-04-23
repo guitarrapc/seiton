@@ -18,6 +18,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private bool _isReplaying;                                   // true when serving a virtual event
     private AnchorEvent _virtualCurrent;                         // current event when _isReplaying
 
+    /// <summary>Creates a new adapter wrapping the given UTF-8 YAML bytes for pull-based parsing.</summary>
     public VYamlStreamAdapter(Memory<byte> bytes)
     {
         _source = bytes;

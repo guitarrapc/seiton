@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing;
 
+/// <summary>Identifies whether a YAML document is a workflow or action metadata file.</summary>
 public enum DocumentKind
 {
     Unknown,
@@ -7,18 +8,21 @@ public enum DocumentKind
     ActionMetadata,
 }
 
+/// <summary>Result of classifying a document's kind from path and structural hints.</summary>
 public readonly record struct DocumentKindClassification(
     DocumentKind PathHintKind,
     DocumentKind FinalKind,
     bool HasHintMismatch,
     bool IsAmbiguous);
 
+/// <summary>Parse result combined with document kind classification.</summary>
 public readonly record struct ClassifiedParseResult(
     ParseResult ParseResult,
     DocumentKindClassification Classification);
 
 public static class DocumentKindClassifier
 {
+    /// <summary>Determines the document kind hint from the file path (e.g. <c>action.yml</c> → <see cref="DocumentKind.ActionMetadata"/>).</summary>
     public static DocumentKind GetPathHintKind(string filePath)
     {
         if (string.IsNullOrEmpty(filePath))
@@ -42,6 +46,7 @@ public static class DocumentKindClassifier
         return DocumentKind.Unknown;
     }
 
+    /// <summary>Finalizes the document kind using path hint and structural hints (<c>jobs:</c> / <c>runs:</c>).</summary>
     public static DocumentKind FinalizeKind(DocumentKind pathHintKind, bool hasJobs, bool hasRuns, out bool isAmbiguous, out bool hasHintMismatch)
     {
         isAmbiguous = false;

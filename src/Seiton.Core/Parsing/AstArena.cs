@@ -16,6 +16,7 @@ public readonly record struct StringNodeId : IEquatable<StringNodeId>
 
     private StringNodeId(int raw) => _raw = raw;
 
+    /// <summary>Gets whether this handle points to a valid node (<c>false</c> for <c>default</c>).</summary>
     public bool HasValue
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -45,6 +46,7 @@ public readonly record struct BoolNodeId : IEquatable<BoolNodeId>
 
     private BoolNodeId(int raw) => _raw = raw;
 
+    /// <summary>Gets whether this handle points to a valid node.</summary>
     public bool HasValue
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -74,6 +76,7 @@ public readonly record struct IntNodeId : IEquatable<IntNodeId>
 
     private IntNodeId(int raw) => _raw = raw;
 
+    /// <summary>Gets whether this handle points to a valid node.</summary>
     public bool HasValue
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -103,6 +106,7 @@ public readonly record struct FloatNodeId : IEquatable<FloatNodeId>
 
     private FloatNodeId(int raw) => _raw = raw;
 
+    /// <summary>Gets whether this handle points to a valid node.</summary>
     public bool HasValue
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -207,10 +211,12 @@ public sealed class AstArena : IDisposable
         EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
     }
 
+    /// <summary>Gets the raw UTF-8 source bytes that this arena indexes into.</summary>
     public byte[] Source => _source;
 
     // ---- String allocation ----
 
+    /// <summary>Allocates a string node with no embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public StringNodeId AddString(Utf8Slice value, bool quoted, TextRange range)
     {
@@ -219,6 +225,7 @@ public sealed class AstArena : IDisposable
         return StringNodeId.FromIndex(_stringCount++);
     }
 
+    /// <summary>Allocates a string node with an embedded expression (e.g. <c>${{ ... }}</c>).</summary>
     public StringNodeId AddString(Utf8Slice value, bool quoted, StringNodeId expression, TextRange range)
     {
         if (_stringCount == _strings.Length) Grow(ref _strings);
@@ -228,6 +235,7 @@ public sealed class AstArena : IDisposable
 
     // ---- Bool allocation ----
 
+    /// <summary>Allocates a bool node with no embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BoolNodeId AddBool(bool value, TextRange range)
     {
@@ -236,6 +244,7 @@ public sealed class AstArena : IDisposable
         return BoolNodeId.FromIndex(_boolCount++);
     }
 
+    /// <summary>Allocates a bool node with an embedded expression.</summary>
     public BoolNodeId AddBool(bool value, StringNodeId expression, TextRange range)
     {
         if (_boolCount == _bools.Length) Grow(ref _bools);
@@ -245,6 +254,7 @@ public sealed class AstArena : IDisposable
 
     // ---- Int allocation ----
 
+    /// <summary>Allocates an integer node.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IntNodeId AddInt(long value, TextRange range)
     {
@@ -255,6 +265,7 @@ public sealed class AstArena : IDisposable
 
     // ---- Float allocation ----
 
+    /// <summary>Allocates a float node with no embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public FloatNodeId AddFloat(double value, TextRange range)
     {
@@ -263,6 +274,7 @@ public sealed class AstArena : IDisposable
         return FloatNodeId.FromIndex(_floatCount++);
     }
 
+    /// <summary>Allocates a float node with an embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public FloatNodeId AddFloat(double value, StringNodeId expression, TextRange range)
     {
@@ -273,6 +285,7 @@ public sealed class AstArena : IDisposable
 
     // ---- String read ----
 
+    /// <summary>Resolves a string node's UTF-8 value bytes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ReadOnlySpan<byte> GetStringValue(StringNodeId id)
     {
@@ -280,6 +293,7 @@ public sealed class AstArena : IDisposable
         return _strings[id.Index].Value.AsSpan(_source);
     }
 
+    /// <summary>Resolves a string node's value as a <see cref="Utf8Slice"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Utf8Slice GetStringSlice(StringNodeId id)
     {
@@ -287,6 +301,7 @@ public sealed class AstArena : IDisposable
         return _strings[id.Index].Value;
     }
 
+    /// <summary>Returns whether the string node was YAML-quoted.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool GetStringQuoted(StringNodeId id)
     {
@@ -294,6 +309,7 @@ public sealed class AstArena : IDisposable
         return _strings[id.Index].Quoted;
     }
 
+    /// <summary>Returns the source location of a string node.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TextRange GetStringRange(StringNodeId id)
     {
@@ -301,6 +317,7 @@ public sealed class AstArena : IDisposable
         return _strings[id.Index].Range;
     }
 
+    /// <summary>Returns the embedded expression handle of a string node, or <c>default</c> if none.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public StringNodeId GetStringExpression(StringNodeId id)
     {
@@ -310,6 +327,7 @@ public sealed class AstArena : IDisposable
 
     // ---- Bool read ----
 
+    /// <summary>Resolves a bool node's value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool GetBoolValue(BoolNodeId id)
     {
@@ -317,6 +335,7 @@ public sealed class AstArena : IDisposable
         return _bools[id.Index].Value;
     }
 
+    /// <summary>Returns the source location of a bool node.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TextRange GetBoolRange(BoolNodeId id)
     {
@@ -324,6 +343,7 @@ public sealed class AstArena : IDisposable
         return _bools[id.Index].Range;
     }
 
+    /// <summary>Returns the embedded expression handle of a bool node, or <c>default</c> if none.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public StringNodeId GetBoolExpression(BoolNodeId id)
     {
@@ -333,6 +353,7 @@ public sealed class AstArena : IDisposable
 
     // ---- Int read ----
 
+    /// <summary>Resolves an integer node's value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public long GetIntValue(IntNodeId id)
     {
@@ -340,6 +361,7 @@ public sealed class AstArena : IDisposable
         return _ints[id.Index].Value;
     }
 
+    /// <summary>Returns the source location of an integer node.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TextRange GetIntRange(IntNodeId id)
     {
@@ -347,6 +369,7 @@ public sealed class AstArena : IDisposable
         return _ints[id.Index].Range;
     }
 
+    /// <summary>Returns the embedded expression handle of an integer node, or <c>default</c> if none.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public StringNodeId GetIntExpression(IntNodeId id)
     {
@@ -356,6 +379,7 @@ public sealed class AstArena : IDisposable
 
     // ---- Float read ----
 
+    /// <summary>Resolves a float node's value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public double GetFloatValue(FloatNodeId id)
     {
@@ -363,6 +387,7 @@ public sealed class AstArena : IDisposable
         return _floats[id.Index].Value;
     }
 
+    /// <summary>Returns the source location of a float node.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TextRange GetFloatRange(FloatNodeId id)
     {
@@ -370,6 +395,7 @@ public sealed class AstArena : IDisposable
         return _floats[id.Index].Range;
     }
 
+    /// <summary>Returns the embedded expression handle of a float node, or <c>default</c> if none.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public StringNodeId GetFloatExpression(FloatNodeId id)
     {

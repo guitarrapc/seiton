@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
+/// <summary>AST node representing a GitHub Actions workflow file.</summary>
 public sealed class Workflow
 {
     public StringNodeId Name { get; init; }

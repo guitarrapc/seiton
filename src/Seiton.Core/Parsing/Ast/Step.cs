@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
+/// <summary>AST node representing a single step within a job.</summary>
 public sealed class Step
 {
     public StringNodeId Id { get; init; }
@@ -19,6 +20,7 @@ public sealed class Step
     public TextRange Range { get; init; }
 }
 
+/// <summary>Base class for step execution payloads (<c>run:</c> or <c>uses:</c>).</summary>
 public abstract class StepExec
 {
     public StepExecKind Kind { get; init; }
@@ -26,12 +28,14 @@ public abstract class StepExec
     public TextRange Range { get; init; }
 }
 
+/// <summary>Discriminator for step execution kind.</summary>
 public enum StepExecKind
 {
     Run,
     Action,
 }
 
+/// <summary>Execution payload for a <c>run:</c> step.</summary>
 public sealed class ExecRun : StepExec
 {
     public StringNodeId Run { get; init; }
@@ -41,6 +45,7 @@ public sealed class ExecRun : StepExec
     public StringNodeId WorkingDirectory { get; init; }
 }
 
+/// <summary>Execution payload for a <c>uses:</c> step (action invocation).</summary>
 public sealed class ExecAction : StepExec
 {
     public StringNodeId Uses { get; init; }

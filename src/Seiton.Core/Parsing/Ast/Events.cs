@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
+/// <summary>Base class for all trigger event types in the <c>on:</c> section.</summary>
 public abstract class Event
 {
     public StringNodeId EventName { get; init; }
@@ -7,6 +8,7 @@ public abstract class Event
     public TextRange Range { get; init; }
 }
 
+/// <summary>A webhook-triggered event (e.g. <c>push</c>, <c>pull_request</c>).</summary>
 public sealed class WebhookEvent : Event
 {
     public StringNodeId Hook { get; init; }
@@ -28,6 +30,7 @@ public sealed class WebhookEvent : Event
     public StringNodeId[]? Workflows { get; init; }
 }
 
+/// <summary>A branch/path/tag filter within a webhook event.</summary>
 public sealed class WebhookEventFilter
 {
     public StringNodeId Name { get; init; }
@@ -35,11 +38,13 @@ public sealed class WebhookEventFilter
     public StringNodeId[] Values { get; init; } = [];
 }
 
+/// <summary>A <c>schedule:</c> event containing cron entries.</summary>
 public sealed class ScheduledEvent : Event
 {
     public IReadOnlyList<ScheduleEntry> Schedules { get; init; } = [];
 }
 
+/// <summary>A single cron schedule entry.</summary>
 public readonly struct ScheduleEntry
 {
     public StringNodeId Cron { get; init; }
@@ -49,11 +54,13 @@ public readonly struct ScheduleEntry
     public TextRange Range { get; init; }
 }
 
+/// <summary>A <c>workflow_dispatch:</c> event with optional inputs.</summary>
 public sealed class WorkflowDispatchEvent : Event
 {
     public SliceMap<DispatchInput>? Inputs { get; init; }
 }
 
+/// <summary>An input parameter for a <c>workflow_dispatch</c> event.</summary>
 public sealed class DispatchInput
 {
     public StringNodeId Name { get; init; }
@@ -71,6 +78,7 @@ public sealed class DispatchInput
     public TextRange Range { get; init; }
 }
 
+/// <summary>Type discriminator for <c>workflow_dispatch</c> input parameters.</summary>
 public enum DispatchInputType
 {
     None,
@@ -81,6 +89,7 @@ public enum DispatchInputType
     Environment,
 }
 
+/// <summary>A <c>workflow_call:</c> event defining reusable workflow inputs/outputs/secrets.</summary>
 public sealed class WorkflowCallEvent : Event
 {
     public IReadOnlyList<WorkflowCallEventInput>? Inputs { get; init; }
@@ -90,6 +99,7 @@ public sealed class WorkflowCallEvent : Event
     public SliceMap<WorkflowCallEventOutput>? Outputs { get; init; }
 }
 
+/// <summary>An input declared on a <c>workflow_call</c> event.</summary>
 public sealed class WorkflowCallEventInput
 {
     public StringNodeId Name { get; init; }
@@ -107,6 +117,7 @@ public sealed class WorkflowCallEventInput
     public TextRange Range { get; init; }
 }
 
+/// <summary>Type discriminator for <c>workflow_call</c> input parameters.</summary>
 public enum WorkflowCallInputType
 {
     Invalid,
@@ -115,6 +126,7 @@ public enum WorkflowCallInputType
     String,
 }
 
+/// <summary>A secret declared on a <c>workflow_call</c> event.</summary>
 public readonly struct WorkflowCallEventSecret
 {
     public StringNodeId Name { get; init; }
@@ -126,6 +138,7 @@ public readonly struct WorkflowCallEventSecret
     public TextRange Range { get; init; }
 }
 
+/// <summary>An output declared on a <c>workflow_call</c> event.</summary>
 public readonly struct WorkflowCallEventOutput
 {
     public StringNodeId Name { get; init; }
@@ -137,11 +150,13 @@ public readonly struct WorkflowCallEventOutput
     public TextRange Range { get; init; }
 }
 
+/// <summary>A <c>repository_dispatch:</c> event with optional activity types.</summary>
 public sealed class RepositoryDispatchEvent : Event
 {
     public StringNodeId[]? Types { get; init; }
 }
 
+/// <summary>An image version event (e.g. container image update triggers).</summary>
 public sealed class ImageVersionEvent : Event
 {
     public StringNodeId[]? Names { get; init; }

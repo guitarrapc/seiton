@@ -24,6 +24,7 @@ public delegate void ExprNodeVisitor(int nodeId, ExpressionNode node, int parent
 /// </summary>
 public interface IExprNodeVisitor
 {
+    /// <summary>Called for each node during depth-first traversal, once on entry and once on exit.</summary>
     void Visit(int nodeId, ExpressionNode node, int parentId, bool entering);
 }
 

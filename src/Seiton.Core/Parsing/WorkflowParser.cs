@@ -30,11 +30,13 @@ public static partial class WorkflowParser
         public WebhookTypes.EventSpec Spec { get; }
     }
 
+    /// <summary>Parses UTF-8 YAML into a <see cref="ParseResult"/> containing the workflow or action metadata AST.</summary>
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
         return ParseClassified(utf8Yaml, filePath).ParseResult;
     }
 
+    /// <summary>Parses UTF-8 YAML into a <see cref="ClassifiedParseResult"/> containing the AST and document kind classification.</summary>
     public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
     {
         var pathHintKind = DocumentKindClassifier.GetPathHintKind(filePath);
