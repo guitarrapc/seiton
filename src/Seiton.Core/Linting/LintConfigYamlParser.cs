@@ -1,8 +1,8 @@
-﻿using System.Collections;
-using System.Globalization;
+﻿using System.Globalization;
+using System.Text;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
-using VYaml.Serialization;
+using VYaml.Parser;
 
 namespace Seiton.Core.Linting;
 
@@ -41,8 +41,7 @@ internal static class LintConfigYamlParser
         Dictionary<string, object?> root;
         try
         {
-            root = YamlSerializer.Deserialize<Dictionary<string, object?>>(utf8Yaml)
-                ?? new Dictionary<string, object?>();
+            root = ParseYamlDom(utf8Yaml) ?? new Dictionary<string, object?>();
         }
         catch (Exception ex)
         {
@@ -60,6 +59,137 @@ internal static class LintConfigYamlParser
         }
 
         return Convert(root, filePath);
+    }
+
+    /// <summary>
+    /// Builds an untyped DOM (Dictionary/List/string/bool/int/etc.) from YAML bytes
+    /// using VYaml's pull parser. This is AOT-safe unlike <c>YamlSerializer.Deserialize</c>.
+    /// </summary>
+    private static Dictionary<string, object?>? ParseYamlDom(ReadOnlyMemory<byte> utf8Yaml)
+    {
+        // YamlParser.FromBytes requires Memory<byte>; copy if needed.
+        var mutable = new byte[utf8Yaml.Length];
+        utf8Yaml.Span.CopyTo(mutable);
+        var parser = YamlParser.FromBytes(mutable.AsMemory());
+
+        // VYaml event sequence: StreamStart → DocumentStart → content → DocumentEnd → StreamEnd
+        // Advance past StreamStart
+        if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+        {
+            return null;
+        }
+
+        // Advance past DocumentStart
+        if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+        {
+            return null;
+        }
+
+        // Advance to first content event (MappingStart, SequenceStart, or Scalar)
+        if (!parser.Read() || parser.CurrentEventType is ParseEventType.DocumentEnd or ParseEventType.StreamEnd)
+        {
+            return null;
+        }
+
+        var result = ReadValue(ref parser);
+        return result as Dictionary<string, object?>;
+    }
+
+    private static object? ReadValue(ref YamlParser parser)
+    {
+        return parser.CurrentEventType switch
+        {
+            ParseEventType.MappingStart => ReadMapping(ref parser),
+            ParseEventType.SequenceStart => ReadSequence(ref parser),
+            ParseEventType.Scalar => ReadScalar(ref parser),
+            _ => null,
+        };
+    }
+
+    private static Dictionary<string, object?> ReadMapping(ref YamlParser parser)
+    {
+        // Skip MappingStart
+        parser.Read();
+
+        var map = new Dictionary<string, object?>(StringComparer.Ordinal);
+        while (parser.CurrentEventType != ParseEventType.MappingEnd)
+        {
+            var key = ReadScalarAsString(ref parser);
+            parser.Read();
+            var value = ReadValue(ref parser);
+            if (key is not null)
+            {
+                map[key] = value;
+            }
+        }
+
+        // Skip MappingEnd
+        parser.Read();
+        return map;
+    }
+
+    private static List<object?> ReadSequence(ref YamlParser parser)
+    {
+        // Skip SequenceStart
+        parser.Read();
+
+        var list = new List<object?>();
+        while (parser.CurrentEventType != ParseEventType.SequenceEnd)
+        {
+            list.Add(ReadValue(ref parser));
+        }
+
+        // Skip SequenceEnd
+        parser.Read();
+        return list;
+    }
+
+    private static object? ReadScalar(ref YamlParser parser)
+    {
+        var result = ReadScalarValue(ref parser);
+        parser.Read();
+        return result;
+    }
+
+    private static object? ReadScalarValue(ref YamlParser parser)
+    {
+        if (parser.IsNullScalar())
+        {
+            return null;
+        }
+
+        if (parser.TryGetScalarAsBool(out var boolValue))
+        {
+            return boolValue;
+        }
+
+        if (parser.TryGetScalarAsInt32(out var intValue))
+        {
+            return intValue;
+        }
+
+        if (parser.TryGetScalarAsInt64(out var longValue))
+        {
+            return longValue;
+        }
+
+        if (parser.TryGetScalarAsDouble(out var doubleValue))
+        {
+            return doubleValue;
+        }
+
+        return ReadScalarAsString(ref parser);
+    }
+
+    private static string? ReadScalarAsString(ref YamlParser parser)
+    {
+        if (parser.IsNullScalar())
+        {
+            return null;
+        }
+
+        var utf8 = parser.GetScalarAsUtf8();
+        return Encoding.UTF8.GetString(utf8);
     }
 
     private static LintConfigParseResult Convert(Dictionary<string, object?> root, string filePath)
@@ -759,74 +889,12 @@ internal static class LintConfigYamlParser
 
     private static Dictionary<string, object?>? AsMap(object? o)
     {
-        if (o is null)
-        {
-            return null;
-        }
-
-        if (o is Dictionary<string, object?> d0)
-        {
-            return d0;
-        }
-
-        if (o is Dictionary<string, object> d1)
-        {
-            var r = new Dictionary<string, object?>(d1.Count, StringComparer.Ordinal);
-            foreach (var p in d1)
-            {
-                r[p.Key] = p.Value;
-            }
-
-            return r;
-        }
-
-        if (o is IDictionary idict)
-        {
-            var r = new Dictionary<string, object?>(idict.Count, StringComparer.Ordinal);
-            foreach (DictionaryEntry e in idict)
-            {
-                var k = e.Key?.ToString();
-                if (!string.IsNullOrEmpty(k))
-                {
-                    r[k] = e.Value;
-                }
-            }
-
-            return r;
-        }
-
-        return null;
+        return o as Dictionary<string, object?>;
     }
 
     private static List<object?>? AsList(object? o)
     {
-        if (o is null)
-        {
-            return null;
-        }
-
-        if (o is List<object?> L0)
-        {
-            return L0;
-        }
-
-        if (o is object[] arr)
-        {
-            return [..arr];
-        }
-
-        if (o is IList il)
-        {
-            var r = new List<object?>(il.Count);
-            for (var i = 0; i < il.Count; i++)
-            {
-                r.Add(il[i]);
-            }
-
-            return r;
-        }
-
-        return null;
+        return o as List<object?>;
     }
 
     private static string ScalarToString(object? o) => o switch
