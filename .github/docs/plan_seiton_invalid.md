@@ -73,6 +73,8 @@
 - **Rule**: Needs new check in expression semantic analysis
 - **Root cause**: Seiton's expression evaluator does not perform cross-type comparison validation.
 - **Fix**: Add type-aware comparison checking in expression semantic analysis. When both sides of `==`, `!=`, `<`, `>`, `<=`, `>=` have known concrete types that are incompatible, emit a warning.
+- **Status**: ✅ **Fixed** — `ValidateCompareOp` extended to also check `==`/`!=` for cross-type incompatibility. Compatible pairs (string/number, string/bool, null/any) are allowed. `AreEqualityCompatible` helper method added.
+- **Regression tests**: `ParseAndValidate_EqualityObjectVsNumber_ReportsWarning`, `ParseAndValidate_EqualityArrayVsString_ReportsWarning`, `ParseAndValidate_EqualityStringVsNumber_NoDiagnostic`, `ParseAndValidate_EqualityNullVsString_NoDiagnostic`, `ParseAndValidate_EqualityAnyVsString_NoDiagnostic` (ExpressionTests)
 
 #### 6. Expression type checking — object/array/null in `${{ }}` template
 
@@ -82,6 +84,8 @@
 - **Rule**: Needs new check
 - **Root cause**: Seiton doesn't validate whether the inferred type of an expression is safe for string interpolation.
 - **Fix**: When an expression in `${{ }}` resolves to an object, array, or null type, emit a warning. String, number, and boolean are safe.
+- **Status**: ✅ **Fixed** — `ExpressionSemanticAnalyzer.CheckTemplateType` added. Called from `ExprUndefinedVarRule.ValidateTemplateType` for embedded expressions in template positions (not `if` conditions). Warns for object/array/null types in `${{ }}`. Currently covers `env` and `with` positions checked by ExprUndefinedVarRule; `run` scripts are not checked by this rule.
+- **Regression tests**: `CheckTemplateType_ObjectType_ReportsWarning`, `CheckTemplateType_ArrayType_ReportsWarning`, `CheckTemplateType_NullType_ReportsWarning`, `CheckTemplateType_StringType_NoDiagnostic` (ExpressionTests); `ng-step-env-object-in-template`, `ng-step-env-null-in-template`, `ok-step-if-object-no-template-warning`, `ok-step-env-string-in-template` (RuleInterfaceTests)
 
 #### 7. Expression type checking — string dereference as object
 
@@ -90,6 +94,8 @@
 - **Seiton**: No detection.
 - **Rule**: Needs new check in expression semantic analysis
 - **Fix**: When `.property` access is applied to a type known to be `string`, emit an error.
+- **Status**: ✅ **Fixed** — `ValidatePropertyAccess` extended to check for `StringExprType` receiver. Emits `receiver of object dereference "<prop>" must be type of object but got "string"` error.
+- **Regression tests**: `ParseAndValidate_StringPropertyAccess_ReportsDiagnostic`, `ParseAndValidate_ObjectPropertyAccess_NoDiagnostic` (ExpressionTests)
 
 #### 8. Contextual `needs.*` output validation
 
@@ -153,6 +159,8 @@
 - **Rule**: Needs enhancement to `expr-undefined-var` or expression evaluator
 - **Root cause**: Expression evaluator does not resolve `inputs.*` and `secrets.*` properties against the workflow's declared inputs/secrets.
 - **Fix**: When `on.workflow_call` or `on.workflow_dispatch` inputs/secrets are declared, build a typed property map and validate all `inputs.*` / `secrets.*` expression accesses against it.
+- **Status**: ✅ **Fixed** — `DynamicContextTypeBuilder.BuildSecretsOverride` added for `workflow_call` secrets. `ExprUndefinedVarRule` now includes secrets in both job-scope and step-scope overrides. `inputs` was already resolved via `BuildInputsOverride`; now `secrets` also gets strict typing from declared `workflow_call.secrets`.
+- **Regression tests**: `ok-workflow-call-secret-known`, `ng-workflow-call-secret-unknown` (RuleInterfaceTests)
 
 ---
 
@@ -206,6 +214,8 @@
 - **Seiton**: Not detected (only detects missing arguments).
 - **Rule**: `parse` (expression evaluator)
 - **Fix**: When evaluating `format()`, check that all argument indices are referenced in the format string.
+- **Status**: ✅ **Fixed** — `ValidateFormatPlaceholders` extended to track used placeholder indices via bitmask and warn when supplied arguments have no corresponding placeholder.
+- **Regression tests**: `ParseAndValidate_FormatExcessArgument_ReportsWarning`, `ParseAndValidate_FormatAllArgsUsed_NoDiagnostic` (ExpressionTests)
 
 #### 21. Broken JSON in `fromJSON()`
 
@@ -214,6 +224,8 @@
 - **Seiton**: Not detected.
 - **Rule**: Needs expression evaluator enhancement
 - **Fix**: When `fromJSON()` is called with a string literal, validate it as JSON.
+- **Status**: ✅ **Fixed** — `ValidateFromJsonLiteral` added to `ExpressionSemanticAnalyzer`, called from `ValidateFunctionCall` for `fromJSON()` with string literal arguments. Emits error with `JsonException.Message` for broken JSON.
+- **Regression tests**: `ParseAndValidate_FromJsonBrokenJson_ReportsDiagnostic`, `ParseAndValidate_FromJsonValidJson_NoDiagnostic` (ExpressionTests)
 
 #### 22. `fromJSON()` property validation
 
@@ -222,6 +234,7 @@
 - **Seiton**: Not detected.
 - **Rule**: Needs expression evaluator enhancement
 - **Fix**: When `fromJSON()` is called with a literal string, parse the JSON and use the resulting type for property validation.
+- **Status**: ✅ **Already works** — `TryInferFromJsonLiteral` parses JSON literal and returns typed `ObjectExprType`. Combined with the string-dereference check (#7) and existing `ValidatePropertyAccess`, property validation on `fromJSON()` results works when the result type is strict. No additional code needed; the type inference already flows through property access validation.
 
 #### 23. Runner context not available in matrix scope
 
@@ -466,20 +479,68 @@ These examples are fully covered by seiton (all actionlint errors detected):
 
 ✅ 全項目 Mean +10% / Allocated +20% 以内。性能劣化なし。
 
-### Phase 2: Core Expression Type System (P1, high impact)
+### Phase 2: Core Expression Type System (P1, high impact) — ✅ 完了
 
-8. Add comparison type mismatch checking (#5)
-9. Add object/array/null in `${{ }}` template warning (#6)
-10. Add string-as-object dereference checking (#7)
-11. Add `inputs.*`/`secrets.*` property resolution from workflow declarations (#14)
-12. Add `format()` excess argument checking (#20)
-13. Add `fromJSON()` literal validation (#21, #22)
+8. ✅ Add comparison type mismatch checking (#5)
+9. ✅ Add object/array/null in `${{ }}` template warning (#6)
+10. ✅ Add string-as-object dereference checking (#7)
+11. ✅ Add `inputs.*`/`secrets.*` property resolution from workflow declarations (#14)
+12. ✅ Add `format()` excess argument checking (#20)
+13. ✅ Add `fromJSON()` literal validation (#21, #22)
 
 **Phase 2 検証チェックリスト:**
-- [ ] `dotnet test` 全テスト通過
-- [ ] 各検出項目に `ng-*` リグレッションテスト追加
-- [ ] 型チェックが誤検出しない `ok-*` テスト追加
-- [ ] `cd src/Seiton.Benchmark; dotnet run -c Release` で ParsingBenchmark / LintBenchmark の性能劣化なし
+- [x] `dotnet test` 全テスト通過 (588 tests)
+- [x] 各検出項目に `ng-*` リグレッションテスト追加
+- [x] 型チェックが誤検出しない `ok-*` テスト追加
+- [x] `cd src/Seiton.Benchmark; dotnet run -c Release` で ParsingBenchmark / LintBenchmark の性能劣化なし
+
+**実施済みの変更:**
+
+| 変更対象 | 内容 |
+|---|---|
+| `ExpressionSemanticAnalyzer.cs` | `ValidateCompareOp` を `==`/`!=` の cross-type 比較チェックに拡張。`AreEqualityCompatible` ヘルパー追加 |
+| `ExpressionSemanticAnalyzer.cs` | `ValidatePropertyAccess` を `StringExprType` receiver チェックに拡張 (string dereference) |
+| `ExpressionSemanticAnalyzer.cs` | `ValidateFormatPlaceholders` を余剰引数チェックに拡張 (ビットマスクで使用済みプレースホルダー追跡) |
+| `ExpressionSemanticAnalyzer.cs` | `ValidateFromJsonLiteral` 追加: `fromJSON()` の文字列リテラル引数を JSON として検証 |
+| `ExpressionSemanticAnalyzer.cs` | `CheckTemplateType` 追加: `${{ }}` テンプレート内の object/array/null 型を警告 |
+| `ExpressionSemanticAnalyzer.cs` | `OperatorSymbol` に `==`/`!=` 追加 |
+| `DynamicContextTypeBuilder.cs` | `BuildSecretsOverride` 追加: `workflow_call.secrets` から strict 型を構築 |
+| `ExprUndefinedVarRule.cs` | secrets override を job/step スコープに追加。`ValidateTemplateType` で埋め込み式の型チェック |
+
+**リグレッションテスト (17 cases):**
+
+| テストファイル | テスト名/ケース | 対象 |
+|---|---|---|
+| ExpressionTests | `ParseAndValidate_EqualityObjectVsNumber_ReportsWarning` | #5 |
+| ExpressionTests | `ParseAndValidate_EqualityArrayVsString_ReportsWarning` | #5 |
+| ExpressionTests | `ParseAndValidate_EqualityStringVsNumber_NoDiagnostic` | #5 |
+| ExpressionTests | `ParseAndValidate_EqualityNullVsString_NoDiagnostic` | #5 |
+| ExpressionTests | `ParseAndValidate_EqualityAnyVsString_NoDiagnostic` | #5 |
+| ExpressionTests | `ParseAndValidate_StringPropertyAccess_ReportsDiagnostic` | #7 |
+| ExpressionTests | `ParseAndValidate_ObjectPropertyAccess_NoDiagnostic` | #7 |
+| ExpressionTests | `ParseAndValidate_FormatExcessArgument_ReportsWarning` | #20 |
+| ExpressionTests | `ParseAndValidate_FormatAllArgsUsed_NoDiagnostic` | #20 |
+| ExpressionTests | `ParseAndValidate_FromJsonBrokenJson_ReportsDiagnostic` | #21 |
+| ExpressionTests | `ParseAndValidate_FromJsonValidJson_NoDiagnostic` | #21 |
+| ExpressionTests | `CheckTemplateType_ObjectType_ReportsWarning` | #6 |
+| ExpressionTests | `CheckTemplateType_ArrayType_ReportsWarning` | #6 |
+| ExpressionTests | `CheckTemplateType_NullType_ReportsWarning` | #6 |
+| ExpressionTests | `CheckTemplateType_StringType_NoDiagnostic` | #6 |
+| RuleInterfaceTests (ExprUndefinedVar) | `ng-step-env-object-in-template`, `ng-step-env-null-in-template`, `ok-step-if-object-no-template-warning`, `ok-step-env-string-in-template` | #6 |
+| RuleInterfaceTests (ExprUndefinedVar) | `ok-workflow-call-secret-known`, `ng-workflow-call-secret-unknown` | #14 |
+
+**ベンチマーク検証結果 (Phase 2 完了時):**
+
+| Benchmark | Size | Phase 1 Mean | Phase 2 Mean | Phase 1 Alloc | Phase 2 Alloc | Mean Δ | Alloc Δ |
+|---|---|---|---|---|---|---|---|
+| ParsingBenchmark | Small | 34.75μs | 29.73μs | 4.99KB | 4.99KB | -14.4% | 0% |
+| ParsingBenchmark | Medium | 576.35μs | 496.15μs | 26.70KB | 26.70KB | -13.9% | 0% |
+| ParsingBenchmark | Large | 8168μs | 7780μs | 110.93KB | 110.93KB | -4.7% | 0% |
+| LintBenchmark | Small | 47.10μs | 43.52μs | 14.64KB | 14.64KB | -7.6% | 0% |
+| LintBenchmark | Medium | 806.76μs | 718.01μs | 90.86KB | 90.84KB | -11.0% | 0% |
+| LintBenchmark | Large | 12993μs | 10951μs | 423.10KB | 423.10KB | -15.7% | 0% |
+
+✅ 全項目でアロケーション変化なし。Mean は全サイズで改善方向（ShortRun ノイズ含む）。性能劣化なし。
 
 ### Phase 3: Contextual Validation (P1, medium-high impact)
 

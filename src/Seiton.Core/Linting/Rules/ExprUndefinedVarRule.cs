@@ -19,9 +19,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // job-specific types so that property-access errors can be detected.
     private Workflow? _currentWorkflow;
     private (byte[] NameUtf8, ExprType Type) _inputsOverride;
+    private (byte[] NameUtf8, ExprType Type) _secretsOverride;
     // Reusable fixed-size override arrays to avoid per-job allocation
-    private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[3];
-    private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[4];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[4];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[5];
     private bool _hasOverrides;
     private readonly List<Diagnostic> _propertyDiagnostics = new();
 
@@ -30,6 +31,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
+        _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
         _hasOverrides = false;
     }
 
@@ -50,15 +52,17 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             yaml);
         var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml);
 
-        // job scope: matrix, needs, inputs available (steps is NOT available in job scope)
+        // job scope: matrix, needs, inputs, secrets available (steps is NOT available in job scope)
         _jobScopeOverrides[0] = matrixOverride;
         _jobScopeOverrides[1] = needsOverride;
         _jobScopeOverrides[2] = _inputsOverride;
+        _jobScopeOverrides[3] = _secretsOverride;
         // step scope: also includes steps
         _stepScopeOverrides[0] = stepsOverride;
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
+        _stepScopeOverrides[4] = _secretsOverride;
         _hasOverrides = true;
 
         CheckNode(job.If, ExpressionValidationContext.Job, "job.if", static (rule, message, location, targetJob) =>
@@ -174,6 +178,12 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             }
 
             ValidateExpression(expression, context, sinkName, Arena.GetStringRange(node), report, target);
+
+            // Template type check: object/array/null interpolated in ${{ }} outside if conditions
+            if (!parseWholeValue)
+            {
+                ValidateTemplateType(expression, Arena.GetStringRange(node), report, target);
+            }
         }
     }
 
@@ -297,6 +307,26 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             _ => "unknown",
         };
     }
+
+    private void ValidateTemplateType<TTarget>(
+        ReadOnlySpan<byte> expression,
+        TextRange location,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        var parseResult = Config.ParseExpression(expression);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return;
+        }
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(parseResult, expression, location);
+        if (diag is { } d)
+        {
+            report(this, d.Message, d.Location, target);
+        }
+    }
+
     private static bool TryFindEmbeddedExpression(
         ReadOnlySpan<byte> value,
         int searchStart,

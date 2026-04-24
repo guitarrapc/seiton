@@ -1058,6 +1058,245 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
 
+    // ── Phase 2: Cross-type equality comparison ─────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_EqualityObjectVsNumber_ReportsWarning()
+    {
+        var expression = "fromJson('{\"a\":1}') == 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to number value", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityArrayVsString_ReportsWarning()
+    {
+        var expression = "fromJson('[1,2]') != 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared to string value", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityStringVsNumber_NoDiagnostic()
+    {
+        // GitHub Actions coerces string to number for equality comparison
+        var expression = "'42' == 42"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityNullVsString_NoDiagnostic()
+    {
+        // null can be compared with any type
+        var expression = "null == 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityAnyVsString_NoDiagnostic()
+    {
+        // Any type should not produce warnings
+        var expression = "github.event.number == 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // ── Phase 2: String dereference as object ───────────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_StringPropertyAccess_ReportsDiagnostic()
+    {
+        // github.ref is string — accessing .owner on it is an error
+        var expression = "github.ref.owner"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object but got \"string\"", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ObjectPropertyAccess_NoDiagnostic()
+    {
+        // github is an object — accessing .ref on it is fine
+        var expression = "github.ref"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // ── Phase 2: format() excess argument checking ──────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_FormatExcessArgument_ReportsWarning()
+    {
+        var expression = "format('{0}', github.ref, github.sha)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder {1}", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FormatAllArgsUsed_NoDiagnostic()
+    {
+        var expression = "format('{0}-{1}', github.ref, github.sha)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // ── Phase 2: fromJSON() broken JSON validation ──────────────────────────
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonBrokenJson_ReportsDiagnostic()
+    {
+        var expression = "fromJson('{invalid}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON() argument is not valid JSON", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonValidJson_NoDiagnostic()
+    {
+        var expression = "fromJson('{\"a\":1}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // ── Phase 2: Template type checking ─────────────────────────────────────
+
+    [Test]
+    public async Task CheckTemplateType_ObjectType_ReportsWarning()
+    {
+        var expression = "fromJson('{\"a\":1}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNotNull();
+        await Assert.That(diag!.Value.Message).Contains("object value in ${{ }}");
+    }
+
+    [Test]
+    public async Task CheckTemplateType_ArrayType_ReportsWarning()
+    {
+        var expression = "fromJson('[1,2]')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNotNull();
+        await Assert.That(diag!.Value.Message).Contains("array value in ${{ }}");
+    }
+
+    [Test]
+    public async Task CheckTemplateType_NullType_ReportsWarning()
+    {
+        var expression = "null"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNotNull();
+        await Assert.That(diag!.Value.Message).Contains("null value in ${{ }}");
+    }
+
+    [Test]
+    public async Task CheckTemplateType_StringType_NoDiagnostic()
+    {
+        var expression = "github.ref"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNull();
+    }
+
     [Test]
     public async Task ParseAndValidate_NotObject_ReportsDiagnostic()
     {

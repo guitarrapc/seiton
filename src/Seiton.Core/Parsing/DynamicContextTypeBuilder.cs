@@ -17,6 +17,7 @@ internal static class DynamicContextTypeBuilder
     internal static readonly byte[] MatrixKeyUtf8 = "matrix"u8.ToArray();
     internal static readonly byte[] NeedsKeyUtf8 = "needs"u8.ToArray();
     internal static readonly byte[] InputsKeyUtf8 = "inputs"u8.ToArray();
+    internal static readonly byte[] SecretsKeyUtf8 = "secrets"u8.ToArray();
 
     // Static Utf8String keys reused across all needs entries
     private static readonly Utf8String s_resultKey = new("result"u8);
@@ -268,5 +269,29 @@ internal static class DynamicContextTypeBuilder
         }
 
         return ExprType.Object(props, strict: true);
+    }
+
+    /// <summary>
+    /// Builds the secrets context type override for a workflow.
+    /// Returns a strict object keyed by secret names when workflow_call secrets are defined.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildSecretsOverride(IReadOnlyList<Event> on, byte[]? utf8Yaml = null)
+    {
+        for (var i = 0; i < on.Count; i++)
+        {
+            var ev = on[i];
+            if (ev is WorkflowCallEvent { Secrets: { Count: > 0 } secrets } && utf8Yaml is not null)
+            {
+                var props = new Dictionary<Utf8String, ExprType>(secrets.Count);
+                foreach (var pair in secrets)
+                {
+                    props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
+                }
+
+                return (SecretsKeyUtf8, ExprType.Object(props, strict: true));
+            }
+        }
+
+        return (SecretsKeyUtf8, s_looseDynamic);
     }
 }

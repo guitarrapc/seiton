@@ -4686,6 +4686,111 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_TemplateTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-step-env-object-in-template",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ fromJson('{"a":1}') }}
+                          run: echo "$VAL"
+            """,
+            ["object value in ${{ }}"]),
+            new RuleCase(
+            "ng-step-env-null-in-template",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ null }}
+                          run: echo "$VAL"
+            """,
+            ["null value in ${{ }}"]),
+            new RuleCase(
+            "ok-step-if-object-no-template-warning",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ fromJson('{"a":1}') }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-step-env-string-in-template",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ github.ref }}
+                          run: echo "$VAL"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_SecretsResolution_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-workflow-call-secret-known",
+            """
+            on:
+                workflow_call:
+                    secrets:
+                        DEPLOY_KEY:
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            KEY: ${{ secrets.DEPLOY_KEY }}
+                          run: echo "$KEY"
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-call-secret-unknown",
+            """
+            on:
+                workflow_call:
+                    secrets:
+                        DEPLOY_KEY:
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            KEY: ${{ secrets.UNKNOWN_SECRET }}
+                          run: echo "$KEY"
+            """,
+            ["'UNKNOWN_SECRET' is not defined in 'secrets'"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_RunEnvContextDirectUseRule_TableDriven()
     {
         var cases = new[]
