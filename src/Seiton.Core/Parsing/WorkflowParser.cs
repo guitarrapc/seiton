@@ -101,13 +101,14 @@ public static partial class WorkflowParser
         }
         catch (Exception ex)
         {
+            var (startLine, startColumn) = TryExtractLineCol(ex.Message);
             var location = new TextRange(
                 Start: 0,
                 Length: 0,
-                StartLine: 1,
-                StartColumn: 1,
-                EndLine: 1,
-                EndColumn: 1);
+                StartLine: startLine,
+                StartColumn: startColumn,
+                EndLine: startLine,
+                EndColumn: startColumn);
             var diagnostic = new Diagnostic(
                 Severity: DiagnosticSeverity.Error,
                 Message: $"yaml parse failure: {ex.Message}",
@@ -118,6 +119,52 @@ public static partial class WorkflowParser
                 parseResult,
                 new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
         }
+    }
+
+    /// <summary>
+    /// Extracts line/col from VYaml exception messages (format: "... at Line: {L}, Col: {C}, Idx: {I}").
+    /// Returns (1, 1) if extraction fails.
+    /// </summary>
+    internal static (int Line, int Column) TryExtractLineCol(string message)
+    {
+        // VYaml format: "... at Line: 5, Col: 3, Idx: 42"
+        const string lineMarker = "Line: ";
+        const string colMarker = "Col: ";
+
+        var lineIdx = message.LastIndexOf(lineMarker, StringComparison.Ordinal);
+        if (lineIdx < 0)
+        {
+            return (1, 1);
+        }
+
+        var lineStart = lineIdx + lineMarker.Length;
+        var lineEnd = message.IndexOf(',', lineStart);
+        if (lineEnd < 0)
+        {
+            return (1, 1);
+        }
+
+        var colIdx = message.IndexOf(colMarker, lineEnd, StringComparison.Ordinal);
+        if (colIdx < 0)
+        {
+            return (1, 1);
+        }
+
+        var colStart = colIdx + colMarker.Length;
+        var colEnd = message.IndexOf(',', colStart);
+        if (colEnd < 0)
+        {
+            colEnd = message.Length;
+        }
+
+        if (int.TryParse(message.AsSpan(lineStart, lineEnd - lineStart), out var line)
+            && int.TryParse(message.AsSpan(colStart, colEnd - colStart), out var col))
+        {
+            // VYaml line/col are 0-based; convert to 1-based
+            return (line + 1, col + 1);
+        }
+
+        return (1, 1);
     }
 
     internal static ParseResult ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)

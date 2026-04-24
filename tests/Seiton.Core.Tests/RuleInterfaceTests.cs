@@ -2064,6 +2064,32 @@ public sealed class RuleInterfaceTests
                         - run: echo ok
             """,
             ["shell name", "invalid"]),
+            new RuleCase(
+            "ok-custom-shell-template-perl",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: print "ok"
+                          shell: perl {0}
+            """,
+            []),
+            new RuleCase(
+            "ok-custom-shell-template-ruby",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: puts 'ok'
+                          shell: ruby {0}
+            """,
+            []),
         };
 
         await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
@@ -3733,6 +3759,42 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always true"]),
+            new RuleCase(
+            "ng-step-if-always-true-multi-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ github.event_name == 'push' }} && ${{ github.ref_name == 'main' }}
+                          run: echo ng
+            """,
+            ["always evaluated to true because extra characters are around"]),
+            new RuleCase(
+            "ng-step-if-always-true-trailing-space",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: "${{ github.event_name == 'push' }} "
+                          run: echo ng
+            """,
+            ["always evaluated to true because extra characters are around"]),
+            new RuleCase(
+            "ok-step-if-bare-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: github.event_name == 'push'
+                          run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new IfCondRule(), "if-cond", cases);

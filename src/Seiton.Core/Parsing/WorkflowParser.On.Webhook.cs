@@ -185,8 +185,8 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var mark = reader.CurrentStart;
             var slice = reader.GetScalarSlice();
+            var mark = reader.ComputePositionFromOffset(slice.Offset);
             var valueUtf8 = reader.GetScalarUtf8();
             if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
             {
@@ -218,8 +218,8 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                var mark = reader.CurrentStart;
                 var slice = reader.GetScalarSlice();
+                var mark = reader.ComputePositionFromOffset(slice.Offset);
                 var valueUtf8 = reader.GetScalarUtf8();
                 if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
                 {

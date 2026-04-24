@@ -86,7 +86,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
     private string BuildInvalidShellMessage(StringNodeId shellNode)
     {
         var shellText = Decode(Arena.GetStringSlice(shellNode));
-        return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python";
+        return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python, or a custom shell command containing '{{0}}'";
     }
 
     private static bool IsValidShellName(ReadOnlySpan<byte> shell)
@@ -96,6 +96,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
             || shell.SequenceEqual("pwsh"u8)
             || shell.SequenceEqual("powershell"u8)
             || shell.SequenceEqual("cmd"u8)
-            || shell.SequenceEqual("python"u8);
+            || shell.SequenceEqual("python"u8)
+            || shell.IndexOf("{0}"u8) >= 0;
     }
 }

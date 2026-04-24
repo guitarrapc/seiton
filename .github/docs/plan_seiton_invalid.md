@@ -165,6 +165,7 @@
 - **Seiton**: Detects `if: false` as always false ✅. Reports `${{ }} && ${{ }}` as "syntax errors" rather than "always true". Does not detect trailing whitespace/newline cases.
 - **Rule**: `if-cond`
 - **Fix**: Detect when an if condition contains `${{ }}` wrapped by extra characters (including newlines, spaces, `&&`, etc.). Report as "always evaluated to true" with explanation.
+- **Status**: ✅ **Fixed** — P0 #7 で修正済み。`IsAlwaysTrueTemplate` が検出。
 
 #### 16. Duplicate job ID in needs array
 
@@ -316,6 +317,7 @@
 - **Problem**: When VYaml reports a parse failure, seiton always emits the diagnostic at `1:1` (file start) even though the error message contains the actual line/column.
 - **Root cause**: The parse failure handler doesn't extract position from the VYaml exception message.
 - **Fix**: Parse VYaml's `Line:` and `Col:` from the exception message and use them as the diagnostic position.
+- **Status**: ✅ **Fixed** — P0 #5 で修正済み。`TryExtractLineCol` が VYaml 例外メッセージから `Line: {L}, Col: {C}` を抽出 (0-based → 1-based 変換)。
 
 ### Issue B: `expand_object` — False positive on object-type expression in `env:`
 
@@ -327,6 +329,7 @@
 
 - **Problem**: For `${{ expr }} && ${{ expr }}`, seiton reports "step if condition contains syntax errors" which is misleading. The condition is syntactically valid but semantically always true.
 - **Fix**: Detect the `${{ }} text ${{ }}` pattern and report as "always evaluated to true because extra characters are around ${{ }}".
+- **Status**: ✅ **Fixed** — P0 #7 で修正済み。`IsAlwaysTrueTemplate` が先行テキスト・複数 `${{ }}`・末尾文字のパターンを検出。
 
 ### Issue D: `contextual_matrix_values` — False positive on `include:`-only axes
 
@@ -337,8 +340,9 @@
 ### Issue E: `webhook_checks` — Activity type error points to wrong event
 
 - **Problem**: Seiton reports `on.issues.types contains unsupported activity type: created` at line 11:9 which is the `release:` key, not the `issues:` section.
-- **Root cause**: Event type validation may be associating the error with the wrong YAML node.
-- **Fix**: Ensure the diagnostic span points to the actual `types:` value within the correct event section.
+- **Root cause**: VYaml の `CurrentMark` がトークン末尾位置を返すため、`reader.CurrentStart` の位置が不正確だった。
+- **Fix**: `ParseOnTypesNodes` で `reader.ComputePositionFromOffset(slice.Offset)` を使用し、`GetScalarSlice()` のバイトオフセットから正確な位置を算出。
+- **Status**: ✅ **Fixed** — P0 #6 で修正済み。`created` が正しく 10:12 を指すようになった。
 
 ### Issue F: `runner_label_check` — Matrix-expanded labels not validated
 
@@ -350,6 +354,7 @@
 
 - **Problem**: `shell: 'perl {0}'` is a valid custom shell template per GitHub Actions docs, but seiton flags it as invalid.
 - **Fix**: Allow custom shell names that contain `{0}` placeholder as valid custom shell templates.
+- **Status**: ✅ **Fixed** — P0 #8 で修正済み。`IsValidShellName` が `{0}` を含むカスタムシェルテンプレートを許可。
 
 ### Issue H: `action_metadata_syntax_validation` — Limited local action validation
 
@@ -404,10 +409,10 @@ These examples are fully covered by seiton (all actionlint errors detected):
 2. ✅ Fix `expand_object` false positive → allow `${{ }}` expression in `env:`
 3. ✅ Fix `contextual_matrix_values` → merge `include:` keys into matrix type
 4. ✅ Fix `permissions` unknown scope and restricted value → auto-generated `PermissionScopes.g.cs`
-5. Fix YAML parse error position → extract line/col from VYaml exception
-6. Fix `webhook_checks` activity type error → associate with correct event
-7. Fix `if_cond_always_true` message → "always true" not "syntax errors"
-8. Fix `shell_name_validation` → allow custom `{0}` shell templates
+5. ✅ Fix YAML parse error position → extract line/col from VYaml exception
+6. ✅ Fix `webhook_checks` activity type error → use `ComputePositionFromOffset` for accurate position
+7. ✅ Fix `if_cond_always_true` message → "always true" not "syntax errors"
+8. ✅ Fix `shell_name_validation` → allow custom `{0}` shell templates
 
 **実施済みの変更:**
 
@@ -416,11 +421,14 @@ These examples are fully covered by seiton (all actionlint errors detected):
 | `DynamicContextTypeBuilder.cs` | `BuildMatrixOverride` が `matrix.Include` エントリからもキーを収集 |
 | `WorkflowParser.Steps.cs` | Step `env:` パースで `MappingStart` を要求せず `ParseEnvNode` に委譲 |
 | `VYamlStreamAdapter.cs` | `IsInsideYamlComment` ヘルパー追加、`GetScalarSlice()` / `TryResolveRawStart()` でコメント内マッチをスキップ |
-| `WorkflowParser.cs` | `ParsePermissionsNode` で `GetScalarSlice()` 二重呼び出しを修正 |
+| `WorkflowParser.cs` | `ParsePermissionsNode` で `GetScalarSlice()` 二重呼び出しを修正。`TryExtractLineCol` で VYaml 例外からの行/列抽出 |
+| `WorkflowParser.On.Webhook.cs` | `ParseOnTypesNodes` で `ComputePositionFromOffset(slice.Offset)` を使用し正確な位置を算出 |
+| `IfCondRule.cs` | `IsAlwaysTrueTemplate` 追加: 先行テキスト・複数 `${{ }}`・末尾文字のパターンを検出 |
+| `ShellNameRule.cs` | `IsValidShellName` が `{0}` を含むカスタムシェルテンプレートを許可 |
 | `PermissionsRule.cs` | ハードコード配列を削除し、自動生成 `PermissionScopes` クラスを使用 |
 | `PermissionScopes.g.cs` | 17スコープの `IsKnownScope()` / `GetAllowedValues()` / `AllScopesList` を自動生成 |
 
-**リグレッションテスト (10 cases):**
+**リグレッションテスト (17 cases):**
 
 | テストファイル | テスト名/ケース | 対象P0 |
 |---|---|---|
@@ -435,6 +443,28 @@ These examples are fully covered by seiton (all actionlint errors detected):
 | RuleInterfaceTests (Permissions) | `ng-id-token-read-restricted` | P0-4 |
 | RuleInterfaceTests (Permissions) | `ng-vulnerability-alerts-write-restricted` | P0-4 |
 | RuleInterfaceTests (Permissions) | `ok-all-standard-scopes-valid` | P0-3/4 |
+| ParserTests | `Parse_BrokenYaml_ErrorPositionNotAtFirstLine` | P0-5 |
+| ParserTests | `TryExtractLineCol_VYamlFormat_ExtractsCorrectPosition` | P0-5 |
+| ParserTests | `TryExtractLineCol_NoMatch_ReturnsOneOne` | P0-5 |
+| ParserTests | `Parse_WebhookUnsupportedActivityType_PositionPointsToValue` | P0-6 |
+| RuleInterfaceTests (IfCond) | `ng-step-if-always-true-multi-expression` | P0-7 |
+| RuleInterfaceTests (IfCond) | `ng-step-if-always-true-trailing-space` | P0-7 |
+| RuleInterfaceTests (IfCond) | `ok-step-if-bare-expression` | P0-7 |
+| RuleInterfaceTests (ShellName) | `ok-custom-shell-template-perl` | P0-8 |
+| RuleInterfaceTests (ShellName) | `ok-custom-shell-template-ruby` | P0-8 |
+
+**ベンチマーク検証結果 (Phase 1 完了時):**
+
+| Benchmark | Size | Mean | Allocated | Mean Δ | Alloc Δ |
+|---|---|---|---|---|---|
+| ParsingBenchmark | Small | 34.75μs | 4.99KB | +2.2% | +1.8% |
+| ParsingBenchmark | Medium | 576.35μs | 26.70KB | +2.7% | -1.1% |
+| ParsingBenchmark | Large | 8168μs | 110.93KB | +3.3% | -1.8% |
+| LintBenchmark | Small | 47.10μs | 14.64KB | -5.8% | -2.4% |
+| LintBenchmark | Medium | 806.76μs | 90.86KB | -6.1% | -9.1% |
+| LintBenchmark | Large | 12993μs | 423.10KB | +8.5% | -8.8% |
+
+✅ 全項目 Mean +10% / Allocated +20% 以内。性能劣化なし。
 
 ### Phase 2: Core Expression Type System (P1, high impact)
 

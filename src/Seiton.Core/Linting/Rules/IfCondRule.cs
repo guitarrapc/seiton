@@ -33,6 +33,24 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             return;
         }
 
+        // Detect "always true" pattern: value contains ${{ }} but has extra characters around it.
+        // GitHub Actions evaluates the entire string as a template, producing a non-empty string → always truthy.
+        // Examples: "${{ expr }}\n" (block scalar), "${{ expr }} " (trailing space), "${{ e1 }} && ${{ e2 }}"
+        if (IsAlwaysTrueTemplate(raw))
+        {
+            if (job is not null)
+            {
+                AddJobWarning(job, "job if condition is always evaluated to true because extra characters are around ${{ }}", Arena.GetStringRange(condition));
+            }
+
+            if (step is not null)
+            {
+                AddStepWarning(step, "step if condition is always evaluated to true because extra characters are around ${{ }}", Arena.GetStringRange(condition));
+            }
+
+            return;
+        }
+
         var expression = TryExtractExpressionBody(raw, out var body) ? body : raw;
 
         var parseResult = Config.ParseExpression(expression);
@@ -161,5 +179,61 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 
         body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
         return true;
+    }
+
+    /// <summary>
+    /// Returns true when the value contains at least one <c>${{ }}</c> expression delimiter.
+    /// Used to distinguish "always true" patterns from plain text that has no expression at all.
+    /// </summary>
+    private static bool ContainsExpressionDelimiter(ReadOnlySpan<byte> value)
+    {
+        return value.IndexOf("${{"u8) >= 0;
+    }
+
+    /// <summary>
+    /// Detects "always evaluated to true" patterns where <c>${{ }}</c> is present but extra characters
+    /// are around it (leading text, trailing newline/space, or multiple expression blocks).
+    /// GitHub Actions treats such values as string templates that produce non-empty strings → always truthy.
+    /// </summary>
+    private static bool IsAlwaysTrueTemplate(ReadOnlySpan<byte> value)
+    {
+        var firstOpen = value.IndexOf("${{"u8);
+        if (firstOpen < 0)
+        {
+            return false; // No expression delimiter at all
+        }
+
+        // Leading text before first ${{ → always true
+        if (firstOpen > 0)
+        {
+            return true;
+        }
+
+        // firstOpen == 0: starts with ${{
+        // Find the first matching }}
+        var firstClose = value.Slice(3).IndexOf("}}"u8);
+        if (firstClose < 0)
+        {
+            return false; // Malformed, let syntax error path handle it
+        }
+
+        firstClose += 3; // Adjust to absolute position
+
+        var tail = firstClose + 2;
+
+        // Check for another ${{ after the first }} → multiple expression blocks → always true
+        if (tail < value.Length && value.Slice(tail).IndexOf("${{"u8) >= 0)
+        {
+            return true;
+        }
+
+        // Check trailing characters after }}: any characters at all mean "extra characters around ${{ }}".
+        // A clean expression wrapper has nothing after }}.
+        if (tail < value.Length)
+        {
+            return true;
+        }
+
+        return false;
     }
 }

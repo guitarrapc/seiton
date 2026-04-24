@@ -2502,6 +2502,49 @@ public sealed class ParserTests
         await Assert.That(Encoding.UTF8.GetString(contentsScope.ValueText.AsSpan(source))).IsEqualTo("read");
     }
 
+    // P0-5 regression: YAML parse error position extracted from VYaml exception
+    [Test]
+    public async Task Parse_BrokenYaml_ErrorPositionNotAtFirstLine()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        with\n          bad: yaml\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "broken.yml");
+        await Assert.That(result.HasFatalError).IsTrue();
+        var diag = result.Diagnostics[0];
+        // Should NOT point to 1:1 — the error is deeper in the file
+        await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
+    }
+
+    // P0-6 regression: webhook activity type error position uses slice offset (not VYaml mark)
+    [Test]
+    public async Task Parse_WebhookUnsupportedActivityType_PositionPointsToValue()
+    {
+        var yaml = "on:\n  issues:\n    types: created\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "webhook-types.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        var typeDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("unsupported activity type", StringComparison.Ordinal));
+        await Assert.That(typeDiag.Message).IsNotEmpty();
+        // 'created' is on line 3, column 12 (1-based)
+        await Assert.That(typeDiag.Location.StartLine).IsEqualTo(3);
+        await Assert.That(typeDiag.Location.StartColumn).IsEqualTo(12);
+    }
+
+    // P0-5 regression: TryExtractLineCol parses VYaml exception format
+    [Test]
+    public async Task TryExtractLineCol_VYamlFormat_ExtractsCorrectPosition()
+    {
+        var (line, col) = WorkflowParser.TryExtractLineCol("Failed to parse at Line: 5, Col: 3, Idx: 42");
+        await Assert.That(line).IsEqualTo(6);  // 0-based → 1-based
+        await Assert.That(col).IsEqualTo(4);   // 0-based → 1-based
+    }
+
+    [Test]
+    public async Task TryExtractLineCol_NoMatch_ReturnsOneOne()
+    {
+        var (line, col) = WorkflowParser.TryExtractLineCol("Some random error message");
+        await Assert.That(line).IsEqualTo(1);
+        await Assert.That(col).IsEqualTo(1);
+    }
+
     // P0-1 regression: matrix include adds extra keys to the matrix context
     [Test]
     public async Task Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys()
