@@ -311,7 +311,7 @@ public sealed class PopularActionsPipelineStageTests
 
             var inputNames = checkout.GetProperty("inputs")
                 .EnumerateArray()
-                .Select(x => x.GetString())
+                .Select(x => x.GetProperty("name").GetString())
                 .ToHashSet(StringComparer.Ordinal);
 
             await Assert.That(inputNames).Contains("fetch-depth");

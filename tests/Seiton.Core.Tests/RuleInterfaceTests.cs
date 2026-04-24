@@ -1088,6 +1088,58 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_PopularActionInputsRule_RequiredInputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #10: actions/cache requires 'path' and 'key' — missing both should warn
+            new RuleCase(
+            "ng-cache-missing-required-inputs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                            restore-keys: |
+                                some-key-
+            """,
+            ["missing required input 'key' for action 'actions/cache@v4'", "missing required input 'path' for action 'actions/cache@v4'"]),
+            // #10: actions/cache with required inputs present — no error
+            new RuleCase(
+            "ok-cache-all-required-inputs-present",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                            path: ~/.npm
+                            key: npm-${{ runner.os }}
+            """,
+            []),
+            // #10: actions/checkout has no required inputs without defaults — no error even with empty with
+            new RuleCase(
+            "ok-checkout-no-required-inputs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CheckoutPersistCredentialsRule_TableDriven()
     {
         var cases = new[]
@@ -4785,6 +4837,190 @@ public sealed class RuleInterfaceTests
                           run: echo "$KEY"
             """,
             ["'UNKNOWN_SECRET' is not defined in 'secrets'"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ── Phase 3: Contextual Validation ──────────────────────────────────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_NeedsOutputValidation_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #8: needs.build.outputs.built should be detected as undefined when build has no such output
+            new RuleCase(
+            "ng-needs-unknown-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.build.outputs.tag }}
+                    steps:
+                        - id: build
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - env:
+                            TAG: ${{ needs.build.outputs.typo_output }}
+                          run: echo "$TAG"
+            """,
+            ["'typo_output' is not defined in 'needs'"]),
+            // #8: needs.build.outputs.image_tag should be valid
+            new RuleCase(
+            "ok-needs-known-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.build.outputs.tag }}
+                    steps:
+                        - id: build
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - env:
+                            TAG: ${{ needs.build.outputs.image_tag }}
+                          run: echo "$TAG"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_StepsOrderValidation_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #9: referencing a step ID that hasn't been defined yet should be an error
+            new RuleCase(
+            "ng-step-reference-before-definition",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ steps.later.outcome == 'success' }}
+                          run: echo "first"
+                        - id: later
+                          run: echo "later"
+            """,
+            ["'later' is not defined in 'steps'"]),
+            // #9: referencing a step ID that was defined earlier is fine
+            new RuleCase(
+            "ok-step-reference-after-definition",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: earlier
+                          run: echo "earlier"
+                        - if: ${{ steps.earlier.outcome == 'success' }}
+                          run: echo "second"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_RunnerContextInMatrix_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #23: runner context should NOT be available in strategy.matrix expressions
+            // (currently Job scope doesn't include runner, so this may already pass)
+            new RuleCase(
+            "ng-matrix-uses-runner-context",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - if: ${{ runner.os == 'Linux' }}
+                          run: echo ok
+            """,
+            []),
+            // runner context IS valid in step scope — should not error
+            new RuleCase(
+            "ok-step-uses-runner-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ runner.os == 'Linux' }}
+                          run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ReusableWorkflowOutputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #25: jobs.<id>.outputs.<name> in workflow_call output value should validate
+            new RuleCase(
+            "ng-workflow-output-references-unknown-job-output",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        image:
+                            value: ${{ jobs.build.outputs.imagetag }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.b.outputs.tag }}
+                    steps:
+                        - id: b
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+            """,
+            ["'imagetag' is not defined"]),
+            // #25: correct output name should not error
+            new RuleCase(
+            "ok-workflow-output-references-known-job-output",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        image:
+                            value: ${{ jobs.build.outputs.image_tag }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.b.outputs.tag }}
+                    steps:
+                        - id: b
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+            """,
+            []),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

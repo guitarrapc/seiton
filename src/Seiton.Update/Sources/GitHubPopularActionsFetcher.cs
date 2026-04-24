@@ -90,13 +90,13 @@ internal sealed class GitHubPopularActionsFetcher
         {
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
             var text = File.ReadAllText(rawPath);
-            var inputs = yamlParser.ParseInputNames(text);
+            var inputs = yamlParser.ParseInputs(text);
 
             parsed.Actions.Add(new ParsedPopularAction
             {
                 ActionRef = source.ActionRef,
                 Uses = source.Uses,
-                Inputs = inputs.ToList(),
+                Inputs = inputs.Select(static x => new ParsedPopularActionInput { Name = x.Name, Required = x.Required }).ToList(),
             });
         }
 
@@ -145,9 +145,10 @@ internal sealed class GitHubPopularActionsFetcher
                 {
                     uses = x.Uses,
                     inputs = x.Inputs
-                        .Where(static n => !string.IsNullOrWhiteSpace(n))
-                        .Distinct(StringComparer.Ordinal)
-                        .OrderBy(static n => n, StringComparer.Ordinal)
+                        .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                        .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                        .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                        .Select(static n => new { name = n.Name, required = n.Required })
                         .ToArray(),
                 })
                 .ToArray(),
@@ -300,6 +301,12 @@ internal sealed class GitHubPopularActionsFetcher
     {
         public string ActionRef { get; set; } = string.Empty;
         public string Uses { get; set; } = string.Empty;
-        public List<string> Inputs { get; set; } = [];
+        public List<ParsedPopularActionInput> Inputs { get; set; } = [];
+    }
+
+    private sealed class ParsedPopularActionInput
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool Required { get; set; }
     }
 }

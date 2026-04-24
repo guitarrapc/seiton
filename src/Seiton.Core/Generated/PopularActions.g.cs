@@ -111,6 +111,39 @@ internal static class PopularActions
                 _ => false,
             };
         }
+
+        internal bool IsInputRequired(ReadOnlySpan<byte> inputNameUtf8)
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "key"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8),
+                ActionId.ActionsCheckout => false,
+                ActionId.ActionsDownloadArtifact => false,
+                ActionId.ActionsSetupDotnet => false,
+                ActionId.ActionsSetupNode => false,
+                ActionId.ActionsUploadArtifact =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8),
+                ActionId.DockerLoginAction => false,
+                _ => false,
+            };
+        }
+
+        internal byte[][] GetRequiredInputs()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => ["key"u8.ToArray(), "path"u8.ToArray()],
+                ActionId.ActionsCheckout => [],
+                ActionId.ActionsDownloadArtifact => [],
+                ActionId.ActionsSetupDotnet => [],
+                ActionId.ActionsSetupNode => [],
+                ActionId.ActionsUploadArtifact => ["path"u8.ToArray()],
+                ActionId.DockerLoginAction => [],
+                _ => [],
+            };
+        }
     }
 
     internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)

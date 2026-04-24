@@ -5,106 +5,316 @@
     {
       "uses": "actions/cache",
       "inputs": [
-        "enableCrossOsArchive",
-        "fail-on-cache-miss",
-        "key",
-        "lookup-only",
-        "path",
-        "restore-keys",
-        "save-always",
-        "upload-chunk-size"
+        {
+          "name": "enableCrossOsArchive",
+          "required": false
+        },
+        {
+          "name": "fail-on-cache-miss",
+          "required": false
+        },
+        {
+          "name": "key",
+          "required": true
+        },
+        {
+          "name": "lookup-only",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": true
+        },
+        {
+          "name": "restore-keys",
+          "required": false
+        },
+        {
+          "name": "save-always",
+          "required": false
+        },
+        {
+          "name": "upload-chunk-size",
+          "required": false
+        }
       ]
     },
     {
       "uses": "actions/checkout",
       "inputs": [
-        "clean",
-        "fetch-depth",
-        "fetch-tags",
-        "filter",
-        "github-server-url",
-        "lfs",
-        "path",
-        "persist-credentials",
-        "ref",
-        "repository",
-        "set-safe-directory",
-        "show-progress",
-        "sparse-checkout",
-        "sparse-checkout-cone-mode",
-        "ssh-key",
-        "ssh-known-hosts",
-        "ssh-strict",
-        "ssh-user",
-        "submodules",
-        "token"
+        {
+          "name": "clean",
+          "required": false
+        },
+        {
+          "name": "fetch-depth",
+          "required": false
+        },
+        {
+          "name": "fetch-tags",
+          "required": false
+        },
+        {
+          "name": "filter",
+          "required": false
+        },
+        {
+          "name": "github-server-url",
+          "required": false
+        },
+        {
+          "name": "lfs",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": false
+        },
+        {
+          "name": "persist-credentials",
+          "required": false
+        },
+        {
+          "name": "ref",
+          "required": false
+        },
+        {
+          "name": "repository",
+          "required": false
+        },
+        {
+          "name": "set-safe-directory",
+          "required": false
+        },
+        {
+          "name": "show-progress",
+          "required": false
+        },
+        {
+          "name": "sparse-checkout",
+          "required": false
+        },
+        {
+          "name": "sparse-checkout-cone-mode",
+          "required": false
+        },
+        {
+          "name": "ssh-key",
+          "required": false
+        },
+        {
+          "name": "ssh-known-hosts",
+          "required": false
+        },
+        {
+          "name": "ssh-strict",
+          "required": false
+        },
+        {
+          "name": "ssh-user",
+          "required": false
+        },
+        {
+          "name": "submodules",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
       ]
     },
     {
       "uses": "actions/download-artifact",
       "inputs": [
-        "artifact-ids",
-        "github-token",
-        "merge-multiple",
-        "name",
-        "path",
-        "pattern",
-        "repository",
-        "run-id"
+        {
+          "name": "artifact-ids",
+          "required": false
+        },
+        {
+          "name": "github-token",
+          "required": false
+        },
+        {
+          "name": "merge-multiple",
+          "required": false
+        },
+        {
+          "name": "name",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": false
+        },
+        {
+          "name": "pattern",
+          "required": false
+        },
+        {
+          "name": "repository",
+          "required": false
+        },
+        {
+          "name": "run-id",
+          "required": false
+        }
       ]
     },
     {
       "uses": "actions/setup-dotnet",
       "inputs": [
-        "cache",
-        "cache-dependency-path",
-        "config-file",
-        "dotnet-quality",
-        "dotnet-version",
-        "global-json-file",
-        "owner",
-        "source-url"
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "config-file",
+          "required": false
+        },
+        {
+          "name": "dotnet-quality",
+          "required": false
+        },
+        {
+          "name": "dotnet-version",
+          "required": false
+        },
+        {
+          "name": "global-json-file",
+          "required": false
+        },
+        {
+          "name": "owner",
+          "required": false
+        },
+        {
+          "name": "source-url",
+          "required": false
+        }
       ]
     },
     {
       "uses": "actions/setup-node",
       "inputs": [
-        "always-auth",
-        "architecture",
-        "cache",
-        "cache-dependency-path",
-        "check-latest",
-        "mirror",
-        "mirror-token",
-        "node-version",
-        "node-version-file",
-        "registry-url",
-        "scope",
-        "token"
+        {
+          "name": "always-auth",
+          "required": false
+        },
+        {
+          "name": "architecture",
+          "required": false
+        },
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "check-latest",
+          "required": false
+        },
+        {
+          "name": "mirror",
+          "required": false
+        },
+        {
+          "name": "mirror-token",
+          "required": false
+        },
+        {
+          "name": "node-version",
+          "required": false
+        },
+        {
+          "name": "node-version-file",
+          "required": false
+        },
+        {
+          "name": "registry-url",
+          "required": false
+        },
+        {
+          "name": "scope",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
       ]
     },
     {
       "uses": "actions/upload-artifact",
       "inputs": [
-        "compression-level",
-        "if-no-files-found",
-        "include-hidden-files",
-        "name",
-        "overwrite",
-        "path",
-        "retention-days"
+        {
+          "name": "compression-level",
+          "required": false
+        },
+        {
+          "name": "if-no-files-found",
+          "required": false
+        },
+        {
+          "name": "include-hidden-files",
+          "required": false
+        },
+        {
+          "name": "name",
+          "required": false
+        },
+        {
+          "name": "overwrite",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": true
+        },
+        {
+          "name": "retention-days",
+          "required": false
+        }
       ]
     },
     {
       "uses": "docker/login-action",
       "inputs": [
-        "ecr",
-        "logout",
-        "password",
-        "registry",
-        "registry-auth",
-        "scope",
-        "username"
+        {
+          "name": "ecr",
+          "required": false
+        },
+        {
+          "name": "logout",
+          "required": false
+        },
+        {
+          "name": "password",
+          "required": false
+        },
+        {
+          "name": "registry",
+          "required": false
+        },
+        {
+          "name": "registry-auth",
+          "required": false
+        },
+        {
+          "name": "scope",
+          "required": false
+        },
+        {
+          "name": "username",
+          "required": false
+        }
       ]
     }
   ]

@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Seiton.Core.Generated;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -11,7 +12,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
     public override void VisitStep(Step step)
     {
-        if (step.Exec is not ExecAction actionExec || actionExec.Inputs is null || actionExec.Inputs.Value.Count == 0)
+        if (step.Exec is not ExecAction actionExec)
         {
             return;
         }
@@ -28,15 +29,52 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         }
 
         var actionName = Decode(Arena.GetStringSlice(actionExec.Uses));
-        foreach (var pair in actionExec.Inputs.Value)
+
+        // Check unknown inputs
+        if (actionExec.Inputs is { Count: > 0 } inputs)
         {
-            if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
+            foreach (var pair in inputs)
+            {
+                if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
+                {
+                    continue;
+                }
+
+                var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
+                AddStepWarning(step, $"unknown input '{inputName}' for action '{actionName}'");
+            }
+        }
+
+        // Check missing required inputs
+        var requiredInputs = actionSpec.GetRequiredInputs();
+        for (var i = 0; i < requiredInputs.Length; i++)
+        {
+            var requiredUtf8 = requiredInputs[i].AsSpan();
+            if (IsInputProvided(actionExec, requiredUtf8))
             {
                 continue;
             }
 
-            var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
-            AddStepWarning(step, $"unknown input '{inputName}' for action '{actionName}'");
+            var requiredName = Encoding.UTF8.GetString(requiredUtf8);
+            AddStepWarning(step, $"missing required input '{requiredName}' for action '{actionName}'");
         }
+    }
+
+    private bool IsInputProvided(ExecAction actionExec, ReadOnlySpan<byte> inputNameUtf8)
+    {
+        if (actionExec.Inputs is not { Count: > 0 } inputs || Config.Utf8Yaml is null)
+        {
+            return false;
+        }
+
+        foreach (var pair in inputs)
+        {
+            if (SpanHelpers.EqualsAsciiIgnoreCase(pair.Key.AsSpan(Config.Utf8Yaml), inputNameUtf8))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

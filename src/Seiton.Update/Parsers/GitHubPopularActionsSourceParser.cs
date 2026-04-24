@@ -29,7 +29,7 @@ internal sealed class GitHubPopularActionsSourceParser
             .Where(static x => !string.IsNullOrWhiteSpace(x.Uses))
             .Select(static x => new PopularActionModel(
                 x.Uses,
-                (x.Inputs ?? []).ToArray()))
+                (x.Inputs ?? []).Select(static i => new PopularActionInputModel(i.Name, i.Required)).ToArray()))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
     }
@@ -42,6 +42,12 @@ internal sealed class GitHubPopularActionsSourceParser
     private sealed class PopularActionEntry
     {
         public string Uses { get; set; } = string.Empty;
-        public List<string>? Inputs { get; set; }
+        public List<PopularActionInputEntry>? Inputs { get; set; }
+    }
+
+    private sealed class PopularActionInputEntry
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool Required { get; set; }
     }
 }

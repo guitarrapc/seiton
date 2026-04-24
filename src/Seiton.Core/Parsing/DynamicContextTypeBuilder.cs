@@ -35,11 +35,14 @@ internal static class DynamicContextTypeBuilder
     /// <summary>
     /// Builds the steps context type override for a job.
     /// Returns a strict object keyed by step IDs, or a loose object when no steps have IDs.
+    /// When <paramref name="maxStepIndex"/> is non-negative, only steps with index &lt; maxStepIndex are included
+    /// (for detecting forward references to steps defined later).
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildStepsOverride(
         IReadOnlyList<Step>? steps,
         AstArena arena,
-        byte[] utf8Yaml)
+        byte[] utf8Yaml,
+        int maxStepIndex = -1)
     {
         if (steps is null || steps.Count == 0)
         {
@@ -47,7 +50,8 @@ internal static class DynamicContextTypeBuilder
         }
 
         var props = new Dictionary<Utf8String, ExprType>();
-        for (var i = 0; i < steps.Count; i++)
+        var limit = maxStepIndex >= 0 ? Math.Min(maxStepIndex, steps.Count) : steps.Count;
+        for (var i = 0; i < limit; i++)
         {
             var step = steps[i];
             if (!step.Id.HasValue)
@@ -64,8 +68,11 @@ internal static class DynamicContextTypeBuilder
             props[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = s_stepEntryType;
         }
 
+        // When maxStepIndex >= 0, we're doing incremental building (step ordering validation).
+        // Return strict type even when empty so forward references are flagged.
+        // When maxStepIndex < 0 (default), fall back to loose if no step IDs found.
         return props.Count == 0
-            ? (StepsKeyUtf8, s_looseDynamic)
+            ? (StepsKeyUtf8, maxStepIndex >= 0 ? ExprType.Object(props, strict: true) : s_looseDynamic)
             : (StepsKeyUtf8, ExprType.Object(props, strict: true));
     }
 
@@ -293,5 +300,37 @@ internal static class DynamicContextTypeBuilder
         }
 
         return (SecretsKeyUtf8, s_looseDynamic);
+    }
+
+    internal static readonly byte[] JobsKeyUtf8 = "jobs"u8.ToArray();
+
+    /// <summary>
+    /// Builds the jobs context type override for workflow_call output validation.
+    /// Structure: <c>jobs.&lt;job_id&gt;.result</c> (string) and <c>jobs.&lt;job_id&gt;.outputs.&lt;name&gt;</c>.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildJobsOverride(
+        SliceMap<Job> allJobs,
+        byte[]? utf8Yaml)
+    {
+        if (allJobs.Count == 0 || utf8Yaml is null)
+        {
+            return (JobsKeyUtf8, s_looseDynamic);
+        }
+
+        var props = new Dictionary<Utf8String, ExprType>(allJobs.Count);
+        foreach (var pair in allJobs)
+        {
+            var outputsType = BuildJobOutputsType(pair.Value, utf8Yaml);
+            var jobEntryType = ExprType.Object(
+                new Dictionary<Utf8String, ExprType>
+                {
+                    { s_resultKey, ExprType.String },
+                    { s_outputsKey, outputsType },
+                },
+                strict: true);
+            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = jobEntryType;
+        }
+
+        return (JobsKeyUtf8, ExprType.Object(props, strict: true));
     }
 }

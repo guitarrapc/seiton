@@ -25,6 +25,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[5];
     private bool _hasOverrides;
     private readonly List<Diagnostic> _propertyDiagnostics = new();
+    // Per-job state for incremental step override building
+    private IReadOnlyList<Step>? _currentJobSteps;
+    private int _currentStepIndex;
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -33,6 +36,75 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
         _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
         _hasOverrides = false;
+    }
+
+    public override void VisitWorkflowPost(Workflow workflow)
+    {
+        if (Config.Utf8Yaml is null || _currentWorkflow is null)
+        {
+            return;
+        }
+
+        // Validate workflow_call output value expressions against jobs context
+        for (var i = 0; i < workflow.On.Count; i++)
+        {
+            if (workflow.On[i] is not WorkflowCallEvent { Outputs: { Count: > 0 } outputs })
+            {
+                continue;
+            }
+
+            var jobsOverride = DynamicContextTypeBuilder.BuildJobsOverride(
+                _currentWorkflow.Jobs, Config.Utf8Yaml);
+            var overrides = new (byte[], ExprType)[]
+            {
+                jobsOverride,
+                _inputsOverride,
+            };
+
+            foreach (var pair in outputs)
+            {
+                var output = pair.Value;
+                if (!output.Value.HasValue)
+                {
+                    continue;
+                }
+
+                var value = Arena.GetStringValue(output.Value);
+                if (value.Length == 0)
+                {
+                    continue;
+                }
+
+                var searchStart = 0;
+                while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
+                {
+                    searchStart = nextSearchStart;
+                    var expression = TrimAsciiWhiteSpace(value.Slice(bodyStart, bodyLength));
+                    if (expression.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    // Validate context availability
+                    var parseResult = Config.ParseExpression(expression);
+                    if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+                    {
+                        continue;
+                    }
+
+                    // Validate property access against jobs context
+                    var propertyDiagnostics = _propertyDiagnostics;
+                    propertyDiagnostics.Clear();
+                    ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline(
+                        parseResult, expression, Arena.GetStringRange(output.Value), overrides, propertyDiagnostics);
+                    for (var d = 0; d < propertyDiagnostics.Count; d++)
+                    {
+                        var diag = propertyDiagnostics[d];
+                        AddWorkflowError(workflow, diag.Message, diag.Location);
+                    }
+                }
+            }
+        }
     }
 
     public override void VisitJobPre(Job job)
@@ -50,15 +122,18 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             _currentWorkflow?.Jobs ?? default,
             Arena,
             yaml);
-        var stepsOverride = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml);
+
+        // Store job steps for incremental step override building in VisitStep
+        _currentJobSteps = job.Steps;
+        _currentStepIndex = 0;
 
         // job scope: matrix, needs, inputs, secrets available (steps is NOT available in job scope)
         _jobScopeOverrides[0] = matrixOverride;
         _jobScopeOverrides[1] = needsOverride;
         _jobScopeOverrides[2] = _inputsOverride;
         _jobScopeOverrides[3] = _secretsOverride;
-        // step scope: also includes steps
-        _stepScopeOverrides[0] = stepsOverride;
+        // step scope: initialize with empty steps (will be rebuilt per-step in VisitStep)
+        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml, maxStepIndex: 0);
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
@@ -91,6 +166,14 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         if (Config.Utf8Yaml is null)
         {
             return;
+        }
+
+        // Rebuild steps override to include only steps defined before the current one
+        if (_hasOverrides && _currentJobSteps is not null)
+        {
+            _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(
+                _currentJobSteps, Arena, Config.Utf8Yaml, maxStepIndex: _currentStepIndex);
+            _currentStepIndex++;
         }
 
         CheckNode(step.If, ExpressionValidationContext.Step, "step.if", static (rule, message, location, targetStep) =>
