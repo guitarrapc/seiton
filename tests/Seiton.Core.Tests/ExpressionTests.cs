@@ -1138,6 +1138,244 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
 
+    // Dynamic-override comparison type validation
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputGreaterThanNumber_ReportsDiagnostic()
+    {
+        // inputs.timeout is bool via override — using > should report error
+        var expression = "inputs.timeout > 60"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("timeout"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>' does not support bool type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_NumberInputLessThanNumber_NoDiagnostic()
+    {
+        // inputs.count is number via override — using < is fine
+        var expression = "inputs.count < 100"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("count"u8)] = ExprType.Number,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputEqualsBool_NoDiagnostic()
+    {
+        // inputs.verbose is bool via override — using == with bool is fine
+        var expression = "inputs.verbose == true"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("verbose"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_ObjectInputEqualsString_ReportsWarning()
+    {
+        // inputs.data is object via override — comparing with string should warn
+        var expression = "inputs.data == 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("data"u8)] = ExprType.Object(),
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to string value with '==' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputGreaterOrEqualNumber_ReportsDiagnostic()
+    {
+        // inputs.flag is bool via override — using >= should report error
+        var expression = "inputs.flag >= 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("flag"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>=' does not support bool type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputLessOrEqualNumber_ReportsDiagnostic()
+    {
+        // inputs.flag is bool via override — using <= should report error
+        var expression = "inputs.flag <= 5"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("flag"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<=' does not support bool type", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_ObjectInputNotEqualsString_ReportsWarning()
+    {
+        // inputs.data is object via override — != with string should warn
+        var expression = "inputs.data != 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("data"u8)] = ExprType.Object(),
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to string value with '!=' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StringInputNotEqualsString_NoDiagnostic()
+    {
+        // inputs.name is string via override — != with string is fine
+        var expression = "inputs.name != 'admin'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("name"u8)] = ExprType.String,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_AnyInputGreaterThanNumber_NoDiagnostic()
+    {
+        // When both sides are Any — no error should fire
+        var expression = "inputs.unknown > 60"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        // Non-strict object means properties resolve to Any
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(dynamicPropertyType: ExprType.Any)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StringInputGreaterOrEqualString_NoDiagnostic()
+    {
+        // inputs.version is string via override — >= with string is fine
+        var expression = "inputs.version >= 'v2'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("version"u8)] = ExprType.String,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support", StringComparison.Ordinal))).IsFalse();
+    }
+
     // String dereference as object
 
     [Test]

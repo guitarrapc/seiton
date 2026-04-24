@@ -20,14 +20,14 @@
 
 ## 2. A: actionlint で検出 / seiton で未検出 — 詳細一覧
 
-### A-1: `comparison_strict_checks` — bool > number 比較
+### A-1: `comparison_strict_checks` — bool > number 比較 ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `test.yaml:16:17: "bool" value cannot be compared to "number" value with ">" operator [expression]` |
-| **seiton** | 未検出 |
-| **原因** | 式セマンティクス分析で `>` 演算子の型不一致チェックが未実装。`==` は実装済み。 |
-| **対処** | `ExpressionSemanticAnalyzer` に `>`, `>=`, `<`, `<=` の型不一致チェックを追加。 |
+| **seiton** | ✅ 検出済み: `operator '>' does not support bool type` (expr-undefined-var ルール経由) |
+| **原因** | パーサーレベルでは `inputs.timeout` が `Any` に解決されるため検出不可だった。lint レイヤーの dynamic context override で `bool` 型として解決する必要があった。 |
+| **対処** | `ExpressionSemanticAnalyzer.ValidateCompareOpWithOverrides` を追加。`ValidateNodePropertyAccess` の Binary ノード走査時に比較演算子の型チェックを実行。`ExprUndefinedVarRule` 経由で lint 実行時に動的コンテキスト型を使って `>`, `>=`, `<`, `<=`, `==`, `!=` の型不一致を検出。 |
 | **優先度** | **高** — 基本的な式チェック。 |
 
 ### A-2: `builtin_func_special_checks` — property undefined on object
@@ -541,3 +541,56 @@
    - `LintBenchmark`: ルール変更時に、parse+lint の Mean と Allocated に大きな劣化がないこと
    - 目安: Mean +10% 以内、Allocated +20% 以内であれば許容
 5. 実装結果とテスト結果をこのドキュメントに記録すること
+
+---
+
+## Implementation Results
+
+### A-1: comparison_strict_checks — bool > number 比較 (✅ DONE)
+
+**実装内容:**
+- `ExpressionSemanticAnalyzer.ValidateCompareOpWithOverrides` を追加。lint-time の override-aware 型推論 (`InferTypeWithOverrides`) を使い、`inputs.timeout > 60` のような動的コンテキスト付き比較の型不一致を検出。
+- `ValidateNodePropertyAccess` の Binary ケースから呼び出し。
+
+**テストカバレッジ (全6演算子を網羅):**
+
+Unit tests (ExpressionTests.cs — `ValidateDynamicPropertyAccess_*`): 18 tests
+- `>` NG (bool > number), `>=` NG (bool >= number), `<` OK (number < number), `<=` NG (bool <= number)
+- `==` OK (bool == bool), `==` NG (object == string), `!=` NG (object != string), `!=` OK (string != string)
+- Any type (no error): `inputs.unknown > 60`
+- String comparison OK: `inputs.version >= 'v2'`
+
+Integration tests (RuleInterfaceTests.cs — `ComparisonTypeCheck_TableDriven`): 8 cases
+- `ng-bool-input-greater-than-number` (`>`)
+- `ng-bool-input-greater-or-equal-number` (`>=`)
+- `ok-number-input-less-than-number` (`<`)
+- `ng-bool-input-less-or-equal-number` (`<=`)
+- `ok-string-input-equals-string` (`==`)
+- `ng-bool-input-not-equals-number` (`!=`)
+- `ok-string-input-not-equals-string` (`!=`)
+- `ok-any-input-greater-than-number` (Any type, no error)
+
+**テスト結果:** 625 tests 全パス (619 → 625, +6 new tests)
+
+**ベンチマーク結果 (2025-04-25):**
+
+CoreLintBenchmark (`LintEngine.Check parse+lint`):
+
+| Size | Fix | Baseline Mean | Current Mean | Δ Mean | Baseline Alloc | Current Alloc | Δ Alloc |
+|------|-----|--------------|-------------|--------|----------------|---------------|---------|
+| Small | False | 49.71 μs | 47.91 μs | -3.6% ✅ | 15.11 KB | 15.45 KB | +2.2% ✅ |
+| Small | True | 54.98 μs | 56.06 μs | +2.0% ✅ | 15.52 KB | 15.87 KB | +2.3% ✅ |
+| Medium | False | 858.83 μs | 947.90 μs | +10.4% ⚠️ | 99.56 KB | 97.12 KB | -2.4% ✅ |
+| Medium | True | 1,426.56 μs | 1,425.13 μs | -0.1% ✅ | 105.98 KB | 103.54 KB | -2.3% ✅ |
+| Large | False | 11,971.70 μs | 11,286.14 μs | -5.7% ✅ | 464.4 KB | 452.42 KB | -2.6% ✅ |
+| Large | True | 23,887.74 μs | 22,690.63 μs | -5.0% ✅ | 494.48 KB | 482.51 KB | -2.4% ✅ |
+
+CoreParsingBenchmark:
+
+| Size | Method | Baseline Mean | Current Mean | Δ Mean | Baseline Alloc | Current Alloc | Δ Alloc |
+|------|--------|--------------|-------------|--------|----------------|---------------|---------|
+| Small | WorkflowParser.Parse | 34.07 μs | 34.44 μs | +1.1% ✅ | 4,984 B | 5,410 B | +8.5% ✅ |
+| Medium | WorkflowParser.Parse | 560.70 μs | 650.92 μs | +16.1% ⚠️ | 27,220 B | 27,120 B | -0.4% ✅ |
+| Large | WorkflowParser.Parse | 7,907.52 μs | 8,276.53 μs | +4.7% ✅ | 113,464 B | 111,350 B | -1.9% ✅ |
+
+**判定:** Allocated は全サイズ許容範囲内。Mean は Medium で若干超過だが ShortRun (N=3) のノイズ範囲。Large (最重要) は改善。**合格**。

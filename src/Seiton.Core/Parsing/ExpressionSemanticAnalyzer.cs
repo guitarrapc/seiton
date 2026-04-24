@@ -1299,6 +1299,7 @@ public static class ExpressionSemanticAnalyzer
             case ExpressionNodeKind.Binary:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateCompareOpWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 break;
             case ExpressionNodeKind.MemberAccess:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
@@ -1350,6 +1351,69 @@ public static class ExpressionSemanticAnalyzer
                 DiagnosticSeverity.Error,
                 $"property '{propNameText}' is not defined in '{rootName}' object",
                 expressionLocation));
+        }
+    }
+
+    /// <summary>
+    /// Validates comparison and equality operators using context-override–aware type inference.
+    /// This catches type mismatches (e.g. <c>bool &gt; number</c>) that the parser-level
+    /// <see cref="ValidateCompareOp"/> cannot detect because dynamic context types (inputs, matrix, etc.)
+    /// resolve to <see cref="AnyExprType"/> without overrides.
+    /// </summary>
+    private static void ValidateCompareOpWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        var rightType = InferTypeWithOverrides(node.Right, nodes, arguments, expressionUtf8, overrides);
+
+        // Ordering operators (<, <=, >, >=): reject null, bool, object, array
+        if (IsComparisonOperator(node.Operator))
+        {
+            // Skip if both sides are still Any (overrides didn't help resolve types)
+            if (leftType is AnyExprType && rightType is AnyExprType)
+            {
+                return;
+            }
+
+            if (IsNotComparableType(leftType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"operator '{OperatorSymbol(node.Operator)}' does not support {leftType.TypeName} type",
+                    expressionLocation));
+            }
+            else if (IsNotComparableType(rightType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"operator '{OperatorSymbol(node.Operator)}' does not support {rightType.TypeName} type",
+                    expressionLocation));
+            }
+
+            return;
+        }
+
+        // Equality operators (==, !=): warn about cross-type comparisons
+        if (node.Operator is ExpressionOperator.Equal or ExpressionOperator.NotEqual)
+        {
+            if (leftType is AnyExprType || rightType is AnyExprType)
+            {
+                return;
+            }
+
+            if (!AreEqualityCompatible(leftType, rightType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Warning,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
         }
     }
 

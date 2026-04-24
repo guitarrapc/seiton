@@ -5047,6 +5047,140 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ComparisonTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-bool-input-greater-than-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        timeout:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.timeout > 60 }}
+                          run: echo timeout
+            """,
+            ["operator '>' does not support bool type"]),
+            new RuleCase(
+            "ok-number-input-less-than-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        count:
+                            type: number
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.count < 100 }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-string-input-equals-string",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        env:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.env == 'production' }}
+                          run: echo deploy
+            """,
+            []),
+            new RuleCase(
+            "ng-bool-input-less-or-equal-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        verbose:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.verbose <= 5 }}
+                          run: echo ok
+            """,
+            ["operator '<=' does not support bool type"]),
+            new RuleCase(
+            "ng-bool-input-greater-or-equal-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        flag:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.flag >= 1 }}
+                          run: echo ok
+            """,
+            ["operator '>=' does not support bool type"]),
+            new RuleCase(
+            "ng-bool-input-not-equals-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        flag:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.flag != 60 }}
+                          run: echo ok
+            """,
+            ["bool value cannot be compared to number value with '!=' operator"]),
+            new RuleCase(
+            "ok-string-input-not-equals-string",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        env:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.env != 'staging' }}
+                          run: echo deploy
+            """,
+            []),
+            new RuleCase(
+            "ok-any-input-greater-than-number",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ github.event.number > 0 }}
+                          run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_TemplateTypeCheck_TableDriven()
     {
         var cases = new[]
