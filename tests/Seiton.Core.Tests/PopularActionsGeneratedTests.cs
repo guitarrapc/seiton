@@ -34,10 +34,10 @@ public sealed class PopularActionsGeneratedTests
         PopularActions.TryGet("actions/checkout@v4"u8, out var spec);
         var runsUsing = spec.GetRunsUsing();
         var isEmpty = runsUsing.IsEmpty;
-        var isNode20 = runsUsing.SequenceEqual("node20"u8);
+        var isNode24 = runsUsing.SequenceEqual("node24"u8);
 
         await Assert.That(isEmpty).IsFalse();
-        await Assert.That(isNode20).IsTrue();
+        await Assert.That(isNode24).IsTrue();
     }
 
     [Test]
@@ -46,13 +46,14 @@ public sealed class PopularActionsGeneratedTests
         // Every popular action in the catalog should have runs.using metadata
         var actions = new[]
         {
-            "actions/cache@v4"u8.ToArray(),
-            "actions/checkout@v4"u8.ToArray(),
-            "actions/download-artifact@v4"u8.ToArray(),
-            "actions/setup-dotnet@v4"u8.ToArray(),
-            "actions/setup-node@v4"u8.ToArray(),
-            "actions/upload-artifact@v4"u8.ToArray(),
-            "docker/login-action@v3"u8.ToArray(),
+            "actions/cache@v5"u8.ToArray(),
+            "actions/checkout@v6"u8.ToArray(),
+            "actions/download-artifact@v8"u8.ToArray(),
+            "actions/setup-dotnet@v5"u8.ToArray(),
+            "actions/setup-go@v6"u8.ToArray(),
+            "actions/setup-node@v6"u8.ToArray(),
+            "actions/upload-artifact@v7"u8.ToArray(),
+            "docker/login-action@v4"u8.ToArray(),
         };
 
         foreach (var actionRef in actions)

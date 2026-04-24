@@ -97,10 +97,10 @@ public sealed class PopularActionsPipelineStageTests
                             "schemaVersion": 1,
                             "targets": [
                                 {
-                                    "actionRef": "actions/checkout@v4",
+                                    "actionRef": "actions/checkout@v6",
                                     "uses": "actions/checkout",
-                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
-                                    "rawFileName": "actions_checkout_v4.action.yml"
+                                    "url": "https://raw.githubusercontent.com/actions/checkout/v6/action.yml",
+                                    "rawFileName": "actions_checkout.action.yml"
                                 }
                             ]
                         }

@@ -43,7 +43,7 @@
           "name": "cache-hit"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
       "uses": "actions/checkout",
@@ -137,13 +137,17 @@
           "name": "ref"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
       "uses": "actions/download-artifact",
       "inputs": [
         {
           "name": "artifact-ids",
+          "required": false
+        },
+        {
+          "name": "digest-mismatch",
           "required": false
         },
         {
@@ -173,6 +177,10 @@
         {
           "name": "run-id",
           "required": false
+        },
+        {
+          "name": "skip-decompress",
+          "required": false
         }
       ],
       "outputs": [
@@ -180,11 +188,15 @@
           "name": "download-path"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
       "uses": "actions/setup-dotnet",
       "inputs": [
+        {
+          "name": "architecture",
+          "required": false
+        },
         {
           "name": "cache",
           "required": false
@@ -216,6 +228,10 @@
         {
           "name": "source-url",
           "required": false
+        },
+        {
+          "name": "workloads",
+          "required": false
         }
       ],
       "outputs": [
@@ -226,15 +242,57 @@
           "name": "dotnet-version"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
+    },
+    {
+      "uses": "actions/setup-go",
+      "inputs": [
+        {
+          "name": "architecture",
+          "required": false
+        },
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "check-latest",
+          "required": false
+        },
+        {
+          "name": "go-download-base-url",
+          "required": false
+        },
+        {
+          "name": "go-version",
+          "required": false
+        },
+        {
+          "name": "go-version-file",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "go-version"
+        }
+      ],
+      "runsUsing": "node24"
     },
     {
       "uses": "actions/setup-node",
       "inputs": [
-        {
-          "name": "always-auth",
-          "required": false
-        },
         {
           "name": "architecture",
           "required": false
@@ -268,6 +326,10 @@
           "required": false
         },
         {
+          "name": "package-manager-cache",
+          "required": false
+        },
+        {
           "name": "registry-url",
           "required": false
         },
@@ -288,11 +350,15 @@
           "name": "node-version"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
       "uses": "actions/upload-artifact",
       "inputs": [
+        {
+          "name": "archive",
+          "required": false
+        },
         {
           "name": "compression-level",
           "required": false
@@ -333,7 +399,7 @@
           "name": "artifact-url"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
       "uses": "docker/login-action",
@@ -368,7 +434,7 @@
         }
       ],
       "outputs": [],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     }
   ]
 }

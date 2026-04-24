@@ -3,7 +3,7 @@
   "source": "github-action-metadata-raw",
   "actions": [
     {
-      "actionRef": "actions/cache@v4",
+      "actionRef": "actions/cache@v5",
       "uses": "actions/cache",
       "inputs": [
         {
@@ -44,10 +44,10 @@
           "name": "cache-hit"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
-      "actionRef": "actions/checkout@v4",
+      "actionRef": "actions/checkout@v6",
       "uses": "actions/checkout",
       "inputs": [
         {
@@ -139,14 +139,18 @@
           "name": "ref"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
-      "actionRef": "actions/download-artifact@v4",
+      "actionRef": "actions/download-artifact@v8",
       "uses": "actions/download-artifact",
       "inputs": [
         {
           "name": "artifact-ids",
+          "required": false
+        },
+        {
+          "name": "digest-mismatch",
           "required": false
         },
         {
@@ -176,6 +180,10 @@
         {
           "name": "run-id",
           "required": false
+        },
+        {
+          "name": "skip-decompress",
+          "required": false
         }
       ],
       "outputs": [
@@ -183,12 +191,16 @@
           "name": "download-path"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
-      "actionRef": "actions/setup-dotnet@v4",
+      "actionRef": "actions/setup-dotnet@v5",
       "uses": "actions/setup-dotnet",
       "inputs": [
+        {
+          "name": "architecture",
+          "required": false
+        },
         {
           "name": "cache",
           "required": false
@@ -220,6 +232,10 @@
         {
           "name": "source-url",
           "required": false
+        },
+        {
+          "name": "workloads",
+          "required": false
         }
       ],
       "outputs": [
@@ -230,16 +246,59 @@
           "name": "dotnet-version"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
-      "actionRef": "actions/setup-node@v4",
-      "uses": "actions/setup-node",
+      "actionRef": "actions/setup-go@v6",
+      "uses": "actions/setup-go",
       "inputs": [
         {
-          "name": "always-auth",
+          "name": "architecture",
           "required": false
         },
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "check-latest",
+          "required": false
+        },
+        {
+          "name": "go-download-base-url",
+          "required": false
+        },
+        {
+          "name": "go-version",
+          "required": false
+        },
+        {
+          "name": "go-version-file",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "go-version"
+        }
+      ],
+      "runsUsing": "node24"
+    },
+    {
+      "actionRef": "actions/setup-node@v6",
+      "uses": "actions/setup-node",
+      "inputs": [
         {
           "name": "architecture",
           "required": false
@@ -273,6 +332,10 @@
           "required": false
         },
         {
+          "name": "package-manager-cache",
+          "required": false
+        },
+        {
           "name": "registry-url",
           "required": false
         },
@@ -293,12 +356,16 @@
           "name": "node-version"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
-      "actionRef": "actions/upload-artifact@v4",
+      "actionRef": "actions/upload-artifact@v7",
       "uses": "actions/upload-artifact",
       "inputs": [
+        {
+          "name": "archive",
+          "required": false
+        },
         {
           "name": "compression-level",
           "required": false
@@ -339,10 +406,10 @@
           "name": "artifact-url"
         }
       ],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     },
     {
-      "actionRef": "docker/login-action@v3",
+      "actionRef": "docker/login-action@v4",
       "uses": "docker/login-action",
       "inputs": [
         {
@@ -375,7 +442,7 @@
         }
       ],
       "outputs": [],
-      "runsUsing": "node20"
+      "runsUsing": "node24"
     }
   ]
 }

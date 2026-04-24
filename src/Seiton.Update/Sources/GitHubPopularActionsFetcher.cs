@@ -50,6 +50,21 @@ internal sealed class GitHubPopularActionsFetcher
         var paths = Paths(repoRoot);
         Directory.CreateDirectory(paths.RawDir);
 
+        // Clean up stale raw files that are no longer referenced by targets.json
+        var expectedFileNames = new HashSet<string>(
+            sources.Select(static x => x.RawFileName),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var existing in Directory.EnumerateFiles(paths.RawDir))
+        {
+            var fileName = Path.GetFileName(existing);
+            if (!expectedFileNames.Contains(fileName))
+            {
+                File.Delete(existing);
+                UpdateLogger.Info($"[fetch:popular-actions:sources] removed stale raw file {fileName}");
+            }
+        }
+
         foreach (var source in sources)
         {
             var content = await client.GetStringAsync(source.Url);

@@ -13,6 +13,7 @@ internal static class PopularActions
         ActionsCheckout,
         ActionsDownloadArtifact,
         ActionsSetupDotnet,
+        ActionsSetupGo,
         ActionsSetupNode,
         ActionsUploadArtifact,
         DockerLoginAction,
@@ -63,25 +64,37 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8),
                 ActionId.ActionsDownloadArtifact =>
                     EqualsAsciiIgnoreCase(inputNameUtf8, "artifact-ids"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "digest-mismatch"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "github-token"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "merge-multiple"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "name"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "pattern"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "repository"u8)
-                    || EqualsAsciiIgnoreCase(inputNameUtf8, "run-id"u8),
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "run-id"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "skip-decompress"u8),
                 ActionId.ActionsSetupDotnet =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "cache-dependency-path"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "config-file"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "dotnet-quality"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "dotnet-version"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "global-json-file"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "owner"u8)
-                    || EqualsAsciiIgnoreCase(inputNameUtf8, "source-url"u8),
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "source-url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "workloads"u8),
+                ActionId.ActionsSetupGo =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "cache-dependency-path"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "check-latest"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "go-download-base-url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "go-version"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "go-version-file"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8),
                 ActionId.ActionsSetupNode =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "always-auth"u8)
-                    || EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "cache-dependency-path"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "check-latest"u8)
@@ -89,11 +102,13 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "mirror-token"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "node-version"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "node-version-file"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "package-manager-cache"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "registry-url"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "scope"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8),
                 ActionId.ActionsUploadArtifact =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "compression-level"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "archive"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "compression-level"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "if-no-files-found"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "include-hidden-files"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "name"u8)
@@ -122,6 +137,7 @@ internal static class PopularActions
                 ActionId.ActionsCheckout => false,
                 ActionId.ActionsDownloadArtifact => false,
                 ActionId.ActionsSetupDotnet => false,
+                ActionId.ActionsSetupGo => false,
                 ActionId.ActionsSetupNode => false,
                 ActionId.ActionsUploadArtifact =>
                     EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8),
@@ -138,6 +154,7 @@ internal static class PopularActions
                 ActionId.ActionsCheckout => [],
                 ActionId.ActionsDownloadArtifact => [],
                 ActionId.ActionsSetupDotnet => [],
+                ActionId.ActionsSetupGo => [],
                 ActionId.ActionsSetupNode => [],
                 ActionId.ActionsUploadArtifact => ["path"u8.ToArray()],
                 ActionId.DockerLoginAction => [],
@@ -153,6 +170,7 @@ internal static class PopularActions
                 ActionId.ActionsCheckout => ["commit"u8.ToArray(), "ref"u8.ToArray()],
                 ActionId.ActionsDownloadArtifact => ["download-path"u8.ToArray()],
                 ActionId.ActionsSetupDotnet => ["cache-hit"u8.ToArray(), "dotnet-version"u8.ToArray()],
+                ActionId.ActionsSetupGo => ["cache-hit"u8.ToArray(), "go-version"u8.ToArray()],
                 ActionId.ActionsSetupNode => ["cache-hit"u8.ToArray(), "node-version"u8.ToArray()],
                 ActionId.ActionsUploadArtifact => ["artifact-digest"u8.ToArray(), "artifact-id"u8.ToArray(), "artifact-url"u8.ToArray()],
                 ActionId.DockerLoginAction => [],
@@ -164,13 +182,14 @@ internal static class PopularActions
         {
             return Id switch
             {
-                ActionId.ActionsCache => "node20"u8,
-                ActionId.ActionsCheckout => "node20"u8,
-                ActionId.ActionsDownloadArtifact => "node20"u8,
-                ActionId.ActionsSetupDotnet => "node20"u8,
-                ActionId.ActionsSetupNode => "node20"u8,
-                ActionId.ActionsUploadArtifact => "node20"u8,
-                ActionId.DockerLoginAction => "node20"u8,
+                ActionId.ActionsCache => "node24"u8,
+                ActionId.ActionsCheckout => "node24"u8,
+                ActionId.ActionsDownloadArtifact => "node24"u8,
+                ActionId.ActionsSetupDotnet => "node24"u8,
+                ActionId.ActionsSetupGo => "node24"u8,
+                ActionId.ActionsSetupNode => "node24"u8,
+                ActionId.ActionsUploadArtifact => "node24"u8,
+                ActionId.DockerLoginAction => "node24"u8,
                 _ => default,
             };
         }
@@ -199,6 +218,12 @@ internal static class PopularActions
         if (MatchesActionReference(usesUtf8, "actions/setup-dotnet"u8))
         {
             spec = new ActionSpec(ActionId.ActionsSetupDotnet);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "actions/setup-go"u8))
+        {
+            spec = new ActionSpec(ActionId.ActionsSetupGo);
             return true;
         }
 

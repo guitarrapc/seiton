@@ -1,5 +1,6 @@
 ﻿using Seiton.Update.Services;
 using Seiton.Update.Sources;
+using Seiton.Update.Validators;
 
 namespace Seiton.Update.Commands;
 
@@ -70,6 +71,26 @@ internal static class PopularActionsCommands
         }
 
         UpdateLogger.Info("[verify:popular-actions] generated file is up to date with GitHub primary source.");
+        return 0;
+    }
+
+    public static async Task<int> ValidateVersions(string repoRoot)
+    {
+        var validator = new PopularActionsVersionValidator();
+        var result = await validator.ValidateAsync(repoRoot);
+
+        if (result.HasFindings)
+        {
+            foreach (var stale in result.StaleVersions)
+            {
+                UpdateLogger.Warn($"[validate:popular-actions:versions] {stale.ActionRef} is stale (current: v{stale.CurrentMajor}, latest: v{stale.LatestMajor})");
+            }
+
+            UpdateLogger.Error($"[validate:popular-actions:versions] {result.StaleVersions.Count} action(s) have newer major versions available.");
+            return 4;
+        }
+
+        UpdateLogger.Info("[validate:popular-actions:versions] all targets are up to date.");
         return 0;
     }
 }

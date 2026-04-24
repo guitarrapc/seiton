@@ -2,9 +2,6 @@ name: 'Setup Node.js environment'
 description: 'Setup a Node.js environment by adding problem matchers and optionally downloading and adding it to the PATH.'
 author: 'GitHub'
 inputs:
-  always-auth:
-    description: 'Set always-auth in npmrc.'
-    default: 'false'
   node-version:
     description: 'Version Spec of the version to use. Examples: 12.x, 10.15.1, >=10.15.0.'
   node-version-file:
@@ -23,21 +20,24 @@ inputs:
     default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
   cache:
     description: 'Used to specify a package manager for caching in the default directory. Supported values: npm, yarn, pnpm.'
+  package-manager-cache:
+    description: 'Set to false to disable automatic caching. By default, caching is enabled when either devEngines.packageManager or the top-level packageManager field in package.json specifies npm as the package manager.'
+    default: true
   cache-dependency-path:
     description: 'Used to specify the path to a dependency file: package-lock.json, yarn.lock, etc. Supports wildcards or a list of file names for caching multiple dependencies.'
   mirror:
-    description: 'Used to specify an alternative mirror to downlooad Node.js binaries from'
+    description: 'Used to specify an alternative mirror to download Node.js binaries from'
   mirror-token:
     description: 'The token used as Authorization header when fetching from the mirror'
 # TODO: add input to control forcing to pull from cloud or dist.
 #       escape valve for someone having issues or needing the absolute latest which isn't cached yet
 outputs:
-  cache-hit: 
+  cache-hit:
     description: 'A boolean value to indicate if a cache was hit.'
   node-version:
     description: 'The installed node version.'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/setup/index.js'
   post: 'dist/cache-save/index.js'
   post-if: success()

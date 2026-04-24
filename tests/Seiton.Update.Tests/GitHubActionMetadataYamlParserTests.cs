@@ -153,23 +153,23 @@ public sealed class GitHubActionMetadataYamlParserTests
     }
 
     [Test]
-    public async Task ParseRunsUsing_RealCheckoutV4_ReturnsNode20()
+    public async Task ParseRunsUsing_RealCheckout_ReturnsNode24()
     {
         var repoRoot = FindRepoRoot();
-        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "actions_checkout_v4.action.yml");
+        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "actions_checkout.action.yml");
         var yaml = File.ReadAllText(rawPath);
 
         var parser = new GitHubActionMetadataYamlParser();
         var runsUsing = parser.ParseRunsUsing(yaml);
 
-        await Assert.That(runsUsing).IsEqualTo("node20");
+        await Assert.That(runsUsing).IsEqualTo("node24");
     }
 
     [Test]
-    public async Task ParseOutputs_RealCacheV4_ContainsCacheHit()
+    public async Task ParseOutputs_RealCache_ContainsCacheHit()
     {
         var repoRoot = FindRepoRoot();
-        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "actions_cache_v4.action.yml");
+        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "actions_cache.action.yml");
         var yaml = File.ReadAllText(rawPath);
 
         var parser = new GitHubActionMetadataYamlParser();
