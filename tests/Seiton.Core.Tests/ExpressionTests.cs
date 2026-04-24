@@ -1061,7 +1061,7 @@ public sealed class ExpressionTests
     // Cross-type equality comparison
 
     [Test]
-    public async Task ParseAndValidate_EqualityObjectVsNumber_ReportsWarning()
+    public async Task ParseAndValidate_EqualityObjectVsNumber_ReportsError()
     {
         var expression = "fromJson('{\"a\":1}') == 1"u8;
         var parseResult = ExpressionParser.Parse(expression);
@@ -1076,7 +1076,7 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task ParseAndValidate_EqualityArrayVsString_ReportsWarning()
+    public async Task ParseAndValidate_EqualityArrayVsString_ReportsError()
     {
         var expression = "fromJson('[1,2]') != 'hello'"u8;
         var parseResult = ExpressionParser.Parse(expression);

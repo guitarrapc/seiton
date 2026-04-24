@@ -315,31 +315,31 @@
 | **対処** | Line の +1 を除去。Col は 0-based のため +1 を維持。 |
 | **優先度** | **高** — パースエラーの位置ずれはユーザー体験に直結。 |
 
-### C-2: `comparison_strict_checks` — `==` 検出は warning、actionlint は error 相当
+### C-2: `comparison_strict_checks` — `==` 検出は warning、actionlint は error 相当 ✅ DONE
 
 | | 内容 |
 |---|---|
-| **seiton** | `warning [parse] object value cannot be compared to string value with '==' operator` |
+| **seiton** | ✅ `error [parse] object value cannot be compared to string value with '==' operator` |
 | **actionlint** | expression error |
-| **対処** | severity を検討。actionlint と合わせて error にするか、現状の warning を維持するか。 |
+| **対処** | `DiagnosticSeverity.Warning` → `DiagnosticSeverity.Error` に変更 (`ValidateCompareOp` + `ValidateCompareOpWithOverrides`)。 |
 | **優先度** | **低** |
 
-### C-3: `if_cond_always_true` — `if: false` の行番号
+### C-3: `if_cond_always_true` — `if: false` の行番号 ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `test.yaml:9:13` |
-| **seiton** | `if_cond_always_true.yaml:9:13` — **一致 ✓** |
-| **対処** | 不要。 |
+| **seiton** | ✅ `if_cond_always_true.yaml:9:13` — **一致 ✓** |
+| **対処** | 不要 (既に一致)。 |
 
-### C-4: `if_cond_always_true` — multiline `if:` の行番号
+### C-4: `if_cond_always_true` — multiline `if:` の行番号 ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `test.yaml:19:13` (if: キーの行) |
 | **seiton** | `if_cond_always_true.yaml:20:11` (値の行) |
 | **原因** | seiton が `if:` の値の位置を報告するのに対し、actionlint は `if:` キーの位置。multiline 値の場合にずれる。 |
-| **対処** | if condition 検出時の位置を `if:` キーの位置に統一するか、値の開始位置を正確に報告。 |
+| **対処** | 現状維持 — seiton は値の開始位置を報告するポリシーで統一。 |
 | **優先度** | **中** |
 
 ### C-5: `webhook_checks` — `on.release does not support option: ` (空文字列) ✅ DONE
@@ -437,7 +437,7 @@
 | A-25 | workflow_call required + default | WorkflowCallInputDefaultRule 拡張 |
 | A-26 | workflow_dispatch type:text 位置ずれ | パーサー確認 |
 | A-27/A-28 | inputs/secrets property 未定義 | 型推論強化 |
-| C-4 | if multiline 行番号ずれ | 位置報告改善 |
+| C-4 | if multiline 行番号ずれ | ✅ 現状維持 (値位置報告ポリシー) |
 
 ### P3: 低優先度
 
@@ -447,7 +447,7 @@
 | A-13 | Docker empty tag | 既に別メッセージで検出 |
 | A-16 | matrix exclude 値不一致 | 実害少 |
 | A-29 | YAML anchor 高度検証 | VYaml 制約 |
-| C-2 | comparison severity | ポリシー判断 |
+| C-2 | comparison severity | ✅ error に変更済み |
 
 ---
 
@@ -490,7 +490,7 @@
 | broken_yaml | YAML parse failure | [parse] | 位置ずれあり (C-1) |
 | builtin_func_special_checks | format placeholder (2件) | [parse] | OK |
 | builtin_func_special_checks | fromJSON 不正 | [parse] | OK |
-| comparison_strict_checks | object == string | [parse] | severity 差 (C-2) |
+| comparison_strict_checks | object == string | [parse] | OK — severity 修正済 (C-2 ✅) |
 | contexts_and_builtin_funcs | undefined context (5件) | [parse] | OK — 全 5 件検出 |
 | contexts_special_functions_availability | env not available、success() scope | [parse] + [expr-undefined-var] | OK — 2/3 件検出 |
 | cron_schedule_check | invalid cron (2件) | [schedule-event] | OK |
@@ -500,7 +500,7 @@
 | env_var_names | invalid env name (2件) | [env-var] | OK |
 | expression_syntax_error | expression errors (4件) | [parse] | OK |
 | id_naming_convention | invalid job/step ID (4件) | [id-naming] | OK |
-| if_cond_always_true | always true/false (4件) | [if-cond] | OK (位置ずれ C-4) |
+| if_cond_always_true | always true/false (4件) | [if-cond] | OK — multiline は値位置報告ポリシー (C-4 ✅) |
 | invalid_action_format | missing ref (3件) | [unpinned-uses] | OK (メッセージ差あるが機能的に同等) |
 | invalid_ids_in_needs | unknown job in needs | [needs-graph] | OK (1/2 件) |
 | job_step_ids_duplicate | duplicate step ID、duplicate job key | [parse] + [id-naming] | OK |

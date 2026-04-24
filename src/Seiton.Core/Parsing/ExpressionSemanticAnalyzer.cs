@@ -936,7 +936,7 @@ public static class ExpressionSemanticAnalyzer
             if (!AreEqualityCompatible(leftType, rightType))
             {
                 diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Warning,
+                    DiagnosticSeverity.Error,
                     $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
                     expressionLocation));
             }
@@ -1451,7 +1451,7 @@ public static class ExpressionSemanticAnalyzer
             if (!AreEqualityCompatible(leftType, rightType))
             {
                 diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Warning,
+                    DiagnosticSeverity.Error,
                     $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
                     expressionLocation));
             }
