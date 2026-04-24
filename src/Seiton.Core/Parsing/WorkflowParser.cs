@@ -178,8 +178,8 @@ public static partial class WorkflowParser
         if (int.TryParse(message.AsSpan(lineStart, lineEnd - lineStart), out var line)
             && int.TryParse(message.AsSpan(colStart, colEnd - colStart), out var col))
         {
-            // VYaml line/col are 0-based; convert to 1-based
-            return (line + 1, col + 1);
+            // VYaml line is 1-based; col is 0-based → convert col to 1-based
+            return (line, col + 1);
         }
 
         return (1, 1);
@@ -1064,9 +1064,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         var range = BuildScalarLocation(mark, valueUtf8.Length);
 
         if (TryParseBool(valueUtf8, tag, out var value))

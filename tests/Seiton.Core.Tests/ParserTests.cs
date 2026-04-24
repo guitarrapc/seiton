@@ -2668,12 +2668,13 @@ public sealed class ParserTests
     }
 
     // P0-5 regression: TryExtractLineCol parses VYaml exception format
+    // VYaml Line is 1-based, Col is 0-based; only Col needs +1
     [Test]
     public async Task TryExtractLineCol_VYamlFormat_ExtractsCorrectPosition()
     {
         var (line, col) = WorkflowParser.TryExtractLineCol("Failed to parse at Line: 5, Col: 3, Idx: 42");
-        await Assert.That(line).IsEqualTo(6);  // 0-based → 1-based
-        await Assert.That(col).IsEqualTo(4);   // 0-based → 1-based
+        await Assert.That(line).IsEqualTo(5);  // Line is 1-based already
+        await Assert.That(col).IsEqualTo(4);   // Col 0-based → 1-based
     }
 
     [Test]
@@ -3501,5 +3502,62 @@ public sealed class ParserTests
         }
 
         throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    // C-1 regression: YAML parse error line number should not be off-by-one
+    [Test]
+    public async Task Parse_BrokenYaml_ReportsCorrectLineNumber()
+    {
+        var yaml = "on: push\njobs:\n  linux:\n    runs-on: ubuntu-latest\n    steps:\n      - run: foo:\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.HasFatalError).IsTrue();
+        var diag = result.Diagnostics[0];
+        await Assert.That(diag.Location.StartLine).IsEqualTo(6);
+    }
+
+    // C-5 regression: webhook known-but-disallowed option must include key name in message
+    [Test]
+    public async Task Parse_WebhookOptionNotAllowed_MessageContainsKeyName()
+    {
+        var yaml = "on:\n  release:\n    tags: v*.*.*\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("does not support option"));
+        await Assert.That(diag.Message).Contains("tags");
+    }
+
+    // C-9 regression: timeout-minutes parse error must have valid position
+    [Test]
+    public async Task Parse_TimeoutMinutesInvalidValue_ReportsCorrectPosition()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        timeout-minutes: two\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("timeout-minutes"));
+        // "two" starts at line 7, column 26 (8 spaces + "timeout-minutes: " = 26)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(26);
+    }
+
+    // C-9 regression: fail-fast parse error must have valid position
+    [Test]
+    public async Task Parse_FailFastInvalidValue_ReportsCorrectPosition()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    strategy:\n      fail-fast: off\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("fail-fast"));
+        // "off" starts at line 5, column 18 (6 spaces + "fail-fast: " = 18)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(5);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(18);
+    }
+
+    // C-9 regression: max-parallel parse error must have valid position
+    [Test]
+    public async Task Parse_MaxParallelInvalidValue_ReportsCorrectPosition()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    strategy:\n      max-parallel: 1.5\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("max-parallel must be integer"));
+        // "1.5" starts at line 5, column 21 (6 spaces + "max-parallel: " = 21)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(5);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(21);
     }
 }

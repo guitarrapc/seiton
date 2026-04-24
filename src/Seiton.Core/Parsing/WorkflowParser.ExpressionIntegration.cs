@@ -156,9 +156,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         var range = BuildScalarLocation(mark, valueUtf8.Length);
 
         if (TryParseDouble(valueUtf8, tag, out var value))

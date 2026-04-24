@@ -51,8 +51,8 @@ public static partial class WorkflowParser
 
             var knownOption = Utf8MappingDispatch.TryMatchFirstOrdered<OnWebhookEventOptionKeyTable>(keyUtf8, out var whOptOrdinal);
             var whOpt = (OnWebhookEventOptionMappingKey)whOptOrdinal;
-            string? unknownKeyText = !knownOption ? Encoding.UTF8.GetString(keyUtf8) : null;
             var isOptionNotAllowed = eventInfo.IsKnown && !eventInfo.Spec.IsOptionAllowed(keyUtf8);
+            string? unknownKeyText = (!knownOption || isOptionNotAllowed) ? Encoding.UTF8.GetString(keyUtf8) : null;
 
             reader.Read(); // consume key - after this keyUtf8 may be invalid
 

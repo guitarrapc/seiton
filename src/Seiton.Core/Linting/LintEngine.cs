@@ -193,6 +193,17 @@ public sealed class LintEngine
         _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
 
         _seen.Clear();
+
+        // Seed _seen with parser diagnostic identities so lint rules that duplicate
+        // the same check (e.g. JobStructureRule, ReusableWorkflowRule) are suppressed.
+        // Track indices for replacement: when a lint rule produces the same diagnostic,
+        // we replace the parser version (RuleId = null) with the lint version (has RuleId)
+        // so that rule-based suppression and filtering still work.
+        for (var i = 0; i < _diagnostics.Count; i++)
+        {
+            _seen.Add(new DiagnosticIdentity(_diagnostics[i]));
+        }
+
         _suppressedByRule.Clear();
         _suppressionRecords.Clear();
         for (var i = 0; i < _ruleDiagnostics.Count; i++)
@@ -201,6 +212,17 @@ public sealed class LintEngine
             var identity = new DiagnosticIdentity(current);
             if (!_seen.Add(identity))
             {
+                // Lint diagnostic duplicates a parser diagnostic — replace the parser entry
+                // so the RuleId is preserved for suppression and diagnostic attribution.
+                for (var j = 0; j < _diagnostics.Count; j++)
+                {
+                    if (_diagnostics[j].RuleId is null && new DiagnosticIdentity(_diagnostics[j]).Equals(identity))
+                    {
+                        _diagnostics[j] = current;
+                        break;
+                    }
+                }
+
                 continue;
             }
 

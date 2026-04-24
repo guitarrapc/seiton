@@ -8027,4 +8027,39 @@ public sealed class RuleInterfaceTests
             }
         }
     }
+
+    // C-6/C-7/C-8 regression: parser + lint rule duplicate diagnostics are suppressed
+    [Test]
+    public async Task LintEngine_DuplicateParserAndLintDiagnostics_AreDeduplicated()
+    {
+        // Job without runs-on triggers both parser and job-structure rule
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            steps:
+              - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("requires runs-on")).ToArray();
+        await Assert.That(runsOnDiags).HasCount().EqualTo(1);
+    }
+
+    [Test]
+    public async Task LintEngine_DuplicateParserAndLintDiagnostics_BothUsesAndSteps_AreDeduplicated()
+    {
+        // Job with both uses and steps triggers both parser and lint rules
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            uses: org/repo/.github/workflows/build.yml@main
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var bothDiags = result.Diagnostics.Where(d => d.Message.Contains("cannot have both uses and steps")).ToArray();
+        await Assert.That(bothDiags).HasCount().EqualTo(1);
+    }
 }

@@ -34,9 +34,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseBool(valueUtf8, tag, out var value))
         {
             needsError = true;
@@ -194,9 +197,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseDouble(valueUtf8, tag, out var value))
         {
             needsError = true;
@@ -237,9 +243,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseInt64(valueUtf8, tag, out var value))
         {
             needsError = true;
@@ -513,9 +522,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseBool(valueUtf8, tag, out var value))
         {
             AddError(diagnostics, errorMessage, mark);
