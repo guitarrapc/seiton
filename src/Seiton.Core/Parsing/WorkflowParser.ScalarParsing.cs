@@ -1,4 +1,4 @@
-using System.Buffers.Text;
+﻿using System.Buffers.Text;
 using System.Text;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -482,6 +482,19 @@ public static partial class WorkflowParser
             EndColumn: mark.Col);
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+    }
+
+    private static void AddWarning(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark)
+    {
+        var location = new TextRange(
+            Start: mark.Position,
+            Length: 0,
+            StartLine: mark.Line,
+            StartColumn: mark.Col,
+            EndLine: mark.Line,
+            EndColumn: mark.Col);
+
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, message, location));
     }
 
     /// <summary>Parses a YAML bool scalar into <see cref="BoolNodeId"/> (used by <c>on.*</c> metadata and action metadata).</summary>

@@ -18,6 +18,11 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private bool _isReplaying;                                   // true when serving a virtual event
     private AnchorEvent _virtualCurrent;                         // current event when _isReplaying
 
+    // Anchor usage tracking for unused-anchor detection
+    private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id → (name, position)
+    private HashSet<int>? _referencedAnchorIds;                                       // anchor ids used by aliases
+    private List<(string Name, TextPosition Position)>? _recursiveAliases;            // recursive alias occurrences
+
     /// <summary>Creates a new adapter wrapping the given UTF-8 YAML bytes for pull-based parsing.</summary>
     public VYamlStreamAdapter(Memory<byte> bytes)
     {
@@ -87,6 +92,10 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 && _anchorStore.TryGetValue(aliasAnchor.Id, out var snapshots)
                 && snapshots.Count > 0)
             {
+                // Track alias reference for unused-anchor detection
+                _referencedAnchorIds ??= new HashSet<int>();
+                _referencedAnchorIds.Add(aliasAnchor.Id);
+
                 _pendingReplays ??= new Queue<AnchorEvent>();
                 for (int i = 1; i < snapshots.Count; i++)
                     _pendingReplays.Enqueue(snapshots[i]);
@@ -103,6 +112,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 return true;
             }
             // Unresolvable alias: surface as-is so the parser can emit an error.
+            // When we reach this path and _currentRecording is active, the alias references an
+            // anchor that hasn't finished recording — this is a recursive self-reference.
+            // (Truly undefined anchors cause VYaml to throw before reaching here.)
+            if (_currentRecording != null && _parser.TryGetCurrentAnchor(out var unresolvableAnchor))
+            {
+                _recursiveAliases ??= new List<(string, TextPosition)>();
+                var mark = _parser.CurrentMark;
+                _recursiveAliases.Add((unresolvableAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col)));
+            }
             // Record an Alias placeholder into the current recording (if any) so that the
             // stored event sequence remains structurally complete and can be replayed correctly.
             if (_currentRecording != null)
@@ -132,6 +150,11 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             _currentRecording = new List<AnchorEvent>(16);
             _recordingId = currentAnchor.Id;
             _recordingDepth = 0;
+
+            // Track anchor definition for unused-anchor detection
+            _definedAnchors ??= new Dictionary<int, (string Name, TextPosition Position)>();
+            var mark = _parser.CurrentMark;
+            _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col));
         }
 
         if (_currentRecording != null)
@@ -623,6 +646,44 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         _anchorStore[_recordingId] = _currentRecording!;
         _currentRecording = null;
         _recordingDepth = 0;
+    }
+
+    /// <summary>
+    /// Returns anchors that were defined but never referenced by an alias.
+    /// Each entry contains the anchor name and the position where it was defined.
+    /// Returns an empty span if all anchors are referenced or no anchors exist.
+    /// </summary>
+    public ReadOnlySpan<(string Name, TextPosition Position)> GetUnusedAnchors(Span<(string Name, TextPosition Position)> buffer)
+    {
+        if (_definedAnchors == null || _definedAnchors.Count == 0)
+            return ReadOnlySpan<(string Name, TextPosition Position)>.Empty;
+
+        int count = 0;
+        foreach (var (id, info) in _definedAnchors)
+        {
+            if (_referencedAnchorIds == null || !_referencedAnchorIds.Contains(id))
+            {
+                if (count < buffer.Length)
+                    buffer[count] = info;
+                count++;
+            }
+        }
+        return buffer[..Math.Min(count, buffer.Length)];
+    }
+
+    /// <summary>
+    /// Returns recursive alias occurrences detected during parsing.
+    /// Each entry contains the anchor name and the position where the recursive alias was found.
+    /// </summary>
+    public ReadOnlySpan<(string Name, TextPosition Position)> GetRecursiveAliases(Span<(string Name, TextPosition Position)> buffer)
+    {
+        if (_recursiveAliases == null || _recursiveAliases.Count == 0)
+            return ReadOnlySpan<(string Name, TextPosition Position)>.Empty;
+
+        var count = Math.Min(_recursiveAliases.Count, buffer.Length);
+        for (int i = 0; i < count; i++)
+            buffer[i] = _recursiveAliases[i];
+        return buffer[..count];
     }
 
     /// <summary>

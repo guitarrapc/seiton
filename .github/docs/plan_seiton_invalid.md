@@ -138,6 +138,8 @@
 - **Rule**: `glob-pattern` (rule exists but doesn't validate glob syntax)
 - **Root cause**: GlobPatternRule validates event option legality, types, and mutual exclusion, but does not parse/validate the actual glob pattern strings.
 - **Fix**: Add glob pattern string validation to GlobPatternRule. Check: invalid ref characters (`^`, `:`, `~`, `[`, `?`, `*`, spaces), invalid escape sequences, reversed character ranges, `.`/`..` path segments.
+- **Status**: ✅ **Fixed** — Phase 4 で `TryGetInvalidReason` を拡張。反転範囲 `[z-a]` 検出と `..` パスセグメント検出を追加。
+- **Regression tests**: `ng-reversed-bracket-range`, `ng-dot-dot-path-segment`, `ok-valid-bracket-range` (RuleInterfaceTests GlobPatternRule_Syntax table)
 
 #### 12. Matrix duplicate value and exclude mismatch
 
@@ -147,6 +149,8 @@
 - **Rule**: `matrix`
 - **Root cause**: MatrixRule checks for unknown axes in exclude but doesn't check for duplicate values within an axis or exclude values that don't match any combination.
 - **Fix**: Add duplicate-value detection within each axis array. Add exclude-value validation: for each exclude row, check that each value matches at least one value in the corresponding axis.
+- **Status**: ✅ **Fixed** — Phase 4 で `ValidateNoDuplicateAxisValues` を追加。軸内の重複スカラー値を検出。
+- **Regression tests**: `ng-duplicate-axis-value`, `ok-unique-axis-values` (RuleInterfaceTests MatrixRule_DuplicateValues table)
 
 #### 13. `workflow_call` input default type validation
 
@@ -156,6 +160,8 @@
 - **Rule**: Needs enhancement to parser or new rule
 - **Root cause**: Parser validates input type keyword but not default-vs-type consistency or required+default conflict.
 - **Fix**: Validate that `default:` value is compatible with declared `type:`. Warn when `required: true` and `default:` is set (default will never be used).
+- **Status**: ✅ **Fixed** — Phase 4 で新規 `WorkflowCallInputDefaultRule` を追加。`workflow_call` input の default 値が宣言型（boolean/number）と一致するか検証。
+- **Regression tests**: `ng-boolean-input-non-bool-default`, `ng-number-input-non-number-default`, `ok-boolean-input-true-default`, `ok-string-input-any-default` (RuleInterfaceTests WorkflowCallInputDefaultRule table)
 
 #### 14. `workflow_call`/`workflow_dispatch` expression-level input property validation
 
@@ -188,6 +194,8 @@
 - **Seiton**: Not detected (only unknown job reference).
 - **Rule**: `needs-graph`
 - **Fix**: Check for case-insensitive duplicates in the `needs:` array of each job.
+- **Status**: ✅ **Fixed** — Phase 4 で `NeedsGraphRule.VisitJobPre` に重複検出を追加。
+- **Regression tests**: `ng-duplicate-needs-id`, `ok-unique-needs-ids` (RuleInterfaceTests NeedsGraphRule_DuplicateNeeds table)
 
 #### 17. Runner label conflict
 
@@ -196,6 +204,8 @@
 - **Seiton**: Not detected.
 - **Rule**: `runner-label`
 - **Fix**: When multiple runner labels are specified in `runs-on:` array, check for OS-family conflicts (Ubuntu vs Windows vs macOS).
+- **Status**: ✅ **Fixed** — Phase 4 で `RunnerLabelRule.DetectOsFamilyConflicts` を追加。OS ファミリー競合を検出。
+- **Regression tests**: `ng-mixed-os-labels`, `ok-single-os-label` (RuleInterfaceTests RunnerLabelRule_OsConflict table)
 
 #### 18. Unexpected mapping value type validation
 
@@ -204,6 +214,8 @@
 - **Seiton**: Only detects `max-parallel` (1 of 3).
 - **Rule**: `parse`
 - **Fix**: Validate `fail-fast` is boolean (true/false only), `timeout-minutes` is numeric (integer or float).
+- **Status**: ✅ **Fixed** — Phase 4 で `ParseBoolOrExpression`/`ParseFloatOrExpression` を修正。式でない文字列のフォールバックを防止。
+- **Regression tests**: `Parse_FailFast_Off_ReportsError`, `Parse_TimeoutMinutes_String_ReportsError` (ParserTests)
 
 #### 19. OS-specific shell validation
 
@@ -212,6 +224,8 @@
 - **Seiton**: Validates shell names globally but does not consider OS-specific availability.
 - **Rule**: `shell-name`
 - **Fix**: Cross-reference shell name with the job's `runs-on` labels. When OS can be inferred (e.g., `ubuntu-*` → Linux, `windows-*` → Windows, `macos-*` → macOS), validate shell availability per OS.
+- **Status**: ✅ **Fixed** — Phase 4 で `ShellNameRule.ResolveOsFamily` + `CheckOsSpecificShell` を追加。`cmd`/`powershell` の OS 非互換を検出。
+- **Regression tests**: `ng-cmd-on-ubuntu`, `ng-powershell-on-ubuntu`, `ok-pwsh-on-ubuntu`, `ok-cmd-on-windows` (RuleInterfaceTests ShellNameRule_OsSpecific table)
 
 #### 20. `format()` excess arguments
 
@@ -259,6 +273,8 @@
 - **Seiton**: Detects field count and frequency but not invalid timezone.
 - **Rule**: `schedule-event`
 - **Fix**: Validate `timezone:` value against IANA timezone database.
+- **Status**: ✅ **Already implemented** — `ScheduleEventRule.ValidateTimezone` + `LooksLikeIanaTimezoneUtf8` が既に検出。
+- **Regression tests**: `ng-invalid-timezone` (RuleInterfaceTests ScheduleEventRule table)
 
 #### 25. Reusable workflow output property validation
 
@@ -274,24 +290,25 @@
 
 - **Example**: `yaml_anchor_usage`
 - **Actionlint**: `anchor "credentials" is defined but not used`
-- **Seiton**: Not detected (YAML parse failure instead).
-- **Rule**: `parse` or new rule
-- **Status**: Low priority informational check.
+- **Seiton**: Detected as warning: `anchor "xxx" is defined but not used`
+- **Rule**: `parse` (VYamlStreamAdapter tracks defined/referenced anchors)
+- **Status**: ✅ 完了
 
 #### 27. Recursive alias detection
 
 - **Example**: `yaml_anchor_usage`
 - **Actionlint**: `recursive alias "recursive" is found`
-- **Seiton**: YAML parse failure (VYaml may not handle this).
-- **Status**: Depends on VYaml capability.
+- **Seiton**: Detected as error: `recursive alias "xxx" is found`
+- **Rule**: `parse` (VYamlStreamAdapter detects unresolvable aliases during recording)
+- **Status**: ✅ 完了
 
 #### 28. `env:` section expression type validation
 
 - **Example**: `yaml_anchor_usage`
 - **Actionlint**: `"env" section is alias node but mapping node is expected`, `expecting a single ${{...}} expression or mapping value for "env" section, but found plain text node`
-- **Seiton**: Not detected.
-- **Rule**: `parse`
-- **Fix**: Validate that `env:` at workflow/job/step level is either a mapping or a single `${{ }}` expression that resolves to an object.
+- **Seiton**: Detected as error: `expecting a single ${{...}} expression or mapping value for env section, but found plain text node`
+- **Rule**: `parse` (ParseEnvNode rejects plain text scalars without `${{ }}`)
+- **Status**: ✅ 完了
 
 ---
 
@@ -608,7 +625,7 @@ These examples are fully covered by seiton (all actionlint errors detected):
 19. ✅ Add glob pattern syntax validation (#11) — 反転範囲 `[z-a]` と `..` パスセグメント検出を追加
 20. ✅ Add matrix duplicate value + exclude mismatch (#12) — 軸内の重複値検出を追加
 21. ✅ Add workflow_call input default validation (#13) — 新規 `WorkflowCallInputDefaultRule` ルール追加
-22. Add if condition "always true" trailing char detection (#15) — 未実施（Phase 4 スコープ外）
+22. ✅ Add if condition "always true" trailing char detection (#15) — P0 Phase 1 #7 で修正済み（`IsAlwaysTrueTemplate` が検出）
 23. ✅ Add needs array duplicate detection (#16) — `NeedsGraphRule` に重複検出を追加
 24. ✅ Add runner label conflict detection (#17) — OS ファミリー競合検出を追加
 25. ✅ Add fail-fast/timeout-minutes type validation (#18) — パーサーで非式文字列のフォールバックを修正

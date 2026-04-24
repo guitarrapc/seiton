@@ -1486,7 +1486,7 @@ public sealed class ParserTests
             new ErrFixtureExpectation("missing_jobs.yaml", ["required key 'jobs' is missing"]),
             new ErrFixtureExpectation("merge_key_unsupported.yaml", ["does not support merge key '<<'"]),
             new ErrFixtureExpectation("undefined_anchor.yaml", ["yaml parse failure"]),
-            new ErrFixtureExpectation("recursive_anchors.yaml", ["must be mapping"]),
+            new ErrFixtureExpectation("recursive_anchors.yaml", ["recursive alias"]),
         };
 
         var failures = new List<string>();
@@ -1757,6 +1757,70 @@ public sealed class ParserTests
         var steps = result.Workflow!.Jobs.Values().First().Steps!;
         await Assert.That(steps[0].If.HasValue).IsTrue();
         await Assert.That(steps[1].If.HasValue).IsTrue();
+    }
+
+    // Phase 4: #26 unused anchor detection
+    [Test]
+    public async Task Parse_UnusedAnchor_ReportsWarning()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ env.FOO }}
+                env: &unused_env
+                  FOO: bar
+              - run: echo done
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "unused-anchor.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unused_env", StringComparison.Ordinal) && d.Message.Contains("not used", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UsedAnchor_NoUnusedWarning()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ env.FOO }}
+                env: &shared_env
+                  FOO: bar
+              - run: echo ${{ env.FOO }}
+                env: *shared_env
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "used-anchor.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("not used", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // Phase 4: #27 recursive alias detection
+    [Test]
+    public async Task Parse_RecursiveAlias_ReportsRecursiveDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - &recursive
+                run: echo hello
+                env: *recursive
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-alias.yml");
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("recursive alias", StringComparison.OrdinalIgnoreCase) && d.Message.Contains("recursive", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2507,6 +2571,43 @@ public sealed class ParserTests
         await Assert.That(steps!.Count).IsEqualTo(1);
         // The env node should exist and be treated as an expression
         await Assert.That(steps[0].Env).IsNotNull();
+    }
+
+    // Phase 4: #28 env plain text scalar should report error
+    [Test]
+    public async Task Parse_StepEnvPlainTextScalar_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+                      env: hello_world
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-env-plain-text.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("env", StringComparison.Ordinal) && x.Message.Contains("expression", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowEnvPlainTextScalar_ReportsError()
+    {
+        var yaml = """
+        on: push
+        env: some_value
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-env-plain-text.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("env", StringComparison.Ordinal))).IsTrue();
     }
 
     // P0-3 regression: permission value position should point to actual value, not comment

@@ -64,12 +64,30 @@ public static partial class WorkflowParser
             var arena = AstArena.Rent(utf8Yaml);
             var parseResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode);
 
-            var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2);
+            // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
+            var unusedBuf = new (string Name, TextPosition Position)[8];
+            var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
+            var recursiveBuf = new (string Name, TextPosition Position)[8];
+            var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
+
+            var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2 + unusedAnchors.Length + recursiveAliases.Length);
             try
             {
                 for (var i = 0; i < parseResult.Diagnostics.Length; i++)
                 {
                     diagnostics.Add(parseResult.Diagnostics[i]);
+                }
+
+                for (var i = 0; i < unusedAnchors.Length; i++)
+                {
+                    var (name, pos) = unusedAnchors[i];
+                    AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
+                }
+
+                for (var i = 0; i < recursiveAliases.Length; i++)
+                {
+                    var (name, pos) = recursiveAliases[i];
+                    AddError(ref diagnostics, $"recursive alias \"{name}\" is found", pos);
                 }
 
                 if (isAmbiguous)
@@ -626,6 +644,15 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
+            // Check if the scalar contains an expression — plain text scalars are not valid for env
+            var valueUtf8 = reader.GetScalarUtf8();
+            if (valueUtf8.IndexOf("${{"u8) < 0)
+            {
+                AddError(diagnostics, $"{error}; expecting a single ${{{{...}}}} expression or mapping value for env section, but found plain text node", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                return null;
+            }
+
             var expression = ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
             return !expression.HasValue
                 ? null
