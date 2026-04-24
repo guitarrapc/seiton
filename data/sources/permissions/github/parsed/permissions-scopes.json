@@ -1,5 +1,6 @@
 {
-  "source": "https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions",
+  "schemaVersion": 1,
+  "source": "github-token-available-permissions-reusable",
   "scopes": [
     {
       "name": "actions",
@@ -50,14 +51,6 @@
       ]
     },
     {
-      "name": "discussions",
-      "allowed": [
-        "read",
-        "write",
-        "none"
-      ]
-    },
-    {
       "name": "id-token",
       "allowed": [
         "write",
@@ -76,6 +69,14 @@
       "name": "models",
       "allowed": [
         "read",
+        "none"
+      ]
+    },
+    {
+      "name": "discussions",
+      "allowed": [
+        "read",
+        "write",
         "none"
       ]
     },

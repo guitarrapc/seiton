@@ -172,6 +172,46 @@ app.Add("verify-permissions", () =>
     }
 });
 
+app.Add("fetch-permissions", async () =>
+{
+    var code = await PermissionsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-permissions failed with code {code}");
+    }
+});
+
+app.Add("fetch-permissions-sources", async () =>
+{
+    var code = await PermissionsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-permissions-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-permissions-sources", () =>
+{
+    var code = PermissionsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-permissions-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-permissions-sources", () =>
+{
+    var code = PermissionsCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-permissions-sources failed with code {code}");
+    }
+});
+
 app.Add("fetch-function-specs", async () =>
 {
     var code = await FunctionSpecsCommands.Fetch(repoRoot);

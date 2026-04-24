@@ -22,6 +22,16 @@
       }
     },
     {
+      "dataset": "permissions",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md"
+      ],
+      "fetchedAtUtc": "2026-04-24T06:38:14.9320135\u002B00:00",
+      "rawFileHashes": {
+        "github-token-available-permissions.md": "sha256:93e1ef1a29d8f63f4604f3bb42cb530a14d2f16e7a4001f4bd3eec0ee4231502"
+      }
+    },
+    {
       "dataset": "popular-actions",
       "sourceUrls": [
         "https://raw.githubusercontent.com/actions/cache/v4/action.yml",
