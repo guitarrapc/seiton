@@ -964,7 +964,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["\"admin\" is invalid as permission of scope \"contents\". available values are \"read\", \"write\", \"none\""]),
-            // P0-4 regression: unknown scope name should be detected
+            // regression: unknown scope name should be detected
             new RuleCase(
             "ng-unknown-scope-check",
             """
@@ -978,7 +978,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["unknown permission scope \"check\". all available permission scopes are"]),
-            // P0-4 regression: models scope only allows read/none
+            // regression: models scope only allows read/none
             new RuleCase(
             "ng-models-write-restricted",
             """
@@ -992,7 +992,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["\"write\" is invalid as permission of scope \"models\". available values are \"read\", \"none\""]),
-            // P0-4 regression: id-token scope only allows write/none
+            // regression: id-token scope only allows write/none
             new RuleCase(
             "ng-id-token-read-restricted",
             """
@@ -1006,7 +1006,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["\"read\" is invalid as permission of scope \"id-token\". available values are \"write\", \"none\""]),
-            // P0-4 regression: vulnerability-alerts only allows read/none
+            // regression: vulnerability-alerts only allows read/none
             new RuleCase(
             "ng-vulnerability-alerts-write-restricted",
             """
@@ -1020,7 +1020,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["\"write\" is invalid as permission of scope \"vulnerability-alerts\". available values are \"read\", \"none\""]),
-            // P0-3 & P0-4 regression: valid scopes should not produce errors
+            // regression: valid scopes should not produce errors
             new RuleCase(
             "ok-all-standard-scopes-valid",
             """
@@ -4983,7 +4983,7 @@ public sealed class RuleInterfaceTests
                           run: echo "$VAL"
             """,
             ["'unknown_param' is not defined in 'inputs'"]),
-            // P0-1 regression: matrix include-only axis keys should be accessible
+            // regression: matrix include-only axis keys should be accessible
             new RuleCase(
             "ok-matrix-include-only-axis-accessible",
             """
@@ -5004,7 +5004,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ${{ matrix.npm }}
             """,
             []),
-            // P0-1 regression: include-only matrix (no row axes) should resolve keys
+            // regression: include-only matrix (no row axes) should resolve keys
             new RuleCase(
             "ok-matrix-include-only-no-rows",
             """
@@ -5023,7 +5023,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ${{ matrix.version }}
             """,
             []),
-            // P0-2 regression: step env with expression scalar should not error
+            // regression: step env with expression scalar should not error
             new RuleCase(
             "ok-step-env-expression-scalar",
             """

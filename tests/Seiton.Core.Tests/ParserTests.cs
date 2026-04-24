@@ -2544,7 +2544,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsTrue();
     }
 
-    // P0-2 regression: step env: with expression scalar should parse without error
+    // regression: step env: with expression scalar should parse without error
     [Test]
     public async Task Parse_StepEnvExpressionScalar_ParsesWithoutError()
     {
@@ -2610,7 +2610,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("env", StringComparison.Ordinal))).IsTrue();
     }
 
-    // P0-3 regression: permission value position should point to actual value, not comment
+    // regression: permission value position should point to actual value, not comment
     [Test]
     public async Task Parse_PermissionsWithComment_PositionPointsToValue()
     {
@@ -2641,7 +2641,7 @@ public sealed class ParserTests
         await Assert.That(Encoding.UTF8.GetString(contentsScope.ValueText.AsSpan(source))).IsEqualTo("read");
     }
 
-    // P0-5 regression: YAML parse error position extracted from VYaml exception
+    // regression: YAML parse error position extracted from VYaml exception
     [Test]
     public async Task Parse_BrokenYaml_ErrorPositionNotAtFirstLine()
     {
@@ -2653,7 +2653,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
     }
 
-    // P0-6 regression: webhook activity type error position uses slice offset (not VYaml mark)
+    // regression: webhook activity type error position uses slice offset (not VYaml mark)
     [Test]
     public async Task Parse_WebhookUnsupportedActivityType_PositionPointsToValue()
     {
@@ -2667,7 +2667,7 @@ public sealed class ParserTests
         await Assert.That(typeDiag.Location.StartColumn).IsEqualTo(12);
     }
 
-    // P0-5 regression: TryExtractLineCol parses VYaml exception format
+    // regression: TryExtractLineCol parses VYaml exception format
     // VYaml Line is 1-based, Col is 0-based; only Col needs +1
     [Test]
     public async Task TryExtractLineCol_VYamlFormat_ExtractsCorrectPosition()
@@ -2685,7 +2685,7 @@ public sealed class ParserTests
         await Assert.That(col).IsEqualTo(1);
     }
 
-    // P0-1 regression: matrix include adds extra keys to the matrix context
+    // regression: matrix include adds extra keys to the matrix context
     [Test]
     public async Task Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys()
     {
