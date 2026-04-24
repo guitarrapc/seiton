@@ -22,6 +22,7 @@ internal sealed class RunnerLabelsCSharpGenerator
             .ToArray();
 
         var sb = new StringBuilder();
+        GeneratorHelper.AppendGeneratedHeader(sb, "sync-runner-labels");
         sb.AppendLine(
             """
             namespace Seiton.Core.Generated;
