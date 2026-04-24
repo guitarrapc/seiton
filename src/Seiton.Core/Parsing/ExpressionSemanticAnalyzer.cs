@@ -819,7 +819,7 @@ public static class ExpressionSemanticAnalyzer
                         properties[new Utf8String(Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
                     }
 
-                    return ExprType.Object(properties, dynamicPropertyType: ExprType.Any, strict: false);
+                    return ExprType.Object(properties, strict: true);
                 }
             case JsonValueKind.Array:
                 {
@@ -1039,12 +1039,27 @@ public static class ExpressionSemanticAnalyzer
                 $"index of array must be number, but got {rightType.TypeName}",
                 expressionLocation));
         }
-        else if (leftType is ObjectExprType && rightType is not (AnyExprType or StringExprType))
+        else if (leftType is ObjectExprType objType && rightType is not (AnyExprType or StringExprType))
         {
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"index of object must be string, but got {rightType.TypeName}",
                 expressionLocation));
+        }
+        else if (leftType is ObjectExprType { Strict: true } strictObj
+            && node.Right >= 0
+            && node.Right < nodes.Length
+            && nodes[node.Right].Kind == ExpressionNodeKind.StringLiteral)
+        {
+            var propertyName = nodes[node.Right].Token.AsSpan(expressionUtf8);
+            if (!strictObj.TryGetProperty(propertyName, out _))
+            {
+                var propNameText = Encoding.UTF8.GetString(propertyName);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
+                    expressionLocation));
+            }
         }
     }
 
@@ -1204,6 +1219,32 @@ public static class ExpressionSemanticAnalyzer
         }
 
         return "object";
+    }
+
+    private static string FormatObjectType(ObjectExprType objectType)
+    {
+        if (objectType.Properties is null || objectType.Properties.Count == 0)
+        {
+            return "{}";
+        }
+
+        var sb = new System.Text.StringBuilder("{");
+        var first = true;
+        foreach (var pair in objectType.Properties)
+        {
+            if (!first)
+            {
+                sb.Append("; ");
+            }
+
+            sb.Append(Encoding.UTF8.GetString(pair.Key.Span));
+            sb.Append(": ");
+            sb.Append(pair.Value.TypeName);
+            first = false;
+        }
+
+        sb.Append('}');
+        return sb.ToString();
     }
 
     private static string ToContextText(ExpressionValidationContext context)

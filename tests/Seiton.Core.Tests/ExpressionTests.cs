@@ -1474,6 +1474,72 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal))).IsFalse();
     }
 
+    // fromJSON() strict object property validation
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectIndexUndefinedProperty_ReportsDiagnostic()
+    {
+        // fromJSON('{"win":"...", "linux":"..."}')['mac'] — 'mac' is not defined
+        var expression = "fromJson('{\"win\":\"windows-latest\",\"linux\":\"ubuntu-latest\"}')['mac']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"mac\" is not defined in object type {", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectIndexDefinedProperty_NoDiagnostic()
+    {
+        // fromJSON('{"win":"...", "linux":"..."}')['win'] — 'win' exists
+        var expression = "fromJson('{\"win\":\"windows-latest\",\"linux\":\"ubuntu-latest\"}')['win']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectMemberUndefinedProperty_ReportsDiagnostic()
+    {
+        // fromJSON('{"enabled":true}').disabled — 'disabled' is not defined
+        var expression = "fromJson('{\"enabled\":true}').disabled"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'disabled' is not defined", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectMemberDefinedProperty_NoDiagnostic()
+    {
+        // fromJSON('{"enabled":true}').enabled — 'enabled' exists
+        var expression = "fromJson('{\"enabled\":true}').enabled"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Step);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+    }
+
     // Template type checking
 
     [Test]

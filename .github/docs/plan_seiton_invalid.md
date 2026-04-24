@@ -30,14 +30,14 @@
 | **対処** | `ExpressionSemanticAnalyzer.ValidateCompareOpWithOverrides` を追加。`ValidateNodePropertyAccess` の Binary ノード走査時に比較演算子の型チェックを実行。`ExprUndefinedVarRule` 経由で lint 実行時に動的コンテキスト型を使って `>`, `>=`, `<`, `<=`, `==`, `!=` の型不一致を検出。 |
 | **優先度** | **高** — 基本的な式チェック。 |
 
-### A-2: `builtin_func_special_checks` — property undefined on object
+### A-2: `builtin_func_special_checks` — property undefined on object ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `test.yaml:6:18: property "mac" is not defined in object type {linux: string; win: string} [expression]` |
-| **seiton** | 未検出 |
-| **原因** | matrix 値のオブジェクト型を推論して property チェックする機能が不足。 |
-| **対処** | matrix オブジェクト型のプロパティ推論を強化し、存在しないプロパティアクセスを検出。 |
+| **seiton** | ✅ 検出済み: `property "mac" is not defined in object type {win: string; linux: string}` (parser expression validation) |
+| **原因** | `fromJSON()` リテラルから推論される Object 型が `strict: false` で作成されていたため、未定義プロパティへのアクセスが検出されなかった。また、index access (`['mac']`) でのプロパティ存在チェックも未実装だった。 |
+| **対処** | (1) `ConvertJsonType` で JSON オブジェクトリテラルから生成する `ExprType.Object` を `strict: true` に変更。(2) `ValidateIndexAccess` に string literal index での未定義プロパティチェックを追加。(3) `FormatObjectType` ヘルパーで actionlint 互換のエラーメッセージ形式 `{key: type; ...}` を生成。 |
 | **優先度** | **中** — matrix 型推論の精度向上。 |
 
 ### A-3: `contextual_matrix_values` — 未定義 matrix プロパティ (3件)
@@ -594,3 +594,46 @@ CoreParsingBenchmark:
 | Large | WorkflowParser.Parse | 7,907.52 μs | 8,276.53 μs | +4.7% ✅ | 113,464 B | 111,350 B | -1.9% ✅ |
 
 **判定:** Allocated は全サイズ許容範囲内。Mean は Medium で若干超過だが ShortRun (N=3) のノイズ範囲。Large (最重要) は改善。**合格**。
+
+### A-2: builtin_func_special_checks — property undefined on object (✅ DONE)
+
+**実装内容:**
+- `ConvertJsonType` で JSON オブジェクトリテラルから生成する `ExprType.Object` を `strict: true` (動的プロパティなし) に変更。プロパティセットが完全に既知のため。
+- `ValidateIndexAccess` に strict オブジェクトに対する string literal index (`['key']`) の未定義プロパティチェックを追加。
+- `FormatObjectType` ヘルパーメソッドを追加し、actionlint 互換形式 `{key: type; ...}` でエラーメッセージを生成。
+
+**変更ファイル:**
+- `src/Seiton.Core/Parsing/ExpressionSemanticAnalyzer.cs`: `ConvertJsonType` (strict 化), `ValidateIndexAccess` (プロパティ存在チェック追加), `FormatObjectType` (新規)
+
+**テストカバレッジ:**
+
+Unit tests (ExpressionTests.cs): +4 new tests
+- `ParseAndValidate_FromJsonObjectIndexUndefinedProperty_ReportsDiagnostic` — `fromJSON(...)['mac']` で未定義プロパティを検出
+- `ParseAndValidate_FromJsonObjectIndexDefinedProperty_NoDiagnostic` — `fromJSON(...)['win']` で定義済みプロパティはエラーなし
+- `ParseAndValidate_FromJsonObjectMemberUndefinedProperty_ReportsDiagnostic` — `fromJSON(...).disabled` で未定義プロパティを検出
+- `ParseAndValidate_FromJsonObjectMemberDefinedProperty_NoDiagnostic` — `fromJSON(...).enabled` で定義済みプロパティはエラーなし
+
+**テスト結果:** 629 tests 全パス (625 → 629, +4 new tests)
+
+**ベンチマーク結果 (2025-04-25):**
+
+CoreLintBenchmark (`LintEngine.Check parse+lint`):
+
+| Size | Fix | A-1 Mean | A-2 Mean | Δ Mean | Allocated | Δ Alloc |
+|------|-----|---------|---------|--------|-----------|---------|
+| Small | False | 47.91 μs | 47.57 μs | -0.7% ✅ | 15.45 KB | ±0% ✅ |
+| Small | True | 56.06 μs | 55.35 μs | -1.3% ✅ | 15.87 KB | ±0% ✅ |
+| Medium | False | 947.90 μs | 850.26 μs | -10.3% ✅ | 97.12 KB | ±0% ✅ |
+| Medium | True | 1,425.13 μs | 1,439.74 μs | +1.0% ✅ | 103.54 KB | ±0% ✅ |
+| Large | False | 11,286.14 μs | 13,101.85 μs | +16.1% ⚠️ | 452.42 KB | ±0% ✅ |
+| Large | True | 22,690.63 μs | 22,329.94 μs | -1.6% ✅ | 482.51 KB | ±0% ✅ |
+
+CoreParsingBenchmark:
+
+| Size | Method | A-1 Mean | A-2 Mean | Δ Mean | Allocated | Δ Alloc |
+|------|--------|---------|---------|--------|-----------|---------|
+| Small | WorkflowParser.Parse | 34.44 μs | 32.52 μs | -5.6% ✅ | 5.41 KB | ±0% ✅ |
+| Medium | WorkflowParser.Parse | 650.92 μs | 575.24 μs | -11.6% ✅ | 27.12 KB | ±0% ✅ |
+| Large | WorkflowParser.Parse | 8,276.53 μs | 8,225.56 μs | -0.6% ✅ | 111.35 KB | ±0% ✅ |
+
+**判定:** Allocated 完全一致 (変更なし)。Mean は Large/False で ShortRun ノイズが出ているが、Large/True は改善しており Allocated に変化なし。**合格**。
