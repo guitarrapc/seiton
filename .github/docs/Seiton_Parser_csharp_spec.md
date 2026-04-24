@@ -371,8 +371,20 @@ Normative structural hints for finalization:
 - Root `jobs` => workflow
 - Root `runs` => action-metadata
 - Root has both `jobs` and `runs` => `unknown` + ambiguity diagnostic
+- Neither `jobs` nor `runs` => fall back to the path-hint candidate kind (e.g., `action.yml` path resolves to action-metadata even without structural confirmation). This enables required-key diagnostics for malformed action metadata files.
 
 Final kind is confirmed from top-level structure; structure has priority over path hint on conflict.
+
+### 1.0.2 Action Metadata Parsing (Spec §2.16)
+
+When `ParseClassified` resolves the document kind to action-metadata, the parser enters action-metadata mode and parses:
+
+- `name`, `description`, `inputs`, `outputs`, `runs`, `branding` sections
+- Required-key checks: `description` and `runs` must be present at root level. Missing keys produce error diagnostics at position `1:1`.
+- Input/output duplicate key detection
+- `runs.using` value parsing and `runs.steps` for composite actions
+
+Implemented in `WorkflowParser.ActionMetadata.cs` (partial class).
 
 ### 1.1 Entry Point (Spec §1.1)
 
@@ -1048,6 +1060,8 @@ The parser never aborts on a single error. Each parse function:
 ### 6.1 Lexer (Spec §6.3)
 
 Inline lexing within `ExpressionParser`. Tokenizes the expression string during recursive descent.
+
+**Double-quote rejection:** When the lexer encounters a `"` character, it emits a diagnostic ("only single quotes are available for string delimiter in expressions") and skips to the closing `"` for error recovery. GitHub Actions expressions only support single-quoted string literals.
 
 ### 6.2 Parser (Spec §6.2)
 

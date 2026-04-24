@@ -54,7 +54,7 @@ Normative structural hints (finalization stage):
 - Workflow candidate is confirmed when root mapping has `jobs`.
 - Action-metadata candidate is confirmed when root mapping has `runs`.
 - If both `jobs` and `runs` exist, classify as `unknown` and emit ambiguity diagnostic.
-- If neither `jobs` nor `runs` is present, keep classification unresolved and continue with existing parser diagnostics.
+- If neither `jobs` nor `runs` is present, fall back to the path-hint candidate kind. This allows action metadata files that lack `runs:` (e.g., malformed `action.yml`) to still be parsed as action metadata when the file path indicates it, enabling proper required-key diagnostics.
 
 Normative path hints (fast candidate stage):
 
@@ -305,6 +305,20 @@ Credentials: `username` + `password` (both required), or expression.
 ### 2.15 WorkflowCall (job-level reusable workflow)
 
 `uses` (required), `inputs?` (`with:`), `secrets?` (mapping or `"inherit"`)
+
+### 2.16 ActionMetadata (action.yml / action.yaml)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Name | StringNode? | - | `name:` |
+| Description | StringNode? | ✓ | `description:` — must be present; parser emits error if missing |
+| Inputs | map[string, ActionMetadataInput]? | - | `inputs:` mapping |
+| Outputs | map[string, ActionMetadataOutput]? | - | `outputs:` mapping |
+| Runs | ActionMetadataRuns? | ✓ | `runs:` — must be present; parser emits error if missing |
+| Branding | ActionMetadataBranding? | ✓ | `branding:` (icon, color) |
+| Range | TextRange | ✓ | Source range |
+
+Required-key validation: When parsing in action-metadata mode, the parser checks that `description` and `runs` are present at the root level. Missing keys emit error diagnostics with position `1:1`.
 
 ---
 
@@ -803,7 +817,7 @@ Index         := Expression
 | Token | Symbol |
 |---|---|
 | `Ident` | alphanumeric + `_` + `-` |
-| `String` | `'...'` (single-quoted, `''` for escape) |
+| `String` | `'...'` (single-quoted, `''` for escape). Double quotes (`"`) are rejected with a diagnostic: "only single quotes are available for string delimiter in expressions". |
 | `Int` | integer literal (decimal / `0x` hex) |
 | `Float` | floating-point literal |
 | `(` `)` `[` `]` `.` `!` | symbols |
