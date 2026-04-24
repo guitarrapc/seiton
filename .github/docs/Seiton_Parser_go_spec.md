@@ -1207,7 +1207,7 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 |---|---|---|
 | Webhook event + activity types | `all_webhooks.go` | Static table mapping event names to allowed activity types and filter options |
 | Context availability | `availability.go` | Which expression contexts and special functions are available at each workflow position |
-| Popular actions metadata | `popular_actions.go` | Well-known GitHub Actions with expected input/output names and types |
+| Popular actions metadata | `popular_actions.go` | Well-known GitHub Actions with expected input names, output names, and `runs.using` runtime |
 
 For pipeline architecture, CLI commands, data paths, update policy, and conflict resolution, see `Seiton_Update_spec.md`.
 

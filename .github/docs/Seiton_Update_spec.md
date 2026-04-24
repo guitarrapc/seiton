@@ -140,7 +140,7 @@ Not all datasets implement all stages. Some use hand-written JSON as primary sou
 |---|---|---|---|
 | webhooks | GitHub Docs | `WebhookTypes.g.cs` | Webhook event names, activity types, and filter options |
 | availability | GitHub Docs | `Availability.g.cs` | Expression context and special function availability per workflow position |
-| popular-actions | Fetched `action.yml` files | `PopularActions.g.cs` | Well-known GitHub Actions with expected input/output names and types |
+| popular-actions | Fetched `action.yml` files | `PopularActions.g.cs` | Well-known GitHub Actions with expected input names, output names, and `runs.using` runtime |
 | runner-labels | GitHub Docs | `RunnerLabels.g.cs` | Known GitHub-hosted runner labels |
 | context-types | Hand-written JSON + GitHub Docs | `ContextTypes.g.cs` | Built-in context type schemas for all 11 context roots |
 | function-specs | Hand-written JSON + GitHub Docs | `FunctionSpecs.g.cs` | Built-in function specs with parameter types and overloads |
@@ -181,6 +181,29 @@ The set of popular actions to ingest is a repository-managed configuration, not 
 - Duplicate `uses` entries or duplicate raw artifact file names are invalid and must fail updater execution
 - Entries with missing required identity fields are invalid and must fail updater execution
 - Target-set modifications and resulting generated diffs must be reviewed together in one change set
+
+#### 4.3.5 Popular Actions Pipeline Data Fields
+
+The popular-actions pipeline extracts the following metadata from each fetched `action.yml` / `action.yaml`:
+
+| Field | Source | Description |
+|---|---|---|
+| `uses` | `targets.json` | Canonical `owner/repo` identifier (without version ref) |
+| `inputs` | `action.yml` `inputs:` section | Input names and `required` flags |
+| `outputs` | `action.yml` `outputs:` section | Output names |
+| `runsUsing` | `action.yml` `runs.using` value | Runtime identifier (e.g. `node20`, `composite`, `docker`) |
+
+The Stage 2 parser (`GitHubActionMetadataYamlParser`) extracts `inputs`, `outputs`, and `runsUsing` independently from raw `action.yml` files using line-based indent-aware parsing.
+
+The Stage 3 merge normalizes and deduplicates all fields into the canonical snapshot (`popular_actions.json`).
+
+The codegen stage (`PopularActionsCSharpGenerator`) produces:
+
+- `IsInputAllowed(name)` — case-insensitive input name lookup
+- `GetOutputNames()` — returns `byte[][]` of known output names
+- `GetRunsUsing()` — returns `ReadOnlySpan<byte>` of the `runs.using` value
+
+These generated methods are consumed by linter rules (`popular-action-inputs`, `outdated-action-runner`, `expr-undefined-var`) at compile time, with no runtime network access.
 
 ---
 
