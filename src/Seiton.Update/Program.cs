@@ -152,6 +152,26 @@ app.Add("verify-function-specs", () =>
     }
 });
 
+app.Add("sync-permissions", () =>
+{
+    var code = PermissionsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-permissions failed with code {code}");
+    }
+});
+
+app.Add("verify-permissions", () =>
+{
+    var code = PermissionsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-permissions failed with code {code}");
+    }
+});
+
 app.Add("fetch-function-specs", async () =>
 {
     var code = await FunctionSpecsCommands.Fetch(repoRoot);
@@ -469,6 +489,11 @@ static int RunSync(string repoRoot, string dataset)
         return FunctionSpecsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "permissions")
+    {
+        return PermissionsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -501,7 +526,13 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return FunctionSpecsCommands.Sync(repoRoot);
+        code = FunctionSpecsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return PermissionsCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -540,6 +571,11 @@ static int RunVerify(string repoRoot, string dataset)
         return FunctionSpecsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "permissions")
+    {
+        return PermissionsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -572,7 +608,13 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return FunctionSpecsCommands.Verify(repoRoot);
+        code = FunctionSpecsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return PermissionsCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

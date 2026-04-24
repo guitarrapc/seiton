@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Generated;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -44,16 +45,36 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
         foreach (var pair in permissions.Scopes)
         {
             var scope = pair.Value;
+            var scopeName = Decode(scope.NameText);
             var value = Decode(scope.ValueText);
-            if (string.Equals(value, "read", StringComparison.Ordinal)
-                || string.Equals(value, "write", StringComparison.Ordinal)
-                || string.Equals(value, "none", StringComparison.Ordinal))
+
+            // Validate scope name
+            if (!PermissionScopes.IsKnownScope(scopeName))
             {
+                AddError($"unknown permission scope \"{scopeName}\". all available permission scopes are {PermissionScopes.AllScopesList}", Arena.GetStringRange(scope.Name), workflow, job);
                 continue;
             }
 
-            var scopeName = Decode(scope.NameText);
-            AddError($"permissions.{scopeName} must be one of 'read', 'write', or 'none', but got '{value}'", Arena.GetStringRange(scope.Value), workflow, job);
+            // Validate per-scope allowed values
+            var allowedValues = PermissionScopes.GetAllowedValues(scopeName);
+            if (allowedValues is not null)
+            {
+                var isAllowed = false;
+                for (var i = 0; i < allowedValues.Length; i++)
+                {
+                    if (string.Equals(value, allowedValues[i], StringComparison.Ordinal))
+                    {
+                        isAllowed = true;
+                        break;
+                    }
+                }
+
+                if (!isAllowed)
+                {
+                    var allowedList = string.Join(", ", allowedValues.Select(v => $"\"{v}\""));
+                    AddError($"\"{value}\" is invalid as permission of scope \"{scopeName}\". available values are {allowedList}", Arena.GetStringRange(scope.Value), workflow, job);
+                }
+            }
         }
     }
 

@@ -241,19 +241,11 @@ public static partial class WorkflowParser
                     case StepMappingKey.Env:
                         if (!reader.End)
                         {
-                            if (reader.CurrentKind != YamlEventKind.MappingStart)
-                            {
-                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping", reader.CurrentStart);
-                                reader.SkipCurrentNode();
-                            }
-                            else
-                            {
-                                envNode = ParseEnvNode(
-                                    ref reader, arena, diagnostics,
-                                    source,
-                                    $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
-                                    ExpressionValidationContext.Step);
-                            }
+                            envNode = ParseEnvNode(
+                                ref reader, arena, diagnostics,
+                                source,
+                                $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
+                                ExpressionValidationContext.Step);
                         }
 
                         break;

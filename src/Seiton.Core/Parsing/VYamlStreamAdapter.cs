@@ -239,10 +239,18 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         var start = -1;
         if (_scalarSliceCursor <= source.Length - utf8.Length)
         {
-            var idx = source[_scalarSliceCursor..].IndexOf(utf8);
-            if (idx >= 0)
+            var searchStart = _scalarSliceCursor;
+            while (searchStart <= source.Length - utf8.Length)
             {
-                start = _scalarSliceCursor + idx;
+                var idx = source[searchStart..].IndexOf(utf8);
+                if (idx < 0) break;
+                var candidate = searchStart + idx;
+                if (!IsInsideYamlComment(source, candidate))
+                {
+                    start = candidate;
+                    break;
+                }
+                searchStart = candidate + 1;
             }
         }
 
@@ -453,22 +461,56 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         if (_scalarSliceCursor <= source.Length - raw.Length)
         {
-            var offsetFromCursor = source[_scalarSliceCursor..].IndexOf(raw);
-            if (offsetFromCursor >= 0)
+            var searchStart = _scalarSliceCursor;
+            while (searchStart <= source.Length - raw.Length)
             {
-                start = _scalarSliceCursor + offsetFromCursor;
-                return true;
+                var offsetFromCursor = source[searchStart..].IndexOf(raw);
+                if (offsetFromCursor < 0) break;
+                var candidate = searchStart + offsetFromCursor;
+                if (!IsInsideYamlComment(source, candidate))
+                {
+                    start = candidate;
+                    return true;
+                }
+                searchStart = candidate + 1;
             }
         }
 
-        var offsetFromStart = source.IndexOf(raw);
-        if (offsetFromStart >= 0)
+        var searchFromStart = 0;
+        while (searchFromStart <= source.Length - raw.Length)
         {
-            start = offsetFromStart;
-            return true;
+            var offsetFromStart = source[searchFromStart..].IndexOf(raw);
+            if (offsetFromStart < 0) break;
+            var candidate = searchFromStart + offsetFromStart;
+            if (!IsInsideYamlComment(source, candidate))
+            {
+                start = candidate;
+                return true;
+            }
+            searchFromStart = candidate + 1;
         }
 
         start = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when the byte at <paramref name="offset"/> is inside a YAML comment
+    /// (i.e. preceded by an unquoted '#' on the same line).
+    /// </summary>
+    private static bool IsInsideYamlComment(ReadOnlySpan<byte> source, int offset)
+    {
+        // Walk backward to the start of the line looking for '#'.
+        // This is a simplified heuristic: it does not track quoted regions, but YAML comments
+        // cannot appear inside quoted scalars so this is accurate for the fallback search path
+        // (which only runs when TryGetScalarAsSpan and TryResolveNormalizedSlice both failed).
+        for (var i = offset - 1; i >= 0; i--)
+        {
+            var ch = source[i];
+            if (ch == (byte)'\n') return false;
+            if (ch == (byte)'#') return true;
+        }
+
         return false;
     }
 

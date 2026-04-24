@@ -270,7 +270,7 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
 
         await Assert.That(result.ParseDiagnostics).IsEmpty();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions.contents must be one of 'read', 'write', or 'none'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"admin\" is invalid as permission of scope \"contents\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -960,7 +960,82 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["permissions.contents must be one of 'read', 'write', or 'none'"]),
+            ["\"admin\" is invalid as permission of scope \"contents\". available values are \"read\", \"write\", \"none\""]),
+            // P0-4 regression: unknown scope name should be detected
+            new RuleCase(
+            "ng-unknown-scope-check",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        check: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["unknown permission scope \"check\". all available permission scopes are"]),
+            // P0-4 regression: models scope only allows read/none
+            new RuleCase(
+            "ng-models-write-restricted",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        models: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"write\" is invalid as permission of scope \"models\". available values are \"read\", \"none\""]),
+            // P0-4 regression: id-token scope only allows write/none
+            new RuleCase(
+            "ng-id-token-read-restricted",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        id-token: read
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"read\" is invalid as permission of scope \"id-token\". available values are \"write\", \"none\""]),
+            // P0-4 regression: vulnerability-alerts only allows read/none
+            new RuleCase(
+            "ng-vulnerability-alerts-write-restricted",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        vulnerability-alerts: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"write\" is invalid as permission of scope \"vulnerability-alerts\". available values are \"read\", \"none\""]),
+            // P0-3 & P0-4 regression: valid scopes should not produce errors
+            new RuleCase(
+            "ok-all-standard-scopes-valid",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        actions: read
+                        contents: write
+                        issues: none
+                        packages: read
+                        id-token: write
+                        models: read
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new PermissionsRule(), "permissions", cases);
@@ -4485,6 +4560,64 @@ public sealed class RuleInterfaceTests
                           run: echo "$VAL"
             """,
             ["'unknown_param' is not defined in 'inputs'"]),
+            // P0-1 regression: matrix include-only axis keys should be accessible
+            new RuleCase(
+            "ok-matrix-include-only-axis-accessible",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                            node: [14, 15]
+                            include:
+                                - node: 15
+                                  npm: 7.5.4
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ${{ matrix.os }}
+                        - run: echo ${{ matrix.node }}
+                        - run: echo ${{ matrix.npm }}
+            """,
+            []),
+            // P0-1 regression: include-only matrix (no row axes) should resolve keys
+            new RuleCase(
+            "ok-matrix-include-only-no-rows",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            include:
+                                - os: ubuntu-latest
+                                  version: 1
+                                - os: windows-latest
+                                  version: 2
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ${{ matrix.version }}
+            """,
+            []),
+            // P0-2 regression: step env with expression scalar should not error
+            new RuleCase(
+            "ok-step-env-expression-scalar",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            env_object:
+                                - FOO: BAR
+                                - FOO: PIYO
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ matrix.env_object }}
+            """,
+            []),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

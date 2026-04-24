@@ -539,14 +539,16 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                var valueSlice = reader.CurrentKind == YamlEventKind.Scalar
-                    ? reader.GetScalarSlice()
-                    : default;
                 var valueNode = ParseString(ref reader, arena, diagnostics, error);
                 if (!valueNode.HasValue)
                 {
                     continue;
                 }
+
+                // Use the slice stored in the arena (computed by ParseString's single GetScalarSlice call)
+                // to avoid calling GetScalarSlice twice for the same scalar — which would advance the cursor
+                // past the value and cause a position mismatch.
+                var valueSlice = arena.GetStringSlice(valueNode);
 
                 scopes.Add(new SliceMap<PermissionScope>.Entry(keySlice, new PermissionScope
                 {

@@ -74,18 +74,58 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
     {
-        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is not { Count: > 0 } rows || utf8Yaml is null)
+        if (matrix is null || matrix.Expression.HasValue || utf8Yaml is null)
         {
             return (MatrixKeyUtf8, s_looseDynamic);
         }
 
-        var props = new Dictionary<Utf8String, ExprType>(rows.Count);
-        foreach (var row in rows)
+        var rows = matrix.Rows;
+        var include = matrix.Include;
+
+        // No rows and no include: loose dynamic
+        if ((rows is null || rows.Value.Count == 0) && (include is null || include.Count == 0))
         {
-            props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.Any;
+            return (MatrixKeyUtf8, s_looseDynamic);
         }
 
-        return (MatrixKeyUtf8, ExprType.Object(props, strict: true));
+        var estimatedCapacity = (rows is null ? 0 : rows.Value.Count) + 4; // extra room for include-only keys
+        var props = new Dictionary<Utf8String, ExprType>(estimatedCapacity);
+
+        // Add keys from main axes
+        if (rows is { Count: > 0 })
+        {
+            foreach (var row in rows)
+            {
+                props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.Any;
+            }
+        }
+
+        // Also add keys that appear only in include: entries (e.g. 'npm' added via include)
+        if (include is not null)
+        {
+            for (var i = 0; i < include.Count; i++)
+            {
+                var combo = include[i];
+                if (combo.Entries is null) continue;
+                for (var j = 0; j < combo.Entries.Count; j++)
+                {
+                    var entry = combo.Entries[j];
+                    foreach (var pair in entry)
+                    {
+                        var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
+                        // Don't overwrite existing axes; include-only keys get Any type
+                        if (!props.ContainsKey(key))
+                        {
+                            props[key] = ExprType.Any;
+                        }
+                    }
+                }
+            }
+        }
+
+        return props.Count == 0
+            ? (MatrixKeyUtf8, s_looseDynamic)
+            : (MatrixKeyUtf8, ExprType.Object(props, strict: true));
     }
 
     /// <summary>

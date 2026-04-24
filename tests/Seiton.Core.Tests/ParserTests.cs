@@ -2442,6 +2442,92 @@ public sealed class ParserTests
         await Assert.That(result.Workflow).IsNotNull();
     }
 
+    // P0-2 regression: step env: with expression scalar should parse without error
+    [Test]
+    public async Task Parse_StepEnvExpressionScalar_ParsesWithoutError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            test:
+                strategy:
+                    matrix:
+                        env_object:
+                            - FOO: BAR
+                            - FOO: PIYO
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "$FOO"
+                      env: ${{ matrix.env_object }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-env-expression-scalar.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        var steps = result.Workflow!.Jobs.Values().First().Steps;
+        await Assert.That(steps).IsNotNull();
+        await Assert.That(steps!.Count).IsEqualTo(1);
+        // The env node should exist and be treated as an expression
+        await Assert.That(steps[0].Env).IsNotNull();
+    }
+
+    // P0-3 regression: permission value position should point to actual value, not comment
+    [Test]
+    public async Task Parse_PermissionsWithComment_PositionPointsToValue()
+    {
+        var yaml = """
+        on: push
+        permissions:
+            contents: read # this is a comment with write in it
+            issues: write
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "permissions-comment.yml");
+        var arena = result.Arena!;
+        await Assert.That(result.HasFatalError).IsFalse();
+        var permissions = result.Workflow!.Permissions;
+        await Assert.That(permissions).IsNotNull();
+        await Assert.That(permissions!.Scopes).IsNotNull();
+
+        // Verify contents scope value position points to correct line (not a comment line)
+        var source = arena.Source;
+        var contentsScope = permissions.Scopes!.Value.Values().FirstOrDefault(s => s.NameText.AsSpan(source).SequenceEqual("contents"u8));
+        await Assert.That(contentsScope.NameText.Length).IsGreaterThan(0);
+        await Assert.That(Encoding.UTF8.GetString(contentsScope.ValueText.AsSpan(source))).IsEqualTo("read");
+    }
+
+    // P0-1 regression: matrix include adds extra keys to the matrix context
+    [Test]
+    public async Task Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            test:
+                strategy:
+                    matrix:
+                        os: [ubuntu-latest, windows-latest]
+                        include:
+                            - os: ubuntu-latest
+                              npm: 7.5.4
+                runs-on: ${{ matrix.os }}
+                steps:
+                    - run: echo ${{ matrix.npm }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "matrix-include-extra-keys.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        // Should not have any diagnostics about matrix.npm being undefined
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("npm", StringComparison.Ordinal) && x.Message.Contains("not defined", StringComparison.Ordinal))).IsFalse();
+    }
+
     [Test]
     public async Task Parse_StrategyMaxParallel_NonPositive_ReportsError()
     {
