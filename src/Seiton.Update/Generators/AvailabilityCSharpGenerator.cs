@@ -23,19 +23,12 @@ internal sealed class AvailabilityCSharpGenerator
     public string Generate(AvailabilityModel model)
     {
         var workflow = Order(model.WorkflowRoots);
+        var workflowCallOutput = Order(model.WorkflowCallOutputRoots);
         var job = Order(model.JobRoots);
+        var jobOutput = Order(model.JobOutputRoots);
+        var reusableWorkflowCallSecrets = Order(model.ReusableWorkflowCallSecretsRoots);
+        var strategy = Order(model.StrategyRoots);
         var step = Order(model.StepRoots);
-        // workflow_call outputs only allow: github, inputs, vars, jobs (no secrets)
-        string[] workflowCallOutputRaw = ["github", "inputs", "vars", "jobs"];
-        var workflowCallOutput = Order(workflowCallOutputRaw);
-        var jobOutput = step;
-        // reusable workflow call secrets: fixed contexts available in the secrets: mapping of a reusable workflow call
-        string[] reusableWorkflowCallSecretsRaw = ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets"];
-        var reusableWorkflowCallSecrets = Order(reusableWorkflowCallSecretsRaw);
-        // strategy: contexts available in jobs.<job_id>.strategy (including matrix values)
-        // Per GitHub docs: github, needs, vars, inputs — no strategy, matrix, secrets, runner, env
-        string[] strategyRaw = ["github", "inputs", "vars", "needs"];
-        var strategy = Order(strategyRaw);
 
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-availability");

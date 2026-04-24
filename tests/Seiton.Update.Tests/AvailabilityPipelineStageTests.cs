@@ -103,16 +103,38 @@ public sealed class AvailabilityPipelineStageTests
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
 
             var workflowRoots = doc.RootElement.GetProperty("workflowRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
+            var workflowCallOutputRoots = doc.RootElement.GetProperty("workflowCallOutputRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
             var jobRoots = doc.RootElement.GetProperty("jobRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
+            var jobOutputRoots = doc.RootElement.GetProperty("jobOutputRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
+            var reusableWorkflowCallSecretsRoots = doc.RootElement.GetProperty("reusableWorkflowCallSecretsRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
+            var strategyRoots = doc.RootElement.GetProperty("strategyRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
             var stepRoots = doc.RootElement.GetProperty("stepRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
 
             await Assert.That(workflowRoots).Contains("github");
             await Assert.That(workflowRoots).Contains("inputs");
             await Assert.That(workflowRoots).Contains("vars");
 
+            await Assert.That(workflowCallOutputRoots).Contains("github");
+            await Assert.That(workflowCallOutputRoots).Contains("jobs");
+
             await Assert.That(jobRoots).Contains("needs");
             await Assert.That(jobRoots).Contains("strategy");
             await Assert.That(jobRoots).Contains("matrix");
+
+            await Assert.That(jobOutputRoots).Contains("steps");
+            await Assert.That(jobOutputRoots).Contains("runner");
+            await Assert.That(jobOutputRoots).Contains("job");
+
+            await Assert.That(reusableWorkflowCallSecretsRoots).Contains("secrets");
+            await Assert.That(reusableWorkflowCallSecretsRoots).Contains("needs");
+
+            await Assert.That(strategyRoots).Contains("github");
+            await Assert.That(strategyRoots).Contains("needs");
+            await Assert.That(strategyRoots).Contains("vars");
+            await Assert.That(strategyRoots).Contains("inputs");
+            await Assert.That(strategyRoots).DoesNotContain("runner");
+            await Assert.That(strategyRoots).DoesNotContain("strategy");
+            await Assert.That(strategyRoots).DoesNotContain("matrix");
 
             await Assert.That(stepRoots).Contains("job");
             await Assert.That(stepRoots).Contains("runner");

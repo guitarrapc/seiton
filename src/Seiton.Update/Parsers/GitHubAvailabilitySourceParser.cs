@@ -27,14 +27,22 @@ internal sealed class GitHubAvailabilitySourceParser
 
         return new AvailabilityModel(
             snapshot.WorkflowRoots ?? [],
+            snapshot.WorkflowCallOutputRoots ?? [],
             snapshot.JobRoots ?? [],
+            snapshot.JobOutputRoots ?? [],
+            snapshot.ReusableWorkflowCallSecretsRoots ?? [],
+            snapshot.StrategyRoots ?? [],
             snapshot.StepRoots ?? []);
     }
 
     private sealed class AvailabilitySnapshot
     {
         public List<string>? WorkflowRoots { get; set; }
+        public List<string>? WorkflowCallOutputRoots { get; set; }
         public List<string>? JobRoots { get; set; }
+        public List<string>? JobOutputRoots { get; set; }
+        public List<string>? ReusableWorkflowCallSecretsRoots { get; set; }
+        public List<string>? StrategyRoots { get; set; }
         public List<string>? StepRoots { get; set; }
     }
 }

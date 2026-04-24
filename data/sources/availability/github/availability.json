@@ -7,6 +7,12 @@
     "vars",
     "secrets"
   ],
+  "workflowCallOutputRoots": [
+    "github",
+    "jobs",
+    "vars",
+    "inputs"
+  ],
   "jobRoots": [
     "github",
     "needs",
@@ -15,6 +21,34 @@
     "inputs",
     "vars",
     "secrets"
+  ],
+  "jobOutputRoots": [
+    "github",
+    "needs",
+    "strategy",
+    "matrix",
+    "job",
+    "runner",
+    "env",
+    "vars",
+    "secrets",
+    "steps",
+    "inputs"
+  ],
+  "reusableWorkflowCallSecretsRoots": [
+    "github",
+    "needs",
+    "strategy",
+    "matrix",
+    "secrets",
+    "inputs",
+    "vars"
+  ],
+  "strategyRoots": [
+    "github",
+    "needs",
+    "vars",
+    "inputs"
   ],
   "stepRoots": [
     "github",

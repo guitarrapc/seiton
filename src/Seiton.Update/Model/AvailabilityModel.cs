@@ -2,5 +2,9 @@
 
 internal sealed record AvailabilityModel(
     IReadOnlyList<string> WorkflowRoots,
+    IReadOnlyList<string> WorkflowCallOutputRoots,
     IReadOnlyList<string> JobRoots,
+    IReadOnlyList<string> JobOutputRoots,
+    IReadOnlyList<string> ReusableWorkflowCallSecretsRoots,
+    IReadOnlyList<string> StrategyRoots,
     IReadOnlyList<string> StepRoots);

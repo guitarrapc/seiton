@@ -117,7 +117,11 @@ internal sealed class GitHubAvailabilityFetcher
             StringComparer.Ordinal);
 
         var workflowRoots = ResolveContextSet(map, "run-name", "concurrency", "env");
+        var workflowCallOutputRoots = ResolveContextSet(map, "on.workflow_call.outputs.<output_id>.value");
         var jobRoots = ResolveContextSet(map, "jobs.<job_id>.concurrency", "jobs.<job_id>.env");
+        var jobOutputRoots = ResolveContextSet(map, "jobs.<job_id>.outputs.<output_id>");
+        var reusableWorkflowCallSecretsRoots = ResolveContextSet(map, "jobs.<job_id>.secrets.<secrets_id>");
+        var strategyRoots = ResolveContextSet(map, "jobs.<job_id>.strategy");
         var stepRoots = ResolveContextSet(map, "jobs.<job_id>.steps.run", "jobs.<job_id>.steps.if");
 
         var snapshot = new
@@ -125,7 +129,11 @@ internal sealed class GitHubAvailabilityFetcher
             schemaVersion = 1,
             source = "github-official-merged-snapshot",
             workflowRoots,
+            workflowCallOutputRoots,
             jobRoots,
+            jobOutputRoots,
+            reusableWorkflowCallSecretsRoots,
+            strategyRoots,
             stepRoots,
         };
 
