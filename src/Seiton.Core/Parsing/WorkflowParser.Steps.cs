@@ -262,9 +262,13 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            // keyUtf8 span is invalidated by reader.Read(); capture what we need BEFORE advancing.
+            var isKnownButNotHandled = IsKnownStepKey(keyUtf8);
+            var unknownKey = isKnownButNotHandled ? null : Encoding.UTF8.GetString(keyUtf8);
+
             reader.Read();
 
-            if (IsKnownStepKey(keyUtf8))
+            if (isKnownButNotHandled)
             {
                 if (!reader.End)
                 {
@@ -273,8 +277,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var key = Encoding.UTF8.GetString(keyUtf8);
-            AddError(diagnostics, $"unexpected step key '{key}' in job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]", keyMark);
+            AddError(diagnostics, $"unexpected step key '{unknownKey}' in job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
