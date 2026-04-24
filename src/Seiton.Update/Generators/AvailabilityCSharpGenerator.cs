@@ -32,6 +32,10 @@ internal sealed class AvailabilityCSharpGenerator
         // reusable workflow call secrets: fixed contexts available in the secrets: mapping of a reusable workflow call
         string[] reusableWorkflowCallSecretsRaw = ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets"];
         var reusableWorkflowCallSecrets = Order(reusableWorkflowCallSecretsRaw);
+        // strategy: contexts available in jobs.<job_id>.strategy (including matrix values)
+        // Per GitHub docs: github, needs, vars, inputs — no strategy, matrix, secrets, runner, env
+        string[] strategyRaw = ["github", "inputs", "vars", "needs"];
+        var strategy = Order(strategyRaw);
 
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-availability");
@@ -55,6 +59,8 @@ internal sealed class AvailabilityCSharpGenerator
         sb.AppendLine();
         AppendArray(sb, "ReusableWorkflowCallSecretsRoots", reusableWorkflowCallSecrets);
         sb.AppendLine();
+        AppendArray(sb, "StrategyRoots", strategy);
+        sb.AppendLine();
         AppendArray(sb, "StepRoots", step);
 
         sb.Append(
@@ -69,6 +75,7 @@ internal sealed class AvailabilityCSharpGenerator
                         ExpressionValidationContext.Job => Contains(JobRoots, rootName),
                         ExpressionValidationContext.JobOutput => Contains(JobOutputRoots, rootName),
                         ExpressionValidationContext.ReusableWorkflowCallSecrets => Contains(ReusableWorkflowCallSecretsRoots, rootName),
+                        ExpressionValidationContext.Strategy => Contains(StrategyRoots, rootName),
                         ExpressionValidationContext.Step => Contains(StepRoots, rootName),
                         _ => false,
                     };

@@ -63,6 +63,14 @@ public static class Availability
         "secrets"u8.ToArray(),
     ];
 
+    static readonly byte[][] StrategyRoots =
+    [
+        "github"u8.ToArray(),
+        "inputs"u8.ToArray(),
+        "vars"u8.ToArray(),
+        "needs"u8.ToArray(),
+    ];
+
     static readonly byte[][] StepRoots =
     [
         "github"u8.ToArray(),
@@ -87,6 +95,7 @@ public static class Availability
             ExpressionValidationContext.Job => Contains(JobRoots, rootName),
             ExpressionValidationContext.JobOutput => Contains(JobOutputRoots, rootName),
             ExpressionValidationContext.ReusableWorkflowCallSecrets => Contains(ReusableWorkflowCallSecretsRoots, rootName),
+            ExpressionValidationContext.Strategy => Contains(StrategyRoots, rootName),
             ExpressionValidationContext.Step => Contains(StepRoots, rootName),
             _ => false,
         };

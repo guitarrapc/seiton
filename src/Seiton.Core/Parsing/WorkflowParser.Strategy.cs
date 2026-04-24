@@ -121,7 +121,7 @@ public static partial class WorkflowParser
                     case StrategyMappingKey.FailFast:
                         if (!reader.End)
                         {
-                            failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var ffErr, out var ffMark);
+                            failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Strategy, out var ffErr, out var ffMark);
                             if (ffErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression", ffMark);
                         }
 
@@ -180,7 +180,7 @@ public static partial class WorkflowParser
         {
             var expression = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
-                ExpressionValidationContext.Job,
+                ExpressionValidationContext.Strategy,
                 out var mxExprErr,
                 out var mxExprMark,
                 parseWholeValueIfNoEmbedded: false);
@@ -289,7 +289,7 @@ public static partial class WorkflowParser
                 {
                     var valueNode = ParseStringAndValidateExpression(
                         ref reader, arena, diagnostics,
-                        ExpressionValidationContext.Job,
+                        ExpressionValidationContext.Strategy,
                         out var rowErr,
                         out var rowMark,
                         parseWholeValueIfNoEmbedded: false);
@@ -299,7 +299,7 @@ public static partial class WorkflowParser
                 }
                 else if (reader.CurrentKind == YamlEventKind.SequenceStart)
                 {
-                    rowValues = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length));
+                    rowValues = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length), ExpressionValidationContext.Strategy);
                 }
                 else
                 {
@@ -338,7 +338,7 @@ public static partial class WorkflowParser
         {
             var expr = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
-                ExpressionValidationContext.Job,
+                ExpressionValidationContext.Strategy,
                 out var mcErr,
                 out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
@@ -373,7 +373,7 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                entries.Add(ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId));
+                entries.Add(ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, ExpressionValidationContext.Strategy));
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
@@ -392,7 +392,7 @@ public static partial class WorkflowParser
         finally { entries.Dispose(); }
     }
 
-    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8)
+    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8, ExpressionValidationContext exprContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -408,7 +408,7 @@ public static partial class WorkflowParser
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                values.Add(ParseRawYamlValue(ref reader, arena, diagnostics, source, jobId));
+                values.Add(ParseRawYamlValue(ref reader, arena, diagnostics, source, jobId, exprContext));
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
@@ -421,12 +421,12 @@ public static partial class WorkflowParser
         finally { values.Dispose(); }
     }
 
-    private static RawYamlValue ParseRawYamlValue<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static RawYamlValue ParseRawYamlValue<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var node = ParseString(ref reader, arena, out var mvErr, out var mvMark, allowEmpty: true);
+            var node = ParseStringAndValidateExpression(ref reader, arena, diagnostics, exprContext, out var mvErr, out var mvMark, parseWholeValueIfNoEmbedded: false);
             if (mvErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value must be scalar, mapping, or sequence", mvMark);
             if (!node.HasValue) node = arena.AddString(default, false, default);
             return new RawYamlString { Value = node };
@@ -436,7 +436,7 @@ public static partial class WorkflowParser
         {
             return new RawYamlObject
             {
-                Properties = ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId),
+                Properties = ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, exprContext),
             };
         }
 
@@ -444,7 +444,7 @@ public static partial class WorkflowParser
         {
             return new RawYamlArray
             {
-                Items = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, "matrix"u8),
+                Items = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, "matrix"u8, exprContext),
             };
         }
 
@@ -453,7 +453,7 @@ public static partial class WorkflowParser
         return new RawYamlString { Value = arena.AddString(default, false, default) };
     }
 
-    private static SliceMap<RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static SliceMap<RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var map = new PooledBuffer<SliceMap<RawYamlValue>.Entry>(8);
@@ -505,7 +505,7 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                map.Add(new SliceMap<RawYamlValue>.Entry(keySlice, ParseRawYamlValue(ref reader, arena, diagnostics, source, jobId)));
+                map.Add(new SliceMap<RawYamlValue>.Entry(keySlice, ParseRawYamlValue(ref reader, arena, diagnostics, source, jobId, exprContext)));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)

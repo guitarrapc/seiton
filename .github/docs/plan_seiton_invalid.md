@@ -70,14 +70,14 @@
 | **対処** | 同一ジョブ内の step id を収集し、`steps.<id>` 参照が存在する step id か検証。 |
 | **優先度** | **高** — step output 参照ミスは頻出バグ。 |
 
-### A-6: `contexts_special_functions_availability` — runner コンテキスト利用不可
+### A-6: `contexts_special_functions_availability` — runner コンテキスト利用不可 ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `test.yaml:14:17: context "runner" is not allowed here` (workflow-level if) |
-| **seiton** | 未検出 (env コンテキストは検出済み) |
-| **原因** | context availability チェックで `runner` コンテキストの可用性制限が漏れている。 |
-| **対処** | context availability テーブルに `runner` の利用不可スコープを追加。 |
+| **seiton** | ✅ 検出済み: `context 'runner' is not available in strategy expressions` (parser expression validation) |
+| **原因** | `ParseRawYamlValue` (matrix 行値) が `ParseString` を使用しており expression semantic validation が未実行。加えて `ExpressionValidationContext` に `Strategy` スコープが無かった。 |
+| **対処** | `ExpressionValidationContext.Strategy` 新設 (`github, inputs, needs, vars` のみ許可)。`ParseRawYaml*` メソッドに `ParseStringAndValidateExpression` + Strategy コンテキストを導入。 |
 | **優先度** | **中** — あまり頻繁には発生しない。 |
 
 ### A-7: `cron_schedule_check` — invalid timezone ✅ DONE
@@ -423,12 +423,12 @@
 | A-1 | comparison `>` 型不一致 | ✅ 式分析拡張 (既存) |
 | A-11 | glob パターン検証強化 | ✅ `^` `~` `:` 文字、`*+` パターン、`.`/`..` パス検証追加 |
 
-### P2: 中優先度 ✅ DONE (A-6 を除く)
+### P2: 中優先度 ✅ DONE
 
 | ID | 内容 | 対処 |
 |---|---|---|
 | A-2 | builtin_func matrix object property | ✅ ConvertJsonType strict 化、ValidateIndexAccess 拡張 |
-| A-6 | runner context availability | context availability テーブル修正 |
+| A-6 | runner context availability | Strategy コンテキスト新設、ParseRawYaml* で expression validation 実装 |
 | A-7 | cron timezone 検出漏れ | ✅ LooksLikeIanaTimezoneUtf8 フォールバック削除 |
 | A-10 | env に string 型展開 | ✅ P1 の matrix 型推論で対応済み |
 | A-14 | needs 重複 | ✅ NeedsGraphRule で既に実装済み |
@@ -695,7 +695,7 @@ CoreParsingBenchmark:
 
 **判定:** Allocated 完全一致 (変更なし)。Mean の増加は ShortRun (N=3) ノイズ — `GetScalarSlice()` は既存の `ParseString` で確立済みパターンで追加アロケーションなし (Allocated 証明)。位置精度の向上はユーザー体験に直結する品質改善のため許容。**合格**。
 
-### P2: 中優先度 — 検出強化 (✅ DONE, A-6 を除く)
+### P2: 中優先度 — 検出強化 (✅ DONE)
 
 **対象 ID:** A-2, A-7, A-10, A-14, A-15, A-18/A-22, A-25, A-26, A-27/A-28, C-4
 
@@ -713,7 +713,7 @@ CoreParsingBenchmark:
 | A-26 | ✅ 既存 | パーサーで `type: text` を正しく検出済み |
 | A-27/A-28 | ✅ 既存 | P1 の動的コンテキスト型推論で inputs/secrets property 未定義を検出済み |
 | C-4 | ✅ 現状維持 | 値位置報告ポリシーにより multiline if の行番号は値の位置を報告 |
-| A-6 | 🔲 未着手 | runner context availability テーブル修正 |
+| A-6 | ✅ 実装 | Strategy コンテキスト新設、ParseRawYaml* で expression validation 実装 |
 
 **新規実装詳細:**
 
@@ -774,3 +774,18 @@ CoreParsingBenchmark:
 4. ✅ ベンチマーク実行: 上記結果 — Allocated 許容範囲内、Mean は ShortRun ノイズ
 5. ✅ 実装結果記録: 本セクション
 6. ✅ スペック更新: `Seiton_Linter_spec.md` の `expr-undefined-var` に local action output 解決を追記、`schedule-event` のタイムゾーン検証方法を更新。`Seiton_Linter_csharp_spec.md` の `expr-undefined-var` と action パリティ領域に `LocalActionOutputResolver` を追記。
+
+#### A-6: Strategy コンテキスト新設 — runner context availability
+
+- **根本原因**: `ParseRawYamlValue` (matrix 行値パース) が `ParseString` を使用しており、expression semantic validation を実行していなかった。加えて、`ExpressionValidationContext` に `Strategy` が存在せず、`Job` コンテキスト (`strategy`, `matrix`, `secrets` 含む) が使われていた。GitHub Docs では `jobs.<job_id>.strategy` のコンテキストは `github, inputs, needs, vars` のみ。
+- **実装内容**:
+  1. `ExpressionValidationContext` enum に `Strategy` 値を追加
+  2. `AvailabilityCSharpGenerator` に `StrategyRoots` 配列 (`github, inputs, needs, vars`) を生成
+  3. `Availability.g.cs` を再生成 (`dotnet run --project src/Seiton.Update -- sync-availability`)
+  4. `ExpressionSemanticAnalyzer.ToContextText` に `Strategy => "strategy"` を追加
+  5. `WorkflowParser.Strategy.cs`: `ParseRawYamlValue`, `ParseRawYamlObject`, `ParseRawYamlArray` に `ExpressionValidationContext` パラメータを追加。`ParseRawYamlValue` で `ParseString` → `ParseStringAndValidateExpression` に変更。
+  6. `ParseMatrix`, `ParseMatrixCombinations`, `fail-fast` の全 expression パースで `ExpressionValidationContext.Strategy` を使用
+- テスト: `Parse_StrategyMatrix_WithRunnerContext_ReportsContextAvailability`, `Parse_StrategyMatrix_WithAllowedContexts_DoesNotReportError` の 2 テスト追加
+- テストデータ: `testdata/err/strategy_matrix_runner_context.yaml` + `.out`
+- テスト結果: 663 tests 全パス (661 → 663)
+- ベンチマーク: RuleCatalogBenchmark 全項目 zero allocation、Mean 変化なし

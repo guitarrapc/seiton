@@ -2936,6 +2936,50 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_StrategyMatrix_WithRunnerContext_ReportsContextAvailability()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            strategy:
+              matrix:
+                directory:
+                  - ${{ runner.temp }}
+            runs-on: ubuntu-24.04
+            timeout-minutes: 10
+            steps:
+              - run: echo done
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-runner-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'runner' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StrategyMatrix_WithAllowedContexts_DoesNotReportError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            strategy:
+              matrix:
+                value:
+                  - ${{ github.ref_name }}
+            runs-on: ubuntu-24.04
+            timeout-minutes: 10
+            steps:
+              - run: echo done
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-github-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("is not available in strategy expressions", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task Parse_JobOutputs_WithStepsContext_DoesNotReportSemanticError()
     {
         var yaml = """
