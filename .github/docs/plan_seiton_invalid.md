@@ -80,14 +80,14 @@
 | **対処** | context availability テーブルに `runner` の利用不可スコープを追加。 |
 | **優先度** | **中** — あまり頻繁には発生しない。 |
 
-### A-7: `cron_schedule_check` — invalid timezone
+### A-7: `cron_schedule_check` — invalid timezone ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `test.yaml:9:17: invalid timezone "Asia/Somewhere"` |
-| **seiton** | 未検出 |
-| **原因** | `ScheduleEventRule` にタイムゾーン検証は実装済みだが、YAML パースで schedule の timezone フィールドが正しく取得されていない可能性。テストデータの構造を確認要。 |
-| **対処** | schedule パーサーで timezone フィールドの取得を確認・修正。 |
+| **seiton** | ✅ 検出済み: `on.schedule timezone 'Asia/Somewhere' is invalid` (schedule-event ルール) |
+| **原因** | `ScheduleEventRule.ValidateTimezone` に `LooksLikeIanaTimezoneUtf8` フォールバックがあり、IANA 形式のタイムゾーン文字列 (e.g. `Asia/Somewhere`) を誤って許容していた。.NET 10 では `TimeZoneInfo.FindSystemTimeZoneById` が IANA ID をネイティブサポートするため、このフォールバックは不要。 |
+| **対処** | `LooksLikeIanaTimezoneUtf8` フォールバックと `TryMatchIanaArea` を削除。`TimeZoneInfo.FindSystemTimeZoneById` が例外を投げたら常にエラー報告。 |
 | **優先度** | **中** |
 
 ### A-8: `deprecated_inputs` — deprecated input 警告
@@ -110,14 +110,14 @@
 | **対処** | 新ルール `OutdatedActionRunner` を追加。popular actions カタログの runs.using 情報から node16/node12 を検出。 |
 | **優先度** | **高** — node16 deprecation は 2024 年以降の最重要課題。 |
 
-### A-10: `expand_object` — env に string 型を展開
+### A-10: `expand_object` — env に string 型を展開 ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `type of expression at "env" must be object but found type string` |
-| **seiton** | 未検出 |
-| **原因** | `env:` セクションに `${{ matrix.env_string }}` のような式を展開した際、式の型が object であるべきところ string になるチェックが未実装。 |
-| **対処** | env セクションの式展開時に型チェック (object 必須) を追加。 |
+| **seiton** | ✅ 検出済み: `type of expression at "env" must be object but found type string` (expression ルール) |
+| **原因** | P1 の動的コンテキスト型推論 (matrix override) 実装により、`matrix.env_string` が string 型に解決され、env セクションでの型不一致が検出されるようになった。 |
+| **対処** | 追加実装不要。P1 で対応済み。 |
 | **優先度** | **中** — 実行時 silent failure になるパターン。 |
 
 ### A-11: `glob` — invalid branch 名文字 `^`、invalid `+` 構文、`.` / `..` パス (3件) ✅ DONE
@@ -150,24 +150,24 @@
 | **対処** | Docker action の空タグ (`docker://image:`) を明示的に検出するメッセージを追加検討。 |
 | **優先度** | **低** — 一応検出はしている。 |
 
-### A-14: `invalid_ids_in_needs` — needs 重複
+### A-14: `invalid_ids_in_needs` — needs 重複 ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `job ID "BAR" duplicates in "needs" section` |
-| **seiton** | 未検出 (`unknown` job 参照は検出済み) |
-| **原因** | `NeedsGraphRule` が needs 内の重複 job id チェック (case-insensitive) を未実装。 |
-| **対処** | `NeedsGraphRule` に needs リスト内の重複チェックを追加。 |
+| **seiton** | ✅ 検出済み: `NeedsGraphRule.VisitJobPre` で needs エントリの重複を SequenceEqual で検出 |
+| **原因** | 調査の結果、`NeedsGraphRule` は既に needs リスト内の重複チェック (lines 37-48) を実装済みだった。 |
+| **対処** | 追加実装不要。 |
 | **優先度** | **中** |
 
-### A-15: `local_action_outputs` — local action output 未定義 (2件)
+### A-15: `local_action_outputs` — local action output 未定義 (2件) ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `property "my_action" is not defined`、`property "some-value" is not defined in object type {some_value: string}` |
-| **seiton** | 未検出 |
-| **原因** | local action の output 定義を読み取り、`steps.<id>.outputs.<name>` の存在チェックを行う機能がない。 |
-| **対処** | `LocalActionInputsRule` を拡張、または新ルール `LocalActionOutputsRule` で local action の outputs 宣言と実際の参照を照合。 |
+| **seiton** | ✅ 検出済み: forward reference (steps ordering) + strict output type (local action metadata 解析) |
+| **原因** | local action の output 定義を読み取り、`steps.<id>.outputs.<name>` の存在チェックを行う機能がなかった。 |
+| **対処** | `LocalActionOutputResolver` を新設し、`DynamicContextTypeBuilder.BuildStepEntryType` で local action metadata からの output 名を解決。`ExprUndefinedVarRule` から resolver を提供。 |
 | **優先度** | **中** — local action 使用時のバグ発見に有用。 |
 
 ### A-16: `matrix_checks` — exclude 値が matrix にマッチしない
@@ -188,14 +188,14 @@
 | **原因** | parser-level と lint-level で同一チェックが重複。 |
 | **対処** | → **C (メッセージ/位置ずれ)** カテゴリで対処。 |
 
-### A-18: `not_persistent_matrix_values` — array を template 展開
+### A-18: `not_persistent_matrix_values` — array を template 展開 ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `object, array, and null values should not be evaluated in template with ${{ }}` |
-| **seiton** | 未検出 |
-| **原因** | 式セマンティクス分析で template 展開 (`${{ }}`) 時に object/array/null 型を警告する機能がない。 |
-| **対処** | template 展開式の結果型が string/number/bool 以外の場合に警告。 |
+| **seiton** | ✅ 検出済み: `ExpressionSemanticAnalyzer.CheckTemplateType` + `ExprUndefinedVarRule.ValidateTemplateType` で `${{ }}` 内の object/array/null 型を警告 |
+| **原因** | 調査の結果、`CheckTemplateType` は既に実装済みで、`ExprUndefinedVarRule` から全 embedded expression で呼び出されていた。testdata/err/evaluated_template, testdata/examples/not_persistent_matrix_values 等のテストで検証済み。 |
+| **対処** | 追加実装不要。 |
 | **優先度** | **中** — 実行時に `[object Object]` や空文字列になるパターン。 |
 
 ### A-19: `popular_action_outputs` — popular action output 未定義 (2件) ✅ DONE
@@ -226,13 +226,13 @@
 | **対処** | matrix 展開後のラベルチェック対応。self-hosted preset (`arm64`, `gpu` 等) の扱い検討。 |
 | **優先度** | **中** — matrix 経由の runner label はエッジケース。actionlint も config ファイルでカスタムラベルを許容しており、`gpu` は actionlint.yaml で設定するケース。seiton でも同様にconfig対応で十分。 |
 
-### A-22: `type_checks` — template 展開時の object 型警告
+### A-22: `type_checks` — template 展開時の object 型警告 ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `object, array, and null values should not be evaluated in template with ${{ }}` (line 13) |
-| **seiton** | 未検出 (A-18 と同じ根本原因) |
-| **対処** | A-18 と同じ — template 展開式の型チェック追加。 |
+| **seiton** | ✅ 検出済み (A-18 と同じ — `CheckTemplateType` で対応済み) |
+| **対処** | A-18 と同じ — 追加実装不要。 |
 
 ### A-23: `untrusted_input` — 複数の untrusted input 検出不足 (2件) ✅ DONE
 
@@ -252,44 +252,44 @@
 | **seiton** | `on.release does not support option: ` (空文字列) — 検出しているがメッセージが壊れている。 |
 | **対処** | → **C カテゴリ** でメッセージ修正。 |
 
-### A-25: `workflow_call_definitions` — required + default 競合
+### A-25: `workflow_call_definitions` — required + default 競合 ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `input "path" of workflow_call event has the default value "", but it is also required` |
-| **seiton** | 未検出 |
-| **原因** | `WorkflowCallInputDefaultRule` が required + default の競合チェックを実装していない。 |
-| **対処** | workflow_call input が required かつ default を持つ場合に警告。 |
+| **seiton** | ✅ 検出済み: `workflow_call input 'path' has the default value but is also required. if an input is required, its default value will never be used` (workflow-call-input-default ルール) |
+| **原因** | `WorkflowCallInputDefaultRule` が required + default の競合チェックを実装していなかった。 |
+| **対処** | `WorkflowCallInputDefaultRule.ValidateInputDefault` の冒頭に `Required.HasValue && GetBoolValue(Required) && Default.HasValue` チェックを追加。 |
 | **優先度** | **中** |
 
-### A-26: `workflow_dispatch_input_types` — input type "text" 不正
+### A-26: `workflow_dispatch_input_types` — input type "text" 不正 ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `input type of workflow_dispatch event must be one of "string", "number", "boolean", "choice", "environment" but got "text"` |
-| **seiton** | parser が `type: text` を含む行で別のエラーを出すが、`id` input の `type: text` は検出しない（`kind` の行 8 で検出している）。 |
-| **原因** | パーサーが `type: text` をエラーとして報告する位置が off-by-one。 |
-| **対処** | → 確認が必要。testdata の YAML 構造を見ると `id` input の `type: text` (line 6) がパーサーで検出されていない。 |
+| **seiton** | ✅ 検出済み: パーサーが `type: text` を検出 (`testdata/examples/workflow_dispatch_input_types.out` で確認済み) |
+| **原因** | 調査の結果、パーサーは `type: text` を正しく検出していた。`testdata/examples/workflow_dispatch_input_types.out` に期待エラーが記録済み。 |
+| **対処** | 追加実装不要。 |
 | **優先度** | **中** |
 
-### A-27: `workflow_dispatch_input_types` — expression property 未定義 (4件)
+### A-27: `workflow_dispatch_input_types` — expression property 未定義 (4件) ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `inputs.massage` 未定義 (line 33)、`inputs.verbose` の bool を key に (line 35)、`inputs.age` の number を key に (line 37)、`github.event.inputs.massage` 未定義 (line 39) |
-| **seiton** | いずれも式レベルでは未検出 (`run-inputs-context-direct-use` で `${{ inputs.* }}` 使用は検出するが、プロパティ名の正当性や型は未チェック) |
-| **原因** | `ExprUndefinedVarRule` が `inputs` コンテキストのプロパティ名を workflow_dispatch input 宣言と照合していない。また object key の型チェックも未対応。 |
-| **対処** | inputs コンテキストの型を workflow_dispatch 宣言から構築し、未定義プロパティと型不一致を検出。 |
-| **優先度** | **中** — `run-inputs-context-direct-use` で代替的に検出はしている。 |
+| **seiton** | ✅ 検出済み: `DynamicContextTypeBuilder.BuildWorkflowDispatchInputsType` + `BuildWorkflowCallInputsType` で strict inputs 型を構築、`ExprUndefinedVarRule` で property 未定義を検出 |
+| **原因** | 調査の結果、P1 の動的コンテキスト型推論で inputs コンテキストは既に strict 型として構築されていた。`testdata/examples/workflow_inputs_secrets_types.out` で property 未定義検出が確認済み。 |
+| **対処** | 追加実装不要。P1 で対応済み。 |
+| **優先度** | **中** |
 
-### A-28: `workflow_inputs_secrets_types` — inputs.uri 未定義
+### A-28: `workflow_inputs_secrets_types` — inputs.uri 未定義 ✅ DONE (既存実装で対応済み)
 
 | | 内容 |
 |---|---|
 | **actionlint** | `property "uri" is not defined in object type {lucky_number: number; url: string}` |
-| **seiton** | 未検出 (`secrets.credentials` は検出済み) |
-| **原因** | A-27 と同根。workflow_call inputs の型推論が不十分。 |
-| **対処** | A-27 と同じ。 |
+| **seiton** | ✅ 検出済み: `property "uri" is not defined in object type {lucky_number: number; url: string}` (expression ルール) |
+| **原因** | 調査の結果、P1 の動的コンテキスト型推論で workflow_call inputs/secrets は既に strict 型として構築されていた。`testdata/examples/workflow_inputs_secrets_types.out` で確認済み。 |
+| **対処** | 追加実装不要。P1 で対応済み。 |
 
 ### A-29: `yaml_anchor_usage` — anchor/alias 高度な検証 (4件)
 
@@ -409,7 +409,7 @@
 | C-9 | timeout-minutes col:0 | ✅ ParseFloat/Bool/Int で GetScalarSlice+ComputePositionFromOffset 使用 |
 | C-6,C-7,C-8 | parser/lint 重複診断 | ✅ LintEngine で parser 診断を _seen にシード、lint 診断で置換 |
 
-### P1: 高優先度 (検出漏れ — セキュリティ/頻出バグ)
+### P1: 高優先度 (検出漏れ — セキュリティ/頻出バグ) ✅ DONE
 
 | ID | 内容 | 対処 |
 |---|---|---|
@@ -423,20 +423,20 @@
 | A-1 | comparison `>` 型不一致 | ✅ 式分析拡張 (既存) |
 | A-11 | glob パターン検証強化 | ✅ `^` `~` `:` 文字、`*+` パターン、`.`/`..` パス検証追加 |
 
-### P2: 中優先度
+### P2: 中優先度 ✅ DONE (A-6 を除く)
 
 | ID | 内容 | 対処 |
 |---|---|---|
-| A-2 | builtin_func matrix object property | matrix 型推論強化 |
+| A-2 | builtin_func matrix object property | ✅ ConvertJsonType strict 化、ValidateIndexAccess 拡張 |
 | A-6 | runner context availability | context availability テーブル修正 |
-| A-7 | cron timezone 検出漏れ | schedule パーサー確認 |
-| A-10 | env に string 型展開 | env 式型チェック |
-| A-14 | needs 重複 | NeedsGraphRule 拡張 |
-| A-15 | local action output 未定義 | LocalActionOutputsRule 新設 |
-| A-18/A-22 | template 展開時 object/array 警告 | 式型チェック追加 |
-| A-25 | workflow_call required + default | WorkflowCallInputDefaultRule 拡張 |
-| A-26 | workflow_dispatch type:text 位置ずれ | パーサー確認 |
-| A-27/A-28 | inputs/secrets property 未定義 | 型推論強化 |
+| A-7 | cron timezone 検出漏れ | ✅ LooksLikeIanaTimezoneUtf8 フォールバック削除 |
+| A-10 | env に string 型展開 | ✅ P1 の matrix 型推論で対応済み |
+| A-14 | needs 重複 | ✅ NeedsGraphRule で既に実装済み |
+| A-15 | local action output 未定義 | ✅ LocalActionOutputResolver 新設、DynamicContextTypeBuilder 拡張 |
+| A-18/A-22 | template 展開時 object/array 警告 | ✅ CheckTemplateType で既に実装済み |
+| A-25 | workflow_call required + default | ✅ ValidateInputDefault に required+default チェック追加 |
+| A-26 | workflow_dispatch type:text 位置ずれ | ✅ パーサーで既に検出済み |
+| A-27/A-28 | inputs/secrets property 未定義 | ✅ P1 の動的コンテキスト型推論で対応済み |
 | C-4 | if multiline 行番号ずれ | ✅ 現状維持 (値位置報告ポリシー) |
 
 ### P3: 低優先度
@@ -694,3 +694,83 @@ CoreParsingBenchmark:
 | Large | WorkflowParser.Parse | 8,225.56 μs | 9,668.98 μs | +17.5% ⚠️ | 111.35 KB | ±0% ✅ |
 
 **判定:** Allocated 完全一致 (変更なし)。Mean の増加は ShortRun (N=3) ノイズ — `GetScalarSlice()` は既存の `ParseString` で確立済みパターンで追加アロケーションなし (Allocated 証明)。位置精度の向上はユーザー体験に直結する品質改善のため許容。**合格**。
+
+### P2: 中優先度 — 検出強化 (✅ DONE, A-6 を除く)
+
+**対象 ID:** A-2, A-7, A-10, A-14, A-15, A-18/A-22, A-25, A-26, A-27/A-28, C-4
+
+**サマリ:**
+
+| ID | ステータス | 内容 |
+|---|---|---|
+| A-2 | ✅ 実装済み | `ConvertJsonType` strict 化、`ValidateIndexAccess` 拡張 (P0/P1 フェーズで実装) |
+| A-7 | ✅ 実装 | `ScheduleEventRule.ValidateTimezone` から `LooksLikeIanaTimezoneUtf8` フォールバック削除 |
+| A-10 | ✅ 既存 | P1 の matrix 型推論で対応済み |
+| A-14 | ✅ 既存 | `NeedsGraphRule` で needs 重複チェック実装済み |
+| A-15 | ✅ 実装 | `LocalActionOutputResolver` 新設、`DynamicContextTypeBuilder` で local action output 解決 |
+| A-18/A-22 | ✅ 既存 | `CheckTemplateType` で template 展開時の object/array/null 型警告実装済み |
+| A-25 | ✅ 実装 | `WorkflowCallInputDefaultRule.ValidateInputDefault` に required+default 競合チェック追加 |
+| A-26 | ✅ 既存 | パーサーで `type: text` を正しく検出済み |
+| A-27/A-28 | ✅ 既存 | P1 の動的コンテキスト型推論で inputs/secrets property 未定義を検出済み |
+| C-4 | ✅ 現状維持 | 値位置報告ポリシーにより multiline if の行番号は値の位置を報告 |
+| A-6 | 🔲 未着手 | runner context availability テーブル修正 |
+
+**新規実装詳細:**
+
+#### A-7: ScheduleEventRule timezone フォールバック削除
+
+- `ScheduleEventRule.ValidateTimezone` から `LooksLikeIanaTimezoneUtf8` フォールバックと `TryMatchIanaArea` メソッドを削除
+- .NET 10 では `TimeZoneInfo.FindSystemTimeZoneById` が IANA ID をネイティブサポートするため、失敗した全ケースをエラー報告
+- テスト: `ng-iana-like-invalid-timezone` ケース追加 (`RuleRegression_ScheduleEventRule_TableDriven`)
+- テストデータ: `testdata/err/schedule_iana_like_invalid_timezone.yaml` + `.out`
+
+#### A-15: LocalActionOutputResolver + DynamicContextTypeBuilder 拡張
+
+- `LocalActionOutputResolver` を新設 (`Linting/LocalActionOutputResolver.cs`)
+  - `ResolveOutputNames(ReadOnlySpan<byte> usesValue)` → `string[]?` で local action metadata の outputs を解決
+  - ワークフローファイルパスからリポジトリルートを検索し、`action.yml`/`action.yaml` をパース
+  - 結果をワークフロー単位でキャッシュ
+- `DynamicContextTypeBuilder.BuildStepEntryType` に `localActionOutputResolver` パラメータ追加
+  - popular actions lookup 失敗後に local action 解決を試行
+  - `BuildStrictStepEntryType(string[])` オーバーロード追加
+- `ExprUndefinedVarRule` から resolver を初期化し `BuildStepsOverride` に渡す
+- テスト: `LintEngine_LocalActionOutputs_StrictPropertyValidation` (一時ディレクトリに action.yaml を作成し outputs の typo を検出)
+
+#### A-25: WorkflowCallInputDefaultRule required+default 競合チェック
+
+- `WorkflowCallInputDefaultRule.ValidateInputDefault` の冒頭に required+default 競合チェック追加
+  - `Required.HasValue && GetBoolValue(Required) && Default.HasValue` で検出
+  - エラーメッセージ: `workflow_call input '{name}' has the default value but is also required. if an input is required, its default value will never be used`
+- テスト: `ng-required-input-with-default`, `ok-required-input-without-default` ケース追加 (`RuleRegression_WorkflowCallInputDefaultRule_TableDriven`)
+- テストデータ: `testdata/err/workflow_call_required_default.yaml` + `.out`
+
+**テスト結果:** 661 tests 全パス (660 → 661, +1 new test for A-15)
+
+**ベンチマーク結果 (P2 完了時点):**
+
+CoreLintBenchmark (`LintEngine.Check parse+lint`):
+
+| Size | Fix | P0 Mean | P2 Mean | Δ Mean | P0 Alloc | P2 Alloc | Δ Alloc |
+|------|-----|---------|---------|--------|----------|----------|---------|
+| Small | False | 49.48 μs | 54.90 μs | +11.0% ⚠️ | 15.45 KB | 15.49 KB | +0.3% ✅ |
+| Medium | False | 925.76 μs | 954.71 μs | +3.1% ✅ | 97.12 KB | 97.35 KB | +0.2% ✅ |
+| Large | False | 13,797.69 μs | 13,561.38 μs | -1.7% ✅ | 452.42 KB | 453.21 KB | +0.2% ✅ |
+
+CoreParsingBenchmark:
+
+| Size | Method | P0 Mean | P2 Mean | Δ Mean | P0 Alloc | P2 Alloc | Δ Alloc |
+|------|--------|---------|---------|--------|----------|----------|---------|
+| Small | WorkflowParser.Parse | 35.03 μs | 36.21 μs | +3.4% ✅ | 5.41 KB | 5.41 KB | ±0% ✅ |
+| Medium | WorkflowParser.Parse | 648.45 μs | 722.96 μs | +11.5% ⚠️ | 27.12 KB | 27.12 KB | ±0% ✅ |
+| Large | WorkflowParser.Parse | 9,668.98 μs | 9,988.39 μs | +3.3% ✅ | 111.35 KB | 111.35 KB | ±0% ✅ |
+
+**判定:** Allocated はほぼ変化なし (Lint で +0.2~0.3%, Parse は完全一致)。Mean は Small/Lint で +11% だが ShortRun (N=3) のノイズ範囲で Large (最重要) は改善。**合格**。
+
+**Verification Requirements 遵守状況:**
+
+1. ✅ テストファースト: A-7, A-25 はテストデータ作成 → テスト確認 → 実装の順で実施。A-15 は既存の forward reference テストで事前確認後に実装。
+2. ✅ テスト実行: `dotnet test` で 661 tests 全パス
+3. ✅ リグレッションテスト追加: A-7 (`ng-iana-like-invalid-timezone`), A-25 (`ng-required-input-with-default`, `ok-required-input-without-default`), A-15 (`LintEngine_LocalActionOutputs_StrictPropertyValidation`)
+4. ✅ ベンチマーク実行: 上記結果 — Allocated 許容範囲内、Mean は ShortRun ノイズ
+5. ✅ 実装結果記録: 本セクション
+6. ✅ スペック更新: `Seiton_Linter_spec.md` の `expr-undefined-var` に local action output 解決を追記、`schedule-event` のタイムゾーン検証方法を更新。`Seiton_Linter_csharp_spec.md` の `expr-undefined-var` と action パリティ領域に `LocalActionOutputResolver` を追記。

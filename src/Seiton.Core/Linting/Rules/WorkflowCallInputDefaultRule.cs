@@ -25,6 +25,13 @@ public sealed class WorkflowCallInputDefaultRule() : RuleBase(RuleId.WorkflowCal
 
     private void ValidateInputDefault(WorkflowCallEvent workflowCall, WorkflowCallEventInput input)
     {
+        // Check required+default conflict
+        if (input.Required.HasValue && Arena.GetBoolValue(input.Required) && input.Default.HasValue)
+        {
+            var inputName = Decode(Arena.GetStringSlice(input.Name));
+            AddEventError(workflowCall, $"workflow_call input '{inputName}' has the default value but is also required. if an input is required, its default value will never be used", Arena.GetStringRange(input.Default));
+        }
+
         if (!input.Default.HasValue || IsExpressionOrInterpolation(input.Default))
         {
             return;

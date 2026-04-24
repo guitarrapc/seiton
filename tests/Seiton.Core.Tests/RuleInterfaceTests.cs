@@ -883,6 +883,64 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_LocalActionOutputs_StrictPropertyValidation()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-outputs-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action-with-output");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yaml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            name: My action with output
+            description: my action with outputs
+            outputs:
+              some_value:
+                description: some value returned from this action
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: ./.github/actions/my-action-with-output
+                    id: my_action
+                  - run: echo ${{ steps.my_action.outputs.some_value }}
+                  - run: echo ${{ steps.my_action.outputs.some-value }}
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
+            // some_value should be valid (no error)
+            await Assert.That(msgs.Any(m => m.Contains("some_value", StringComparison.Ordinal))).IsFalse();
+            // some-value should be flagged as undefined property
+            await Assert.That(msgs.Any(m => m.Contains("some-value", StringComparison.Ordinal) && m.Contains("not defined", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
     public async Task RuleRegression_DenyInheritSecretsRule_TableDriven()
     {
         var cases = new[]
@@ -2834,6 +2892,39 @@ public sealed class RuleInterfaceTests
                         - run: echo ok
             """,
             []),
+            new RuleCase(
+            "ng-required-input-with-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        path:
+                            type: string
+                            required: true
+                            default: ""
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["default", "required"]),
+            new RuleCase(
+            "ok-required-input-without-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        path:
+                            type: string
+                            required: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new WorkflowCallInputDefaultRule(), "workflow-call-input-default", cases);
@@ -2959,6 +3050,20 @@ public sealed class RuleInterfaceTests
                 schedule:
                     - cron: "0 0 * * *"
                       timezone: "Mars/Phobos"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["timezone", "invalid"]),
+            new RuleCase(
+            "ng-iana-like-invalid-timezone",
+            """
+            on:
+                schedule:
+                    - cron: "0 0 * * *"
+                      timezone: "Asia/Somewhere"
             jobs:
                 build:
                     runs-on: ubuntu-latest

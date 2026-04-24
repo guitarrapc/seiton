@@ -85,10 +85,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
         }
         catch
         {
-            if (!LooksLikeIanaTimezoneUtf8(span))
-            {
-                AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
-            }
+            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
         }
     }
 
@@ -120,54 +117,6 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
     {
         return Utf8EqualsAsciiIgnoreCase(span, "UTC"u8)
             || Utf8EqualsAsciiIgnoreCase(span, "Local"u8);
-    }
-
-    private static bool LooksLikeIanaTimezoneUtf8(ReadOnlySpan<byte> timezone)
-    {
-        if (timezone.Length < 3)
-        {
-            return false;
-        }
-
-        var slash = timezone.IndexOf((byte)'/');
-        if (slash <= 0)
-        {
-            return false;
-        }
-
-        if (!TryMatchIanaArea(timezone[..slash]))
-        {
-            return false;
-        }
-
-        for (var i = 0; i < timezone.Length; i++)
-        {
-            var b = timezone[i];
-            var isLetter = b is >= (byte)'A' and <= (byte)'Z' or >= (byte)'a' and <= (byte)'z';
-            var isDigit = b is >= (byte)'0' and <= (byte)'9';
-            var isSym = b is (byte)'/' or (byte)'_' or (byte)'-' or (byte)'+';
-            if (!isLetter && !isDigit && !isSym)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool TryMatchIanaArea(ReadOnlySpan<byte> area)
-    {
-        return Utf8EqualsAsciiIgnoreCase(area, "Africa"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "America"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Antarctica"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Arctic"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Asia"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Atlantic"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Australia"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Etc"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Europe"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Indian"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Pacific"u8);
     }
 
     private static bool Utf8EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

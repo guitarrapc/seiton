@@ -43,7 +43,8 @@ internal static class DynamicContextTypeBuilder
         IReadOnlyList<Step>? steps,
         AstArena arena,
         byte[] utf8Yaml,
-        int maxStepIndex = -1)
+        int maxStepIndex = -1,
+        Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver = null)
     {
         if (steps is null || steps.Count == 0)
         {
@@ -66,7 +67,7 @@ internal static class DynamicContextTypeBuilder
                 continue;
             }
 
-            props[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = BuildStepEntryType(step, arena, utf8Yaml);
+            props[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = BuildStepEntryType(step, arena, utf8Yaml, localActionOutputResolver);
         }
 
         // When maxStepIndex >= 0, we're doing incremental building (step ordering validation).
@@ -79,8 +80,13 @@ internal static class DynamicContextTypeBuilder
 
     /// <summary>
     /// Builds the step entry type. For popular actions with known outputs, returns a strict outputs type.
+    /// For local actions, uses the optional resolver to get output names from action metadata.
     /// </summary>
-    private static ObjectExprType BuildStepEntryType(Step step, AstArena arena, byte[] utf8Yaml)
+    private static ObjectExprType BuildStepEntryType(
+        Step step,
+        AstArena arena,
+        byte[] utf8Yaml,
+        Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver = null)
     {
         if (step.Exec is ExecAction action)
         {
@@ -90,25 +96,65 @@ internal static class DynamicContextTypeBuilder
                 var outputNames = spec.GetOutputNames();
                 if (outputNames.Length > 0)
                 {
-                    var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
-                    for (var j = 0; j < outputNames.Length; j++)
-                    {
-                        outputProps[new Utf8String(outputNames[j])] = ExprType.String;
-                    }
+                    return BuildStrictStepEntryType(outputNames);
+                }
+            }
 
-                    return ExprType.Object(
-                        new Dictionary<Utf8String, ExprType>
-                        {
-                            { new Utf8String("outcome"u8), ExprType.String },
-                            { new Utf8String("conclusion"u8), ExprType.String },
-                            { outputsKey, ExprType.Object(outputProps, strict: true) },
-                        },
-                        strict: true);
+            // Try local action output resolution
+            if (localActionOutputResolver is not null && usesValue.Length > 0)
+            {
+                var usesMemory = utf8Yaml.AsMemory(arena.GetStringSlice(action.Uses).Offset, arena.GetStringSlice(action.Uses).Length);
+                var outputNames = localActionOutputResolver(usesMemory);
+                if (outputNames is { Length: > 0 })
+                {
+                    return BuildStrictStepEntryType(outputNames);
+                }
+
+                if (outputNames is { Length: 0 })
+                {
+                    // Action exists but has no outputs — use default strict step type
+                    return stepEntryType;
                 }
             }
         }
 
         return stepEntryType;
+    }
+
+    private static ObjectExprType BuildStrictStepEntryType(ReadOnlySpan<byte[]> outputNames)
+    {
+        var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
+        for (var j = 0; j < outputNames.Length; j++)
+        {
+            outputProps[new Utf8String(outputNames[j])] = ExprType.String;
+        }
+
+        return ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("outcome"u8), ExprType.String },
+                { new Utf8String("conclusion"u8), ExprType.String },
+                { outputsKey, ExprType.Object(outputProps, strict: true) },
+            },
+            strict: true);
+    }
+
+    private static ObjectExprType BuildStrictStepEntryType(string[] outputNames)
+    {
+        var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
+        for (var j = 0; j < outputNames.Length; j++)
+        {
+            outputProps[new Utf8String(System.Text.Encoding.UTF8.GetBytes(outputNames[j]))] = ExprType.String;
+        }
+
+        return ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("outcome"u8), ExprType.String },
+                { new Utf8String("conclusion"u8), ExprType.String },
+                { outputsKey, ExprType.Object(outputProps, strict: true) },
+            },
+            strict: true);
     }
 
     /// <summary>

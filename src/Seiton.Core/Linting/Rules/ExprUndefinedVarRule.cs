@@ -28,6 +28,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // Per-job state for incremental step override building
     private IReadOnlyList<Step>? _currentJobSteps;
     private int _currentStepIndex;
+    // Local action output resolver for building strict step output types
+    private LocalActionOutputResolver? _localActionOutputResolver;
+    private Func<ReadOnlyMemory<byte>, string[]?>? _localActionOutputResolverFunc;
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -36,6 +39,17 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
         _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
         _hasOverrides = false;
+
+        if (!string.IsNullOrEmpty(Config.FilePath) && Path.IsPathFullyQualified(Config.FilePath))
+        {
+            _localActionOutputResolver = new LocalActionOutputResolver(Config.FilePath);
+            _localActionOutputResolverFunc = mem => _localActionOutputResolver.ResolveOutputNames(mem.Span);
+        }
+        else
+        {
+            _localActionOutputResolver = null;
+            _localActionOutputResolverFunc = null;
+        }
     }
 
     public override void VisitWorkflowPost(Workflow workflow)
@@ -133,7 +147,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _jobScopeOverrides[2] = _inputsOverride;
         _jobScopeOverrides[3] = _secretsOverride;
         // step scope: initialize with empty steps (will be rebuilt per-step in VisitStep)
-        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml, maxStepIndex: 0);
+        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
@@ -172,7 +186,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         if (_hasOverrides && _currentJobSteps is not null)
         {
             _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(
-                _currentJobSteps, Arena, Config.Utf8Yaml, maxStepIndex: _currentStepIndex);
+                _currentJobSteps, Arena, Config.Utf8Yaml, maxStepIndex: _currentStepIndex, _localActionOutputResolverFunc);
             _currentStepIndex++;
         }
 
