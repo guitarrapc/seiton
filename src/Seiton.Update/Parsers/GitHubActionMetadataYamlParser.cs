@@ -185,6 +185,68 @@ internal sealed class GitHubActionMetadataYamlParser
             .ToArray();
     }
 
+    public string ParseRunsUsing(string yaml)
+    {
+        var lines = yaml.Replace("\r\n", "\n").Split('\n');
+
+        var runsLineIndex = -1;
+        var runsIndent = 0;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var trimmed = line.Trim();
+            if (trimmed == "runs:")
+            {
+                runsLineIndex = i;
+                runsIndent = GetIndent(line);
+                break;
+            }
+        }
+
+        if (runsLineIndex < 0)
+        {
+            return string.Empty;
+        }
+
+        for (var i = runsLineIndex + 1; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var trimmedStart = line.TrimStart();
+            if (trimmedStart.StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= runsIndent)
+            {
+                break;
+            }
+
+            if (indent == runsIndent + 2)
+            {
+                var trimmed2 = line.Trim();
+                if (trimmed2.StartsWith("using:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var val = trimmed2["using:".Length..].Trim();
+                    return TrimQuotes(val);
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
     private static int GetIndent(string line)
     {
         var count = 0;

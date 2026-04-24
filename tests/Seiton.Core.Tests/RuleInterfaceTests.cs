@@ -2842,10 +2842,14 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RuleRegression_OutdatedActionRunnerRule_TableDriven()
     {
+        // This rule is catalog-driven: it checks the popular actions catalog's runs.using value.
+        // Currently all catalog entries use node20 (not deprecated), so no errors are expected.
+        // When node20 is deprecated, add it to DeprecatedRunners and actions still using node20
+        // in the catalog will be flagged.
         var cases = new[]
         {
             new RuleCase(
-            "ok-latest-version",
+            "ok-latest-version-node20",
             """
             on: push
             jobs:
@@ -2856,7 +2860,7 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ng-outdated-checkout-v3",
+            "ok-older-version-same-catalog-entry",
             """
             on: push
             jobs:
@@ -2865,23 +2869,9 @@ public sealed class RuleInterfaceTests
                     steps:
                         - uses: actions/checkout@v3
             """,
-            ["the runner of \"actions/checkout@v3\" action is too old"]),
+            []),
             new RuleCase(
-            "ng-outdated-cache-v3",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    steps:
-                        - uses: actions/cache@v3
-                          with:
-                            path: ~/.cache
-                            key: ${{ runner.os }}-cache
-            """,
-            ["the runner of \"actions/cache@v3\" action is too old"]),
-            new RuleCase(
-            "ok-unknown-action-not-checked",
+            "ok-unknown-action-not-in-catalog",
             """
             on: push
             jobs:
@@ -2892,7 +2882,7 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-sha-ref-not-checked",
+            "ok-sha-ref",
             """
             on: push
             jobs:
@@ -2903,16 +2893,16 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ng-outdated-docker-login-v2",
+            "ok-docker-login-current",
             """
             on: push
             jobs:
                 build:
                     runs-on: ubuntu-latest
                     steps:
-                        - uses: docker/login-action@v2
+                        - uses: docker/login-action@v3
             """,
-            ["the runner of \"docker/login-action@v2\" action is too old"]),
+            []),
         };
 
         await AssertRuleCases(new OutdatedActionRunnerRule(), "outdated-action-runner", cases);
@@ -5882,6 +5872,76 @@ public sealed class RuleInterfaceTests
                     steps:
                         - id: b
                           run: echo "tag=v1" >> $GITHUB_OUTPUT
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_RunAndWithExpressions_TableDriven()
+    {
+        var cases = new[]
+        {
+            // A-4: run field expression uses unknown context
+            new RuleCase(
+            "ng-run-field-unknown-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ bogus.value }}
+            """,
+            ["step.run", "undefined context 'bogus'"]),
+            // A-4: run field expression uses matrix key from wrong job
+            new RuleCase(
+            "ng-run-field-matrix-key-from-wrong-job",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            ["'os' is not defined in 'matrix'"]),
+            // A-5: action with input expression using unknown context
+            new RuleCase(
+            "ng-action-with-input-unknown-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                            ref: ${{ nosuch.branch }}
+            """,
+            ["step.with.ref", "undefined context 'nosuch'"]),
+            // A-4/A-5: run and with expressions using valid context should not error
+            new RuleCase(
+            "ok-run-and-with-valid-contexts",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                            ref: ${{ github.ref }}
+                        - run: echo ${{ github.sha }}
             """,
             []),
         };

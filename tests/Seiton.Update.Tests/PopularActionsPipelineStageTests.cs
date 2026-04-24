@@ -324,6 +324,55 @@ public sealed class PopularActionsPipelineStageTests
         }
     }
 
+    [Test]
+    public async Task MergeParsedSources_SnapshotContainsOutputsAndRunsUsing()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithParsed(repoRoot);
+
+        try
+        {
+            var fetcher = new GitHubPopularActionsFetcher();
+            fetcher.MergeParsedSources(tempRepo);
+
+            var path = Path.Combine(tempRepo, "data", "sources", "popular-actions", "github", "popular_actions.json");
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+
+            // actions/cache should have outputs and runsUsing
+            var cache = doc.RootElement
+                .GetProperty("actions")
+                .EnumerateArray()
+                .FirstOrDefault(x => x.GetProperty("uses").GetString() == "actions/cache");
+
+            await Assert.That(cache.ValueKind).IsNotEqualTo(JsonValueKind.Undefined);
+
+            // Verify runsUsing is present and non-empty
+            var runsUsing = cache.GetProperty("runsUsing").GetString();
+            await Assert.That(runsUsing).IsNotNull();
+            await Assert.That(runsUsing!.Length).IsGreaterThan(0);
+
+            // Verify outputs are present
+            var outputNames = cache.GetProperty("outputs")
+                .EnumerateArray()
+                .Select(x => x.GetProperty("name").GetString())
+                .ToHashSet(StringComparer.Ordinal);
+
+            await Assert.That(outputNames).Contains("cache-hit");
+
+            // Verify all actions have runsUsing
+            foreach (var action in doc.RootElement.GetProperty("actions").EnumerateArray())
+            {
+                var uses = action.GetProperty("uses").GetString();
+                var ru = action.GetProperty("runsUsing").GetString();
+                await Assert.That(ru).IsNotNull().Because($"action '{uses}' should have runsUsing");
+            }
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
     private static string CreateTempRepoWithRaw(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));

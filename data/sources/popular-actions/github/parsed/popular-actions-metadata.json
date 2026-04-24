@@ -43,7 +43,8 @@
         {
           "name": "cache-hit"
         }
-      ]
+      ],
+      "runsUsing": "node20"
     },
     {
       "actionRef": "actions/checkout@v4",
@@ -137,7 +138,8 @@
         {
           "name": "ref"
         }
-      ]
+      ],
+      "runsUsing": "node20"
     },
     {
       "actionRef": "actions/download-artifact@v4",
@@ -180,7 +182,8 @@
         {
           "name": "download-path"
         }
-      ]
+      ],
+      "runsUsing": "node20"
     },
     {
       "actionRef": "actions/setup-dotnet@v4",
@@ -226,7 +229,8 @@
         {
           "name": "dotnet-version"
         }
-      ]
+      ],
+      "runsUsing": "node20"
     },
     {
       "actionRef": "actions/setup-node@v4",
@@ -288,7 +292,8 @@
         {
           "name": "node-version"
         }
-      ]
+      ],
+      "runsUsing": "node20"
     },
     {
       "actionRef": "actions/upload-artifact@v4",
@@ -333,7 +338,8 @@
         {
           "name": "artifact-url"
         }
-      ]
+      ],
+      "runsUsing": "node20"
     },
     {
       "actionRef": "docker/login-action@v3",
@@ -368,7 +374,8 @@
           "required": false
         }
       ],
-      "outputs": []
+      "outputs": [],
+      "runsUsing": "node20"
     }
   ]
 }

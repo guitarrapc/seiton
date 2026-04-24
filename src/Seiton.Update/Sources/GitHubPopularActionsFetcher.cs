@@ -92,6 +92,7 @@ internal sealed class GitHubPopularActionsFetcher
             var text = File.ReadAllText(rawPath);
             var inputs = yamlParser.ParseInputs(text);
             var outputs = yamlParser.ParseOutputs(text);
+            var runsUsing = yamlParser.ParseRunsUsing(text);
 
             parsed.Actions.Add(new ParsedPopularAction
             {
@@ -99,6 +100,7 @@ internal sealed class GitHubPopularActionsFetcher
                 Uses = source.Uses,
                 Inputs = inputs.Select(static x => new ParsedPopularActionInput { Name = x.Name, Required = x.Required }).ToList(),
                 Outputs = outputs.Select(static x => new ParsedPopularActionOutput { Name = x.Name }).ToList(),
+                RunsUsing = runsUsing,
             });
         }
 
@@ -158,6 +160,7 @@ internal sealed class GitHubPopularActionsFetcher
                         .OrderBy(static n => n.Name, StringComparer.Ordinal)
                         .Select(static n => new { name = n.Name })
                         .ToArray(),
+                    runsUsing = x.RunsUsing ?? string.Empty,
                 })
                 .ToArray(),
         };
@@ -311,6 +314,7 @@ internal sealed class GitHubPopularActionsFetcher
         public string Uses { get; set; } = string.Empty;
         public List<ParsedPopularActionInput> Inputs { get; set; } = [];
         public List<ParsedPopularActionOutput>? Outputs { get; set; }
+        public string? RunsUsing { get; set; }
     }
 
     private sealed class ParsedPopularActionInput

@@ -30,7 +30,8 @@ internal sealed class GitHubPopularActionsSourceParser
             .Select(static x => new PopularActionModel(
                 x.Uses,
                 (x.Inputs ?? []).Select(static i => new PopularActionInputModel(i.Name, i.Required)).ToArray(),
-                (x.Outputs ?? []).Select(static o => new PopularActionOutputModel(o.Name)).ToArray()))
+                (x.Outputs ?? []).Select(static o => new PopularActionOutputModel(o.Name)).ToArray(),
+                x.RunsUsing ?? string.Empty))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
     }
@@ -45,6 +46,7 @@ internal sealed class GitHubPopularActionsSourceParser
         public string Uses { get; set; } = string.Empty;
         public List<PopularActionInputEntry>? Inputs { get; set; }
         public List<PopularActionOutputEntry>? Outputs { get; set; }
+        public string? RunsUsing { get; set; }
     }
 
     private sealed class PopularActionInputEntry

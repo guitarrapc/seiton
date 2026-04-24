@@ -20,7 +20,8 @@ internal sealed class PopularActionsCSharpGenerator
                     .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
                     .DistinctBy(static n => n.Name, StringComparer.Ordinal)
                     .OrderBy(static n => n.Name, StringComparer.Ordinal)
-                    .ToArray()))
+                    .ToArray(),
+                x.RunsUsing))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
 
@@ -168,6 +169,32 @@ internal sealed class PopularActionsCSharpGenerator
         sb.Append(
             """
                             _ => [],
+                        };
+                    }
+
+                    internal ReadOnlySpan<byte> GetRunsUsing()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (string.IsNullOrWhiteSpace(action.RunsUsing))
+            {
+                sb.AppendLine($"                ActionId.{actionId} => default,");
+            }
+            else
+            {
+                sb.AppendLine($"                ActionId.{actionId} => \"{action.RunsUsing}\"u8,");
+            }
+        }
+
+        sb.Append(
+            """
+                            _ => default,
                         };
                     }
                 }

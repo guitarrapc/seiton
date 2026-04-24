@@ -159,6 +159,21 @@ internal static class PopularActions
                 _ => [],
             };
         }
+
+        internal ReadOnlySpan<byte> GetRunsUsing()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => "node20"u8,
+                ActionId.ActionsCheckout => "node20"u8,
+                ActionId.ActionsDownloadArtifact => "node20"u8,
+                ActionId.ActionsSetupDotnet => "node20"u8,
+                ActionId.ActionsSetupNode => "node20"u8,
+                ActionId.ActionsUploadArtifact => "node20"u8,
+                ActionId.DockerLoginAction => "node20"u8,
+                _ => default,
+            };
+        }
     }
 
     internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)

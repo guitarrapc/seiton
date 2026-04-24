@@ -10,4 +10,5 @@ internal sealed record PopularActionOutputModel(
 internal sealed record PopularActionModel(
     string Uses,
     IReadOnlyList<PopularActionInputModel> Inputs,
-    IReadOnlyList<PopularActionOutputModel> Outputs);
+    IReadOnlyList<PopularActionOutputModel> Outputs,
+    string RunsUsing);
