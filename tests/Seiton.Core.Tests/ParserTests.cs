@@ -1574,7 +1574,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
     }
 
-    // ── YAML anchor / alias tests ─────────────────────────────────────────────
+    // YAML anchor / alias tests
 
     [Test]
     public async Task Parse_AnchorOnScalar_AliasedScalarResolved()
@@ -1759,7 +1759,7 @@ public sealed class ParserTests
         await Assert.That(steps[1].If.HasValue).IsTrue();
     }
 
-    // Phase 4: #26 unused anchor detection
+    // unused anchor detection
     [Test]
     public async Task Parse_UnusedAnchor_ReportsWarning()
     {
@@ -1803,7 +1803,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("not used", StringComparison.Ordinal))).IsFalse();
     }
 
-    // Phase 4: #27 recursive alias detection
+    // recursive alias detection
     [Test]
     public async Task Parse_RecursiveAlias_ReportsRecursiveDiagnostic()
     {
@@ -2506,7 +2506,7 @@ public sealed class ParserTests
         await Assert.That(result.Workflow).IsNotNull();
     }
 
-    // Phase 4: #18 fail-fast/timeout-minutes type validation
+    // fail-fast/timeout-minutes type validation
     [Test]
     public async Task Parse_FailFast_Off_ReportsError()
     {
@@ -2573,7 +2573,7 @@ public sealed class ParserTests
         await Assert.That(steps[0].Env).IsNotNull();
     }
 
-    // Phase 4: #28 env plain text scalar should report error
+    // env plain text scalar should report error
     [Test]
     public async Task Parse_StepEnvPlainTextScalar_ReportsError()
     {

@@ -255,7 +255,7 @@ public sealed class ExpressionTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token '-'", StringComparison.Ordinal))).IsTrue();
     }
 
-    // ── InferType: literal nodes ──────────────────────────────────────────────
+    // InferType: literal nodes
 
     [Test]
     public async Task InferType_StringLiteral_ReturnsString()
@@ -301,7 +301,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsEqualTo(ExprType.Null);
     }
 
-    // ── InferType: unary and binary operators ─────────────────────────────────
+    // InferType: unary and binary operators
 
     [Test]
     public async Task InferType_UnaryNot_ReturnsBool()
@@ -337,7 +337,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsEqualTo(ExprType.Any);
     }
 
-    // ── InferType: function return types ──────────────────────────────────────
+    // InferType: function return types
 
     [Test]
     public async Task InferType_BoolReturningFunction_ReturnsBool()
@@ -394,7 +394,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsEqualTo(ExprType.Number);
     }
 
-    // ── InferType: context access ─────────────────────────────────────────────
+    // InferType: context access
 
     [Test]
     public async Task InferType_GitHubRef_ReturnsString()
@@ -484,7 +484,7 @@ public sealed class ExpressionTests
         await Assert.That(type is ObjectExprType).IsTrue();
     }
 
-    // ── Validate: context root and property checks ────────────────────────────
+    // Validate: context root and property checks
 
     [Test]
     public async Task ParseAndValidate_UndefinedRootContext_ReportsDiagnostic()
@@ -546,7 +546,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── ValidateStringArg: improved bottom-up type check ─────────────────────
+    // ValidateStringArg: improved bottom-up type check
 
     [Test]
     public async Task ParseAndValidate_BinaryExprPassedAsStringArg_ReportsDiagnostic()
@@ -579,7 +579,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── ExpressionVisitor.VisitExprNode ───────────────────────────────────────
+    // ExpressionVisitor.VisitExprNode
 
     [Test]
     public async Task VisitExprNode_SingleLiteral_FiresEnterAndLeave()
@@ -771,7 +771,7 @@ public sealed class ExpressionTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── ValidateDynamicPropertyAccess ─────────────────────────────────────────
+    // ValidateDynamicPropertyAccess
 
     [Test]
     public async Task ValidateDynamicPropertyAccess_NoOverrides_NoDiagnostics()
@@ -934,7 +934,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
-    // ── Operator type validation (Phase 3) ────────────────────────────────────
+    // Operator type validation
 
     [Test]
     public async Task ParseAndValidate_CompareNullLessThanNumber_ReportsDiagnostic()
@@ -1058,7 +1058,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── Phase 2: Cross-type equality comparison ─────────────────────────────
+    // Cross-type equality comparison
 
     [Test]
     public async Task ParseAndValidate_EqualityObjectVsNumber_ReportsWarning()
@@ -1138,7 +1138,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── Phase 2: String dereference as object ───────────────────────────────
+    // String dereference as object
 
     [Test]
     public async Task ParseAndValidate_StringPropertyAccess_ReportsDiagnostic()
@@ -1172,7 +1172,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── Phase 2: format() excess argument checking ──────────────────────────
+    // format() excess argument checking
 
     [Test]
     public async Task ParseAndValidate_FormatExcessArgument_ReportsWarning()
@@ -1204,7 +1204,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── Phase 2: fromJSON() broken JSON validation ──────────────────────────
+    // fromJSON() broken JSON validation
 
     [Test]
     public async Task ParseAndValidate_FromJsonBrokenJson_ReportsDiagnostic()
@@ -1236,7 +1236,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── Phase 2: Template type checking ─────────────────────────────────────
+    // Template type checking
 
     [Test]
     public async Task CheckTemplateType_ObjectType_ReportsWarning()
@@ -1464,7 +1464,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object must be string, but got number", StringComparison.Ordinal))).IsTrue();
     }
 
-    // ── Status check function restriction (Phase 4 - Gap #5) ─────────────────
+    // Status check function restriction
 
     [Test]
     public async Task ParseAndValidate_SuccessInIfContext_NoDiagnostic()
@@ -1575,7 +1575,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── case() function (Phase 4 - Gap #6) ───────────────────────────────────
+    // case() function
 
     [Test]
     public async Task ParseAndValidate_CaseFunction_ValidUsage_NoDiagnostic()
@@ -1642,7 +1642,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsTypeOf<AnyExprType>();
     }
 
-    // ── vars naming convention (Phase 4 - Gap #7) ────────────────────────────
+    // Vars naming convention
 
     [Test]
     public async Task ParseAndValidate_VarsGithubPrefix_ReportsDiagnostic()
@@ -1737,5 +1737,23 @@ public sealed class ExpressionTests
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // Expression double-quote delimiter
+
+    [Test]
+    public async Task Parse_DoubleQuoteStringLiteral_ReportsError()
+    {
+        var expression = "\"hello\""u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        await Assert.That(parseResult.Diagnostics.Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_SingleQuoteStringLiteral_NoDiagnostic()
+    {
+        var expression = "'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        await Assert.That(parseResult.Diagnostics.Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsFalse();
     }
 }

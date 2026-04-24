@@ -338,14 +338,18 @@
 - **Example**: `action_metadata_syntax_validation`
 - **Actionlint**: Validates branding colors/icons, description presence, JS entry file existence.
 - **Seiton**: Only validates `runs.using` value.
-- **Status**: Can be incrementally enhanced in `local-action-inputs` rule.
+- **Rule**: `parse` (parser-level required-key checks + branding enum validation)
+- **Fix**: (a) Required `description` key check. (b) Required `runs` key check. (c) Branding color/icon enum validation (9 colors, 257 Feather icons).
+- **Status**: ✅ Phase 5 で実装済み
 
 #### 33. Expression string literal delimiter
 
 - **Example**: `expression_syntax_error`
 - **Actionlint**: `got unexpected character '"' while lexing expression... only single quotes are available`
-- **Seiton**: Not detected (expression parser may silently skip).
-- **Fix**: Improve expression lexer error messages for double-quote strings.
+- **Seiton**: Not detected — expression parser currently accepts double quotes as valid string delimiters.
+- **Rule**: `parse` (expression parser)
+- **Fix**: Reject `"` in `ParseStringLiteral` with a targeted error: only single quotes are available for string delimiter in expressions.
+- **Status**: ✅ Phase 5 で実装済み
 
 ---
 
@@ -677,6 +681,37 @@ These examples are fully covered by seiton (all actionlint errors detected):
 | LintBenchmark (F=F) | Large | 10951μs | 12701μs | 423.10KB | 452KB | ShortRun variance | +6.8% |
 
 ✅ Parsing アロケーション変化なし。Lint アロケーション微増は新ルール (`WorkflowCallInputDefaultRule`) のインスタンス化に起因。Mean 差は ShortRun ノイズ範囲内。
+
+### Phase 5: Action Metadata & Expression Polish (P3) — ✅ 完了
+
+28. ✅ Add expression double-quote delimiter rejection (#33)
+29. ✅ Add action metadata required `description` key check (#32a)
+30. ✅ Add action metadata required `runs` key check (#32b)
+31. ✅ Add action metadata branding color/icon enum validation (#32c)
+
+**変更ファイル:**
+
+| ファイル | 変更内容 |
+|---|---|
+| `src/Seiton.Core/Parsing/ExpressionParser.cs` | ダブルクォートを拒否し、シングルクォートのみ許可 |
+| `src/Seiton.Core/Parsing/WorkflowParser.cs` | action metadata の required key (`description`, `runs`) チェック追加 |
+| `src/Seiton.Core/Parsing/WorkflowParser.ActionMetadata.cs` | branding color/icon の enum バリデーション追加 (9 colors, 257 icons) |
+| `src/Seiton.Core/Parsing/DocumentKind.cs` | 構造ヒントなし時にパスヒントにフォールバック |
+| `tests/Seiton.Core.Tests/ExpressionTests.cs` | expression double-quote テスト 2 件追加 |
+| `tests/Seiton.Core.Tests/DocumentKindClassificationTests.cs` | action metadata バリデーションテスト 6 件追加 |
+
+**テスト結果:** 614 tests all passing
+
+**ベンチマーク結果 (Phase 5 後):**
+
+| Benchmark | Size | Mean | Allocated |
+|---|---|---|---|
+| LintEngine.Check | Small | 47.70 µs | 15.45 KB |
+| LintEngine.Check | Medium | 780.92 µs | 97.12 KB |
+| LintEngine.Check | Large | 11.52 ms | 452.42 KB |
+| WorkflowParser.Parse | Small | 35.39 µs | 5.41 KB |
+| WorkflowParser.Parse | Medium | 560.81 µs | 27.12 KB |
+| WorkflowParser.Parse | Large | 7.80 ms | 111.35 KB |
 
 ---
 

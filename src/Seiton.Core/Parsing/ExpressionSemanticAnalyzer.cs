@@ -1220,7 +1220,7 @@ public static class ExpressionSemanticAnalyzer
         };
     }
 
-    // ── Dynamic context property access validation ─────────────────────────────
+    // Dynamic context property access validation
 
     /// <summary>
     /// Validates property accesses in the expression using per-job context type overrides.

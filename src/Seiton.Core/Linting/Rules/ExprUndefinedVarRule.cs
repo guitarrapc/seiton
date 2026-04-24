@@ -14,7 +14,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 {
     public override string Name => "Expr Undefined Var Rule";
 
-    // Phase 2: per-workflow and per-job dynamic context type overrides.
+    // per-workflow and per-job dynamic context type overrides.
     // These replace the loose static types for steps/matrix/needs/inputs with strict,
     // job-specific types so that property-access errors can be detected.
     private Workflow? _currentWorkflow;
@@ -296,7 +296,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             report,
             target);
 
-        // Phase 2: also validate property access against dynamic context types
+        // also validate property access against dynamic context types
         if (!_hasOverrides)
         {
             return;

@@ -234,9 +234,18 @@ public static class ExpressionParser
             }
 
             int expr;
-            if (Peek() == '\'' || Peek() == '"')
+            if (Peek() == '\'')
             {
                 expr = ParseStringLiteral();
+            }
+            else if (Peek() == '"')
+            {
+                AddError("got unexpected character '\"'; only single quotes are available for string delimiter in expressions");
+                // Skip the double-quoted string so we can continue parsing the rest
+                _pos++;
+                while (!End && Peek() != '"') _pos++;
+                if (!End) _pos++;
+                return -1;
             }
             else if (IsDigit(Peek()))
             {

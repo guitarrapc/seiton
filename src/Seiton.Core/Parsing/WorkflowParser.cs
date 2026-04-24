@@ -51,7 +51,7 @@ public static partial class WorkflowParser
             var hasHints = TryReadRootStructuralHints(ref hintReader, out var hasJobs, out var hasRuns);
             var finalKind = hasHints
                 ? DocumentKindClassifier.FinalizeKind(pathHintKind, hasJobs, hasRuns, out var ignoredAmbiguous, out var ignoredHintMismatch)
-                : DocumentKind.Unknown;
+                : pathHintKind;
 
             var isAmbiguous = hasHints && hasJobs && hasRuns;
             var hasHintMismatch =
@@ -499,6 +499,16 @@ public static partial class WorkflowParser
 
         if (parseMode == ParseMode.ActionMetadata)
         {
+            if (!actionDescription.HasValue)
+            {
+                AddError(diagnostics, "required key 'description' is missing in action metadata", new TextPosition(0, 1, 1));
+            }
+
+            if (actionRuns == null)
+            {
+                AddError(diagnostics, "required key 'runs' is missing in action metadata", new TextPosition(0, 1, 1));
+            }
+
             var actionMetadata = new ActionMetadata
             {
                 Name = nameNode,

@@ -1925,7 +1925,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
     }
 
-    // ── Phase 4: #16 Duplicate job ID in needs array ────────────────────
+    // Duplicate job ID in needs array
     [Test]
     public async Task RuleRegression_NeedsGraphRule_DuplicateNeeds_TableDriven()
     {
@@ -2197,7 +2197,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
     }
 
-    // ── Phase 4: #19 OS-specific shell validation ───────────────────────
+    // OS-specific shell validation
     [Test]
     public async Task RuleRegression_ShellNameRule_OsSpecific_TableDriven()
     {
@@ -2364,7 +2364,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
     }
 
-    // ── Phase 4: #17 Runner label conflict ──────────────────────────────
+    // Runner label conflict
     [Test]
     public async Task RuleRegression_RunnerLabelRule_OsConflict_TableDriven()
     {
@@ -2761,7 +2761,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new DispatchInputsRule(), "dispatch-inputs", cases);
     }
 
-    // ── Phase 4: #13 workflow_call input default validation ─────────────
+    // Workflow call input default validation
     [Test]
     public async Task RuleRegression_WorkflowCallInputDefaultRule_TableDriven()
     {
@@ -2997,7 +2997,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
     }
 
-    // ── Phase 4: #11 Glob pattern syntax validation ─────────────────────
+    // Glob pattern syntax validation
     [Test]
     public async Task RuleRegression_GlobPatternRule_Syntax_TableDriven()
     {
@@ -3943,7 +3943,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new MatrixRule(), "matrix", cases);
     }
 
-    // ── Phase 4: #12 Matrix duplicate value + exclude mismatch ──────────
+    // Matrix duplicate value + exclude mismatch
     [Test]
     public async Task RuleRegression_MatrixRule_DuplicateValues_TableDriven()
     {
@@ -5151,7 +5151,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ── Phase 3: Contextual Validation ──────────────────────────────────────
+    // Contextual Validation
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_NeedsOutputValidation_TableDriven()
