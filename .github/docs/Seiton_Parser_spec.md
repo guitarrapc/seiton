@@ -957,128 +957,15 @@ Detailed linter runtime behavior is defined in `Seiton_Linter_spec.md`.
 
 ## 9. Generated Data Specification
 
-### 9.1 Targets
+Generated data pipeline specification has been moved to `Seiton_Update_spec.md`.
 
-| Data | Source |
-|---|---|
-| Webhook event + activity types | GitHub Docs |
-| Context availability table | GitHub Docs |
-| Special function names | GitHub Docs |
-| Popular actions metadata | Fetched from action.yml |
-| Context type definitions | Hand-written JSON (`data/sources/context-types/github/context-types.json`) |
-| Function signatures | Hand-written JSON (`data/sources/function-specs/github/function-specs.json`) |
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
 
-### 9.1.1 Source of Truth and Reference Role (Normative)
+Key parser-relevant contract points (see `Seiton_Update_spec.md` for full details):
 
-- Official GitHub sources are normative for generated data. Specifically, GitHub Docs and official GitHub metadata endpoints/files define Seiton's intended contract.
-- `actionlint` data and `.references/actionlint/**` are non-normative reference inputs used for differential validation only.
-- If official GitHub sources and actionlint differ, Seiton-generated outputs must follow official GitHub sources, and the actionlint difference should be reported as parity information.
-- Reference parity must never silently override the contract defined by official GitHub sources.
-
-### 9.2 Update Policy
-
-- Fetch external data via update command or script
-- Resolve and normalize official GitHub sources first, then run optional/secondary differential validation against actionlint
-- Commit generated results; CI detects diffs -> auto PR
-- Parser and rules do not make network requests at runtime
-
-### 9.2.1 Webhook Activity Type Conflict Resolution (Normative)
-
-For webhook event activity types, official GitHub sources may disagree (for example, GitHub Docs vs SchemaStore metadata).
-
-- Normalized generated data must treat GitHub Docs as the primary value source when the Docs event table is parseable.
-- SchemaStore metadata is still ingested as an official source and used as fallback when Docs values are unavailable/unparseable for a given event.
-- Conflicts between official sources must be recorded in a dedicated official-source diff report; they must not be silently discarded.
-- actionlint parity checks remain secondary and must not override the official-source resolution above.
-
-Example: if GitHub Docs lists `check_suite` activity types as `completed` while SchemaStore includes additional values, normalized output follows the Docs value and the mismatch is reported.
-
-### 9.3 Source Pipeline Architecture (Normative)
-
-Generated data is produced by a deterministic 3-stage pipeline. Each stage produces Git-tracked artifacts that are independently reviewable and reproducible.
-
-#### 9.3.1 Stage 1 — Fetch Raw Sources
-
-Download official source files verbatim and persist them locally.
-
-- Input: Remote URLs for each official source
-- Output: Raw files in `data/sources/{dataset}/{provider}/raw/`
-- Network access: **yes** (only stage that accesses the network)
-- All downloaded files must be committed to the repository so each fetch is auditable.
-
-#### 9.3.2 Stage 2 — Parse Local Source Files
-
-Parse each raw file independently and emit normalized intermediate JSON artifacts.
-
-- Input: Raw files from Stage 1
-- Output: Parsed JSON files in `data/sources/{dataset}/{provider}/parsed/`
-- Network access: **no**
-- Parsing must be deterministic given the same raw inputs.
-
-#### 9.3.3 Stage 3 — Merge Parsed Artifacts
-
-Apply conflict resolution policy (§9.2.1) across all parsed artifacts to produce one canonical snapshot.
-
-- Input: Parsed JSON files from Stage 2
-- Output:
-  - Canonical snapshot: `data/sources/{dataset}/{provider}/{snapshot}.json`
-  - Official-source diff report: `data/sources/reports/official-{dataset}-source-diff.md`
-- Network access: **no**
-
-#### 9.3.4 Storage Path Convention
-
-```
-data/sources/{dataset}/{provider}/raw/        ← stage 1: raw downloaded source files
-data/sources/{dataset}/{provider}/parsed/     ← stage 2: per-source parsed JSON
-data/sources/{dataset}/{provider}/{name}.json ← stage 3: merged canonical snapshot
-data/sources/reports/                         ← diff and parity reports
-data/sources/manifest.json                    ← provenance metadata (dataset, sourceUrls, fetchedAtUtc, rawFileHashes)
-```
-
-All artifacts from every stage are committed to the repository.
-
-#### 9.3.5 Stage Independence
-
-Each stage may be invoked independently:
-
-- Stage 1 may be re-run to refresh raw source files.
-- Stage 2 re-parses existing raw files without network access.
-- Stage 3 re-merges using existing parsed artifacts without network access.
-- An orchestrator command runs all 3 stages in sequence.
-
-### 9.4 Popular Actions Target Configuration (Normative)
-
-The set of popular actions to ingest is a repository-managed configuration, not a hard-coded list in updater source code.
-
-#### 9.4.1 Purpose
-
-- Make popular-actions ingestion extensible without code changes.
-- Keep target-set changes reviewable as data-only diffs.
-- Ensure deterministic regeneration when the target set changes.
-
-#### 9.4.2 Configuration Contract
-
-- Target-set configuration file path: `data/sources/popular-actions/targets.json`.
-- The file is committed to the repository and versioned with code.
-- Each entry identifies:
-  - canonical `uses` name (for generated lookup keys)
-  - immutable metadata source locator (owner/repo + ref, or equivalent fixed URL)
-  - local raw artifact file name used in stage-1 output
-
-The exact schema may evolve, but those three identity fields are required for contract compatibility.
-
-#### 9.4.3 Determinism and Validation Rules
-
-- Duplicate `uses` entries are invalid and must fail update execution.
-- Duplicate raw artifact file names are invalid and must fail update execution.
-- Entries with missing required identity fields are invalid and must fail update execution.
-- Merged canonical output must be stable under ASCII ordering of target entries and input names.
-
-#### 9.4.4 Operational Policy
-
-- Adding/removing a target action is performed by editing `targets.json` and re-running updater sync.
-- Target-set modifications and resulting generated diffs must be reviewed together in one change set.
-- CI `verify --dataset all` remains the contract gate for stale generated artifacts after target-set updates.
+- Generated data is produced by `Seiton.Update`, a maintainer-only CLI tool.
+- Parser and rules do not make network requests at runtime; all generated data is compile-time constant.
+- Official GitHub sources are normative; actionlint data is used for differential validation only.
 
 ---
 

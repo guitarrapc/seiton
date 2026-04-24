@@ -1197,7 +1197,11 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 
 ## 9. Generated Data (Spec §9)
 
-### 9.1 Data Files
+The generated-data pipeline specification has been moved to `Seiton_Update_spec.md`.
+
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
+
+### 9.1 Go Generated Files
 
 | Data | File | Description |
 |---|---|---|
@@ -1205,57 +1209,7 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 | Context availability | `availability.go` | Which expression contexts and special functions are available at each workflow position |
 | Popular actions metadata | `popular_actions.go` | Well-known GitHub Actions with expected input/output names and types |
 
-### 9.2 Update Policy
-
-- Fetch and normalize official GitHub sources first via update command or script
-- Treat actionlint-derived inputs as differential validation only (non-normative)
-- If official GitHub sources and actionlint differ, generated Go data follows official GitHub sources and records parity diffs
-- Commit generated results; CI detects diffs → auto PR
-- Parser and rules do not make network requests at runtime
-
-### 9.2.1 Webhook Activity Type Conflict Resolution
-
-When official GitHub sources disagree for webhook activity types:
-
-- Normalization prefers GitHub Docs values when the Docs event table is parseable.
-- SchemaStore metadata is still consumed as an official source and acts as fallback for events where Docs values are unavailable/unparseable.
-- Official-source mismatches are recorded in a dedicated official-source diff report and surfaced for review.
-- actionlint parity remains a secondary differential signal and never overrides official-source resolution.
-
-Example: if Docs lists `check_suite` as `completed` while SchemaStore includes additional values, generated webhook data follows the Docs value and reports the mismatch.
-
-### 9.3 Source Pipeline Architecture (Spec §9.3)
-
-The update pipeline operates as a 3-stage DAG. Each stage produces Git-tracked artifacts for independent review.
-
-#### 9.3.1 Stage Summary
-
-| Stage | Input | Output | Network |
-|---|---|---|---|
-| Fetch sources | Remote URLs | `raw/` files | Yes |
-| Parse sources | `raw/` files | `parsed/` JSON | No |
-| Merge artifacts | `parsed/` JSON | canonical JSON + diff report | No |
-
-#### 9.3.2 Storage Layout
-
-```
-data/sources/{dataset}/{provider}/raw/        ← stage 1: raw downloaded source files
-data/sources/{dataset}/{provider}/parsed/     ← stage 2: per-source parsed JSON
-data/sources/{dataset}/{provider}/{name}.json ← stage 3: merged canonical snapshot
-data/sources/reports/                         ← diff and parity reports
-data/sources/manifest.json                    ← provenance metadata (dataset, sourceUrls, fetchedAtUtc, rawFileHashes)
-```
-
-All artifacts are committed to the repository.
-
-### 9.4 Popular Actions Target Configuration (Spec §9.4)
-
-Popular-actions ingestion is driven by repository configuration instead of hard-coded targets.
-
-- Target-set file: `data/sources/popular-actions/targets.json`
-- Required identity fields per entry: canonical `uses`, immutable source locator, raw artifact file name
-- Invalid configuration (duplicate `uses`, duplicate raw artifact file names, missing required identity fields) must fail updater execution
-- Target-set updates are applied by editing configuration and re-running updater sync/verify
+For pipeline architecture, CLI commands, data paths, update policy, and conflict resolution, see `Seiton_Update_spec.md`.
 
 ---
 

@@ -1168,7 +1168,11 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 
 ## 9. Generated Data (Spec §9)
 
-### 9.1 Data Files
+The generated-data pipeline specification has been moved to `Seiton_Update_spec.md`.
+
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
+
+### 9.1 C# Generated Files
 
 | Data | File | Description |
 |---|---|---|
@@ -1178,124 +1182,13 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 | Context type definitions | `ContextTypes.g.cs` | Built-in context type schemas for all 11 context roots (source: `data/sources/context-types/github/context-types.json`) |
 | Function signatures | `FunctionSpecs.g.cs` | Built-in function specs with parameter types and overloads (source: `data/sources/function-specs/github/function-specs.json`) |
 
-### 9.2 Update Policy
+For pipeline architecture, CLI commands, data paths, update policy, and conflict resolution, see `Seiton_Update_spec.md`.
 
-- Fetch and normalize official GitHub sources first via update command (`Seiton.Update` or script)
-- Treat actionlint-derived inputs as differential validation only (non-normative)
-- If official GitHub sources and actionlint differ, generated C# data follows official GitHub sources and records parity diffs
-- Commit generated results as `.g.cs`
-- CI periodic runs detect diffs and create auto PRs
-- Parser and rules do not make network requests at runtime
+### 9.2 C#-Specific Notes
 
-#### 9.2.1 Webhook Activity Type Conflict Resolution
-
-When official GitHub sources disagree for webhook activity types:
-
-- `Seiton.Update` resolves to GitHub Docs values when the Docs table is parseable for the event.
-- SchemaStore metadata remains an official source and is used as fallback for events where Docs values are unavailable or unparseable.
-- Official-source mismatches are emitted to a dedicated official-source diff report and are treated as reviewable signals.
-- actionlint parity is a separate differential check and never overrides the official-source resolution.
-
-Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore includes additional values, `WebhookTypes.g.cs` is generated from the Docs value and the mismatch is reported.
-
-#### 9.2.2 Relationship with Current `OnEventSpecs`
+#### 9.2.1 Relationship with Current `OnEventSpecs`
 
 `OnEventSpecs` is a hand-implemented event name + activity types table. It is an implementation detail that may later be replaced by `WebhookTypes.g.cs`; this migration does not change Seiton's current support contract by itself.
-
-### 9.3 Source Pipeline Architecture (Spec §9.3)
-
-Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`, `runner-labels`, `context-types`, `function-specs`, `permissions`).
-
-> **Note**: `context-types` merges GitHub Docs `contexts.md` into `context-types.json` together with a repository-managed override; the merged file is the source of truth for codegen. `function-specs` uses a hand-written JSON for codegen but additionally supports fetching function names from GitHub Docs `expressions.md` for gap detection (no separate merge stage; `fetch-function-specs` updates manifest + intermediate artifacts used by `validate-function-specs`).
-
-#### 9.3.1 CLI Commands
-
-| Dataset | Stage 1 (fetch raw) | Stage 2 (parse local) | Stage 3 (merge) | Orchestrator |
-|---|---|---|---|---|
-| webhooks | `fetch-webhooks-sources` | `parse-webhooks-sources` | `merge-webhooks-sources [--exclude-schema-only]` | `fetch-webhooks [--exclude-schema-only]` |
-| availability | `fetch-availability-sources` | `parse-availability-sources` | `merge-availability-sources` | `fetch-availability` |
-| popular-actions | `fetch-popular-actions-sources` | `parse-popular-actions-sources` | `merge-popular-actions-sources` | `fetch-popular-actions` |
-| runner-labels | `fetch-runner-labels-sources` | `parse-runner-labels-sources` | `merge-runner-labels-sources` | `fetch-runner-labels` |
-| context-types | `fetch-context-types-sources` | `parse-context-types-sources` | `merge-context-types-sources` | `fetch-context-types` |
-| permissions | `fetch-permissions-sources` | `parse-permissions-sources` | `merge-permissions-sources` | `fetch-permissions` |
-| function-specs | `fetch-function-specs-sources` | `parse-function-specs-sources` | — | `fetch-function-specs` |
-
-Additional commands (validation / differential checks):
-
-- `validate-function-specs` — compare parsed docs function names against `function-specs.json` and warn on unregistered functions
-- `validate-context-types` — compare parsed docs contexts/properties against `context-types.json` and warn on gaps (non-fatal)
-- `validate-popular-actions-targets` — validate `data/sources/popular-actions/targets.json` shape and uniqueness rules before fetch
-- `parity-webhooks` — optional differential check against a local actionlint reference checkout (skipped when reference is absent); does not replace official-source resolution
-- `sync-function-specs` automatically runs `validate-function-specs` when parsed data is available
-
-Per-dataset convenience aliases (same behavior as `sync --dataset …` / `verify --dataset …`):
-
-- `sync-webhooks`, `verify-webhooks`, `sync-availability`, `verify-availability`, `sync-popular-actions`, `verify-popular-actions`, `sync-runner-labels`, `verify-runner-labels`, `sync-context-types`, `verify-context-types`, `sync-function-specs`, `verify-function-specs`, `sync-permissions`, `verify-permissions`
-
-Aggregate entrypoints:
-
-- `sync --dataset {webhooks|availability|popular-actions|runner-labels|context-types|function-specs|permissions|all}`
-- `verify --dataset {webhooks|availability|popular-actions|runner-labels|context-types|function-specs|permissions|all}`
-
-`sync --dataset all` / `verify --dataset all` includes every dataset in the rows above (in a fixed internal order).
-
-#### 9.3.2 Data Paths
-
-```
-data/sources/webhooks/github/raw/*
-data/sources/webhooks/github/parsed/*
-data/sources/webhooks/github/webhook_types.json
-
-data/sources/availability/github/raw/*
-data/sources/availability/github/parsed/*
-data/sources/availability/github/availability.json
-
-data/sources/popular-actions/github/raw/*.action.yml
-data/sources/popular-actions/github/parsed/*
-data/sources/popular-actions/github/popular_actions.json
-
-data/sources/runner-labels/github/raw/*
-data/sources/runner-labels/github/parsed/*
-data/sources/runner-labels/github/runner_labels.json
-
-data/sources/reports/*
-data/sources/manifest.json
-
-data/sources/context-types/github/raw/*
-data/sources/context-types/github/parsed/*
-data/sources/context-types/github/context-types.json
-
-data/sources/function-specs/github/raw/
-data/sources/function-specs/github/parsed/
-data/sources/function-specs/github/function-specs.json
-
-data/sources/permissions/github/raw/*
-data/sources/permissions/github/parsed/*
-data/sources/permissions/github/permissions.json
-```
-
-#### 9.3.3 Stage Isolation Guarantee
-
-- `*FetchSourceFilesAsync` methods are the only networked paths.
-- `*ParseLocalSourceFiles` and `*MergeParsedSources` (or dedicated merge services such as `ContextTypesMergeService.Merge`) are network-free and reproducible from cached raw artifacts.
-- Each stage writes Git-tracked artifacts enabling independent review of downloads, parse results, and merge decisions.
-
-#### 9.3.4 Docs markup assumptions (implementation note)
-
-Several parsers match GitHub Docs structure with fixed anchors (for example webhook `## \`event\`` headings and markdown tables whose header row contains `Activity types`; availability `### Context availability` and a table whose header includes `| Workflow key |` and `| Context |`; runner labels `## Supported runners` through `## Administrative privileges`; function lists under `## Functions` / `## Status check functions` with `###` names; permissions metadata in a YAML fenced code block). If upstream docs change headings, table shapes, or column order, Stage 2 may emit empty or partial parsed JSON until the parser is updated — CI `verify` on generated `.g.cs` and `Seiton.Update.Tests` contract tests on committed `raw/*.md` are intended to surface such breaks early.
-
-### 9.4 Popular Actions Target Configuration (Spec §9.4)
-
-Popular-actions ingestion uses a repository-managed target-set configuration file:
-
-- `data/sources/popular-actions/targets.json`
-
-Contract highlights:
-
-- Target entries are data, not hard-coded source constants.
-- Each entry must provide canonical `uses`, immutable source locator, and raw artifact file name.
-- Duplicate `uses` or duplicate raw artifact file names are invalid and fail updater execution.
-- Target-set edits are applied by updating `targets.json` and running `sync --dataset popular-actions` (or `sync --dataset all`).
 
 ---
 

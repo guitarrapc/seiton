@@ -62,7 +62,7 @@ data/sources/{dataset}/github/
 - `verify-{dataset}` — check `.g.cs` is up to date (CI)
 - `validate-{dataset}` — cross-check source data against docs (optional)
 
-Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `.github/docsSeiton_Parser_csharp_spec.md` §9.3 for details.
+Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `.github/docs/Seiton_Update_spec.md` for details.
 
 **When adding a new dataset pipeline**, follow the existing pattern:
 1. Create a `SourcePathResolver` in `Services/` (with legacy path fallback)

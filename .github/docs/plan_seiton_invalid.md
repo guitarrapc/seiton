@@ -541,6 +541,7 @@
    - `LintBenchmark`: ルール変更時に、parse+lint の Mean と Allocated に大きな劣化がないこと
    - 目安: Mean +10% 以内、Allocated +20% 以内であれば許容
 5. 実装結果とテスト結果をこのドキュメントに記録すること
+6. 追加実装をした場合は、必要に応じてSeiton_Parser_spec.mdやSeiton_Lint_spec.mdの該当ルールの仕様を更新すること。またSeiton_Parser_csharp.mdやSeiton_Lint_csharp.mdの実装ノートも更新すること。
 
 ---
 

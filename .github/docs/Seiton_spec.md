@@ -104,6 +104,8 @@ Responsibilities that belong exclusively to each component:
 - Linter C# companion: `.github/docsSeiton_Linter_csharp_spec.md`
 - Linter Go companion: `.github/docsSeiton_Linter_go_spec.md`
 
+- Update pipeline: `.github/docs/Seiton_Update_spec.md`
+
 Implementation plans:
 
 - Parser plan (C#): `.github/docsparser_implementation_csharp_plan.md`
