@@ -79,11 +79,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             return;
         }
 
-        try
-        {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(Encoding.UTF8.GetString(span));
-        }
-        catch
+        if (!Generated.IanaTimeZones.IsKnown(Encoding.UTF8.GetString(span)))
         {
             AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
         }

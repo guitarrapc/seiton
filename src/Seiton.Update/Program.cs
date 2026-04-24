@@ -446,6 +446,66 @@ app.Add("merge-popular-actions-sources", () =>
     }
 });
 
+app.Add("sync-iana-timezones", () =>
+{
+    var code = IanaTimeZonesCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-iana-timezones failed with code {code}");
+    }
+});
+
+app.Add("verify-iana-timezones", () =>
+{
+    var code = IanaTimeZonesCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-iana-timezones failed with code {code}");
+    }
+});
+
+app.Add("fetch-iana-timezones", async () =>
+{
+    var code = await IanaTimeZonesCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-iana-timezones failed with code {code}");
+    }
+});
+
+app.Add("fetch-iana-timezones-sources", async () =>
+{
+    var code = await IanaTimeZonesCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-iana-timezones-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-iana-timezones-sources", () =>
+{
+    var code = IanaTimeZonesCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-iana-timezones-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-iana-timezones-sources", () =>
+{
+    var code = IanaTimeZonesCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-iana-timezones-sources failed with code {code}");
+    }
+});
+
 app.Add("fetch-runner-labels", async () =>
 {
     var code = await RunnerLabelsCommands.Fetch(repoRoot);
@@ -544,6 +604,11 @@ static int RunSync(string repoRoot, string dataset)
         return PermissionsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "iana-timezones")
+    {
+        return IanaTimeZonesCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -582,7 +647,13 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return PermissionsCommands.Sync(repoRoot);
+        code = PermissionsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return IanaTimeZonesCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -626,6 +697,11 @@ static int RunVerify(string repoRoot, string dataset)
         return PermissionsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "iana-timezones")
+    {
+        return IanaTimeZonesCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -664,7 +740,13 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return PermissionsCommands.Verify(repoRoot);
+        code = PermissionsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return IanaTimeZonesCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

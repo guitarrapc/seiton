@@ -145,6 +145,7 @@ Not all datasets implement all stages. Some use hand-written JSON as primary sou
 | context-types | Hand-written JSON + GitHub Docs | `ContextTypes.g.cs` | Built-in context type schemas for all 11 context roots |
 | function-specs | Hand-written JSON + GitHub Docs | `FunctionSpecs.g.cs` | Built-in function specs with parameter types and overloads |
 | permissions | GitHub Docs | `PermissionScopes.g.cs` | GitHub token permission scope metadata |
+| iana-timezones | IANA `tzdata.zi` | `IanaTimeZones.g.cs` | IANA timezone identifiers (zones + links) for schedule-event timezone validation |
 
 ### 4.2 Source of Truth Policy
 
