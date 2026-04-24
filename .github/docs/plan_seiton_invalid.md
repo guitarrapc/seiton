@@ -27,6 +27,8 @@
 - **Rule**: `expr-undefined-var`
 - **Root cause**: ExprUndefinedVarRule does not merge `include:`-only axes into the matrix type, and does not scope `matrix.*` availability to jobs that actually define a matrix.
 - **Fix**: When building the matrix property set for a job, union all keys from `include:` rows with the main axes. For jobs without a matrix, `matrix.*` should resolve to empty.
+- **Status**: ✅ **Fixed** — `DynamicContextTypeBuilder.BuildMatrixOverride` now collects keys from `matrix.Include` entries in addition to `matrix.Rows`.
+- **Regression tests**: `Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys` (ParserTests), `ok-matrix-include-only-axis-accessible`, `ok-matrix-include-only-no-rows` (RuleInterfaceTests ExprUndefinedVarRule table)
 
 #### 2. `expand_object` — False positive (both steps flagged, only one is wrong)
 
@@ -35,14 +37,18 @@
 - **Rule**: `parse` (parser-level check)
 - **Root cause**: Parser treats any `${{ ... }}` in `env:` as invalid non-mapping, without considering that the expression might evaluate to a mapping.
 - **Fix**: When `env:` value is a single `${{ ... }}` expression, allow it (defer to runtime type resolution). Only error if the value is a plain string or literal non-mapping.
+- **Status**: ✅ **Fixed** — `WorkflowParser.Steps.cs` no longer requires `MappingStart` before parsing `env:`, always delegates to `ParseEnvNode` which handles both scalar expressions and mappings.
+- **Regression tests**: `Parse_StepEnvExpressionScalar_ParsesWithoutError` (ParserTests), `ok-step-env-expression-scalar` (RuleInterfaceTests ExprUndefinedVarRule table)
 
 #### 3. `permissions` — Error on wrong line (points to comment)
 
 - **Actionlint**: `test.yaml:4:14: "write" is invalid for permission for all the scopes`
 - **Seiton**: `permissions.yaml:3:54` — points to column 54 of line 3, which is inside a COMMENT (`# ERROR: Available values for whole permissions are "write-all"...`), not on the actual `permissions: write` value on line 4.
 - **Rule**: `permissions`
-- **Root cause**: The diagnostic position is incorrectly resolved to the comment text rather than the YAML scalar node.
-- **Fix**: Ensure PermissionsRule uses the span of the actual scalar value node, not surrounding text.
+- **Root cause**: Two issues: (1) `IndexOf` fallback in `VYamlStreamAdapter` found `write` inside YAML comments. (2) Double `GetScalarSlice()` call in `ParsePermissionsNode` advanced cursor past the value.
+- **Fix**: (1) Added `IsInsideYamlComment` helper and loop in `GetScalarSlice()` / `TryResolveRawStart()` to skip comment hits. (2) Used `arena.GetStringSlice(valueNode)` instead of pre-calling `reader.GetScalarSlice()`.
+- **Status**: ✅ **Fixed** — Positions now correctly point to actual YAML values (e.g., 4:14 for `write` scalar, 11:12 for unknown scope key).
+- **Regression tests**: `Parse_PermissionsWithComment_PositionPointsToValue` (ParserTests)
 
 #### 4. `permissions` — Missing `unknown scope "check"` and `models: write` restriction
 
@@ -51,6 +57,9 @@
 - **Rule**: `permissions`
 - **Root cause**: PermissionsRule may not have the full scope allowlist or per-scope access restrictions.
 - **Fix**: Add `check` → unknown scope error; validate per-scope allowed values (e.g., `models` only accepts `read`/`none`).
+- **Status**: ✅ **Fixed** — `PermissionsRule` now uses auto-generated `PermissionScopes` class (from `PermissionScopes.g.cs`) which contains all 17 scopes and their per-scope allowed values. Unknown scopes and restricted-value violations are detected.
+- **Auto-generation pipeline**: Permission scopes are now fetched from GitHub Docs (`data/reusables/actions/github-token-available-permissions.md`), parsed, merged (with `repository-projects` actionlint compat), and generated into `PermissionScopes.g.cs` via `Seiton.Update` pipeline. See [Auto-generation Pipeline](#appendix-permissions-auto-generation-pipeline) for details.
+- **Regression tests**: `ng-unknown-scope-check`, `ng-models-write-restricted`, `ng-id-token-read-restricted`, `ng-vulnerability-alerts-write-restricted`, `ok-all-standard-scopes-valid` (RuleInterfaceTests PermissionsRule table)
 
 ---
 
@@ -312,6 +321,7 @@
 
 - **Problem**: Seiton flags `env: ${{ matrix.env_object }}` as "env must be mapping" but this is an object expression that evaluates to a mapping at runtime.
 - **(Same as P0 #2 above)**
+- **Status**: ✅ **Fixed** — P0 #2 で修正済み
 
 ### Issue C: `if_cond_always_true` — "syntax errors" instead of "always true"
 
@@ -322,6 +332,7 @@
 
 - **Problem**: `matrix.npm` is valid (defined only in `include:`) but seiton flags it.
 - **(Same as P0 #1 above)**
+- **Status**: ✅ **Fixed** — P0 #1 で修正済み
 
 ### Issue E: `webhook_checks` — Activity type error points to wrong event
 
@@ -373,15 +384,57 @@ These examples are fully covered by seiton (all actionlint errors detected):
 
 ## Implementation Priority Roadmap
 
-### Phase 1: Fix False Positives & Wrong Positions (P0)
+### Verification Requirements (All Phases)
 
-1. Fix `permissions` error position → points to YAML value node, not comment
-2. Fix `expand_object` false positive → allow `${{ }}` expression in `env:`
-3. Fix `contextual_matrix_values` → merge `include:` keys into matrix type
-4. Fix YAML parse error position → extract line/col from VYaml exception
-5. Fix `webhook_checks` activity type error → associate with correct event
-6. Fix `if_cond_always_true` message → "always true" not "syntax errors"
-7. Fix `shell_name_validation` → allow custom `{0}` shell templates
+各フェーズの実装完了前に、以下の検証を必ず行うこと:
+
+1. **テスト実行**: `dotnet test` で全テスト通過を確認
+2. **リグレッションテスト追加**: 修正した誤検出・検出漏れに対して、再発防止のためのテストを追加する
+   - 誤検出修正: `ok-*` ケースで「エラーが出ないこと」を確認するテスト
+   - 検出漏れ修正: `ng-*` ケースで「期待するエラーメッセージが出ること」を確認するテスト
+   - パーサー修正: `ParserTests` でAST構築が正しいことを確認するテスト
+3. **ベンチマーク実行**: `cd src/Seiton.Benchmark; dotnet run -c Release` で性能劣化がないことを確認する
+   - `ParsingBenchmark`: パーサー変更時に、Small/Medium/Large の Mean と Allocated に大きな劣化がないこと
+   - `LintBenchmark`: ルール変更時に、parse+lint の Mean と Allocated に大きな劣化がないこと
+   - 目安: Mean +10% 以内、Allocated +20% 以内であれば許容
+
+### Phase 1: Fix False Positives & Wrong Positions (P0) — ✅ 完了
+
+1. ✅ Fix `permissions` error position → points to YAML value node, not comment
+2. ✅ Fix `expand_object` false positive → allow `${{ }}` expression in `env:`
+3. ✅ Fix `contextual_matrix_values` → merge `include:` keys into matrix type
+4. ✅ Fix `permissions` unknown scope and restricted value → auto-generated `PermissionScopes.g.cs`
+5. Fix YAML parse error position → extract line/col from VYaml exception
+6. Fix `webhook_checks` activity type error → associate with correct event
+7. Fix `if_cond_always_true` message → "always true" not "syntax errors"
+8. Fix `shell_name_validation` → allow custom `{0}` shell templates
+
+**実施済みの変更:**
+
+| 変更対象 | 内容 |
+|---|---|
+| `DynamicContextTypeBuilder.cs` | `BuildMatrixOverride` が `matrix.Include` エントリからもキーを収集 |
+| `WorkflowParser.Steps.cs` | Step `env:` パースで `MappingStart` を要求せず `ParseEnvNode` に委譲 |
+| `VYamlStreamAdapter.cs` | `IsInsideYamlComment` ヘルパー追加、`GetScalarSlice()` / `TryResolveRawStart()` でコメント内マッチをスキップ |
+| `WorkflowParser.cs` | `ParsePermissionsNode` で `GetScalarSlice()` 二重呼び出しを修正 |
+| `PermissionsRule.cs` | ハードコード配列を削除し、自動生成 `PermissionScopes` クラスを使用 |
+| `PermissionScopes.g.cs` | 17スコープの `IsKnownScope()` / `GetAllowedValues()` / `AllScopesList` を自動生成 |
+
+**リグレッションテスト (10 cases):**
+
+| テストファイル | テスト名/ケース | 対象P0 |
+|---|---|---|
+| ParserTests | `Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys` | P0-1 |
+| ParserTests | `Parse_StepEnvExpressionScalar_ParsesWithoutError` | P0-2 |
+| ParserTests | `Parse_PermissionsWithComment_PositionPointsToValue` | P0-3 |
+| RuleInterfaceTests (ExprUndefinedVar) | `ok-matrix-include-only-axis-accessible` | P0-1 |
+| RuleInterfaceTests (ExprUndefinedVar) | `ok-matrix-include-only-no-rows` | P0-1 |
+| RuleInterfaceTests (ExprUndefinedVar) | `ok-step-env-expression-scalar` | P0-2 |
+| RuleInterfaceTests (Permissions) | `ng-unknown-scope-check` | P0-4 |
+| RuleInterfaceTests (Permissions) | `ng-models-write-restricted` | P0-4 |
+| RuleInterfaceTests (Permissions) | `ng-id-token-read-restricted` | P0-4 |
+| RuleInterfaceTests (Permissions) | `ng-vulnerability-alerts-write-restricted` | P0-4 |
+| RuleInterfaceTests (Permissions) | `ok-all-standard-scopes-valid` | P0-3/4 |
 
 ### Phase 2: Core Expression Type System (P1, high impact)
 
@@ -392,6 +445,12 @@ These examples are fully covered by seiton (all actionlint errors detected):
 12. Add `format()` excess argument checking (#20)
 13. Add `fromJSON()` literal validation (#21, #22)
 
+**Phase 2 検証チェックリスト:**
+- [ ] `dotnet test` 全テスト通過
+- [ ] 各検出項目に `ng-*` リグレッションテスト追加
+- [ ] 型チェックが誤検出しない `ok-*` テスト追加
+- [ ] `cd src/Seiton.Benchmark; dotnet run -c Release` で ParsingBenchmark / LintBenchmark の性能劣化なし
+
 ### Phase 3: Contextual Validation (P1, medium-high impact)
 
 14. Add `needs.*` output contextual validation (#8)
@@ -399,6 +458,12 @@ These examples are fully covered by seiton (all actionlint errors detected):
 16. Add popular action required input checking (#10)
 17. Add reusable workflow output property validation (#25)
 18. Add runner context availability in matrix scope (#23)
+
+**Phase 3 検証チェックリスト:**
+- [ ] `dotnet test` 全テスト通過
+- [ ] `needs.*` / `steps.*` の正常系・異常系テスト追加
+- [ ] popular action required input の欠落・存在テスト追加
+- [ ] `cd src/Seiton.Benchmark; dotnet run -c Release` で性能劣化なし（特にコンテキスト解決のアロケーション増加に注意）
 
 ### Phase 4: Pattern Validation (P1-P2)
 
@@ -411,3 +476,66 @@ These examples are fully covered by seiton (all actionlint errors detected):
 25. Add fail-fast/timeout-minutes type validation (#18)
 26. Add OS-specific shell validation (#19)
 27. Add cron timezone validation (#24)
+
+**Phase 4 検証チェックリスト:**
+- [ ] `dotnet test` 全テスト通過
+- [ ] 各パターン検出に対して最低 2 ケース（正常+異常）のテスト追加
+- [ ] `cd src/Seiton.Benchmark; dotnet run -c Release` で性能劣化なし
+
+---
+
+## Appendix: Permissions Auto-generation Pipeline
+
+### 概要
+
+`PermissionsRule` で使用するスコープ一覧は、GitHub Docs から自動取得・パース・生成される。手動リスト管理ではなく、公式ドキュメントの変更に追随できるパイプラインとなっている。
+
+### データフロー
+
+```
+Stage 1: fetch-permissions-sources
+  URL: raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md
+  → data/sources/permissions/github/raw/github-token-available-permissions.md
+
+Stage 2: parse-permissions-sources
+  → data/sources/permissions/github/parsed/permissions-scopes.json
+  (Liquid テンプレートタグを除去し、YAML ブロックからスコープ名と許可値を抽出)
+
+Stage 3: merge-permissions-sources
+  → data/sources/permissions/github/permissions.json
+  (パース結果 + repository-projects actionlint 互換)
+
+sync-permissions:
+  → src/Seiton.Core/Generated/PermissionScopes.g.cs
+  (IsKnownScope / GetAllowedValues / AllScopesList を生成)
+```
+
+### CLI コマンド
+
+| コマンド | 説明 |
+|---|---|
+| `fetch-permissions` | オーケストレーター: fetch + parse + merge + manifest 更新 |
+| `fetch-permissions-sources` | Stage 1: raw markdown をダウンロード |
+| `parse-permissions-sources` | Stage 2: raw → 中間 JSON にパース |
+| `merge-permissions-sources` | Stage 3: パース結果をマージしてスナップショット生成 |
+| `sync-permissions` | スナップショットから `.g.cs` を生成 |
+| `verify-permissions` | 生成ファイルが最新か検証 (CI 用) |
+
+### 実装ファイル
+
+| ファイル | 責務 |
+|---|---|
+| `src/Seiton.Update/Sources/GitHubPermissionsFetcher.cs` | Stage 1-3 の実行 |
+| `src/Seiton.Update/Parsers/GitHubDocsPermissionsMarkdownParser.cs` | Liquid タグ除去 + YAML ブロックパース |
+| `src/Seiton.Update/Parsers/PermissionsSourceParser.cs` | Stage 3 JSON のデシリアライズ |
+| `src/Seiton.Update/Model/PermissionsModel.cs` | データモデル |
+| `src/Seiton.Update/Generators/PermissionsCSharpGenerator.cs` | `.g.cs` コード生成 |
+| `src/Seiton.Update/Services/PermissionsSyncService.cs` | Sync / IsUpToDate |
+| `src/Seiton.Update/Services/PermissionsSourcePathResolver.cs` | パス解決 (レガシーフォールバック付き) |
+| `src/Seiton.Update/Commands/PermissionsCommands.cs` | CLI コマンド実装 |
+
+### Merge ロジック
+
+- GitHub Docs から取得した 17 スコープをそのまま使用
+- `repository-projects` が Docs に含まれない場合、actionlint 互換として追加 (現在は `{% ifversion projects-v1 %}` で Docs に含まれている)
+- アルファベット順にソート
