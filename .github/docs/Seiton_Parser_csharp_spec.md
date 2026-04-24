@@ -1204,9 +1204,9 @@ Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore i
 
 ### 9.3 Source Pipeline Architecture (Spec §9.3)
 
-Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`, `context-types`, `function-specs`).
+Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`, `runner-labels`, `context-types`, `function-specs`, `permissions`).
 
-> **Note**: `context-types` uses a hand-written JSON data file as its authoritative source. `function-specs` uses a hand-written JSON for codegen but additionally supports fetching function names from GitHub Docs `expressions.md` for gap detection.
+> **Note**: `context-types` merges GitHub Docs `contexts.md` into `context-types.json` together with a repository-managed override; the merged file is the source of truth for codegen. `function-specs` uses a hand-written JSON for codegen but additionally supports fetching function names from GitHub Docs `expressions.md` for gap detection (no separate merge stage; `fetch-function-specs` updates manifest + intermediate artifacts used by `validate-function-specs`).
 
 #### 9.3.1 CLI Commands
 
@@ -1215,17 +1215,29 @@ Implements the 3-stage pipeline defined in Spec §9.3 for all currently supporte
 | webhooks | `fetch-webhooks-sources` | `parse-webhooks-sources` | `merge-webhooks-sources [--exclude-schema-only]` | `fetch-webhooks [--exclude-schema-only]` |
 | availability | `fetch-availability-sources` | `parse-availability-sources` | `merge-availability-sources` | `fetch-availability` |
 | popular-actions | `fetch-popular-actions-sources` | `parse-popular-actions-sources` | `merge-popular-actions-sources` | `fetch-popular-actions` |
+| runner-labels | `fetch-runner-labels-sources` | `parse-runner-labels-sources` | `merge-runner-labels-sources` | `fetch-runner-labels` |
+| context-types | `fetch-context-types-sources` | `parse-context-types-sources` | `merge-context-types-sources` | `fetch-context-types` |
+| permissions | `fetch-permissions-sources` | `parse-permissions-sources` | `merge-permissions-sources` | `fetch-permissions` |
 | function-specs | `fetch-function-specs-sources` | `parse-function-specs-sources` | — | `fetch-function-specs` |
 
-Additional function-specs commands:
+Additional commands (validation / differential checks):
 
 - `validate-function-specs` — compare parsed docs function names against `function-specs.json` and warn on unregistered functions
-- `sync-function-specs` automatically runs validation when parsed data is available
+- `validate-context-types` — compare parsed docs contexts/properties against `context-types.json` and warn on gaps (non-fatal)
+- `validate-popular-actions-targets` — validate `data/sources/popular-actions/targets.json` shape and uniqueness rules before fetch
+- `parity-webhooks` — optional differential check against a local actionlint reference checkout (skipped when reference is absent); does not replace official-source resolution
+- `sync-function-specs` automatically runs `validate-function-specs` when parsed data is available
 
-Sync/verify entrypoints:
+Per-dataset convenience aliases (same behavior as `sync --dataset …` / `verify --dataset …`):
 
-- `sync --dataset {webhooks|availability|popular-actions|context-types|function-specs|all}`
-- `verify --dataset {webhooks|availability|popular-actions|context-types|function-specs|all}`
+- `sync-webhooks`, `verify-webhooks`, `sync-availability`, `verify-availability`, `sync-popular-actions`, `verify-popular-actions`, `sync-runner-labels`, `verify-runner-labels`, `sync-context-types`, `verify-context-types`, `sync-function-specs`, `verify-function-specs`, `sync-permissions`, `verify-permissions`
+
+Aggregate entrypoints:
+
+- `sync --dataset {webhooks|availability|popular-actions|runner-labels|context-types|function-specs|permissions|all}`
+- `verify --dataset {webhooks|availability|popular-actions|runner-labels|context-types|function-specs|permissions|all}`
+
+`sync --dataset all` / `verify --dataset all` includes every dataset in the rows above (in a fixed internal order).
 
 #### 9.3.2 Data Paths
 
@@ -1242,23 +1254,35 @@ data/sources/popular-actions/github/raw/*.action.yml
 data/sources/popular-actions/github/parsed/*
 data/sources/popular-actions/github/popular_actions.json
 
+data/sources/runner-labels/github/raw/*
+data/sources/runner-labels/github/parsed/*
+data/sources/runner-labels/github/runner_labels.json
+
 data/sources/reports/*
 data/sources/manifest.json
 
-data/sources/context-types/github/raw/          ← future: fetched contexts.md
-data/sources/context-types/github/parsed/       ← future: parsed context property tables
+data/sources/context-types/github/raw/*
+data/sources/context-types/github/parsed/*
 data/sources/context-types/github/context-types.json
 
-data/sources/function-specs/github/raw/         ← fetched expressions.md from GitHub Docs
-data/sources/function-specs/github/parsed/      ← parsed function name list (docs-function-names.json)
+data/sources/function-specs/github/raw/
+data/sources/function-specs/github/parsed/
 data/sources/function-specs/github/function-specs.json
+
+data/sources/permissions/github/raw/*
+data/sources/permissions/github/parsed/*
+data/sources/permissions/github/permissions.json
 ```
 
 #### 9.3.3 Stage Isolation Guarantee
 
 - `*FetchSourceFilesAsync` methods are the only networked paths.
-- `*ParseLocalSourceFiles` and `*MergeParsedSources` are network-free and reproducible from cached raw artifacts.
+- `*ParseLocalSourceFiles` and `*MergeParsedSources` (or dedicated merge services such as `ContextTypesMergeService.Merge`) are network-free and reproducible from cached raw artifacts.
 - Each stage writes Git-tracked artifacts enabling independent review of downloads, parse results, and merge decisions.
+
+#### 9.3.4 Docs markup assumptions (implementation note)
+
+Several parsers match GitHub Docs structure with fixed anchors (for example webhook `## \`event\`` headings and markdown tables whose header row contains `Activity types`; availability `### Context availability` and a table whose header includes `| Workflow key |` and `| Context |`; runner labels `## Supported runners` through `## Administrative privileges`; function lists under `## Functions` / `## Status check functions` with `###` names; permissions metadata in a YAML fenced code block). If upstream docs change headings, table shapes, or column order, Stage 2 may emit empty or partial parsed JSON until the parser is updated — CI `verify` on generated `.g.cs` and `Seiton.Update.Tests` contract tests on committed `raw/*.md` are intended to surface such breaks early.
 
 ### 9.4 Popular Actions Target Configuration (Spec §9.4)
 
