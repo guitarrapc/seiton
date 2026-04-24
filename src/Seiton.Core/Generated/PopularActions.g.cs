@@ -144,6 +144,21 @@ internal static class PopularActions
                 _ => [],
             };
         }
+
+        internal byte[][] GetOutputNames()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => ["cache-hit"u8.ToArray()],
+                ActionId.ActionsCheckout => ["commit"u8.ToArray(), "ref"u8.ToArray()],
+                ActionId.ActionsDownloadArtifact => ["download-path"u8.ToArray()],
+                ActionId.ActionsSetupDotnet => ["cache-hit"u8.ToArray(), "dotnet-version"u8.ToArray()],
+                ActionId.ActionsSetupNode => ["cache-hit"u8.ToArray(), "node-version"u8.ToArray()],
+                ActionId.ActionsUploadArtifact => ["artifact-digest"u8.ToArray(), "artifact-id"u8.ToArray(), "artifact-url"u8.ToArray()],
+                ActionId.DockerLoginAction => [],
+                _ => [],
+            };
+        }
     }
 
     internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)

@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 /// <summary>Additional UTF-8 key tables for strategy, containers, action metadata, and on.* mapping dispatch.</summary>
 public static partial class WorkflowParser

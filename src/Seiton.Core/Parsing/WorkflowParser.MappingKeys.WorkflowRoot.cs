@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 /// <summary>Key tables for <see cref="WorkflowParser"/> root / defaults / concurrency mapping dispatch.</summary>
 public static partial class WorkflowParser

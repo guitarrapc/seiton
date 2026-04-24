@@ -295,7 +295,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(49);
+        await Assert.That(rules.Length).IsEqualTo(50);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -345,6 +345,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[46].Id).IsEqualTo(RuleId.UseTrustedPublishing);
         await Assert.That(rules[47].Id).IsEqualTo(RuleId.LocalActionInputs);
         await Assert.That(rules[48].Id).IsEqualTo(RuleId.WorkflowCallInputDefault);
+        await Assert.That(rules[49].Id).IsEqualTo(RuleId.OutdatedActionRunner);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -395,6 +396,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(50);
         await Assert.That(RuleCatalog.GetPriority("local-action-inputs")).IsEqualTo(51);
         await Assert.That(RuleCatalog.GetPriority("workflow-call-input-default")).IsEqualTo(52);
+        await Assert.That(RuleCatalog.GetPriority("outdated-action-runner")).IsEqualTo(53);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -408,12 +410,13 @@ public sealed class RuleInterfaceTests
         await Assert.That(knownVulnerable).IsEqualTo(RuleId.KnownVulnerableActions);
         await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-049");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-050");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-050");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-051");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-051", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-052", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-052");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-053");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-053");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-054");
     }
 
     [Test]
@@ -2837,6 +2840,85 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_OutdatedActionRunnerRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-latest-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ng-outdated-checkout-v3",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v3
+            """,
+            ["the runner of \"actions/checkout@v3\" action is too old"]),
+            new RuleCase(
+            "ng-outdated-cache-v3",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v3
+                          with:
+                            path: ~/.cache
+                            key: ${{ runner.os }}-cache
+            """,
+            ["the runner of \"actions/cache@v3\" action is too old"]),
+            new RuleCase(
+            "ok-unknown-action-not-checked",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: some/action@v1
+            """,
+            []),
+            new RuleCase(
+            "ok-sha-ref-not-checked",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29
+            """,
+            []),
+            new RuleCase(
+            "ng-outdated-docker-login-v2",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker/login-action@v2
+            """,
+            ["the runner of \"docker/login-action@v2\" action is too old"]),
+        };
+
+        await AssertRuleCases(new OutdatedActionRunnerRule(), "outdated-action-runner", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_ScheduleEventRule_TableDriven()
     {
         var cases = new[]
@@ -3030,7 +3112,49 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["'..' path segment"]),
+            ["'.' and '..' are not allowed"]),
+            new RuleCase(
+            "ng-caret-char-in-branch-pattern",
+            """
+            on:
+                push:
+                    branches: ['^foo-']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["character '^' is invalid"]),
+            new RuleCase(
+            "ng-star-plus-in-tag-pattern",
+            """
+            on:
+                push:
+                    tags: ['v*+']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["unexpected character '+' after '*'"]),
+            new RuleCase(
+            "ng-dot-path-segment",
+            """
+            on:
+                push:
+                    paths: ['./foo/bar.txt']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["'.' and '..' are not allowed"]),
             new RuleCase(
             "ok-valid-bracket-range",
             """
@@ -4623,6 +4747,55 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["credentials are not configured", "private.example.org"]),
+            new RuleCase(
+            "ng-hardcoded-password-in-container",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: 'example.com/owner/image'
+                        credentials:
+                            username: user
+                            password: pass
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"password\" section in \"container\" section should be specified via secrets"]),
+            new RuleCase(
+            "ng-hardcoded-password-in-service",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        redis:
+                            image: redis
+                            credentials:
+                                username: user
+                                password: pass
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"password\" section in \"redis\" service should be specified via secrets"]),
+            new RuleCase(
+            "ok-password-via-secrets-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: 'example.com/owner/image'
+                        credentials:
+                            username: ${{ secrets.REG_USER }}
+                            password: ${{ secrets.REG_PASS }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new CredentialsRule(), "credentials", cases);
@@ -4743,6 +4916,56 @@ public sealed class RuleInterfaceTests
                     runs-on: ubuntu-latest
                     steps:
                         - run: echo "${{ format('{0}', github.event.issue.title) }}"
+            """,
+            ["template injection risk", "run", "github context"]),
+            new RuleCase(
+            "ng-github-script-with-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                            script: console.log('${{ github.event.head_commit.author.name }}')
+            """,
+            ["template injection risk", "script", "github context"]),
+            new RuleCase(
+            "ok-github-script-with-safe-expression",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                            script: console.log('${{ github.ref }}')
+            """,
+            []),
+            new RuleCase(
+            "ok-action-input-not-github-script",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/stale@v9
+                          with:
+                            stale-pr-message: ${{ github.event.pull_request.title }} was closed
+            """,
+            []),
+            new RuleCase(
+            "ng-run-with-object-filter-untrusted",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ toJSON(github.event.*.body) }}'
             """,
             ["template injection risk", "run", "github context"]),
         };
@@ -5041,6 +5264,112 @@ public sealed class RuleInterfaceTests
                           env: ${{ matrix.env_object }}
             """,
             []),
+            // A-3: matrix nested object property access — known property should be fine
+            new RuleCase(
+            "ok-matrix-nested-object-property",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            package:
+                                - name: 'foo'
+                                  optional: true
+                                - name: 'bar'
+                                  optional: false
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.package.name }}
+            """,
+            []),
+            // A-3: matrix nested object — unknown property should error
+            new RuleCase(
+            "ng-matrix-nested-object-unknown-property",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            package:
+                                - name: 'foo'
+                                  optional: true
+                                - name: 'bar'
+                                  optional: false
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.package.dev }}
+            """,
+            ["'dev' is not defined"]),
+            // A-3: matrix undefined axis (no such key at all)
+            new RuleCase(
+            "ng-matrix-undefined-axis",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ${{ matrix.platform }}
+            """,
+            ["'platform' is not defined in 'matrix'"]),
+            // A-3: empty matrix in other job — matrix should be strict empty
+            new RuleCase(
+            "ng-matrix-empty-in-other-job",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo test
+                other:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            ["'os' is not defined in 'matrix'"]),
+            // A-19: popular action output — known output should be fine
+            new RuleCase(
+            "ok-popular-action-known-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          id: cache
+                          with:
+                            key: ${{ hashFiles('**/*.lock') }}
+                            path: ./packages
+                        - run: echo ${{ steps.cache.outputs.cache-hit }}
+            """,
+            []),
+            // A-19: popular action output — typo should be flagged
+            new RuleCase(
+            "ng-popular-action-unknown-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          id: cache
+                          with:
+                            key: ${{ hashFiles('**/*.lock') }}
+                            path: ./packages
+                        - run: echo ${{ steps.cache.outputs.cache_hit }}
+            """,
+            ["'cache_hit' is not defined"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -5336,6 +5665,97 @@ public sealed class RuleInterfaceTests
                           run: echo "$TAG"
             """,
             []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_NeedsUndefinedJob_TableDriven()
+    {
+        var cases = new[]
+        {
+            // A-4: needs.prepare undefined when not in needs list
+            new RuleCase(
+            "ng-needs-job-not-in-needs-list",
+            """
+            on: push
+            jobs:
+                prepare:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        prepared: ${{ steps.a.outputs.val }}
+                    steps:
+                        - id: a
+                          run: echo "val=1" >> $GITHUB_OUTPUT
+                        - run: echo '${{ needs.prepare.outputs.prepared }}'
+            """,
+            ["'prepare' is not defined in 'needs'"]),
+            // A-4: needs.some_job undefined (job doesn't exist)
+            new RuleCase(
+            "ng-needs-nonexistent-job",
+            """
+            on: push
+            jobs:
+                install:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        installed: ok
+                    steps:
+                        - run: echo install
+                build:
+                    needs: [install]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ needs.some_job }}'
+            """,
+            ["'some_job' is not defined in 'needs'"]),
+            // A-4: needs.build undefined in other job (build not in other's needs)
+            new RuleCase(
+            "ng-needs-job-not-declared-in-needs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        built: ok
+                    steps:
+                        - run: echo build
+                other:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ needs.build.outputs.built }}'
+            """,
+            ["'build' is not defined in 'needs'"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_StepsCrossJob_TableDriven()
+    {
+        var cases = new[]
+        {
+            // A-5: steps.get_value undefined in other job (step IDs are job-local)
+            new RuleCase(
+            "ng-steps-cross-job-reference",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: get_value
+                          run: echo "name=foo" >> $GITHUB_OUTPUT
+                        - run: echo '${{ steps.get_value.outputs.name }}'
+                other:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ steps.get_value.outputs.name }}'
+            """,
+            ["'get_value' is not defined in 'steps'"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

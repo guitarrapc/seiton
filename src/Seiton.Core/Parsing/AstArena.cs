@@ -135,7 +135,7 @@ public readonly record struct FloatNodeId : IEquatable<FloatNodeId>
 [DebuggerDisplay("AstArena: {_stringCount} strings, {_boolCount} bools, {_intCount} ints, {_floatCount} floats")]
 public sealed class AstArena : IDisposable
 {
-    [ThreadStatic] private static AstArena? s_cached;
+    [ThreadStatic] private static AstArena? cached;
 
     private byte[] _source;
 
@@ -166,10 +166,10 @@ public sealed class AstArena : IDisposable
     /// </summary>
     public static AstArena Rent(byte[] source)
     {
-        var arena = s_cached;
+        var arena = cached;
         if (arena is not null)
         {
-            s_cached = null;
+            cached = null;
             arena.ResetForSource(source);
             return arena;
         }
@@ -188,7 +188,7 @@ public sealed class AstArena : IDisposable
         _intCount = 0;
         _floatCount = 0;
         _source = [];
-        s_cached ??= this;
+        cached ??= this;
     }
 
     private static AstArena CreateNew(byte[] source)

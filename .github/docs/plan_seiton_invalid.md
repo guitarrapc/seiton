@@ -40,7 +40,7 @@
 | **対処** | (1) `ConvertJsonType` で JSON オブジェクトリテラルから生成する `ExprType.Object` を `strict: true` に変更。(2) `ValidateIndexAccess` に string literal index での未定義プロパティチェックを追加。(3) `FormatObjectType` ヘルパーで actionlint 互換のエラーメッセージ形式 `{key: type; ...}` を生成。 |
 | **優先度** | **中** — matrix 型推論の精度向上。 |
 
-### A-3: `contextual_matrix_values` — 未定義 matrix プロパティ (3件)
+### A-3: `contextual_matrix_values` — 未定義 matrix プロパティ (3件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -50,7 +50,7 @@
 | **対処** | matrix axis 名の推論精度を向上。nested object property (e.g. `matrix.package.dev`) の型チェックを追加。空 matrix (別ジョブの matrix 参照) の検出。 |
 | **優先度** | **高** — ユーザーの typo 発見に直結。 |
 
-### A-4: `contextual_needs_object` — 未定義 needs プロパティ (4件)
+### A-4: `contextual_needs_object` — 未定義 needs プロパティ (4件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -60,7 +60,7 @@
 | **対処** | needs コンテキストの型を各ジョブの outputs 宣言から構築し、未定義プロパティを検出。 |
 | **優先度** | **高** — needs 参照ミスは実行時エラーに直結。 |
 
-### A-5: `contextual_steps_outputs` — 未定義 steps outputs (2件)
+### A-5: `contextual_steps_outputs` — 未定義 steps outputs (2件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -100,7 +100,7 @@
 | **対処** | popular actions カタログの deprecated フラグ整備を確認。カタログに無い action は対象外であるためスコープ検討。 |
 | **優先度** | **低** — カタログ依存。 |
 
-### A-9: `detect_outdated_popular_actions` — outdated runner
+### A-9: `detect_outdated_popular_actions` — outdated runner ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -120,7 +120,7 @@
 | **対処** | env セクションの式展開時に型チェック (object 必須) を追加。 |
 | **優先度** | **中** — 実行時 silent failure になるパターン。 |
 
-### A-11: `glob` — invalid branch 名文字 `^`、invalid `+` 構文、`.` / `..` パス (3件)
+### A-11: `glob` — invalid branch 名文字 `^`、invalid `+` 構文、`.` / `..` パス (3件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -130,7 +130,7 @@
 | **対処** | glob パターン検証を強化: (1) ref 名禁止文字チェック、(2) `*+` `**+` 連続特殊文字チェック、(3) `.` `..` セグメントチェック。 |
 | **優先度** | **高** — glob パターンのバグは頻出。 |
 
-### A-12: `hardcoded_credentials` — ハードコード password (2件)
+### A-12: `hardcoded_credentials` — ハードコード password (2件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -198,7 +198,7 @@
 | **対処** | template 展開式の結果型が string/number/bool 以外の場合に警告。 |
 | **優先度** | **中** — 実行時に `[object Object]` や空文字列になるパターン。 |
 
-### A-19: `popular_action_outputs` — popular action output 未定義 (2件)
+### A-19: `popular_action_outputs` — popular action output 未定義 (2件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -234,7 +234,7 @@
 | **seiton** | 未検出 (A-18 と同じ根本原因) |
 | **対処** | A-18 と同じ — template 展開式の型チェック追加。 |
 
-### A-23: `untrusted_input` — 複数の untrusted input 検出不足 (2件)
+### A-23: `untrusted_input` — 複数の untrusted input 検出不足 (2件) ✅ DONE
 
 | | 内容 |
 |---|---|
@@ -413,15 +413,15 @@
 
 | ID | 内容 | 対処 |
 |---|---|---|
-| A-12 | hardcoded credentials | 新チェック: password が secrets 経由でないことを検出 |
-| A-23 | untrusted input (with.script, object filter) | TemplateInjectionRule 拡張 |
-| A-9 | outdated action runner (node16) | 新ルール: OutdatedActionRunner |
-| A-3 | matrix property 未定義 | ExprUndefinedVarRule 強化 |
-| A-4 | needs property 未定義 | needs コンテキスト型構築 |
-| A-5 | steps output 未定義 | steps コンテキスト型構築 |
-| A-19 | popular action output 未定義 | カタログに outputs 追加 |
-| A-1 | comparison `>` 型不一致 | 式分析拡張 |
-| A-11 | glob パターン検証強化 | `^` 文字、`*+` パターン、`.`/`..` パス |
+| A-12 | hardcoded credentials | ✅ CredentialsRule に password ハードコードチェック追加 |
+| A-23 | untrusted input (with.script, object filter) | ✅ TemplateInjectionRule に github-script, wildcard match 追加 |
+| A-9 | outdated action runner (node16) | ✅ 新ルール OutdatedActionRunnerRule 追加 |
+| A-3 | matrix property 未定義 | ✅ BuildMatrixOverride で nested object 型推論、空 matrix strict 化 |
+| A-4 | needs property 未定義 | ✅ BuildNeedsOverride で空 needs strict 化、run フィールドチェック追加 |
+| A-5 | steps output 未定義 | ✅ ExprUndefinedVarRule に run フィールド式チェック追加 |
+| A-19 | popular action output 未定義 | ✅ カタログに outputs 追加、BuildStepEntryType で strict outputs 型構築 |
+| A-1 | comparison `>` 型不一致 | ✅ 式分析拡張 (既存) |
+| A-11 | glob パターン検証強化 | ✅ `^` `~` `:` 文字、`*+` パターン、`.`/`..` パス検証追加 |
 
 ### P2: 中優先度
 

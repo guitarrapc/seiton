@@ -9,6 +9,30 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Detects expressions in <c>run:</c> scripts that may be vulnerable to template injection attacks.</summary>
 public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 {
+    private static readonly string[][] untrustedPaths =
+    [
+        ["github", "event", "issue", "title"],
+        ["github", "event", "issue", "body"],
+        ["github", "event", "pull_request", "title"],
+        ["github", "event", "pull_request", "body"],
+        ["github", "event", "pull_request", "head", "ref"],
+        ["github", "event", "pull_request", "head", "label"],
+        ["github", "event", "pull_request", "head", "repo", "default_branch"],
+        ["github", "event", "comment", "body"],
+        ["github", "event", "review", "body"],
+        ["github", "event", "review_comment", "body"],
+        ["github", "event", "pages", "*", "page_name"],
+        ["github", "event", "commits", "*", "message"],
+        ["github", "event", "commits", "*", "author", "email"],
+        ["github", "event", "commits", "*", "author", "name"],
+        ["github", "event", "head_commit", "message"],
+        ["github", "event", "head_commit", "author", "email"],
+        ["github", "event", "head_commit", "author", "name"],
+        ["github", "event", "discussion", "title"],
+        ["github", "event", "discussion", "body"],
+        ["github", "head_ref"],
+    ];
+
     public override string Name => "Template Injection Rule";
 
     public override void VisitStep(Step step)
@@ -22,6 +46,47 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         {
             CheckSink(step, run.Run, "run");
         }
+        else if (step.Exec is ExecAction action)
+        {
+            CheckActionScriptSink(step, action);
+        }
+    }
+
+    private void CheckActionScriptSink(Step step, ExecAction action)
+    {
+        if (!action.Uses.HasValue || action.Inputs is null || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        var uses = Arena.GetStringValue(action.Uses);
+        if (!IsGithubScriptAction(uses))
+        {
+            return;
+        }
+
+        foreach (var pair in action.Inputs)
+        {
+            var keySpan = pair.Key.AsSpan(Config.Utf8Yaml);
+            if (keySpan.SequenceEqual("script"u8))
+            {
+                CheckSink(step, pair.Value, "script");
+                return;
+            }
+        }
+    }
+
+    private static bool IsGithubScriptAction(ReadOnlySpan<byte> uses)
+    {
+        // Match actions/github-script@<any version>
+        const byte AtSign = (byte)'@';
+        var atIndex = uses.IndexOf(AtSign);
+        if (atIndex < 0)
+        {
+            return false;
+        }
+
+        return uses[..atIndex].SequenceEqual("actions/github-script"u8);
     }
 
     private void CheckSink(Step step, StringNodeId valueNode, string sinkName)
@@ -156,9 +221,9 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
-        for (var i = 0; i < s_untrustedPaths.Length; i++)
+        for (var i = 0; i < untrustedPaths.Length; i++)
         {
-            if (IsPathMatch(segments[..count], s_untrustedPaths[i], expression))
+            if (IsPathMatch(segments[..count], untrustedPaths[i], expression))
             {
                 return true;
             }
@@ -268,14 +333,17 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         {
             var expectedSegment = expected[i];
             var actualSegment = actual[i];
+
+            // Expected wildcard matches any actual segment
             if (expectedSegment == "*")
             {
                 continue;
             }
 
+            // Actual wildcard (e.g., github.event.*.body) matches any expected segment
             if (actualSegment.IsWildcard)
             {
-                return false;
+                continue;
             }
 
             if (!TokenEqualsIgnoreCase(actualSegment.Token.AsSpan(expression), expectedSegment))
@@ -348,28 +416,4 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     }
 
     private readonly record struct PathSegment(Utf8Slice Token, bool IsWildcard);
-
-    private static readonly string[][] s_untrustedPaths =
-    [
-        ["github", "event", "issue", "title"],
-        ["github", "event", "issue", "body"],
-        ["github", "event", "pull_request", "title"],
-        ["github", "event", "pull_request", "body"],
-        ["github", "event", "pull_request", "head", "ref"],
-        ["github", "event", "pull_request", "head", "label"],
-        ["github", "event", "pull_request", "head", "repo", "default_branch"],
-        ["github", "event", "comment", "body"],
-        ["github", "event", "review", "body"],
-        ["github", "event", "review_comment", "body"],
-        ["github", "event", "pages", "*", "page_name"],
-        ["github", "event", "commits", "*", "message"],
-        ["github", "event", "commits", "*", "author", "email"],
-        ["github", "event", "commits", "*", "author", "name"],
-        ["github", "event", "head_commit", "message"],
-        ["github", "event", "head_commit", "author", "email"],
-        ["github", "event", "head_commit", "author", "name"],
-        ["github", "event", "discussion", "title"],
-        ["github", "event", "discussion", "body"],
-        ["github", "head_ref"],
-    ];
 }

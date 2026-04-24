@@ -15,6 +15,11 @@ internal sealed class PopularActionsCSharpGenerator
                     .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
                     .DistinctBy(static n => n.Name, StringComparer.Ordinal)
                     .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                    .ToArray(),
+                x.Outputs
+                    .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                    .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                    .OrderBy(static n => n.Name, StringComparer.Ordinal)
                     .ToArray()))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
@@ -131,6 +136,32 @@ internal sealed class PopularActionsCSharpGenerator
             }
 
             var items = string.Join(", ", requiredInputs.Select(static i => $"\"{i.Name}\"u8.ToArray()"));
+            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+        }
+
+        sb.Append(
+            """
+                            _ => [],
+                        };
+                    }
+
+                    internal byte[][] GetOutputNames()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (action.Outputs.Count == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => [],");
+                continue;
+            }
+
+            var items = string.Join(", ", action.Outputs.Select(static o => $"\"{o.Name}\"u8.ToArray()"));
             sb.AppendLine($"                ActionId.{actionId} => [{items}],");
         }
 

@@ -432,7 +432,8 @@ public static class ExpressionSemanticAnalyzer
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
-    {        if (!EqualsAsciiIgnoreCase(functionNameUtf8, "format"u8))
+    {
+        if (!EqualsAsciiIgnoreCase(functionNameUtf8, "format"u8))
         {
             return;
         }

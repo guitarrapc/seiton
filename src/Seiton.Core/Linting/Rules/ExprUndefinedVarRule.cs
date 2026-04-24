@@ -182,16 +182,19 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckEnv(step.Env, ExpressionValidationContext.Step, "step.env", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
-        if (step.Exec is not ExecAction action || action.Inputs is null || action.Inputs.Value.Count == 0)
+        if (step.Exec is ExecRun run)
         {
-            return;
-        }
-
-        foreach (var pair in action.Inputs.Value)
-        {
-            var inputName = Decode(pair.Key);
-            CheckNode(pair.Value, ExpressionValidationContext.Step, $"step.with.{inputName}", static (rule, message, location, targetStep) =>
+            CheckNode(run.Run, ExpressionValidationContext.Step, "step.run", static (rule, message, location, targetStep) =>
                 rule.AddStepError(targetStep, message, location), step);
+        }
+        else if (step.Exec is ExecAction action && action.Inputs is { Count: > 0 })
+        {
+            foreach (var pair in action.Inputs.Value)
+            {
+                var inputName = Decode(pair.Key);
+                CheckNode(pair.Value, ExpressionValidationContext.Step, $"step.with.{inputName}", static (rule, message, location, targetStep) =>
+                    rule.AddStepError(targetStep, message, location), step);
+            }
         }
     }
 

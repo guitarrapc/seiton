@@ -38,6 +38,11 @@
           "name": "upload-chunk-size",
           "required": false
         }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        }
       ]
     },
     {
@@ -124,6 +129,14 @@
           "name": "token",
           "required": false
         }
+      ],
+      "outputs": [
+        {
+          "name": "commit"
+        },
+        {
+          "name": "ref"
+        }
       ]
     },
     {
@@ -162,6 +175,11 @@
           "name": "run-id",
           "required": false
         }
+      ],
+      "outputs": [
+        {
+          "name": "download-path"
+        }
       ]
     },
     {
@@ -199,6 +217,14 @@
         {
           "name": "source-url",
           "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "dotnet-version"
         }
       ]
     },
@@ -254,6 +280,14 @@
           "name": "token",
           "required": false
         }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "node-version"
+        }
       ]
     },
     {
@@ -287,6 +321,17 @@
         {
           "name": "retention-days",
           "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "artifact-digest"
+        },
+        {
+          "name": "artifact-id"
+        },
+        {
+          "name": "artifact-url"
         }
       ]
     },
@@ -322,7 +367,8 @@
           "name": "username",
           "required": false
         }
-      ]
+      ],
+      "outputs": []
     }
   ]
 }

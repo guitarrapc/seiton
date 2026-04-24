@@ -114,6 +114,77 @@ internal sealed class GitHubActionMetadataYamlParser
             .ToArray();
     }
 
+    public IReadOnlyList<PopularActionOutputModel> ParseOutputs(string yaml)
+    {
+        var lines = yaml.Replace("\r\n", "\n").Split('\n');
+
+        var outputsLineIndex = -1;
+        var outputsIndent = 0;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var trimmed = line.Trim();
+            if (trimmed == "outputs:")
+            {
+                outputsLineIndex = i;
+                outputsIndent = GetIndent(line);
+                break;
+            }
+        }
+
+        if (outputsLineIndex < 0)
+        {
+            return [];
+        }
+
+        var result = new List<string>();
+
+        for (var i = outputsLineIndex + 1; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var trimmedStart = line.TrimStart();
+            if (trimmedStart.StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var indent = GetIndent(line);
+            if (indent <= outputsIndent)
+            {
+                break;
+            }
+
+            if (indent == outputsIndent + 2)
+            {
+                var trimmed2 = line.Trim();
+                var colon = trimmed2.IndexOf(':');
+                if (colon <= 0) continue;
+
+                var key = trimmed2[..colon].Trim();
+                key = TrimQuotes(key);
+                if (key.Length == 0 || key == "<<") continue;
+
+                result.Add(key);
+            }
+        }
+
+        return result
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
+            .Select(static x => new PopularActionOutputModel(x))
+            .ToArray();
+    }
+
     private static int GetIndent(string line)
     {
         var count = 0;

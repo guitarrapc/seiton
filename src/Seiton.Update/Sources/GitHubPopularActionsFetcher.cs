@@ -91,12 +91,14 @@ internal sealed class GitHubPopularActionsFetcher
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
             var text = File.ReadAllText(rawPath);
             var inputs = yamlParser.ParseInputs(text);
+            var outputs = yamlParser.ParseOutputs(text);
 
             parsed.Actions.Add(new ParsedPopularAction
             {
                 ActionRef = source.ActionRef,
                 Uses = source.Uses,
                 Inputs = inputs.Select(static x => new ParsedPopularActionInput { Name = x.Name, Required = x.Required }).ToList(),
+                Outputs = outputs.Select(static x => new ParsedPopularActionOutput { Name = x.Name }).ToList(),
             });
         }
 
@@ -149,6 +151,12 @@ internal sealed class GitHubPopularActionsFetcher
                         .DistinctBy(static n => n.Name, StringComparer.Ordinal)
                         .OrderBy(static n => n.Name, StringComparer.Ordinal)
                         .Select(static n => new { name = n.Name, required = n.Required })
+                        .ToArray(),
+                    outputs = (x.Outputs ?? [])
+                        .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                        .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                        .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                        .Select(static n => new { name = n.Name })
                         .ToArray(),
                 })
                 .ToArray(),
@@ -302,11 +310,17 @@ internal sealed class GitHubPopularActionsFetcher
         public string ActionRef { get; set; } = string.Empty;
         public string Uses { get; set; } = string.Empty;
         public List<ParsedPopularActionInput> Inputs { get; set; } = [];
+        public List<ParsedPopularActionOutput>? Outputs { get; set; }
     }
 
     private sealed class ParsedPopularActionInput
     {
         public string Name { get; set; } = string.Empty;
         public bool Required { get; set; }
+    }
+
+    private sealed class ParsedPopularActionOutput
+    {
+        public string Name { get; set; } = string.Empty;
     }
 }

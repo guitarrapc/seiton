@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Generated;
+using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -10,7 +11,7 @@ namespace Seiton.Core.Parsing;
 /// </summary>
 internal static class DynamicContextTypeBuilder
 {
-    private static readonly ObjectExprType s_looseDynamic = ExprType.Object(dynamicPropertyType: ExprType.Any);
+    private static readonly ObjectExprType looseDynamic = ExprType.Object(dynamicPropertyType: ExprType.Any);
 
     // Static byte[] keys to avoid per-job allocation of "steps"u8.ToArray() etc.
     internal static readonly byte[] StepsKeyUtf8 = "steps"u8.ToArray();
@@ -20,10 +21,10 @@ internal static class DynamicContextTypeBuilder
     internal static readonly byte[] SecretsKeyUtf8 = "secrets"u8.ToArray();
 
     // Static Utf8String keys reused across all needs entries
-    private static readonly Utf8String s_resultKey = new("result"u8);
-    private static readonly Utf8String s_outputsKey = new("outputs"u8);
+    private static readonly Utf8String resultKey = new("result"u8);
+    private static readonly Utf8String outputsKey = new("outputs"u8);
 
-    private static readonly ObjectExprType s_stepEntryType = ExprType.Object(
+    private static readonly ObjectExprType stepEntryType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("outcome"u8), ExprType.String },
@@ -46,7 +47,7 @@ internal static class DynamicContextTypeBuilder
     {
         if (steps is null || steps.Count == 0)
         {
-            return (StepsKeyUtf8, s_looseDynamic);
+            return (StepsKeyUtf8, looseDynamic);
         }
 
         var props = new Dictionary<Utf8String, ExprType>();
@@ -65,15 +66,49 @@ internal static class DynamicContextTypeBuilder
                 continue;
             }
 
-            props[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = s_stepEntryType;
+            props[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = BuildStepEntryType(step, arena, utf8Yaml);
         }
 
         // When maxStepIndex >= 0, we're doing incremental building (step ordering validation).
         // Return strict type even when empty so forward references are flagged.
         // When maxStepIndex < 0 (default), fall back to loose if no step IDs found.
         return props.Count == 0
-            ? (StepsKeyUtf8, maxStepIndex >= 0 ? ExprType.Object(props, strict: true) : s_looseDynamic)
+            ? (StepsKeyUtf8, maxStepIndex >= 0 ? ExprType.Object(props, strict: true) : looseDynamic)
             : (StepsKeyUtf8, ExprType.Object(props, strict: true));
+    }
+
+    /// <summary>
+    /// Builds the step entry type. For popular actions with known outputs, returns a strict outputs type.
+    /// </summary>
+    private static ObjectExprType BuildStepEntryType(Step step, AstArena arena, byte[] utf8Yaml)
+    {
+        if (step.Exec is ExecAction action)
+        {
+            var usesValue = arena.GetStringValue(action.Uses);
+            if (PopularActions.TryGet(usesValue, out var spec))
+            {
+                var outputNames = spec.GetOutputNames();
+                if (outputNames.Length > 0)
+                {
+                    var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
+                    for (var j = 0; j < outputNames.Length; j++)
+                    {
+                        outputProps[new Utf8String(outputNames[j])] = ExprType.String;
+                    }
+
+                    return ExprType.Object(
+                        new Dictionary<Utf8String, ExprType>
+                        {
+                            { new Utf8String("outcome"u8), ExprType.String },
+                            { new Utf8String("conclusion"u8), ExprType.String },
+                            { outputsKey, ExprType.Object(outputProps, strict: true) },
+                        },
+                        strict: true);
+                }
+            }
+        }
+
+        return stepEntryType;
     }
 
     /// <summary>
@@ -82,9 +117,20 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
     {
-        if (matrix is null || matrix.Expression.HasValue || utf8Yaml is null)
+        if (utf8Yaml is null)
         {
-            return (MatrixKeyUtf8, s_looseDynamic);
+            return (MatrixKeyUtf8, looseDynamic);
+        }
+
+        if (matrix is null)
+        {
+            // Job has no matrix — return strict empty so any `matrix.X` is flagged
+            return (MatrixKeyUtf8, ExprType.Object(strict: true));
+        }
+
+        if (matrix.Expression.HasValue)
+        {
+            return (MatrixKeyUtf8, looseDynamic);
         }
 
         var rows = matrix.Rows;
@@ -93,18 +139,18 @@ internal static class DynamicContextTypeBuilder
         // No rows and no include: loose dynamic
         if ((rows is null || rows.Value.Count == 0) && (include is null || include.Count == 0))
         {
-            return (MatrixKeyUtf8, s_looseDynamic);
+            return (MatrixKeyUtf8, looseDynamic);
         }
 
         var estimatedCapacity = (rows is null ? 0 : rows.Value.Count) + 4; // extra room for include-only keys
         var props = new Dictionary<Utf8String, ExprType>(estimatedCapacity);
 
-        // Add keys from main axes
+        // Add keys from main axes with inferred types
         if (rows is { Count: > 0 })
         {
             foreach (var row in rows)
             {
-                props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.Any;
+                props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml);
             }
         }
 
@@ -132,8 +178,78 @@ internal static class DynamicContextTypeBuilder
         }
 
         return props.Count == 0
-            ? (MatrixKeyUtf8, s_looseDynamic)
+            ? (MatrixKeyUtf8, looseDynamic)
             : (MatrixKeyUtf8, ExprType.Object(props, strict: true));
+    }
+
+    /// <summary>
+    /// Infers the type of a matrix row from its values.
+    /// When all values are objects with the same key set, returns a strict object type.
+    /// Otherwise returns Any.
+    /// </summary>
+    private static ExprType InferMatrixRowType(MatrixRow row, byte[] utf8Yaml)
+    {
+        if (row.Expression.HasValue || row.Values is null || row.Values.Count == 0)
+        {
+            return ExprType.Any;
+        }
+
+        // Check if all values are objects
+        Dictionary<Utf8String, ExprType>? mergedProps = null;
+        for (var i = 0; i < row.Values.Count; i++)
+        {
+            if (row.Values[i] is not RawYamlObject obj)
+            {
+                return ExprType.Any;
+            }
+
+            if (mergedProps is null)
+            {
+                mergedProps = new Dictionary<Utf8String, ExprType>(obj.Properties.Count);
+                foreach (var pair in obj.Properties)
+                {
+                    mergedProps[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml);
+                }
+            }
+            else
+            {
+                // Merge keys from subsequent objects
+                foreach (var pair in obj.Properties)
+                {
+                    var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
+                    if (!mergedProps.ContainsKey(key))
+                    {
+                        mergedProps[key] = InferRawValueType(pair.Value, utf8Yaml);
+                    }
+                }
+            }
+        }
+
+        return mergedProps is { Count: > 0 }
+            ? ExprType.Object(mergedProps, strict: true)
+            : ExprType.Any;
+    }
+
+    private static ExprType InferRawValueType(RawYamlValue value, byte[] utf8Yaml)
+    {
+        return value switch
+        {
+            RawYamlString => ExprType.Any,
+            RawYamlArray => ExprType.Any,
+            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml),
+            _ => ExprType.Any,
+        };
+    }
+
+    private static ObjectExprType InferRawObjectType(RawYamlObject obj, byte[] utf8Yaml)
+    {
+        var props = new Dictionary<Utf8String, ExprType>(obj.Properties.Count);
+        foreach (var pair in obj.Properties)
+        {
+            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml);
+        }
+
+        return ExprType.Object(props, strict: true);
     }
 
     /// <summary>
@@ -148,7 +264,8 @@ internal static class DynamicContextTypeBuilder
     {
         if (needs is null || needs.Length == 0)
         {
-            return (NeedsKeyUtf8, s_looseDynamic);
+            // Job has no needs: — return strict empty so any `needs.X` is flagged as undefined
+            return (NeedsKeyUtf8, ExprType.Object(strict: true));
         }
 
         var props = new Dictionary<Utf8String, ExprType>(needs.Length);
@@ -166,8 +283,8 @@ internal static class DynamicContextTypeBuilder
             var needsEntryType = ExprType.Object(
                 new Dictionary<Utf8String, ExprType>
                 {
-                    { s_resultKey, ExprType.String },
-                    { s_outputsKey, outputsType },
+                    { resultKey, ExprType.String },
+                    { outputsKey, outputsType },
                 },
                 strict: true);
 
@@ -175,7 +292,7 @@ internal static class DynamicContextTypeBuilder
         }
 
         return props.Count == 0
-            ? (NeedsKeyUtf8, s_looseDynamic)
+            ? (NeedsKeyUtf8, looseDynamic)
             : (NeedsKeyUtf8, ExprType.Object(props, strict: true));
     }
 
@@ -237,7 +354,7 @@ internal static class DynamicContextTypeBuilder
             }
         }
 
-        return (InputsKeyUtf8, s_looseDynamic);
+        return (InputsKeyUtf8, looseDynamic);
     }
 
     private static ObjectExprType BuildWorkflowCallInputsType(IReadOnlyList<WorkflowCallEventInput> inputs)
@@ -299,7 +416,7 @@ internal static class DynamicContextTypeBuilder
             }
         }
 
-        return (SecretsKeyUtf8, s_looseDynamic);
+        return (SecretsKeyUtf8, looseDynamic);
     }
 
     internal static readonly byte[] JobsKeyUtf8 = "jobs"u8.ToArray();
@@ -314,7 +431,7 @@ internal static class DynamicContextTypeBuilder
     {
         if (allJobs.Count == 0 || utf8Yaml is null)
         {
-            return (JobsKeyUtf8, s_looseDynamic);
+            return (JobsKeyUtf8, looseDynamic);
         }
 
         var props = new Dictionary<Utf8String, ExprType>(allJobs.Count);
@@ -324,8 +441,8 @@ internal static class DynamicContextTypeBuilder
             var jobEntryType = ExprType.Object(
                 new Dictionary<Utf8String, ExprType>
                 {
-                    { s_resultKey, ExprType.String },
-                    { s_outputsKey, outputsType },
+                    { resultKey, ExprType.String },
+                    { outputsKey, outputsType },
                 },
                 strict: true);
             props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = jobEntryType;

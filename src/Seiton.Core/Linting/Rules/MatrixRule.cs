@@ -128,7 +128,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 goto nextValue;
             }
 
-            nextValue:;
+        nextValue:;
         }
     }
 

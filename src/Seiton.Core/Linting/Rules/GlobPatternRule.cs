@@ -179,6 +179,13 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             }
             else
             {
+                // Check for special character followed by + (e.g. *+, **+, ?+)
+                if (b == (byte)'+' && consecutiveStars > 0)
+                {
+                    reason = "unexpected character '+' after '*'. the preceding character must not be a special character";
+                    return true;
+                }
+
                 consecutiveStars = 0;
             }
 
@@ -210,6 +217,13 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                     return true;
                 }
             }
+
+            // Detect git-check-ref-format violation characters (outside brackets)
+            if (!insideBracket && IsRefNameForbiddenChar(b))
+            {
+                reason = $"character '{(char)b}' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, ?, backslash";
+                return true;
+            }
         }
 
         if (openBracketCount > 0)
@@ -218,10 +232,10 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             return true;
         }
 
-        // Detect '..' path segments
-        if (ContainsDotDotSegment(pattern))
+        // Detect '.' or '..' path segments
+        if (ContainsDotSegment(pattern))
         {
-            reason = "'..' path segment is not allowed";
+            reason = "'.' and '..' are not allowed in path";
             return true;
         }
 
@@ -229,21 +243,44 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         return false;
     }
 
-    private static bool ContainsDotDotSegment(ReadOnlySpan<byte> pattern)
+    private static bool IsRefNameForbiddenChar(byte b)
     {
-        // Check for leading "../" or "..\", bare "..", or "/../" / "\..\", or trailing "/.." / "\.."
-        for (var i = 0; i < pattern.Length - 1; i++)
+        return b == (byte)'^'
+            || b == (byte)'~'
+            || b == (byte)':'
+            || b == (byte)' ';
+    }
+
+    private static bool ContainsDotSegment(ReadOnlySpan<byte> pattern)
+    {
+        // Check for '.' or '..' as a path segment:
+        // Bare "." or "..", or leading "./" "../", or "/./" "/../", or trailing "/." "/.."
+        for (var i = 0; i < pattern.Length; i++)
         {
-            if (pattern[i] != (byte)'.' || pattern[i + 1] != (byte)'.')
+            if (pattern[i] != (byte)'.')
             {
                 continue;
             }
 
             var atStart = i == 0 || pattern[i - 1] == (byte)'/' || pattern[i - 1] == (byte)'\\';
-            var atEnd = i + 2 >= pattern.Length || pattern[i + 2] == (byte)'/' || pattern[i + 2] == (byte)'\\';
-            if (atStart && atEnd)
+            if (!atStart)
+            {
+                continue;
+            }
+
+            // Single dot segment: "." at end, or "./" or ".\"
+            if (i + 1 >= pattern.Length || pattern[i + 1] == (byte)'/' || pattern[i + 1] == (byte)'\\')
             {
                 return true;
+            }
+
+            // Double dot segment: ".." at end, or "../" or "..\"
+            if (pattern[i + 1] == (byte)'.')
+            {
+                if (i + 2 >= pattern.Length || pattern[i + 2] == (byte)'/' || pattern[i + 2] == (byte)'\\')
+                {
+                    return true;
+                }
             }
         }
 

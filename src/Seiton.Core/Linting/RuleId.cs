@@ -55,6 +55,7 @@ public enum RuleId
     UseTrustedPublishing,
     LocalActionInputs,
     WorkflowCallInputDefault,
+    OutdatedActionRunner,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

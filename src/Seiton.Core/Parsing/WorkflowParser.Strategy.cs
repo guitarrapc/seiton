@@ -157,7 +157,7 @@ public static partial class WorkflowParser
             }
         }
 
-        strategy_mapping_done:
+    strategy_mapping_done:
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
