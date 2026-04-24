@@ -163,6 +163,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
     {
         var consecutiveStars = 0;
         var openBracketCount = 0;
+        var insideBracket = false;
 
         for (var i = 0; i < pattern.Length; i++)
         {
@@ -184,6 +185,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             if (b == (byte)'[')
             {
                 openBracketCount++;
+                insideBracket = true;
             }
             else if (b == (byte)']')
             {
@@ -194,6 +196,19 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 }
 
                 openBracketCount--;
+                insideBracket = false;
+            }
+
+            // Detect reversed ranges inside brackets: [z-a]
+            if (insideBracket && b == (byte)'-' && i >= 2 && i + 1 < pattern.Length)
+            {
+                var prev = pattern[i - 1];
+                var next = pattern[i + 1];
+                if (prev != (byte)'[' && next != (byte)']' && prev > next)
+                {
+                    reason = $"reversed range '[{(char)prev}-{(char)next}]' in character class";
+                    return true;
+                }
             }
         }
 
@@ -203,7 +218,35 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             return true;
         }
 
+        // Detect '..' path segments
+        if (ContainsDotDotSegment(pattern))
+        {
+            reason = "'..' path segment is not allowed";
+            return true;
+        }
+
         reason = string.Empty;
+        return false;
+    }
+
+    private static bool ContainsDotDotSegment(ReadOnlySpan<byte> pattern)
+    {
+        // Check for leading "../" or "..\", bare "..", or "/../" / "\..\", or trailing "/.." / "\.."
+        for (var i = 0; i < pattern.Length - 1; i++)
+        {
+            if (pattern[i] != (byte)'.' || pattern[i + 1] != (byte)'.')
+            {
+                continue;
+            }
+
+            var atStart = i == 0 || pattern[i - 1] == (byte)'/' || pattern[i - 1] == (byte)'\\';
+            var atEnd = i + 2 >= pattern.Length || pattern[i + 2] == (byte)'/' || pattern[i + 2] == (byte)'\\';
+            if (atStart && atEnd)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 

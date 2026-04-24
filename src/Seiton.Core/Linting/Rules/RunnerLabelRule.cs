@@ -36,6 +36,10 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         }
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
+
+        // Detect OS family conflicts among labels
+        DetectOsFamilyConflicts(job, jobId, runsOn.Labels);
+
         for (var i = 0; i < runsOn.Labels.Length; i++)
         {
             var label = runsOn.Labels[i];
@@ -53,6 +57,95 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             var labelText = Decode(Arena.GetStringSlice(label));
             AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(label));
         }
+    }
+
+    private void DetectOsFamilyConflicts(Job job, string jobId, StringNodeId[] labels)
+    {
+        // Track which OS families appear and where
+        byte seenOsFamilies = 0; // bit 0=linux, 1=windows, 2=macos
+        var firstConflictRange = default(TextRange);
+
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var label = labels[i];
+            if (Arena.GetStringExpression(label).HasValue)
+            {
+                continue;
+            }
+
+            var labelUtf8 = Arena.GetStringValue(label);
+            var family = GetOsFamily(labelUtf8);
+            if (family == 0)
+            {
+                continue;
+            }
+
+            if (seenOsFamilies != 0 && (seenOsFamilies & family) == 0)
+            {
+                // Different OS family from what we already saw
+                firstConflictRange = Arena.GetStringRange(label);
+                AddJobError(job, $"job '{jobId}' runs-on labels contain conflicting OS families", firstConflictRange);
+                return;
+            }
+
+            seenOsFamilies |= family;
+        }
+    }
+
+    /// <summary>Returns a bitmask for the OS family: 1=linux, 2=windows, 4=macos, 0=unknown.</summary>
+    private static byte GetOsFamily(ReadOnlySpan<byte> labelUtf8)
+    {
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "ubuntu-"u8))
+        {
+            return 1;
+        }
+
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "windows-"u8))
+        {
+            return 2;
+        }
+
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "macos-"u8))
+        {
+            return 4;
+        }
+
+        return 0;
+    }
+
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> prefix)
+    {
+        if (value.Length < prefix.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < prefix.Length; i++)
+        {
+            var a = value[i];
+            var b = prefix[i];
+            if (a == b)
+            {
+                continue;
+            }
+
+            if (a is >= (byte)'A' and <= (byte)'Z')
+            {
+                a = (byte)(a + 32);
+            }
+
+            if (b is >= (byte)'A' and <= (byte)'Z')
+            {
+                b = (byte)(b + 32);
+            }
+
+            if (a != b)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private bool ContainsSelfHostedLabel(StringNodeId[] labels)

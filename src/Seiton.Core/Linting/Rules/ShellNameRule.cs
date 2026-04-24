@@ -10,6 +10,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
 
     private Workflow? _currentWorkflow;
     private Job? _currentJob;
+    private OsFamily _currentOsFamily;
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -22,6 +23,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
     public override void VisitJobPre(Job job)
     {
         _currentJob = job;
+        _currentOsFamily = ResolveOsFamily(job);
         CheckDefaultsRunShell(job.Defaults);
         _currentJob = null;
     }
@@ -41,12 +43,17 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
             return;
         }
 
-        if (IsValidShellName(shellSpan))
+        if (!IsValidShellName(shellSpan))
         {
+            AddStepError(step, BuildInvalidShellMessage(run.Shell), Arena.GetStringRange(run.Shell));
             return;
         }
 
-        AddStepError(step, BuildInvalidShellMessage(run.Shell), Arena.GetStringRange(run.Shell));
+        // OS-specific shell validation
+        if (_currentOsFamily != OsFamily.Unknown)
+        {
+            CheckOsSpecificShell(step, run.Shell, shellSpan);
+        }
     }
 
     private void CheckDefaultsRunShell(Defaults? defaults)
@@ -98,5 +105,118 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
             || shell.SequenceEqual("cmd"u8)
             || shell.SequenceEqual("python"u8)
             || shell.IndexOf("{0}"u8) >= 0;
+    }
+
+    private void CheckOsSpecificShell(Step step, StringNodeId shellNode, ReadOnlySpan<byte> shellSpan)
+    {
+        // cmd and powershell are Windows-only
+        if (shellSpan.SequenceEqual("cmd"u8) && _currentOsFamily != OsFamily.Windows)
+        {
+            var osName = _currentOsFamily.ToString().ToLowerInvariant();
+            AddStepWarning(step, $"shell 'cmd' is not available on {osName} runners", Arena.GetStringRange(shellNode));
+        }
+        else if (shellSpan.SequenceEqual("powershell"u8) && _currentOsFamily != OsFamily.Windows)
+        {
+            var osName = _currentOsFamily.ToString().ToLowerInvariant();
+            AddStepWarning(step, $"shell 'powershell' is not available on {osName} runners; use 'pwsh' instead", Arena.GetStringRange(shellNode));
+        }
+    }
+
+    private OsFamily ResolveOsFamily(Job job)
+    {
+        var runsOn = job.RunsOn;
+        if (runsOn is null || runsOn.LabelsExpr.HasValue || runsOn.Labels is null || Config.Utf8Yaml is null)
+        {
+            return OsFamily.Unknown;
+        }
+
+        OsFamily resolved = OsFamily.Unknown;
+        for (var i = 0; i < runsOn.Labels.Length; i++)
+        {
+            var label = runsOn.Labels[i];
+            if (Arena.GetStringExpression(label).HasValue)
+            {
+                return OsFamily.Unknown;
+            }
+
+            var labelUtf8 = Arena.GetStringValue(label);
+            var family = GetOsFamilyFromLabel(labelUtf8);
+            if (family == OsFamily.Unknown)
+            {
+                continue;
+            }
+
+            if (resolved != OsFamily.Unknown && resolved != family)
+            {
+                return OsFamily.Unknown; // conflicting labels, can't determine OS
+            }
+
+            resolved = family;
+        }
+
+        return resolved;
+    }
+
+    private static OsFamily GetOsFamilyFromLabel(ReadOnlySpan<byte> labelUtf8)
+    {
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "ubuntu-"u8))
+        {
+            return OsFamily.Linux;
+        }
+
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "windows-"u8))
+        {
+            return OsFamily.Windows;
+        }
+
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "macos-"u8))
+        {
+            return OsFamily.MacOS;
+        }
+
+        return OsFamily.Unknown;
+    }
+
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> prefix)
+    {
+        if (value.Length < prefix.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < prefix.Length; i++)
+        {
+            var a = value[i];
+            var b = prefix[i];
+            if (a == b)
+            {
+                continue;
+            }
+
+            if (a is >= (byte)'A' and <= (byte)'Z')
+            {
+                a = (byte)(a + 32);
+            }
+
+            if (b is >= (byte)'A' and <= (byte)'Z')
+            {
+                b = (byte)(b + 32);
+            }
+
+            if (a != b)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private enum OsFamily
+    {
+        Unknown,
+        Linux,
+        Windows,
+        MacOS,
     }
 }

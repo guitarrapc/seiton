@@ -62,6 +62,7 @@ internal static class RuleIdExtensions
         RuleId.RefVersionMismatch => "ref-version-mismatch",
         RuleId.UseTrustedPublishing => "use-trusted-publishing",
         RuleId.LocalActionInputs => "local-action-inputs",
+        RuleId.WorkflowCallInputDefault => "workflow-call-input-default",
         RuleId.Syntax => "syntax",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };

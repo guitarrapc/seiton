@@ -33,6 +33,19 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 var needText = Decode(Arena.GetStringSlice(need));
                 AddJobError(job, $"job '{jobId}' references unknown job '{needText}' in needs", Arena.GetStringRange(need));
             }
+
+            // Check for duplicates among earlier entries
+            for (var j = 0; j < i; j++)
+            {
+                var earlier = job.Needs[j];
+                if (needSpan.SequenceEqual(Arena.GetStringValue(earlier)))
+                {
+                    var jobId = Decode(Arena.GetStringSlice(job.Id));
+                    var needText = Decode(Arena.GetStringSlice(need));
+                    AddJobError(job, $"job '{jobId}' has duplicates '{needText}' in needs", Arena.GetStringRange(need));
+                    break;
+                }
+            }
         }
     }
 

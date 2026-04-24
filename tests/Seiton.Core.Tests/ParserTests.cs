@@ -2442,6 +2442,44 @@ public sealed class ParserTests
         await Assert.That(result.Workflow).IsNotNull();
     }
 
+    // Phase 4: #18 fail-fast/timeout-minutes type validation
+    [Test]
+    public async Task Parse_FailFast_Off_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            test:
+                strategy:
+                    fail-fast: off
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ng
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "fail-fast-off.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("fail-fast must be bool", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_TimeoutMinutes_String_ReportsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - timeout-minutes: two minutes
+                      run: echo ng
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "timeout-string.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsTrue();
+    }
+
     // P0-2 regression: step env: with expression scalar should parse without error
     [Test]
     public async Task Parse_StepEnvExpressionScalar_ParsesWithoutError()

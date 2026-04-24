@@ -1,4 +1,4 @@
-using static Seiton.Core.Parsing.SpanHelpers;
+﻿using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 
@@ -171,6 +171,14 @@ public static partial class WorkflowParser
         var expressionNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
         if (!expressionNode.HasValue)
         {
+            return default;
+        }
+
+        // If the string doesn't contain an expression, it's not a valid number
+        if (!arena.GetStringExpression(expressionNode).HasValue && arena.GetStringValue(expressionNode).IndexOf("${{"u8) < 0)
+        {
+            needsError = true;
+            errorMark = mark;
             return default;
         }
 

@@ -1045,6 +1045,14 @@ public static partial class WorkflowParser
             return default;
         }
 
+        // If the string doesn't contain an expression, it's not a valid bool
+        if (!arena.GetStringExpression(expressionNode).HasValue && arena.GetStringValue(expressionNode).IndexOf("${{"u8) < 0)
+        {
+            needsError = true;
+            errorMark = mark;
+            return default;
+        }
+
         return arena.AddBool(false, expressionNode, range);
     }
 

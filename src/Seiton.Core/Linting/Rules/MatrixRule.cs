@@ -51,6 +51,9 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 continue;
             }
 
+            // Check for duplicate values within this axis
+            ValidateNoDuplicateAxisValues(job, row);
+
             if (combinationWarningReported)
             {
                 continue;
@@ -74,6 +77,58 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 $"job '{jobIdForMessage}' strategy.matrix expands to more than {MaxRecommendedCombinations} combinations; consider reducing matrix fan-out",
                 matrixNode.Range);
             combinationWarningReported = true;
+        }
+    }
+
+    private void ValidateNoDuplicateAxisValues(Job job, MatrixRow row)
+    {
+        var values = row.Values;
+        if (values is null || values.Count < 2)
+        {
+            return;
+        }
+
+        for (var i = 1; i < values.Count; i++)
+        {
+            if (values[i] is not RawYamlString current)
+            {
+                continue;
+            }
+
+            var currentSpan = Arena.GetStringValue(current.Value);
+            if (Arena.GetStringExpression(current.Value).HasValue || currentSpan.IndexOf("${{"u8) >= 0)
+            {
+                continue;
+            }
+
+            for (var j = 0; j < i; j++)
+            {
+                if (values[j] is not RawYamlString earlier)
+                {
+                    continue;
+                }
+
+                if (Arena.GetStringExpression(earlier.Value).HasValue || Arena.GetStringValue(earlier.Value).IndexOf("${{"u8) >= 0)
+                {
+                    continue;
+                }
+
+                if (!currentSpan.SequenceEqual(Arena.GetStringValue(earlier.Value)))
+                {
+                    continue;
+                }
+
+                var jobId = Decode(Arena.GetStringSlice(job.Id));
+                var axisName = Decode(Arena.GetStringSlice(row.Name));
+                var valueText = Decode(Arena.GetStringSlice(current.Value));
+                AddJobWarning(
+                    job,
+                    $"job '{jobId}' strategy.matrix axis '{axisName}' has duplicate value '{valueText}'",
+                    Arena.GetStringRange(current.Value));
+                goto nextValue;
+            }
+
+            nextValue:;
         }
     }
 

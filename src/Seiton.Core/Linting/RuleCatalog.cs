@@ -68,6 +68,7 @@ internal static class RuleCatalog
         (RuleId.RefVersionMismatch, 49, static () => new RefVersionMismatchRule()),
         (RuleId.UseTrustedPublishing, 50, static () => new UseTrustedPublishingRule()),
         (RuleId.LocalActionInputs, 51, static () => new LocalActionInputsRule()),
+        (RuleId.WorkflowCallInputDefault, 52, static () => new WorkflowCallInputDefaultRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor

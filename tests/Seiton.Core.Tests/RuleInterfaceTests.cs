@@ -295,7 +295,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(48);
+        await Assert.That(rules.Length).IsEqualTo(49);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -344,6 +344,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[45].Id).IsEqualTo(RuleId.RefVersionMismatch);
         await Assert.That(rules[46].Id).IsEqualTo(RuleId.UseTrustedPublishing);
         await Assert.That(rules[47].Id).IsEqualTo(RuleId.LocalActionInputs);
+        await Assert.That(rules[48].Id).IsEqualTo(RuleId.WorkflowCallInputDefault);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -393,6 +394,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(49);
         await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(50);
         await Assert.That(RuleCatalog.GetPriority("local-action-inputs")).IsEqualTo(51);
+        await Assert.That(RuleCatalog.GetPriority("workflow-call-input-default")).IsEqualTo(52);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -405,12 +407,13 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo(RuleId.KnownVulnerableActions);
         await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-050");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-050", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-051", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-051");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-053");
     }
 
     [Test]
@@ -1922,6 +1925,53 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
     }
 
+    // ── Phase 4: #16 Duplicate job ID in needs array ────────────────────
+    [Test]
+    public async Task RuleRegression_NeedsGraphRule_DuplicateNeeds_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-duplicate-needs-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build, build]
+                    steps:
+                        - run: echo test
+            """,
+            ["duplicates"]),
+            new RuleCase(
+            "ok-unique-needs-ids",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                lint:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo lint
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build, lint]
+                    steps:
+                        - run: echo test
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
+    }
+
     [Test]
     public async Task RuleRegression_ShellNameRule_TableDriven()
     {
@@ -2147,6 +2197,65 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
     }
 
+    // ── Phase 4: #19 OS-specific shell validation ───────────────────────
+    [Test]
+    public async Task RuleRegression_ShellNameRule_OsSpecific_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-cmd-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: cmd
+            """,
+            ["cmd", "not available on"]),
+            new RuleCase(
+            "ng-powershell-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: powershell
+            """,
+            ["powershell", "not available on"]),
+            new RuleCase(
+            "ok-pwsh-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: pwsh
+            """,
+            []),
+            new RuleCase(
+            "ok-cmd-on-windows",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    steps:
+                        - run: echo ok
+                          shell: cmd
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
+    }
+
     [Test]
     public async Task RuleRegression_RunnerLabelRule_TableDriven()
     {
@@ -2246,6 +2355,39 @@ public sealed class RuleInterfaceTests
                     runs-on:
                         labels: [self-hosted, custom-hosted]
                     permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
+    // ── Phase 4: #17 Runner label conflict ──────────────────────────────
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_OsConflict_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-mixed-os-labels",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest, windows-latest]
+                    steps:
+                        - run: echo ng
+            """,
+            ["conflicting OS families"]),
+            new RuleCase(
+            "ok-single-os-label",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest]
                     steps:
                         - run: echo ok
             """,
@@ -2619,6 +2761,81 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new DispatchInputsRule(), "dispatch-inputs", cases);
     }
 
+    // ── Phase 4: #13 workflow_call input default validation ─────────────
+    [Test]
+    public async Task RuleRegression_WorkflowCallInputDefaultRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-boolean-input-non-bool-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        debug:
+                            type: boolean
+                            default: "yes"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["boolean", "default"]),
+            new RuleCase(
+            "ng-number-input-non-number-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        retries:
+                            type: number
+                            default: "three"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["number", "default"]),
+            new RuleCase(
+            "ok-boolean-input-true-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        debug:
+                            type: boolean
+                            default: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-string-input-any-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        name:
+                            type: string
+                            default: "hello"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new WorkflowCallInputDefaultRule(), "workflow-call-input-default", cases);
+    }
+
     [Test]
     public async Task RuleRegression_ScheduleEventRule_TableDriven()
     {
@@ -2775,6 +2992,59 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["cannot be used together"]),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    // ── Phase 4: #11 Glob pattern syntax validation ─────────────────────
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_Syntax_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-reversed-bracket-range",
+            """
+            on:
+                push:
+                    branches: ['feature/[z-a]']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["reversed range"]),
+            new RuleCase(
+            "ng-dot-dot-path-segment",
+            """
+            on:
+                push:
+                    paths: ['src/../etc/passwd']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["'..' path segment"]),
+            new RuleCase(
+            "ok-valid-bracket-range",
+            """
+            on:
+                push:
+                    branches: ['release/v[0-9].*']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
@@ -3668,6 +3938,45 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["strategy.matrix.exclude references unknown axis 'arch'"]),
+        };
+
+        await AssertRuleCases(new MatrixRule(), "matrix", cases);
+    }
+
+    // ── Phase 4: #12 Matrix duplicate value + exclude mismatch ──────────
+    [Test]
+    public async Task RuleRegression_MatrixRule_DuplicateValues_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-duplicate-axis-value",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-20.04, ubuntu-22.04, ubuntu-20.04]
+                    steps:
+                        - run: echo ng
+            """,
+            ["duplicate"]),
+            new RuleCase(
+            "ok-unique-axis-values",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-20.04, ubuntu-22.04, ubuntu-24.04]
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new MatrixRule(), "matrix", cases);
