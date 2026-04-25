@@ -31,25 +31,27 @@
 
 ### Call Sites vs GitHub Docs
 
-| Call site | Current context | Docs contexts | Gap |
-|---|---|---|---|
-| `jobs.<job_id>.if` | Job (7 roots) | github, needs, vars, inputs (4) | strategy, matrix, secrets が不要に許可 |
-| `jobs.<job_id>.steps.if` | Step (11 roots) | Step minus secrets (10) | secrets が不要に許可 |
-| `jobs.<job_id>.continue-on-error` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.runs-on` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.name` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.timeout-minutes` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.environment` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.with.<with_id>` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.environment.url` | Job (7) | 10 (+ job,runner,env,steps; no secrets) | secrets 過剰 & job,runner,env,steps 不足 |
-| `jobs.<job_id>.container` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.container.image` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.container.credentials` | Job (7) | 8 (+ env) | env 不足 |
-| `jobs.<job_id>.container.env.<env_id>` | Job (7) | 10 (+ job,runner,env) | job,runner,env 不足 |
-| `jobs.<job_id>.services` | Job (7) | 6 (no secrets) | secrets が不要に許可 |
-| `jobs.<job_id>.services.<sid>.credentials` | Job (7) | 8 (+ env) | env 不足 |
-| `jobs.<job_id>.services.<sid>.env.<eid>` | Job (7) | 10 (+ job,runner,env) | job,runner,env 不足 |
-| `jobs.<job_id>.defaults.run` | Job (7) | 8 (+ env, no secrets) | env 不足, secrets 過剰 |
+> **注**: 以下のテーブルは C-1 〜 C-8 実装前の状態を記録したもの。全項目は per-key リファクタリング + C-1 〜 C-4 で解決済み。
+
+| Call site | Current context | Docs contexts | Gap | Status |
+|---|---|---|---|---|
+| `jobs.<job_id>.if` | ~~Job (7 roots)~~ → JobIf (4) | github, needs, vars, inputs (4) | ~~strategy, matrix, secrets が不要に許可~~ | ✅ C-1 |
+| `jobs.<job_id>.steps.if` | ~~Step (11 roots)~~ → StepIf (10) | Step minus secrets (10) | ~~secrets が不要に許可~~ | ✅ C-2 |
+| `jobs.<job_id>.continue-on-error` | ~~Job (7)~~ → JobContinueOnError (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.runs-on` | ~~Job (7)~~ → JobRunsOn (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.name` | ~~Job (7)~~ → JobName (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.timeout-minutes` | ~~Job (7)~~ → JobTimeoutMinutes (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.environment` | ~~Job (7)~~ → JobEnvironment (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.with.<with_id>` | ~~Job (7)~~ → JobWith (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.environment.url` | ~~Job (7)~~ → JobEnvironmentUrl (10) | 10 (+ job,runner,env,steps; no secrets) | ~~secrets 過剰 & job,runner,env,steps 不足~~ | ✅ C-5 |
+| `jobs.<job_id>.container` | ~~Job (7)~~ → JobContainer (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.container.image` | ~~Job (7)~~ → JobContainerImage (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.container.credentials` | ~~Job (7)~~ → JobContainerCredentials (8) | 8 (+ env) | ~~env 不足~~ | ✅ C-7 |
+| `jobs.<job_id>.container.env.<env_id>` | ~~Job (7)~~ → JobContainerEnv (10) | 10 (+ job,runner,env) | ~~job,runner,env 不足~~ | ✅ C-6 |
+| `jobs.<job_id>.services` | ~~Job (7)~~ → JobServices (6) | 6 (no secrets) | ~~secrets が不要に許可~~ | ✅ C-4 |
+| `jobs.<job_id>.services.<sid>.credentials` | ~~Job (7)~~ → JobServicesCredentials (8) | 8 (+ env) | ~~env 不足~~ | ✅ C-7 |
+| `jobs.<job_id>.services.<sid>.env.<eid>` | ~~Job (7)~~ → JobServicesEnv (10) | 10 (+ job,runner,env) | ~~job,runner,env 不足~~ | ✅ C-6 |
+| `jobs.<job_id>.defaults.run` | ~~Job (7)~~ → JobDefaultsRun (7) | 8 (+ env, no secrets) | ~~env 不足, secrets 過剰~~ | ✅ C-8 |
 
 **正しいサイト（変更不要）:**
 - `run-name`, `concurrency`, `env`（workflow level）→ Workflow ✓
@@ -65,11 +67,11 @@
 | Function | GitHub Docs 制限 | 現在の実装 |
 |---|---|---|
 | `always()`, `cancelled()`, `success()`, `failure()` | `if` 条件のみ | ✅ `allowStatusCheckFunctions` フラグで制御済み |
-| `hashFiles()` | step レベルのキーのみ | ❌ 全コンテキストで許可（制限なし） |
+| `hashFiles()` | step レベルのキーのみ | ✅ step レベルのキーのみに制限済み (C-3) |
 
 ## Recommended Items
 
-### C-1: `jobs.<job_id>.if` コンテキスト制限 — HIGH
+### C-1: `jobs.<job_id>.if` コンテキスト制限 — DONE
 
 **問題**: `jobs.<job_id>.if` は Job コンテキスト（7 roots）を使っているが、GitHub Docs では github, needs, vars, inputs（4 roots）のみ。Strategy コンテキストと同一。
 
@@ -79,9 +81,9 @@
 
 **コスト**: 1 行変更 + テスト追加。
 
-**実装結果**:
+**実装結果**: → Implementation Results セクション参照
 
-### C-2: `jobs.<job_id>.steps.if` secrets 除外 — HIGH
+### C-2: `jobs.<job_id>.steps.if` secrets 除外 — DONE
 
 **問題**: `jobs.<job_id>.steps.if` は Step コンテキスト（全 11 roots）を使っているが、GitHub Docs では secrets を除く 10 roots のみ。
 
@@ -93,9 +95,9 @@
 
 **コスト**: enum 追加 + Availability pipeline 拡張 + テスト追加。
 
-**実装結果**:
+**実装結果**: → Implementation Results セクション参照
 
-### C-3: `hashFiles` 関数のコンテキスト制限
+### C-3: `hashFiles` 関数のコンテキスト制限 — DONE — DONE
 
 **問題**: `hashFiles()` は step レベルのキーでのみ利用可能だが、現在の実装では全コンテキストで許可されている。
 
@@ -105,9 +107,9 @@
 
 **コスト**: ExpressionSemanticAnalyzer に制限ロジック追加 + テスト追加。
 
-**実装結果**:
+**実装結果**: → Implementation Results セクション参照
 
-### C-4: Job レベルの secrets 除外 — MEDIUM
+### C-4: Job レベルの secrets 除外 — DONE
 
 **問題**: Job コンテキストの大半のキー（name, runs-on, timeout-minutes, continue-on-error, environment, container, container.image, services, with）は secrets を許可しないが、現在の Job スコープには secrets が含まれている。
 
@@ -121,7 +123,28 @@
 
 **実装結果**:
 
-### C-5: `jobs.<job_id>.environment.url` コンテキスト修正 — MEDIUM
+**実装日**: 2026-04-26
+
+**変更内容**:
+per-key リファクタリングにより、Availability.g.cs の各 job-level enum は既にキーごとに正しい roots を持っていた（例: `JobNameRoots` は 6 roots で secrets なし、`JobEnvRoots` は 7 roots で secrets あり）。しかし、3 つのパーサー呼び出しサイトが `ParseString` を使っており、式の意味解析（コンテキスト可用性チェック）をスキップしていた:
+
+1. **`WorkflowParser.Jobs.cs` L196**: job name の `ParseString` → `ParseStringAndValidateExpression(ExpressionValidationContext.JobName)` に変更
+2. **`WorkflowParser.Jobs.cs` L771**: environment スカラー値の `ParseString` → `ParseStringAndValidateExpression(ExpressionValidationContext.JobEnvironment)` に変更
+3. **`WorkflowParser.Jobs.cs` L329 + `WorkflowParser.cs` L764-869**: defaults.run の `ParseDefaultsNode` に `ExpressionValidationContext?` パラメータを追加。job レベルでは `JobDefaultsRun` を渡し、workflow レベルでは null（検証なし）。shell/working-directory のパースを条件分岐で `ParseStringAndValidateExpression` に切り替え。
+
+既に正しく式検証を行っていたサイト（runs-on, continue-on-error, timeout-minutes 等）は変更不要。
+
+**テスト結果**: 全 715 テスト通過（0 失敗）
+
+**追加テスト**:
+- `ParserTests`: `Parse_JobName_WithSecretsContext_ReportsSemanticError`, `Parse_JobRunsOn_WithSecretsContext_ReportsSemanticError`, `Parse_JobEnvironment_WithSecretsContext_ReportsSemanticError`, `Parse_JobEnv_WithSecretsContext_NoError`, `Parse_JobContinueOnError_WithSecretsContext_ReportsSemanticError`, `Parse_JobTimeoutMinutes_WithSecretsContext_ReportsSemanticError`
+- `RuleInterfaceTests`: `LintEngine_JobName_WithSecrets_ReportsDiagnostic`, `LintEngine_JobEnv_WithSecrets_NoDiagnostic`
+
+**教訓**:
+- per-key リファクタリングでデータ（Availability.g.cs の roots 配列）は正しくなっていたが、パーサーの呼び出しサイトが `ParseString`（式検証なし）を使っていると意味解析がスキップされる。データとコードパスの両方を確認する必要がある。
+- `ParseDefaultsNode` は workflow レベルと job レベルで共有されるため、optional パラメータで条件分岐する設計とした。
+
+### C-5: `jobs.<job_id>.environment.url` コンテキスト修正 — DONE
 
 **問題**: Job コンテキスト（7 roots）を使っているが、GitHub Docs では github, needs, strategy, matrix, job, runner, env, vars, steps, inputs（10 roots、secrets 以外全て）。現在は job, runner, env, steps が不足し、secrets が過剰。
 
@@ -133,7 +156,13 @@
 
 **実装結果**:
 
-### C-6: Container/Service env コンテキスト拡張 — LOW
+**実装日**: 2026-04-26
+
+per-key リファクタリングにより解決済み。`JobEnvironmentUrlRoots` は正しい 10 roots（github, needs, strategy, matrix, job, runner, env, vars, steps, inputs — secrets なし）を持つ。パーサーの呼び出しサイトも既に `ExpressionValidationContext.JobEnvironmentUrl` を使用。
+
+**追加テスト**: `Parse_JobEnvironmentUrl_WithStepsContext_NoError`, `Parse_JobEnvironmentUrl_WithSecretsContext_ReportsSemanticError`
+
+### C-6: Container/Service env コンテキスト拡張 — DONE
 
 **問題**: `container.env.<env_id>` および `services.<service_id>.env.<env_id>` は Job（7 roots）を使っているが、GitHub Docs では job, runner, env を追加した 10 roots（Step minus steps）が正しい。
 
@@ -145,7 +174,13 @@
 
 **実装結果**:
 
-### C-7: Container/Service credentials env 追加 — LOW
+**実装日**: 2026-04-26
+
+per-key リファクタリングにより解決済み。`JobContainerEnvRoots` と `JobServicesEnvRoots` は正しい 10 roots を持つ。パーサーの呼び出しサイトも既に per-key enum 値を使用。
+
+**追加テスト**: `Parse_JobContainerEnv_WithRunnerContext_NoError`
+
+### C-7: Container/Service credentials env 追加 — DONE
 
 **問題**: `container.credentials` と `services.<service_id>.credentials` は Job（7 roots）を使っているが、GitHub Docs では env コンテキストも含む 8 roots が正しい。
 
@@ -155,7 +190,13 @@
 
 **実装結果**:
 
-### C-8: `jobs.<job_id>.defaults.run` コンテキスト修正 — LOW
+**実装日**: 2026-04-26
+
+per-key リファクタリングにより解決済み。`JobContainerCredentialsRoots` と `JobServicesCredentialsRoots` は正しい 8 roots（env 含む）を持つ。パーサーの呼び出しサイトも既に per-key enum 値を使用。
+
+**追加テスト**: `Parse_JobContainerCredentials_WithEnvContext_NoError`
+
+### C-8: `jobs.<job_id>.defaults.run` コンテキスト修正 — DONE
 
 **問題**: Job（7 roots）を使っているが、GitHub Docs では env を追加し secrets を除いた 8 roots が正しい。
 
@@ -164,6 +205,12 @@
 **コスト**: C-4 と合わせて対応可能。
 
 **実装結果**:
+
+**実装日**: 2026-04-26
+
+per-key リファクタリングにより `JobDefaultsRunRoots` は正しい 7 roots（env 含む、secrets なし）を持つ。ただし、パーサーの `ParseDefaultsNode` が `ParseString`（式検証なし）を使っていたため、C-4 で `ParseStringAndValidateExpression` への切り替えを実施。
+
+**追加テスト**: `Parse_JobDefaultsRun_WithEnvContext_NoError`, `Parse_JobDefaultsRun_WithSecretsContext_ReportsSemanticError`
 
 ## Implementation Approach
 
@@ -341,3 +388,41 @@ availability.json はグループ化された8つの root 配列（workflowRoots
 - `hashFiles` 制限はパーサーレベル（`ExpressionSemanticAnalyzer.ValidateFunctionCall`）で実装。lint ルール（`ExprUndefinedVarRule`）は関数レベルの制限チェックを行わないため、lint テストは `LintEngine.Check` の全体結果（パーサー + lint 診断の統合結果）で検証する
 - status check function と hashFiles の制限は同じ `ValidateFunctionCall` メソッド内で順次チェックされる。将来の関数制限追加も同じパターンで実装可能
 - plan で記載されていた「JobOutput コンテキストでも許可」は GitHub Docs と照合して不要と判断。hashFiles は `jobs.<job_id>.steps.*` の8キーのみで利用可能
+
+---
+
+### C-4 〜 C-8: Job レベルの secrets 除外 + 関連コンテキスト修正 — DONE
+
+**実装日**: 2026-04-26
+
+**概要**: C-4 〜 C-8 は per-key リファクタリング（C-2 後に実施済み）により、Availability.g.cs のデータ（各キーの roots 配列）が全て正しい値に更新されていた。C-4 で残っていたのは、3 つのパーサー呼び出しサイト（job name, environment スカラー, defaults.run）が `ParseString`（式検証なし）を使っていた点のみ。これらを `ParseStringAndValidateExpression` に切り替えることで、全ての job-level キーで正しいコンテキスト可用性チェックが行われるようになった。
+
+**テスト結果**: 全 715 テスト通過（0 失敗）
+
+**追加テスト（C-4 〜 C-8 合計 13 件）**:
+- C-4: `Parse_JobName_WithSecretsContext_ReportsSemanticError`, `Parse_JobRunsOn_WithSecretsContext_ReportsSemanticError`, `Parse_JobEnvironment_WithSecretsContext_ReportsSemanticError`, `Parse_JobEnv_WithSecretsContext_NoError`, `Parse_JobContinueOnError_WithSecretsContext_ReportsSemanticError`, `Parse_JobTimeoutMinutes_WithSecretsContext_ReportsSemanticError`, `LintEngine_JobName_WithSecrets_ReportsDiagnostic`, `LintEngine_JobEnv_WithSecrets_NoDiagnostic`
+- C-5: `Parse_JobEnvironmentUrl_WithStepsContext_NoError`, `Parse_JobEnvironmentUrl_WithSecretsContext_ReportsSemanticError`
+- C-6: `Parse_JobContainerEnv_WithRunnerContext_NoError`
+- C-7: `Parse_JobContainerCredentials_WithEnvContext_NoError`
+- C-8: `Parse_JobDefaultsRun_WithEnvContext_NoError`, `Parse_JobDefaultsRun_WithSecretsContext_ReportsSemanticError`
+
+**ベンチマーク結果** (性能劣化なし):
+
+| Benchmark | Size | C-3 After (Mean) | C-4 After (Mean) | Δ Mean | C-3 After (Alloc) | C-4 After (Alloc) | Δ Alloc |
+|---|---|---|---|---|---|---|---|
+| ParsingBenchmark | Small | 36.58 μs | 31.78 μs | -13.1%* | 5,410 B | 5,112 B | -5.5% |
+| ParsingBenchmark | Medium | 624.91 μs | 564.45 μs | -9.7%* | 27,120 B | 27,336 B | +0.8% |
+| ParsingBenchmark | Large | 10,312.63 μs | 7,501.44 μs | -27.2%* | 111,350 B | 113,592 B | +2.0% |
+| LintBenchmark | Small/False | 53.72 μs | 44.72 μs | -16.8%* | 15.49 KB | 14.42 KB | -6.9% |
+| LintBenchmark | Small/True | 60.49 μs | 51.63 μs | -14.6%* | 15.91 KB | 14.84 KB | -6.7% |
+| LintBenchmark | Medium/False | 934.89 μs | 809.89 μs | -13.4%* | 97.35 KB | 89.91 KB | -7.6% |
+| LintBenchmark | Medium/True | 1,670.82 μs | 1,394.83 μs | -16.5%* | 103.77 KB | 96.34 KB | -7.2% |
+| LintBenchmark | Large/False | 13,858.23 μs | 11,084.86 μs | -20.0%* | 453.21 KB | 420.21 KB | -7.3% |
+| LintBenchmark | Large/True | 26,022.17 μs | 22,827.94 μs | -12.3%* | 483.29 KB | 450.29 KB | -6.8% |
+
+*Mean が大幅に改善しているが、これは C-4 の変更によるものではなく、ShortRun (N=3) の測定誤差範囲内の変動。Allocated の微減（LintBenchmark で -7% 前後）は per-key リファクタリングによる enum switch の最適化と、ベンチマーク間の GC 状態の差異による可能性がある。C-4 の変更（3 箇所の `ParseString` → `ParseStringAndValidateExpression`）自体はベンチマーク YAML に secrets 式を含まないため、新しい検証パスはほぼ通らず、パフォーマンスへの本質的な影響はなし。
+
+### 教訓
+- per-key リファクタリングでデータ（roots 配列）が正しくなっていても、パーサーの呼び出しサイトが `ParseString`（式検証なし）を使っていると意味解析がスキップされる。データとコードパスの両方を確認する必要がある
+- `ParseDefaultsNode` は workflow レベルと job レベルで共有されるため、`ExpressionValidationContext?` optional パラメータで条件分岐する設計とした。workflow レベルでは null（検証なし）、job レベルでは `JobDefaultsRun` を渡す
+- C-5, C-6, C-7 は per-key リファクタリングで完全に解決済みで、追加のコード変更は不要だった。リグレッションテストの追加のみ

@@ -196,7 +196,7 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Name:
                         if (!reader.End)
                         {
-                            nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
+                            nameNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobName, out var nameErr, out var nameMark, false);
                             if (nameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' name must be scalar", nameMark);
                         }
 
@@ -326,7 +326,7 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' defaults must be mapping");
+                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' defaults must be mapping", ExpressionValidationContext.JobDefaultsRun);
                         }
 
                         break;
@@ -770,7 +770,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var name = ParseString(ref reader, arena, out var envNameErr, out var envNameMark);
+            var name = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobEnvironment, out var envNameErr, out var envNameMark, false);
             if (envNameErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment must be scalar or mapping", envNameMark);
             return !name.HasValue
                 ? null

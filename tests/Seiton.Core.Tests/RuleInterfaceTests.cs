@@ -9695,4 +9695,39 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
     }
+
+    // C-4: job-level secrets exclusion
+
+    [Test]
+    public async Task LintEngine_JobName_WithSecrets_ReportsDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                name: ${{ secrets.TOKEN }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_JobEnv_WithSecrets_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsFalse();
+    }
 }

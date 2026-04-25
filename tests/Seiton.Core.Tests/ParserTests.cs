@@ -3833,6 +3833,248 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
     }
 
+    // C-4 regression: job-level secrets exclusion
+
+    [Test]
+    public async Task Parse_JobName_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                name: ${{ secrets.TOKEN }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-name-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobRunsOn_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ${{ secrets.RUNNER }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-runs-on-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobEnvironment_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                environment: ${{ secrets.ENV_NAME }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-environment-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobEnv_WithSecretsContext_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_JobContinueOnError_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                continue-on-error: ${{ secrets.ALLOW_FAIL != '' }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-continue-on-error-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobTimeoutMinutes_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: ${{ fromJSON(secrets.TIMEOUT) }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-timeout-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    // C-5 regression: environment.url has extended contexts (job, runner, env, steps)
+
+    [Test]
+    public async Task Parse_JobEnvironmentUrl_WithStepsContext_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                environment:
+                    name: production
+                    url: ${{ steps.deploy.outputs.url }}
+                steps:
+                    - id: deploy
+                      run: echo "url=https://example.com" >> $GITHUB_OUTPUT
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-url-steps.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_JobEnvironmentUrl_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                environment:
+                    name: production
+                    url: ${{ secrets.DEPLOY_URL }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-url-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    // C-6 regression: container/service env has extended contexts
+
+    [Test]
+    public async Task Parse_JobContainerEnv_WithRunnerContext_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    image: node:20
+                    env:
+                        RUNNER_OS: ${{ runner.os }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-env-runner.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'runner' is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // C-7 regression: container/service credentials includes env
+
+    [Test]
+    public async Task Parse_JobContainerCredentials_WithEnvContext_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    image: ghcr.io/owner/repo
+                    credentials:
+                        username: ${{ env.REGISTRY_USER }}
+                        password: ${{ secrets.REGISTRY_TOKEN }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-credentials-env.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // C-8 regression: defaults.run includes env, excludes secrets
+
+    [Test]
+    public async Task Parse_JobDefaultsRun_WithEnvContext_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                defaults:
+                    run:
+                        working-directory: ${{ env.WORK_DIR }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-run-env.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_JobDefaultsRun_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                defaults:
+                    run:
+                        working-directory: ${{ secrets.WORK_DIR }}
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-run-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
     // C-9 regression: fail-fast parse error must have valid position
     [Test]
     public async Task Parse_FailFastInvalidValue_ReportsCorrectPosition()

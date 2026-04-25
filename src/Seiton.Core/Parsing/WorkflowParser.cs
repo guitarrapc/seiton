@@ -761,7 +761,7 @@ public static partial class WorkflowParser
         finally { vars.Dispose(); }
     }
 
-    private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error)
+    private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -863,10 +863,14 @@ public static partial class WorkflowParser
                         switch (drk)
                         {
                             case DefaultsRunMappingKey.Shell:
-                                shellNode = ParseString(ref reader, arena, diagnostics, "workflow defaults.run.shell must be scalar");
+                                shellNode = expressionContext.HasValue
+                                    ? ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext.Value, "workflow defaults.run.shell must be scalar", false)
+                                    : ParseString(ref reader, arena, diagnostics, "workflow defaults.run.shell must be scalar");
                                 continue;
                             case DefaultsRunMappingKey.WorkingDirectory:
-                                workingDirectoryNode = ParseString(ref reader, arena, diagnostics, "workflow defaults.run.working-directory must be scalar");
+                                workingDirectoryNode = expressionContext.HasValue
+                                    ? ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext.Value, "workflow defaults.run.working-directory must be scalar", false)
+                                    : ParseString(ref reader, arena, diagnostics, "workflow defaults.run.working-directory must be scalar");
                                 continue;
                             default:
                                 if (!reader.End)
