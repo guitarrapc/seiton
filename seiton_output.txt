@@ -1,0 +1,910 @@
+﻿Note: The tool simplified the command to `Get-ChildItem ".references/actionlint/testdata/examples/*.yaml" | ForEach-Object { $name = $_.BaseName; $output = dotnet run --project src/Seiton --no-build -c Release -- check $_.FullName --oneline 2>&1 | Out-String; Write-Output "=== $name ==="; Write-Output $output; Write-Output "---END---" }`, and this is the output of running that command instead:
+=== action_metadata_syntax_validation ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\action_metadata_syntax_validation.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\action_metadata_syntax_validation.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\action_metadata_syntax_validation.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\action_metadata_syntax_validation.yaml:8:13: error [local-action-inputs] local action has invalid runs.using 'node14'; expected node20, node24, composite, or docker
+dotnet : 2 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== broken_yaml ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\broken_yaml.yaml:6:17: error [parse] yaml parse failure: Mapping values are not allowed in this context at Line: 6, Col: 16, Idx: 78
+dotnet : 1 error in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error in 1 file:String) [], Rem 
+   oteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== builtin_func_special_checks ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\builtin_func_special_checks.yaml:6:18: error [parse] property "mac" is not defined in object type {win: string; linux: string}
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\builtin_func_special_checks.yaml:9:24: warning [parse] format string does not contain placeholder {2}; remove argument which is unused
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\builtin_func_special_checks.yaml:11:24: error [parse] format placeholder '{2}' requires argument 3, but got 2 format argument(s)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\builtin_func_special_checks.yaml:14:13: error [parse] fromJSON() argument is not valid JSON: Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 23.
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\builtin_func_special_checks.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\builtin_func_special_checks.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== comparison_strict_checks ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\comparison_strict_checks.yaml:13:17: error [parse] object value cannot be compared to string value with '==' operator
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\comparison_strict_checks.yaml:8:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\comparison_strict_checks.yaml:13:13: error [expr-undefined-var] object value cannot be compared to string value with '==' operator
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\comparison_strict_checks.yaml:16:13: error [expr-undefined-var] operator '>' does not support bool type
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\comparison_strict_checks.yaml:9:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\comparison_strict_checks.yaml:8:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== contexts_and_builtin_funcs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:7:24: error [parse] undefined context 'unknown_context'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:9:24: error [parse] property 'events' is not defined in 'github' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:11:24: error [parse] unknown expression function: startWith
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:13:24: error [parse] function 'startsWith' expects 2 argument(s), but got 1
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:15:24: error [parse] argument 2 should be string, but got object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:7:14: error [expr-undefined-var] step.run expression references undefined context 'unknown_context' in step scope
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:9:14: error [expr-undefined-var] property 'events' is not defined in 'github' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_and_builtin_funcs.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 8 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (8 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== contexts_special_functions_availability ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:14:17: error [parse] context 'runner' is not available in strategy expressions
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:18:17: error [parse] context 'env' is not available in job expressions
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:24:33: error [parse] status check function 'success()' is only available in 'if' conditions
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:7:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:18:13: error [expr-undefined-var] job.env.NAME expression references undefined context 'env' in job scope
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:15:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contexts_special_functions_availability.yaml:7:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== contextual_matrix_values ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:30:8: warning [job-permissions-required] job 'test2' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:19:14: error [expr-undefined-var] property 'platform' is not defined in 'matrix' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:21:14: error [expr-undefined-var] property 'dev' is not defined in 'matrix' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:34:14: error [expr-undefined-var] property 'os' is not defined in 'matrix' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:31:14: warning [runner-no-latest] job 'test2' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_matrix_values.yaml:30:8: error [job-timeout-minutes-required] job 'test2' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 3 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 3 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== contextual_needs_object ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:3:10: warning [job-permissions-required] job 'install' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:9:10: warning [job-permissions-required] job 'prepare' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:17:8: warning [job-permissions-required] job 'build' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:29:8: warning [job-permissions-required] job 'other' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:16:14: error [expr-undefined-var] property 'prepare' is not defined in 'needs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:26:14: error [expr-undefined-var] property 'foo' is not defined in 'needs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:28:14: error [expr-undefined-var] property 'some_job' is not defined in 'needs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:33:14: error [expr-undefined-var] property 'build' is not defined in 'needs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:6:14: warning [runner-no-latest] job 'install' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:12:14: warning [runner-no-latest] job 'prepare' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:21:14: warning [runner-no-latest] job 'build' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:30:14: warning [runner-no-latest] job 'other' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:3:10: error [job-timeout-minutes-required] job 'install' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:9:10: error [job-timeout-minutes-required] job 'prepare' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:17:8: error [job-timeout-minutes-required] job 'build' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_needs_object.yaml:29:8: error [job-timeout-minutes-required] job 'other' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 8 errors, 8 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (8 errors, 8 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== contextual_steps_outputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:18:8: warning [job-permissions-required] job 'other' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:10:14: error [expr-undefined-var] property 'get_value' is not defined in 'steps' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:22:14: error [expr-undefined-var] property 'get_value' is not defined in 'steps' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:19:14: warning [runner-no-latest] job 'other' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\contextual_steps_outputs.yaml:18:8: error [job-timeout-minutes-required] job 'other' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== cron_schedule_check ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cron_schedule_check.yaml:12:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cron_schedule_check.yaml:4:14: error [schedule-event] on.schedule cron '0 */3 * *' is invalid: cron must have exactly 5 fields
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cron_schedule_check.yaml:6:14: error [schedule-event] on.schedule cron '* */3 * * *' runs too frequently; the shortest interval is once every 5 minutes
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cron_schedule_check.yaml:9:18: error [schedule-event] on.schedule timezone 'Asia/Somewhere' is invalid
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cron_schedule_check.yaml:13:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cron_schedule_check.yaml:12:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== cyclic_deps_needs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:3:10: warning [job-permissions-required] job 'prepare' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:8:10: warning [job-permissions-required] job 'install' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:13:8: warning [job-permissions-required] job 'build' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:9:13: error [needs-graph] job 'install' has a circular 'needs' dependency via 'prepare'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:5:14: warning [runner-no-latest] job 'prepare' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:10:14: warning [runner-no-latest] job 'install' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:15:14: warning [runner-no-latest] job 'build' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:3:10: error [job-timeout-minutes-required] job 'prepare' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:8:10: error [job-timeout-minutes-required] job 'install' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\cyclic_deps_needs.yaml:13:8: error [job-timeout-minutes-required] job 'build' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 6 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 6 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== dangling_alias ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\dangling_alias.yaml:10:1: error [parse] yaml parse failure: While parsing node, found unknown anchor at Line: 10, Col: 0, Idx: 160
+dotnet : 1 error in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error in 1 file:String) [], Rem 
+   oteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== deprecated_inputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_inputs.yaml:6:42: warning [unpinned-uses] action uses 'reviewdog/action-actionlint@v1' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_inputs.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_inputs.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_inputs.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 1 error, 3 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 3 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== deprecated_workflow_commands ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_workflow_commands.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_workflow_commands.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_workflow_commands.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\deprecated_workflow_commands.yaml:8:14: warning [deprecated-commands] run script uses deprecated command '::set-output'; use $GITHUB_OUTPUT instead
+dotnet : 1 error, 3 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 3 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== detect_outdated_popular_actions ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\detect_outdated_popular_actions.yaml:8:31: warning [unpinned-uses] action uses 'actions/checkout@v3' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\detect_outdated_popular_actions.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\detect_outdated_popular_actions.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\detect_outdated_popular_actions.yaml:8:15: warning [checkout-persist-credentials] action 'actions/checkout@v3' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\detect_outdated_popular_actions.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 1 error, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 4 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== env_var_names ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\env_var_names.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\env_var_names.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\env_var_names.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\env_var_names.yaml:6:14: warning [env-var] job.env key 'FOO=BAR' is not portable; use [A-Z_][A-Z0-9_]* naming
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\env_var_names.yaml:7:14: warning [env-var] job.env key 'FOO BAR' is not portable; use [A-Z_][A-Z0-9_]* naming
+dotnet : 1 error, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 4 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== expand_object ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expand_object.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expand_object.yaml:12:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expand_object.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 1 error, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 2 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== expression_syntax_error ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:7:24: error [parse] expression parse error: got unexpected character '"'; only single quotes are available for string delimiter in expressions
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:9:26: error [parse] expression parse error: unexpected token at position 2
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:11:64: error [parse] expression parse error: expected ',' or ')' in function call
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:13:37: error [parse] expression parse error: member name is missing after '.'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\expression_syntax_error.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== glob ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:17:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:6:10: error [glob-pattern] event filter 'branches' has invalid glob pattern '^foo-': character '^' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, ?, backslash
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:9:10: error [glob-pattern] event filter 'tags' has invalid glob pattern 'v*+': unexpected character '+' after '*'. the preceding character must not be a special character
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:11:10: error [glob-pattern] event filter 'tags' has invalid glob pattern 'v[9-1]': reversed range '[9-1]' in character class
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:14:9: error [glob-pattern] event filter 'paths' has invalid glob pattern './foo/bar.txt': '.' and '..' are not allowed in path
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:18:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\glob.yaml:17:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== hardcoded_credentials ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:6:15: warning [unpinned-image] job.container image 'example.com/owner/image' is not pinned by digest (expected @sha256:<64-hex>)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:13:16: warning [unpinned-image] job.services image 'redis' is not pinned by digest (expected @sha256:<64-hex>)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:10:9: error [credentials] "password" section in "container" section should be specified via secrets. do not put password value directly
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:17:11: error [credentials] "password" section in "redis" service should be specified via secrets. do not put password value directly
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\hardcoded_credentials.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== id_naming_convention ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:5:13: warning [job-permissions-required] job 'foo-v1.2.3' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:12:16: warning [job-permissions-required] job '-hello-world-' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:17:10: warning [job-permissions-required] job '2d-game' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:5:13: error [id-naming] job id 'foo-v1.2.3' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:10:13: error [id-naming] step id 'echo for test' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:12:16: error [id-naming] job id '-hello-world-' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:17:10: error [id-naming] job id '2d-game' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:6:14: warning [runner-no-latest] job 'foo-v1.2.3' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:13:14: warning [runner-no-latest] job '-hello-world-' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:18:14: warning [runner-no-latest] job '2d-game' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:5:13: error [job-timeout-minutes-required] job 'foo-v1.2.3' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:12:16: error [job-timeout-minutes-required] job '-hello-world-' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\id_naming_convention.yaml:17:10: error [job-timeout-minutes-required] job '2d-game' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 7 errors, 6 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (7 errors, 6 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== if_cond_always_true ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:9:13: warning [if-cond] step if condition is always false
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:20:11: warning [if-cond] step if condition is always evaluated to true because extra characters are around ${{ }}
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:23:14: warning [if-cond] step if condition is always evaluated to true because extra characters are around ${{ }}
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\if_cond_always_true.yaml:29:13: warning [if-cond] step if condition is always evaluated to true because extra characters are around ${{ }}
+dotnet : 1 error, 6 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 6 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== invalid_action_format ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:7:13: warning [unpinned-uses] action uses 'actions/checkout' has invalid reference format; expected owner/repo[/path]@ref
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:9:13: warning [unpinned-uses] action uses 'checkout@v2' has invalid reference format; expected owner/repo[/path]@ref
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:13:13: warning [unpinned-uses] action uses '.github/my-actions/do-something' has invalid reference format; expected owner/repo[/path]@ref
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:11:13: warning [unpinned-image] docker action uses 'docker://image:' is not pinned by digest (expected @sha256:<64-hex>)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:7:15: warning [checkout-persist-credentials] action 'actions/checkout' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_action_format.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 1 error, 7 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 7 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== invalid_ids_in_needs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:3:6: warning [job-permissions-required] job 'foo' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:8:6: warning [job-permissions-required] job 'bar' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:9:13: error [needs-graph] job 'bar' references unknown job 'unknown' in needs
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:5:14: warning [runner-no-latest] job 'foo' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:10:14: warning [runner-no-latest] job 'bar' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:3:6: error [job-timeout-minutes-required] job 'foo' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\invalid_ids_in_needs.yaml:8:6: error [job-timeout-minutes-required] job 'bar' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== job_step_ids_duplicate ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\job_step_ids_duplicate.yaml:12:7: error [parse] jobs contains duplicate key: TEST
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\job_step_ids_duplicate.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\job_step_ids_duplicate.yaml:10:13: error [id-naming] step id 'STEP_ID' is duplicated in the same job (case-insensitive)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\job_step_ids_duplicate.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\job_step_ids_duplicate.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== local_action_inputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_inputs.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_inputs.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_inputs.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_inputs.yaml:7:13: error [local-action-inputs] required input 'message' is not set for local action
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_inputs.yaml:13:22: error [local-action-inputs] unknown local action input 'additions'; declared inputs are: addition, message, name
+dotnet : 3 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== local_action_outputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_outputs.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_outputs.yaml:8:14: error [expr-undefined-var] property 'my_action' is not defined in 'steps' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_outputs.yaml:15:14: error [expr-undefined-var] property 'some-value' is not defined in 'steps' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_outputs.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\local_action_outputs.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== main ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:3:11: error [parse] on.push does not support option: branch
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:22:17: error [parse] receiver of object dereference "permissions" must be type of object but got "string"
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:15:15: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:14:31: warning [unpinned-uses] action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:15:33: warning [unpinned-uses] action uses 'actions/setup-node@v4' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:18:28: warning [unpinned-uses] action uses 'actions/cache@v4' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:7:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:10:28: warning [runner-label] job 'test' runs-on label 'linux-latest' is not a known GitHub-hosted runner label
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:13:14: error [template-injection] template injection risk: run contains expression referencing untrusted github.event/github context data
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:21:16: error [expr-undefined-var] property 'platform' is not defined in 'matrix' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:14:15: warning [checkout-persist-credentials] action 'actions/checkout@v4' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\main.yaml:7:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 7 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 7 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== matrix_checks ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\matrix_checks.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\matrix_checks.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\matrix_checks.yaml:6:13: warning [matrix] job 'test' strategy.matrix.exclude references unknown axis 'platform'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\matrix_checks.yaml:6:28: warning [matrix] job 'test' strategy.matrix axis 'node' has duplicate value '14'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\matrix_checks.yaml:9:19: warning [matrix] value "13" in "exclude" does not match in matrix "node" combinations. possible values are "10", "12", "14", "14"
+dotnet : 1 error, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 4 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== missing_required_keys ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\missing_required_keys.yaml:8:21: error [parse] strategy.matrix contains duplicate key: VERSION_NAME
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\missing_required_keys.yaml:3:7: error [job-structure] job 'test' requires runs-on (or uses)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\missing_required_keys.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\missing_required_keys.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 1 warning in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 1 warning in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== not_persistent_matrix_values ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\not_persistent_matrix_values.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\not_persistent_matrix_values.yaml:15:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\not_persistent_matrix_values.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 1 error, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 2 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== permissions ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\permissions.yaml:4:14: error [permissions] permissions scalar must be 'read-all' or 'write-all', but got 'write'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\permissions.yaml:11:12: error [permissions] unknown permission scope "check". all available permission scopes are "actions", "artifact-metadata", "attestations", "checks", "contents", "deployments", "discussions", "id-token", "issues", "models", "packages", "pages", "pull-requests", "repository-projects", "security-events", "statuses", "vulnerability-alerts"
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\permissions.yaml:13:15: error [permissions] "readable" is invalid as permission of scope "issues". available values are "read", "write", "none"
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\permissions.yaml:15:15: error [permissions] "write" is invalid as permission of scope "models". available values are "read", "none"
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\permissions.yaml:8:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\permissions.yaml:7:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 1 warning in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 1 warning in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== popular_action_inputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_inputs.yaml:7:15: warning [popular-action-inputs] missing required input 'key' for action 'actions/cache@v4'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_inputs.yaml:7:15: warning [popular-action-inputs] unknown input 'keys' for action 'actions/cache@v4'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_inputs.yaml:7:28: warning [unpinned-uses] action uses 'actions/cache@v4' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_inputs.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_inputs.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_inputs.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 1 error, 5 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error, 5 warnings in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== popular_action_outputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_outputs.yaml:10:28: warning [unpinned-uses] action uses 'actions/cache@v4' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_outputs.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_outputs.yaml:8:14: error [expr-undefined-var] property 'cache' is not defined in 'steps' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_outputs.yaml:18:14: error [expr-undefined-var] property 'cache_hit' is not defined in 'steps' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_outputs.yaml:5:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\popular_action_outputs.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 3 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 3 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== pyflakes_integration ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\pyflakes_integration.yaml:3:8: warning [job-permissions-required] job 'linux' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\pyflakes_integration.yaml:12:9: warning [job-permissions-required] job 'linux2' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\pyflakes_integration.yaml:4:14: warning [runner-no-latest] job 'linux' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\pyflakes_integration.yaml:13:14: warning [runner-no-latest] job 'linux2' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\pyflakes_integration.yaml:3:8: error [job-timeout-minutes-required] job 'linux' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\pyflakes_integration.yaml:12:9: error [job-timeout-minutes-required] job 'linux2' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 2 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== reusable_workflow_outputs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\reusable_workflow_outputs.yaml:9:20: warning [job-permissions-required] job 'gen-image-version' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\reusable_workflow_outputs.yaml:7:16: error [expr-undefined-var] property 'imagetag' is not defined in 'jobs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\reusable_workflow_outputs.yaml:10:14: warning [runner-no-latest] job 'gen-image-version' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\reusable_workflow_outputs.yaml:9:20: error [job-timeout-minutes-required] job 'gen-image-version' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 2 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== runner_label_check ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:21:8: warning [job-permissions-required] job 'test2' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:10:13: warning [runner-label] job 'test' runs-on label 'linux-latest' is not a known GitHub-hosted runner label
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:16:13: warning [runner-label] job 'test' runs-on label 'gpu' is not a known GitHub-hosted runner label
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:23:14: warning [runner-label] job 'test2' runs-on label 'macos-10.13' is not a known GitHub-hosted runner label
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_check.yaml:21:8: error [job-timeout-minutes-required] job 'test2' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 2 errors, 5 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2 errors, 5 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== runner_label_conflict ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_conflict.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_conflict.yaml:4:30: error [runner-label] job 'test' runs-on labels contain conflicting OS families
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_conflict.yaml:4:15: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_conflict.yaml:4:30: warning [runner-no-latest] job 'test' runs-on label 'windows-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\runner_label_conflict.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 2 errors, 3 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2 errors, 3 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== shellcheck_integration ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shellcheck_integration.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shellcheck_integration.yaml:7:11: warning [job-permissions-required] job 'test-win' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shellcheck_integration.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shellcheck_integration.yaml:8:14: warning [runner-no-latest] job 'test-win' runs-on label 'windows-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shellcheck_integration.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shellcheck_integration.yaml:7:11: error [job-timeout-minutes-required] job 'test-win' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 2 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== shell_name_validation ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:3:8: warning [job-permissions-required] job 'linux' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:12:6: warning [job-permissions-required] job 'mac' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:22:10: warning [job-permissions-required] job 'windows' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:11:16: warning [shell-name] shell 'powershell' is not available on linux runners; use 'pwsh' instead
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:8:16: error [shell-name] shell name 'dash' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python, or a custom shell command containing '{0}'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:17:16: error [shell-name] shell name 'fish' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python, or a custom shell command containing '{0}'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:4:14: warning [runner-no-latest] job 'linux' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:13:14: warning [runner-no-latest] job 'mac' runs-on label 'macos-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:23:14: warning [runner-no-latest] job 'windows' runs-on label 'windows-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:3:8: error [job-timeout-minutes-required] job 'linux' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:12:6: error [job-timeout-minutes-required] job 'mac' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\shell_name_validation.yaml:22:10: error [job-timeout-minutes-required] job 'windows' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 7 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 7 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== type_checks ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:7:24: error [parse] index of object must be string, but got number
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:9:24: error [parse] property 'os' is not defined in 'job' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:11:24: error [parse] receiver of object dereference "owner" must be type of object but got "string"
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:9:14: error [expr-undefined-var] property 'os' is not defined in 'job' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:13:14: error [expr-undefined-var] object value in ${{ }} will be converted to string "[Object]"
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:7:20: error [run-env-context-direct-use] run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:13:20: error [run-env-context-direct-use] run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\type_checks.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 8 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (8 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== unexpected_keys ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_keys.yaml:6:12: error [parse] unexpected job key 'default' in job 'test'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_keys.yaml:12:14: error [parse] unexpected step key 'Shell' in job 'test' step[1]
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_keys.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_keys.yaml:4:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_keys.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 3 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (3 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== unexpected_mapping_values ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_mapping_values.yaml:6:18: error [parse] job 'test' strategy.fail-fast must be bool or expression
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_mapping_values.yaml:8:21: error [parse] job 'test' strategy.max-parallel must be integer
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_mapping_values.yaml:13:26: error [parse] job 'test' step[1] timeout-minutes must be number or expression
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_mapping_values.yaml:3:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_mapping_values.yaml:9:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\unexpected_mapping_values.yaml:3:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== untrusted_input ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:11:28: warning [unpinned-uses] action uses 'actions/stale@v9' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:16:36: warning [unpinned-uses] action uses 'actions/github-script@v7' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:5:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:10:14: error [template-injection] template injection risk: run contains expression referencing untrusted github.event/github context data
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:19:19: error [template-injection] template injection risk: script contains expression referencing untrusted github.event/github context data
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:22:14: error [template-injection] template injection risk: run contains expression referencing untrusted github.event/github context data
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:6:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\untrusted_input.yaml:5:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== webhook_checks ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:4:11: error [parse] on.push does not support option: branch
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:2:7: error [parse] on.push cannot use both paths and paths-ignore
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:10:12: error [parse] on.issues.types contains unsupported activity type: created
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:13:9: error [parse] on.release does not support option: tags
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:15:10: error [parse] unknown event in on: pullreq
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:18:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:7:17: error [glob-pattern] event filter 'paths' and 'paths-ignore' cannot be used together
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:10:12: error [glob-pattern] event 'issues' has unsupported activity type 'created'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:19:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\webhook_checks.yaml:18:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 8 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (8 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== workflow_call_definitions ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:21:10: error [parse] on.workflow_call input type must be one of boolean, number, string
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:28:5: warning [job-permissions-required] job 'do' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:29:14: warning [runner-no-latest] job 'do' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:31:20: error [run-inputs-context-direct-use] run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:28:5: error [job-timeout-minutes-required] job 'do' must define timeout-minutes; alternatively, set timeout-minutes on every step
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:15:19: error [workflow-call-input-default] workflow_call input 'port' has number type but default is not numeric
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_definitions.yaml:26:14: error [workflow-call-input-default] workflow_call input 'path' has the default value but is also required. if an input is required, its default value will never be used
+dotnet : 5 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 2 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== workflow_call_jobs ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:3:7: error [job-structure] job 'job1' cannot have both uses and runs-on
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:6:12: error [parse] when job 'job1' calls reusable workflow with uses, key 'runs-on' is not allowed
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:10:7: error [reusable-workflow] job 'job3' key 'with' requires uses
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:3:7: error [reusable-workflow] when job 'job1' calls reusable workflow with uses, key 'runs-on' is not allowed
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:9:9: error [reusable-workflow] job 'job2' local reusable workflow uses must not contain '@ref'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:17:7: error [reusable-workflow] job 'job4' references local reusable workflow '.\.github\workflows\not-existing.yml' but the file does not exist
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:0:0: warning [unpinned-uses] job 'job3' reusable workflow uses '' has invalid reference format; expected owner/repo/path@ref
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:4:42: warning [unpinned-uses] job 'job1' reusable workflow uses 'owner/repo/path/to/workflow.yml@v1' is not pinned to a full-length commit SHA
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:9:37: warning [unpinned-uses] job 'job2' local reusable workflow uses must not contain '@ref'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:3:7: warning [job-permissions-required] job 'job1' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:7:7: warning [job-permissions-required] job 'job2' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:10:7: warning [job-permissions-required] job 'job3' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:17:7: warning [job-permissions-required] job 'job4' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:6:14: warning [runner-no-latest] job 'job1' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_call_jobs.yaml:14:14: warning [runner-no-latest] job 'job3' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+dotnet : 6 errors, 9 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (6 errors, 9 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== workflow_dispatch_input_types ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:8:10: error [parse] on.workflow_dispatch input type must be one of string, number, boolean, choice, environment
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:29:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:8:11: error [dispatch-inputs] workflow_dispatch input 'kind' of type 'choice' must define non-empty options
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:16:18: error [dispatch-inputs] workflow_dispatch input 'name' has default value 'Chobi' which is not included in options
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:22:18: error [dispatch-inputs] workflow_dispatch input 'verbose' has boolean default that must be 'true' or 'false'
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:26:18: error [dispatch-inputs] workflow_dispatch input 'age' has non-numeric default value
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:33:14: error [expr-undefined-var] property 'massage' is not defined in 'inputs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:35:20: error [run-env-context-direct-use] run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:37:20: error [run-env-context-direct-use] run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:30:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:33:20: error [run-inputs-context-direct-use] run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:35:20: error [run-inputs-context-direct-use] run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:37:20: error [run-inputs-context-direct-use] run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:39:20: error [run-inputs-context-direct-use] run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_dispatch_input_types.yaml:29:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 13 errors, 2 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (13 errors, 2 warnings in 1 file:S 
+   tring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== workflow_inputs_secrets_types ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_inputs_secrets_types.yaml:15:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_inputs_secrets_types.yaml:20:14: error [expr-undefined-var] property 'uri' is not defined in 'inputs' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_inputs_secrets_types.yaml:23:18: error [expr-undefined-var] property 'credentials' is not defined in 'secrets' object
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_inputs_secrets_types.yaml:20:19: error [run-inputs-context-direct-use] run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\workflow_inputs_secrets_types.yaml:15:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 4 errors, 1 warning in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (4 errors, 1 warning in 1 file:Str 
+   ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== yaml_anchors ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:13:16: error [parse] unexpected job 'test' service 'nginx'.credentials key: email
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:13:16: error [parse] unexpected job 'test' service 'redis'.credentials key: email
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:7:16: warning [unpinned-image] job.services image 'nginx:latest' is not pinned by digest (expected @sha256:<64-hex>)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:15:16: warning [unpinned-image] job.services image 'redis:latest' is not pinned by digest (expected @sha256:<64-hex>)
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:4:7: warning [job-permissions-required] job 'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:11:21: error [credentials] "password" section in "nginx" service should be specified via secrets. do not put password value directly
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:11:21: error [credentials] "password" section in "redis" service should be specified via secrets. do not put password value directly
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:17:14: warning [runner-no-latest] job 'test' runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchors.yaml:4:7: error [job-timeout-minutes-required] job 'test' must define timeout-minutes; alternatively, set timeout-minutes on every step
+dotnet : 5 errors, 4 warnings in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (5 errors, 4 warnings in 1 file:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
+=== yaml_anchor_usage ===
+D:\github\guitarrapc\seiton\.references\actionlint\testdata\examples\yaml_anchor_usage.yaml:19:8: error [parse] yaml parse failure: Cannot detect a scalar value as utf8 : Scalar  at Line: 19, Col: 7, Idx: 433
+dotnet : 1 error in 1 file
+At line:1 char:115
++ ... ; $output = dotnet run --project src/Seiton --no-build -c Release --  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (1 error in 1 file:String) [], Rem 
+   oteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+---END---
