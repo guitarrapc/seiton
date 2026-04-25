@@ -706,6 +706,17 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     /// This helper walks backward through <see cref="_source"/> from <paramref name="nextTokenPosition"/>,
     /// skips whitespace/newlines, and – if it finds an adjacent pair of matching quotes ('''' or &quot;&quot;) –
     /// returns the offset of the opening quote.  Otherwise it returns the backward-walked position.
+    /// <para>
+    /// When VYaml's mark has advanced past the next key's <c>key:</c> separator (common for null
+    /// scalars like <c>permissions:\n    runs-on: value</c>), the initial whitespace scan stops at
+    /// that colon without crossing a newline.  We detect this in two ways:
+    /// <list type="number">
+    /// <item>The colon has a value on the same line (e.g. <c>runs-on: ubuntu-latest</c>).</item>
+    /// <item>The colon is on a different line than <see cref="_scalarSliceCursor"/>
+    ///        (e.g. <c>jobs:</c> with a mapping value on the next line).</item>
+    /// </list>
+    /// In both cases we skip the entire <c>key:</c> pattern and repeat.
+    /// </para>
     /// </summary>
     private int ResolveEmptyScalarStart(int nextTokenPosition)
     {
@@ -716,10 +727,62 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             pos = source.Length;
         }
 
-        // Walk backward past trailing whitespace and line endings.
+        // Walk backward past trailing whitespace and line endings, tracking newline crossings.
+        var crossedNewline = false;
         while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
         {
+            if (source[pos - 1] is (byte)'\n' or (byte)'\r')
+                crossedNewline = true;
             pos--;
+        }
+
+        // If the whitespace scan did NOT cross a newline and we stopped at a ':', VYaml's mark
+        // may have landed right after the next key's colon.
+        // Two detection strategies:
+        //   (a) The colon has non-whitespace content before the next newline (inline value).
+        //   (b) There is a newline between _scalarSliceCursor and the colon, meaning the colon
+        //       is on a different source line than the previous key we parsed (the one whose
+        //       null value we are resolving).
+        if (!crossedNewline && pos > 0 && source[pos - 1] == (byte)':')
+        {
+            var colonPos = pos - 1;
+            var isNextKeyColon = false;
+
+            // Strategy (a): colon has inline value
+            for (var i = pos; i < source.Length; i++)
+            {
+                var b = source[i];
+                if (b is (byte)'\n' or (byte)'\r') break;
+                if (b is not ((byte)' ' or (byte)'\t'))
+                {
+                    isNextKeyColon = true;
+                    break;
+                }
+            }
+
+            // Strategy (b): newline between cursor and colon position
+            if (!isNextKeyColon)
+            {
+                for (var i = _scalarSliceCursor; i < colonPos; i++)
+                {
+                    if (source[i] is (byte)'\n')
+                    {
+                        isNextKeyColon = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isNextKeyColon)
+            {
+                pos--; // skip ':'
+                // Skip backward past the key name.
+                while (pos > 0 && source[pos - 1] is not ((byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r'))
+                    pos--;
+                // Skip whitespace/newlines again.
+                while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
+                    pos--;
+            }
         }
 
         // If we stopped at a '-' (YAML block sequence indicator), skip over it and continue

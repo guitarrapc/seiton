@@ -78,15 +78,17 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 |---|---|---|---|
 | `invalid_permissions` | `4:13`, `5:3`, `6:13`, etc. (12行) | seiton は `[permissions]` で検出するが、列位置が値位置を指している。また permission scope リストに `vulnerability-alerts` が追加されておりメッセージが異なる | seiton は値ノード位置を報告、actionlint はキー/値境界を報告 |
 | `issue558_read_write_none_are_not_always_valid_permissions` | `8:17`, `9:15` (2行) | seiton の `[permissions]` で検出済みだが列ずれ | 同上 |
-| `issue170_empty_permissions` | `12:17` (2行) | ~~空文字列 permission の検出が不足~~ **対処済み** — パーサーとルールの両方で空文字列を検出。位置は VYaml の null scalar 位置ずれにより `13:13` (既知の制限) | parse レベルで空文字列 permission を検出すべき |
+| `issue170_empty_permissions` | `12:17` (2行) | ~~空文字列 permission の検出が不足~~ **完全対処済み** — パーサーとルールの両方で空文字列を検出。位置も `12:17` で actionlint と一致 | parse レベルで空文字列 permission を検出すべき |
 
-**対処**: seitonのpermissions ルールの位置報告は値位置が仕様なので、actionlintのキー位置基準に合わせない。空文字列パーミッション検出の追加。
+**対処**: seitonのpermissions ルールの位置報告は値位置が仕様なので、actionlintのキー位置基準に合わせない。空文字列パーミッション検出の追加。VYaml アダプターの backward-scan 改善。
 
 **実施済み**:
 - `PermissionsRule.cs`: 空文字列 All 値に対して `"" is invalid for permission for all the scopes. available values are "read-all", "write-all" or {}` メッセージを追加
 - `WorkflowParser.cs`: `ParsePermissionsNode` で空スカラー時に `permissions value must not be empty` メッセージを追加（旧: 汎用の "must be scalar or mapping"）
+- `VYamlStreamAdapter.cs`: `ResolveEmptyScalarStart` を改善 — VYaml の mark が次キーの `key:` 位置まで進んだ場合に、(a) コロン後にインライン値がある場合、(b) `_scalarSliceCursor` とコロン位置の間に改行がある場合の 2 戦略で次キーのコロンを検出し、正しい位置にバックスキャン
 - テスト: `RuleRegression_PermissionsRule_TableDriven` に `ng-job-empty-permissions-scalar` と `ng-workflow-empty-permissions-scalar` ケースを追加
-- 全715テスト通過
+- テスト: `ParserTests` に `Parse_NullScalarPermissions_ReportsPermissionsLine` と `Parse_NullScalarPermissions_WorkflowLevel_ReportsPermissionsLine` を追加（位置精度テスト）
+- 全717テスト通過
 
 #### B-2. id-naming ルール — ルール名差異
 
@@ -535,11 +537,19 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 **変更ファイル**:
 - `src/Seiton.Core/Linting/Rules/PermissionsRule.cs`: 空文字列 All 値に対する専用エラーメッセージ追加
 - `src/Seiton.Core/Parsing/WorkflowParser.cs`: `ParsePermissionsNode` の空スカラー検出で専用メッセージ使用
+- `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs`: `ResolveEmptyScalarStart` の backward-scan 改善
+  - 2戦略で次キーのコロンを検出: (a) colonHasValue (コロン後にインライン値), (b) colonIsOnDifferentLine (`_scalarSliceCursor` とコロン位置間に改行)
+  - `crossedNewline` トラッキングにより既に正しい行に戻っている場合はスキップしない
 - `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: 空文字列 permissions のテストケース2件追加
+- `tests/Seiton.Core.Tests/ParserTests.cs`: null scalar 位置精度テスト2件追加
+  - `Parse_NullScalarPermissions_ReportsPermissionsLine`: ジョブレベル (line 4)
+  - `Parse_NullScalarPermissions_WorkflowLevel_ReportsPermissionsLine`: ワークフローレベル (line 2)
 
-**テスト結果**: 全715テスト通過
+**テスト結果**: 全717テスト通過
 
-**残課題**: VYaml の null scalar で位置が `13:13` (次トークン位置) になる問題は VYaml アダプターの backward-scan 改善が必要（本対処のスコープ外）
+**ベンチマーク結果**: Allocated は +0.5%〜+2% (Medium/Large)、Mean は ShortRun (N=3) のため変動あり（+10-17%）だが `ResolveEmptyScalarStart` は null/empty scalar のみのレアパスのため実質影響なし
+
+**CLIで確認**: `issue170_empty_permissions.yaml` の出力が `13:13` → `12:17` に修正され、actionlint の期待値と一致
 
 ### Phase 1 実装記録
 

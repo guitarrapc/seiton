@@ -4098,4 +4098,32 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);
         await Assert.That(diag.Location.StartColumn).IsEqualTo(21);
     }
+
+    // B-1 regression: null scalar position for "permissions:" with no value should report the
+    // permissions line, not the next token's line. VYaml advances past the null scalar to the
+    // next key; ResolveEmptyScalarStart must walk backward past the next key's colon.
+    [Test]
+    public async Task Parse_NullScalarPermissions_ReportsPermissionsLine()
+    {
+        // "permissions:" is on line 4, column 5 (4 spaces indent), colon at column 16.
+        // The empty value position should be line 4, column 17 (right after the colon).
+        var yaml = "on: push\njobs:\n  test:\n    permissions:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("permissions value must not be empty"));
+        // Must be on the "permissions:" line (line 4), NOT the "runs-on:" line (line 5)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+    }
+
+    // B-1 regression: null scalar position at workflow level "permissions:" should report
+    // the correct line even when the next key is "jobs:".
+    [Test]
+    public async Task Parse_NullScalarPermissions_WorkflowLevel_ReportsPermissionsLine()
+    {
+        // "permissions:" is on line 2
+        var yaml = "on: push\npermissions:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("permissions value must not be empty"));
+        // Must be on the "permissions:" line (line 2), NOT the "jobs:" line (line 3)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(2);
+    }
 }
