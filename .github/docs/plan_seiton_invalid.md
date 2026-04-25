@@ -170,14 +170,14 @@
 | **対処** | `LocalActionOutputResolver` を新設し、`DynamicContextTypeBuilder.BuildStepEntryType` で local action metadata からの output 名を解決。`ExprUndefinedVarRule` から resolver を提供。 |
 | **優先度** | **中** — local action 使用時のバグ発見に有用。 |
 
-### A-16: `matrix_checks` — exclude 値が matrix にマッチしない
+### A-16: `matrix_checks` — exclude 値が matrix にマッチしない ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `value "13" in "exclude" does not match in matrix "node" combinations` |
-| **seiton** | 未検出 (exclude 内の unknown axis と duplicate value は検出済み) |
-| **原因** | `MatrixRule` が exclude 値と matrix 軸の実際の値セットを照合していない。 |
-| **対処** | exclude 内の値が対応する matrix 軸の値に含まれるかチェック。 |
+| **seiton** | ✅ 検出済み: `value "13" in "exclude" does not match in matrix "node" combinations. possible values are "10", "12", "14"` (matrix ルール) |
+| **原因** | `MatrixRule.ValidateCombinations` が exclude 値と matrix 軸の実際の値セットを照合していなかった。 |
+| **対処** | `ValidateCombinations` に exclude 値マッチング検証を追加。スカラー、オブジェクト（部分マッチ）、配列（要素一致）の 3 種を再帰的に比較。include で追加された軸も検証対象。式を含む値はスキップ。 |
 | **優先度** | **低** — exclude のマッチ外れは silent failure だが実害少。 |
 
 ### A-17: `missing_required_keys` — 重複検出
@@ -445,7 +445,7 @@
 |---|---|---|
 | A-8 | deprecated inputs | カタログ依存 |
 | A-13 | Docker empty tag | 既に別メッセージで検出 |
-| A-16 | matrix exclude 値不一致 | 実害少 |
+| A-16 | matrix exclude 値不一致 | ✅ ValidateCombinations に値マッチング追加 |
 | A-29 | YAML anchor 高度検証 | VYaml 制約 |
 | C-2 | comparison severity | ✅ error に変更済み |
 
@@ -506,7 +506,7 @@
 | job_step_ids_duplicate | duplicate step ID、duplicate job key | [parse] + [id-naming] | OK |
 | local_action_inputs | missing required、unknown input | [local-action-inputs] | OK |
 | main | unexpected key、untrusted input、unknown input、undefined matrix、receiver type | [parse] + [template-injection] + [popular-action-inputs] + [expr-undefined-var] | 5/7 件検出 |
-| matrix_checks | duplicate value、unknown axis in exclude | [matrix] | 2/3 件検出 |
+| matrix_checks | duplicate value、unknown axis in exclude | [matrix] | OK — 3/3 件検出 (A-16 ✅) |
 | missing_required_keys | missing runs-on、duplicate matrix key | [parse] + [job-structure] | OK (重複あり C-6) |
 | permissions | invalid permissions (4件) | [permissions] | OK |
 | popular_action_inputs | missing required、unknown input | [popular-action-inputs] | OK |
@@ -789,3 +789,60 @@ CoreParsingBenchmark:
 - テストデータ: `testdata/err/strategy_matrix_runner_context.yaml` + `.out`
 - テスト結果: 663 tests 全パス (661 → 663)
 - ベンチマーク: RuleCatalogBenchmark 全項目 zero allocation、Mean 変化なし
+
+### A-16: matrix_checks — exclude 値が matrix にマッチしない (✅ DONE)
+
+**実装内容:**
+- `MatrixRule.ValidateCombinations` に exclude 値マッチング検証を追加
+- 既存の「unknown axis」チェック後に、軸が存在する場合は exclude 値が matrix 行の値セットにマッチするか検証
+- スカラー（UTF-8 span 比較）、オブジェクト（部分マッチ — exclude の全キーが row に存在し値一致）、配列（同長・要素一致）の 3 種を再帰的に比較
+- `include` で追加された軸も検証対象（`CollectIncludeAxisValues` で収集）
+- 式を含む値（`${{ }}` 埋め込み）はスキップ
+- エラーメッセージ: `value "13" in "exclude" does not match in matrix "node" combinations. possible values are "10", "12", "14"`
+- `FormatRawYamlValue` でスカラー/オブジェクト/配列を JSON-like フォーマットで表示（オブジェクトはキーをアルファベット順ソート）
+
+**変更ファイル:**
+- `src/Seiton.Core/Linting/Rules/MatrixRule.cs`: `ValidateCombinations` 拡張、`ValidateExcludeValueMatch`, `ValidateExcludeValueMatchAgainstList`, `CollectIncludeAxisValues`, `RawYamlValuesMatch`, `ContainsExpression`, `FormatRawYamlValue`, `FormatPossibleValues`, `GetRawYamlValueLocation` 追加
+
+**テストカバレッジ:**
+
+RuleInterfaceTests.cs — `RuleRegression_MatrixRule_ExcludeValueMismatch_TableDriven`: 6 cases
+- `ng-scalar-value-mismatch`: exclude `node: 13` が `[10, 12, 14]` にマッチしない
+- `ok-scalar-value-matches`: exclude `node: 10` が `[10, 12, 14]` にマッチ
+- `ok-exclude-value-is-expression`: exclude 値が `${{ }}` 式の場合はスキップ
+- `ok-row-value-is-expression`: matrix 行値が `${{ }}` 式の場合はスキップ
+- `ng-include-only-axis-value-mismatch`: include で追加された軸 `gui: kde` が `gnome` にマッチしない
+- `ok-include-only-axis-value-matches`: include で追加された軸 `gui: gnome` がマッチ
+
+テストデータ:
+- `testdata/err/matrix_exclude_value_mismatch.yaml` + `.out`
+- `testdata/err/matrix_exclude_no_match.yaml` + `.out`
+- `testdata/err/matrix_exclude_mismatch.yaml` + `.out`
+- `testdata/ok/matrix_exclude_value_match.yaml`
+- `testdata/ok/matrix_expression_in_exclude.yaml`
+- `testdata/ok/matrix_exclude_match_to_expr.yaml`
+
+**テスト結果:** 664 tests 全パス (663 → 664, +1 new test)
+
+**ベンチマーク結果 (2026-04-25):**
+
+CoreLintBenchmark (`LintEngine.Check parse+lint`):
+
+| Size | Fix | P2 Mean | A-16 Mean | Δ Mean | P2 Alloc | A-16 Alloc | Δ Alloc |
+|------|-----|---------|-----------|--------|----------|------------|---------|
+| Small | False | 54.90 μs | 51.37 μs | -6.4% ✅ | 15.49 KB | 15.49 KB | ±0% ✅ |
+| Small | True | — | 55.93 μs | — | — | 15.91 KB | — |
+| Medium | False | 954.71 μs | 875.47 μs | -8.3% ✅ | 97.35 KB | 97.35 KB | ±0% ✅ |
+| Medium | True | — | 1,427.65 μs | — | — | 103.77 KB | — |
+| Large | False | 13,561.38 μs | 11,930.42 μs | -12.0% ✅ | 453.21 KB | 453.21 KB | ±0% ✅ |
+| Large | True | — | 22,684.50 μs | — | — | 483.29 KB | — |
+
+CoreParsingBenchmark:
+
+| Size | Method | P2 Mean | A-16 Mean | Δ Mean | P2 Alloc | A-16 Alloc | Δ Alloc |
+|------|--------|---------|-----------|--------|----------|------------|---------|
+| Small | WorkflowParser.Parse | 36.21 μs | 34.07 μs | -5.9% ✅ | 5.41 KB | 5.41 KB | ±0% ✅ |
+| Medium | WorkflowParser.Parse | 722.96 μs | 641.42 μs | -11.3% ✅ | 27.12 KB | 27.12 KB | ±0% ✅ |
+| Large | WorkflowParser.Parse | 9,988.39 μs | 9,076.16 μs | -9.1% ✅ | 111.35 KB | 111.35 KB | ±0% ✅ |
+
+**判定:** Allocated 完全一致 (変更なし)。Mean は全サイズ改善 (ShortRun ノイズ)。lint ルールのみの変更のため parser に影響なし。**合格**。

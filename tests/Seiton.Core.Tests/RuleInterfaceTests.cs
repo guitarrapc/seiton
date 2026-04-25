@@ -4202,6 +4202,125 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_MatrixRule_ExcludeValueMismatch_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-scalar-value-mismatch",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            node: [10, 12, 14]
+                            os: [ubuntu-latest, macos-latest]
+                            exclude:
+                                - node: 13
+                                  os: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not match in matrix \"node\" combinations"]),
+            new RuleCase(
+            "ok-scalar-value-matches",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            node: [10, 12, 14]
+                            os: [ubuntu-latest, macos-latest]
+                            exclude:
+                                - node: 10
+                                  os: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-exclude-value-is-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            foo: [aaa]
+                            exclude:
+                                - foo: ${{ fromJSON('"x"') }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-row-value-is-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            foo:
+                                - ${{ fromJSON('{"bar":"x"}') }}
+                            exclude:
+                                - foo: bar
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-include-only-axis-value-mismatch",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                            include:
+                                - os: ubuntu-latest
+                                  gui: gnome
+                            exclude:
+                                - os: ubuntu-latest
+                                  gui: kde
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not match in matrix \"gui\" combinations"]),
+            new RuleCase(
+            "ok-include-only-axis-value-matches",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                            include:
+                                - os: ubuntu-latest
+                                  gui: gnome
+                            exclude:
+                                - os: ubuntu-latest
+                                  gui: gnome
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new MatrixRule(), "matrix", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_EnvVarRule_TableDriven()
     {
         var cases = new[]

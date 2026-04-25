@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -139,6 +140,8 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             return;
         }
 
+        var source = Config.Utf8Yaml!;
+
         for (var i = 0; i < combinations.Count; i++)
         {
             var combo = combinations[i];
@@ -152,20 +155,282 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 var entry = combo.Entries[entryIndex];
                 foreach (var pair in entry)
                 {
-                    if (Config.Utf8Yaml is not null && matrix.Rows.Value.ContainsKey(Config.Utf8Yaml, pair.Key))
+                    var keyBytes = pair.Key.AsSpan(source);
+
+                    // Check if axis exists in Rows
+                    if (matrix.Rows.Value.TryGetValue(source, keyBytes, out var row))
                     {
+                        ValidateExcludeValueMatch(job, matrix, row, pair.Key, pair.Value, section);
                         continue;
                     }
 
+                    // Check if axis exists in Include entries
+                    var includeValues = CollectIncludeAxisValues(matrix, source, keyBytes);
+                    if (includeValues is not null)
+                    {
+                        ValidateExcludeValueMatchAgainstList(job, matrix, pair.Key, pair.Value, includeValues, section);
+                        continue;
+                    }
+
+                    // Unknown axis
                     var jobId = Decode(Arena.GetStringSlice(job.Id));
                     var axisName = Decode(pair.Key);
                     AddJobWarning(
                         job,
                         $"job '{jobId}' strategy.matrix.{section} references unknown axis '{axisName}'",
                         matrix.Range);
-                    return;
+                    goto nextEntry;
+                }
+
+            nextEntry:;
+            }
+        }
+    }
+
+    private void ValidateExcludeValueMatch(Job job, Matrix matrix, MatrixRow row, Utf8Slice axisKey, RawYamlValue excludeValue, string section)
+    {
+        // Skip if row is expression-based or has no values
+        if (Arena.GetStringExpression(row.Expression).HasValue || row.Values is null || row.Values.Count == 0)
+        {
+            return;
+        }
+
+        // Skip if exclude value contains an expression
+        if (ContainsExpression(excludeValue))
+        {
+            return;
+        }
+
+        var source = Config.Utf8Yaml!;
+
+        // Check if exclude value matches any row value
+        for (var i = 0; i < row.Values.Count; i++)
+        {
+            var rowValue = row.Values[i];
+            if (ContainsExpression(rowValue))
+            {
+                return; // Can't statically verify when row values contain expressions
+            }
+
+            if (RawYamlValuesMatch(excludeValue, rowValue, source))
+            {
+                return; // Match found
+            }
+        }
+
+        // No match found — report diagnostic
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var axisName = Decode(axisKey);
+        var excludeText = FormatRawYamlValue(excludeValue);
+        var possibleText = FormatPossibleValues(row.Values);
+        var location = GetRawYamlValueLocation(excludeValue, matrix.Range);
+        AddJobWarning(
+            job,
+            $"value {excludeText} in \"{section}\" does not match in matrix \"{axisName}\" combinations. possible values are {possibleText}",
+            location);
+    }
+
+    private void ValidateExcludeValueMatchAgainstList(Job job, Matrix matrix, Utf8Slice axisKey, RawYamlValue excludeValue, List<RawYamlValue> possibleValues, string section)
+    {
+        // Skip if exclude value contains an expression
+        if (ContainsExpression(excludeValue))
+        {
+            return;
+        }
+
+        var source = Config.Utf8Yaml!;
+
+        for (var i = 0; i < possibleValues.Count; i++)
+        {
+            var possible = possibleValues[i];
+            if (ContainsExpression(possible))
+            {
+                return;
+            }
+
+            if (RawYamlValuesMatch(excludeValue, possible, source))
+            {
+                return;
+            }
+        }
+
+        // No match found
+        var axisName = Decode(axisKey);
+        var excludeText = FormatRawYamlValue(excludeValue);
+        var possibleText = FormatPossibleValues(possibleValues);
+        var location = GetRawYamlValueLocation(excludeValue, matrix.Range);
+        AddJobWarning(
+            job,
+            $"value {excludeText} in \"{section}\" does not match in matrix \"{axisName}\" combinations. possible values are {possibleText}",
+            location);
+    }
+
+    private static List<RawYamlValue>? CollectIncludeAxisValues(Matrix matrix, ReadOnlySpan<byte> source, ReadOnlySpan<byte> axisKey)
+    {
+        if (matrix.Include is null || matrix.Include.Count == 0)
+        {
+            return null;
+        }
+
+        List<RawYamlValue>? values = null;
+        for (var i = 0; i < matrix.Include.Count; i++)
+        {
+            var combo = matrix.Include[i];
+            if (combo.Entries is null)
+            {
+                continue;
+            }
+
+            for (var j = 0; j < combo.Entries.Count; j++)
+            {
+                if (combo.Entries[j].TryGetValue(source, axisKey, out var val))
+                {
+                    values ??= [];
+                    values.Add(val);
                 }
             }
         }
+
+        return values;
+    }
+
+    private bool RawYamlValuesMatch(RawYamlValue excludeValue, RawYamlValue rowValue, ReadOnlySpan<byte> source)
+    {
+        // Both scalars
+        if (excludeValue is RawYamlString exStr && rowValue is RawYamlString rwStr)
+        {
+            return Arena.GetStringValue(exStr.Value).SequenceEqual(Arena.GetStringValue(rwStr.Value));
+        }
+
+        // Both objects — partial match (every key in exclude must exist in row with matching value)
+        if (excludeValue is RawYamlObject exObj && rowValue is RawYamlObject rwObj)
+        {
+            foreach (var pair in exObj.Properties)
+            {
+                if (!rwObj.Properties.TryGetValue(source, pair.Key.AsSpan(source), out var rwVal))
+                {
+                    return false;
+                }
+
+                if (!RawYamlValuesMatch(pair.Value, rwVal, source))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Both arrays — same length, element-wise match
+        if (excludeValue is RawYamlArray exArr && rowValue is RawYamlArray rwArr)
+        {
+            if (exArr.Items.Count != rwArr.Items.Count)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < exArr.Items.Count; i++)
+            {
+                if (!RawYamlValuesMatch(exArr.Items[i], rwArr.Items[i], source))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Type mismatch
+        return false;
+    }
+
+    private bool ContainsExpression(RawYamlValue value)
+    {
+        if (value is RawYamlString str)
+        {
+            return Arena.GetStringExpression(str.Value).HasValue
+                || Arena.GetStringValue(str.Value).IndexOf("${{"u8) >= 0;
+        }
+
+        return false;
+    }
+
+    private string FormatRawYamlValue(RawYamlValue value)
+    {
+        if (value is RawYamlString str)
+        {
+            return $"\"{Decode(Arena.GetStringSlice(str.Value))}\"";
+        }
+
+        if (value is RawYamlObject obj)
+        {
+            var sb = new StringBuilder();
+            sb.Append('{');
+            var sortedEntries = new List<(string Key, string Value)>();
+            foreach (var pair in obj.Properties)
+            {
+                sortedEntries.Add((Decode(pair.Key), FormatRawYamlValue(pair.Value)));
+            }
+
+            sortedEntries.Sort(static (a, b) => string.Compare(a.Key, b.Key, StringComparison.Ordinal));
+            for (var i = 0; i < sortedEntries.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append('"').Append(sortedEntries[i].Key).Append("\": ").Append(sortedEntries[i].Value);
+            }
+
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        if (value is RawYamlArray arr)
+        {
+            var sb = new StringBuilder();
+            sb.Append('[');
+            for (var i = 0; i < arr.Items.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append(FormatRawYamlValue(arr.Items[i]));
+            }
+
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        return "?";
+    }
+
+    private string FormatPossibleValues(IReadOnlyList<RawYamlValue> values)
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append(FormatRawYamlValue(values[i]));
+        }
+
+        return sb.ToString();
+    }
+
+    private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback)
+    {
+        if (value is RawYamlString str)
+        {
+            return Arena.GetStringRange(str.Value);
+        }
+
+        return fallback;
     }
 }
