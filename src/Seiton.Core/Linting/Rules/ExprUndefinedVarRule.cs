@@ -154,7 +154,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _stepScopeOverrides[4] = _secretsOverride;
         _hasOverrides = true;
 
-        CheckNode(job.If, ExpressionValidationContext.Job, "job.if", static (rule, message, location, targetJob) =>
+        CheckNode(job.If, ExpressionValidationContext.Strategy, "job.if", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
 
         CheckEnv(job.Env, ExpressionValidationContext.Job, "job.env", static (rule, message, location, targetJob) =>
@@ -406,6 +406,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             ExpressionValidationContext.Workflow => "workflow",
             ExpressionValidationContext.Job => "job",
+            ExpressionValidationContext.Strategy => "job",
             ExpressionValidationContext.Step => "step",
             _ => "unknown",
         };

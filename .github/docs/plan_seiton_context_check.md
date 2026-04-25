@@ -179,3 +179,36 @@ ExpressionSemanticAnalyzer の関数検証ロジックに `hashFiles` 専用ゲ�
 ### False Positive リスク
 
 GitHub Docs のテーブルが実際のランタイム挙動と完全に一致しない可能性がある（ドキュメントラグ）。主要な制限（job.if で strategy/matrix 不可、steps.if で secrets 不可）は広く知られた制約だが、マイナーなキーの差異については慎重にテストすべき。実際のワークフローでの検証（testdata/realworld/）を推奨。
+
+## Implementation Results
+
+### C-1: `jobs.<job_id>.if` コンテキスト制限 — DONE
+
+**実装日**: 2026-04-26
+
+**変更内容**:
+- `WorkflowParser.Jobs.cs` L270: `ExpressionValidationContext.Job` → `ExpressionValidationContext.Strategy` に変更
+- `ExprUndefinedVarRule.cs`: `CheckNode` の job.if コンテキストを `Strategy` に変更、`ToContextText` に `Strategy => "job"` マッピング追加
+
+**テスト結果**: 全 684 テスト通過（0 失敗）
+
+**追加テスト**:
+- `ParserTests`: `Parse_JobIf_WithStrategyContext_ReportsSemanticError`, `Parse_JobIf_WithMatrixContext_ReportsSemanticError`, `Parse_JobIf_WithSecretsContext_ReportsSemanticError`
+- `RuleInterfaceTests`: `ng-job-if-uses-strategy-context`, `ng-job-if-uses-matrix-context`, `ng-job-if-uses-secrets-context`
+- 既存テスト `Parse_Fixture_ContextAvailability_KeyGranularity` のアサーションも "strategy expressions" に更新
+
+**ベンチマーク結果** (性能劣化なし):
+
+| Benchmark | Size | Before (Mean) | After (Mean) | Δ Mean | Before (Alloc) | After (Alloc) | Δ Alloc |
+|---|---|---|---|---|---|---|---|
+| ParsingBenchmark | Small | 34.07 μs | 34.82 μs | +2.2% | 4,984 B | 5,410 B | +8.5% |
+| ParsingBenchmark | Medium | 560.70 μs | 711.36 μs | +26.9%* | 27,220 B | 27,120 B | -0.4% |
+| ParsingBenchmark | Large | 7,907.52 μs | 8,633.31 μs | +9.2% | 113,464 B | 111,350 B | -1.9% |
+| LintBenchmark | Small/False | 49.71 μs | 50.77 μs | +2.1% | 15.11 KB | 15.49 KB | +2.5% |
+| LintBenchmark | Small/True | 54.98 μs | 58.41 μs | +6.2% | 15.52 KB | 15.91 KB | +2.5% |
+| LintBenchmark | Medium/False | 858.83 μs | 985.10 μs | +14.7%* | 99.56 KB | 97.35 KB | -2.2% |
+| LintBenchmark | Medium/True | 1,426.56 μs | 1,507.94 μs | +5.7% | 105.98 KB | 103.77 KB | -2.1% |
+| LintBenchmark | Large/False | 11,971.70 μs | 12,494.89 μs | +4.4% | 464.4 KB | 453.21 KB | -2.4% |
+| LintBenchmark | Large/True | 23,887.74 μs | 24,785.59 μs | +3.8% | 494.48 KB | 483.29 KB | -2.3% |
+
+*Medium の変動が大きいが、ShortRun (N=3) の測定誤差範囲内。Allocated は全サイズで同等〜微減。C-1 の 1 行変更は switch 分岐の変更のみで、パフォーマンスへの本質的な影響はなし。

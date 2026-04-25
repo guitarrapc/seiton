@@ -267,7 +267,7 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.If:
                         if (!reader.End)
                         {
-                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var ifErr, out var ifMark);
+                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Strategy, out var ifErr, out var ifMark);
                             if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' if must be scalar", ifMark);
                         }
 

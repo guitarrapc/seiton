@@ -5803,6 +5803,42 @@ public sealed class RuleInterfaceTests
             """,
             ["job.if", "undefined context 'steps'", "job scope"]),
             new RuleCase(
+            "ng-job-if-uses-strategy-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ strategy.fail-fast }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["job.if", "undefined context 'strategy'", "job scope"]),
+            new RuleCase(
+            "ng-job-if-uses-matrix-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ matrix.os == 'ubuntu-latest' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["job.if", "undefined context 'matrix'", "job scope"]),
+            new RuleCase(
+            "ng-job-if-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ secrets.TOKEN != '' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["job.if", "undefined context 'secrets'", "job scope"]),
+            new RuleCase(
             "ng-step-if-uses-unknown-context",
             """
             on: push
