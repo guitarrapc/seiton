@@ -97,7 +97,13 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: `PopularActionInputsRule` が required/unknown input のみチェックしており、deprecated input のメタデータを持っていない。
 - **対処方針**: popular actions のメタデータに `deprecated` フラグと代替 input 情報を追加し、`PopularActionInputsRule` で deprecated input 使用時に警告。ただし、popular actions の metadata に deprecated 情報を持たせる必要があり、`Seiton.Update` パイプラインの拡張が必要。
 - **テストデータ**: `testdata/examples/deprecated_inputs.yaml`
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 4-a で実装済み。`Seiton.Update` パイプライン全体を拡張:
+  - `GitHubActionMetadataYamlParser`: `deprecationMessage:` フィールドの解析（inline/block scalar対応、末尾ピリオド除去）
+  - `PopularActionInputModel`: `DeprecationMessage` フィールド追加
+  - `GitHubPopularActionsFetcher`: parse/merge ステージで deprecationMessage を伝播
+  - `PopularActionsCSharpGenerator`: `GetDeprecatedInputMessage(ReadOnlySpan<byte>)` メソッド生成
+  - `PopularActionInputsRule`: deprecated input 使用時に警告 (`avoid using deprecated input "{name}" in action "{ref}": {message}`)
+  - データ: `reviewdog/action-actionlint`, `pypa/gh-action-pypi-publish` を popular actions に追加
 
 ### 1-8. [P2: 中] outdated action runner の検出漏れ
 
@@ -117,7 +123,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: VYaml パーサーがアンカーのエッジケース（env に直接アンカー定義、再帰アンカー）でうまく処理できず、パース失敗に陥る。actionlint は Go の yaml.v3 を使っており、より寛容。
 - **対処方針**: VYaml のパースエラー時のリカバリを改善。現時点では優先度低。再帰アンカー検出は VYaml レベルの対応が必要な可能性あり。
 - **テストデータ**: `testdata/examples/yaml_anchor_usage.yaml`
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 5-a で改善済み。VYaml アダプタ (`VYamlStreamAdapter`) に null スカラーガード追加。`GetScalarUtf8()`, `GetScalarSlice()`, `GetScalarString()`, `SnapshotCurrentEvent()` で null scalar を空として処理。`_definedAnchors` のポジション記録を `CurrentStart` に変更。完全なエラーリカバリは VYaml 側の制約で困難だが、パース失敗時のクラッシュを防止。
 
 ### 1-10. [P3: 低] 深い action metadata 検証
 
@@ -351,8 +357,20 @@ Phase 2 実装結果
 
 | # | 項目 | 対象 | 難易度 | 状態 |
 |---|------|------|--------|------|
-| 4-a | deprecated action input 検出 | `PopularActionInputsRule` + データ拡張 | 高 | |
+| 4-a | deprecated action input 検出 | `PopularActionInputsRule` + データ拡張 | 高 | ✅ 完了 |
 | 4-b | 深い action metadata 検証 | `LocalActionInputsRule` 拡張 | 中 | ✅ |
+
+**4-a の実装内容:**
+- `Seiton.Update` パイプライン全体を拡張して deprecated input 情報を伝播:
+  - `GitHubActionMetadataYamlParser`: `deprecationMessage:` フィールドの解析（inline/block scalar 対応、末尾ピリオド除去）
+  - `PopularActionInputModel`: `DeprecationMessage` フィールド追加
+  - `ParsedPopularActionInput`: `DeprecationMessage` プロパティ追加
+  - `GitHubPopularActionsFetcher`: parse/merge ステージで deprecationMessage を伝播、JSON の null フィールド抑制
+  - `GitHubPopularActionsSourceParser`: JSON から `deprecationMessage` を読み取り
+  - `PopularActionsCSharpGenerator`: `GetDeprecatedInputMessage(ReadOnlySpan<byte>)` メソッド生成（ternary chain パターン）
+- `PopularActionInputsRule`: deprecated input 使用時に `avoid using deprecated input "{name}" in action "{ref}": {message}` 形式の警告を生成
+- データ: `reviewdog/action-actionlint`, `pypa/gh-action-pypi-publish` を `targets.json` と raw sources に追加
+- テスト: `RuleRegression_PopularActionInputsRule_DeprecatedInputs_TableDriven` (3 ケース), YAML パーサーテスト 3 件追加
 
 ### Phase 5: YAML パーサーの改善（低優先度）
 

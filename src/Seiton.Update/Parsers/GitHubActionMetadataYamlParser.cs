@@ -37,10 +37,11 @@ internal sealed class GitHubActionMetadataYamlParser
             return [];
         }
 
-        var result = new List<(string Name, bool Required, bool HasDefault)>();
+        var result = new List<(string Name, bool Required, bool HasDefault, string? DeprecationMessage)>();
         string? currentKey = null;
         var currentRequired = false;
         var currentHasDefault = false;
+        string? currentDeprecationMessage = null;
 
         for (var i = inputsLineIndex + 1; i <= lines.Length; i++)
         {
@@ -52,10 +53,11 @@ internal sealed class GitHubActionMetadataYamlParser
             if ((isInputKey || isEnd) && currentKey is not null)
             {
                 // required: true with no default means truly required
-                result.Add((currentKey, currentRequired && !currentHasDefault, currentHasDefault));
+                result.Add((currentKey, currentRequired && !currentHasDefault, currentHasDefault, currentDeprecationMessage));
                 currentKey = null;
                 currentRequired = false;
                 currentHasDefault = false;
+                currentDeprecationMessage = null;
             }
 
             if (isEnd)
@@ -90,6 +92,7 @@ internal sealed class GitHubActionMetadataYamlParser
                 currentKey = key;
                 currentRequired = false;
                 currentHasDefault = false;
+                currentDeprecationMessage = null;
             }
             else if (indent == inputsIndent + 4 && currentKey is not null)
             {
@@ -104,13 +107,44 @@ internal sealed class GitHubActionMetadataYamlParser
                 {
                     currentHasDefault = true;
                 }
+                else if (trimmed2.StartsWith("deprecationMessage:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var val = trimmed2["deprecationMessage:".Length..].Trim().Trim('\'', '"');
+                    if (val is "|" or ">" or "|+" or ">+" or "|-" or ">-" or "|2" or ">2")
+                    {
+                        // Block scalar: read continuation lines
+                        var blockLines = new List<string>();
+                        for (var j = i + 1; j < lines.Length; j++)
+                        {
+                            var blockLine = lines[j];
+                            if (string.IsNullOrWhiteSpace(blockLine))
+                            {
+                                break;
+                            }
+
+                            var blockIndent = GetIndent(blockLine);
+                            if (blockIndent <= inputsIndent + 4)
+                            {
+                                break;
+                            }
+
+                            blockLines.Add(blockLine.Trim());
+                        }
+
+                        currentDeprecationMessage = blockLines.Count > 0 ? string.Join(" ", blockLines).TrimEnd('.') : null;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(val))
+                    {
+                        currentDeprecationMessage = val.TrimEnd('.');
+                    }
+                }
             }
         }
 
         return result
             .DistinctBy(static x => x.Name, StringComparer.Ordinal)
             .OrderBy(static x => x.Name, StringComparer.Ordinal)
-            .Select(static x => new PopularActionInputModel(x.Name, x.Required))
+            .Select(static x => new PopularActionInputModel(x.Name, x.Required, x.DeprecationMessage))
             .ToArray();
     }
 

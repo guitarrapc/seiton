@@ -178,6 +178,69 @@ public sealed class GitHubActionMetadataYamlParserTests
         await Assert.That(outputs.Select(o => o.Name)).Contains("cache-hit");
     }
 
+    [Test]
+    public async Task ParseInputs_InlineDeprecationMessage_ParsesMessage()
+    {
+        var yaml = """
+            name: test action
+            inputs:
+              old-input:
+                description: old
+                deprecationMessage: Use new-input instead.
+              new-input:
+                description: new
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var inputs = parser.ParseInputs(yaml);
+
+        var oldInput = inputs.Single(i => i.Name == "old-input");
+        await Assert.That(oldInput.DeprecationMessage).IsEqualTo("Use new-input instead");
+
+        var newInput = inputs.Single(i => i.Name == "new-input");
+        await Assert.That(newInput.DeprecationMessage).IsNull();
+    }
+
+    [Test]
+    public async Task ParseInputs_BlockScalarDeprecationMessage_ParsesMultilineMessage()
+    {
+        var yaml = """
+            name: test action
+            inputs:
+              save-always:
+                description: save always
+                deprecationMessage: |
+                  save-always does not work as intended.
+                  Use actions/cache/restore instead.
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var inputs = parser.ParseInputs(yaml);
+
+        var saveAlways = inputs.Single(i => i.Name == "save-always");
+        await Assert.That(saveAlways.DeprecationMessage).IsEqualTo("save-always does not work as intended. Use actions/cache/restore instead");
+    }
+
+    [Test]
+    public async Task ParseInputs_RealActionlint_ParsesDeprecationMessage()
+    {
+        var repoRoot = FindRepoRoot();
+        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "reviewdog_action-actionlint.action.yml");
+        var yaml = File.ReadAllText(rawPath);
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var inputs = parser.ParseInputs(yaml);
+
+        var failOnError = inputs.Single(i => i.Name == "fail_on_error");
+        await Assert.That(failOnError.DeprecationMessage).IsEqualTo("Deprecated, use `fail_level` instead");
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

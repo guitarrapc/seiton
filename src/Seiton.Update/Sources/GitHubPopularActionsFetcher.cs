@@ -12,6 +12,7 @@ internal sealed class GitHubPopularActionsFetcher
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
@@ -113,7 +114,7 @@ internal sealed class GitHubPopularActionsFetcher
             {
                 ActionRef = source.ActionRef,
                 Uses = source.Uses,
-                Inputs = inputs.Select(static x => new ParsedPopularActionInput { Name = x.Name, Required = x.Required }).ToList(),
+                Inputs = inputs.Select(static x => new ParsedPopularActionInput { Name = x.Name, Required = x.Required, DeprecationMessage = x.DeprecationMessage }).ToList(),
                 Outputs = outputs.Select(static x => new ParsedPopularActionOutput { Name = x.Name }).ToList(),
                 RunsUsing = runsUsing,
             });
@@ -177,7 +178,7 @@ internal sealed class GitHubPopularActionsFetcher
                         .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
                         .DistinctBy(static n => n.Name, StringComparer.Ordinal)
                         .OrderBy(static n => n.Name, StringComparer.Ordinal)
-                        .Select(static n => new { name = n.Name, required = n.Required })
+                        .Select(static n => new { name = n.Name, required = n.Required, deprecationMessage = n.DeprecationMessage })
                         .ToArray(),
                     outputs = (x.Outputs ?? [])
                         .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
@@ -349,6 +350,7 @@ internal sealed class GitHubPopularActionsFetcher
     {
         public string Name { get; set; } = string.Empty;
         public bool Required { get; set; }
+        public string? DeprecationMessage { get; set; }
     }
 
     private sealed class ParsedPopularActionOutput

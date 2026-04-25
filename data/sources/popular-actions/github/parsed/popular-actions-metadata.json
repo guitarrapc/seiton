@@ -32,7 +32,8 @@
         },
         {
           "name": "save-always",
-          "required": false
+          "required": false,
+          "deprecationMessage": "save-always does not work as intended and will be removed in a future release. A separate \u0060actions/cache/restore\u0060 step should be used instead. See https://github.com/actions/cache/tree/main/save#always-save-cache for more details"
         },
         {
           "name": "upload-chunk-size",
@@ -443,6 +444,120 @@
       ],
       "outputs": [],
       "runsUsing": "node24"
+    },
+    {
+      "actionRef": "pypa/gh-action-pypi-publish@release/v1",
+      "uses": "pypa/gh-action-pypi-publish",
+      "inputs": [
+        {
+          "name": "attestations",
+          "required": false
+        },
+        {
+          "name": "packages-dir",
+          "required": false
+        },
+        {
+          "name": "packages_dir",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060packages-dir\u0060 instead"
+        },
+        {
+          "name": "password",
+          "required": false
+        },
+        {
+          "name": "print-hash",
+          "required": false
+        },
+        {
+          "name": "print_hash",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060print-hash\u0060 instead"
+        },
+        {
+          "name": "repository-url",
+          "required": false
+        },
+        {
+          "name": "repository_url",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060repository-url\u0060 instead"
+        },
+        {
+          "name": "skip-existing",
+          "required": false
+        },
+        {
+          "name": "skip_existing",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060skip-existing\u0060 instead"
+        },
+        {
+          "name": "user",
+          "required": false
+        },
+        {
+          "name": "verbose",
+          "required": false
+        },
+        {
+          "name": "verify-metadata",
+          "required": false
+        },
+        {
+          "name": "verify_metadata",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060verify-metadata\u0060 instead"
+        }
+      ],
+      "outputs": [],
+      "runsUsing": "composite"
+    },
+    {
+      "actionRef": "reviewdog/action-actionlint@v1",
+      "uses": "reviewdog/action-actionlint",
+      "inputs": [
+        {
+          "name": "actionlint_flags",
+          "required": false
+        },
+        {
+          "name": "fail_level",
+          "required": false
+        },
+        {
+          "name": "fail_on_error",
+          "required": false,
+          "deprecationMessage": "Deprecated, use \u0060fail_level\u0060 instead"
+        },
+        {
+          "name": "filter_mode",
+          "required": false
+        },
+        {
+          "name": "github_token",
+          "required": false
+        },
+        {
+          "name": "level",
+          "required": false
+        },
+        {
+          "name": "reporter",
+          "required": false
+        },
+        {
+          "name": "reviewdog_flags",
+          "required": false
+        },
+        {
+          "name": "tool_name",
+          "required": false
+        }
+      ],
+      "outputs": [],
+      "runsUsing": "docker"
     }
   ]
 }

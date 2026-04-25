@@ -1472,6 +1472,63 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_PopularActionInputsRule_DeprecatedInputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Deprecated input for reviewdog/action-actionlint
+            new RuleCase(
+            "ng-deprecated-fail-on-error",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: reviewdog/action-actionlint@v1
+                          with:
+                            fail_on_error: true
+            """,
+            ["avoid using deprecated input \"fail_on_error\" in action \"reviewdog/action-actionlint@v1\": Deprecated, use `fail_level` instead"]),
+            // Deprecated inputs for pypa/gh-action-pypi-publish
+            new RuleCase(
+            "ng-deprecated-pypa-packages-dir",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: pypa/gh-action-pypi-publish@release/v1
+                          with:
+                            packages_dir: /path/to/dir
+                            repository_url: https://github.com/foo/bar
+            """,
+            [
+                "avoid using deprecated input \"packages_dir\" in action \"pypa/gh-action-pypi-publish@release/v1\": The inputs have been normalized to use kebab-case. Use `packages-dir` instead",
+                "avoid using deprecated input \"repository_url\" in action \"pypa/gh-action-pypi-publish@release/v1\": The inputs have been normalized to use kebab-case. Use `repository-url` instead",
+            ]),
+            // Non-deprecated input should not trigger warning
+            new RuleCase(
+            "ok-non-deprecated-input",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                            path: ~/.npm
+                            key: npm-${{ runner.os }}
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_CheckoutPersistCredentialsRule_TableDriven()
     {
         var cases = new[]

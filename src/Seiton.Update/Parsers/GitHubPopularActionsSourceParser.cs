@@ -29,7 +29,7 @@ internal sealed class GitHubPopularActionsSourceParser
             .Where(static x => !string.IsNullOrWhiteSpace(x.Uses))
             .Select(static x => new PopularActionModel(
                 x.Uses,
-                (x.Inputs ?? []).Select(static i => new PopularActionInputModel(i.Name, i.Required)).ToArray(),
+                (x.Inputs ?? []).Select(static i => new PopularActionInputModel(i.Name, i.Required, i.DeprecationMessage)).ToArray(),
                 (x.Outputs ?? []).Select(static o => new PopularActionOutputModel(o.Name)).ToArray(),
                 x.RunsUsing ?? string.Empty,
                 x.MaxDeprecatedMajorVersion ?? 0))
@@ -55,6 +55,7 @@ internal sealed class GitHubPopularActionsSourceParser
     {
         public string Name { get; set; } = string.Empty;
         public bool Required { get; set; }
+        public string? DeprecationMessage { get; set; }
     }
 
     private sealed class PopularActionOutputEntry

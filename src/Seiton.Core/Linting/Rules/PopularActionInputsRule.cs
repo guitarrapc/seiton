@@ -37,11 +37,20 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
             {
                 if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
                 {
+                    // Check deprecated inputs
+                    var deprecationMessage = actionSpec.GetDeprecatedInputMessage(pair.Key.AsSpan(Config.Utf8Yaml));
+                    if (!deprecationMessage.IsEmpty)
+                    {
+                        var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
+                        var message = Encoding.UTF8.GetString(deprecationMessage);
+                        AddStepWarning(step, $"avoid using deprecated input \"{inputName}\" in action \"{actionName}\": {message}");
+                    }
+
                     continue;
                 }
 
-                var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
-                AddStepWarning(step, $"unknown input '{inputName}' for action '{actionName}'");
+                var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
+                AddStepWarning(step, $"unknown input '{unknownInputName}' for action '{actionName}'");
             }
         }
 

@@ -173,6 +173,47 @@ internal sealed class PopularActionsCSharpGenerator
                         };
                     }
 
+                    internal ReadOnlySpan<byte> GetDeprecatedInputMessage(ReadOnlySpan<byte> inputNameUtf8)
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            var deprecatedInputs = action.Inputs.Where(static i => !string.IsNullOrWhiteSpace(i.DeprecationMessage)).ToArray();
+            if (deprecatedInputs.Length == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => default,");
+                continue;
+            }
+
+            sb.AppendLine($"                ActionId.{actionId} =>");
+            for (var i = 0; i < deprecatedInputs.Length; i++)
+            {
+                var input = deprecatedInputs[i];
+                var message = EscapeCSharpString(input.DeprecationMessage!);
+                var prefix = i == 0 ? "" : ": ";
+                if (i == 0)
+                {
+                    sb.AppendLine($"                    EqualsAsciiIgnoreCase(inputNameUtf8, \"{input.Name}\"u8) ? \"{message}\"u8");
+                }
+                else
+                {
+                    sb.AppendLine($"                    : EqualsAsciiIgnoreCase(inputNameUtf8, \"{input.Name}\"u8) ? \"{message}\"u8");
+                }
+            }
+            sb.AppendLine("                    : default,");
+        }
+
+        sb.Append(
+            """
+                            _ => default,
+                        };
+                    }
+
                     internal ReadOnlySpan<byte> GetRunsUsing()
                     {
                         return Id switch
@@ -325,5 +366,10 @@ internal sealed class PopularActionsCSharpGenerator
         }
 
         return sb.ToString();
+    }
+
+    private static string EscapeCSharpString(string value)
+    {
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 }

@@ -17,6 +17,8 @@ internal static class PopularActions
         ActionsSetupNode,
         ActionsUploadArtifact,
         DockerLoginAction,
+        PypaGhActionPypiPublish,
+        ReviewdogActionActionlint,
     }
 
     internal readonly struct ActionSpec
@@ -123,6 +125,31 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "registry-auth"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "scope"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "username"u8),
+                ActionId.PypaGhActionPypiPublish =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "attestations"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "packages-dir"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "packages_dir"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "password"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "print-hash"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "print_hash"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "repository-url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "repository_url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "skip-existing"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "skip_existing"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "user"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "verbose"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "verify-metadata"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "verify_metadata"u8),
+                ActionId.ReviewdogActionActionlint =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "actionlint_flags"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "fail_level"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "fail_on_error"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "filter_mode"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "github_token"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "level"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "reporter"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "reviewdog_flags"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "tool_name"u8),
                 _ => false,
             };
         }
@@ -142,6 +169,8 @@ internal static class PopularActions
                 ActionId.ActionsUploadArtifact =>
                     EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8),
                 ActionId.DockerLoginAction => false,
+                ActionId.PypaGhActionPypiPublish => false,
+                ActionId.ReviewdogActionActionlint => false,
                 _ => false,
             };
         }
@@ -158,6 +187,8 @@ internal static class PopularActions
                 ActionId.ActionsSetupNode => [],
                 ActionId.ActionsUploadArtifact => ["path"u8.ToArray()],
                 ActionId.DockerLoginAction => [],
+                ActionId.PypaGhActionPypiPublish => [],
+                ActionId.ReviewdogActionActionlint => [],
                 _ => [],
             };
         }
@@ -174,7 +205,37 @@ internal static class PopularActions
                 ActionId.ActionsSetupNode => ["cache-hit"u8.ToArray(), "node-version"u8.ToArray()],
                 ActionId.ActionsUploadArtifact => ["artifact-digest"u8.ToArray(), "artifact-id"u8.ToArray(), "artifact-url"u8.ToArray()],
                 ActionId.DockerLoginAction => [],
+                ActionId.PypaGhActionPypiPublish => [],
+                ActionId.ReviewdogActionActionlint => [],
                 _ => [],
+            };
+        }
+
+        internal ReadOnlySpan<byte> GetDeprecatedInputMessage(ReadOnlySpan<byte> inputNameUtf8)
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "save-always"u8) ? "save-always does not work as intended and will be removed in a future release. A separate `actions/cache/restore` step should be used instead. See https://github.com/actions/cache/tree/main/save#always-save-cache for more details"u8
+                    : default,
+                ActionId.ActionsCheckout => default,
+                ActionId.ActionsDownloadArtifact => default,
+                ActionId.ActionsSetupDotnet => default,
+                ActionId.ActionsSetupGo => default,
+                ActionId.ActionsSetupNode => default,
+                ActionId.ActionsUploadArtifact => default,
+                ActionId.DockerLoginAction => default,
+                ActionId.PypaGhActionPypiPublish =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "packages_dir"u8) ? "The inputs have been normalized to use kebab-case. Use `packages-dir` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "print_hash"u8) ? "The inputs have been normalized to use kebab-case. Use `print-hash` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "repository_url"u8) ? "The inputs have been normalized to use kebab-case. Use `repository-url` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "skip_existing"u8) ? "The inputs have been normalized to use kebab-case. Use `skip-existing` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "verify_metadata"u8) ? "The inputs have been normalized to use kebab-case. Use `verify-metadata` instead"u8
+                    : default,
+                ActionId.ReviewdogActionActionlint =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "fail_on_error"u8) ? "Deprecated, use `fail_level` instead"u8
+                    : default,
+                _ => default,
             };
         }
 
@@ -190,6 +251,8 @@ internal static class PopularActions
                 ActionId.ActionsSetupNode => "node24"u8,
                 ActionId.ActionsUploadArtifact => "node24"u8,
                 ActionId.DockerLoginAction => "node24"u8,
+                ActionId.PypaGhActionPypiPublish => "composite"u8,
+                ActionId.ReviewdogActionActionlint => "docker"u8,
                 _ => default,
             };
         }
@@ -206,6 +269,8 @@ internal static class PopularActions
                 ActionId.ActionsSetupNode => 3,
                 ActionId.ActionsUploadArtifact => 3,
                 ActionId.DockerLoginAction => 2,
+                ActionId.PypaGhActionPypiPublish => 0,
+                ActionId.ReviewdogActionActionlint => 0,
                 _ => 0,
             };
         }
@@ -258,6 +323,18 @@ internal static class PopularActions
         if (MatchesActionReference(usesUtf8, "docker/login-action"u8))
         {
             spec = new ActionSpec(ActionId.DockerLoginAction);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "pypa/gh-action-pypi-publish"u8))
+        {
+            spec = new ActionSpec(ActionId.PypaGhActionPypiPublish);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "reviewdog/action-actionlint"u8))
+        {
+            spec = new ActionSpec(ActionId.ReviewdogActionActionlint);
             return true;
         }
 

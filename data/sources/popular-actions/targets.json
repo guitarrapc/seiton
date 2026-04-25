@@ -57,6 +57,20 @@
       "url": "https://raw.githubusercontent.com/docker/login-action/v4/action.yml",
       "rawFileName": "docker_login-action.action.yml",
       "maxDeprecatedMajorVersion": 2
+    },
+    {
+      "actionRef": "pypa/gh-action-pypi-publish@release/v1",
+      "uses": "pypa/gh-action-pypi-publish",
+      "url": "https://raw.githubusercontent.com/pypa/gh-action-pypi-publish/release/v1/action.yml",
+      "rawFileName": "pypa_gh-action-pypi-publish.action.yml",
+      "maxDeprecatedMajorVersion": 0
+    },
+    {
+      "actionRef": "reviewdog/action-actionlint@v1",
+      "uses": "reviewdog/action-actionlint",
+      "url": "https://raw.githubusercontent.com/reviewdog/action-actionlint/v1/action.yml",
+      "rawFileName": "reviewdog_action-actionlint.action.yml",
+      "maxDeprecatedMajorVersion": 0
     }
   ]
 }

@@ -2,7 +2,8 @@
 
 internal sealed record PopularActionInputModel(
     string Name,
-    bool Required);
+    bool Required,
+    string? DeprecationMessage = null);
 
 internal sealed record PopularActionOutputModel(
     string Name);
