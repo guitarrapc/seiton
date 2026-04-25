@@ -97,7 +97,7 @@
 
 **実装結果**: → Implementation Results セクション参照
 
-### C-3: `hashFiles` 関数のコンテキスト制限 — DONE — DONE
+### C-3: `hashFiles` 関数のコンテキスト制限 — DONE
 
 **問題**: `hashFiles()` は step レベルのキーでのみ利用可能だが、現在の実装では全コンテキストで許可されている。
 

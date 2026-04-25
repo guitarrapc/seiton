@@ -874,25 +874,81 @@ The expression AST is traversed using the `VisitExprNode(node, parent, entering)
 
 ### 7.2 Context Availability Validation
 
-The root identifiers of expressions (`github`, `env`, `steps`, `job`, `runner`, `secrets`, `strategy`, `matrix`, `needs`, `inputs`, `vars`) have different availability depending on usage location (workflow, job, step).
+The root identifiers of expressions (`github`, `env`, `vars`, `job`, `steps`, `runner`, `secrets`, `strategy`, `matrix`, `needs`, `inputs`) have different availability depending on the workflow key where the expression appears.
 
-| Context | workflow level | job level | job `if:` | step `if:` | step level |
-|---|---|---|---|---|---|
-| `github` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `env` | ✓ | ✓ | - | ✓ | ✓ |
-| `vars` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `job` | - | ✓ | - | ✓ | ✓ |
-| `steps` | - | - | - | ✓ | ✓ |
-| `runner` | - | ✓ | - | ✓ | ✓ |
-| `secrets` | - | ✓ | - | - | ✓ |
-| `strategy` | - | ✓ | - | ✓ | ✓ |
-| `matrix` | - | ✓ | - | ✓ | ✓ |
-| `needs` | - | ✓ | ✓ | ✓ | ✓ |
-| `inputs` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `hashFiles` | - | ✓ | - | ✓ | ✓ |
-| `success`/`failure`/`always`/`cancelled` | - | ✓ (`if:` only) | ✓ | ✓ | ✓ (`if:` only) |
+#### 7.2.1 Per-Key Context Availability Table
 
-**Note**: This is a simplified table. Strictly, availability differs by key position (`if:` / `env:` / `with:`, etc.). The complete availability table is managed as generated data. `jobs.<job_id>.if` uses the same restricted set as `strategy` (github, needs, vars, inputs only) because job-level `if:` is evaluated before strategy/matrix expansion. `jobs.<job_id>.steps.if` uses a dedicated `StepIf` scope that excludes `secrets` (10 roots) compared to the full step scope (11 roots).
+The following table shows the complete per-key availability. Each row is a workflow key position, each column is a context root. ✓ = available, - = not available.
+
+**Workflow Level:**
+
+| Workflow Key | `github` | `env` | `vars` | `job` | `steps` | `runner` | `secrets` | `strategy` | `matrix` | `needs` | `inputs` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `run-name` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+| `env` | ✓ | - | ✓ | - | - | - | ✓ | - | - | - | ✓ |
+| `concurrency` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+| `on.workflow_call.inputs.*.default` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+| `on.workflow_call.outputs.*.value` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+
+> Note: `on.workflow_call.outputs.*.value` additionally has access to `jobs` context (for referencing job outputs).
+
+**Job Level:**
+
+| Workflow Key | `github` | `env` | `vars` | `job` | `steps` | `runner` | `secrets` | `strategy` | `matrix` | `needs` | `inputs` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `jobs.<id>.if` | ✓ | - | ✓ | - | - | - | - | - | - | ✓ | ✓ |
+| `jobs.<id>.name` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.runs-on` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.env` | ✓ | - | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.concurrency` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.strategy` | ✓ | - | ✓ | - | - | - | - | - | - | ✓ | ✓ |
+| `jobs.<id>.continue-on-error` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.timeout-minutes` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.environment` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.environment.url` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.outputs.<out_id>` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.with.<with_id>` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.secrets.<secret_id>` | ✓ | - | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.defaults.run` | ✓ | ✓ | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container.image` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container.credentials` | ✓ | ✓ | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container.env.<env_id>` | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.services` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.services.<sid>.credentials` | ✓ | ✓ | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.services.<sid>.env.<eid>` | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+**Step Level:**
+
+| Workflow Key | `github` | `env` | `vars` | `job` | `steps` | `runner` | `secrets` | `strategy` | `matrix` | `needs` | `inputs` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `jobs.<id>.steps.if` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.name` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.run` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.with` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.env` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.continue-on-error` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.timeout-minutes` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.working-directory` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+#### 7.2.2 Function Availability by Context
+
+| Function | Availability |
+|---|---|
+| `hashFiles()` | Step-level keys only (all `jobs.<id>.steps.*` positions) |
+| `success()` / `failure()` / `cancelled()` / `always()` | `if:` conditions only (`jobs.<id>.if` and `jobs.<id>.steps.if`) |
+
+#### 7.2.3 Key Observations
+
+- **`jobs.<id>.if`** uses the most restricted set (4 roots: github, vars, needs, inputs) because it is evaluated before strategy/matrix expansion.
+- **`jobs.<id>.strategy`** shares the same restricted set as `jobs.<id>.if` (4 roots).
+- **`jobs.<id>.env`** is the only job-level mapping key that permits `secrets`.
+- **`jobs.<id>.steps.if`** is the only step-level key that excludes `secrets` (10 roots vs 11 for other step keys).
+- **`jobs.<id>.environment.url`** and **`jobs.<id>.outputs.<out_id>`** have broader access than most job-level keys because they are evaluated after step execution.
+- **Container/service env** keys gain `job`, `runner`, `env` contexts compared to regular job-level keys.
+- **Container/service credentials** keys gain `env` and `secrets` compared to regular job-level keys.
+
+The complete availability data is generated from `data/sources/availability/` and materialized in `Availability.g.cs`. Each workflow key position maps to a dedicated `ExpressionValidationContext` enum value with its own root array.
 
 ### 7.3 Type Validation
 
