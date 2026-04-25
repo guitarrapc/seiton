@@ -30,7 +30,11 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
         if (permissions.All.HasValue)
         {
             var value = Decode(Arena.GetStringSlice(permissions.All));
-            if (!string.Equals(value, "read-all", StringComparison.Ordinal)
+            if (value.Length == 0)
+            {
+                AddError("\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}", Arena.GetStringRange(permissions.All), workflow, job);
+            }
+            else if (!string.Equals(value, "read-all", StringComparison.Ordinal)
                 && !string.Equals(value, "write-all", StringComparison.Ordinal))
             {
                 AddError($"permissions scalar must be 'read-all' or 'write-all', but got '{value}'", Arena.GetStringRange(permissions.All), workflow, job);

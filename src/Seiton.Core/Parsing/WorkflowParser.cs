@@ -543,7 +543,12 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var all = ParseString(ref reader, arena, diagnostics, error);
+            var all = ParseString(ref reader, arena, out var needsError, out var errorMark);
+            if (needsError)
+            {
+                AddError(diagnostics, "permissions value must not be empty", errorMark);
+            }
+
             return !all.HasValue
                 ? null
                 : new Permissions

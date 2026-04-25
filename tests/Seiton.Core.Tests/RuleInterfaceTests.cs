@@ -1368,6 +1368,32 @@ public sealed class RuleInterfaceTests
                         - run: echo ok
             """,
             []),
+            // regression: empty permissions scalar at job level (issue170)
+            new RuleCase(
+            "ng-job-empty-permissions-scalar",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}"]),
+            // regression: empty permissions scalar at workflow level (issue170)
+            new RuleCase(
+            "ng-workflow-empty-permissions-scalar",
+            """
+            on: push
+            permissions:
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}"]),
         };
 
         await AssertRuleCases(new PermissionsRule(), "permissions", cases);
