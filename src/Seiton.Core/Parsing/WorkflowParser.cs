@@ -321,7 +321,7 @@ public static partial class WorkflowParser
                     case WorkflowRootMappingKey.RunName:
                         runNameNode = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.Workflow,
+                            ExpressionValidationContext.RunName,
                             "run-name must be scalar",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
@@ -364,7 +364,7 @@ public static partial class WorkflowParser
                                 ref reader, arena, diagnostics,
                                 source,
                                 "workflow env must be mapping",
-                                ExpressionValidationContext.Workflow);
+                                ExpressionValidationContext.Env);
                         }
 
                         continue;
@@ -385,7 +385,7 @@ public static partial class WorkflowParser
                     case WorkflowRootMappingKey.Concurrency:
                         if (!reader.End)
                         {
-                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be scalar or mapping", ExpressionValidationContext.Workflow);
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be scalar or mapping", ExpressionValidationContext.Concurrency);
                         }
 
                         continue;

@@ -75,7 +75,7 @@ foreach (var (name, expr) in expressions)
 
     var before = GC.GetTotalAllocatedBytes(precise: true);
     var diags = ExpressionSemanticAnalyzer.Validate(
-        parseResult, utf8, loc, ExpressionValidationContext.Step);
+        parseResult, utf8, loc, ExpressionValidationContext.StepRun);
     var after = GC.GetTotalAllocatedBytes(precise: true);
     var delta = after - before;
 
@@ -136,20 +136,20 @@ for (int j = 0; j < 20; j++)
         {
             var idx = e; // 0=startsWith, 1=matrix.os, 2=github.sha
             var pr = ExpressionParser.Parse(exprs[idx]);
-            _ = ExpressionSemanticAnalyzer.Validate(pr, exprs[idx], loc2, ExpressionValidationContext.Step);
+            _ = ExpressionSemanticAnalyzer.Validate(pr, exprs[idx], loc2, ExpressionValidationContext.StepRun);
         }
         // Action step: 1 expression
         {
             var pr = ExpressionParser.Parse(exprs[3]);
-            _ = ExpressionSemanticAnalyzer.Validate(pr, exprs[3], loc2, ExpressionValidationContext.Step);
+            _ = ExpressionSemanticAnalyzer.Validate(pr, exprs[3], loc2, ExpressionValidationContext.StepRun);
         }
     }
 }
 {
     var pr1 = ExpressionParser.Parse(exprs[4]);
-    _ = ExpressionSemanticAnalyzer.Validate(pr1, exprs[4], loc2, ExpressionValidationContext.Workflow);
+    _ = ExpressionSemanticAnalyzer.Validate(pr1, exprs[4], loc2, ExpressionValidationContext.RunName);
     var pr2 = ExpressionParser.Parse(exprs[5]);
-    _ = ExpressionSemanticAnalyzer.Validate(pr2, exprs[5], loc2, ExpressionValidationContext.Workflow);
+    _ = ExpressionSemanticAnalyzer.Validate(pr2, exprs[5], loc2, ExpressionValidationContext.Concurrency);
 }
 var validateAllocAfter = GC.GetTotalAllocatedBytes(precise: true);
 Console.WriteLine($"Parse + Validate (482 calls): {validateAllocAfter - validateAllocBefore:N0}B");

@@ -7,19 +7,6 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Parsing;
 
-/// <summary>Identifies which part of the workflow an expression appears in, for context-sensitive validation.</summary>
-public enum ExpressionValidationContext
-{
-    Workflow,
-    WorkflowCallOutput,
-    Job,
-    JobOutput,
-    ReusableWorkflowCallSecrets,
-    Step,
-    StepIf,
-    Strategy,
-}
-
 /// <summary>
 /// Performs semantic analysis on parsed expression ASTs: context availability, function validation,
 /// type inference, and property access checks.
@@ -1304,21 +1291,7 @@ public static class ExpressionSemanticAnalyzer
         return sb.ToString();
     }
 
-    private static string ToContextText(ExpressionValidationContext context)
-    {
-        return context switch
-        {
-            ExpressionValidationContext.Workflow => "workflow",
-            ExpressionValidationContext.WorkflowCallOutput => "workflow_call output",
-            ExpressionValidationContext.Job => "job",
-            ExpressionValidationContext.JobOutput => "job output",
-            ExpressionValidationContext.ReusableWorkflowCallSecrets => "reusable workflow call secrets",
-            ExpressionValidationContext.Step => "step",
-            ExpressionValidationContext.StepIf => "step",
-            ExpressionValidationContext.Strategy => "strategy",
-            _ => "unknown",
-        };
-    }
+    private static string ToContextText(ExpressionValidationContext context) => Availability.GetContextText(context);
 
     // Dynamic context property access validation
 

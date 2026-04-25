@@ -630,7 +630,7 @@ public static partial class WorkflowParser
                     case WorkflowCallOutputFieldKey.Value:
                         value = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.WorkflowCallOutput,
+                            ExpressionValidationContext.WorkflowCallOutputsValue,
                             "on.workflow_call output value must be scalar",
                             parseWholeValueIfNoEmbedded: false);
                         continue;

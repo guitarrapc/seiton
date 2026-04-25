@@ -253,3 +253,40 @@ GitHub Docs のテーブルが実際のランタイム挙動と完全に一致�
 | LintBenchmark | Large/True | 24,785.59 μs | 25,112.02 μs | +1.3% | 483.29 KB | 483.29 KB | 0% |
 
 Allocated は全サイズで完全に同一。Mean の変動は ShortRun (N=3) の測定誤差範囲内。C-2 の enum 追加・switch 分岐追加はパフォーマンスへの影響なし。
+
+---
+
+## Availability パイプラインの per-key リファクタリング（C-2 後、C-3 前）
+
+### 動機
+availability.json はグループ化された8つの root 配列（workflowRoots, jobRoots 等）で表現されており、workflow key ごとの固有のコンテキスト情報が失われていた。例えば `jobs.<job_id>.env` と `jobs.<job_id>.concurrency` は同じ `jobRoots` を共有していたが、実際には異なるコンテキストセットを持つ（env は secrets を含むが concurrency は含まない）。
+
+### 変更内容
+1. **availability.json (schemaVersion 2)**: グループ化された8配列 → 34個の per-key entries（parsed JSON のパススルー）
+2. **AvailabilityModel**: `record AvailabilityModel(IReadOnlyList<AvailabilityEntry> Entries)` + `AvailabilityEntry(WorkflowKey, Contexts)`
+3. **GitHubAvailabilitySourceParser**: per-entry format のパース（`entries[]` 配列）
+4. **GitHubAvailabilityFetcher.MergeParsedSources**: union ロジック削除 → parsed entries のパススルー
+5. **AvailabilityCSharpGenerator**: 34個の per-key 配列 + enum 定義 + switch + ヘルパーメソッド生成
+6. **ExpressionValidationContext enum**: 手書き8値 → 生成34値（`Availability.g.cs` 内に block namespace で配置）
+7. **パーサー全呼び出し箇所**: `Workflow/Job/Step/Strategy` 等 → `RunName/JobEnv/StepRun/JobStrategy/JobIf` 等の per-key enum 値
+8. **ExprUndefinedVarRule**: `context is Step or StepIf` → `Availability.IsStepLevel(context)`、`ToContextText` → `Availability.GetLintCategoryText`
+9. **ExpressionSemanticAnalyzer**: `ToContextText` → `Availability.GetContextText`
+
+### 生成されるヘルパー
+- `Availability.IsStepLevel(context)` — 全 Step* enum 値に対して true
+- `Availability.GetContextText(context)` — パーサーレベルのカテゴリテキスト（"workflow", "job", "strategy", "step if" 等）
+- `Availability.GetLintCategoryText(context)` — lint レベルの折りたたみテキスト（"workflow", "job", "step" 等）
+
+### Enum 命名規則（生成器アルゴリズム）
+1. workflow key を `.` で分割、`<...>` セグメント除去
+2. プレフィックス: `on.workflow_call.` → `WorkflowCall`, `jobs.*.steps.` → `Step`, `jobs.` → `Job`, その他 → なし
+3. 残りセグメントを PascalCase（`-` と `_` で分割、先頭大文字化）
+4. 結合
+
+### テスト結果
+全 686 テスト通過（0 失敗）
+
+### 教訓
+- Container パーサーは `isService` パラメータで container/service を区別。per-key 化により `JobContainerEnv` vs `JobServicesEnv` の自動選択が可能
+- パーサーの `GetContextText` とリントの `GetLintCategoryText` は異なるマッピング: パーサーは "strategy" / "job if" / "step if" を区別、リントは "job" / "step" に折りたたむ
+- Action metadata (action.yml) のコンテキストは workflow key に直接対応しないが、step レベルの enum 値（`StepRun`, `StepIf`, `StepEnv`）で適切にカバーされる

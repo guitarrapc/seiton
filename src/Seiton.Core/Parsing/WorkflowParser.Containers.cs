@@ -13,7 +13,7 @@ public static partial class WorkflowParser
         {
             var expression = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
-                ExpressionValidationContext.Job,
+                ExpressionValidationContext.JobServices,
                 out var svcErr,
                 out var svcMark,
                 parseWholeValueIfNoEmbedded: false);
@@ -210,7 +210,7 @@ public static partial class WorkflowParser
                             ref reader, arena, diagnostics,
                             source,
                             $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
-                            ExpressionValidationContext.Job);
+                            isService ? ExpressionValidationContext.JobServicesEnv : ExpressionValidationContext.JobContainerEnv);
                         continue;
                     case ContainerMappingKey.Ports:
                     case ContainerMappingKey.Volumes:
@@ -276,11 +276,12 @@ public static partial class WorkflowParser
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.18: expression form is accepted as Credentials { Expression }
+        var credentialsContext = isService ? ExpressionValidationContext.JobServicesCredentials : ExpressionValidationContext.JobContainerCredentials;
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var expression = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
-                ExpressionValidationContext.Job,
+                credentialsContext,
                 out var crExprErr,
                 out var crExprMark,
                 parseWholeValueIfNoEmbedded: false);
@@ -349,7 +350,7 @@ public static partial class WorkflowParser
                         hasUsername = true;
                         username = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.Job,
+                            credentialsContext,
                             out var unErr,
                             out var unMark,
                             parseWholeValueIfNoEmbedded: false);
@@ -359,7 +360,7 @@ public static partial class WorkflowParser
                         hasPassword = true;
                         password = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.Job,
+                            credentialsContext,
                             out var pwErr,
                             out var pwMark,
                             parseWholeValueIfNoEmbedded: false);

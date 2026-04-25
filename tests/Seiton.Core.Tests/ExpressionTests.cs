@@ -125,7 +125,7 @@ public sealed class ExpressionTests
 
         var result = ExpressionExtractor.ExtractParseAndValidate(
             Encoding.UTF8.GetBytes(yaml),
-            ExpressionValidationContext.Job);
+            ExpressionValidationContext.JobEnv);
 
         await Assert.That(result.Occurrences.Length).IsEqualTo(1);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
@@ -141,7 +141,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
     }
@@ -156,7 +156,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects 2 argument(s), but got 1", StringComparison.Ordinal))).IsTrue();
     }
@@ -171,7 +171,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
     }
@@ -186,7 +186,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         // Regression: previously reported "expects 2 argument(s), but got 3" because
         // the inner fromJson call's argument was counted toward contains's ArgCount.
@@ -204,7 +204,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("format placeholder '{1}' requires argument 2, but got 1 format argument(s)", StringComparison.Ordinal))).IsTrue();
     }
@@ -219,7 +219,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("format placeholder", StringComparison.Ordinal))).IsFalse();
     }
@@ -234,7 +234,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("context 'steps' is not available", StringComparison.Ordinal))).IsFalse();
     }
@@ -496,7 +496,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsTrue();
     }
@@ -511,7 +511,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'typo_field' is not defined in 'github' object", StringComparison.Ordinal))).IsTrue();
     }
@@ -526,7 +526,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
@@ -541,7 +541,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
@@ -558,7 +558,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got bool", StringComparison.Ordinal))).IsTrue();
     }
@@ -574,7 +574,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string", StringComparison.Ordinal))).IsFalse();
     }
@@ -721,7 +721,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Job);
+            ExpressionValidationContext.JobEnv);
 
         await Assert.That(parseResult.Diagnostics).IsEmpty();
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument", StringComparison.Ordinal))).IsFalse();
@@ -738,7 +738,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(parseResult.Diagnostics).IsEmpty();
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
@@ -946,7 +946,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("null value cannot be compared to number value with '<' operator", StringComparison.Ordinal))).IsTrue();
     }
@@ -961,7 +961,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to bool value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
@@ -976,7 +976,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -991,7 +991,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -1006,7 +1006,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to number value with '<' operator", StringComparison.Ordinal))).IsTrue();
     }
@@ -1021,7 +1021,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("value cannot be compared to number value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
@@ -1037,7 +1037,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -1053,7 +1053,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -1070,7 +1070,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to number value", StringComparison.Ordinal))).IsTrue();
     }
@@ -1085,7 +1085,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared to string value", StringComparison.Ordinal))).IsTrue();
     }
@@ -1101,7 +1101,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
@@ -1117,7 +1117,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
@@ -1133,7 +1133,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
@@ -1389,7 +1389,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object but got \"string\"", StringComparison.Ordinal))).IsTrue();
     }
@@ -1405,7 +1405,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object", StringComparison.Ordinal))).IsFalse();
     }
@@ -1422,7 +1422,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder {1}", StringComparison.Ordinal))).IsTrue();
     }
@@ -1437,7 +1437,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder", StringComparison.Ordinal))).IsFalse();
     }
@@ -1454,7 +1454,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON() argument is not valid JSON", StringComparison.Ordinal))).IsTrue();
     }
@@ -1469,7 +1469,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal))).IsFalse();
     }
@@ -1487,7 +1487,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"mac\" is not defined in object type {", StringComparison.Ordinal))).IsTrue();
     }
@@ -1503,7 +1503,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
     }
@@ -1519,7 +1519,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'disabled' is not defined", StringComparison.Ordinal))).IsTrue();
     }
@@ -1535,7 +1535,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
     }
@@ -1611,7 +1611,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!' does not support object type", StringComparison.Ordinal))).IsTrue();
     }
@@ -1626,7 +1626,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support array", StringComparison.Ordinal))).IsTrue();
     }
@@ -1641,7 +1641,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!'", StringComparison.Ordinal))).IsFalse();
     }
@@ -1657,7 +1657,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!'", StringComparison.Ordinal))).IsFalse();
     }
@@ -1672,7 +1672,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*' must be an object or array, but got string", StringComparison.Ordinal))).IsTrue();
     }
@@ -1688,7 +1688,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*'", StringComparison.Ordinal))).IsFalse();
     }
@@ -1703,7 +1703,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*' must be an object or array, but got bool", StringComparison.Ordinal))).IsTrue();
     }
@@ -1718,7 +1718,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of array", StringComparison.Ordinal))).IsFalse();
     }
@@ -1733,7 +1733,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of array must be number, but got string", StringComparison.Ordinal))).IsTrue();
     }
@@ -1748,7 +1748,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object", StringComparison.Ordinal))).IsFalse();
     }
@@ -1763,7 +1763,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object must be string, but got number", StringComparison.Ordinal))).IsTrue();
     }
@@ -1780,7 +1780,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
@@ -1796,7 +1796,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: false);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'success()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
@@ -1812,7 +1812,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'failure()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
     }
@@ -1827,7 +1827,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'cancelled()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
     }
@@ -1842,7 +1842,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'always()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
     }
@@ -1857,7 +1857,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Job,
+            ExpressionValidationContext.JobEnv,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
@@ -1874,7 +1874,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
     }
@@ -1891,7 +1891,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("unknown expression function", StringComparison.Ordinal))).IsFalse();
@@ -1909,7 +1909,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
@@ -1925,7 +1925,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsTrue();
@@ -1958,7 +1958,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsTrue();
@@ -1974,7 +1974,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsTrue();
@@ -2004,7 +2004,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("configuration variable name", StringComparison.Ordinal))).IsFalse();
@@ -2020,7 +2020,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("configuration variable name", StringComparison.Ordinal))).IsFalse();
@@ -2037,7 +2037,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsFalse();

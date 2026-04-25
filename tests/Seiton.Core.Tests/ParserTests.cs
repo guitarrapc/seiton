@@ -1314,7 +1314,7 @@ public sealed class ParserTests
         var messages = result.Diagnostics.Select(static d => d.Message).ToArray();
 
         await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in workflow expressions", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(messages.Any(static m => m.Contains("context 'env' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("context 'env' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
         await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
         await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in step expressions", StringComparison.Ordinal))).IsFalse();
     }
@@ -2963,7 +2963,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2981,7 +2981,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-strategy-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'strategy' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'strategy' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2999,7 +2999,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-matrix-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'matrix' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'matrix' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3017,7 +3017,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-secrets-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3053,7 +3053,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in step expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in step if expressions", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

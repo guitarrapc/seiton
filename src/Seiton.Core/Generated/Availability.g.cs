@@ -4,128 +4,589 @@
 // Regenerate: dotnet run --project src/Seiton.Update -- sync-availability
 // </auto-generated>
 
-using Seiton.Core.Parsing;
-
-namespace Seiton.Core.Generated;
-
-public static class Availability
+namespace Seiton.Core.Parsing
 {
-    static readonly byte[][] WorkflowRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "secrets"u8.ToArray(),
-    ];
-
-    static readonly byte[][] WorkflowCallOutputRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "jobs"u8.ToArray(),
-    ];
-
-    static readonly byte[][] JobRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "needs"u8.ToArray(),
-        "strategy"u8.ToArray(),
-        "matrix"u8.ToArray(),
-        "secrets"u8.ToArray(),
-    ];
-
-    static readonly byte[][] JobOutputRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "needs"u8.ToArray(),
-        "strategy"u8.ToArray(),
-        "matrix"u8.ToArray(),
-        "job"u8.ToArray(),
-        "runner"u8.ToArray(),
-        "env"u8.ToArray(),
-        "secrets"u8.ToArray(),
-        "steps"u8.ToArray(),
-    ];
-
-    static readonly byte[][] ReusableWorkflowCallSecretsRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "needs"u8.ToArray(),
-        "strategy"u8.ToArray(),
-        "matrix"u8.ToArray(),
-        "secrets"u8.ToArray(),
-    ];
-
-    static readonly byte[][] StrategyRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "needs"u8.ToArray(),
-    ];
-
-    static readonly byte[][] StepRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "needs"u8.ToArray(),
-        "strategy"u8.ToArray(),
-        "matrix"u8.ToArray(),
-        "job"u8.ToArray(),
-        "runner"u8.ToArray(),
-        "env"u8.ToArray(),
-        "secrets"u8.ToArray(),
-        "steps"u8.ToArray(),
-    ];
-
-    static readonly byte[][] StepIfRoots =
-    [
-        "github"u8.ToArray(),
-        "inputs"u8.ToArray(),
-        "vars"u8.ToArray(),
-        "needs"u8.ToArray(),
-        "strategy"u8.ToArray(),
-        "matrix"u8.ToArray(),
-        "job"u8.ToArray(),
-        "runner"u8.ToArray(),
-        "env"u8.ToArray(),
-        "steps"u8.ToArray(),
-    ];
-
-    public static bool IsRootContextAvailable(ExpressionValidationContext context, ReadOnlySpan<byte> rootName)
+    /// <summary>Identifies which part of the workflow an expression appears in, for context-sensitive validation.</summary>
+    public enum ExpressionValidationContext
     {
-        return context switch
-        {
-            ExpressionValidationContext.Workflow => Contains(WorkflowRoots, rootName),
-            ExpressionValidationContext.WorkflowCallOutput => Contains(WorkflowCallOutputRoots, rootName),
-            ExpressionValidationContext.Job => Contains(JobRoots, rootName),
-            ExpressionValidationContext.JobOutput => Contains(JobOutputRoots, rootName),
-            ExpressionValidationContext.ReusableWorkflowCallSecrets => Contains(ReusableWorkflowCallSecretsRoots, rootName),
-            ExpressionValidationContext.Strategy => Contains(StrategyRoots, rootName),
-            ExpressionValidationContext.Step => Contains(StepRoots, rootName),
-            ExpressionValidationContext.StepIf => Contains(StepIfRoots, rootName),
-            _ => false,
-        };
+        Concurrency,
+        Env,
+        RunName,
+        WorkflowCallInputsDefault,
+        WorkflowCallOutputsValue,
+        JobConcurrency,
+        JobContainer,
+        JobContainerCredentials,
+        JobContainerEnv,
+        JobContainerImage,
+        JobContinueOnError,
+        JobDefaultsRun,
+        JobEnv,
+        JobEnvironment,
+        JobEnvironmentUrl,
+        JobIf,
+        JobName,
+        JobOutputs,
+        JobRunsOn,
+        JobSecrets,
+        JobServices,
+        JobServicesCredentials,
+        JobServicesEnv,
+        JobStrategy,
+        JobTimeoutMinutes,
+        JobWith,
+        StepContinueOnError,
+        StepEnv,
+        StepIf,
+        StepName,
+        StepRun,
+        StepTimeoutMinutes,
+        StepWith,
+        StepWorkingDirectory,
     }
+}
 
-    static bool Contains(byte[][] table, ReadOnlySpan<byte> name)
+namespace Seiton.Core.Generated
+{
+    using Seiton.Core.Parsing;
+
+    public static class Availability
     {
-        for (var i = 0; i < table.Length; i++)
+        static readonly byte[][] ConcurrencyRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+        ];
+
+        static readonly byte[][] EnvRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] RunNameRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+        ];
+
+        static readonly byte[][] WorkflowCallInputsDefaultRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+        ];
+
+        static readonly byte[][] WorkflowCallOutputsValueRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "jobs"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobConcurrencyRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobContainerRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobContainerCredentialsRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobContainerEnvRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobContainerImageRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobContinueOnErrorRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobDefaultsRunRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "env"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobEnvRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobEnvironmentRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobEnvironmentUrlRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobIfRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobNameRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobOutputsRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobRunsOnRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobSecretsRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobServicesRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobServicesCredentialsRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobServicesEnvRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobStrategyRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobTimeoutMinutesRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobWithRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepContinueOnErrorRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepEnvRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepIfRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepNameRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepRunRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepTimeoutMinutesRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepWithRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepWorkingDirectoryRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+            "job"u8.ToArray(),
+            "runner"u8.ToArray(),
+            "env"u8.ToArray(),
+            "secrets"u8.ToArray(),
+            "steps"u8.ToArray(),
+        ];
+
+        public static bool IsRootContextAvailable(ExpressionValidationContext context, ReadOnlySpan<byte> rootName)
         {
-            if (name.SequenceEqual(table[i]))
+            return context switch
             {
-                return true;
-            }
+                ExpressionValidationContext.Concurrency => Contains(ConcurrencyRoots, rootName),
+                ExpressionValidationContext.Env => Contains(EnvRoots, rootName),
+                ExpressionValidationContext.RunName => Contains(RunNameRoots, rootName),
+                ExpressionValidationContext.WorkflowCallInputsDefault => Contains(WorkflowCallInputsDefaultRoots, rootName),
+                ExpressionValidationContext.WorkflowCallOutputsValue => Contains(WorkflowCallOutputsValueRoots, rootName),
+                ExpressionValidationContext.JobConcurrency => Contains(JobConcurrencyRoots, rootName),
+                ExpressionValidationContext.JobContainer => Contains(JobContainerRoots, rootName),
+                ExpressionValidationContext.JobContainerCredentials => Contains(JobContainerCredentialsRoots, rootName),
+                ExpressionValidationContext.JobContainerEnv => Contains(JobContainerEnvRoots, rootName),
+                ExpressionValidationContext.JobContainerImage => Contains(JobContainerImageRoots, rootName),
+                ExpressionValidationContext.JobContinueOnError => Contains(JobContinueOnErrorRoots, rootName),
+                ExpressionValidationContext.JobDefaultsRun => Contains(JobDefaultsRunRoots, rootName),
+                ExpressionValidationContext.JobEnv => Contains(JobEnvRoots, rootName),
+                ExpressionValidationContext.JobEnvironment => Contains(JobEnvironmentRoots, rootName),
+                ExpressionValidationContext.JobEnvironmentUrl => Contains(JobEnvironmentUrlRoots, rootName),
+                ExpressionValidationContext.JobIf => Contains(JobIfRoots, rootName),
+                ExpressionValidationContext.JobName => Contains(JobNameRoots, rootName),
+                ExpressionValidationContext.JobOutputs => Contains(JobOutputsRoots, rootName),
+                ExpressionValidationContext.JobRunsOn => Contains(JobRunsOnRoots, rootName),
+                ExpressionValidationContext.JobSecrets => Contains(JobSecretsRoots, rootName),
+                ExpressionValidationContext.JobServices => Contains(JobServicesRoots, rootName),
+                ExpressionValidationContext.JobServicesCredentials => Contains(JobServicesCredentialsRoots, rootName),
+                ExpressionValidationContext.JobServicesEnv => Contains(JobServicesEnvRoots, rootName),
+                ExpressionValidationContext.JobStrategy => Contains(JobStrategyRoots, rootName),
+                ExpressionValidationContext.JobTimeoutMinutes => Contains(JobTimeoutMinutesRoots, rootName),
+                ExpressionValidationContext.JobWith => Contains(JobWithRoots, rootName),
+                ExpressionValidationContext.StepContinueOnError => Contains(StepContinueOnErrorRoots, rootName),
+                ExpressionValidationContext.StepEnv => Contains(StepEnvRoots, rootName),
+                ExpressionValidationContext.StepIf => Contains(StepIfRoots, rootName),
+                ExpressionValidationContext.StepName => Contains(StepNameRoots, rootName),
+                ExpressionValidationContext.StepRun => Contains(StepRunRoots, rootName),
+                ExpressionValidationContext.StepTimeoutMinutes => Contains(StepTimeoutMinutesRoots, rootName),
+                ExpressionValidationContext.StepWith => Contains(StepWithRoots, rootName),
+                ExpressionValidationContext.StepWorkingDirectory => Contains(StepWorkingDirectoryRoots, rootName),
+                _ => false,
+            };
         }
 
-        return false;
+        public static bool IsStepLevel(ExpressionValidationContext context)
+        {
+            return context is ExpressionValidationContext.StepContinueOnError
+                or ExpressionValidationContext.StepEnv
+                or ExpressionValidationContext.StepIf
+                or ExpressionValidationContext.StepName
+                or ExpressionValidationContext.StepRun
+                or ExpressionValidationContext.StepTimeoutMinutes
+                or ExpressionValidationContext.StepWith
+                or ExpressionValidationContext.StepWorkingDirectory;
+        }
+
+        public static string GetContextText(ExpressionValidationContext context)
+        {
+            return context switch
+            {
+                ExpressionValidationContext.Concurrency => "workflow",
+                ExpressionValidationContext.Env => "workflow",
+                ExpressionValidationContext.RunName => "workflow",
+                ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call",
+                ExpressionValidationContext.WorkflowCallOutputsValue => "workflow_call",
+                ExpressionValidationContext.JobConcurrency => "job",
+                ExpressionValidationContext.JobContainer => "job",
+                ExpressionValidationContext.JobContainerCredentials => "job",
+                ExpressionValidationContext.JobContainerEnv => "job",
+                ExpressionValidationContext.JobContainerImage => "job",
+                ExpressionValidationContext.JobContinueOnError => "job",
+                ExpressionValidationContext.JobDefaultsRun => "job",
+                ExpressionValidationContext.JobEnv => "job",
+                ExpressionValidationContext.JobEnvironment => "job",
+                ExpressionValidationContext.JobEnvironmentUrl => "job",
+                ExpressionValidationContext.JobIf => "job if",
+                ExpressionValidationContext.JobName => "job",
+                ExpressionValidationContext.JobOutputs => "job output",
+                ExpressionValidationContext.JobRunsOn => "job",
+                ExpressionValidationContext.JobSecrets => "reusable workflow call secrets",
+                ExpressionValidationContext.JobServices => "job",
+                ExpressionValidationContext.JobServicesCredentials => "job",
+                ExpressionValidationContext.JobServicesEnv => "job",
+                ExpressionValidationContext.JobStrategy => "strategy",
+                ExpressionValidationContext.JobTimeoutMinutes => "job",
+                ExpressionValidationContext.JobWith => "job",
+                ExpressionValidationContext.StepContinueOnError => "step",
+                ExpressionValidationContext.StepEnv => "step",
+                ExpressionValidationContext.StepIf => "step if",
+                ExpressionValidationContext.StepName => "step",
+                ExpressionValidationContext.StepRun => "step",
+                ExpressionValidationContext.StepTimeoutMinutes => "step",
+                ExpressionValidationContext.StepWith => "step",
+                ExpressionValidationContext.StepWorkingDirectory => "step",
+                _ => "unknown",
+            };
+        }
+
+        public static string GetLintCategoryText(ExpressionValidationContext context)
+        {
+            return context switch
+            {
+                ExpressionValidationContext.Concurrency => "workflow",
+                ExpressionValidationContext.Env => "workflow",
+                ExpressionValidationContext.RunName => "workflow",
+                ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call",
+                ExpressionValidationContext.WorkflowCallOutputsValue => "workflow_call",
+                ExpressionValidationContext.JobConcurrency => "job",
+                ExpressionValidationContext.JobContainer => "job",
+                ExpressionValidationContext.JobContainerCredentials => "job",
+                ExpressionValidationContext.JobContainerEnv => "job",
+                ExpressionValidationContext.JobContainerImage => "job",
+                ExpressionValidationContext.JobContinueOnError => "job",
+                ExpressionValidationContext.JobDefaultsRun => "job",
+                ExpressionValidationContext.JobEnv => "job",
+                ExpressionValidationContext.JobEnvironment => "job",
+                ExpressionValidationContext.JobEnvironmentUrl => "job",
+                ExpressionValidationContext.JobIf => "job",
+                ExpressionValidationContext.JobName => "job",
+                ExpressionValidationContext.JobOutputs => "job output",
+                ExpressionValidationContext.JobRunsOn => "job",
+                ExpressionValidationContext.JobSecrets => "reusable workflow_call secrets",
+                ExpressionValidationContext.JobServices => "job",
+                ExpressionValidationContext.JobServicesCredentials => "job",
+                ExpressionValidationContext.JobServicesEnv => "job",
+                ExpressionValidationContext.JobStrategy => "job",
+                ExpressionValidationContext.JobTimeoutMinutes => "job",
+                ExpressionValidationContext.JobWith => "job",
+                ExpressionValidationContext.StepContinueOnError => "step",
+                ExpressionValidationContext.StepEnv => "step",
+                ExpressionValidationContext.StepIf => "step",
+                ExpressionValidationContext.StepName => "step",
+                ExpressionValidationContext.StepRun => "step",
+                ExpressionValidationContext.StepTimeoutMinutes => "step",
+                ExpressionValidationContext.StepWith => "step",
+                ExpressionValidationContext.StepWorkingDirectory => "step",
+                _ => "unknown",
+            };
+        }
+
+        static bool Contains(byte[][] table, ReadOnlySpan<byte> name)
+        {
+            for (var i = 0; i < table.Length; i++)
+            {
+                if (name.SequenceEqual(table[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

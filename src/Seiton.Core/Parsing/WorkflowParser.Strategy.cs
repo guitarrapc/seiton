@@ -121,7 +121,7 @@ public static partial class WorkflowParser
                     case StrategyMappingKey.FailFast:
                         if (!reader.End)
                         {
-                            failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Strategy, out var ffErr, out var ffMark);
+                            failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobStrategy, out var ffErr, out var ffMark);
                             if (ffErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression", ffMark);
                         }
 
@@ -180,7 +180,7 @@ public static partial class WorkflowParser
         {
             var expression = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
-                ExpressionValidationContext.Strategy,
+                ExpressionValidationContext.JobStrategy,
                 out var mxExprErr,
                 out var mxExprMark,
                 parseWholeValueIfNoEmbedded: false);
@@ -289,7 +289,7 @@ public static partial class WorkflowParser
                 {
                     var valueNode = ParseStringAndValidateExpression(
                         ref reader, arena, diagnostics,
-                        ExpressionValidationContext.Strategy,
+                        ExpressionValidationContext.JobStrategy,
                         out var rowErr,
                         out var rowMark,
                         parseWholeValueIfNoEmbedded: false);
@@ -299,7 +299,7 @@ public static partial class WorkflowParser
                 }
                 else if (reader.CurrentKind == YamlEventKind.SequenceStart)
                 {
-                    rowValues = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length), ExpressionValidationContext.Strategy);
+                    rowValues = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length), ExpressionValidationContext.JobStrategy);
                 }
                 else
                 {
@@ -338,7 +338,7 @@ public static partial class WorkflowParser
         {
             var expr = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
-                ExpressionValidationContext.Strategy,
+                ExpressionValidationContext.JobStrategy,
                 out var mcErr,
                 out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
@@ -373,7 +373,7 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                entries.Add(ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, ExpressionValidationContext.Strategy));
+                entries.Add(ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, ExpressionValidationContext.JobStrategy));
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)

@@ -220,7 +220,7 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.Job);
+                            envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.JobEnv);
                         }
 
                         break;
@@ -267,7 +267,7 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.If:
                         if (!reader.End)
                         {
-                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Strategy, out var ifErr, out var ifMark);
+                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobIf, out var ifErr, out var ifMark);
                             if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' if must be scalar", ifMark);
                         }
 
@@ -298,7 +298,7 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Concurrency:
                         if (!reader.End)
                         {
-                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be scalar or mapping", ExpressionValidationContext.Job);
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be scalar or mapping", ExpressionValidationContext.JobConcurrency);
                         }
 
                         break;
@@ -340,7 +340,7 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var tmErr, out var tmMark);
+                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobTimeoutMinutes, out var tmErr, out var tmMark);
                             if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' timeout-minutes must be number or expression", tmMark);
                             if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
                             {
@@ -359,7 +359,7 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var coeErr, out var coeMark);
+                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobContinueOnError, out var coeErr, out var coeMark);
                             if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' continue-on-error must be bool or expression", coeMark);
                         }
 
@@ -689,7 +689,7 @@ public static partial class WorkflowParser
                                     var valueUtf8 = reader.GetScalarUtf8();
                                     if (ContainsExpression(valueUtf8))
                                     {
-                                        labelsExpr = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
+                                        labelsExpr = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobRunsOn, out var lblExprErr, out var lblExprMark, parseWholeValueIfNoEmbedded: false);
                                         if (lblExprErr) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblExprMark);
                                     }
                                     else
@@ -708,7 +708,7 @@ public static partial class WorkflowParser
                             break;
 
                         case RunsOnMappingKey.Group:
-                            group = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
+                            group = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobRunsOn, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
                             if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
                             break;
                     }
@@ -746,7 +746,7 @@ public static partial class WorkflowParser
             var scalarUtf8 = reader.GetScalarUtf8();
             if (ContainsExpression(scalarUtf8))
             {
-                var expr = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var roExprErr, out var roExprMark, parseWholeValueIfNoEmbedded: false);
+                var expr = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobRunsOn, out var roExprErr, out var roExprMark, parseWholeValueIfNoEmbedded: false);
                 if (roExprErr) AddError(diagnostics, $"{section} must be scalar, sequence, or mapping", roExprMark);
                 return new Runner
                 {
@@ -829,7 +829,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, "environment contains duplicate key: url", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                urlNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var urlErr, out var urlMark, parseWholeValueIfNoEmbedded: false);
+                urlNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobEnvironmentUrl, out var urlErr, out var urlMark, parseWholeValueIfNoEmbedded: false);
                 if (urlErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.url must be scalar", urlMark);
                 continue;
             }
@@ -838,7 +838,7 @@ public static partial class WorkflowParser
             {
                 reader.Read();
                 if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, "environment contains duplicate key: deployment", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                deploymentNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var depErr, out var depMark);
+                deploymentNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobEnvironment, out var depErr, out var depMark);
                 if (depErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.deployment must be bool or expression", depMark);
                 continue;
             }
@@ -933,7 +933,7 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                var value = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobOutput, out var outErr, out var outMark, parseWholeValueIfNoEmbedded: false);
+                var value = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobOutputs, out var outErr, out var outMark, parseWholeValueIfNoEmbedded: false);
                 if (outErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' outputs.{Encoding.UTF8.GetString(keyUtf8)} must be scalar", outMark);
                 outputs.Add(new SliceMap<StringNodeId>.Entry(keySlice, value.HasValue ? value : keyNode));
             }
@@ -1001,7 +1001,7 @@ public static partial class WorkflowParser
                 StringNodeId valueNode;
                 try
                 {
-                    valueNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Job, out var withErr, out var withMark, parseWholeValueIfNoEmbedded: false);
+                    valueNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobWith, out var withErr, out var withMark, parseWholeValueIfNoEmbedded: false);
                     if (withErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' with.{Encoding.UTF8.GetString(nameUtf8)} must be scalar", withMark);
                 }
                 catch
@@ -1100,7 +1100,7 @@ public static partial class WorkflowParser
                 {
                     var valueUtf8 = arena.GetStringValue(valueNode);
                     var valueLocation = BuildLocationFromSourceSlice(source, arena.GetStringSlice(valueNode).Offset, valueUtf8.Length);
-                    ValidateExpressionText(valueUtf8, valueLocation, ExpressionValidationContext.ReusableWorkflowCallSecrets, diagnostics, parseWholeValueIfNoEmbedded: false);
+                    ValidateExpressionText(valueUtf8, valueLocation, ExpressionValidationContext.JobSecrets, diagnostics, parseWholeValueIfNoEmbedded: false);
                 }
 
                 if (valueNode.HasValue)

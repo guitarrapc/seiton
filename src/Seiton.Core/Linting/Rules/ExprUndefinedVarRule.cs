@@ -154,10 +154,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _stepScopeOverrides[4] = _secretsOverride;
         _hasOverrides = true;
 
-        CheckNode(job.If, ExpressionValidationContext.Strategy, "job.if", static (rule, message, location, targetJob) =>
+        CheckNode(job.If, ExpressionValidationContext.JobIf, "job.if", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
 
-        CheckEnv(job.Env, ExpressionValidationContext.Job, "job.env", static (rule, message, location, targetJob) =>
+        CheckEnv(job.Env, ExpressionValidationContext.JobEnv, "job.env", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
 
         var callInputs = job.WorkflowCall?.Inputs;
@@ -170,7 +170,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             var input = pair.Value;
             var inputName = Decode(Arena.GetStringSlice(input.Name));
-            CheckNode(input.Value, ExpressionValidationContext.Job, $"job.with.{inputName}", static (rule, message, location, targetJob) =>
+            CheckNode(input.Value, ExpressionValidationContext.JobWith, $"job.with.{inputName}", static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
         }
     }
@@ -193,12 +193,12 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckNode(step.If, ExpressionValidationContext.StepIf, "step.if", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
-        CheckEnv(step.Env, ExpressionValidationContext.Step, "step.env", static (rule, message, location, targetStep) =>
+        CheckEnv(step.Env, ExpressionValidationContext.StepEnv, "step.env", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
         if (step.Exec is ExecRun run)
         {
-            CheckNode(run.Run, ExpressionValidationContext.Step, "step.run", static (rule, message, location, targetStep) =>
+            CheckNode(run.Run, ExpressionValidationContext.StepRun, "step.run", static (rule, message, location, targetStep) =>
                 rule.AddStepError(targetStep, message, location), step);
         }
         else if (step.Exec is ExecAction action && action.Inputs is { Count: > 0 })
@@ -206,7 +206,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             foreach (var pair in action.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
-                CheckNode(pair.Value, ExpressionValidationContext.Step, $"step.with.{inputName}", static (rule, message, location, targetStep) =>
+                CheckNode(pair.Value, ExpressionValidationContext.StepWith, $"step.with.{inputName}", static (rule, message, location, targetStep) =>
                     rule.AddStepError(targetStep, message, location), step);
             }
         }
@@ -322,7 +322,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var overrides = context is ExpressionValidationContext.Step or ExpressionValidationContext.StepIf ? _stepScopeOverrides : _jobScopeOverrides;
+        var overrides = Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides;
 
         var propertyDiagnostics = _propertyDiagnostics;
         propertyDiagnostics.Clear();
@@ -400,18 +400,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    private static string ToContextText(ExpressionValidationContext context)
-    {
-        return context switch
-        {
-            ExpressionValidationContext.Workflow => "workflow",
-            ExpressionValidationContext.Job => "job",
-            ExpressionValidationContext.Strategy => "job",
-            ExpressionValidationContext.Step => "step",
-            ExpressionValidationContext.StepIf => "step",
-            _ => "unknown",
-        };
-    }
+    private static string ToContextText(ExpressionValidationContext context) => Availability.GetLintCategoryText(context);
 
     private void ValidateTemplateType<TTarget>(
         ReadOnlySpan<byte> expression,
@@ -429,7 +418,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         Diagnostic? diag;
         if (_hasOverrides)
         {
-            var overrides = context is ExpressionValidationContext.Step or ExpressionValidationContext.StepIf ? _stepScopeOverrides : _jobScopeOverrides;
+            var overrides = Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides;
             diag = ExpressionSemanticAnalyzer.CheckTemplateTypeWithOverrides(parseResult, expression, location, overrides);
         }
         else
@@ -473,7 +462,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var overrides = _hasOverrides
-            ? (context is ExpressionValidationContext.Step or ExpressionValidationContext.StepIf ? _stepScopeOverrides : _jobScopeOverrides)
+            ? (Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides)
             : null;
 
         var diag = ExpressionSemanticAnalyzer.CheckEnvMappingType(

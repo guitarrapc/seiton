@@ -25,26 +25,24 @@ internal sealed class GitHubAvailabilitySourceParser
             throw new InvalidDataException($"GitHub availability source snapshot is invalid: {path}");
         }
 
-        return new AvailabilityModel(
-            snapshot.WorkflowRoots ?? [],
-            snapshot.WorkflowCallOutputRoots ?? [],
-            snapshot.JobRoots ?? [],
-            snapshot.JobOutputRoots ?? [],
-            snapshot.ReusableWorkflowCallSecretsRoots ?? [],
-            snapshot.StrategyRoots ?? [],
-            snapshot.StepRoots ?? [],
-            snapshot.StepIfRoots ?? []);
+        var entries = (snapshot.Entries ?? [])
+            .Select(static e => new AvailabilityEntry(e.WorkflowKey ?? "", e.Contexts ?? []))
+            .Where(static e => !string.IsNullOrEmpty(e.WorkflowKey))
+            .ToList();
+
+        return new AvailabilityModel(entries);
     }
 
     private sealed class AvailabilitySnapshot
     {
-        public List<string>? WorkflowRoots { get; set; }
-        public List<string>? WorkflowCallOutputRoots { get; set; }
-        public List<string>? JobRoots { get; set; }
-        public List<string>? JobOutputRoots { get; set; }
-        public List<string>? ReusableWorkflowCallSecretsRoots { get; set; }
-        public List<string>? StrategyRoots { get; set; }
-        public List<string>? StepRoots { get; set; }
-        public List<string>? StepIfRoots { get; set; }
+        public int SchemaVersion { get; set; }
+        public string? Source { get; set; }
+        public List<SnapshotEntry>? Entries { get; set; }
+    }
+
+    private sealed class SnapshotEntry
+    {
+        public string? WorkflowKey { get; set; }
+        public List<string>? Contexts { get; set; }
     }
 }

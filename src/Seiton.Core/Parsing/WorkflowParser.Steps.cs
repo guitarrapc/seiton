@@ -126,7 +126,7 @@ public static partial class WorkflowParser
                         {
                             runNode = ParseStringAndValidateExpression(
                                 ref reader, arena, diagnostics,
-                                ExpressionValidationContext.Step,
+                                ExpressionValidationContext.StepRun,
                                 out var runErr,
                                 out var runMark,
                                 parseWholeValueIfNoEmbedded: false);
@@ -207,7 +207,7 @@ public static partial class WorkflowParser
                         {
                             workingDirectoryNode = ParseStringAndValidateExpression(
                                 ref reader, arena, diagnostics,
-                                ExpressionValidationContext.Step,
+                                ExpressionValidationContext.StepWorkingDirectory,
                                 out var wdErr,
                                 out var wdMark,
                                 parseWholeValueIfNoEmbedded: false);
@@ -219,7 +219,7 @@ public static partial class WorkflowParser
                     case StepMappingKey.TimeoutMinutes:
                         if (!reader.End)
                         {
-                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var tmErr, out var tmMark);
+                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.StepTimeoutMinutes, out var tmErr, out var tmMark);
                             if (tmErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] timeout-minutes must be number or expression", tmMark);
                             if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
                             {
@@ -232,7 +232,7 @@ public static partial class WorkflowParser
                     case StepMappingKey.ContinueOnError:
                         if (!reader.End)
                         {
-                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Step, out var coeErr, out var coeMark);
+                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.StepContinueOnError, out var coeErr, out var coeMark);
                             if (coeErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] continue-on-error must be bool or expression", coeMark);
                         }
 
@@ -245,7 +245,7 @@ public static partial class WorkflowParser
                                 ref reader, arena, diagnostics,
                                 source,
                                 $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
-                                ExpressionValidationContext.Step);
+                                ExpressionValidationContext.StepEnv);
                         }
 
                         break;
@@ -376,7 +376,7 @@ public static partial class WorkflowParser
 
                 var value = ParseStringAndValidateExpression(
                     ref reader, arena, diagnostics,
-                    ExpressionValidationContext.Step,
+                    ExpressionValidationContext.StepWith,
                     out var withErr,
                     out var withMark,
                     parseWholeValueIfNoEmbedded: false);

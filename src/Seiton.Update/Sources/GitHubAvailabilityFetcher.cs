@@ -111,32 +111,17 @@ internal sealed class GitHubAvailabilityFetcher
             PropertyNameCaseInsensitive = true,
         }) ?? throw new InvalidDataException($"Invalid parsed availability snapshot: {paths.ParsedDocsPath}");
 
-        var map = parsed.Entries.ToDictionary(
-            static x => x.WorkflowKey,
-            static x => (IReadOnlyList<string>)x.Contexts,
-            StringComparer.Ordinal);
-
-        var workflowRoots = ResolveContextSet(map, "run-name", "concurrency", "env");
-        var workflowCallOutputRoots = ResolveContextSet(map, "on.workflow_call.outputs.<output_id>.value");
-        var jobRoots = ResolveContextSet(map, "jobs.<job_id>.concurrency", "jobs.<job_id>.env");
-        var jobOutputRoots = ResolveContextSet(map, "jobs.<job_id>.outputs.<output_id>");
-        var reusableWorkflowCallSecretsRoots = ResolveContextSet(map, "jobs.<job_id>.secrets.<secrets_id>");
-        var strategyRoots = ResolveContextSet(map, "jobs.<job_id>.strategy");
-        var stepRoots = ResolveContextSet(map, "jobs.<job_id>.steps.run", "jobs.<job_id>.steps.if");
-        var stepIfRoots = ResolveContextSet(map, "jobs.<job_id>.steps.if");
+        // Passthrough: emit all per-key entries as-is from parsed source.
+        var entries = parsed.Entries
+            .Where(static x => !string.IsNullOrEmpty(x.WorkflowKey) && x.Contexts.Count > 0)
+            .Select(static x => new { workflowKey = x.WorkflowKey, contexts = x.Contexts })
+            .ToArray();
 
         var snapshot = new
         {
-            schemaVersion = 1,
+            schemaVersion = 2,
             source = "github-official-merged-snapshot",
-            workflowRoots,
-            workflowCallOutputRoots,
-            jobRoots,
-            jobOutputRoots,
-            reusableWorkflowCallSecretsRoots,
-            strategyRoots,
-            stepRoots,
-            stepIfRoots,
+            entries,
         };
 
         var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions)) + "\n";
@@ -154,27 +139,6 @@ internal sealed class GitHubAvailabilityFetcher
         {
             UpdateLogger.Info("[merge:availability:sources] snapshot already up to date.");
         }
-    }
-
-    private static string[] ResolveContextSet(IReadOnlyDictionary<string, IReadOnlyList<string>> map, params string[] keys)
-    {
-        var union = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var key in keys)
-        {
-            if (map.TryGetValue(key, out var values))
-            {
-                foreach (var v in values)
-                {
-                    if (!string.IsNullOrWhiteSpace(v))
-                        union.Add(v);
-                }
-            }
-        }
-
-        if (union.Count == 0)
-            throw new InvalidDataException($"Required availability key not found in parsed snapshot. keys=[{string.Join(", ", keys)}]");
-
-        return union.ToArray();
     }
 
     private static AvailabilityPaths Paths(string repoRoot)

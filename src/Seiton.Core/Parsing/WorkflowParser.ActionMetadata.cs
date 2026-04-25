@@ -395,7 +395,7 @@ public static partial class WorkflowParser
                     case ActionMetadataOutputOptionKey.Value:
                         value = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.Step,
+                            ExpressionValidationContext.StepRun,
                             "action output value must be scalar",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
@@ -637,14 +637,14 @@ public static partial class WorkflowParser
                     case ActionMetadataRunsMappingKey.PreIf:
                         preIf = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.Step,
+                            ExpressionValidationContext.StepIf,
                             "action runs pre-if must be scalar",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     case ActionMetadataRunsMappingKey.PostIf:
                         postIf = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.Step,
+                            ExpressionValidationContext.StepIf,
                             "action runs post-if must be scalar",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
@@ -668,7 +668,7 @@ public static partial class WorkflowParser
                                 ref reader, arena, diagnostics,
                                 source,
                                 "action runs env must be mapping",
-                                ExpressionValidationContext.Step);
+                                ExpressionValidationContext.StepEnv);
                         }
 
                         continue;

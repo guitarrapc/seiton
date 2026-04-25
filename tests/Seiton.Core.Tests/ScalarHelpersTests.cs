@@ -87,7 +87,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Workflow, "expected expression");
+        var node = WorkflowParser.ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Concurrency, "expected expression");
 
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
@@ -104,7 +104,7 @@ public sealed class ScalarHelpersTests
         });
         var diagnostics = new List<Diagnostic>();
 
-        var node = WorkflowParser.MayParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Workflow);
+        var node = WorkflowParser.MayParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.Concurrency);
 
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(diagnostics).IsEmpty();
