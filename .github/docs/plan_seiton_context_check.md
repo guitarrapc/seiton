@@ -9,6 +9,24 @@
 
 データパイプラインは整備済み（`docs-context-availability.json` に 37 エントリ）。パーサー側の呼び出しサイト変更のみで対応可能。
 
+## 検証手順（各フェーズ共通）
+
+各フェーズの実装完了前に、以下の検証を必ず行うこと:
+
+1. **テストファースト**: まず、失敗するテストを用意して実装がない/間違っていることを確認してから実装し、実装後テストが通ることを確認してください。
+2. **テスト実行**: `dotnet test` で全テスト通過を確認
+3. **リグレッションテスト追加**: 修正した誤検出・検出漏れに対して、再発防止のためのテストを追加する
+   - 誤検出修正: `ok-*` ケースで「エラーが出ないこと」を確認するテスト
+   - 検出漏れ修正: `ng-*` ケースで「期待するエラーメッセージが出ること」を確認するテスト
+   - パーサー修正: `ParserTests` でAST構築が正しいことを確認するテスト
+4. **ベンチマーク実行**: `cd src/Seiton.Benchmark; dotnet run -c Release` で性能劣化がないことを確認する
+   - `ParsingBenchmark`: パーサー変更時に、Small/Medium/Large の Mean と Allocated に大きな劣化がないこと
+   - `LintBenchmark`: ルール変更時に、parse+lint の Mean と Allocated に大きな劣化がないこと
+   - 目安: Mean +10% 以内、Allocated +20% 以内であれば許容
+5. 実装結果とテスト結果をこのドキュメントに記録すること
+6. 追加実装をした場合は、必要に応じて Seiton_Parser_spec.md や Seiton_Lint_spec.md の該当ルールの仕様を更新すること。また Seiton_Parser_csharp.md や Seiton_Lint_csharp.md の実装ノートも更新すること。
+
+
 ## Current State Analysis
 
 ### Call Sites vs GitHub Docs
