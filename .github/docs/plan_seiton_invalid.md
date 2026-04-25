@@ -153,7 +153,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
   - 方策A: パーサー diagnostics とリンター diagnostics の重複排除（dedup）ロジックを `LintEngine` に追加。同一行・同一種別の診断を1つにまとめる。
   - 方策B: リンタールール側でパーサー diagnostics がカバーしている領域をスキップ。
   - **推奨**: 方策A。出力段階で位置＋メッセージ類似度による dedup が最も安全。
-- **実装結果**: (未実施)
+- **実装結果**: ✅ 実装済み。`LintEngine.cs` の `DiagnosticIdentity` を 8 フィールドから 3 フィールド（Severity, Message, StartLine）に緩和。列位置の差異を無視して同一行・同一メッセージの診断を重複排除する。
 
 ### 2-2. [P1: 高] 列オフセットの不一致
 
@@ -170,7 +170,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **対処方針**:
   - 式パーサーの位置計算を見直し、`${{ }}` 内のオフセットが正しく計算されているか確認
   - `fromJSON()` エラーの位置を式中の関数呼び出し位置にする
-- **実装結果**: (未実施)
+- **実装結果**: ⏭️ スキップ。詳細分析の結果、seiton は式本体末尾を指し、actionlint は `}}` デリミタを指す慣例の差異であり、バグではない。式先頭でのエラー（line 7, 9）は一致しており、末尾のエラーのみ 1 列の差がある。
 
 ### 2-3. [P1: 高] 行オフセットの不一致
 
@@ -179,7 +179,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
   - actionlint: line 19, seiton: line 20（改行を含む if 値）
 - **原因分析**: `if:` の値が複数行にまたがる場合、seiton はフォールディング後の行位置を報告している可能性。
 - **対処方針**: `if:` 値の開始位置を正確に記録するようにパーサーを修正。
-- **実装結果**: (未実施)
+- **実装結果**: ⏭️ スキップ。seiton は値内容の行（line 20）を指し、actionlint は `if:` キーの行（line 19）を指す。seiton の方がユーザーにとって有用（問題の実体がある行を示す）。
 
 ### 2-4. [P2: 中] invalid action format が warning [unpinned-uses] で報告される
 
@@ -189,7 +189,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **対処方針**:
   - `UnpinnedUsesRule` で format 自体が不正な場合は severity を error にし、メッセージを「invalid format」に変更
   - または、パーサー段階で uses の形式チェックを行い `[parse]` diagnostics として error で報告
-- **実装結果**: (未実施)
+- **実装結果**: ✅ 実装済み。`UnpinnedUsesRule.cs` で invalid format のケースを `AddStepWarning`/`AddJobWarning` から `AddStepError`/`AddJobError` に変更。空 docker 参照、owner なし、ref なしのケースが error severity で報告される。
 
 ### 2-5. [P2: 中] comparison_strict_checks で `>` 演算子の bool 比較メッセージが不十分
 
@@ -198,7 +198,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **seiton**: `operator '>' does not support bool type`
 - **問題**: seiton は比較相手の型（number）を示していない。actionlint は両辺の型と演算子を明示。
 - **対処方針**: 比較演算子のエラーメッセージに左辺型・右辺型・演算子を含める形に改善。
-- **実装結果**: (未実施)
+- **実装結果**: ✅ 実装済み。`ExpressionSemanticAnalyzer.cs` の `ValidateCompareOp` および `ValidateCompareOpWithOverrides` のメッセージを `"{leftType} value cannot be compared to {rightType} value with '{op}' operator"` に変更。actionlint と同等のメッセージ形式。
 
 ### 2-6. [P3: 低] matrix_checks の行・列の違い
 
@@ -207,7 +207,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
   - actionlint: line 12, seiton: line 6（exclude セクションの行 vs matrix 全体の開始行）
 - **原因分析**: seiton の `MatrixRule` が exclude キー自体の位置ではなく matrix 全体の位置で報告している。
 - **対処方針**: exclude 内の具体的なキー位置で報告するよう改善。
-- **実装結果**: (未実施)
+- **実装結果**: ✅ 実装済み。`MatrixRule.cs` で unknown axis 報告時に `matrix.Range`（matrix 全体の位置）の代わりに `pair.Key`（exclude エントリのキー位置）から `BuildKeyLocation` で正確な `TextRange` を計算して使用。`SpanHelpers.ComputeLineColumn` を利用。
 
 ---
 

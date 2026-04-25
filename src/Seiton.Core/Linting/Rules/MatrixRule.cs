@@ -175,10 +175,11 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                     // Unknown axis
                     var jobId = Decode(Arena.GetStringSlice(job.Id));
                     var axisName = Decode(pair.Key);
+                    var keyLocation = BuildKeyLocation(source, pair.Key);
                     AddJobWarning(
                         job,
                         $"job '{jobId}' strategy.matrix.{section} references unknown axis '{axisName}'",
-                        matrix.Range);
+                        keyLocation);
                     goto nextEntry;
                 }
 
@@ -431,5 +432,31 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         }
 
         return fallback;
+    }
+
+    private static TextRange BuildKeyLocation(ReadOnlySpan<byte> source, Utf8Slice key)
+    {
+        var offset = key.Offset;
+        var length = key.Length <= 0 ? 1 : key.Length;
+        if ((uint)offset >= (uint)source.Length)
+        {
+            return new TextRange(offset, length, 1, 1, 1, length);
+        }
+
+        var endOffset = offset + length - 1;
+        if (endOffset >= source.Length)
+        {
+            endOffset = source.Length - 1;
+        }
+
+        var start = SpanHelpers.ComputeLineColumn(source, offset);
+        var end = SpanHelpers.ComputeLineColumn(source, endOffset);
+        return new TextRange(
+            Start: offset,
+            Length: length,
+            StartLine: start.Line,
+            StartColumn: start.Column,
+            EndLine: end.Line,
+            EndColumn: end.Column);
     }
 }

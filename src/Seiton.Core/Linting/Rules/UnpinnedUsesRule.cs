@@ -45,7 +45,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             var formatJobId = Decode(Arena.GetStringSlice(job.Id));
             var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
-            AddJobWarning(
+            AddJobError(
                 job,
                 $"job '{formatJobId}' reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
                 usesLocation);
@@ -76,7 +76,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             if (uses.Length <= "docker://"u8.Length)
             {
-                AddStepWarning(step, "action uses 'docker://' must include an image reference", usesLocation);
+                AddStepError(step, "action uses 'docker://' must include an image reference", usesLocation);
             }
 
             return;
@@ -97,7 +97,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         if (!TryParseRemoteUses(uses, out var parsedStep))
         {
             var invalidUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
-            AddStepWarning(
+            AddStepError(
                 step,
                 $"action uses '{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
                 usesLocation);

@@ -913,14 +913,14 @@ public static class ExpressionSemanticAnalyzer
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"operator '{OperatorSymbol(node.Operator)}' does not support {leftType.TypeName} type",
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
                     expressionLocation));
             }
             else if (IsNotComparableType(rightType))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"operator '{OperatorSymbol(node.Operator)}' does not support {rightType.TypeName} type",
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
                     expressionLocation));
             }
 
@@ -1429,14 +1429,14 @@ public static class ExpressionSemanticAnalyzer
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"operator '{OperatorSymbol(node.Operator)}' does not support {leftType.TypeName} type",
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
                     expressionLocation));
             }
             else if (IsNotComparableType(rightType))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"operator '{OperatorSymbol(node.Operator)}' does not support {rightType.TypeName} type",
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
                     expressionLocation));
             }
 

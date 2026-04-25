@@ -979,26 +979,23 @@ public sealed class LintEngine
         return string.CompareOrdinal(x.Message, y.Message);
     }
 
+    /// <summary>
+    /// Identity used for diagnostic deduplication.
+    /// Matches on severity + message + line only (ignoring column / byte offset) so that
+    /// parser diagnostics (reported at expression-internal positions) and lint diagnostics
+    /// (reported at YAML key positions) on the same line with the same message are treated
+    /// as duplicates.
+    /// </summary>
     private readonly record struct DiagnosticIdentity(
         DiagnosticSeverity Severity,
         string Message,
-        int Start,
-        int Length,
-        int StartLine,
-        int StartColumn,
-        int EndLine,
-        int EndColumn)
+        int StartLine)
     {
         public DiagnosticIdentity(Diagnostic diagnostic)
             : this(
                 diagnostic.Severity,
                 diagnostic.Message,
-                diagnostic.Location.Start,
-                diagnostic.Location.Length,
-                diagnostic.Location.StartLine,
-                diagnostic.Location.StartColumn,
-                diagnostic.Location.EndLine,
-                diagnostic.Location.EndColumn)
+                diagnostic.Location.StartLine)
         {
         }
     }

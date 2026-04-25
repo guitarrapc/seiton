@@ -5752,7 +5752,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ inputs.timeout > 60 }}
                           run: echo timeout
             """,
-            ["operator '>' does not support bool type"]),
+            ["bool value cannot be compared to number value with '>' operator"]),
             new RuleCase(
             "ok-number-input-less-than-number",
             """
@@ -5800,7 +5800,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ inputs.verbose <= 5 }}
                           run: echo ok
             """,
-            ["operator '<=' does not support bool type"]),
+            ["bool value cannot be compared to number value with '<=' operator"]),
             new RuleCase(
             "ng-bool-input-greater-or-equal-number",
             """
@@ -5816,7 +5816,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ inputs.flag >= 1 }}
                           run: echo ok
             """,
-            ["operator '>=' does not support bool type"]),
+            ["bool value cannot be compared to number value with '>=' operator"]),
             new RuleCase(
             "ng-bool-input-not-equals-number",
             """

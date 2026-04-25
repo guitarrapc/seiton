@@ -948,7 +948,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.Step);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<' does not support null type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("null value cannot be compared to number value with '<' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -963,7 +963,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.Step);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>' does not support bool type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to bool value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1008,7 +1008,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.Step);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<' does not support object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to number value with '<' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1023,7 +1023,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.Step);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support array", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("value cannot be compared to number value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1161,7 +1161,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>' does not support bool type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to number value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1185,7 +1185,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1257,7 +1257,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>=' does not support bool type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to number value with '>=' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1281,7 +1281,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<=' does not support bool type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to number value with '<=' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1349,7 +1349,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1373,7 +1373,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
     }
 
     // String dereference as object
