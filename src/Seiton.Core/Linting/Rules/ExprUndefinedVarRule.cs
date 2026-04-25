@@ -226,6 +226,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 
         CheckNode(Arena.GetStringExpression(env.Expression), context, sinkName, report, target);
 
+        // When env is a single expression (${{ expr }}), check that it resolves to object type
+        ValidateEnvMappingType(env.Expression, context, report, target);
+
         var vars = env.Vars;
         if (vars is null || vars.Value.Count == 0)
         {
@@ -282,7 +285,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             // Template type check: object/array/null interpolated in ${{ }} outside if conditions
             if (!parseWholeValue)
             {
-                ValidateTemplateType(expression, Arena.GetStringRange(node), report, target);
+                ValidateTemplateType(expression, Arena.GetStringRange(node), context, report, target);
             }
         }
     }
@@ -411,6 +414,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private void ValidateTemplateType<TTarget>(
         ReadOnlySpan<byte> expression,
         TextRange location,
+        ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
@@ -420,7 +424,58 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(parseResult, expression, location);
+        Diagnostic? diag;
+        if (_hasOverrides)
+        {
+            var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
+            diag = ExpressionSemanticAnalyzer.CheckTemplateTypeWithOverrides(parseResult, expression, location, overrides);
+        }
+        else
+        {
+            diag = ExpressionSemanticAnalyzer.CheckTemplateType(parseResult, expression, location);
+        }
+
+        if (diag is { } d)
+        {
+            report(this, d.Message, d.Location, target);
+        }
+    }
+
+    private void ValidateEnvMappingType<TTarget>(
+        StringNodeId envExpression,
+        ExpressionValidationContext context,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!envExpression.HasValue || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        var value = Arena.GetStringValue(envExpression);
+        if (value.Length == 0)
+        {
+            return;
+        }
+
+        // Extract the sole ${{ expr }} body
+        if (!TryExtractExpressionBody(value, out var body))
+        {
+            return;
+        }
+
+        var parseResult = Config.ParseExpression(body);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return;
+        }
+
+        var overrides = _hasOverrides
+            ? (context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides)
+            : null;
+
+        var diag = ExpressionSemanticAnalyzer.CheckEnvMappingType(
+            parseResult, body, Arena.GetStringRange(envExpression), overrides);
         if (diag is { } d)
         {
             report(this, d.Message, d.Location, target);

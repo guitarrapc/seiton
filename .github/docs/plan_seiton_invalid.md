@@ -67,7 +67,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: パーサーの式型推論で matrix 値の型を追跡しているが、配列型の `${{ }}` 展開に対する「文字列化不可」チェックが不足。
 - **対処方針**: 式解析の型チェック層で、式の結果型が object/array/null の場合に `${{ }}` コンテキストで警告を出す。これはパーサーの式解析 (`ExpressionAnalyzer`) またはリンタールールとして実装。
 - **テストデータ**: `testdata/examples/not_persistent_matrix_values.yaml` line 22
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 3-a で実装済み。`CheckTemplateTypeWithOverrides` で動的コンテキストオーバーライドを使った型推論を実行。`InferMatrixRowType` を拡張し配列型の matrix 行を `ArrayExprType` として推論。
 
 ### 1-5. [P2: 中] env マッピングの型チェック（object expected, got string）
 
@@ -77,7 +77,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: `env:` キーに `${{ }}` 式が指定された場合、式の結果型が object（mapping）であることの検証が未実装。
 - **対処方針**: env/with マッピング位置で `${{ }}` 式が使われた場合、式の結果型が object/mapping であることをチェック。パーサーの `EnvParser` またはリンタールールで実装。
 - **テストデータ**: `testdata/examples/expand_object.yaml` line 19
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 3-b で実装済み。`CheckEnvMappingType` で `env:` 展開式がオブジェクト型でない場合に警告。`InferMatrixRowType` を拡張しスカラー型の matrix 行を `StringExprType` として推論。
 
 ### 1-6. [P2: 中] 式のプロパティアクセス型チェック（property access must be string）
 
@@ -87,7 +87,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: 基本的なプロパティアクセス型チェックは実装されているが、`inputs` 定義から型推論した場合の `env[inputs.verbose]`（bool 型）の検出が不足。
 - **対処方針**: 式解析で `env[expr]` のインデックスアクセス時に、`expr` の型がstring以外の場合にエラーを出す。`inputs` の型情報を活用。
 - **テストデータ**: `testdata/examples/workflow_dispatch_input_types.yaml` lines 35, 37
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 3-c で実装済み。`ValidateIndexAccessWithOverrides` で動的コンテキストを使ったインデックス型チェックを実行。`env[inputs.verbose]`（bool）を検出。
 
 ### 1-7. [P2: 中] deprecated action input の検出
 
@@ -247,7 +247,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 | `webhook_checks` | ✅ 同等 | 5/5 検出（重複あり） |
 | `workflow_call_definitions` | ✅ 同等 | 3/3 検出 |
 | `workflow_call_jobs` | ✅ 同等 | 4/4 検出（重複あり） |
-| `workflow_dispatch_input_types` | ✅ 部分 | 5/9 検出（型チェック一部未対応） |
+| `workflow_dispatch_input_types` | ✅ 同等 | 7/9 検出（Phase 3-c でインデックス型チェック追加） |
 | `workflow_inputs_secrets_types` | ✅ 同等 | 2/2 検出 |
 | `yaml_anchors` | ✅ 同等 | 3/3 検出 |
 
@@ -316,9 +316,28 @@ Phase 2 実装結果
 
 | # | 項目 | 対象 | 難易度 | 状態 |
 |---|------|------|--------|------|
-| 3-a | 非スカラー型の `${{ }}` 展開警告 | 式型チェック | 高 | |
-| 3-b | env マッピングの型チェック | 式型チェック / パーサー | 中 | |
-| 3-c | プロパティアクセスのインデックス型チェック | 式型チェック | 中 | |
+| 3-a | 非スカラー型の `${{ }}` 展開警告 | 式型チェック | 高 | ✅ |
+| 3-b | env マッピングの型チェック | 式型チェック / パーサー | 中 | ✅ |
+| 3-c | プロパティアクセスのインデックス型チェック | 式型チェック | 中 | ✅ |
+
+#### Phase 3 実装結果
+
+**3-a: 非スカラー型の `${{ }}` 展開警告**
+- `ExpressionSemanticAnalyzer.CheckTemplateTypeWithOverrides` を新設。動的コンテキストオーバーライド（matrix/inputs/needs/steps）を使った型推論でテンプレート型チェックを実行
+- `ExprUndefinedVarRule.ValidateTemplateType` にコンテキスト引数を追加し、オーバーライド対応版を呼び出すよう変更
+- `DynamicContextTypeBuilder.InferMatrixRowType` を拡張: 全値が `RawYamlArray` の場合は `ArrayExprType` を返すよう追加
+- 例: `matrix.bar: [[42], [true]]` → `${{ matrix.bar }}` で「array value in ${{ }}」警告を検出
+
+**3-b: env マッピングの型チェック**
+- `ExpressionSemanticAnalyzer.CheckEnvMappingType` を新設。`env:` に展開される式がオブジェクト型でない場合に警告
+- `ExprUndefinedVarRule.ValidateEnvMappingType` を追加し `CheckEnv` から呼び出し
+- `InferMatrixRowType` を拡張: 全値が `RawYamlString`（スカラー）の場合は `StringExprType` を返すよう追加
+- 例: `env: ${{ matrix.env_string }}` で「string value cannot be expanded as mapping」を検出
+
+**3-c: プロパティアクセスのインデックス型チェック**
+- `ExpressionSemanticAnalyzer.ValidateIndexAccessWithOverrides` を新設。動的コンテキストを使った型推論でインデックス型チェックを実行
+- `ValidateNodePropertyAccess` の `IndexAccess` ケースで呼び出しを追加
+- 例: `env[inputs.verbose]`（verbose は boolean 型）→「index of object must be string, but got bool」を検出
 
 ### Phase 4: メタデータ拡充
 

@@ -6031,6 +6031,208 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_MatrixArrayTemplateTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-matrix-array-in-template",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            bar:
+                                - [42]
+                                - [true]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.bar }}
+            """,
+            ["array value in ${{ }}"]),
+            new RuleCase(
+            "ok-matrix-array-element-access",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            bar:
+                                - [42]
+                                - [true]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.bar[0] }}
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-mixed-types-any",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            foo:
+                                - 'string value'
+                                - 42
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.foo }}
+            """,
+            []),
+            new RuleCase(
+            "ng-matrix-object-in-template",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            obj:
+                                - { a: 1, b: 2 }
+                                - { a: 3, b: 4 }
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.obj }}
+            """,
+            ["object value in ${{ }}"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_EnvMappingTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-env-string-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            env_string:
+                                - 'FOO=BAR'
+                                - 'FOO=PIYO'
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ matrix.env_string }}
+            """,
+            ["cannot be expanded as mapping"]),
+            new RuleCase(
+            "ok-env-object-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            env_object:
+                                - FOO: BAR
+                                - FOO: PIYO
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ matrix.env_object }}
+            """,
+            []),
+            new RuleCase(
+            "ok-env-any-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ fromJson('{"FOO":"bar"}') }}
+            """,
+            []),
+            new RuleCase(
+            "ng-env-array-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            arr:
+                                - [1, 2]
+                                - [3, 4]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo test
+                          env: ${{ matrix.arr }}
+            """,
+            ["cannot be expanded as mapping"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_IndexTypeCheckWithOverrides_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-bool-index-on-object",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        verbose:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ env[inputs.verbose] }}"
+            """,
+            ["index of object must be string, but got bool"]),
+            new RuleCase(
+            "ng-number-index-on-object",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        age:
+                            type: number
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ env[inputs.age] }}"
+            """,
+            ["index of object must be string, but got number"]),
+            new RuleCase(
+            "ok-string-index-on-object",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        name:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ env[inputs.name] }}"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_SecretsResolution_TableDriven()
     {
         var cases = new[]

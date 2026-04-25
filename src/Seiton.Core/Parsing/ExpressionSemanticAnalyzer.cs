@@ -134,6 +134,30 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var type = InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+        return CheckTypeForTemplate(type, expressionLocation);
+    }
+
+    /// <summary>
+    /// Variant of <see cref="CheckTemplateType"/> that uses dynamic context overrides for type inference.
+    /// This enables detection of non-scalar types in matrix/inputs/needs contexts.
+    /// </summary>
+    internal static Diagnostic? CheckTemplateTypeWithOverrides(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] contextOverrides)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides);
+        return CheckTypeForTemplate(type, expressionLocation);
+    }
+
+    private static Diagnostic? CheckTypeForTemplate(ExprType type, TextRange expressionLocation)
+    {
         return type switch
         {
             ObjectExprType => new Diagnostic(
@@ -149,6 +173,36 @@ public static class ExpressionSemanticAnalyzer
                 "null value in ${{ }} will be converted to empty string",
                 expressionLocation),
             _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Checks that an expression used as an env mapping value resolves to object type.
+    /// Returns a diagnostic if the type is a non-object concrete type (string, number, bool, array, null).
+    /// </summary>
+    internal static Diagnostic? CheckEnvMappingType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[]? contextOverrides)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = contextOverrides is not null
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+
+        // object and any are acceptable; concrete non-object types are errors
+        return type switch
+        {
+            ObjectExprType or AnyExprType => null,
+            _ => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                $"{type.TypeName} value cannot be expanded as mapping for \"env:\" section. expected object value",
+                expressionLocation),
         };
     }
 
@@ -1355,6 +1409,7 @@ public static class ExpressionSemanticAnalyzer
             case ExpressionNodeKind.IndexAccess:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateIndexAccessWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 break;
             case ExpressionNodeKind.FunctionCall:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
@@ -1394,6 +1449,34 @@ public static class ExpressionSemanticAnalyzer
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"property '{propNameText}' is not defined in '{rootName}' object",
+                expressionLocation));
+        }
+    }
+
+    private static void ValidateIndexAccessWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        var rightType = InferTypeWithOverrides(node.Right, nodes, arguments, expressionUtf8, overrides);
+
+        if (leftType is ArrayExprType && rightType is not (AnyExprType or NumberExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of array must be number, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+        else if (leftType is ObjectExprType && rightType is not (AnyExprType or StringExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of object must be string, but got {rightType.TypeName}",
                 expressionLocation));
         }
     }

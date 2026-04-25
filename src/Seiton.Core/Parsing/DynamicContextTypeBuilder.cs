@@ -231,6 +231,7 @@ internal static class DynamicContextTypeBuilder
     /// <summary>
     /// Infers the type of a matrix row from its values.
     /// When all values are objects with the same key set, returns a strict object type.
+    /// When all values are arrays, returns an array type.
     /// Otherwise returns Any.
     /// </summary>
     private static ExprType InferMatrixRowType(MatrixRow row, byte[] utf8Yaml)
@@ -240,14 +241,37 @@ internal static class DynamicContextTypeBuilder
             return ExprType.Any;
         }
 
-        // Check if all values are objects
+        // Classify all values
+        var allObjects = true;
+        var allArrays = true;
+        var allScalars = true;
+        for (var i = 0; i < row.Values.Count; i++)
+        {
+            if (row.Values[i] is not RawYamlObject) allObjects = false;
+            if (row.Values[i] is not RawYamlArray) allArrays = false;
+            if (row.Values[i] is not RawYamlString) allScalars = false;
+        }
+
+        if (allArrays)
+        {
+            return ExprType.EmptyArray;
+        }
+
+        if (allScalars)
+        {
+            return ExprType.String;
+        }
+
+        if (!allObjects)
+        {
+            return ExprType.Any;
+        }
+
+        // All values are objects — build merged property set
         Dictionary<Utf8String, ExprType>? mergedProps = null;
         for (var i = 0; i < row.Values.Count; i++)
         {
-            if (row.Values[i] is not RawYamlObject obj)
-            {
-                return ExprType.Any;
-            }
+            var obj = (RawYamlObject)row.Values[i];
 
             if (mergedProps is null)
             {
