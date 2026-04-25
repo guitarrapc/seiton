@@ -3738,6 +3738,101 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartColumn).IsEqualTo(26);
     }
 
+    // hashFiles function context restriction
+
+    [Test]
+    public async Task Parse_WorkflowEnv_WithHashFiles_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        env:
+            CACHE_KEY: ${{ hashFiles('**/package-lock.json') }}
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-env-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobIf_WithHashFiles_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                if: ${{ hashFiles('**/package-lock.json') != '' }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StrategyMatrix_WithHashFiles_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                strategy:
+                    matrix:
+                        key:
+                            - ${{ hashFiles('**/package-lock.json') }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepRun_WithHashFiles_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ${{ hashFiles('**/package-lock.json') }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_StepIf_WithHashFiles_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - if: hashFiles('**/package-lock.json') != ''
+                      run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
     // C-9 regression: fail-fast parse error must have valid position
     [Test]
     public async Task Parse_FailFastInvalidValue_ReportsCorrectPosition()

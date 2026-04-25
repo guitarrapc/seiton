@@ -2043,6 +2043,101 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsFalse();
     }
 
+    // hashFiles function context restriction
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInStepContext_NoDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInStepIfContext_NoDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json') != ''"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepIf,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInJobIfContext_ReportsDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json') != ''"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.JobIf,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInWorkflowEnvContext_ReportsDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Env);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInStrategyContext_ReportsDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.JobStrategy);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesCaseInsensitive_ReportsDiagnostic()
+    {
+        var expression = "HASHFILES('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.JobIf,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
     // Expression double-quote delimiter
 
     [Test]

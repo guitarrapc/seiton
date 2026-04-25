@@ -300,7 +300,7 @@ public static class ExpressionSemanticAnalyzer
 
         if (node.Kind == ExpressionNodeKind.FunctionCall)
         {
-            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, allowStatusCheckFunctions, diagnostics);
+            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
         }
 
         if (node.Kind == ExpressionNodeKind.MemberAccess)
@@ -352,6 +352,7 @@ public static class ExpressionSemanticAnalyzer
         ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
+        ExpressionValidationContext context,
         bool allowStatusCheckFunctions,
         List<Diagnostic> diagnostics)
     {
@@ -381,6 +382,15 @@ public static class ExpressionSemanticAnalyzer
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"status check function '{Encoding.UTF8.GetString(nameUtf8)}()' is only available in 'if' conditions",
+                expressionLocation));
+            return;
+        }
+
+        if (IsHashFilesFunction(nameUtf8) && !Availability.IsStepLevel(context))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"hashFiles() is not available in {ToContextText(context)} expressions",
                 expressionLocation));
             return;
         }
@@ -1127,6 +1137,11 @@ public static class ExpressionSemanticAnalyzer
             || EqualsAsciiIgnoreCase(nameUtf8, "failure"u8)
             || EqualsAsciiIgnoreCase(nameUtf8, "cancelled"u8)
             || EqualsAsciiIgnoreCase(nameUtf8, "always"u8);
+    }
+
+    private static bool IsHashFilesFunction(ReadOnlySpan<byte> nameUtf8)
+    {
+        return EqualsAsciiIgnoreCase(nameUtf8, "hashfiles"u8);
     }
 
     private static void ValidateVarsNamingConvention(

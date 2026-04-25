@@ -9627,4 +9627,72 @@ public sealed class RuleInterfaceTests
         var bothDiags = result.Diagnostics.Where(d => d.Message.Contains("cannot have both uses and steps")).ToArray();
         await Assert.That(bothDiags).HasCount().EqualTo(1);
     }
+
+    // C-3: hashFiles function context restriction (parser-level diagnostic)
+
+    [Test]
+    public async Task LintEngine_HashFilesInWorkflowEnv_ReportsParserDiagnostic()
+    {
+        var yaml = """
+        on: push
+        env:
+            CACHE_KEY: ${{ hashFiles('**/package-lock.json') }}
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_HashFilesInJobIf_ReportsParserDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                if: ${{ hashFiles('**/package-lock.json') != '' }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_HashFilesInStepRun_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ${{ hashFiles('**/package-lock.json') }}
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_HashFilesInStepWith_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/cache@v4
+                      with:
+                        key: ${{ hashFiles('**/package-lock.json') }}
+                        path: ./packages
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
 }

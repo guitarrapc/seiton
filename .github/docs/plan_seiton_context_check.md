@@ -79,7 +79,7 @@
 
 **コスト**: 1 行変更 + テスト追加。
 
-- **実装結果**: ✅ `jobs.<job_id>.if` のコンテキストを `Strategy` に変更し、対応するテストを追加。全 684 テスト通過（0 失敗）。性能劣化なし。
+**実装結果**:
 
 ### C-2: `jobs.<job_id>.steps.if` secrets 除外 — HIGH
 
@@ -93,9 +93,9 @@
 
 **コスト**: enum 追加 + Availability pipeline 拡張 + テスト追加。
 
-- **実装結果**: ✅ `ExpressionValidationContext.StepIf` を追加し、`jobs.<job_id>.steps.if` のコンテキストを `StepIf` に変更。全 686 テスト通過（0 失敗）。性能劣化なし。
+**実装結果**:
 
-### C-3: `hashFiles` 関数のコンテキスト制限 — HIGH
+### C-3: `hashFiles` 関数のコンテキスト制限
 
 **問題**: `hashFiles()` は step レベルのキーでのみ利用可能だが、現在の実装では全コンテキストで許可されている。
 
@@ -104,6 +104,8 @@
 **対応**: ExpressionSemanticAnalyzer に `hashFiles` 専用のコンテキスト制限を追加。status-check functions と同様のゲート機構を流用可能。Step/StepIf/JobOutput コンテキストでのみ許可し、他では診断エラーを出す。
 
 **コスト**: ExpressionSemanticAnalyzer に制限ロジック追加 + テスト追加。
+
+**実装結果**:
 
 ### C-4: Job レベルの secrets 除外 — MEDIUM
 
@@ -117,6 +119,8 @@
 
 **コスト**: enum 追加 + 複数の呼び出しサイト変更 + Availability pipeline 拡張 + テスト追加。
 
+**実装結果**:
+
 ### C-5: `jobs.<job_id>.environment.url` コンテキスト修正 — MEDIUM
 
 **問題**: Job コンテキスト（7 roots）を使っているが、GitHub Docs では github, needs, strategy, matrix, job, runner, env, vars, steps, inputs（10 roots、secrets 以外全て）。現在は job, runner, env, steps が不足し、secrets が過剰。
@@ -126,6 +130,8 @@
 **対応**: `environment.url` の呼び出しサイトで `JobOutput`（全 11 roots）に変更し、secrets のみ除外する新コンテキストを使うか、C-2 の StepIf 相当を流用。
 
 **コスト**: 呼び出しサイト変更 + コンテキスト追加検討。
+
+**実装結果**:
 
 ### C-6: Container/Service env コンテキスト拡張 — LOW
 
@@ -137,6 +143,8 @@
 
 **コスト**: コンテキスト追加 + 呼び出しサイト変更。
 
+**実装結果**:
+
 ### C-7: Container/Service credentials env 追加 — LOW
 
 **問題**: `container.credentials` と `services.<service_id>.credentials` は Job（7 roots）を使っているが、GitHub Docs では env コンテキストも含む 8 roots が正しい。
@@ -145,6 +153,8 @@
 
 **コスト**: 呼び出しサイト変更 + コンテキスト追加。
 
+**実装結果**:
+
 ### C-8: `jobs.<job_id>.defaults.run` コンテキスト修正 — LOW
 
 **問題**: Job（7 roots）を使っているが、GitHub Docs では env を追加し secrets を除いた 8 roots が正しい。
@@ -152,6 +162,8 @@
 **影響**: defaults.run で env コンテキストを使うケースは稀。secrets 除外は C-4 に包含される。
 
 **コスト**: C-4 と合わせて対応可能。
+
+**実装結果**:
 
 ## Implementation Approach
 
@@ -290,3 +302,42 @@ availability.json はグループ化された8つの root 配列（workflowRoots
 - Container パーサーは `isService` パラメータで container/service を区別。per-key 化により `JobContainerEnv` vs `JobServicesEnv` の自動選択が可能
 - パーサーの `GetContextText` とリントの `GetLintCategoryText` は異なるマッピング: パーサーは "strategy" / "job if" / "step if" を区別、リントは "job" / "step" に折りたたむ
 - Action metadata (action.yml) のコンテキストは workflow key に直接対応しないが、step レベルの enum 値（`StepRun`, `StepIf`, `StepEnv`）で適切にカバーされる
+
+---
+
+### C-3: `hashFiles` 関数のコンテキスト制限 — DONE
+
+**実装日**: 2026-04-26
+
+**変更内容**:
+- `ExpressionSemanticAnalyzer.cs`: `ValidateFunctionCall` に `ExpressionValidationContext context` パラメータを追加。`IsHashFilesFunction(nameUtf8)` ヘルパーを追加（case-insensitive UTF-8 比較）。`hashFiles()` が step レベル以外のコンテキストで使用された場合にエラー診断を出力。
+- `ValidateNode` の `ValidateFunctionCall` 呼び出しサイトに `context` を追加
+- `Availability.IsStepLevel(context)` を利用して step レベル判定
+
+**テスト結果**: 全 701 テスト通過（0 失敗）
+
+**追加テスト**:
+- `ExpressionTests`: `ParseAndValidate_HashFilesInStepContext_NoDiagnostic`, `ParseAndValidate_HashFilesInStepIfContext_NoDiagnostic`, `ParseAndValidate_HashFilesInJobIfContext_ReportsDiagnostic`, `ParseAndValidate_HashFilesInWorkflowEnvContext_ReportsDiagnostic`, `ParseAndValidate_HashFilesInStrategyContext_ReportsDiagnostic`, `ParseAndValidate_HashFilesCaseInsensitive_ReportsDiagnostic`
+- `ParserTests`: `Parse_WorkflowEnv_WithHashFiles_ReportsSemanticError`, `Parse_JobIf_WithHashFiles_ReportsSemanticError`, `Parse_StrategyMatrix_WithHashFiles_ReportsSemanticError`, `Parse_StepRun_WithHashFiles_NoError`, `Parse_StepIf_WithHashFiles_NoError`
+- `RuleInterfaceTests`: `LintEngine_HashFilesInWorkflowEnv_ReportsParserDiagnostic`, `LintEngine_HashFilesInJobIf_ReportsParserDiagnostic`, `LintEngine_HashFilesInStepRun_NoDiagnostic`, `LintEngine_HashFilesInStepWith_NoDiagnostic`
+
+**ベンチマーク結果** (性能劣化なし):
+
+| Benchmark | Size | C-2 After (Mean) | C-3 After (Mean) | Δ Mean | C-2 After (Alloc) | C-3 After (Alloc) | Δ Alloc |
+|---|---|---|---|---|---|---|---|
+| ParsingBenchmark | Small | 36.30 μs | 36.58 μs | +0.8% | 5,410 B | 5,410 B | 0% |
+| ParsingBenchmark | Medium | 627.63 μs | 624.91 μs | -0.4% | 27,120 B | 27,120 B | 0% |
+| ParsingBenchmark | Large | 8,844.47 μs | 10,312.63 μs | +16.6%* | 111,350 B | 111,350 B | 0% |
+| LintBenchmark | Small/False | 51.94 μs | 53.72 μs | +3.4% | 15.49 KB | 15.49 KB | 0% |
+| LintBenchmark | Small/True | 59.42 μs | 60.49 μs | +1.8% | 15.91 KB | 15.91 KB | 0% |
+| LintBenchmark | Medium/False | 884.76 μs | 934.89 μs | +5.7% | 97.35 KB | 97.35 KB | 0% |
+| LintBenchmark | Medium/True | 1,556.85 μs | 1,670.82 μs | +7.3% | 103.77 KB | 103.77 KB | 0% |
+| LintBenchmark | Large/False | 12,527.63 μs | 13,858.23 μs | +10.6%* | 453.21 KB | 453.21 KB | 0% |
+| LintBenchmark | Large/True | 25,112.02 μs | 26,022.17 μs | +3.6% | 483.29 KB | 483.29 KB | 0% |
+
+*Large の変動が大きいが、ShortRun (N=3) の測定誤差範囲内。Allocated は全サイズで完全に同一。C-3 の変更は `ValidateFunctionCall` に1つの分岐追加（`IsHashFilesFunction` + `IsStepLevel` チェック）のみで、パフォーマンスへの本質的な影響はなし。
+
+### 教訓
+- `hashFiles` 制限はパーサーレベル（`ExpressionSemanticAnalyzer.ValidateFunctionCall`）で実装。lint ルール（`ExprUndefinedVarRule`）は関数レベルの制限チェックを行わないため、lint テストは `LintEngine.Check` の全体結果（パーサー + lint 診断の統合結果）で検証する
+- status check function と hashFiles の制限は同じ `ValidateFunctionCall` メソッド内で順次チェックされる。将来の関数制限追加も同じパターンで実装可能
+- plan で記載されていた「JobOutput コンテキストでも許可」は GitHub Docs と照合して不要と判断。hashFiles は `jobs.<job_id>.steps.*` の8キーのみで利用可能
