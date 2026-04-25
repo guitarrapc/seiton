@@ -51,7 +51,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             return;
         }
 
-        var expression = TryExtractExpressionBody(raw, out var body) ? body : raw;
+        var expression = ExpressionScanHelpers.TryExtractExpressionBody(raw, out var body) ? body : raw;
 
         var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
@@ -141,46 +141,6 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         return false;
     }
 
-    private static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
-    {
-        body = value;
-
-        var open = value.IndexOf("${{"u8);
-        if (open < 0)
-        {
-            return false;
-        }
-
-        var close = value.LastIndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        if (open + 3 > close)
-        {
-            return false;
-        }
-
-        if (open != 0)
-        {
-            return false;
-        }
-
-        var tail = close + 2;
-        for (var i = tail; i < value.Length; i++)
-        {
-            var b = value[i];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                return false;
-            }
-        }
-
-        body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
-        return true;
-    }
-
     /// <summary>
     /// Detects "always evaluated to true" patterns where <c>${{ }}</c> is present but extra characters
     /// are around it (leading text, trailing newline/space, or multiple expression blocks).
@@ -213,7 +173,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         var tail = firstClose + 2;
 
         // Check for another ${{ after the first }} → multiple expression blocks → always true
-        if (tail < value.Length && value.Slice(tail).IndexOf("${{"u8) >= 0)
+        if (tail < value.Length && ExpressionScanHelpers.ContainsExpressionMarker(value.Slice(tail)))
         {
             return true;
         }

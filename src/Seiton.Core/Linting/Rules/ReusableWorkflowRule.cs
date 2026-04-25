@@ -190,7 +190,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         var value = providedInput.Value;
         var valueSpan = Arena.GetStringValue(value);
-        if (Arena.GetStringExpression(value).HasValue || valueSpan.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(value, Arena))
         {
             return;
         }

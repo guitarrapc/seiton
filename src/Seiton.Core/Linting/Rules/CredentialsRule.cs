@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -65,7 +66,7 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
         }
 
         var image = Arena.GetStringValue(imageNode);
-        if (image.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(image))
         {
             return;
         }
@@ -101,7 +102,7 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
         }
 
         var password = Arena.GetStringValue(passwordNode);
-        if (password.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(password))
         {
             return;
         }

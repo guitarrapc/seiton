@@ -38,7 +38,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
         var shellSpan = Arena.GetStringValue(run.Shell);
 
         // Skip expression values ? cannot validate at static analysis time
-        if (Arena.GetStringExpression(run.Shell).HasValue || shellSpan.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(run.Shell, Arena))
         {
             return;
         }
@@ -72,7 +72,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
         var shellNode = shellNodeNullable.Value;
         var shellSpan = Arena.GetStringValue(shellNode);
 
-        if (Arena.GetStringExpression(shellNode).HasValue || shellSpan.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(shellNode, Arena))
         {
             return;
         }

@@ -46,7 +46,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         }
 
         var value = Arena.GetStringValue(persistCredentialsNode);
-        if (!Arena.GetStringExpression(persistCredentialsNode).HasValue && value.IndexOf("${{"u8) < 0 && value.SequenceEqual("false"u8))
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena) && value.SequenceEqual("false"u8))
         {
             return;
         }
@@ -86,8 +86,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
     private bool TryBuildValueReplacementFix(LintConfig config, StringNodeId persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
-        var value = Arena.GetStringValue(persistCredentialsNode);
-        if (Arena.GetStringExpression(persistCredentialsNode).HasValue || value.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena))
         {
             return false;
         }

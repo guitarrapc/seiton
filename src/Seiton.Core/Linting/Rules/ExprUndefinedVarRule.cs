@@ -258,7 +258,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var hasEmbeddedExpression = value.IndexOf("${{"u8) >= 0;
+        var hasEmbeddedExpression = ExpressionScanHelpers.ContainsExpressionMarker(value);
         var parseWholeValue = sinkName.EndsWith(".if", StringComparison.Ordinal);
 
         if (parseWholeValue && !hasEmbeddedExpression)

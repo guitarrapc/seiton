@@ -97,7 +97,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             }
 
             var currentSpan = Arena.GetStringValue(current.Value);
-            if (Arena.GetStringExpression(current.Value).HasValue || currentSpan.IndexOf("${{"u8) >= 0)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(current.Value, Arena))
             {
                 continue;
             }
@@ -109,7 +109,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                     continue;
                 }
 
-                if (Arena.GetStringExpression(earlier.Value).HasValue || Arena.GetStringValue(earlier.Value).IndexOf("${{"u8) >= 0)
+                if (ExpressionScanHelpers.ContainsExpressionMarker(earlier.Value, Arena))
                 {
                     continue;
                 }
@@ -348,8 +348,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
     {
         if (value is RawYamlString str)
         {
-            return Arena.GetStringExpression(str.Value).HasValue
-                || Arena.GetStringValue(str.Value).IndexOf("${{"u8) >= 0;
+            return ExpressionScanHelpers.ContainsExpressionMarker(str.Value, Arena);
         }
 
         return false;

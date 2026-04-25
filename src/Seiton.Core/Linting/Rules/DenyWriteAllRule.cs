@@ -36,7 +36,7 @@ public sealed class DenyWriteAllRule() : RuleBase(RuleId.DenyWriteAll)
 
         var allNode = permissions.All;
         var value = Arena.GetStringValue(allNode);
-        if (Arena.GetStringExpression(allNode).HasValue || value.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(allNode, Arena))
         {
             return;
         }

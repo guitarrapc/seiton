@@ -656,7 +656,7 @@ public static partial class WorkflowParser
         {
             // Check if the scalar contains an expression — plain text scalars are not valid for env
             var valueUtf8 = reader.GetScalarUtf8();
-            if (valueUtf8.IndexOf("${{"u8) < 0)
+            if (!ExpressionScanHelpers.ContainsExpressionMarker(valueUtf8))
             {
                 AddError(diagnostics, $"{error}; expecting a single ${{{{...}}}} expression or mapping value for env section, but found plain text node", reader.CurrentStart);
                 reader.SkipCurrentNode();
@@ -1086,7 +1086,7 @@ public static partial class WorkflowParser
         }
 
         // If the string doesn't contain an expression, it's not a valid bool
-        if (!arena.GetStringExpression(expressionNode).HasValue && arena.GetStringValue(expressionNode).IndexOf("${{"u8) < 0)
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(expressionNode, arena))
         {
             needsError = true;
             errorMark = mark;

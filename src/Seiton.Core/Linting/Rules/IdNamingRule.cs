@@ -46,7 +46,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
     private void ValidateId(StringNodeId idNode, string kind)
     {
         var value = Arena.GetStringValue(idNode);
-        if (Arena.GetStringExpression(idNode).HasValue || value.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(idNode, Arena))
         {
             return;
         }

@@ -87,7 +87,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 
     private bool IsExpressionOrInterpolation(StringNodeId node)
     {
-        return Arena.GetStringExpression(node).HasValue || Arena.GetStringSlice(node).AsSpan(Config.Utf8Yaml!).IndexOf("${{"u8) >= 0;
+        return ExpressionScanHelpers.ContainsExpressionMarker(node, Arena);
     }
 
     private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> span)

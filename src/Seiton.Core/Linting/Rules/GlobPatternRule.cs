@@ -86,7 +86,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         {
             var typeNode = webhookEv.Types[i];
             var typeValue = Arena.GetStringValue(typeNode);
-            if (Arena.GetStringExpression(typeNode).HasValue || typeValue.IndexOf("${{"u8) >= 0)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(typeNode, Arena))
             {
                 continue;
             }
@@ -143,7 +143,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         {
             var valueNode = filter.Values[i];
             var pattern = Arena.GetStringValue(valueNode);
-            if (Arena.GetStringExpression(valueNode).HasValue || pattern.IndexOf("${{"u8) >= 0)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(valueNode, Arena))
             {
                 continue;
             }

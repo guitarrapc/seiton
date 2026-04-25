@@ -20,7 +20,7 @@ public static partial class WorkflowParser
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
-        var hasExpression = valueUtf8.IndexOf("${{"u8) >= 0;
+        var hasExpression = ExpressionScanHelpers.ContainsExpressionMarker(valueUtf8);
         var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
 
         if (hasExpression)
@@ -178,7 +178,7 @@ public static partial class WorkflowParser
         }
 
         // If the string doesn't contain an expression, it's not a valid number
-        if (!arena.GetStringExpression(expressionNode).HasValue && arena.GetStringValue(expressionNode).IndexOf("${{"u8) < 0)
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(expressionNode, arena))
         {
             needsError = true;
             errorMark = mark;

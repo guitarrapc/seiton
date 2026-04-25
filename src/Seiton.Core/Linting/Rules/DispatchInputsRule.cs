@@ -157,6 +157,6 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 
     private bool IsExpressionOrInterpolation(StringNodeId node)
     {
-        return Arena.GetStringExpression(node).HasValue || Arena.GetStringValue(node).IndexOf("${{"u8) >= 0;
+        return ExpressionScanHelpers.ContainsExpressionMarker(node, Arena);
     }
 }

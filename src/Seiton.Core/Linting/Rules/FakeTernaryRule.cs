@@ -33,7 +33,7 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
             return;
         }
 
-        var expression = TryExtractExpressionBody(raw, out var body) ? body : raw;
+        var expression = ExpressionScanHelpers.TryExtractExpressionBody(raw, out var body) ? body : raw;
 
         var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
@@ -129,45 +129,5 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
     private static bool IsBooleanType(ExprType type)
     {
         return type is BoolExprType;
-    }
-
-    private static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
-    {
-        body = value;
-
-        var open = value.IndexOf("${{"u8);
-        if (open < 0)
-        {
-            return false;
-        }
-
-        var close = value.LastIndexOf("}}"u8);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        if (open + 3 > close)
-        {
-            return false;
-        }
-
-        if (open != 0)
-        {
-            return false;
-        }
-
-        var tail = close + 2;
-        for (var i = tail; i < value.Length; i++)
-        {
-            var b = value[i];
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                return false;
-            }
-        }
-
-        body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
-        return true;
     }
 }
