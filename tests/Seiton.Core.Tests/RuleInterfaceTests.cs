@@ -2425,6 +2425,149 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
     }
 
+    // Runner label — matrix-expanded runs-on
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_MatrixExpanded_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-matrix-unknown-scalar",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - macos-latest
+                                - linux-latest
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo test
+            """,
+            ["not a known GitHub-hosted runner label"]),
+            new RuleCase(
+            "ok-matrix-known-labels-only",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - ubuntu-latest
+                                - macos-latest
+                                - windows-latest
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-self-hosted-array",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - [self-hosted, linux, x64]
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-self-hosted-preset-label",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - arm64
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-matrix-gpu-unknown",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - macos-latest
+                                - gpu
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo test
+            """,
+            ["not a known GitHub-hosted runner label"]),
+            new RuleCase(
+            "ok-matrix-expression-row-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner: ${{ fromJson(needs.setup.outputs.runners) }}
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-no-strategy-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-mixed-known-and-self-hosted",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - ubuntu-latest
+                                - [self-hosted, linux, x64]
+                                - arm64
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-non-matrix-expression-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ github.event.inputs.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
     // Runner label conflict
     [Test]
     public async Task RuleRegression_RunnerLabelRule_OsConflict_TableDriven()

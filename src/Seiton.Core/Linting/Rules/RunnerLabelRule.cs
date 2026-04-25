@@ -25,7 +25,18 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     public override void VisitJobPre(Job job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || runsOn.LabelsExpr.HasValue || runsOn.Labels is null || Config.Utf8Yaml is null)
+        if (runsOn is null || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        if (runsOn.LabelsExpr.HasValue)
+        {
+            CheckMatrixExpandedLabels(job, runsOn);
+            return;
+        }
+
+        if (runsOn.Labels is null)
         {
             return;
         }
@@ -176,5 +187,126 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         }
 
         return additionalKnownHostedLabels.Contains(NormalizeAsciiLower(labelUtf8));
+    }
+
+    /// <summary>
+    /// When <c>runs-on</c> is a single <c>${{ matrix.AXIS }}</c> expression,
+    /// resolves the matrix dimension and validates each scalar value as a runner label.
+    /// </summary>
+    private void CheckMatrixExpandedLabels(Job job, Runner runsOn)
+    {
+        var exprUtf8 = Arena.GetStringValue(runsOn.LabelsExpr);
+        if (!ExpressionScanHelpers.TryExtractExpressionBody(exprUtf8, out var body))
+        {
+            return;
+        }
+
+        // Only handle simple `matrix.AXIS` references
+        if (!body.StartsWith("matrix."u8) || body.Length <= 7)
+        {
+            return;
+        }
+
+        // Check for nested property access (e.g. matrix.runner.os) — skip
+        if (body[7..].IndexOf((byte)'.') >= 0)
+        {
+            return;
+        }
+
+        var axisName = body[7..]; // slice after "matrix."
+
+        var matrix = job.Strategy?.Matrix;
+        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
+        {
+            return;
+        }
+
+        if (!matrix.Rows.Value.TryGetValue(Config.Utf8Yaml, axisName, out var row))
+        {
+            return;
+        }
+
+        // Row is an expression — cannot validate
+        if (row.Expression.HasValue || row.Values is null)
+        {
+            return;
+        }
+
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+
+        for (var i = 0; i < row.Values.Count; i++)
+        {
+            var value = row.Values[i];
+            switch (value)
+            {
+                case RawYamlString scalar:
+                {
+                    if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                    {
+                        continue;
+                    }
+
+                    var labelUtf8 = Arena.GetStringValue(scalar.Value);
+                    if (labelUtf8.IsEmpty
+                        || RunnerLabels.IsKnownHostedLabel(labelUtf8)
+                        || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8)
+                        || IsAdditionalKnownHostedLabel(labelUtf8))
+                    {
+                        continue;
+                    }
+
+                    var labelText = Decode(Arena.GetStringSlice(scalar.Value));
+                    AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(scalar.Value));
+                    break;
+                }
+
+                case RawYamlArray array:
+                {
+                    // If any element is "self-hosted", the whole entry is self-hosted runner labels
+                    var hasSelfHosted = false;
+                    for (var j = 0; j < array.Items.Count; j++)
+                    {
+                        if (array.Items[j] is RawYamlString item && RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(item.Value)))
+                        {
+                            hasSelfHosted = true;
+                            break;
+                        }
+                    }
+
+                    if (hasSelfHosted)
+                    {
+                        continue;
+                    }
+
+                    // Validate each element
+                    for (var j = 0; j < array.Items.Count; j++)
+                    {
+                        if (array.Items[j] is not RawYamlString element)
+                        {
+                            continue;
+                        }
+
+                        if (ExpressionScanHelpers.ContainsExpressionMarker(element.Value, Arena))
+                        {
+                            continue;
+                        }
+
+                        var elemUtf8 = Arena.GetStringValue(element.Value);
+                        if (elemUtf8.IsEmpty
+                            || RunnerLabels.IsKnownHostedLabel(elemUtf8)
+                            || RunnerLabels.IsSelfHostedPresetLabel(elemUtf8)
+                            || IsAdditionalKnownHostedLabel(elemUtf8))
+                        {
+                            continue;
+                        }
+
+                        var elemText = Decode(Arena.GetStringSlice(element.Value));
+                        AddJobWarning(job, $"job '{jobId}' runs-on label '{elemText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(element.Value));
+                    }
+
+                    break;
+                }
+            }
+        }
     }
 }

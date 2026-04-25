@@ -216,15 +216,15 @@
 | **seiton** | `property 'imagetag' is not defined in 'jobs' object` — 検出済みだがメッセージが曖昧 |
 | **対処** | → **C カテゴリ** でメッセージ改善。 |
 
-### A-21: `runner_label_check` — unknown runner label (2件不足)
+### A-21: `runner_label_check` — unknown runner label (2件不足) ✅ DONE
 
 | | 内容 |
 |---|---|
 | **actionlint** | `linux-latest` unknown、`gpu` unknown、`macos-10.13` unknown |
-| **seiton** | `macos-10.13` のみ検出。`linux-latest` と `gpu` 未検出。 |
-| **原因** | `runs-on: ${{ matrix.runner }}` で matrix 展開後のラベル検証ができない。matrix の各値を展開してラベル検証する必要がある。`gpu` は self-hosted preset label として除外されている。 |
-| **対処** | matrix 展開後のラベルチェック対応。self-hosted preset (`arm64`, `gpu` 等) の扱い検討。 |
-| **優先度** | **中** — matrix 経由の runner label はエッジケース。actionlint も config ファイルでカスタムラベルを許容しており、`gpu` は actionlint.yaml で設定するケース。seiton でも同様にconfig対応で十分。 |
+| **seiton** | ✅ 3件すべて検出。`runs-on: ${{ matrix.runner }}` の matrix 展開ラベル検証を実装。 |
+| **原因** | `runs-on: ${{ matrix.runner }}` で matrix 展開後のラベル検証ができなかった。 |
+| **対処** | `RunnerLabelRule.CheckMatrixExpandedLabels()` で `${{ matrix.AXIS }}` を解決し、matrix row の各値を検証。self-hosted preset label (`self-hosted`, `linux`, `macos`, `windows`, `x64`, `arm`, `arm64`) を `RunnerLabels.IsSelfHostedPresetLabel()` として generator に追加。配列値では `self-hosted` を含む場合スキップ。 |
+| **実装** | `RunnerLabelRule.cs` に `CheckMatrixExpandedLabels()` 追加、`RunnerLabelsCSharpGenerator.cs` に `IsSelfHostedPresetLabel()` 追加・再生成。テスト9ケース追加、全665テスト通過。ベンチマーク回帰なし。 |
 
 ### A-22: `type_checks` — template 展開時の object 型警告 ✅ DONE (既存実装で対応済み)
 
