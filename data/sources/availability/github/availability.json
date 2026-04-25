@@ -62,5 +62,17 @@
     "secrets",
     "steps",
     "inputs"
+  ],
+  "stepIfRoots": [
+    "github",
+    "needs",
+    "strategy",
+    "matrix",
+    "job",
+    "runner",
+    "env",
+    "vars",
+    "steps",
+    "inputs"
   ]
 }

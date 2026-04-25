@@ -32,7 +32,8 @@ internal sealed class GitHubAvailabilitySourceParser
             snapshot.JobOutputRoots ?? [],
             snapshot.ReusableWorkflowCallSecretsRoots ?? [],
             snapshot.StrategyRoots ?? [],
-            snapshot.StepRoots ?? []);
+            snapshot.StepRoots ?? [],
+            snapshot.StepIfRoots ?? []);
     }
 
     private sealed class AvailabilitySnapshot
@@ -44,5 +45,6 @@ internal sealed class GitHubAvailabilitySourceParser
         public List<string>? ReusableWorkflowCallSecretsRoots { get; set; }
         public List<string>? StrategyRoots { get; set; }
         public List<string>? StepRoots { get; set; }
+        public List<string>? StepIfRoots { get; set; }
     }
 }

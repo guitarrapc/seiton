@@ -169,7 +169,7 @@ public static partial class WorkflowParser
                         {
                             ifNode = ParseExpression(
                                 ref reader, arena, diagnostics,
-                                ExpressionValidationContext.Step,
+                                ExpressionValidationContext.StepIf,
                                 out var ifErr,
                                 out var ifMark);
                             if (ifErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] if must be scalar", ifMark);

@@ -86,6 +86,20 @@ public static class Availability
         "steps"u8.ToArray(),
     ];
 
+    static readonly byte[][] StepIfRoots =
+    [
+        "github"u8.ToArray(),
+        "inputs"u8.ToArray(),
+        "vars"u8.ToArray(),
+        "needs"u8.ToArray(),
+        "strategy"u8.ToArray(),
+        "matrix"u8.ToArray(),
+        "job"u8.ToArray(),
+        "runner"u8.ToArray(),
+        "env"u8.ToArray(),
+        "steps"u8.ToArray(),
+    ];
+
     public static bool IsRootContextAvailable(ExpressionValidationContext context, ReadOnlySpan<byte> rootName)
     {
         return context switch
@@ -97,6 +111,7 @@ public static class Availability
             ExpressionValidationContext.ReusableWorkflowCallSecrets => Contains(ReusableWorkflowCallSecretsRoots, rootName),
             ExpressionValidationContext.Strategy => Contains(StrategyRoots, rootName),
             ExpressionValidationContext.Step => Contains(StepRoots, rootName),
+            ExpressionValidationContext.StepIf => Contains(StepIfRoots, rootName),
             _ => false,
         };
     }

@@ -29,6 +29,7 @@ internal sealed class AvailabilityCSharpGenerator
         var reusableWorkflowCallSecrets = Order(model.ReusableWorkflowCallSecretsRoots);
         var strategy = Order(model.StrategyRoots);
         var step = Order(model.StepRoots);
+        var stepIf = Order(model.StepIfRoots);
 
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-availability");
@@ -55,6 +56,8 @@ internal sealed class AvailabilityCSharpGenerator
         AppendArray(sb, "StrategyRoots", strategy);
         sb.AppendLine();
         AppendArray(sb, "StepRoots", step);
+        sb.AppendLine();
+        AppendArray(sb, "StepIfRoots", stepIf);
 
         sb.Append(
             """
@@ -70,6 +73,7 @@ internal sealed class AvailabilityCSharpGenerator
                         ExpressionValidationContext.ReusableWorkflowCallSecrets => Contains(ReusableWorkflowCallSecretsRoots, rootName),
                         ExpressionValidationContext.Strategy => Contains(StrategyRoots, rootName),
                         ExpressionValidationContext.Step => Contains(StepRoots, rootName),
+                        ExpressionValidationContext.StepIf => Contains(StepIfRoots, rootName),
                         _ => false,
                     };
                 }

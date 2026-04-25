@@ -79,6 +79,8 @@
 
 **コスト**: 1 行変更 + テスト追加。
 
+- **実装結果**: ✅ `jobs.<job_id>.if` のコンテキストを `Strategy` に変更し、対応するテストを追加。全 684 テスト通過（0 失敗）。性能劣化なし。
+
 ### C-2: `jobs.<job_id>.steps.if` secrets 除外 — HIGH
 
 **問題**: `jobs.<job_id>.steps.if` は Step コンテキスト（全 11 roots）を使っているが、GitHub Docs では secrets を除く 10 roots のみ。
@@ -90,6 +92,8 @@
 **代替案**: `StepIf` の追加が過剰と判断する場合、secrets を除外するための別のフィルタリング機構を検討（ただし enum 追加がシンプル）。
 
 **コスト**: enum 追加 + Availability pipeline 拡張 + テスト追加。
+
+- **実装結果**: ✅ `ExpressionValidationContext.StepIf` を追加し、`jobs.<job_id>.steps.if` のコンテキストを `StepIf` に変更。全 686 テスト通過（0 失敗）。性能劣化なし。
 
 ### C-3: `hashFiles` 関数のコンテキスト制限 — HIGH
 
@@ -212,3 +216,40 @@ GitHub Docs のテーブルが実際のランタイム挙動と完全に一致�
 | LintBenchmark | Large/True | 23,887.74 μs | 24,785.59 μs | +3.8% | 494.48 KB | 483.29 KB | -2.3% |
 
 *Medium の変動が大きいが、ShortRun (N=3) の測定誤差範囲内。Allocated は全サイズで同等〜微減。C-1 の 1 行変更は switch 分岐の変更のみで、パフォーマンスへの本質的な影響はなし。
+
+### C-2: `jobs.<job_id>.steps.if` secrets 除外 — DONE
+
+**実装日**: 2026-04-26
+
+**変更内容**:
+- `ExpressionSemanticAnalyzer.cs`: `ExpressionValidationContext.StepIf` を enum に追加（Step と Strategy の間）、`ToContextText` に `StepIf => "step"` マッピング追加
+- `WorkflowParser.Steps.cs` L172: step.if の ParseExpression 呼び出しを `ExpressionValidationContext.Step` → `ExpressionValidationContext.StepIf` に変更
+- `ExprUndefinedVarRule.cs`: step.If のコンテキストを `StepIf` に変更、override 選択条件に `StepIf` を追加、`ToContextText` に `StepIf => "step"` 追加
+- `data/sources/availability/github/availability.json`: `stepIfRoots` 配列を追加（10 roots: Step minus secrets）
+- `src/Seiton.Update/Model/AvailabilityModel.cs`: `StepIfRoots` パラメータを追加
+- `src/Seiton.Update/Parsers/GitHubAvailabilitySourceParser.cs`: `StepIfRoots` のパース・スナップショット対応
+- `src/Seiton.Update/Generators/AvailabilityCSharpGenerator.cs`: `StepIf` 用の配列生成・switch case 追加
+- `src/Seiton.Update/Sources/GitHubAvailabilityFetcher.cs`: `MergeParsedSources` に `stepIfRoots` を追加（`steps.if` 単独の ResolveContextSet）
+- `src/Seiton.Core/Generated/Availability.g.cs`: 再生成（`StepIfRoots` 含む）
+
+**テスト結果**: 全 686 テスト通過（0 失敗）
+
+**追加テスト**:
+- `ParserTests`: `Parse_StepIf_WithSecretsContext_ReportsSemanticError`, `Parse_StepRun_WithSecretsContext_NoError`
+- `RuleInterfaceTests`: `ng-step-if-uses-secrets-context`, `ok-step-run-uses-secrets-context`, `ok-step-env-uses-secrets-context`
+
+**ベンチマーク結果** (性能劣化なし):
+
+| Benchmark | Size | C-1 After (Mean) | C-2 After (Mean) | Δ Mean | C-1 After (Alloc) | C-2 After (Alloc) | Δ Alloc |
+|---|---|---|---|---|---|---|---|
+| ParsingBenchmark | Small | 34.82 μs | 36.30 μs | +4.3% | 5,410 B | 5,410 B | 0% |
+| ParsingBenchmark | Medium | 711.36 μs | 627.63 μs | -11.8% | 27,120 B | 27,120 B | 0% |
+| ParsingBenchmark | Large | 8,633.31 μs | 8,844.47 μs | +2.4% | 111,350 B | 111,350 B | 0% |
+| LintBenchmark | Small/False | 50.77 μs | 51.94 μs | +2.3% | 15.49 KB | 15.49 KB | 0% |
+| LintBenchmark | Small/True | 58.41 μs | 59.42 μs | +1.7% | 15.91 KB | 15.91 KB | 0% |
+| LintBenchmark | Medium/False | 985.10 μs | 884.76 μs | -10.2% | 97.35 KB | 97.35 KB | 0% |
+| LintBenchmark | Medium/True | 1,507.94 μs | 1,556.85 μs | +3.2% | 103.77 KB | 103.77 KB | 0% |
+| LintBenchmark | Large/False | 12,494.89 μs | 12,527.63 μs | +0.3% | 453.21 KB | 453.21 KB | 0% |
+| LintBenchmark | Large/True | 24,785.59 μs | 25,112.02 μs | +1.3% | 483.29 KB | 483.29 KB | 0% |
+
+Allocated は全サイズで完全に同一。Mean の変動は ShortRun (N=3) の測定誤差範囲内。C-2 の enum 追加・switch 分岐追加はパフォーマンスへの影響なし。

@@ -5839,6 +5839,42 @@ public sealed class RuleInterfaceTests
             """,
             ["job.if", "undefined context 'secrets'", "job scope"]),
             new RuleCase(
+            "ng-step-if-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ secrets.TOKEN != '' }}
+                          run: echo ng
+            """,
+            ["step.if", "undefined context 'secrets'", "step scope"]),
+            new RuleCase(
+            "ok-step-run-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ secrets.TOKEN }}
+            """,
+            []),
+            new RuleCase(
+            "ok-step-env-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            TOKEN: ${{ secrets.TOKEN }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
             "ng-step-if-uses-unknown-context",
             """
             on: push

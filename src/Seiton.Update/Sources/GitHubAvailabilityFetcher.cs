@@ -123,6 +123,7 @@ internal sealed class GitHubAvailabilityFetcher
         var reusableWorkflowCallSecretsRoots = ResolveContextSet(map, "jobs.<job_id>.secrets.<secrets_id>");
         var strategyRoots = ResolveContextSet(map, "jobs.<job_id>.strategy");
         var stepRoots = ResolveContextSet(map, "jobs.<job_id>.steps.run", "jobs.<job_id>.steps.if");
+        var stepIfRoots = ResolveContextSet(map, "jobs.<job_id>.steps.if");
 
         var snapshot = new
         {
@@ -135,6 +136,7 @@ internal sealed class GitHubAvailabilityFetcher
             reusableWorkflowCallSecretsRoots,
             strategyRoots,
             stepRoots,
+            stepIfRoots,
         };
 
         var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions)) + "\n";

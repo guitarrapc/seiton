@@ -1145,10 +1145,12 @@ public class ExpressionSemanticAnalyzer
 The current C# implementation uses `Availability.g.cs` together with the parser call site to enforce position-dependent root availability:
 - workflow-level expression sites use `ExpressionValidationContext.Workflow`
 - job-level expression sites use `ExpressionValidationContext.Job` (except `jobs.<job_id>.if` which uses `ExpressionValidationContext.Strategy` — see below)
-- step-level expression sites use `ExpressionValidationContext.Step`
+- step-level expression sites use `ExpressionValidationContext.Step` (except `jobs.<job_id>.steps.if` which uses `ExpressionValidationContext.StepIf` — see below)
 - fixture coverage fixes the same root identifier producing different results depending on key position (`run-name`, workflow `env`, job `if`, job `env`, step `if`)
 
 `jobs.<job_id>.if` uses `ExpressionValidationContext.Strategy` (roots: github, needs, vars, inputs) instead of `Job` because job-level `if:` is evaluated before strategy/matrix expansion, so strategy, matrix, and secrets contexts are not available. This matches the GitHub Docs context availability table.
+
+`jobs.<job_id>.steps.if` uses `ExpressionValidationContext.StepIf` (roots: Step minus secrets, 10 roots) instead of `Step` because step-level `if:` does not have access to the `secrets` context per the GitHub Docs context availability table. Other step-level keys (`run`, `env`, `with`, etc.) continue to use `ExpressionValidationContext.Step` which includes all 11 roots.
 
 This implements the current C# contract for position-based root-context availability with key-level granularity for the parser expression sites Seiton models today.
 

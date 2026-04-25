@@ -3039,6 +3039,41 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_StepIf_WithSecretsContext_ReportsSemanticError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - if: secrets.TOKEN != ''
+                      run: echo ok
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in step expressions", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepRun_WithSecretsContext_NoError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ${{ secrets.TOKEN }}
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-secrets-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secrets", StringComparison.Ordinal) && x.Message.Contains("not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task Parse_JobEnv_WithStepOnlyContext_ReportsSemanticError()
     {
         var yaml = """

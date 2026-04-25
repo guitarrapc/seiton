@@ -190,7 +190,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             _currentStepIndex++;
         }
 
-        CheckNode(step.If, ExpressionValidationContext.Step, "step.if", static (rule, message, location, targetStep) =>
+        CheckNode(step.If, ExpressionValidationContext.StepIf, "step.if", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
         CheckEnv(step.Env, ExpressionValidationContext.Step, "step.env", static (rule, message, location, targetStep) =>
@@ -322,7 +322,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
+        var overrides = context is ExpressionValidationContext.Step or ExpressionValidationContext.StepIf ? _stepScopeOverrides : _jobScopeOverrides;
 
         var propertyDiagnostics = _propertyDiagnostics;
         propertyDiagnostics.Clear();
@@ -408,6 +408,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             ExpressionValidationContext.Job => "job",
             ExpressionValidationContext.Strategy => "job",
             ExpressionValidationContext.Step => "step",
+            ExpressionValidationContext.StepIf => "step",
             _ => "unknown",
         };
     }
@@ -428,7 +429,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         Diagnostic? diag;
         if (_hasOverrides)
         {
-            var overrides = context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides;
+            var overrides = context is ExpressionValidationContext.Step or ExpressionValidationContext.StepIf ? _stepScopeOverrides : _jobScopeOverrides;
             diag = ExpressionSemanticAnalyzer.CheckTemplateTypeWithOverrides(parseResult, expression, location, overrides);
         }
         else
@@ -472,7 +473,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var overrides = _hasOverrides
-            ? (context == ExpressionValidationContext.Step ? _stepScopeOverrides : _jobScopeOverrides)
+            ? (context is ExpressionValidationContext.Step or ExpressionValidationContext.StepIf ? _stepScopeOverrides : _jobScopeOverrides)
             : null;
 
         var diag = ExpressionSemanticAnalyzer.CheckEnvMappingType(

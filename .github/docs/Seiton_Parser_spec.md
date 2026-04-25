@@ -876,23 +876,23 @@ The expression AST is traversed using the `VisitExprNode(node, parent, entering)
 
 The root identifiers of expressions (`github`, `env`, `steps`, `job`, `runner`, `secrets`, `strategy`, `matrix`, `needs`, `inputs`, `vars`) have different availability depending on usage location (workflow, job, step).
 
-| Context | workflow level | job level | job `if:` | step level |
-|---|---|---|---|---|
-| `github` | ✓ | ✓ | ✓ | ✓ |
-| `env` | ✓ | ✓ | - | ✓ |
-| `vars` | ✓ | ✓ | ✓ | ✓ |
-| `job` | - | ✓ | - | ✓ |
-| `steps` | - | - | - | ✓ |
-| `runner` | - | ✓ | - | ✓ |
-| `secrets` | - | ✓ | - | ✓ |
-| `strategy` | - | ✓ | - | ✓ |
-| `matrix` | - | ✓ | - | ✓ |
-| `needs` | - | ✓ | ✓ | ✓ |
-| `inputs` | ✓ | ✓ | ✓ | ✓ |
-| `hashFiles` | - | ✓ | - | ✓ |
-| `success`/`failure`/`always`/`cancelled` | - | ✓ (`if:` only) | ✓ | ✓ (`if:` only) |
+| Context | workflow level | job level | job `if:` | step `if:` | step level |
+|---|---|---|---|---|---|
+| `github` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `env` | ✓ | ✓ | - | ✓ | ✓ |
+| `vars` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `job` | - | ✓ | - | ✓ | ✓ |
+| `steps` | - | - | - | ✓ | ✓ |
+| `runner` | - | ✓ | - | ✓ | ✓ |
+| `secrets` | - | ✓ | - | - | ✓ |
+| `strategy` | - | ✓ | - | ✓ | ✓ |
+| `matrix` | - | ✓ | - | ✓ | ✓ |
+| `needs` | - | ✓ | ✓ | ✓ | ✓ |
+| `inputs` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `hashFiles` | - | ✓ | - | ✓ | ✓ |
+| `success`/`failure`/`always`/`cancelled` | - | ✓ (`if:` only) | ✓ | ✓ | ✓ (`if:` only) |
 
-**Note**: This is a simplified table. Strictly, availability differs by key position (`if:` / `env:` / `with:`, etc.). The complete availability table is managed as generated data. `jobs.<job_id>.if` uses the same restricted set as `strategy` (github, needs, vars, inputs only) because job-level `if:` is evaluated before strategy/matrix expansion.
+**Note**: This is a simplified table. Strictly, availability differs by key position (`if:` / `env:` / `with:`, etc.). The complete availability table is managed as generated data. `jobs.<job_id>.if` uses the same restricted set as `strategy` (github, needs, vars, inputs only) because job-level `if:` is evaluated before strategy/matrix expansion. `jobs.<job_id>.steps.if` uses a dedicated `StepIf` scope that excludes `secrets` (10 roots) compared to the full step scope (11 roots).
 
 ### 7.3 Type Validation
 
