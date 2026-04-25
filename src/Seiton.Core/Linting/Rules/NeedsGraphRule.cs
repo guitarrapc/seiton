@@ -34,11 +34,11 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 AddJobError(job, $"job '{jobId}' references unknown job '{needText}' in needs", Arena.GetStringRange(need));
             }
 
-            // Check for duplicates among earlier entries
+            // Check for duplicates among earlier entries (case-insensitive, GitHub Actions job IDs are case-insensitive)
             for (var j = 0; j < i; j++)
             {
                 var earlier = job.Needs[j];
-                if (needSpan.SequenceEqual(Arena.GetStringValue(earlier)))
+                if (EqualsAsciiIgnoreCase(needSpan, Arena.GetStringValue(earlier)))
                 {
                     var jobId = Decode(Arena.GetStringSlice(job.Id));
                     var needText = Decode(Arena.GetStringSlice(need));
@@ -128,5 +128,40 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 }
             }
         }
+    }
+
+    private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var a = left[i];
+            var b = right[i];
+            if (a == b)
+            {
+                continue;
+            }
+
+            if (a is >= (byte)'A' and <= (byte)'Z')
+            {
+                a = (byte)(a + 32);
+            }
+
+            if (b is >= (byte)'A' and <= (byte)'Z')
+            {
+                b = (byte)(b + 32);
+            }
+
+            if (a != b)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

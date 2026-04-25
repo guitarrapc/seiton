@@ -2028,6 +2028,22 @@ public sealed class RuleInterfaceTests
                         - run: echo test
             """,
             []),
+            new RuleCase(
+            "ng-duplicate-needs-case-insensitive",
+            """
+            on: push
+            jobs:
+                bar:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo bar
+                foo:
+                    needs: [bar, BAR]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo foo
+            """,
+            ["duplicates"]),
         };
 
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
@@ -2310,6 +2326,30 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ok
                           shell: cmd
+            """,
+            []),
+            new RuleCase(
+            "ng-sh-on-windows",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    steps:
+                        - run: echo ng
+                          shell: sh
+            """,
+            ["sh", "not available on"]),
+            new RuleCase(
+            "ok-sh-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: sh
             """,
             []),
         };
@@ -3076,10 +3116,9 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RuleRegression_OutdatedActionRunnerRule_TableDriven()
     {
-        // This rule is catalog-driven: it checks the popular actions catalog's runs.using value.
-        // Currently all catalog entries use node20 (not deprecated), so no errors are expected.
-        // When node20 is deprecated, add it to DeprecatedRunners and actions still using node20
-        // in the catalog will be flagged.
+        // This rule is catalog-driven and version-aware: it checks the popular actions catalog
+        // for deprecated runner versions. Actions with maxDeprecatedMajorVersion in the catalog
+        // are flagged when the referenced version is at or below that threshold.
         var cases = new[]
         {
             new RuleCase(
@@ -3094,7 +3133,7 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-older-version-same-catalog-entry",
+            "ng-outdated-checkout-v3",
             """
             on: push
             jobs:
@@ -3103,7 +3142,18 @@ public sealed class RuleInterfaceTests
                     steps:
                         - uses: actions/checkout@v3
             """,
-            []),
+            ["too old to run"]),
+            new RuleCase(
+            "ng-outdated-checkout-v2",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v2
+            """,
+            ["too old to run"]),
             new RuleCase(
             "ok-unknown-action-not-in-catalog",
             """
@@ -3137,6 +3187,17 @@ public sealed class RuleInterfaceTests
                         - uses: docker/login-action@v3
             """,
             []),
+            new RuleCase(
+            "ng-docker-login-v2",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker/login-action@v2
+            """,
+            ["too old to run"]),
         };
 
         await AssertRuleCases(new OutdatedActionRunnerRule(), "outdated-action-runner", cases);
@@ -3399,6 +3460,48 @@ public sealed class RuleInterfaceTests
             on:
                 push:
                     branches: ['release/v[0-9].*']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-backslash-regex-escape-in-tags",
+            """
+            on:
+                push:
+                    tags: ['v\d+']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "not a valid glob escape"]),
+            new RuleCase(
+            "ng-trailing-backslash-in-branches",
+            """
+            on:
+                push:
+                    branches: ["feature\\"]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "trailing backslash"]),
+            new RuleCase(
+            "ok-valid-backslash-escape-star",
+            """
+            on:
+                push:
+                    branches: ['feature/\*']
             jobs:
                 build:
                     runs-on: ubuntu-latest

@@ -11,4 +11,5 @@ internal sealed record PopularActionModel(
     string Uses,
     IReadOnlyList<PopularActionInputModel> Inputs,
     IReadOnlyList<PopularActionOutputModel> Outputs,
-    string RunsUsing);
+    string RunsUsing,
+    int MaxDeprecatedMajorVersion);

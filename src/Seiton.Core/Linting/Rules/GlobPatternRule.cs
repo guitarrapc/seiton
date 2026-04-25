@@ -218,6 +218,26 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 }
             }
 
+            // Validate backslash escapes: \X is valid only when X is a glob metacharacter
+            if (b == (byte)'\\' && !insideBracket)
+            {
+                if (i + 1 >= pattern.Length)
+                {
+                    reason = "trailing backslash '\\' with no character to escape";
+                    return true;
+                }
+
+                var next = pattern[i + 1];
+                if (!IsGlobEscapable(next))
+                {
+                    reason = $"'\\{(char)next}' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \\, !, +, #) can be escaped";
+                    return true;
+                }
+
+                i++; // skip escaped character
+                continue;
+            }
+
             // Detect git-check-ref-format violation characters (outside brackets)
             if (!insideBracket && IsRefNameForbiddenChar(b))
             {
@@ -249,6 +269,18 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             || b == (byte)'~'
             || b == (byte)':'
             || b == (byte)' ';
+    }
+
+    private static bool IsGlobEscapable(byte b)
+    {
+        return b == (byte)'*'
+            || b == (byte)'?'
+            || b == (byte)'['
+            || b == (byte)']'
+            || b == (byte)'\\'
+            || b == (byte)'!'
+            || b == (byte)'+'
+            || b == (byte)'#';
     }
 
     private static bool ContainsDotSegment(ReadOnlySpan<byte> pattern)

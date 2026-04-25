@@ -193,6 +193,22 @@ internal static class PopularActions
                 _ => default,
             };
         }
+
+        internal int GetMaxDeprecatedMajorVersion()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => 3,
+                ActionId.ActionsCheckout => 3,
+                ActionId.ActionsDownloadArtifact => 3,
+                ActionId.ActionsSetupDotnet => 3,
+                ActionId.ActionsSetupGo => 3,
+                ActionId.ActionsSetupNode => 3,
+                ActionId.ActionsUploadArtifact => 3,
+                ActionId.DockerLoginAction => 2,
+                _ => 0,
+            };
+        }
     }
 
     internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)

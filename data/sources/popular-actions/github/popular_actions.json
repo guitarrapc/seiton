@@ -43,7 +43,8 @@
           "name": "cache-hit"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "actions/checkout",
@@ -137,7 +138,8 @@
           "name": "ref"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "actions/download-artifact",
@@ -188,7 +190,8 @@
           "name": "download-path"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "actions/setup-dotnet",
@@ -242,7 +245,8 @@
           "name": "dotnet-version"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "actions/setup-go",
@@ -288,7 +292,8 @@
           "name": "go-version"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "actions/setup-node",
@@ -350,7 +355,8 @@
           "name": "node-version"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "actions/upload-artifact",
@@ -399,7 +405,8 @@
           "name": "artifact-url"
         }
       ],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "uses": "docker/login-action",
@@ -434,7 +441,8 @@
         }
       ],
       "outputs": [],
-      "runsUsing": "node24"
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 2
     }
   ]
 }

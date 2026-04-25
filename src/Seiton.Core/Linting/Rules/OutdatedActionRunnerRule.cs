@@ -42,6 +42,16 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
             return;
         }
 
+        // Check version-aware deprecation first: if the major version is known to use a deprecated runner
+        var maxDeprecated = spec.GetMaxDeprecatedMajorVersion();
+        if (maxDeprecated > 0 && TryExtractMajorVersion(usesValue, out var majorVersion) && majorVersion <= maxDeprecated)
+        {
+            var usesStr = Decode(Arena.GetStringSlice(actionExec.Uses));
+            AddStepError(step, $"the runner of \"{usesStr}\" action is too old to run on GitHub Actions. update the action's version to fix this problem", Arena.GetStringRange(actionExec.Uses));
+            return;
+        }
+
+        // Fallback: check the catalog's current runs.using value
         var runsUsing = spec.GetRunsUsing();
         if (runsUsing.IsEmpty)
         {
@@ -53,8 +63,57 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
             return;
         }
 
-        var usesStr = Decode(Arena.GetStringSlice(actionExec.Uses));
-        AddStepError(step, $"the runner of \"{usesStr}\" action is too old to run on GitHub Actions. update the action's version to fix this problem", Arena.GetStringRange(actionExec.Uses));
+        var usesStr2 = Decode(Arena.GetStringSlice(actionExec.Uses));
+        AddStepError(step, $"the runner of \"{usesStr2}\" action is too old to run on GitHub Actions. update the action's version to fix this problem", Arena.GetStringRange(actionExec.Uses));
+    }
+
+    /// <summary>
+    /// Extracts the major version number from a uses value like "actions/checkout@v3".
+    /// Returns false if the version tag is missing, doesn't start with 'v', or isn't a valid number.
+    /// </summary>
+    internal static bool TryExtractMajorVersion(ReadOnlySpan<byte> usesValue, out int majorVersion)
+    {
+        majorVersion = 0;
+        var atIndex = usesValue.IndexOf((byte)'@');
+        if (atIndex < 0 || atIndex + 2 >= usesValue.Length)
+        {
+            return false;
+        }
+
+        var versionPart = usesValue.Slice(atIndex + 1);
+
+        // Must start with 'v' or 'V'
+        if (versionPart[0] != (byte)'v' && versionPart[0] != (byte)'V')
+        {
+            return false;
+        }
+
+        versionPart = versionPart.Slice(1);
+
+        // Parse digits until non-digit or end
+        var result = 0;
+        var hasDigit = false;
+        for (var i = 0; i < versionPart.Length; i++)
+        {
+            var b = versionPart[i];
+            if (b is >= (byte)'0' and <= (byte)'9')
+            {
+                result = result * 10 + (b - (byte)'0');
+                hasDigit = true;
+            }
+            else
+            {
+                break; // stop at first non-digit (e.g. '.', '-')
+            }
+        }
+
+        if (!hasDigit)
+        {
+            return false;
+        }
+
+        majorVersion = result;
+        return true;
     }
 
     internal static bool IsDeprecated(ReadOnlySpan<byte> runsUsing)

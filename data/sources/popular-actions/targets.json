@@ -6,49 +6,57 @@
       "actionRef": "actions/cache@v5",
       "uses": "actions/cache",
       "url": "https://raw.githubusercontent.com/actions/cache/v5/action.yml",
-      "rawFileName": "actions_cache.action.yml"
+      "rawFileName": "actions_cache.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "actions/checkout@v6",
       "uses": "actions/checkout",
       "url": "https://raw.githubusercontent.com/actions/checkout/v6/action.yml",
-      "rawFileName": "actions_checkout.action.yml"
+      "rawFileName": "actions_checkout.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "actions/download-artifact@v8",
       "uses": "actions/download-artifact",
       "url": "https://raw.githubusercontent.com/actions/download-artifact/v8/action.yml",
-      "rawFileName": "actions_download-artifact.action.yml"
+      "rawFileName": "actions_download-artifact.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "actions/setup-dotnet@v5",
       "uses": "actions/setup-dotnet",
       "url": "https://raw.githubusercontent.com/actions/setup-dotnet/v5/action.yml",
-      "rawFileName": "actions_setup-dotnet.action.yml"
+      "rawFileName": "actions_setup-dotnet.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "actions/setup-go@v6",
       "uses": "actions/setup-go",
       "url": "https://raw.githubusercontent.com/actions/setup-go/v6/action.yml",
-      "rawFileName": "actions_setup-go.action.yml"
+      "rawFileName": "actions_setup-go.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "actions/setup-node@v6",
       "uses": "actions/setup-node",
       "url": "https://raw.githubusercontent.com/actions/setup-node/v6/action.yml",
-      "rawFileName": "actions_setup-node.action.yml"
+      "rawFileName": "actions_setup-node.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "actions/upload-artifact@v7",
       "uses": "actions/upload-artifact",
       "url": "https://raw.githubusercontent.com/actions/upload-artifact/v7/action.yml",
-      "rawFileName": "actions_upload-artifact.action.yml"
+      "rawFileName": "actions_upload-artifact.action.yml",
+      "maxDeprecatedMajorVersion": 3
     },
     {
       "actionRef": "docker/login-action@v4",
       "uses": "docker/login-action",
       "url": "https://raw.githubusercontent.com/docker/login-action/v4/action.yml",
-      "rawFileName": "docker_login-action.action.yml"
+      "rawFileName": "docker_login-action.action.yml",
+      "maxDeprecatedMajorVersion": 2
     }
   ]
 }

@@ -21,7 +21,8 @@ internal sealed class PopularActionsCSharpGenerator
                     .DistinctBy(static n => n.Name, StringComparer.Ordinal)
                     .OrderBy(static n => n.Name, StringComparer.Ordinal)
                     .ToArray(),
-                x.RunsUsing))
+                x.RunsUsing,
+                x.MaxDeprecatedMajorVersion))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
 
@@ -195,6 +196,25 @@ internal sealed class PopularActionsCSharpGenerator
         sb.Append(
             """
                             _ => default,
+                        };
+                    }
+
+                    internal int GetMaxDeprecatedMajorVersion()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            sb.AppendLine($"                ActionId.{actionId} => {action.MaxDeprecatedMajorVersion},");
+        }
+
+        sb.Append(
+            """
+                            _ => 0,
                         };
                     }
                 }

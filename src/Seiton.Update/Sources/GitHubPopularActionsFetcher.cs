@@ -136,7 +136,7 @@ internal sealed class GitHubPopularActionsFetcher
 
     public void MergeParsedSources(string repoRoot)
     {
-        _ = LoadSources(repoRoot);
+        var sources = LoadSources(repoRoot);
 
         var paths = Paths(repoRoot);
         if (!File.Exists(paths.ParsedPath))
@@ -154,13 +154,23 @@ internal sealed class GitHubPopularActionsFetcher
             PropertyNameCaseInsensitive = true,
         }) ?? throw new InvalidDataException($"Invalid parsed popular-actions snapshot: {paths.ParsedPath}");
 
+        // Build lookup from targets.json for maxDeprecatedMajorVersion
+        var deprecatedVersionLookup = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        {
+            if (source.MaxDeprecatedMajorVersion > 0)
+            {
+                deprecatedVersionLookup[source.Uses] = source.MaxDeprecatedMajorVersion;
+            }
+        }
+
         var snapshot = new
         {
             schemaVersion = 1,
             source = "github-official-merged-snapshot",
             actions = parsed.Actions
                 .OrderBy(static x => x.Uses, StringComparer.Ordinal)
-                .Select(static x => new
+                .Select(x => new
                 {
                     uses = x.Uses,
                     inputs = x.Inputs
@@ -176,6 +186,7 @@ internal sealed class GitHubPopularActionsFetcher
                         .Select(static n => new { name = n.Name })
                         .ToArray(),
                     runsUsing = x.RunsUsing ?? string.Empty,
+                    maxDeprecatedMajorVersion = deprecatedVersionLookup.GetValueOrDefault(x.Uses, 0),
                 })
                 .ToArray(),
         };
@@ -231,6 +242,7 @@ internal sealed class GitHubPopularActionsFetcher
                 Uses = (x.Uses ?? string.Empty).Trim(),
                 Url = (x.Url ?? string.Empty).Trim(),
                 RawFileName = (x.RawFileName ?? string.Empty).Trim(),
+                MaxDeprecatedMajorVersion = x.MaxDeprecatedMajorVersion,
             })
             .ToList();
 
@@ -301,6 +313,7 @@ internal sealed class GitHubPopularActionsFetcher
         public string Uses { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
         public string RawFileName { get; set; } = string.Empty;
+        public int MaxDeprecatedMajorVersion { get; set; }
     }
 
     private sealed class PopularActionsTargetConfig

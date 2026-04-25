@@ -37,7 +37,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: `GlobPatternRule` がバックスラッシュ (`\`) のエスケープ対象文字の検証を行っていない。`^`, `[9-1]`, `./` などは検出しているが、`\` + 無効文字の組み合わせチェックが不足。
 - **対処方針**: `GlobPatternRule` にバックスラッシュエスケープ検証ロジックを追加。GitHub Actions のフィルターパターン仕様では `\` でエスケープできる特殊文字は `[`, `?`, `+`, `*`, `\`, `!` のみ。それ以外の文字の前の `\` はエラー。
 - **テストデータ**: `testdata/examples/main.yaml` line 5
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 2-a で実装済み。`GlobPatternRule.TryGetInvalidReason` にバックスラッシュエスケープ検証を追加。
 
 ### 1-2. [P1: 高] needs の重複 ID 検出（case-insensitive）
 
@@ -47,7 +47,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: `NeedsGraphRule` が needs 配列内の重複チェック（case-insensitive）を行っていない。unknown job の参照チェックはあるが、同一 job の重複参照チェックがない。
 - **対処方針**: `NeedsGraphRule` に needs 配列内の case-insensitive 重複チェックを追加。
 - **テストデータ**: `testdata/examples/invalid_ids_in_needs.yaml` line 4 (`needs: [bar, BAR]`)
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 2-b で実装済み。`NeedsGraphRule` の重複チェックを case-insensitive に変更。
 
 ### 1-3. [P1: 高] OS 固有シェル検証（`sh` on Windows）
 
@@ -57,7 +57,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: `ShellNameRule` で OS 固有の不正シェルチェックが `powershell` on Linux のみ実装されており、`sh` on Windows のチェックが欠落。
 - **対処方針**: `ShellNameRule` に runs-on ラベルからの OS 推定ロジックを拡張し、Windows runner での `sh` を不正として報告。
 - **テストデータ**: `testdata/examples/shell_name_validation.yaml` line 27
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 2-c で確認済み。既存コードで正しく検出。テストケース追加。
 
 ### 1-4. [P2: 中] 非スカラー型の `${{ }}` 展開警告
 
@@ -107,7 +107,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: `OutdatedActionRunnerRule` は `PopularActions.TryGet()` で action を検索し、`GetRunsUsing()` で runtime を取得する。`actions/checkout@v3` の metadata が popular actions データに含まれていないか、`runs.using` が deprecated リストにマッチしていない可能性。
 - **対処方針**: `PopularActions` データで `actions/checkout@v3` の `runs.using` が `node16` であることを確認し、ルールが正しく発火するようデバッグ。popular actions データのバージョン粒度問題の可能性もある（`@v3` と `@v4` で異なる runtime を持つが、データは最新バージョンのみ保持）。
 - **テストデータ**: `testdata/examples/detect_outdated_popular_actions.yaml`
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 2-d で実装済み。`PopularActions` にバージョン認識を追加し `actions/checkout@v3` を検出。
 
 ### 1-9. [P3: 低] YAML アンカーのエッジケース（再帰、未使用、env alias）
 
@@ -270,50 +270,70 @@ seiton 独自の追加検出（actionlint にない）:
 
 seiton の既存検出が正確に動作するための品質改善。新規ルール不要。
 
-| # | 項目 | 対象 | 難易度 |
-|---|------|------|--------|
-| 1-a | 重複診断の排除 | `LintEngine` 出力段階での dedup | 中 |
-| 1-b | 式パーサーの列オフセット修正 | `ExpressionParser` 位置計算 | 低 |
-| 1-c | multiline if の行オフセット修正 | `IfCondRule` / パーサー | 低 |
-| 1-d | invalid action format の severity 修正 | `UnpinnedUsesRule` | 低 |
-| 1-e | 比較演算子エラーメッセージ改善 | 式解析のエラー生成 | 低 |
-| 1-f | matrix exclude 位置精度改善 | `MatrixRule` | 低 |
+| # | 項目 | 対象 | 難易度 | 状態 |
+|---|------|------|--------|------|
+| 1-a | 重複診断の排除 | `LintEngine` 出力段階での dedup | 中 | ✅ |
+| 1-b | 式パーサーの列オフセット修正 | `ExpressionParser` 位置計算 | 低 | ⏭️ |
+| 1-c | multiline if の行オフセット修正 | `IfCondRule` / パーサー | 低 | ⏭️ |
+| 1-d | invalid action format の severity 修正 | `UnpinnedUsesRule` | 低 | ✅ |
+| 1-e | 比較演算子エラーメッセージ改善 | 式解析のエラー生成 | 低 | ✅ |
+| 1-f | matrix exclude 位置精度改善 | `MatrixRule` | 低 | ✅ |
 
 ### Phase 2: 既存ルールの検出漏れ修正
 
 既にルールが存在するが、チェック不足の箇所を補完。
 
-| # | 項目 | 対象ルール | 難易度 |
-|---|------|-----------|--------|
-| 2-a | glob バックスラッシュエスケープ検証 | `GlobPatternRule` | 低 |
-| 2-b | needs 重複 ID チェック（case-insensitive） | `NeedsGraphRule` | 低 |
-| 2-c | OS 固有シェル検証（`sh` on Windows） | `ShellNameRule` | 低 |
-| 2-d | outdated action runner 検出の修正 | `OutdatedActionRunnerRule` | 中 |
+| # | 項目 | 対象ルール | 難易度 | 状態 |
+|---|------|-----------|--------|------|
+| 2-a | glob バックスラッシュエスケープ検証 | `GlobPatternRule` | 低 | ✅ |
+| 2-b | needs 重複 ID チェック（case-insensitive） | `NeedsGraphRule` | 低 | ✅ |
+| 2-c | OS 固有シェル検証（`sh` on Windows） | `ShellNameRule` | 低 | ✅ |
+| 2-d | outdated action runner 検出の修正 | `OutdatedActionRunnerRule` | 中 | ✅ |
+
+Phase 2 実装結果
+
+**全 4 項目完了。テスト 665 件全パス。ベンチマーク回帰なし。**
+
+| # | 変更内容 | テスト |
+|---|---------|--------|
+| 2-a | `GlobPatternRule.TryGetInvalidReason` にバックスラッシュエスケープ検証を追加。`\` の後にグロブメタ文字（`*`, `?`, `[`, `]`, `\`, `!`, `+`, `#`）以外が続く場合エラー。末尾 `\` もエラー。`IsGlobEscapable` ヘルパー追加 | `ng-backslash-regex-escape-in-tags`, `ng-trailing-backslash-in-branches`, `ok-valid-backslash-escape-star` |
+| 2-b | `NeedsGraphRule.VisitJobPre` の重複チェックを `SequenceEqual`（case-sensitive）から `EqualsAsciiIgnoreCase` に変更。`needs: [bar, BAR]` を検出 | `ng-duplicate-needs-case-insensitive` |
+| 2-c | `ShellNameRule` は既存コードで `sh` on Windows を正しく検出（`Shells.IsAvailableOnWindows` に `sh` 未含）。テストケースを追加して確認 | `ng-sh-on-windows`, `ok-sh-on-ubuntu` |
+| 2-d | `PopularActions` データパイプラインを拡張: `targets.json` に `maxDeprecatedMajorVersion` フィールド追加 → `popular_actions.json` → 生成コードに `GetMaxDeprecatedMajorVersion()` メソッド追加。`OutdatedActionRunnerRule` でバージョンタグ抽出 (`TryExtractMajorVersion`) し、閾値以下ならエラー。`actions/checkout@v3` を node16 使用として検出 | `ng-outdated-checkout-v3`, `ng-outdated-checkout-v2`, `ng-docker-login-v2` |
+
+**ベンチマーク（Phase 1 基準との比較）:**
+- Parsing Mean: Small +7.2%, Medium +3.7%, Large +7.2%（許容範囲 +10%）
+- Allocated: Small +8.6%, Medium -0.4%, Large -1.9%（許容範囲 +20%）
+
+**Lessons learned:**
+- YAML single-quoted 文字列では `\` はエスケープされない（リテラル）。`\\` は 2 文字のバックスラッシュ。テストでトレーリングバックスラッシュを表現するには YAML double-quoted `"feature\\"` を使う
+- `PopularActions` の `MatchesActionReference` はバージョンタグを無視してアクション名のみマッチする。バージョン認識には追加ロジックが必要
+- `maxDeprecatedMajorVersion` を `targets.json`（手動管理）に配置し、merge パイプラインで `popular_actions.json` に伝播させることで、fetch→parse→merge サイクルでも値が保持される
 
 ### Phase 3: 新規チェックの追加（式の型検査）
 
 式の型推論と型チェックの拡充。パーサーまたはリンターの拡張が必要。
 
-| # | 項目 | 対象 | 難易度 |
-|---|------|------|--------|
-| 3-a | 非スカラー型の `${{ }}` 展開警告 | 式型チェック | 高 |
-| 3-b | env マッピングの型チェック | 式型チェック / パーサー | 中 |
-| 3-c | プロパティアクセスのインデックス型チェック | 式型チェック | 中 |
+| # | 項目 | 対象 | 難易度 | 状態 |
+|---|------|------|--------|------|
+| 3-a | 非スカラー型の `${{ }}` 展開警告 | 式型チェック | 高 | |
+| 3-b | env マッピングの型チェック | 式型チェック / パーサー | 中 | |
+| 3-c | プロパティアクセスのインデックス型チェック | 式型チェック | 中 | |
 
 ### Phase 4: メタデータ拡充
 
 外部データ（popular actions metadata）の拡張が必要な項目。
 
-| # | 項目 | 対象 | 難易度 |
-|---|------|------|--------|
-| 4-a | deprecated action input 検出 | `PopularActionInputsRule` + データ拡張 | 高 |
-| 4-b | 深い action metadata 検証 | `LocalActionInputsRule` 拡張 | 中 |
+| # | 項目 | 対象 | 難易度 | 状態 |
+|---|------|------|--------|------|
+| 4-a | deprecated action input 検出 | `PopularActionInputsRule` + データ拡張 | 高 | |
+| 4-b | 深い action metadata 検証 | `LocalActionInputsRule` 拡張 | 中 | |
 
 ### Phase 5: YAML パーサーの改善（低優先度）
 
-| # | 項目 | 対象 | 難易度 |
-|---|------|------|--------|
-| 5-a | YAML アンカーのエッジケース改善 | パーサーのエラーリカバリ | 高 |
+| # | 項目 | 対象 | 難易度 | 状態 |
+|---|------|------|--------|------|
+| 5-a | YAML アンカーのエッジケース改善 | パーサーのエラーリカバリ | 高 | |
 
 ---
 
