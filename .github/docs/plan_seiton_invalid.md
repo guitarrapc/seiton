@@ -352,7 +352,14 @@ Phase 2 実装結果
 
 | # | 項目 | 対象 | 難易度 | 状態 |
 |---|------|------|--------|------|
-| 5-a | YAML アンカーのエッジケース改善 | パーサーのエラーリカバリ | 高 | |
+| 5-a | YAML アンカーのエッジケース改善 | パーサーのエラーリカバリ | 高 | ✅ 完了 |
+
+**5-a の実装内容:**
+- `VYamlStreamAdapter` の `GetScalarUtf8()`, `GetScalarSlice()`, `GetScalarString()`, `SnapshotCurrentEvent()` で VYaml の null scalar（`env: &anchor` のように値なしでアンカーを定義するケース）に対してガードを追加
+- VYaml の `GetScalarAsUtf8()` は null scalar に対して例外をスローするため、事前に `IsNullScalar()` チェックで空スパン/null を返すように修正
+- `_definedAnchors` の位置記録を `_parser.CurrentMark` から `CurrentStart` に変更し、null scalar の位置補正を活用
+- テスト 3 件追加: `Parse_NullScalarAnchor_DoesNotCrash`, `Parse_NullScalarAnchorRedefined_DoesNotCrash`, `Parse_YamlAnchorUsageFixture_DoesNotCrash`
+- `testdata/examples/yaml_anchor_usage.yaml` が fatal crash せずに 4 errors, 7 warnings を検出するようになった
 
 ---
 

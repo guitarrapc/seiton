@@ -1824,6 +1824,74 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_NullScalarAnchor_DoesNotCrash()
+    {
+        // env: &anchor with no value (null scalar) should not cause a fatal parse error.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+                env: &empty_anchor
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-scalar-anchor.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        // The null scalar env is not a valid mapping — expect a parse error but not fatal
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env must be mapping", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_NullScalarAnchorRedefined_DoesNotCrash()
+    {
+        // Redefining an anchor on a null scalar (env: &credentials) after initial mapping definition.
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            services:
+              nginx:
+                image: nginx:latest
+                credentials: &credentials
+                  username: user
+                  password: pass
+            runs-on: ubuntu-latest
+            steps:
+              - run: ./download.sh
+                env: *credentials
+              - run: ./upload.sh
+                env: &credentials
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-scalar-anchor-redef.yml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        // env: &credentials with null value is not valid
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env must be mapping", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_YamlAnchorUsageFixture_DoesNotCrash()
+    {
+        // Full integration test for the yaml_anchor_usage.yaml fixture — was previously crashing.
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "testdata", "examples", "yaml_anchor_usage.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        await Assert.That(result.HasFatalError).IsFalse();
+        // Expect parse/lint diagnostics but no fatal crash
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("recursive alias", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_AnchorActionlintOkFixture_NoDiagnostics()
     {
         // Full test using the actionlint anchors.yaml fixture — comprehensive anchor/alias coverage.

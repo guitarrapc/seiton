@@ -356,6 +356,7 @@ Supported anchor targets:
 - **YAML merge key `<<`** is not supported. Any `<<:` key produces a `does not support merge key '<<'` error.
 - **Recursive anchors** (an alias that directly or indirectly references itself) produce parser diagnostics rather than a hang or fatal error.
 - **Undefined aliases** (aliases for which no anchor was defined) produce a `yaml parse failure` fatal error.
+- **Null scalar anchors** (e.g. `env: &name` with no value) are handled gracefully — the adapter returns empty bytes instead of throwing.
 - Parser core does not directly access anchor/alias graph structures; all resolution is owned by the adapter layer.
 
 #### Error recovery
@@ -366,6 +367,7 @@ Supported anchor targets:
 | Unresolvable alias in adapter | Surface as `Alias` event; parser core reports type-mismatch diagnostic and skips |
 | YAML merge key `<<` | `does not support merge key '<<'` diagnostic; value is skipped |
 | Recursive anchor | Deterministic parse diagnostics (no hang) |
+| Null scalar with anchor (`key: &name`) | Adapter returns empty span; parser reports structural error (e.g. "env must be mapping") |
 
 ### 3.2 Workflow Top-Level Parse
 

@@ -153,8 +153,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
             // Track anchor definition for unused-anchor detection
             _definedAnchors ??= new Dictionary<int, (string Name, TextPosition Position)>();
-            var mark = _parser.CurrentMark;
-            _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col));
+            _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), CurrentStart);
         }
 
         if (_currentRecording != null)
@@ -229,12 +228,18 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     public ReadOnlySpan<byte> GetScalarUtf8() =>
         _isReplaying
             ? (_virtualCurrent.ScalarBytes is { } b ? b.AsSpan() : ReadOnlySpan<byte>.Empty)
-            : _parser.GetScalarAsUtf8();
+            : _parser.IsNullScalar() ? ReadOnlySpan<byte>.Empty : _parser.GetScalarAsUtf8();
 
     public Utf8Slice GetScalarSlice()
     {
         if (_isReplaying)
             return _virtualCurrent.Slice;
+
+        if (_parser.IsNullScalar())
+        {
+            var emptyStart = _scalarSliceCursor <= _source.Length ? _scalarSliceCursor : _source.Length;
+            return new Utf8Slice(emptyStart, 0);
+        }
 
         var utf8 = _parser.GetScalarAsUtf8();
         if (utf8.IndexOf((byte)'\n') >= 0
@@ -544,7 +549,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             if (_virtualCurrent.ScalarBytes == null) return null;
             return System.Text.Encoding.UTF8.GetString(_virtualCurrent.ScalarBytes);
         }
-        return _parser.GetScalarAsString();
+        return _parser.IsNullScalar() ? null : _parser.GetScalarAsString();
     }
 
     public ScalarTag GetScalarTag()
@@ -608,7 +613,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             return new AnchorEvent
             {
                 Kind = kind,
-                ScalarBytes = _parser.GetScalarAsUtf8().ToArray(),
+                ScalarBytes = _parser.IsNullScalar() ? [] : _parser.GetScalarAsUtf8().ToArray(),
                 Slice = slice,
                 Tag = GetScalarTag(),
                 IsQuoted = false,
