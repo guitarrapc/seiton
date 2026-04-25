@@ -182,15 +182,6 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
     }
 
     /// <summary>
-    /// Returns true when the value contains at least one <c>${{ }}</c> expression delimiter.
-    /// Used to distinguish "always true" patterns from plain text that has no expression at all.
-    /// </summary>
-    private static bool ContainsExpressionDelimiter(ReadOnlySpan<byte> value)
-    {
-        return value.IndexOf("${{"u8) >= 0;
-    }
-
-    /// <summary>
     /// Detects "always evaluated to true" patterns where <c>${{ }}</c> is present but extra characters
     /// are around it (leading text, trailing newline/space, or multiple expression blocks).
     /// GitHub Actions treats such values as string templates that produce non-empty strings → always truthy.
