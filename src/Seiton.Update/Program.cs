@@ -466,6 +466,26 @@ app.Add("verify-iana-timezones", () =>
     }
 });
 
+app.Add("sync-shells", () =>
+{
+    var code = ShellsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-shells failed with code {code}");
+    }
+});
+
+app.Add("verify-shells", () =>
+{
+    var code = ShellsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-shells failed with code {code}");
+    }
+});
+
 app.Add("fetch-iana-timezones", async () =>
 {
     var code = await IanaTimeZonesCommands.Fetch(repoRoot);
@@ -609,6 +629,11 @@ static int RunSync(string repoRoot, string dataset)
         return IanaTimeZonesCommands.Sync(repoRoot);
     }
 
+    if (dataset is "shells")
+    {
+        return ShellsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -653,7 +678,13 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return IanaTimeZonesCommands.Sync(repoRoot);
+        code = IanaTimeZonesCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return ShellsCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -702,6 +733,11 @@ static int RunVerify(string repoRoot, string dataset)
         return IanaTimeZonesCommands.Verify(repoRoot);
     }
 
+    if (dataset is "shells")
+    {
+        return ShellsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -746,7 +782,13 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return IanaTimeZonesCommands.Verify(repoRoot);
+        code = IanaTimeZonesCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return ShellsCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

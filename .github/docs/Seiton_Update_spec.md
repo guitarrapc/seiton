@@ -146,6 +146,7 @@ Not all datasets implement all stages. Some use hand-written JSON as primary sou
 | function-specs | Hand-written JSON + GitHub Docs | `FunctionSpecs.g.cs` | Built-in function specs with parameter types and overloads |
 | permissions | GitHub Docs | `PermissionScopes.g.cs` | GitHub token permission scope metadata |
 | iana-timezones | IANA `tzdata.zi` | `IanaTimeZones.g.cs` | IANA timezone identifiers (zones + links) for schedule-event timezone validation |
+| shells | Hand-written JSON (GitHub Docs) | `Shells.g.cs` | Shell availability per OS platform for `shell-name` rule validation |
 
 ### 4.2 Source of Truth Policy
 
@@ -206,6 +207,22 @@ The codegen stage (`PopularActionsCSharpGenerator`) produces:
 
 These generated methods are consumed by linter rules (`popular-action-inputs`, `outdated-action-runner`, `expr-undefined-var`) at compile time, with no runtime network access.
 
+#### 4.3.6 Shells
+
+`shells` uses a hand-written JSON (`data/sources/shells/github/shells.json`) as primary source. The JSON defines shell names and their OS platform availability, sourced from [GitHub Docs workflow-syntax.md](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax.md) (the `defaults.run.shell` / `jobs.<job_id>.steps[*].shell` table).
+
+No fetch/parse/merge stages exist; only `sync-shells` and `verify-shells` are implemented. When GitHub adds or changes shell support, the hand-written JSON is updated manually.
+
+The codegen stage (`ShellsCSharpGenerator`) produces:
+
+- `IsValidShell(shellUtf8)` — checks if a shell name is any known built-in shell
+- `IsAvailableOnLinux(shellUtf8)` — checks availability on Linux runners
+- `IsAvailableOnMacOS(shellUtf8)` — checks availability on macOS runners
+- `IsAvailableOnWindows(shellUtf8)` — checks availability on Windows runners
+- `AllValidShellNames` — comma-separated string for diagnostic messages
+
+All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path usage. These are consumed by the `shell-name` linter rule.
+
 ---
 
 ## 5. CLI Commands
@@ -236,6 +253,7 @@ Per-dataset commands follow this naming pattern:
 | context-types | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `validate-context-types` | — |
 | function-specs | ✓ | ✓ | ✓ | — | ✓ | ✓ | `validate-function-specs` | — |
 | permissions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
+| shells | — | — | — | — | ✓ | ✓ | — | — |
 
 `sync-function-specs` automatically runs `validate-function-specs` when parsed data is available.
 
@@ -246,7 +264,7 @@ Per-dataset commands follow this naming pattern:
 | `sync --dataset {name\|all}` | Run sync for specified dataset or all datasets |
 | `verify --dataset {name\|all}` | Run verify for specified dataset or all datasets |
 
-`sync --dataset all` / `verify --dataset all` processes every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions.
+`sync --dataset all` / `verify --dataset all` processes every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells.
 
 ### 5.4 Exit Codes
 
@@ -289,6 +307,8 @@ data/sources/function-specs/github/function-specs.json
 data/sources/permissions/github/raw/*
 data/sources/permissions/github/parsed/*
 data/sources/permissions/github/permissions.json
+
+data/sources/shells/github/shells.json
 
 data/sources/reports/*
 data/sources/manifest.json

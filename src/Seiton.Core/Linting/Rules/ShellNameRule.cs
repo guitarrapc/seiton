@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Generated;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -49,8 +50,8 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
             return;
         }
 
-        // OS-specific shell validation
-        if (_currentOsFamily != OsFamily.Unknown)
+        // OS-specific shell validation (skip custom shell templates — they are user-defined)
+        if (_currentOsFamily != OsFamily.Unknown && Shells.IsValidShell(shellSpan))
         {
             CheckOsSpecificShell(step, run.Shell, shellSpan);
         }
@@ -93,32 +94,30 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
     private string BuildInvalidShellMessage(StringNodeId shellNode)
     {
         var shellText = Decode(Arena.GetStringSlice(shellNode));
-        return $"shell name '{shellText}' is invalid; valid values are: bash, sh, pwsh, powershell, cmd, python, or a custom shell command containing '{{0}}'";
+        return $"shell name '{shellText}' is invalid; valid values are: {Shells.AllValidShellNames}, or a custom shell command containing '{{0}}'";
     }
 
     private static bool IsValidShellName(ReadOnlySpan<byte> shell)
     {
-        return shell.SequenceEqual("bash"u8)
-            || shell.SequenceEqual("sh"u8)
-            || shell.SequenceEqual("pwsh"u8)
-            || shell.SequenceEqual("powershell"u8)
-            || shell.SequenceEqual("cmd"u8)
-            || shell.SequenceEqual("python"u8)
+        return Shells.IsValidShell(shell)
             || shell.IndexOf("{0}"u8) >= 0;
     }
 
     private void CheckOsSpecificShell(Step step, StringNodeId shellNode, ReadOnlySpan<byte> shellSpan)
     {
-        // cmd and powershell are Windows-only
-        if (shellSpan.SequenceEqual("cmd"u8) && _currentOsFamily != OsFamily.Windows)
+        // Check shell availability for the detected OS
+        var available = _currentOsFamily switch
+        {
+            OsFamily.Linux => Shells.IsAvailableOnLinux(shellSpan),
+            OsFamily.MacOS => Shells.IsAvailableOnMacOS(shellSpan),
+            OsFamily.Windows => Shells.IsAvailableOnWindows(shellSpan),
+            _ => true,
+        };
+
+        if (!available)
         {
             var osName = _currentOsFamily.ToString().ToLowerInvariant();
-            AddStepWarning(step, $"shell 'cmd' is not available on {osName} runners", Arena.GetStringRange(shellNode));
-        }
-        else if (shellSpan.SequenceEqual("powershell"u8) && _currentOsFamily != OsFamily.Windows)
-        {
-            var osName = _currentOsFamily.ToString().ToLowerInvariant();
-            AddStepWarning(step, $"shell 'powershell' is not available on {osName} runners; use 'pwsh' instead", Arena.GetStringRange(shellNode));
+            AddStepWarning(step, $"shell '{Decode(Arena.GetStringSlice(shellNode))}' is not available on {osName} runners", Arena.GetStringRange(shellNode));
         }
     }
 
