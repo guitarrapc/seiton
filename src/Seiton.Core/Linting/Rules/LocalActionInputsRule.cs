@@ -7,8 +7,8 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates that local/composite action invocations provide required inputs and don't pass unknown ones.</summary>
 public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 {
-    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena)> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _runnerCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, Diagnostic[]? ParseDiagnostics)> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _metadataCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public override string Name => "Local Action Inputs Rule";
 
@@ -18,7 +18,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
     {
         base.VisitWorkflowPre(workflow);
         _cache.Clear();
-        _runnerCheckedPaths.Clear();
+        _metadataCheckedPaths.Clear();
     }
 
     public override void VisitStep(Step step)
@@ -57,9 +57,10 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return;
         }
 
-        if (_runnerCheckedPaths.Add(actionYamlPath))
+        if (_metadataCheckedPaths.Add(actionYamlPath))
         {
             ValidateRunsUsing(step, action, meta, actionSource, actionArena);
+            ValidateMetadata(step, action, meta, actionSource, actionArena, actionYamlPath);
         }
 
         if (meta.Inputs is null || meta.Inputs.Value.Count == 0)
@@ -145,7 +146,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
         catch
         {
-            _cache[actionYamlPath] = (null, null, null);
+            _cache[actionYamlPath] = (null, null, null, null);
             metadata = null;
             source = null;
             arena = null;
@@ -155,14 +156,14 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         var parseResult = WorkflowParser.Parse(bytes, actionYamlPath);
         if (parseResult.HasFatalError || parseResult.ActionMetadata is null)
         {
-            _cache[actionYamlPath] = (null, null, null);
+            _cache[actionYamlPath] = (null, null, null, null);
             metadata = null;
             source = null;
             arena = null;
             return true;
         }
 
-        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes, parseResult.Arena);
+        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes, parseResult.Arena, parseResult.Diagnostics);
         metadata = parseResult.ActionMetadata;
         source = bytes;
         arena = parseResult.Arena;
@@ -204,6 +205,96 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             step,
             $"local action has invalid runs.using '{Encoding.UTF8.GetString(span)}'; expected node20, node24, composite, or docker",
             BuildUsesLocation(action));
+    }
+
+    private void ValidateMetadata(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath)
+    {
+        var usesLocation = BuildUsesLocation(action);
+        var actionName = meta.Name.HasValue && HasNodeValue(meta.Name, actionArena)
+            ? DecodeSlice(actionSource, actionArena.GetStringSlice(meta.Name))
+            : Encoding.UTF8.GetString(Arena.GetStringValue(action.Uses));
+        var actionDir = Path.GetDirectoryName(actionYamlPath) ?? actionYamlPath;
+
+        // 1. description is required
+        if (!meta.Description.HasValue || !HasNodeValue(meta.Description, actionArena))
+        {
+            AddStepError(step, $"description is required in metadata of \"{actionName}\" action at \"{actionYamlPath}\"", usesLocation);
+        }
+
+        if (meta.Runs is not null)
+        {
+            var isJsAction = IsJavaScriptAction(meta.Runs, actionSource, actionArena);
+
+            // 2. env not allowed for JavaScript actions
+            if (isJsAction && meta.Runs.Env is not null)
+            {
+                AddStepError(step, $"\"env\" is not allowed in \"runs\" section because \"{actionName}\" is a JavaScript action", usesLocation);
+            }
+
+            // 3. File existence for JavaScript entry points (main, pre, post)
+            if (isJsAction)
+            {
+                ValidateJsEntryPoint(step, meta.Runs.Main, "main", actionName, actionDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, meta.Runs.Pre, "pre", actionName, actionDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, meta.Runs.Post, "post", actionName, actionDir, actionSource, actionArena, usesLocation);
+            }
+        }
+
+        // 4-5. Forward branding diagnostics from parser
+        if (_cache.TryGetValue(actionYamlPath, out var cached) && cached.ParseDiagnostics is { Length: > 0 } parseDiags)
+        {
+            foreach (var diag in parseDiags)
+            {
+                if (diag.Message.StartsWith("invalid branding", StringComparison.Ordinal))
+                {
+                    AddStepError(step, $"{diag.Message} in metadata of \"{actionName}\" action at \"{actionYamlPath}\"", usesLocation);
+                }
+            }
+        }
+    }
+
+    private static bool IsJavaScriptAction(ActionMetadataRuns runs, byte[] actionSource, AstArena actionArena)
+    {
+        if (!runs.Using.HasValue || !HasNodeValue(runs.Using, actionArena))
+        {
+            return false;
+        }
+
+        var span = actionArena.GetStringSlice(runs.Using).AsSpan(actionSource);
+        return span.Length >= 4
+            && (span[0] == (byte)'n' || span[0] == (byte)'N')
+            && (span[1] == (byte)'o' || span[1] == (byte)'O')
+            && (span[2] == (byte)'d' || span[2] == (byte)'D')
+            && (span[3] == (byte)'e' || span[3] == (byte)'E');
+    }
+
+    private void ValidateJsEntryPoint(Step step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
+    {
+        if (!entryPoint.HasValue || !HasNodeValue(entryPoint, actionArena))
+        {
+            return;
+        }
+
+        var fileName = DecodeSlice(actionSource, actionArena.GetStringSlice(entryPoint));
+        if (string.IsNullOrEmpty(fileName))
+        {
+            return;
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(Path.Combine(actionDir, fileName));
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            AddStepError(step, $"file \"{fileName}\" does not exist in \"{actionDir}\". it is specified at \"{keyName}\" key in \"runs\" section in \"{actionName}\" action", usesLocation);
+        }
     }
 
     private static bool TryFindMetadataInput(

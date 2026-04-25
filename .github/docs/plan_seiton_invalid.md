@@ -127,7 +127,12 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 - **原因分析**: seiton の `local-action-inputs` ルールは runs.using の検証のみ行い、description の有無、ファイル存在チェック、branding 検証は未実装。
 - **対処方針**: ローカルアクションの metadata 検証を段階的に拡充。ただし branding やファイル存在チェックはユーザーの使用頻度から見て優先度は低い。runs.using の検証（JavaScript action で env が使えない等）は有用。
 - **テストデータ**: `testdata/examples/action_metadata_syntax_validation.yaml`
-- **実装結果**: (未実施)
+- **実装結果**: ✅ Phase 4-b で実装済み。`LocalActionInputsRule` に以下の検証を追加:
+  - `description` 必須チェック
+  - JavaScript action での `env` 禁止チェック
+  - JS エントリポイントファイル存在チェック（`runs.main`/`runs.pre`/`runs.post`）
+  - branding 診断の転送（パーサーが検出した branding エラーをワークフロー uses 位置で再報告）
+  - 6 件のテスト追加、既存 ok テストの action.yml に description 追加
 
 ### 1-11. [対象外] pyflakes / shellcheck 連携
 
@@ -250,6 +255,7 @@ actionlint の `testdata/examples/` にある 51 の YAML サンプルを seiton
 | `workflow_dispatch_input_types` | ✅ 同等 | 7/9 検出（Phase 3-c でインデックス型チェック追加） |
 | `workflow_inputs_secrets_types` | ✅ 同等 | 2/2 検出 |
 | `yaml_anchors` | ✅ 同等 | 3/3 検出 |
+| `action_metadata_syntax_validation` | ✅ 同等 | 6/6 検出（Phase 4-b で全チェック実装） |
 
 seiton 独自の追加検出（actionlint にない）:
 - `[job-permissions-required]`: 全ファイルで job レベル permissions チェック
@@ -346,7 +352,7 @@ Phase 2 実装結果
 | # | 項目 | 対象 | 難易度 | 状態 |
 |---|------|------|--------|------|
 | 4-a | deprecated action input 検出 | `PopularActionInputsRule` + データ拡張 | 高 | |
-| 4-b | 深い action metadata 検証 | `LocalActionInputsRule` 拡張 | 中 | |
+| 4-b | 深い action metadata 検証 | `LocalActionInputsRule` 拡張 | 中 | ✅ |
 
 ### Phase 5: YAML パーサーの改善（低優先度）
 

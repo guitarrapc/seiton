@@ -808,12 +808,19 @@ public sealed class RuleInterfaceTests
         try
         {
             File.WriteAllText(actionN20, NormalizeYaml("""
+            name: N20
+            description: Node20 action
             runs:
               using: node20
               main: index.js
             """), Encoding.UTF8);
 
+            // Create the index.js file so file-existence check passes
+            File.WriteAllText(Path.Combine(actionsDir, "n20", "index.js"), "", Encoding.UTF8);
+
             File.WriteAllText(actionComp, NormalizeYaml("""
+            name: Comp
+            description: Composite action
             runs:
               using: composite
               steps:
@@ -880,6 +887,267 @@ public sealed class RuleInterfaceTests
                 Directory.Delete(rootDir, recursive: true);
             }
         }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_MissingDescription_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-desc-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: No Description
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("description is required", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_EnvNotAllowedForJsAction_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-env-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: JS with env
+            description: A JS action that incorrectly uses env
+            runs:
+              using: node20
+              main: index.js
+              env:
+                SOME_VAR: value
+            """), Encoding.UTF8);
+            File.WriteAllText(Path.Combine(actionsDir, "index.js"), "", Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("\"env\" is not allowed", StringComparison.Ordinal) && x.Message.Contains("JavaScript action", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_MissingMainFile_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-nofile-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: Missing Main
+            description: A JS action with missing main file
+            runs:
+              using: node20
+              main: nonexistent.js
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("does not exist", StringComparison.Ordinal) && x.Message.Contains("nonexistent.js", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_InvalidBranding_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-brand-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: Bad Brand
+            description: An action with bad branding
+            branding:
+              icon: dog
+              color: neon-pink
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+                  shell: bash
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("invalid branding icon", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("invalid branding color", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_DockerEnvAllowed_NoError()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-docker-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: Docker Action
+            description: A Docker action with env
+            runs:
+              using: docker
+              image: Dockerfile
+              env:
+                SOME_VAR: value
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("env", StringComparison.Ordinal))).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_ActionMetadataFixture_AllChecks()
+    {
+        // Full integration test against the testdata/examples fixture
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "testdata", "examples", "action_metadata_syntax_validation.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = new LintEngine([new LocalActionInputsRule()])
+            .Check(File.ReadAllBytes(path), path);
+
+        var msgs = result.Diagnostics.Where(x => x.RuleId == "local-action-inputs").Select(x => x.Message).ToArray();
+        // 6 checks matching actionlint behavior
+        await Assert.That(msgs.Any(m => m.Contains("\"env\" is not allowed", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("description is required", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("does not exist", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("invalid branding color", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("invalid branding icon", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("invalid runs.using", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -8934,6 +9202,22 @@ public sealed class RuleInterfaceTests
                 }
             }
         }
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "seiton.slnx")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
     }
 
     private static string NormalizeYaml(string raw)
