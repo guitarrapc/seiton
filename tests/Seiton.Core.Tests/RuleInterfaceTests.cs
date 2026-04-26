@@ -2400,6 +2400,40 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
     }
 
+    // B-4 regression: cycle diagnostics should report at the job key position (not needs value)
+    [Test]
+    public async Task RuleRegression_NeedsGraphRule_CyclePosition()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                from:
+                    needs: [to]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo from
+                to:
+                    needs: [from]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo to
+            """);
+
+        var result = new LintEngine([new NeedsGraphRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var diags = result.Diagnostics.Where(x => x.RuleId == "needs-graph" && x.Message.Contains("circular")).ToArray();
+
+        await Assert.That(diags.Length).IsGreaterThanOrEqualTo(1);
+
+        // The cycle should be reported at the cycle-start job key position, not at the needs value position.
+        // After NormalizeYaml: "from:" is at line 3 and "to:" is at line 8.
+        // The needs value "from" inside job "to" would be at line 9 — that's the WRONG position.
+        var cycleD = diags[0];
+        // Must report on the cycle-start job (line 3 for "from"), not at the needs value (line 9)
+        await Assert.That(cycleD.Location.StartLine).IsEqualTo(3);
+        // Message should mention the cycle-start job
+        await Assert.That(cycleD.Message).Contains("'from'");
+    }
+
     [Test]
     public async Task RuleRegression_ShellNameRule_TableDriven()
     {

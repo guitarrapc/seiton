@@ -117,9 +117,13 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 if (neighborColor == 1) // gray: back-edge = cycle
                 {
-                    var jobId = Decode(Arena.GetStringSlice(currentJob.Id));
-                    var needText = Decode(Arena.GetStringSlice(need));
-                    AddJobError(currentJob, $"job '{jobId}' has a circular 'needs' dependency via '{needText}'", Arena.GetStringRange(need));
+                    // Report cycle at the cycle-start job (the gray neighbor), matching actionlint behavior
+                    if (_knownJobs.TryGetValue(source, needKey.Span, out var cycleStartJob))
+                    {
+                        var cycleStartId = Decode(Arena.GetStringSlice(cycleStartJob.Id));
+                        var currentId = Decode(Arena.GetStringSlice(currentJob.Id));
+                        AddJobError(cycleStartJob, $"job '{cycleStartId}' has a circular 'needs' dependency via '{currentId}'");
+                    }
                 }
                 else if (neighborColor == 0)
                 {

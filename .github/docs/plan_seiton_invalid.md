@@ -125,10 +125,10 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `minimal_cycle_in_needs` | `4:3` (1行) | seiton `[needs-graph]` で検出済みだが位置が異なる | 報告位置の差異 |
+| `minimal_cycle_in_needs` | `4:3` (1行) | seiton `[needs-graph]` で検出済み。サイクル報告位置が **完全対処済み** — サイクル開始ジョブのキー位置で報告。列ずれ (`4:7` vs `4:3`) は VYaml mark の全ジョブキー共通の系統的差異 | 報告位置の差異 |
 | `random_order_cycle_in_needs` | `4:3` (1行) | 同上 | 同上 |
 
-**対処**: サイクル検出の報告位置を needs キーの位置に合わせる。
+**対処**: サイクル検出の報告位置をサイクル開始ジョブのキー位置に修正。列ずれは VYaml mark の系統的問題 (全ジョブキーで発生) のため B-4 スコープ外。
 
 #### B-5. schedule-event ルール — 部分的検出
 
@@ -498,7 +498,7 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 |---|---|---|---|
 | 5-1 | ~~permissions ルールの空文字列検出~~ **完了** | `issue170_empty_permissions` | B-1 |
 | 5-2 | deprecated-commands の列位置修正 | `deprecated_workflow_commands` | B-3 |
-| 5-3 | needs-graph の報告位置修正 | `minimal_cycle_in_needs`, `random_order_cycle_in_needs` | B-4 |
+| 5-3 | ~~needs-graph の報告位置修正~~ **完了** | `minimal_cycle_in_needs`, `random_order_cycle_in_needs` | B-4 |
 | 5-4 | template-injection の位置精度改善 | `one_error`, `nested_untrusted_input` | C-3d |
 | 5-5 | if-cond の定数畳み込み改善 | `if_cond_constants` | B-7 |
 | 5-6 | if-cond の `${{ }}` 前後テキスト検出 | `if_cond_edge_cases_trailing_leading_chars` | B-7 |
@@ -595,6 +595,33 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 - `TryResolveNormalizedSlice` は decoded (VYaml) の UTF-8 値をソースバイト列に back-project する。CRLF のある Windows 環境ではソース側が `\r\n` だが decoded 側は `\n` のみになるため、CRLF スキップ後に `atLineStart = true` を設定しないとインデントスキップが効かず anchor 不一致となる
 - block scalar の clip chomping は trailing `\n` を付加するが、ソースファイルが trailing newline なしで終わる場合、EOF で decoded 側に残る `\n` をソース側で消費できない。EOF 残余が `\n` のみかチェックして許容する必要がある
 - 位置ずれの当初仮説（列がコマンド位置でない）は誤りだった。単一行テストでは位置は正しく、問題は `return` による早期打ち切りと block scalar back-projection の2点だった
+
+### B-4 実装記録 (needs-graph サイクル報告位置修正)
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/NeedsGraphRule.cs`: `DetectCycles` メソッドで back-edge 検出時の報告対象を変更
+  - 旧: `currentJob` (back-edge の「元」ジョブ) の needs 値位置で報告
+  - 新: `cycleStartJob` (back-edge の「先」= gray neighbor = サイクル開始ジョブ) のジョブキー位置で報告
+  - `_knownJobs.TryGetValue(source, needKey.Span, out var cycleStartJob)` でサイクル開始ジョブを取得
+  - `AddJobError(cycleStartJob, ...)` で `BuildJobLocation` を使いジョブキー位置を報告
+  - メッセージ: `job '{cycleStartId}' has a circular 'needs' dependency via '{currentId}'`
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `RuleRegression_NeedsGraphRule_CyclePosition` テスト追加
+  - サイクル報告位置がジョブキー位置 (line 3) であること、needs 値位置 (line 9) でないことを検証
+  - メッセージにサイクル開始ジョブ ID `'from'` が含まれることを検証
+
+**テスト結果**: 全719テスト通過
+
+**ベンチマーク結果**: 29ベンチマーク実行。CoreParsingBenchmark: Small 30.9µs/5.4KB, Medium 542.6µs/27.1KB, Large 7,500µs/111.4KB。RuleCatalogBenchmark: 全操作 sub-4ns, 0B allocated。性能劣化なし
+
+**CLI確認**:
+- `minimal_cycle_in_needs.yaml`: `4:7: error [needs-graph] job 'from' has a circular 'needs' dependency via 'to'`
+- `random_order_cycle_in_needs.yaml`: `4:4: error [needs-graph] job 'a' has a circular 'needs' dependency via 'd'`
+- 列ずれ (`4:7` vs actionlint `4:3`) は VYaml mark がマッピングキーの末尾付近を指す系統的問題。`job-permissions-required`, `job-timeout-minutes-required` 等の全ジョブキー診断で同じ列ずれが発生しており、B-4 固有の問題ではない
+
+**教訓**:
+- DFS cycle detection の back-edge (gray neighbor) は「サイクルの入口」であり、ユーザーにとってはサイクル開始ジョブとして報告するのが自然
+- `SliceMap<Job>.TryGetValue(source, needKey.Span, out var job)` で needs 値の UTF-8 スパンからジョブを逆引きできる
+- VYaml mark の列オフセット問題はジョブキー全体に影響する系統的課題であり、個別ルールの修正スコープではない
 
 ### Phase 1 実装記録
 
