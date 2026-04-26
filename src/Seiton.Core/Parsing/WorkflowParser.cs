@@ -266,6 +266,7 @@ public static partial class WorkflowParser
         Concurrency? concurrencyNode = null;
         var hasOn = false;
         var hasJobs = false;
+        var lastRootKeyMark = new TextPosition(0, 1, 1);
         Event[] onEvents = [];
         SliceMap<Job> jobs = default;
         ulong seen = 0;
@@ -290,6 +291,7 @@ public static partial class WorkflowParser
             }
 
             var keyMark = reader.CurrentStart;
+            lastRootKeyMark = keyMark;
             var keyUtf8 = reader.GetScalarUtf8();
             if (IsMergeKey(keyUtf8, keyMark, diagnostics, "workflow"))
             {
@@ -490,12 +492,12 @@ public static partial class WorkflowParser
 
         if (parseMode == ParseMode.Workflow && !hasOn)
         {
-            AddError(diagnostics, "required key 'on' is missing", new TextPosition(0, 1, 1));
+            AddError(diagnostics, "\"on\" section is missing in workflow", lastRootKeyMark);
         }
 
         if (parseMode == ParseMode.Workflow && !hasJobs)
         {
-            AddError(diagnostics, "required key 'jobs' is missing", new TextPosition(0, 1, 1));
+            AddError(diagnostics, "\"jobs\" section is missing in workflow", lastRootKeyMark);
         }
 
         if (parseMode == ParseMode.ActionMetadata)

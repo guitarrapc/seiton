@@ -24,6 +24,7 @@ public static partial class WorkflowParser
         var schedules = new PooledBuffer<ScheduleEntry>(2);
         try
         {
+            var seqMark = reader.CurrentStart;
             reader.Read(); // consume SequenceStart
 
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
@@ -41,6 +42,11 @@ public static partial class WorkflowParser
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
             {
                 reader.Read();
+            }
+
+            if (schedules.Count == 0)
+            {
+                AddError(diagnostics, "\"schedule\" section should not be empty", seqMark);
             }
 
             return new ScheduledEvent { EventName = nameNode, Schedules = schedules.ToArray(), Range = arena.GetStringRange(nameNode) };

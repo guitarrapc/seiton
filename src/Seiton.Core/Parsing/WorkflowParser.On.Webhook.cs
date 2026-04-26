@@ -88,8 +88,10 @@ public static partial class WorkflowParser
                         if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasBranches = true;
                         var branchesNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches"u8.Length));
+                        var brSeqMark = reader.CurrentStart;
                         var brValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var brErr, out var brMark);
                         if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar", brMark);
+                        else if (brValues.Length == 0) AddError(diagnostics, "\"branches\" section should not be empty", brSeqMark);
                         branches = new WebhookEventFilter { Name = branchesNameNode, Values = brValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.BranchesIgnore:
@@ -134,8 +136,10 @@ public static partial class WorkflowParser
                         continue;
                     case OnWebhookEventOptionMappingKey.Workflows:
                         if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: workflows", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        var wSeqMark = reader.CurrentStart;
                         workflows = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var wErr, out var wMark);
                         if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar", wMark);
+                        else if (workflows is { Length: 0 }) AddError(diagnostics, "\"workflows\" section should not be empty", wSeqMark);
                         continue;
                     default:
                         if (!reader.End) { reader.SkipCurrentNode(); }
@@ -205,6 +209,7 @@ public static partial class WorkflowParser
             return [];
         }
 
+        var typesSeqMark = reader.CurrentStart;
         reader.Read();
         var list = new PooledBuffer<StringNodeId>(4);
         try
@@ -231,6 +236,12 @@ public static partial class WorkflowParser
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd) { reader.Read(); }
+
+            if (list.Count == 0)
+            {
+                AddError(diagnostics, "\"types\" section should not be empty", typesSeqMark);
+            }
+
             return list.ToArray();
         }
         finally { list.Dispose(); }

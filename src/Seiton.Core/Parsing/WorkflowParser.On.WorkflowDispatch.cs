@@ -217,8 +217,15 @@ public static partial class WorkflowParser
                         type = ParseDispatchInputType(ref reader, arena, diagnostics);
                         continue;
                     case WorkflowDispatchInputFieldKey.Options:
-                        options = ParseStringOrStringSequence(ref reader, arena, diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar", allowElemEmpty: true);
+                    {
+                        var optSeqMark = reader.CurrentStart;
+                        options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
+                        if (optErr)
+                            AddError(diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar", optMark);
+                        else if (options is { Length: 0 })
+                            AddError(diagnostics, "\"options\" section should not be empty", optSeqMark);
                         continue;
+                    }
                     default:
                         if (!reader.End)
                         {

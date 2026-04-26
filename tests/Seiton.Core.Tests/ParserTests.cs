@@ -217,8 +217,8 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "missing.yml");
 
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("required key 'on' is missing", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("required key 'jobs' is missing", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"on\" section is missing in workflow", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"jobs\" section is missing in workflow", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1482,8 +1482,8 @@ public sealed class ParserTests
             new ErrFixtureExpectation("duplicate_keys.yaml", ["contains duplicate key"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["cannot have both run and uses", "requires run or uses"]),
-            new ErrFixtureExpectation("missing_on.yaml", ["required key 'on' is missing"]),
-            new ErrFixtureExpectation("missing_jobs.yaml", ["required key 'jobs' is missing"]),
+            new ErrFixtureExpectation("missing_on.yaml", ["\"on\" section is missing in workflow"]),
+            new ErrFixtureExpectation("missing_jobs.yaml", ["\"jobs\" section is missing in workflow"]),
             new ErrFixtureExpectation("merge_key_unsupported.yaml", ["does not support merge key '<<'"]),
             new ErrFixtureExpectation("undefined_anchor.yaml", ["yaml parse failure"]),
             new ErrFixtureExpectation("recursive_anchors.yaml", ["recursive alias"]),
@@ -2877,7 +2877,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-container-image.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("container.image is required", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"image\" is missing in \"container\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

@@ -769,7 +769,47 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 ### Phase 2 実装記録
 
-(未着手)
+**実装済み項目**: 2-1, 2-2, 2-4, 2-6 (部分的)
+
+#### 2-1: 空セクション検出の網羅化
+
+**変更ファイル**:
+- `WorkflowParser.On.Schedule.cs`: 空シーケンスチェック追加
+- `WorkflowParser.On.WorkflowDispatch.cs`: `options` 空シーケンスチェック追加
+- `WorkflowParser.On.Webhook.cs`: `types`, `branches`, `workflows` 空シーケンスチェック追加
+- `WorkflowParser.Strategy.cs`: `matrix values`, `include`/`exclude` 空チェック追加
+- `WorkflowParser.Jobs.cs`: `needs` 空シーケンスチェック追加
+- `WorkflowParser.Containers.cs`: `image` 空文字列検出、`ports`/`volumes` シーケンス必須化
+
+**検出パターン**: `result.Length == 0 && !needsError` → `"X" section should not be empty`、`needsError && result.Length > 0` → `"string should not be empty"`
+
+#### 2-2: 必須キー欠落の位置精度改善
+
+**変更ファイル**:
+- `WorkflowParser.cs`: `lastRootKeyMark` 追加。`missing on`/`missing jobs` 位置改善
+- メッセージ変更: `"required key 'on' is missing"` → `"\"on\" section is missing in workflow"`
+- `WorkflowParser.Containers.cs`: `"image" is missing` メッセージ改善
+
+#### 2-4: runs-on 構造バリデーション強化
+
+**変更ファイル**: `WorkflowParser.Jobs.cs`
+- Labels: MappingStart タグ付きタイプエラー、空文字列、空シーケンス検出
+- Group: 非スカラー タグ付きタイプエラー、空文字列検出
+- Unknown key: `"groups"` タイポ検出付きメッセージ改善
+- Fallback: 空文字列/空シーケンス検出
+
+#### 2-6: container/services 構造バリデーション強化
+
+**変更ファイル**: `WorkflowParser.Containers.cs`
+- `entrypoint`/`command` コンテナ非対応エラーメッセージ改善
+- 空マッピング・空 credentials 検出
+- credentials unknown key・不完全メッセージ改善
+
+**テスト結果**: 全 730 テスト通過、ベンチマーク ゼロアロケーション維持
+
+**検出状況**: `missing_jobs`/`missing_on` 完全一致。`issue280_runs_on` 17件中11件一致。`empty_sequence_or_string` 16件中11+2近似一致。`invalid_container_syntax` 23件中約18件一致。
+
+**未実施項目**: 2-3 (unused anchor 位置), 2-5 (step 空要素), 2-7 (schedule mapping, 既動作中), `container:null` 暗黙 null 区別不能のためスキップ, `options` 要素空文字列は choice type で正当のため維持
 
 ### Phase 3 実装記録
 

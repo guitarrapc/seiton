@@ -205,8 +205,10 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Needs:
                         if (!reader.End)
                         {
+                            var needsSeqMark = reader.CurrentStart;
                             needsNode = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var needsErr, out var needsMark);
                             if (needsErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' needs must be scalar or sequence of scalar", needsMark);
+                            else if (needsNode is { Length: 0 }) AddError(diagnostics, "\"needs\" section should not be empty", needsSeqMark);
                         }
 
                         break;
@@ -684,7 +686,12 @@ public static partial class WorkflowParser
                         case RunsOnMappingKey.Labels:
                             if (!reader.End)
                             {
-                                if (reader.CurrentKind == YamlEventKind.Scalar)
+                                if (reader.CurrentKind == YamlEventKind.MappingStart)
+                                {
+                                    AddError(diagnostics, "\"labels\" section must be sequence node but got mapping node with \"!!map\" tag", reader.CurrentStart);
+                                    reader.SkipCurrentNode();
+                                }
+                                else if (reader.CurrentKind == YamlEventKind.Scalar)
                                 {
                                     var valueUtf8 = reader.GetScalarUtf8();
                                     if (ContainsExpression(valueUtf8))
@@ -695,21 +702,53 @@ public static partial class WorkflowParser
                                     else
                                     {
                                         labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr1, out var lblMark1);
-                                        if (lblErr1) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
+                                        if (lblErr1)
+                                        {
+                                            if (labels.Length > 0)
+                                                AddError(diagnostics, "string should not be empty", lblMark1);
+                                            else
+                                                AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark1);
+                                        }
                                     }
                                 }
                                 else
                                 {
+                                    var lblSeqMark = reader.CurrentStart;
                                     labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2);
-                                    if (lblErr2) AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
+                                    if (lblErr2)
+                                    {
+                                        if (labels.Length > 0)
+                                            AddError(diagnostics, "string should not be empty", lblMark2);
+                                        else
+                                            AddError(diagnostics, $"{section}.labels must be scalar, sequence, or expression", lblMark2);
+                                    }
+                                    else if (labels.Length == 0)
+                                    {
+                                        AddError(diagnostics, "\"labels\" section should not be empty", lblSeqMark);
+                                    }
                                 }
                             }
 
                             break;
 
                         case RunsOnMappingKey.Group:
-                            group = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobRunsOn, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
-                            if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
+                            if (!reader.End && reader.CurrentKind != YamlEventKind.Scalar)
+                            {
+                                var grpTag = reader.CurrentKind == YamlEventKind.SequenceStart ? "!!seq" : "!!map";
+                                var grpNodeType = reader.CurrentKind == YamlEventKind.SequenceStart ? "sequence" : "mapping";
+                                AddError(diagnostics, $"expected scalar node for string value but found {grpNodeType} node with \"{grpTag}\" tag", reader.CurrentStart);
+                                reader.SkipCurrentNode();
+                            }
+                            else if (!reader.End && reader.GetScalarUtf8().Length == 0)
+                            {
+                                AddError(diagnostics, "string should not be empty", reader.CurrentStart);
+                                reader.Read();
+                            }
+                            else
+                            {
+                                group = ParseStringAndValidateExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobRunsOn, out var grpErr, out var grpMark, parseWholeValueIfNoEmbedded: false);
+                                if (grpErr) AddError(diagnostics, $"{section}.group must be scalar", grpMark);
+                            }
                             break;
                     }
 
@@ -718,7 +757,7 @@ public static partial class WorkflowParser
 
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                AddError(diagnostics, $"unexpected runs-on key: {unknownRunsOnKey}", keyMark);
+                AddError(diagnostics, $"unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of \"group\", \"labels\"", keyMark);
                 if (!reader.End) reader.SkipCurrentNode();
             }
 
@@ -756,8 +795,19 @@ public static partial class WorkflowParser
             }
         }
 
+        var fbSeqMark = reader.CurrentStart;
         var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark);
-        if (lblFbErr) AddError(diagnostics, $"{section} must be scalar, sequence, or mapping", lblFbMark);
+        if (lblFbErr)
+        {
+            if (labelsFallback.Length > 0)
+                AddError(diagnostics, "string should not be empty", lblFbMark);
+            else
+                AddError(diagnostics, $"{section} must be scalar, sequence, or mapping", lblFbMark);
+        }
+        else if (labelsFallback.Length == 0)
+        {
+            AddError(diagnostics, "\"runs-on\" section should not be empty", fbSeqMark);
+        }
         return new Runner
         {
             Labels = labelsFallback,

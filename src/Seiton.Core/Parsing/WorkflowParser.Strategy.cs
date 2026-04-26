@@ -259,12 +259,17 @@ public static partial class WorkflowParser
 
                 if (isInclude || isExclude)
                 {
+                    var incExcKeyText = isInclude ? "include" : "exclude";
                     if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
                     {
-                        var keyTextForDiagnostic = isInclude ? "include" : "exclude";
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be sequence or scalar", reader.CurrentStart);
+                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{incExcKeyText} must be sequence or scalar", reader.CurrentStart);
                     }
-                    var combos = ParseMatrixCombinations(ref reader, arena, diagnostics, source, jobId, isInclude ? "include" : "exclude");
+                    var incExcSeqMark = reader.CurrentStart;
+                    var combos = ParseMatrixCombinations(ref reader, arena, diagnostics, source, jobId, incExcKeyText);
+                    if (combos.Length > 0 && combos[0].Entries is { Count: 0 } && combos[0].Expression == default)
+                    {
+                        AddError(diagnostics, $"\"{incExcKeyText}\" section should not be empty", incExcSeqMark);
+                    }
                     if (isInclude)
                     {
                         include = combos;
@@ -299,7 +304,12 @@ public static partial class WorkflowParser
                 }
                 else if (reader.CurrentKind == YamlEventKind.SequenceStart)
                 {
+                    var matrixRowSeqMark = reader.CurrentStart;
                     rowValues = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length), ExpressionValidationContext.JobStrategy);
+                    if (rowValues.Count == 0)
+                    {
+                        AddError(diagnostics, "\"matrix values\" section should not be empty", matrixRowSeqMark);
+                    }
                 }
                 else
                 {
