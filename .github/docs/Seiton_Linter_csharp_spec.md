@@ -239,7 +239,7 @@ The current default rule scope in C# is:
 | `job-permissions-required` | Warn when a job omits explicit `permissions` configuration. |
 | `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. Cycle diagnostics report at the `needs` value position that closes the cycle, with the full cycle path in the message. |
 | `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
-| `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
+| `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. Error on conflicting OS families among static labels and matrix-expanded expression labels. Bare self-hosted preset OS labels (`linux`, `windows`, `macos`) are recognized for OS family detection. |
 | `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
 | `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
 | `glob-pattern` | Error on invalid event filter configuration, including invalid glob syntax (triple-star, unclosed bracket, reversed range, `*+` sequences), ref-name forbidden characters (`^`, `~`, `:`, space), single-dot and double-dot path segments, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |

@@ -48,13 +48,19 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
 
-        // Detect OS family conflicts among labels
-        DetectOsFamilyConflicts(job, jobId, runsOn.Labels);
+        // Detect OS family conflicts among static labels (reports ALL conflicts)
+        var (staticOsFamily, firstOsLabel) = DetectOsFamilyConflicts(job, jobId, runsOn.Labels);
+
+        // Detect OS conflicts between static labels and matrix-expanded expression labels
+        if (staticOsFamily != 0)
+        {
+            DetectMatrixLabelOsConflicts(job, jobId, runsOn.Labels, staticOsFamily, firstOsLabel);
+        }
 
         for (var i = 0; i < runsOn.Labels.Length; i++)
         {
             var label = runsOn.Labels[i];
-            if (Arena.GetStringExpression(label).HasValue)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
             {
                 continue;
             }
@@ -70,16 +76,20 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         }
     }
 
-    private void DetectOsFamilyConflicts(Job job, string jobId, StringNodeId[] labels)
+    /// <summary>
+    /// Detects OS family conflicts among static labels.
+    /// Reports ALL conflicts (not just the first) and returns the combined OS family bitmask
+    /// and the first OS label for use in matrix conflict messages.
+    /// </summary>
+    private (byte SeenOsFamilies, StringNodeId FirstOsLabel) DetectOsFamilyConflicts(Job job, string jobId, StringNodeId[] labels)
     {
-        // Track which OS families appear and where
         byte seenOsFamilies = 0; // bit 0=linux, 1=windows, 2=macos
-        var firstConflictRange = default(TextRange);
+        var firstOsLabel = default(StringNodeId);
 
         for (var i = 0; i < labels.Length; i++)
         {
             var label = labels[i];
-            if (Arena.GetStringExpression(label).HasValue)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
             {
                 continue;
             }
@@ -94,29 +104,119 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             if (seenOsFamilies != 0 && (seenOsFamilies & family) == 0)
             {
                 // Different OS family from what we already saw
-                firstConflictRange = Arena.GetStringRange(label);
-                AddJobError(job, $"job '{jobId}' runs-on labels contain conflicting OS families", firstConflictRange);
-                return;
+                var labelText = Decode(Arena.GetStringSlice(label));
+                var firstText = Decode(Arena.GetStringSlice(firstOsLabel));
+                AddJobError(job, $"job '{jobId}' runs-on label '{labelText}' conflicts with label '{firstText}'", Arena.GetStringRange(label));
+                // Continue checking remaining labels — don't return early
+            }
+            else if (seenOsFamilies == 0)
+            {
+                firstOsLabel = label;
             }
 
             seenOsFamilies |= family;
         }
+
+        return (seenOsFamilies, firstOsLabel);
     }
 
-    /// <summary>Returns a bitmask for the OS family: 1=linux, 2=windows, 4=macos, 0=unknown.</summary>
+    /// <summary>
+    /// Detects OS family conflicts between static runs-on labels and matrix-expanded expression labels.
+    /// When runs-on is a list containing both static labels and <c>${{ matrix.AXIS }}</c> expressions,
+    /// resolves the matrix axis values and checks each for OS family conflicts with the static labels.
+    /// </summary>
+    private void DetectMatrixLabelOsConflicts(Job job, string jobId, StringNodeId[] labels, byte staticOsFamily, StringNodeId firstOsLabel)
+    {
+        var matrix = job.Strategy?.Matrix;
+        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
+        {
+            return;
+        }
+
+        var firstOsLabelText = Decode(Arena.GetStringSlice(firstOsLabel));
+
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var label = labels[i];
+            if (!ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
+            {
+                continue;
+            }
+
+            var exprUtf8 = Arena.GetStringValue(label);
+            if (!ExpressionScanHelpers.TryExtractExpressionBody(exprUtf8, out var body))
+            {
+                continue;
+            }
+
+            // Only handle simple `matrix.AXIS` references
+            if (!body.StartsWith("matrix."u8) || body.Length <= 7)
+            {
+                continue;
+            }
+
+            // Check for nested property access (e.g. matrix.runner.os) — skip
+            if (body[7..].IndexOf((byte)'.') >= 0)
+            {
+                continue;
+            }
+
+            var axisName = body[7..]; // slice after "matrix."
+
+            if (!matrix.Rows.Value.TryGetValue(Config.Utf8Yaml, axisName, out var row))
+            {
+                continue;
+            }
+
+            if (row.Expression.HasValue || row.Values is null)
+            {
+                continue;
+            }
+
+            for (var j = 0; j < row.Values.Count; j++)
+            {
+                if (row.Values[j] is not RawYamlString scalar)
+                {
+                    continue;
+                }
+
+                if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                {
+                    continue;
+                }
+
+                var valueUtf8 = Arena.GetStringValue(scalar.Value);
+                var family = GetOsFamily(valueUtf8);
+                if (family == 0 || (staticOsFamily & family) != 0)
+                {
+                    // Same family or unknown — no conflict
+                    continue;
+                }
+
+                var valueText = Decode(Arena.GetStringSlice(scalar.Value));
+                AddJobError(job, $"job '{jobId}' runs-on label '{valueText}' conflicts with label '{firstOsLabelText}'", Arena.GetStringRange(scalar.Value));
+            }
+        }
+    }
+
+    /// <summary>Returns a bitmask for the OS family: 1=linux, 2=windows, 4=macos, 0=unknown.
+    /// Matches both hosted label prefixes (ubuntu-, windows-, macos-) and bare self-hosted preset labels (linux, windows, macos).</summary>
     private static byte GetOsFamily(ReadOnlySpan<byte> labelUtf8)
     {
-        if (StartsWithAsciiIgnoreCase(labelUtf8, "ubuntu-"u8))
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "ubuntu-"u8)
+            || (labelUtf8.Length == 5 && StartsWithAsciiIgnoreCase(labelUtf8, "linux"u8)))
         {
             return 1;
         }
 
-        if (StartsWithAsciiIgnoreCase(labelUtf8, "windows-"u8))
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "windows-"u8)
+            || (labelUtf8.Length == 7 && StartsWithAsciiIgnoreCase(labelUtf8, "windows"u8)))
         {
             return 2;
         }
 
-        if (StartsWithAsciiIgnoreCase(labelUtf8, "macos-"u8))
+        if (StartsWithAsciiIgnoreCase(labelUtf8, "macos-"u8)
+            || (labelUtf8.Length == 5 && StartsWithAsciiIgnoreCase(labelUtf8, "macos"u8)))
         {
             return 4;
         }

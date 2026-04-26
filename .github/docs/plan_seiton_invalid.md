@@ -143,12 +143,12 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `invalid_runner_labels` | `4:14`, `8:30`, `8:46` (3行) | 未知ラベルは検出するがラベル競合検出が不足 | ラベル競合チェック未実装 |
-| `runner_labels_conflict_matrix` | `6:14`, `6:30`, `6:44` (3行) | matrix 内ラベル競合が未検出。seiton は `${{matrix.os}}` を動的値として扱い検証をスキップ | matrix 展開後のラベル競合チェック未実装 |
-| `macos_10.15_removed` | `5:14`, `9:14` (2行) | 廃止ラベル検出が不足 | ラベルの鮮度チェック未実装 |
+| `invalid_runner_labels` | `4:14`, `8:30`, `8:46` (3行) | **完全対処済み** — 3件すべて検出。未知ラベル (`4:14`)、OS 競合 (`8:30`, `8:46`) をすべて検出。修正前は OS 競合の早期 return で `8:46` を検出漏れしていた | OS 競合の早期 return + メッセージ改善 |
+| `runner_labels_conflict_matrix` | `6:14`, `6:30`, `6:44` (3行) | **完全対処済み** — 3件すべて検出。matrix 値の OS 競合を静的ラベルとの突合で検出。修正前は `${{matrix.os}}` を未知ラベルとして誤検出 (expression 判定漏れ) | matrix OS 競合チェック実装 + expression 判定修正 |
+| `macos_10.15_removed` | `5:14`, `9:14` (2行) | seiton `[runner-label]` で検出済み（"not a known GitHub-hosted runner label" として）。修正前から検出できていた | 廃止ラベルは known label 集合に含まれないため unknown として検出される |
 | `macos12_runner` | `5:14` (1行) | 同上 | 同上 |
 
-**対処**: ラベル競合チェック実装。廃止ラベル検出の追加。
+**対処**: OS 競合の全件報告（早期 return 除去）。混合 runs-on リストでの matrix OS 競合検出。expression ラベルの誤検出修正。裸 OS ラベル (linux, windows, macos) の OS ファミリー認識。競合メッセージの具体化。
 
 #### B-7. if-cond ルール — 部分検出
 
@@ -641,6 +641,31 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 **残存差異** (B-5 スコープ外):
 - 列位置 18 vs 17 (クォート付きスカラー): VYaml がスカラー内容の開始位置 (クォートの後) を報告する系統的問題
 - 空スカラー位置 (13:5 vs 11:13): VYaml の空スカラーに対する mark 位置が次のトークンに進んでしまう系統的問題 (`ResolveEmptyScalarStart` の後方スキャンでも完全には補正できないケース)
+
+### B-6 実装記録 (runner-label OS 競合全件報告 + matrix 競合検出)
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/RunnerLabelRule.cs`:
+  - `VisitJobPre`: expression ラベルの判定を `Arena.GetStringExpression(label).HasValue` から `ExpressionScanHelpers.ContainsExpressionMarker(label, Arena)` に変更（リスト内の expression が `ParseString` 経由で expression メタデータを持たない問題を修正）。`DetectOsFamilyConflicts` の返り値を受けて `DetectMatrixLabelOsConflicts` を呼び出し
+  - `DetectOsFamilyConflicts`: `void` から `(byte, StringNodeId)` タプルを返すように変更。早期 return を除去して全競合を報告。メッセージを `"label '{X}' conflicts with label '{Y}'"` に具体化
+  - `GetOsFamily`: 裸 OS ラベル (`linux`, `windows`, `macos`) の認識を追加。self-hosted プリセットラベルも OS ファミリー判定に含める
+  - `DetectMatrixLabelOsConflicts` (新規): 混合 runs-on リスト (`[static, ${{matrix.AXIS}}]`) で matrix 軸を解決し、各値の OS ファミリーを静的ラベルと突合して競合を検出。matrix 値の位置で報告
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`:
+  - `RuleRegression_RunnerLabelRule_OsConflict_TableDriven`: メッセージ変更に伴い期待文字列を更新。`ng-multiple-os-conflicts` (ubuntu+windows+macos)、`ng-bare-os-label-conflict` (ubuntu+windows 裸ラベル) を追加
+  - `RuleRegression_RunnerLabelRule_MatrixOsConflict_TableDriven` (新規): matrix 値の OS 競合検出テスト。`ng-matrix-os-conflict-with-static`、`ng-matrix-os-conflict-bare-label`、`ok-matrix-same-os-family` の 3 ケース
+
+**テスト結果**: 全720テスト通過 (719 → 720)
+
+**ベンチマーク結果**: 回帰なし。ルールロジックのみの変更で hotpath 影響なし
+
+**CLI確認**:
+- `invalid_runner_labels.yaml`: `4:14` (unknown), `8:30` (windows-latest conflicts), `8:46` (macos-latest conflicts) — 3件すべて検出
+- `runner_labels_conflict_matrix.yaml`: `6:14` (windows-latest), `6:30` (macos-latest), `6:44` (windows) — 3件すべて matrix 値位置で検出
+- `macos_10.15_removed.yaml`: `5:14`, `9:14` — 修正前から検出済み
+- `macos12_runner.yaml`: `5:14` — 修正前から検出済み
+
+**追加の修正ポイント**:
+- `ParseStringOrStringSequence` 経由でパースされたリスト内 expression ラベル (`'${{matrix.os}}'`) は `Arena.GetStringExpression` が false を返す。`ExpressionScanHelpers.ContainsExpressionMarker` を使うことで raw 文字列内の `${{ }}` マーカーも検出可能。この修正は expression 判定の偽陰性バグの修正でもある
 
 ### Phase 1 実装記録
 

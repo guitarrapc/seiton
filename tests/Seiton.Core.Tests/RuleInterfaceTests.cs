@@ -3012,7 +3012,29 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["conflicting OS families"]),
+            ["'windows-latest' conflicts with label 'ubuntu-latest'"]),
+            new RuleCase(
+            "ng-multiple-os-conflicts",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest, windows-latest, macos-latest]
+                    steps:
+                        - run: echo ng
+            """,
+            ["'windows-latest' conflicts with label 'ubuntu-latest'", "'macos-latest' conflicts with label 'ubuntu-latest'"]),
+            new RuleCase(
+            "ng-bare-os-label-conflict",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest, windows]
+                    steps:
+                        - run: echo ng
+            """,
+            ["'windows' conflicts with label 'ubuntu-latest'"]),
             new RuleCase(
             "ok-single-os-label",
             """
@@ -3020,6 +3042,59 @@ public sealed class RuleInterfaceTests
             jobs:
                 build:
                     runs-on: [ubuntu-latest]
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
+    // Runner label — matrix conflict with static labels
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_MatrixOsConflict_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-matrix-os-conflict-with-static",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [windows-latest, macos-latest]
+                    runs-on: [ubuntu-latest, '${{matrix.os}}']
+                    steps:
+                        - run: echo ng
+            """,
+            ["'windows-latest' conflicts with label 'ubuntu-latest'", "'macos-latest' conflicts with label 'ubuntu-latest'"]),
+            new RuleCase(
+            "ng-matrix-os-conflict-bare-label",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [windows-latest, macos-latest, windows]
+                    runs-on: [ubuntu-latest, '${{matrix.os}}']
+                    steps:
+                        - run: echo ng
+            """,
+            ["'windows-latest' conflicts with label 'ubuntu-latest'", "'macos-latest' conflicts with label 'ubuntu-latest'", "'windows' conflicts with label 'ubuntu-latest'"]),
+            new RuleCase(
+            "ok-matrix-same-os-family",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-22.04, ubuntu-24.04]
+                    runs-on: [ubuntu-latest, '${{matrix.os}}']
                     steps:
                         - run: echo ok
             """,
