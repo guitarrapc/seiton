@@ -282,7 +282,7 @@ public static partial class WorkflowParser
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
-                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of \"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"", keyMark);
+                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
                         if (!reader.End) reader.SkipCurrentNode();
                         continue;
                     default:
@@ -295,8 +295,8 @@ public static partial class WorkflowParser
             reader.Read();
             var containerSectionType = isService ? "services" : "container";
             var expectedKeys = isService
-                ? "\"command\", \"credentials\", \"env\", \"entrypoint\", \"image\", \"options\", \"ports\", \"volumes\""
-                : "\"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"";
+                ? Generated.ExpectedKeys.ServiceKeys
+                : Generated.ExpectedKeys.ContainerKeys;
             AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
@@ -455,7 +455,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of \"password\", \"username\"", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

@@ -768,7 +768,7 @@ public static partial class WorkflowParser
 
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                AddError(diagnostics, $"unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of \"group\", \"labels\"", keyMark);
+                AddError(diagnostics, $"unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}", keyMark);
                 if (!reader.End) reader.SkipCurrentNode();
             }
 

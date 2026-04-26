@@ -147,6 +147,7 @@ Not all datasets implement all stages. Some use hand-written JSON as primary sou
 | permissions | GitHub Docs | `PermissionScopes.g.cs` | GitHub token permission scope metadata |
 | iana-timezones | IANA `tzdata.zi` | `IanaTimeZones.g.cs` | IANA timezone identifiers (zones + links) for schedule-event timezone validation |
 | shells | Hand-written JSON (GitHub Docs) | `Shells.g.cs` | Shell availability per OS platform for `shell-name` rule validation |
+| expected-keys | GitHub Docs | `ExpectedKeys.g.cs` | Expected YAML key lists per parser section for diagnostic messages |
 
 ### 4.2 Source of Truth Policy
 
@@ -223,6 +224,28 @@ The codegen stage (`ShellsCSharpGenerator`) produces:
 
 All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path usage. These are consumed by the `shell-name` linter rule.
 
+#### 4.3.7 Expected Keys
+
+`expected-keys` fetches `workflow-syntax.md` from GitHub Docs and builds a complete parent→child key hierarchy by parsing all `## \`...\`` headings. The algorithm:
+
+1. Extract all `## \`path\`` headings from the raw markdown.
+2. Split each heading into dot-separated segments, preserving angle-bracket and square-bracket contents.
+3. Expand pipe-separated alternatives in angle brackets (e.g. `<branches|branches-ignore>`) into the cartesian product of all combinations.
+4. For each expanded path, register every concrete (non-parameter) segment as a child of its parent path. Single-parameter wildcards like `<job_id>` are skipped; `[*]` array subscripts are stripped from child key names.
+5. Emit named sections for all parents that have concrete children, using a known-path→name mapping with algorithmic fallback for unknown paths.
+6. Derive `action-step` (step keys minus `run`, `shell`, `working-directory`) and `run-step` (step keys minus `uses`, `with`) from the `step` section.
+7. Supplement sections whose sub-keys are documented in body text rather than as headings (`credentials`: `password`/`username`; `runs-on`: `group`/`labels`).
+
+No merge stage exists; Stage 2 produces the canonical `expected-keys.json` directly with ~28 sections covering:
+
+- Top-level workflow keys, `on` event names, per-event filter keys (`on.push`, `on.pull_request`, etc.)
+- `on.workflow_call`/`on.workflow_dispatch` sub-keys and input/secret sub-keys
+- Job-level keys, job defaults, strategy, strategy matrix
+- Step keys (full, action-step, run-step), step-with
+- Container, service, credentials, runs-on
+
+The codegen stage (`ExpectedKeysCSharpGenerator`) produces `const string` fields with quoted, sorted key names for each section. These are consumed by the parser for diagnostic messages when encountering unexpected keys.
+
 ---
 
 ## 5. CLI Commands
@@ -254,6 +277,7 @@ Per-dataset commands follow this naming pattern:
 | function-specs | ✓ | ✓ | ✓ | — | ✓ | ✓ | `validate-function-specs` | — |
 | permissions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | shells | — | — | — | — | ✓ | ✓ | — | — |
+| expected-keys | ✓ | ✓ | ✓ | — | ✓ | ✓ | — | — |
 
 `sync-function-specs` automatically runs `validate-function-specs` when parsed data is available.
 
@@ -264,7 +288,7 @@ Per-dataset commands follow this naming pattern:
 | `sync --dataset {name\|all}` | Run sync for specified dataset or all datasets |
 | `verify --dataset {name\|all}` | Run verify for specified dataset or all datasets |
 
-`sync --dataset all` / `verify --dataset all` processes every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells.
+`sync --dataset all` / `verify --dataset all` processes every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → expected-keys.
 
 ### 5.4 Exit Codes
 
@@ -309,6 +333,9 @@ data/sources/permissions/github/parsed/*
 data/sources/permissions/github/permissions.json
 
 data/sources/shells/github/shells.json
+
+data/sources/expected-keys/github/raw/workflow-syntax.md
+data/sources/expected-keys/github/expected-keys.json
 
 data/sources/reports/*
 data/sources/manifest.json

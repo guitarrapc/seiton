@@ -486,6 +486,56 @@ app.Add("verify-shells", () =>
     }
 });
 
+app.Add("fetch-expected-keys", async () =>
+{
+    var code = await ExpectedKeysCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-expected-keys failed with code {code}");
+    }
+});
+
+app.Add("fetch-expected-keys-sources", async () =>
+{
+    var code = await ExpectedKeysCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-expected-keys-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-expected-keys-sources", () =>
+{
+    var code = ExpectedKeysCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-expected-keys-sources failed with code {code}");
+    }
+});
+
+app.Add("sync-expected-keys", () =>
+{
+    var code = ExpectedKeysCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-expected-keys failed with code {code}");
+    }
+});
+
+app.Add("verify-expected-keys", () =>
+{
+    var code = ExpectedKeysCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-expected-keys failed with code {code}");
+    }
+});
+
 app.Add("fetch-iana-timezones", async () =>
 {
     var code = await IanaTimeZonesCommands.Fetch(repoRoot);
@@ -634,6 +684,11 @@ static int RunSync(string repoRoot, string dataset)
         return ShellsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "expected-keys")
+    {
+        return ExpectedKeysCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -684,7 +739,13 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return ShellsCommands.Sync(repoRoot);
+        code = ShellsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return ExpectedKeysCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -738,6 +799,11 @@ static int RunVerify(string repoRoot, string dataset)
         return ShellsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "expected-keys")
+    {
+        return ExpectedKeysCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -788,7 +854,13 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return ShellsCommands.Verify(repoRoot);
+        code = ShellsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return ExpectedKeysCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

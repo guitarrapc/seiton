@@ -41,8 +41,8 @@ public static partial class WorkflowParser
         };
     }
 
-    private const string ActionStepExpectedKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"timeout-minutes\", \"uses\", \"with\"";
-    private const string RunStepExpectedKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"working-directory\"";
+    private const string ActionStepExpectedKeys = Generated.ExpectedKeys.ActionStepKeys;
+    private const string RunStepExpectedKeys = Generated.ExpectedKeys.RunStepKeys;
 
     private static Step[] ParseSteps<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
