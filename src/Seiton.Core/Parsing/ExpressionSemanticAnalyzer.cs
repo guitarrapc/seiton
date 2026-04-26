@@ -194,6 +194,37 @@ public static class ExpressionSemanticAnalyzer
         };
     }
 
+    /// <summary>
+    /// Checks that the expression evaluates to an object type. Used for positions like credentials, services, env
+    /// where the YAML expects a mapping but the user provided <c>${{ expr }}</c> that evaluates to a non-object type.
+    /// </summary>
+    internal static Diagnostic? CheckExpectedObjectType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[]? contextOverrides,
+        string sectionName)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = contextOverrides is not null
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+
+        // object and any are acceptable; concrete non-object types are errors
+        return type switch
+        {
+            ObjectExprType or AnyExprType => null,
+            _ => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                $"type of expression at \"{sectionName}\" must be object but found type {type.TypeName}",
+                expressionLocation),
+        };
+    }
+
     private static ExprType InferTypeSpan(
         int nodeId,
         ReadOnlySpan<ExpressionNode> nodes,

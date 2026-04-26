@@ -18,15 +18,17 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         // Note: Option allow-list, activity type, and mutual exclusion checks are handled
         // at parser level (WorkflowParser.On.Webhook.cs). This rule only validates glob syntax.
 
-        ValidateFilter(webhookEv, webhookEv.Branches);
-        ValidateFilter(webhookEv, webhookEv.BranchesIgnore);
-        ValidateFilter(webhookEv, webhookEv.Tags);
-        ValidateFilter(webhookEv, webhookEv.TagsIgnore);
-        ValidateFilter(webhookEv, webhookEv.Paths);
-        ValidateFilter(webhookEv, webhookEv.PathsIgnore);
+        ValidateFilter(webhookEv, webhookEv.Branches, FilterKind.Ref);
+        ValidateFilter(webhookEv, webhookEv.BranchesIgnore, FilterKind.Ref);
+        ValidateFilter(webhookEv, webhookEv.Tags, FilterKind.Ref);
+        ValidateFilter(webhookEv, webhookEv.TagsIgnore, FilterKind.Ref);
+        ValidateFilter(webhookEv, webhookEv.Paths, FilterKind.Path);
+        ValidateFilter(webhookEv, webhookEv.PathsIgnore, FilterKind.Path);
     }
 
-    private void ValidateFilter(WebhookEvent webhookEv, WebhookEventFilter? filter)
+    private enum FilterKind { Ref, Path }
+
+    private void ValidateFilter(WebhookEvent webhookEv, WebhookEventFilter? filter, FilterKind kind)
     {
         if (filter is null)
         {
@@ -43,7 +45,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 continue;
             }
 
-            if (TryGetInvalidReason(pattern, out var reason))
+            if (TryGetInvalidReason(pattern, kind, out var reason))
             {
                 var patternText = Decode(Arena.GetStringSlice(valueNode));
                 AddEventError(
@@ -54,8 +56,46 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         }
     }
 
-    private static bool TryGetInvalidReason(ReadOnlySpan<byte> pattern, out string reason)
+    private static bool TryGetInvalidReason(ReadOnlySpan<byte> pattern, FilterKind kind, out string reason)
     {
+        // Empty pattern
+        if (pattern.Length == 0)
+        {
+            reason = "pattern must not be empty";
+            return true;
+        }
+
+        // Lone '!' — negate pattern must have at least one character following
+        if (pattern.Length == 1 && pattern[0] == (byte)'!')
+        {
+            reason = "at least one character must follow '!' in negate pattern";
+            return true;
+        }
+
+        // Leading/trailing spaces (for path filters)
+        if (kind == FilterKind.Path)
+        {
+            if (pattern[0] == (byte)' ' || pattern[^1] == (byte)' ')
+            {
+                reason = "leading and trailing spaces are not allowed in glob path";
+                return true;
+            }
+        }
+
+        // Ref name: must not start with '/'
+        if (kind == FilterKind.Ref && pattern[0] == (byte)'/')
+        {
+            reason = "ref name must not start with '/'";
+            return true;
+        }
+
+        // Ref name: must not end with '/' or '..'
+        if (kind == FilterKind.Ref && pattern[^1] == (byte)'/')
+        {
+            reason = "ref name must not end with '/'";
+            return true;
+        }
+
         var consecutiveStars = 0;
         var openBracketCount = 0;
         var insideBracket = false;

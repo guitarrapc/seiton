@@ -759,6 +759,51 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
+    /// <summary>
+    /// Checks that an expression node evaluates to an object type. Used for credentials, services, etc.
+    /// </summary>
+    private void ValidateExpectedObjectType<TTarget>(
+        StringNodeId expressionNode,
+        ExpressionValidationContext context,
+        string sectionName,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!expressionNode.HasValue || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        var value = Arena.GetStringValue(expressionNode);
+        if (value.Length == 0)
+        {
+            return;
+        }
+
+        // Extract the sole ${{ expr }} body
+        if (!TryExtractExpressionBody(value, out var body))
+        {
+            return;
+        }
+
+        var parseResult = Config.ParseExpression(body);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return;
+        }
+
+        var overrides = _hasOverrides
+            ? (Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides)
+            : null;
+
+        var diag = ExpressionSemanticAnalyzer.CheckExpectedObjectType(
+            parseResult, body, Arena.GetStringRange(expressionNode), overrides, sectionName);
+        if (diag is { } d)
+        {
+            report(this, d.Message, d.Location, target);
+        }
+    }
+
     private static bool TryFindEmbeddedExpression(
         ReadOnlySpan<byte> value,
         int searchStart,
@@ -885,6 +930,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 rule.AddJobError(j, message, location), job);
             CheckNode(Arena.GetStringExpression(creds.Expression), credentialsCtx, "job.container.credentials", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
+            ValidateExpectedObjectType(creds.Expression, credentialsCtx, "credentials", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
         }
     }
 
@@ -893,6 +940,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         if (services is null) return;
 
         CheckNode(Arena.GetStringExpression(services.Expression), ExpressionValidationContext.JobServices, "job.services", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+        ValidateExpectedObjectType(services.Expression, ExpressionValidationContext.JobServices, "services", static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
 
         if (services.ServiceMap is not { Count: > 0 }) return;
@@ -917,6 +966,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 CheckNode(svcCreds.Password, ExpressionValidationContext.JobServicesCredentials, "job.services.credentials.password", static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);
                 CheckNode(Arena.GetStringExpression(svcCreds.Expression), ExpressionValidationContext.JobServicesCredentials, "job.services.credentials", static (rule, message, location, j) =>
+                    rule.AddJobError(j, message, location), job);
+                ValidateExpectedObjectType(svcCreds.Expression, ExpressionValidationContext.JobServicesCredentials, "credentials", static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);
             }
         }

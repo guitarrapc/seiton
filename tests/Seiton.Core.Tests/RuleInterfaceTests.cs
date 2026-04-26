@@ -3983,6 +3983,104 @@ public sealed class RuleInterfaceTests
                         - run: echo ok
             """,
             []),
+            new RuleCase(
+            "ng-lone-bang-in-tags",
+            """
+            on:
+                push:
+                    tags: ['!']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["at least one character must follow '!'"]),
+            new RuleCase(
+            "ng-leading-space-in-paths",
+            """
+            on:
+                push:
+                    paths: ['  foo']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["leading and trailing spaces"]),
+            new RuleCase(
+            "ng-trailing-space-in-paths",
+            """
+            on:
+                push:
+                    paths: ['foo  ']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["leading and trailing spaces"]),
+            new RuleCase(
+            "ng-space-only-in-paths",
+            """
+            on:
+                push:
+                    paths: [' ']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["leading and trailing spaces"]),
+            new RuleCase(
+            "ok-space-in-branches-is-ref-error",
+            """
+            on:
+                push:
+                    branches: [' ']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid for branch and tag names"]),
+            new RuleCase(
+            "ng-ref-starts-with-slash",
+            """
+            on:
+                push:
+                    tags: ['/v1.0']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["ref name must not start with '/'"]),
+            new RuleCase(
+            "ng-ref-ends-with-slash",
+            """
+            on:
+                push:
+                    branches: ['feature/']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["ref name must not end with '/'"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
@@ -6969,6 +7067,83 @@ public sealed class RuleInterfaceTests
                           env: ${{ matrix.arr }}
             """,
             ["cannot be expanded as mapping"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_CredentialsObjectTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-credentials-fromjson-object",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ubuntu:latest
+                        credentials: ${{ fromJSON('{}') }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-credentials-string-expression",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ubuntu:latest
+                        credentials: ${{ 'username:password' }}
+                    steps:
+                        - run: echo
+            """,
+            ["type of expression at \"credentials\" must be object but found type string"]),
+            new RuleCase(
+            "ng-services-string-expression",
+            """
+            on: push
+            jobs:
+                test:
+                    services: ${{ 'redis' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["type of expression at \"services\" must be object but found type string"]),
+            new RuleCase(
+            "ok-services-fromjson-object",
+            """
+            on: push
+            jobs:
+                test:
+                    services: ${{ fromJSON('{}') }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-service-credentials-string-expression",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    services:
+                        redis:
+                            image: redis:latest
+                            credentials: ${{ 'user:pass' }}
+                    steps:
+                        - run: echo
+            """,
+            ["type of expression at \"credentials\" must be object but found type string"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

@@ -523,15 +523,15 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 | # | 対処 | 対象テスト | 分類 |
 |---|---|---|---|
-| 7-1 | glob パターン検出拡充 | `glob_more` | C-4 |
-| 7-2 | ラベル競合チェック | `invalid_runner_labels`, `runner_labels_conflict_matrix` | B-6 |
-| 7-3 | 廃止ラベル検出 | `macos_10.15_removed`, `macos12_runner` | B-6 |
-| 7-4 | 非推奨アクション入力検出 | `deprecated_action_inputs` | C-7 |
-| 7-5 | Docker 固有入力チェック | `docker_specific_inputs_with_normal_action` | C-7 |
-| 7-6 | matrix exclude バリデーション強化 | `matrix_exclude_mismatch`, `matrix_exclude_no_match` | C-5 |
-| 7-7 | credentials/services 式型チェック | `expr_check_in_credentials`, `expr_check_in_services` | C-8 |
-| 7-8 | 比較演算子の型チェック | `invalid_comparisons` | C-3b |
-| 7-9 | `${{ }}` 内 object/array/null 評価警告 | `evaluated_template`, `variables_type_check` | C-3b |
+| 7-1 | ~~glob パターン検出拡充~~ **完了** — 空パターン、単独`!`、パス先頭末尾スペース、ref `/`先頭末尾チェック追加 | `glob_more` | C-4 |
+| 7-2 | ~~ラベル競合チェック~~ **完了** (B-6 で実装済み) | `invalid_runner_labels`, `runner_labels_conflict_matrix` | B-6 |
+| 7-3 | ~~廃止ラベル検出~~ **完了** (B-6 で実装済み — unknown label として検出) | `macos_10.15_removed`, `macos12_runner` | B-6 |
+| 7-4 | ~~非推奨アクション入力検出~~ **既存実装で対応** — `PopularActionInputsRule.GetDeprecatedInputMessage` で検出済み | `deprecated_action_inputs` | C-7 |
+| 7-5 | Docker 固有入力チェック — `rhysd/action-setup-vim` が PopularActions 未登録のためデータ追加が必要 | `docker_specific_inputs_with_normal_action` | C-7 |
+| 7-6 | matrix exclude バリデーション強化 — 深層オブジェクト/配列比較が必要 (高複雑度) | `matrix_exclude_mismatch`, `matrix_exclude_no_match` | C-5 |
+| 7-7 | ~~credentials/services 式型チェック~~ **完了** — `CheckExpectedObjectType` で object 型要求の検証追加 | `expr_check_in_credentials`, `expr_check_in_services` | C-8 |
+| 7-8 | 比較演算子の型チェック — `ValidateCompareOp` で部分実装済み、matrix context overrides 時のチェック拡張余地あり | `invalid_comparisons` | C-3b |
+| 7-9 | `${{ }}` 内 object/array/null 評価警告 — `ValidateTemplateType` で部分実装済み | `evaluated_template`, `variables_type_check` | C-3b |
 
 ### Phase 8: 統合テスト基盤 (Infrastructure)
 
@@ -1081,7 +1081,59 @@ CoreParsingBenchmark (WorkflowParser.Parse — AST + rules):
 
 ### Phase 7 実装記録
 
-(未着手)
+**実装済み項目**: 7-1, 7-7 (新規実装), 7-2/7-3 (Phase B-6 で対処済み), 7-4 (既存実装確認), C-6 (既存実装確認)
+**未実装項目**: 7-5 (データ未登録), 7-6 (matrix exclude 深層比較 — 高複雑度), 7-8/7-9 (比較型チェック/テンプレート評価 — 部分的に既存実装で対応)
+**テスト**: 899 → 900 (+1 新規テスト)、全通過
+
+#### 7-1: glob パターン検出拡充
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/GlobPatternRule.cs`:
+  - `ValidateFilter` に `FilterKind` (Ref/Path) パラメータ追加 — ref name フィルター (branches/tags) と path フィルター (paths) を区別
+  - 新規チェック 4 種追加:
+    - 空パターン: `"pattern must not be empty"`
+    - 単独 `!`: `"at least one character must follow '!' in negate pattern"`
+    - パス先頭/末尾スペース: `"leading and trailing spaces are not allowed in glob path"` (Path のみ)
+    - ref 名 `/` 先頭/末尾: `"ref name must not start with '/'"` / `"ref name must not end with '/'"` (Ref のみ)
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `RuleRegression_GlobPatternRule_Syntax_TableDriven` に 7 テストケース追加 (ng-lone-bang, ng-leading-space, ng-trailing-space, ng-space-only, ok-space-in-branches, ng-ref-starts-with-slash, ng-ref-ends-with-slash)
+
+#### 7-7: credentials/services 式の型チェック
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/ExpressionSemanticAnalyzer.cs`:
+  - `CheckExpectedObjectType` (新規): object 型を期待する位置で式の結果型をチェック。non-object 型なら `"type of expression at \"{section}\" must be object but found type {type}"` を報告
+- `src/Seiton.Core/Linting/Rules/ExprUndefinedVarRule.cs`:
+  - `ValidateExpectedObjectType` (新規): `CheckExpectedObjectType` を呼び出す wrapper
+  - `CheckContainer`: credentials 式に対して `ValidateExpectedObjectType` を追加
+  - `CheckServices`: services 式に対して `ValidateExpectedObjectType` を追加。service 内 credentials にも追加
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `RuleRegression_ExprUndefinedVarRule_CredentialsObjectTypeCheck_TableDriven` 追加 (5 ケース: ok-credentials-fromjson, ng-credentials-string, ng-services-string, ok-services-fromjson, ng-service-credentials-string)
+
+#### 7-2/7-3: ラベル競合・廃止ラベル — Phase B-6 で完了済み
+
+#### 7-4: 非推奨アクション入力 — 既存実装で対応済み
+
+`PopularActionInputsRule.GetDeprecatedInputMessage` により `pypa/gh-action-pypi-publish` の `packages_dir`, `repository_url` は既に deprecated 警告を出力。
+
+#### 7-5: Docker 固有入力 — データ未登録
+
+`rhysd/action-setup-vim` が `PopularActions` に未登録のため検出不可。actionlint は独自のアクション定義データを持つが、seiton の popular-actions リストには含まれていない。データ追加は `Seiton.Update` のスコープ。
+
+#### C-6: workflow_call_job — 既存実装で対応済み
+
+パーサー (`WorkflowParser.Jobs.cs`) と `ReusableWorkflowRule` で steps+uses 共存、with/secrets requires uses、disallowed keys をすべて検出済み。format validation は `UnpinnedUsesRule` で検出するが、compat テストでは `unpinned-uses` が SeitonOnlyRules に含まれるため MISS として計上される (ルール ID マッピングの差異)。
+
+**ベンチマーク結果**: 回帰なし
+
+| Size   | FixEnabled | Mean      | Allocated |
+|--------|-----------|-----------|-----------|
+| Small  | False     | 54.36 μs  | 17.29 KB  |
+| Medium | False     | 1,244 μs  | 120.58 KB |
+| Large  | False     | 18,767 μs | 567.77 KB |
+
+**互換性ベースライン更新**:
+- Fixtures: 10/99 fully matched (9→10)
+- Expected lines: 95/503 matched (92→95, 18%→18%)
+- Extra seiton lines: 423
 
 ### Phase 8 実装記録
 
