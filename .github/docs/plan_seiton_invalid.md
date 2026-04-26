@@ -539,7 +539,7 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 | # | 対処 |
 |---|---|
-| 8-1 | actionlint `testdata/err/*.yaml` を seiton で実行し `.out` と比較する統合テストランナーの実装 |
+| 8-1 | actionlint `testdata/err/*.yaml` を seiton で実行し `.out` と比較する統合テストランナーの実装 (tests/Seiton.Core.Tests/fixtures/schema/actionlint/testdata/err/に配置済み) |
 | 8-2 | 出力形式の変換レイヤー実装（seiton 形式 → actionlint 互換形式） |
 | 8-3 | seiton 固有ルールを除外して比較する機能 |
 | 8-4 | 正規表現 `.out` 行への対応（`/pattern/` 形式） |
@@ -1085,4 +1085,20 @@ CoreParsingBenchmark (WorkflowParser.Parse — AST + rules):
 
 ### Phase 8 実装記録
 
-(未着手)
+**変更ファイル**:
+- `tests/Seiton.Core.Tests/ActionlintCompatTests.cs`: 新規作成 — actionlint `.out` ファイルとの互換性テストランナー
+
+**実装内容**:
+- 8-1: `testdata/err/*.yaml` を seiton で実行し `.out` と比較する統合テストランナー (`CompareWithActionlintExpectation` — 99 fixture × parameterized test)
+- 8-2: 出力形式変換レイヤー (`FormatAsActionlint`) — seiton 形式 `file:line:col: severity [ruleId] message` → actionlint 形式 `test.yaml:line:col: message [rule-id]`
+- 8-3: seiton 固有ルール除外 (`SeitonOnlyRules` HashSet) — 30+ の seiton 専用ルールを比較対象から除外
+- 8-4: 正規表現 `.out` 行対応 (`ParseOutFile` + `IsMatch`) — `/pattern/` 形式の行を `Regex.IsMatch` で照合
+- ルール ID マッピング (`RuleIdMap`) — seiton → actionlint 間の 20 マッピング (例: `parse` → `syntax-check`, `template-injection` → `expression`, `needs-graph` → `job-needs`)
+- 集計サマリテスト (`CompatibilitySummary`) — 全 fixture の一括統計レポート
+
+**テスト結果**: 全 899 テスト通過 (799 → 899, +100 新規)
+
+**互換性ベースライン**:
+- Fixtures: 9/99 fully matched
+- Expected lines: 92/503 matched (18%)
+- Extra seiton lines: 423 (seiton がカバーするがactionlint にないルール、またはメッセージ差異)
