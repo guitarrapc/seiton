@@ -189,8 +189,31 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call input must be mapping", reader.CurrentStart);
-            reader.SkipCurrentNode();
+            // Null/empty body (e.g. `input0:` followed by next key) — treat as empty input.
+            // Still require type field; report "type is required" instead of "must be mapping".
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var bodyUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(bodyUtf8) || bodyUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                }
+                else
+                {
+                    AddError(diagnostics, "on.workflow_call input must be mapping", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                }
+            }
+            else
+            {
+                AddError(diagnostics, "on.workflow_call input must be mapping", reader.CurrentStart);
+                reader.SkipCurrentNode();
+            }
+            // Report missing type
+            AddError(
+                diagnostics,
+                $"on.workflow_call.inputs.{idText}.type is required",
+                new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventInput { Name = nameNode, Id = id, Description = description, Required = required, Default = defaultValue, Type = type, Range = arena.GetStringRange(nameNode) };
         }
 
@@ -414,8 +437,26 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call secret must be mapping", reader.CurrentStart);
-            reader.SkipCurrentNode();
+            // Null/empty body (e.g. `secret0:` followed by next key) — accept silently.
+            // Secrets have no required fields (description and required are both optional).
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var bodyUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(bodyUtf8) || bodyUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                }
+                else
+                {
+                    AddError(diagnostics, "on.workflow_call secret must be mapping", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                }
+            }
+            else
+            {
+                AddError(diagnostics, "on.workflow_call secret must be mapping", reader.CurrentStart);
+                reader.SkipCurrentNode();
+            }
             return new WorkflowCallEventSecret { Name = nameNode, Description = description, Required = required, Range = arena.GetStringRange(nameNode) };
         }
 
@@ -578,8 +619,31 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call output must be mapping", reader.CurrentStart);
-            reader.SkipCurrentNode();
+            // Null/empty body (e.g. `missing-all:` followed by next key) — treat as empty output.
+            // Still require value field.
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var bodyUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(bodyUtf8) || bodyUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                }
+                else
+                {
+                    AddError(diagnostics, "on.workflow_call output must be mapping", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                }
+            }
+            else
+            {
+                AddError(diagnostics, "on.workflow_call output must be mapping", reader.CurrentStart);
+                reader.SkipCurrentNode();
+            }
+            // Report missing value
+            AddError(
+                diagnostics,
+                $"on.workflow_call.outputs.{idText}.value is required",
+                new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
 
@@ -658,13 +722,18 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        // spec ・ゑｽｧ11.17 / ・ゑｽｧ12: workflow_call output requires `value`
+        // spec §11.17 / §12: workflow_call output requires `value`
         if (!value.HasValue)
         {
             AddError(
                 diagnostics,
                 $"on.workflow_call.outputs.{idText}.value is required",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
+        }
+        else if (value.HasValue && arena.GetStringValue(value).Length == 0)
+        {
+            var valueRange = arena.GetStringRange(value);
+            AddError(diagnostics, "string should not be empty", new TextPosition(valueRange.Start, valueRange.StartLine, valueRange.StartColumn));
         }
 
         return new WorkflowCallEventOutput

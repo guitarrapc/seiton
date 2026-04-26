@@ -7,6 +7,19 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    /// <summary>Returns a comma-separated list of events that support the given filter option.</summary>
+    private static string GetEventsForFilter(string filterName)
+    {
+        return filterName switch
+        {
+            "branches" or "branches-ignore" => "merge_group, push, pull_request, pull_request_target, workflow_run",
+            "tags" or "tags-ignore" => "push",
+            "paths" or "paths-ignore" => "push, pull_request, pull_request_target",
+            "workflows" => "workflow_run",
+            _ => string.Empty,
+        };
+    }
+
     private static WebhookEvent ParseWebhookEventWithOptions<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -75,7 +88,15 @@ public static partial class WorkflowParser
             if (isOptionNotAllowed)
             {
                 var key = unknownKeyText ?? string.Empty;
-                AddError(diagnostics, $"on.{eventInfo.Name} does not support option: {key}", keyMark);
+                var eventsForFilter = GetEventsForFilter(key);
+                if (eventsForFilter.Length > 0)
+                {
+                    AddError(diagnostics, $"\"{key}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
+                }
+                else
+                {
+                    AddError(diagnostics, $"on.{eventInfo.Name} does not support option: {key}", keyMark);
+                }
                 if (!reader.End) { reader.SkipCurrentNode(); }
                 continue;
             }

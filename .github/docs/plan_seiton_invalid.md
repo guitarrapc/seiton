@@ -473,15 +473,15 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 | 2-6 | container/services 構造バリデーション強化 | `invalid_container_syntax` | C-1a |
 | 2-7 | schedule イベントの mapping 必須チェック | `schedule_event_with_no_config_1`, `schedule_event_with_no_config_2` | C-2d |
 
-### Phase 3: イベント・フィルターバリデーション (High)
+### Phase 3: イベント・フィルターバリデーション (High) — **完了**
 
 **目標**: イベント設定の検出を actionlint 水準に引き上げる。
 
 | # | 対処 | 対象テスト | 分類 |
 |---|---|---|---|
-| 3-1 | イベント別フィルター可用性テーブル実装 | `invalid_event_filters` | C-2a |
-| 3-2 | workflow_dispatch 25 入力制限 | `workflow_dispatch_more_than_25_inputs` | C-2b |
-| 3-3 | workflow_call 入力/出力/シークレットバリデーション強化 | `workflow_call_event`, `workflow_call_outputs_syntax`, `workflow_call_secrets` | C-2c |
+| 3-1 | ~~イベント別フィルター可用性テーブル実装~~ **完了** — フィルター名→利用可能イベントリストの静的マッピング。GlobPatternRule の重複ロジック削除 | `invalid_event_filters` | C-2a |
+| 3-2 | ~~workflow_dispatch 25 入力制限~~ **完了** — メッセージを actionlint 互換に改善 | `workflow_dispatch_more_than_25_inputs` | C-2b |
+| 3-3 | ~~workflow_call 入力/出力/シークレットバリデーション強化~~ **完了** — null body 対応、empty value 検出、重複削除 | `workflow_call_event`, `workflow_call_outputs_syntax`, `workflow_call_secrets` | C-2c |
 
 ### Phase 4: コンテキスト可用性チェック (High)
 
@@ -856,7 +856,68 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 ### Phase 3 実装記録
 
-(未着手)
+**実装済み項目**: 3-1, 3-2, 3-3
+**テスト**: 782 (730 → 782、+52 フレームワーク側追加分含む)、全通過
+**ベンチマーク**: 回帰なし。LintBenchmark: Small 44.72µs (14.42KB), Medium 809.89µs (89.91KB), Large 11,085µs (420.21KB)。ParsingBenchmark: Medium Gen0=0, Large Gen0=0
+
+#### 3-1: イベント別フィルター可用性テーブル実装
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/WorkflowParser.On.Webhook.cs`:
+  - `GetEventsForFilter(string filterName)` メソッド追加: フィルター名→利用可能イベントリストの静的マッピング
+  - `isOptionNotAllowed` の分岐で `GetEventsForFilter` が非空の場合 `"X" filter is not available for Y event. it is only for Z events` メッセージを使用。空の場合は従来の `does not support option` メッセージ
+- `src/Seiton.Core/Linting/Rules/GlobPatternRule.cs`:
+  - `ValidateOptionAllowList`, `ValidateTypeValues`, `ValidateMutualExclusionFilters` の 3 メソッドを削除。これらはパーサー側で既に検出されていた重複ロジック
+  - `VisitEvent` から 3 メソッド呼び出しを除去、glob syntax validation のみ残留
+  - `using Seiton.Core.Generated;` 削除 (WebhookTypes 参照不要)
+
+**フィルター可用性マッピング**:
+- `branches`/`branches-ignore`: merge_group, push, pull_request, pull_request_target, workflow_run
+- `tags`/`tags-ignore`: push
+- `paths`/`paths-ignore`: push, pull_request, pull_request_target
+- `workflows`: workflow_run
+
+**CLI確認**: `invalid_event_filters.yaml` で 13 件のパースエラー検出 (actionlint 期待と一致)。以前は 13 parse + 1 glob-pattern の重複があったが解消
+
+#### 3-2: workflow_dispatch 25 入力制限メッセージ改善
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/DispatchInputsRule.cs`: メッセージを `"workflow_dispatch event cannot define more than 25 inputs"` → `"maximum number of inputs for \"workflow_dispatch\" event is 25 but {count} inputs are provided"` に変更
+
+**CLI確認**: `workflow_dispatch_more_than_25_inputs.yaml` で `3:3: error [dispatch-inputs] maximum number of inputs for "workflow_dispatch" event is 25 but 26 inputs are provided` と出力。actionlint の期待メッセージパターンと一致
+
+#### 3-3: workflow_call 入力/出力/シークレットバリデーション強化
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/WorkflowParser.On.WorkflowCall.cs`:
+  - **Input null body**: `ParseWorkflowCallInput` で null/empty body (`input0:` の後に次キー) を検出。以前は `"must be mapping"` エラーだったが、null body の場合は `"type is required"` のみ報告
+  - **Secret null body**: `ParseWorkflowCallSecret` で null/empty body を許容 (silent accept)。secrets は必須フィールドなし
+  - **Output null body**: `ParseWorkflowCallOutput` で null/empty body を検出。`"value is required"` のみ報告
+  - **Output empty value**: `value:` (空文字列) に対して `"string should not be empty"` エラーを追加
+  - null body 判定には `IsNullLikeOnEventOptionsScalar` を再利用
+
+**テスト追加**:
+- `ParserTests.cs`:
+  - `Parse_FilterNotAvailableForEvent_IncludesAvailableEvents_TableDriven` (3 ケース): paths/merge_group, tags/pull_request, branches/pull_request_review
+  - `Parse_WorkflowCallInputNullBody_ReportsTypeRequired`: null body で "type is required" のみ (not "must be mapping")
+  - `Parse_WorkflowCallSecretNullBody_NoError`: null body で エラーなし
+  - `Parse_WorkflowCallOutputNullBody_ReportsValueRequired`: null body で "value is required" のみ (not "must be mapping")
+  - `Parse_WorkflowCallOutputEmptyValue_ReportsEmptyString`: 空 value で "string should not be empty"
+- `RuleInterfaceTests.cs`:
+  - `RuleRegression_GlobPatternRule_TableDriven`: activity type/mutual exclusion の 2 テストケースを削除 (パーサー側に移行済み)
+  - `RuleRegression_DispatchInputsRule_TableDriven`: 25 入力制限の期待メッセージを更新
+  - `Parse_WebhookOptionNotAllowed_MessageContainsKeyName`: フィルター可用性メッセージに合わせて更新
+
+**CLI確認**:
+- `workflow_call_event.yaml`: 16 errors (修正前: 17、`input0:` の null body が "must be mapping" + "type required" → "type required" のみに)。actionlint 期待 14 件のうち 12 件が parse で一致、2 件は lint ルール (type default mismatch)
+- `workflow_call_outputs_syntax.yaml`: 6 errors (修正前: 5、empty value 検出追加)。actionlint 期待 5 件すべて一致
+- `workflow_call_secrets.yaml`: 4 errors (変化なし。secret0 null body エラー除去はもともと出ていなかった)
+
+**残存差異** (Phase 3 スコープ外):
+- `exclusive_webhook_filters.yaml`: 報告位置がイベントキー位置 (2:3, 5:3, etc.) で actionlint の個別フィルターキー位置 (4:5, 7:5, etc.) と異なる。seiton はイベント単位で検出するため意図的な差異
+- `workflow_call_event.yaml`: `required: yes` を `[parse] required must be bool` として報告。actionlint は `expecting a single ${{...}} expression or boolean literal` と報告。メッセージ差異は許容
+- `workflow_call_inputs.yaml`: `required+default` 警告は `[workflow-call-input-default]` ルールで検出済み
+- `workflow_call_secrets.yaml`, `workflow_call_invalid_secrets.yaml`: secrets の未定義プロパティチェックは `[expr-undefined-var]` で検出済み
 
 ### Phase 4 実装記録
 

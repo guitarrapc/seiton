@@ -3474,7 +3474,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["cannot define more than 25 inputs"]),
+            ["maximum number of inputs", "25 but 26"]),
         };
 
         await AssertRuleCases(new DispatchInputsRule(), "dispatch-inputs", cases);
@@ -3846,35 +3846,6 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["invalid glob pattern", "not closed"]),
-            new RuleCase(
-            "ng-invalid-activity-type",
-            """
-            on:
-                pull_request:
-                    types: [bogus]
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    permissions: {}
-                    steps:
-                        - run: echo ng
-            """,
-            ["unsupported activity type 'bogus'"]),
-            new RuleCase(
-            "ng-filter-mutual-exclusion",
-            """
-            on:
-                pull_request:
-                    branches: [main]
-                    branches-ignore: ['release/**']
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    permissions: {}
-                    steps:
-                        - run: echo ng
-            """,
-            ["cannot be used together"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);

@@ -18,7 +18,7 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 
         if (dispatch.Inputs.Value.Count > 25)
         {
-            AddEventError(dispatch, "workflow_dispatch event cannot define more than 25 inputs", BuildEventLocation(dispatch));
+            AddEventError(dispatch, $"maximum number of inputs for \"workflow_dispatch\" event is 25 but {dispatch.Inputs.Value.Count} inputs are provided", BuildEventLocation(dispatch));
         }
 
         foreach (var (_, input) in dispatch.Inputs.Value)

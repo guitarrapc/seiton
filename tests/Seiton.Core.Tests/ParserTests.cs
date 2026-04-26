@@ -1015,6 +1015,126 @@ public sealed class ParserTests
         }
     }
 
+    // Event filter availability
+    [Test]
+    public async Task Parse_FilterNotAvailableForEvent_IncludesAvailableEvents_TableDriven()
+    {
+        var cases = new (string Name, string Yaml, string ExpectedMessagePart)[]
+        {
+            (
+                "paths not available for merge_group",
+                """
+                on:
+                    merge_group:
+                        paths: [src/**]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "\"paths\" filter is not available for merge_group event. it is only for push, pull_request, pull_request_target events"
+            ),
+            (
+                "tags not available for pull_request",
+                """
+                on:
+                    pull_request:
+                        tags: [v*]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "\"tags\" filter is not available for pull_request event. it is only for push events"
+            ),
+            (
+                "branches not available for pull_request_review",
+                """
+                on:
+                    pull_request_review:
+                        branches: [main]
+                jobs: {}
+                """.Replace("\r\n", "\n"),
+                "\"branches\" filter is not available for pull_request_review event. it is only for merge_group, push, pull_request, pull_request_target, workflow_run events"
+            ),
+        };
+
+        for (var i = 0; i < cases.Length; i++)
+        {
+            var c = cases[i];
+            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"filter-avail-{i}.yml");
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains(c.ExpectedMessagePart, StringComparison.Ordinal))).IsTrue();
+        }
+    }
+
+    // workflow_call null body handling
+    [Test]
+    public async Task Parse_WorkflowCallInputNullBody_ReportsTypeRequired()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                inputs:
+                    input0:
+                    input1:
+                        type: string
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-input-null.yml");
+        // input0 has null body — should report "type is required" not "must be mapping"
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.inputs.input0.type is required", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("input must be mapping", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowCallSecretNullBody_NoError()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                secrets:
+                    secret0:
+                    secret1:
+                        description: test
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-secret-null.yml");
+        // secret0 has null body — should NOT report error (secrets have no required fields)
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secret must be mapping", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowCallOutputNullBody_ReportsValueRequired()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                outputs:
+                    missing-all:
+                    has-value:
+                        value: ${{ jobs.test.outputs.x }}
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-null.yml");
+        // missing-all has null body — should report "value is required" not "must be mapping"
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.outputs.missing-all.value is required", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("output must be mapping", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowCallOutputEmptyValue_ReportsEmptyString()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                outputs:
+                    empty-value:
+                        description: test
+                        value:
+        jobs: {}
+        """
+        .Replace("\r\n", "\n");
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-empty-value.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("string should not be empty", StringComparison.Ordinal))).IsTrue();
+    }
+
     [Test]
     public async Task Parse_DefaultsMissingRun_ReportsError_TableDriven()
     {
@@ -3778,7 +3898,7 @@ public sealed class ParserTests
     {
         var yaml = "on:\n  release:\n    tags: v*.*.*\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
-        var diag = result.Diagnostics.First(d => d.Message.Contains("does not support option"));
+        var diag = result.Diagnostics.First(d => d.Message.Contains("filter is not available"));
         await Assert.That(diag.Message).Contains("tags");
     }
 

@@ -118,6 +118,14 @@
       ]
     },
     {
+      "name": "on-merge-group",
+      "description": "Expected keys for on.merge_group",
+      "keys": [
+        "branches",
+        "branches-ignore"
+      ]
+    },
+    {
       "name": "on-pull-request",
       "description": "Expected keys for on.pull_request",
       "keys": [
@@ -170,7 +178,8 @@
       "description": "Expected keys for on.workflow_run",
       "keys": [
         "branches",
-        "branches-ignore"
+        "branches-ignore",
+        "workflows"
       ]
     },
     {
