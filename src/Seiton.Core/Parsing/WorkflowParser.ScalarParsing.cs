@@ -402,11 +402,7 @@ public static partial class WorkflowParser
     private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, string mappingName)
     {
         if (!keyUtf8.SequenceEqual("<<"u8)) return false;
-        var correctedMark = new TextPosition(
-            keyMark.Offset - keyUtf8.Length,
-            keyMark.Line,
-            keyMark.Column - keyUtf8.Length);
-        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", correctedMark);
+        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
         return true;
     }
 
@@ -429,11 +425,7 @@ public static partial class WorkflowParser
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
-            var correctedMark = new TextPosition(
-                keyMark.Offset - keyUtf8.Length,
-                keyMark.Line,
-                keyMark.Column - keyUtf8.Length);
-            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", correctedMark);
+            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
             return false;
         }
 

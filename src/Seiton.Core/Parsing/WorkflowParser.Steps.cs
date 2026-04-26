@@ -41,6 +41,9 @@ public static partial class WorkflowParser
         };
     }
 
+    private const string ActionStepExpectedKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"timeout-minutes\", \"uses\", \"with\"";
+    private const string RunStepExpectedKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"working-directory\"";
+
     private static Step[] ParseSteps<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -75,13 +78,31 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] must be mapping", reader.CurrentStart);
+            // Null scalar, bare dash, or other non-mapping → "element should not be empty"
+            if (reader.CurrentKind == YamlEventKind.Scalar
+                && (reader.GetScalarTag() == ScalarTag.Null || reader.GetScalarUtf8().Length == 0))
+            {
+                AddError(diagnostics, "element of \"steps\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
+                AddError(diagnostics, "step must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
+            }
+            else
+            {
+                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] must be mapping", reader.CurrentStart);
+            }
             reader.SkipCurrentNode();
             return default;
         }
 
+        var stepMark = reader.CurrentStart;
         var hasRun = false;
         var hasUses = false;
+        // stepForm: 0=unknown, 1=run, 2=action (determined by run/uses key; last primary wins)
+        var stepForm = 0;
+        TextPosition firstPrimaryMark = default;
+        TextPosition shellKeyMark = default;
+        TextPosition wdKeyMark = default;
+        TextPosition withKeyMark = default;
+        var hasAnyKey = false;
         StringNodeId idNode = default;
         StringNodeId ifNode = default;
         StringNodeId nameNode = default;
@@ -100,6 +121,7 @@ public static partial class WorkflowParser
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
+            hasAnyKey = true;
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
                 AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] key must be scalar", reader.CurrentStart);
@@ -128,6 +150,12 @@ public static partial class WorkflowParser
                 switch ((StepMappingKey)stepKeyOrd)
                 {
                     case StepMappingKey.Run:
+                        if (stepForm == 2) // was action, now becomes run; flag previous primary (uses)
+                        {
+                            AddError(diagnostics, $"unexpected key \"uses\" for step to run shell command. expected one of {RunStepExpectedKeys}", firstPrimaryMark);
+                        }
+                        firstPrimaryMark = keyMark;
+                        stepForm = 1;
                         hasRun = true;
                         if (!reader.End)
                         {
@@ -144,6 +172,12 @@ public static partial class WorkflowParser
 
                     case StepMappingKey.Uses:
                         usesKeyRange = BuildScalarLocation(keyMark, keyLen);
+                        if (stepForm == 1) // was run, now becomes action; flag previous primary (run)
+                        {
+                            AddError(diagnostics, $"unexpected key \"run\" for step to execute action. expected one of {ActionStepExpectedKeys}", firstPrimaryMark);
+                        }
+                        firstPrimaryMark = keyMark;
+                        stepForm = 2;
                         hasUses = true;
                         if (!reader.End)
                         {
@@ -191,6 +225,7 @@ public static partial class WorkflowParser
                         break;
 
                     case StepMappingKey.With:
+                        withKeyMark = keyMark;
                         if (!reader.End)
                         {
                             withInputs = ParseStepWithInputsNode(
@@ -207,6 +242,7 @@ public static partial class WorkflowParser
                         break;
 
                     case StepMappingKey.Shell:
+                        shellKeyMark = keyMark;
                         if (!reader.End)
                         {
                             shellNode = ParseString(ref reader, arena, out var shellErr, out var shellMark);
@@ -216,6 +252,7 @@ public static partial class WorkflowParser
                         break;
 
                     case StepMappingKey.WorkingDirectory:
+                        wdKeyMark = keyMark;
                         if (!reader.End)
                         {
                             workingDirectoryNode = ParseStringAndValidateExpression(
@@ -283,7 +320,15 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"unexpected step key '{unknownKey}' in job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]", keyMark);
+            if (stepForm == 2)
+            {
+                AddError(diagnostics, $"unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", keyMark);
+            }
+            else if (stepForm == 1)
+            {
+                AddError(diagnostics, $"unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", keyMark);
+            }
+            // stepForm == 0: no unexpected key error; caught by "step must run..." below
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -295,16 +340,30 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        // spec §3.12: a step resolves to either ExecRun or ExecAction, never both
-        if (hasRun && hasUses)
+        // Post-mapping: report secondary key conflicts based on step form
+        if (stepForm == 2) // action step: shell and working-directory are unexpected
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] cannot have both run and uses", reader.CurrentStart);
+            if (shellKeyMark != default)
+                AddError(diagnostics, $"unexpected key \"shell\" for step to execute action. expected one of {ActionStepExpectedKeys}", shellKeyMark);
+            if (wdKeyMark != default)
+                AddError(diagnostics, $"unexpected key \"working-directory\" for step to execute action. expected one of {ActionStepExpectedKeys}", wdKeyMark);
+        }
+        else if (stepForm == 1) // run step: with is unexpected
+        {
+            if (withKeyMark != default)
+                AddError(diagnostics, $"unexpected key \"with\" for step to run shell command. expected one of {RunStepExpectedKeys}", withKeyMark);
+        }
+
+        // Empty mapping (e.g. `- {}`)
+        if (!hasAnyKey)
+        {
+            AddError(diagnostics, "element of \"steps\" section should not be empty. please remove this section if it's unnecessary", stepMark);
         }
 
         // spec §3.12: a step must choose one execution form: `run` or `uses`
         if (!hasRun && !hasUses)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] requires run or uses", reader.CurrentStart);
+            AddError(diagnostics, "step must run script with \"run\" section or run action with \"uses\" section", stepMark);
         }
 
         StepExec exec;
@@ -354,7 +413,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] with must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "\"with\" section is scalar node but mapping node is expected", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }

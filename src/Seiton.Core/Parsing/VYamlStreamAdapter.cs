@@ -46,15 +46,20 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 return _virtualCurrent.Start;
 
             var mark = _parser.CurrentMark;
-            // VYaml's CurrentMark for empty/null scalars advances past the token to the next token's
-            // position rather than staying at the scalar itself. Use the backward-scan helper to recover
-            // the actual position. Check IsNullScalar() first because GetScalarAsUtf8() throws when the
-            // VYaml internal currentScalar is null (implicit-null scalars like "key:" with no value).
-            if (_parser.CurrentEventType == ParseEventType.Scalar
-                && (_parser.IsNullScalar() || _parser.GetScalarAsUtf8().Length == 0))
+            // VYaml's CurrentMark for scalars advances past the token to the next token's
+            // position rather than staying at the scalar itself. For empty/null scalars, use
+            // the backward-scan helper. For non-empty scalars, locate the content in source
+            // bytes by searching backward from the mark position.
+            if (_parser.CurrentEventType == ParseEventType.Scalar)
             {
-                var correctedOffset = ResolveEmptyScalarStart(mark.Position);
-                return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
+                if (_parser.IsNullScalar() || _parser.GetScalarAsUtf8().Length == 0)
+                {
+                    var correctedOffset = ResolveEmptyScalarStart(mark.Position);
+                    return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
+                }
+
+                // Non-empty scalar: mark may point past the scalar. Search backward for the content.
+                return ResolveNonEmptyScalarStart(mark.Position);
             }
 
             return new TextPosition(mark.Position, mark.Line, mark.Col);
@@ -155,7 +160,8 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
             // Track anchor definition for unused-anchor detection
             _definedAnchors ??= new Dictionary<int, (string Name, TextPosition Position)>();
-            _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), CurrentStart);
+            var anchorPos = ResolveAnchorPosition(currentAnchor.Name.ToString());
+            _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), anchorPos);
         }
 
         if (_currentRecording != null)
@@ -170,7 +176,8 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             {
                 _anchorStore ??= new Dictionary<int, List<AnchorEvent>>();
                 _definedAnchors ??= new Dictionary<int, (string Name, TextPosition Position)>();
-                _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), snapshot.Start);
+                var nestedAnchorPos = ResolveAnchorPosition(currentAnchor.Name.ToString());
+                _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), nestedAnchorPos);
 
                 if (currentKind == YamlEventKind.Scalar)
                 {
@@ -776,6 +783,84 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     /// </summary>
     public TextPosition ComputePositionFromOffset(int offset)
         => ComputeTextPositionFromOffset(_source.Span, offset);
+
+    /// <summary>
+    /// Locates the `&amp;name` anchor tag in the source bytes by searching forward from the
+    /// current scalar slice cursor. Returns the position of the `&amp;` character.
+    /// Falls back to <see cref="CurrentStart"/> if not found.
+    /// </summary>
+    private TextPosition ResolveAnchorPosition(string anchorName)
+    {
+        var source = _source.Span;
+        var mark = _parser.CurrentMark;
+        var searchEnd = mark.Position;
+        if (searchEnd > source.Length) searchEnd = source.Length;
+
+        // Search for &anchorName in source from _scalarSliceCursor
+        var anchorBytes = System.Text.Encoding.UTF8.GetBytes("&" + anchorName);
+        var anchorSpan = anchorBytes.AsSpan();
+
+        for (var i = _scalarSliceCursor; i <= searchEnd - anchorSpan.Length; i++)
+        {
+            if (source[i] == (byte)'&' && source.Slice(i, anchorSpan.Length).SequenceEqual(anchorSpan))
+            {
+                return ComputeTextPositionFromOffset(source, i);
+            }
+        }
+
+        return CurrentStart;
+    }
+
+    /// <summary>
+    /// For non-empty scalars, VYaml's <see cref="YamlParser.CurrentMark"/> may point past the
+    /// scalar content to the next token. This helper locates the scalar content in the source
+    /// by searching backward from <paramref name="markPosition"/> for the scalar bytes.
+    /// For quoted scalars, the position is set to the opening quote character.
+    /// </summary>
+    private TextPosition ResolveNonEmptyScalarStart(int markPosition)
+    {
+        var source = _source.Span;
+        var utf8 = _parser.GetScalarAsUtf8();
+
+        if (utf8.Length == 0)
+        {
+            return ComputeTextPositionFromOffset(source, markPosition);
+        }
+
+        // Search forward from _scalarSliceCursor for the scalar content.
+        var searchEnd = markPosition;
+        if (searchEnd > source.Length) searchEnd = source.Length;
+        var maxStart = searchEnd - utf8.Length;
+        if (maxStart < 0) maxStart = 0;
+
+        var searchFrom = _scalarSliceCursor;
+        if (searchFrom > maxStart) searchFrom = 0;
+
+        var bestStart = -1;
+        for (var i = searchFrom; i <= maxStart; i++)
+        {
+            if (source[i] == utf8[0] && source.Slice(i, utf8.Length).SequenceEqual(utf8))
+            {
+                if (!IsInsideYamlComment(source, i))
+                {
+                    bestStart = i;
+                }
+            }
+        }
+
+        if (bestStart < 0)
+        {
+            return new TextPosition(markPosition, _parser.CurrentMark.Line, _parser.CurrentMark.Col);
+        }
+
+        // Check for a leading quote character
+        if (bestStart > 0 && source[bestStart - 1] is (byte)'\'' or (byte)'"')
+        {
+            bestStart--;
+        }
+
+        return ComputeTextPositionFromOffset(source, bestStart);
+    }
 
     /// <summary>
     /// VYaml advances its scanner past an empty scalar to the next meaningful token, so

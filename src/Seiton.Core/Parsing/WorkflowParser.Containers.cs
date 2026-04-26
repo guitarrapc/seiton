@@ -77,14 +77,13 @@ public static partial class WorkflowParser
                 }
 
                 var serviceNameNode = arena.AddString(serviceName, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length));
-                var serviceKeyStart = new TextPosition(serviceMark.Offset - serviceNameUtf8.Length, serviceMark.Line, serviceMark.Col - serviceNameUtf8.Length);
                 reader.Read();
                 if (reader.End)
                 {
                     break;
                 }
 
-                var container = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceKeyStart);
+                var container = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceMark);
                 if (container is not null)
                 {
                     map.Add(new SliceMap<Service>.Entry(serviceName, new Service
@@ -182,9 +181,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            // VYaml reports key mark at colon position — adjust to key start
-            var keyStart = new TextPosition(keyMark.Offset - keyUtf8.Length, keyMark.Line, keyMark.Col - keyUtf8.Length);
-            if (IsMergeKey(keyUtf8, keyStart, diagnostics, FormatContainerSectionName(source, jobId, serviceName, isService)))
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, FormatContainerSectionName(source, jobId, serviceName, isService)))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -197,7 +194,7 @@ public static partial class WorkflowParser
                 var ck = (ContainerMappingKey)containerKeyOrdinal;
                 if (!TrySetBit(ref seen, containerKeyOrdinal))
                 {
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyStart);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -230,7 +227,7 @@ public static partial class WorkflowParser
                         }
                         continue;
                     case ContainerMappingKey.Credentials:
-                        credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService, keyStart);
+                        credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService, keyMark);
                         continue;
                     case ContainerMappingKey.Env:
                         env = ParseEnvNode(
@@ -285,7 +282,7 @@ public static partial class WorkflowParser
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
-                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of \"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"", keyStart);
+                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of \"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"", keyMark);
                         if (!reader.End) reader.SkipCurrentNode();
                         continue;
                     default:
@@ -300,7 +297,7 @@ public static partial class WorkflowParser
             var expectedKeys = isService
                 ? "\"command\", \"credentials\", \"env\", \"entrypoint\", \"image\", \"options\", \"ports\", \"volumes\""
                 : "\"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"";
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyStart);
+            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -402,9 +399,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            // VYaml reports key mark at colon position — adjust to key start
-            var keyStart = new TextPosition(keyMark.Offset - keyUtf8.Length, keyMark.Line, keyMark.Col - keyUtf8.Length);
-            if (IsMergeKey(keyUtf8, keyStart, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))            {
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))            {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
                 continue;
@@ -417,7 +412,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, credKeyOrdinal))
                 {
                     var dupName = crk == CredentialsMappingKey.Username ? "username" : "password";
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyStart);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -460,7 +455,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of \"password\", \"username\"", keyStart);
+            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of \"password\", \"username\"", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

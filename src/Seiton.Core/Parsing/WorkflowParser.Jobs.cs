@@ -238,7 +238,18 @@ public static partial class WorkflowParser
                         {
                             if (reader.CurrentKind != YamlEventKind.SequenceStart)
                             {
-                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' steps must be sequence", reader.CurrentStart);
+                                var nodeKind = reader.CurrentKind == YamlEventKind.Scalar ? "scalar" : "mapping";
+                                var tagStr = reader.CurrentKind == YamlEventKind.Scalar
+                                    ? reader.GetScalarTag() switch
+                                    {
+                                        ScalarTag.Null => " with \"!!null\" tag",
+                                        ScalarTag.Bool => " with \"!!bool\" tag",
+                                        ScalarTag.Int => " with \"!!int\" tag",
+                                        ScalarTag.Float => " with \"!!float\" tag",
+                                        _ => "",
+                                    }
+                                    : "";
+                                AddError(diagnostics, $"\"steps\" section must be sequence node but got {nodeKind} node{tagStr}", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else
@@ -392,8 +403,7 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            var containerKeyStart = new TextPosition(keyMark.Offset - keyLen, keyMark.Line, keyMark.Col - keyLen);
-                            containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true, containerKeyStart);
+                            containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true, keyMark);
                         }
 
                         break;
@@ -535,7 +545,7 @@ public static partial class WorkflowParser
         // spec §3.10 post-validation: normal jobs require `steps`
         if (!hasUses && !hasSteps)
         {
-            AddError(diagnostics, $"job '{decodedJobId}' requires steps (or uses)", jobIdMark);
+            AddError(diagnostics, $"\"steps\" section is missing in job \"{decodedJobId}\"", jobIdMark);
         }
 
         if (!hasUses && workflowCallNode is not null)

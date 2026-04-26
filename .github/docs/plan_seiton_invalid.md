@@ -1,6 +1,6 @@
 # Seiton vs actionlint 検出ギャップ分析・対処計画
 
-> actionlint testdata (`.references/actionlint/testdata/err/`, `testdata/err/`) を基準に、seiton の検出漏れ・メッセージ品質・位置ずれを分析し、対処フェーズを定義する。
+> actionlint testdata (`.references/actionlint/testdata/err/`, `tests/Seiton.Core.Tests/fixtures/schema/actionlint/testdata/err/`) を基準に、seiton の検出漏れ・メッセージ品質・位置ずれを分析し、対処フェーズを定義する。
 
 ---
 
@@ -769,7 +769,7 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 ### Phase 2 実装記録
 
-**実装済み項目**: 2-1, 2-2, 2-4, 2-6 (部分的)
+**実装済み項目**: 2-1, 2-2, 2-3, 2-4, 2-5, 2-6, 2-7
 
 #### 2-1: 空セクション検出の網羅化
 
@@ -814,9 +814,45 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 **テスト結果**: 全 730 テスト通過、ベンチマーク ゼロアロケーション維持
 
-**検出状況**: `invalid_container_syntax` 期待 23 件中: メッセージ全 21 parse エラー一致 (+ 2 lint ルール)、位置 16/21 一致。残り 5 件は VYaml `CurrentMark` の非空スカラー値位置ずれ (1行先を報告する既知動作) — アダプター改修が必要な課題として記録
+**検出状況**: `invalid_container_syntax` 期待 23 件中: メッセージ全 21 parse エラー一致 (+ 2 lint ルール)、位置 20/21 一致。残り 1 件は `credentials:` 暗黙 null の位置ずれ (次行を報告)。VYaml アダプターに `ResolveNonEmptyScalarStart`・`ResolveEmptyScalarStart` を実装し、大半の非空スカラー位置ずれを修正済み
 
-**未実施項目**: 2-3 (unused anchor 位置), 2-5 (step 空要素), 2-7 (schedule mapping, 既動作中), VYaml 非空スカラー値位置ずれ (ports/volumes/credentials scalar/env の5箇所)
+#### 2-3: 未使用アンカー位置の修正
+
+**変更ファイル**: `VYamlStreamAdapter.cs`
+- `ResolveAnchorPosition(string anchorName)` メソッド追加: ソースバイト列から `&anchorName` パターンを前方検索し、アンカー定義の `&` 文字位置を返す
+- アンカー記録 2 箇所 (メイン記録・ネスト記録) を `ResolveAnchorPosition` 使用に変更
+- 位置結果: 全 5 アンカー (`2:5`, `6:9`, `12:12`, `24:14`, `27:9`) が期待値と一致
+
+#### 2-5: step の空要素検出・共存チェック強化
+
+**変更ファイル**: `WorkflowParser.Steps.cs`, `WorkflowParser.Jobs.cs`
+- `- null`、`-` (bare dash)、`- {}` (空マッピング) の空要素検出: `element of "steps" section should not be empty` + `step must run script with "run" section or run action with "uses" section`
+- step 共存チェック: `cannot have both run and uses` → `unexpected key "X" for step to execute action/run shell command. expected one of ...`
+  - `stepForm` 変数で step 種別 (unknown/run/action) を追跡。最後の primary key (run/uses) が勝つ
+  - secondary key (shell/working-directory/with) は post-mapping で報告
+  - unknown key は inline で step 種別コンテキスト付きで報告
+- `requires run or uses` → `step must run script with "run" section or run action with "uses" section`
+- `with must be mapping` → `"with" section is scalar node but mapping node is expected`
+- `steps must be sequence` → `"steps" section must be sequence node but got {node} node{tag}` (!!null タグ付き)
+- `requires steps (or uses)` → `"steps" section is missing in job "X"` (parser レベル)
+- 定数 `ActionStepExpectedKeys`/`RunStepExpectedKeys` 追加 (アルファベット順)
+
+#### 2-7: schedule イベントメッセージ修正
+
+**変更ファイル**: `WorkflowParser.On.Core.cs`
+- `on.schedule must be mapping` → `schedule event must be configured with mapping` (2 箇所)
+
+#### VYaml 非空スカラー値位置修正
+
+**変更ファイル**: `VYamlStreamAdapter.cs`
+- `ResolveNonEmptyScalarStart(int markPosition)` メソッド追加: `_scalarSliceCursor` からソースバイト列を前方検索してスカラー内容の先頭位置を返す。クォート付きスカラーは先頭引用符を検出
+- `CurrentStart` プロパティ: 全スカラー型で正確な位置を返すよう書き換え (空/null → `ResolveEmptyScalarStart`、非空 → `ResolveNonEmptyScalarStart`)
+- 全手動キー位置調整 (`keyMark.Col - keyUtf8.Length`) を削除: `IsMergeKey`、`TryRegisterDynamicKey`、`ParseContainerLike`、`ParseJobs`
+- `invalid_container_syntax` 位置: 16/21 → 20/21 一致に改善
+
+**テスト結果**: 全 730 テスト通過、ベンチマーク ゼロアロケーション維持 (Medium/Large Gen0=0)
+
+**未実施項目**: なし (Phase 2 全項目完了)
 
 ### Phase 3 実装記録
 

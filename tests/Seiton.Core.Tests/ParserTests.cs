@@ -699,7 +699,7 @@ public sealed class ParserTests
         {
             var c = cases[i];
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"on-schedule-scalar-{i}.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.schedule must be mapping", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("schedule event must be configured with mapping", StringComparison.Ordinal))).IsTrue();
         }
     }
 
@@ -1481,7 +1481,7 @@ public sealed class ParserTests
             new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected workflow key", "unexpected job key"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["contains duplicate key"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
-            new ErrFixtureExpectation("invalid_steps.yaml", ["cannot have both run and uses", "requires run or uses"]),
+            new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "step must run script"]),
             new ErrFixtureExpectation("missing_on.yaml", ["\"on\" section is missing in workflow"]),
             new ErrFixtureExpectation("missing_jobs.yaml", ["\"jobs\" section is missing in workflow"]),
             new ErrFixtureExpectation("merge_key_unsupported.yaml", ["does not support merge key '<<'"]),
@@ -2028,10 +2028,10 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires steps", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" section is missing", StringComparison.Ordinal))).IsTrue();
 
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml");
-        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("requires steps", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("\"steps\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2348,7 +2348,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-missing-run-uses.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires run or uses", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("step must run script", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2366,7 +2366,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-uses.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both run and uses", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4202,9 +4202,8 @@ public sealed class ParserTests
     {
         var yaml = "on: push\njobs:\n  myJob:\n    runs-on: ubuntu-latest\n    steps: notASequence\n"u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("steps must be sequence"));
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).IsNotEmpty();
-        await Assert.That(diag.Message).Contains("job 'myJob'");
         await Assert.That(diag.Message).DoesNotContain("Utf8Slice");
     }
 
