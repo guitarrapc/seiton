@@ -6067,7 +6067,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job.if", "undefined context 'steps'", "job scope"]),
+            ["context \"steps\" is not allowed here"]),
             new RuleCase(
             "ng-job-if-uses-strategy-context",
             """
@@ -6079,7 +6079,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job.if", "undefined context 'strategy'", "job scope"]),
+            ["context \"strategy\" is not allowed here"]),
             new RuleCase(
             "ng-job-if-uses-matrix-context",
             """
@@ -6091,7 +6091,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job.if", "undefined context 'matrix'", "job scope"]),
+            ["context \"matrix\" is not allowed here"]),
             new RuleCase(
             "ng-job-if-uses-secrets-context",
             """
@@ -6103,7 +6103,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job.if", "undefined context 'secrets'", "job scope"]),
+            ["context \"secrets\" is not allowed here"]),
             new RuleCase(
             "ng-step-if-uses-secrets-context",
             """
@@ -6115,7 +6115,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ secrets.TOKEN != '' }}
                           run: echo ng
             """,
-            ["step.if", "undefined context 'secrets'", "step scope"]),
+            ["context \"secrets\" is not allowed here"]),
             new RuleCase(
             "ok-step-run-uses-secrets-context",
             """
@@ -6151,7 +6151,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ foobar.value == 'x' }}
                           run: echo ng
             """,
-            ["step.if", "undefined context 'foobar'", "step scope"]),
+            ["undefined context \"foobar\""]),
             new RuleCase(
             "ng-step-env-uses-unknown-context",
             """
@@ -6164,7 +6164,7 @@ public sealed class RuleInterfaceTests
                             DATA: ${{ unknown.payload }}
                           run: echo "$DATA"
             """,
-            ["step.env.DATA", "undefined context 'unknown'", "step scope"]),
+            ["undefined context \"unknown\""]),
             new RuleCase(
             "ng-step-with-uses-unknown-context",
             """
@@ -6177,7 +6177,7 @@ public sealed class RuleInterfaceTests
                           with:
                             repository: ${{ unknown.repository }}
             """,
-            ["step.with.repository", "undefined context 'unknown'", "step scope"]),
+            ["undefined context \"unknown\""]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -7230,7 +7230,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ bogus.value }}
             """,
-            ["step.run", "undefined context 'bogus'"]),
+            ["undefined context \"bogus\""]),
             // A-4: run field expression uses matrix key from wrong job
             new RuleCase(
             "ng-run-field-matrix-key-from-wrong-job",
@@ -7263,7 +7263,7 @@ public sealed class RuleInterfaceTests
                           with:
                             ref: ${{ nosuch.branch }}
             """,
-            ["step.with.ref", "undefined context 'nosuch'"]),
+            ["undefined context \"nosuch\""]),
             // A-4/A-5: run and with expressions using valid context should not error
             new RuleCase(
             "ok-run-and-with-valid-contexts",
@@ -7279,6 +7279,739 @@ public sealed class RuleInterfaceTests
                         - run: echo ${{ github.sha }}
             """,
             []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4-1: Context availability — missing field visits ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_WorkflowLevel_TableDriven()
+    {
+        var cases = new[]
+        {
+            // run-name: env context not allowed
+            new RuleCase(
+            "ng-run-name-env",
+            """
+            run-name: ${{ env.FOO }}
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // workflow env: env context not allowed (self-reference)
+            new RuleCase(
+            "ng-workflow-env-self-ref",
+            """
+            on: push
+            env:
+                BAR: ${{ env.BAR }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // workflow concurrency: env context not allowed
+            new RuleCase(
+            "ng-workflow-concurrency-env",
+            """
+            on: push
+            concurrency:
+                group: ${{ env.FOO }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // workflow_call input default: env context not allowed
+            new RuleCase(
+            "ng-workflow-call-input-default-env",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        foo:
+                            type: string
+                            default: ${{ env.FOO }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // OK: workflow env using github and secrets
+            new RuleCase(
+            "ok-workflow-env-github-secrets",
+            """
+            on: push
+            env:
+                FOO: ${{ github.sha }}
+                BAR: ${{ secrets.TOKEN }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_JobLevel_TableDriven()
+    {
+        var cases = new[]
+        {
+            // job.name: runner not allowed
+            new RuleCase(
+            "ng-job-name-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    name: ${{ runner.name }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.runs-on: env and runner not allowed
+            new RuleCase(
+            "ng-job-runs-on-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ env.SUFFIX }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            new RuleCase(
+            "ng-job-runs-on-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ runner.OS }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.concurrency: env not allowed
+            new RuleCase(
+            "ng-job-concurrency-env",
+            """
+            on: push
+            jobs:
+                build:
+                    concurrency:
+                        group: ${{ env.FOO }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.container.credentials: runner not allowed
+            new RuleCase(
+            "ng-job-container-credentials-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: node:14
+                        credentials:
+                            username: ${{ runner.os }}
+                            password: ${{ env.FOO }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.continue-on-error: env not allowed
+            new RuleCase(
+            "ng-job-continue-on-error-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    continue-on-error: ${{ env.FOO == '' }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.environment: runner not allowed
+            new RuleCase(
+            "ng-job-environment-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    environment:
+                        name: ${{ runner.name }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.strategy: env not allowed
+            new RuleCase(
+            "ng-job-strategy-env",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os:
+                                - ${{ env.OS }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.timeout-minutes: env not allowed
+            new RuleCase(
+            "ng-job-timeout-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    timeout-minutes: ${{ env.TIMEOUT }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.outputs: OK (env, runner, steps all allowed)
+            new RuleCase(
+            "ok-job-outputs-env-runner-steps",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        foo: ${{ runner.name }}-${{ env.FOO }}-${{ steps.s1.outputs.x }}
+                    steps:
+                        - id: s1
+                          run: echo
+            """,
+            []),
+            // job.defaults.run: env allowed, runner not allowed
+            new RuleCase(
+            "ng-job-defaults-run-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    defaults:
+                        run:
+                            working-directory: ${{ runner.temp }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.services.image: env not allowed
+            new RuleCase(
+            "ng-job-services-image-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        nginx:
+                            image: ${{ env.IMAGE }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.services.credentials: runner not allowed
+            new RuleCase(
+            "ng-job-services-credentials-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        nginx:
+                            image: nginx
+                            credentials:
+                                username: ${{ runner.name }}
+                                password: ${{ env.PASSWORD }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.secrets: OK (secrets allowed for reusable workflow calls)
+            new RuleCase(
+            "ok-job-secrets-secrets",
+            """
+            on: push
+            jobs:
+                caller:
+                    uses: owner/repo/workflow.yml@main
+                    secrets:
+                        password: ${{ secrets.PASSWORD }}
+            """,
+            []),
+            // job.with (reusable): env not allowed
+            new RuleCase(
+            "ng-job-with-env",
+            """
+            on: push
+            jobs:
+                caller:
+                    uses: owner/repo/workflow.yml@main
+                    with:
+                        some-input: ${{ env.HELLO }}
+            """,
+            ["context \"env\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_StepLevel_TableDriven()
+    {
+        var cases = new[]
+        {
+            // step.name: OK (all step contexts available)
+            new RuleCase(
+            "ok-step-name-env-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - name: ${{ env.VERSION }} on ${{ runner.name }}
+                          run: echo
+            """,
+            []),
+            // step.continue-on-error: OK (inputs allowed)
+            new RuleCase(
+            "ok-step-continue-on-error-inputs",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        bool:
+                            type: boolean
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - continue-on-error: ${{ inputs.bool }}
+                          run: echo
+            """,
+            []),
+            // step.timeout-minutes: OK
+            new RuleCase(
+            "ok-step-timeout-minutes-inputs",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        timeout:
+                            type: number
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - timeout-minutes: ${{ inputs.timeout }}
+                          run: echo
+            """,
+            []),
+            // step.working-directory: OK (runner allowed at step level)
+            new RuleCase(
+            "ok-step-working-directory-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - working-directory: ${{ runner.temp }}
+                          run: echo
+            """,
+            []),
+            // step.if: secrets not allowed
+            new RuleCase(
+            "ng-step-if-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ secrets.PASSWORD != '' }}
+                          run: echo
+            """,
+            ["context \"secrets\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4-1: env context banned in workflow/job env ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_EnvContextBanned_TableDriven()
+    {
+        var cases = new[]
+        {
+            // workflow env cannot reference env context
+            new RuleCase(
+            "ng-workflow-env-env-context",
+            """
+            on: push
+            env:
+                ERROR1: ${{ env.PATH }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job env cannot reference env context
+            new RuleCase(
+            "ng-job-env-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        ERROR2: ${{ env.PATH }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // step env CAN reference env context (OK)
+            new RuleCase(
+            "ok-step-env-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+                          env:
+                            BAR: ${{ env.FOO }}
+            """,
+            []),
+            // container env CAN reference env context (OK)
+            new RuleCase(
+            "ok-container-env-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: node:14
+                        env:
+                            MYPATH: ${{ env.PATH }}
+                    steps:
+                        - run: echo
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4-1: env context banned in job-level if ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_JobIfEnvBanned_TableDriven()
+    {
+        var cases = new[]
+        {
+            // job.if with env context: not allowed
+            new RuleCase(
+            "ng-job-if-env-dollar-brace",
+            """
+            on: push
+            jobs:
+                test1:
+                    runs-on: ubuntu-latest
+                    if: ${{ env.FOO == 'aaa' }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.if without ${{ }}: env not allowed
+            new RuleCase(
+            "ng-job-if-env-bare",
+            """
+            on: push
+            jobs:
+                test2:
+                    runs-on: ubuntu-latest
+                    if: env.FOO == 'aaa'
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // reusable workflow call job if: env not allowed
+            new RuleCase(
+            "ng-reusable-job-if-env",
+            """
+            on: push
+            jobs:
+                test3:
+                    uses: org/repo/workflow.yml@v1
+                    if: ${{ env.FOO == 'aaa' }}
+            """,
+            ["context \"env\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4-2: shell key context availability ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ShellKeyContextAvailability_TableDriven()
+    {
+        var cases = new[]
+        {
+            // workflow-level defaults.run.shell: no context available
+            new RuleCase(
+            "ng-workflow-defaults-shell-env",
+            """
+            on: push
+            defaults:
+                run:
+                    shell: ${{ env.SHELL }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job-level defaults.run.shell: env IS available (OK)
+            new RuleCase(
+            "ok-job-defaults-shell-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    defaults:
+                        run:
+                            shell: ${{ env.SHELL }}
+                    steps:
+                        - run: echo
+            """,
+            []),
+            // step-level shell: no context available
+            new RuleCase(
+            "ng-step-shell-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+                          shell: ${{ env.SHELL }}
+            """,
+            ["context \"env\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4-3: special function availability ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_SpecialFunctionAvailability_TableDriven()
+    {
+        var cases = new[]
+        {
+            // status functions OK in job.if
+            new RuleCase(
+            "ok-always-in-job-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: always()
+                    steps:
+                        - run: echo
+            """,
+            []),
+            new RuleCase(
+            "ok-failure-in-step-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: failure()
+                          run: echo
+            """,
+            []),
+            // status functions NOT OK in strategy.matrix
+            new RuleCase(
+            "ng-always-in-strategy-matrix",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            errors:
+                                - ${{ always() }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["function \"always\" is not allowed here"]),
+            // hashFiles OK in step level
+            new RuleCase(
+            "ok-hashfiles-in-step-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ hashFiles('...') }}"
+            """,
+            []),
+            // hashFiles NOT OK in job.if
+            new RuleCase(
+            "ng-hashfiles-in-job-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: ${{ hashFiles('...') }}
+                    steps:
+                        - run: echo
+            """,
+            ["function \"hashFiles\" is not allowed here"]),
+            // success() NOT OK in step.run
+            new RuleCase(
+            "ng-success-in-step-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo 'success? ${{ success() }}'
+            """,
+            ["function \"success\" is not allowed here"]),
+            // hashFiles NOT OK in strategy.matrix
+            new RuleCase(
+            "ng-hashfiles-in-strategy-matrix",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            errors:
+                                - ${{ hashFiles('...') }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["function \"hashFiles\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4: step.id no context allowed ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_StepIdNoContext_TableDriven()
+    {
+        var cases = new[]
+        {
+            // step.id: no context allowed
+            new RuleCase(
+            "ng-step-id-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: ${{ inputs.foo }}
+                          run: echo
+            """,
+            ["context \"inputs\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // ────────── Phase 4: available context listing in message ──────────
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_MessageIncludesAvailableContexts_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Error message should list available contexts
+            new RuleCase(
+            "ng-job-if-env-lists-available-contexts",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    if: ${{ env.FOO == 'aaa' }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here", "available contexts are"]),
+            // "no context is available here" for shell
+            new RuleCase(
+            "ng-workflow-shell-no-context",
+            """
+            on: push
+            defaults:
+                run:
+                    shell: ${{ env.SHELL }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here", "no context is available here"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

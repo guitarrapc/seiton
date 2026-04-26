@@ -11,6 +11,10 @@
       ]
     },
     {
+      "workflowKey": "defaults.run.shell",
+      "contexts": []
+    },
+    {
       "workflowKey": "env",
       "contexts": [
         "github",
@@ -272,6 +276,10 @@
       ]
     },
     {
+      "workflowKey": "jobs.\u003Cjob_id\u003E.steps.id",
+      "contexts": []
+    },
+    {
       "workflowKey": "jobs.\u003Cjob_id\u003E.steps.if",
       "contexts": [
         "github",
@@ -317,6 +325,10 @@
         "steps",
         "inputs"
       ]
+    },
+    {
+      "workflowKey": "jobs.\u003Cjob_id\u003E.steps.shell",
+      "contexts": []
     },
     {
       "workflowKey": "jobs.\u003Cjob_id\u003E.steps.timeout-minutes",

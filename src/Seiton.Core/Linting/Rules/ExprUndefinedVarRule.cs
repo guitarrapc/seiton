@@ -50,6 +50,47 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             _localActionOutputResolver = null;
             _localActionOutputResolverFunc = null;
         }
+
+        // Workflow-level field checks
+        CheckNode(workflow.RunName, ExpressionValidationContext.RunName, "run-name", static (rule, message, location, w) =>
+            rule.AddWorkflowError(w, message, location), workflow);
+
+        CheckEnv(workflow.Env, ExpressionValidationContext.Env, "env", static (rule, message, location, w) =>
+            rule.AddWorkflowError(w, message, location), workflow);
+
+        if (workflow.Concurrency is { } concurrency)
+        {
+            CheckNode(concurrency.Group, ExpressionValidationContext.Concurrency, "concurrency.group", static (rule, message, location, w) =>
+                rule.AddWorkflowError(w, message, location), workflow);
+        }
+
+        if (workflow.Defaults?.Run is { } defaultsRun)
+        {
+            CheckNode(defaultsRun.Shell, ExpressionValidationContext.DefaultsRunShell, "defaults.run.shell", static (rule, message, location, w) =>
+                rule.AddWorkflowError(w, message, location), workflow);
+            CheckNode(defaultsRun.WorkingDirectory, ExpressionValidationContext.DefaultsRunShell, "defaults.run.working-directory", static (rule, message, location, w) =>
+                rule.AddWorkflowError(w, message, location), workflow);
+        }
+    }
+
+    public override void VisitEvent(Event ev)
+    {
+        if (Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        if (ev is WorkflowCallEvent wce)
+        {
+            if (wce.Inputs is { } inputs)
+            {
+                foreach (var input in inputs)
+                {
+                    CheckNode(input.Default, ExpressionValidationContext.WorkflowCallInputsDefault, "on.workflow_call.inputs.default", static (rule, message, location, e) =>
+                        rule.AddWorkflowError(rule._currentWorkflow!, message, location), ev);
+                }
+            }
+        }
     }
 
     public override void VisitWorkflowPost(Workflow workflow)
@@ -160,6 +201,87 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckEnv(job.Env, ExpressionValidationContext.JobEnv, "job.env", static (rule, message, location, targetJob) =>
             rule.AddJobError(targetJob, message, location), job);
 
+        CheckNode(job.Name, ExpressionValidationContext.JobName, "job.name", static (rule, message, location, targetJob) =>
+            rule.AddJobError(targetJob, message, location), job);
+
+        CheckNode(job.TimeoutMinutes, ExpressionValidationContext.JobTimeoutMinutes, "job.timeout-minutes", static (rule, message, location, targetJob) =>
+            rule.AddJobError(targetJob, message, location), job);
+
+        CheckNode(job.ContinueOnError, ExpressionValidationContext.JobContinueOnError, "job.continue-on-error", static (rule, message, location, targetJob) =>
+            rule.AddJobError(targetJob, message, location), job);
+
+        // job.runs-on
+        if (job.RunsOn is { } runsOn)
+        {
+            CheckNode(runsOn.LabelsExpr, ExpressionValidationContext.JobRunsOn, "job.runs-on", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+            if (runsOn.Labels is { } labels)
+            {
+                for (var li = 0; li < labels.Length; li++)
+                {
+                    CheckNode(labels[li], ExpressionValidationContext.JobRunsOn, "job.runs-on", static (rule, message, location, targetJob) =>
+                        rule.AddJobError(targetJob, message, location), job);
+                }
+            }
+            CheckNode(runsOn.Group, ExpressionValidationContext.JobRunsOn, "job.runs-on.group", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+        }
+
+        // job.concurrency
+        if (job.Concurrency is { } jobConcurrency)
+        {
+            CheckNode(jobConcurrency.Group, ExpressionValidationContext.JobConcurrency, "job.concurrency.group", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+        }
+
+        // job.environment
+        if (job.Environment is { } environment)
+        {
+            CheckNode(environment.Name, ExpressionValidationContext.JobEnvironment, "job.environment.name", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+            CheckNode(environment.Url, ExpressionValidationContext.JobEnvironmentUrl, "job.environment.url", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+        }
+
+        // job.defaults.run
+        if (job.Defaults?.Run is { } jobDefaultsRun)
+        {
+            CheckNode(jobDefaultsRun.Shell, ExpressionValidationContext.JobDefaultsRun, "job.defaults.run.shell", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+            CheckNode(jobDefaultsRun.WorkingDirectory, ExpressionValidationContext.JobDefaultsRun, "job.defaults.run.working-directory", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+        }
+
+        // job.outputs
+        if (job.Outputs is { Count: > 0 } outputs)
+        {
+            foreach (var pair in outputs)
+            {
+                CheckNode(pair.Value, ExpressionValidationContext.JobOutputs, "job.outputs", static (rule, message, location, targetJob) =>
+                    rule.AddJobError(targetJob, message, location), job);
+            }
+        }
+
+        // job.strategy
+        CheckStrategy(job.Strategy, job);
+
+        // job.container
+        CheckContainer(job.Container, ExpressionValidationContext.JobContainerImage, ExpressionValidationContext.JobContainerCredentials, ExpressionValidationContext.JobContainerEnv, ExpressionValidationContext.JobContainer, job);
+
+        // job.services
+        CheckServices(job.Services, job);
+
+        // job.secrets (reusable workflow call)
+        var callSecrets = job.WorkflowCall?.Secrets;
+        if (callSecrets is { Count: > 0 })
+        {
+            foreach (var pair in callSecrets.Value)
+            {
+                CheckNode(pair.Value.Value, ExpressionValidationContext.JobSecrets, "job.secrets", static (rule, message, location, targetJob) =>
+                    rule.AddJobError(targetJob, message, location), job);
+            }
+        }
+
         var callInputs = job.WorkflowCall?.Inputs;
         if (callInputs is null || callInputs.Value.Count == 0)
         {
@@ -196,9 +318,25 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckEnv(step.Env, ExpressionValidationContext.StepEnv, "step.env", static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
+        CheckNode(step.Name, ExpressionValidationContext.StepName, "step.name", static (rule, message, location, targetStep) =>
+            rule.AddStepError(targetStep, message, location), step);
+
+        CheckNode(step.Id, ExpressionValidationContext.StepId, "step.id", static (rule, message, location, targetStep) =>
+            rule.AddStepError(targetStep, message, location), step);
+
+        CheckNode(step.ContinueOnError, ExpressionValidationContext.StepContinueOnError, "step.continue-on-error", static (rule, message, location, targetStep) =>
+            rule.AddStepError(targetStep, message, location), step);
+
+        CheckNode(step.TimeoutMinutes, ExpressionValidationContext.StepTimeoutMinutes, "step.timeout-minutes", static (rule, message, location, targetStep) =>
+            rule.AddStepError(targetStep, message, location), step);
+
         if (step.Exec is ExecRun run)
         {
             CheckNode(run.Run, ExpressionValidationContext.StepRun, "step.run", static (rule, message, location, targetStep) =>
+                rule.AddStepError(targetStep, message, location), step);
+            CheckNode(run.Shell, ExpressionValidationContext.StepShell, "step.shell", static (rule, message, location, targetStep) =>
+                rule.AddStepError(targetStep, message, location), step);
+            CheckNode(run.WorkingDirectory, ExpressionValidationContext.StepWorkingDirectory, "step.working-directory", static (rule, message, location, targetStep) =>
                 rule.AddStepError(targetStep, message, location), step);
         }
         else if (step.Exec is ExecAction action && action.Inputs is { Count: > 0 })
@@ -241,6 +379,28 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             var keyName = Decode(Arena.GetStringSlice(envVar.Name));
             CheckNode(envVar.Value, context, $"{sinkName}.{keyName}", report, target);
         }
+    }
+
+    private void CheckNode<TTarget>(
+        FloatNodeId node,
+        ExpressionValidationContext context,
+        string sinkName,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!node.HasValue) return;
+        CheckNode(Arena.GetFloatExpression(node), context, sinkName, report, target);
+    }
+
+    private void CheckNode<TTarget>(
+        BoolNodeId node,
+        ExpressionValidationContext context,
+        string sinkName,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!node.HasValue) return;
+        CheckNode(Arena.GetBoolExpression(node), context, sinkName, report, target);
     }
 
     private void CheckNode<TTarget>(
@@ -359,11 +519,55 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             if (!Availability.IsRootContextAvailable(context, rootName))
             {
                 var rootNameText = Encoding.UTF8.GetString(rootName);
-                report(
-                    this,
-                    $"{sinkName} expression references undefined context '{rootNameText}' in {ToContextText(context)} scope",
-                    location,
-                    target);
+                if (IsBuiltinContext(rootName))
+                {
+                    var availableText = Availability.FormatAvailableContexts(context);
+                    report(
+                        this,
+                        $"context \"{rootNameText}\" is not allowed here. {availableText}",
+                        location,
+                        target);
+                }
+                else
+                {
+                    report(
+                        this,
+                        $"context \"{rootNameText}\" is not allowed here. undefined context \"{rootNameText}\"",
+                        location,
+                        target);
+                }
+            }
+        }
+
+        // Special function availability checks
+        if (node.Kind == ExpressionNodeKind.FunctionCall && node.Left >= 0 && node.Left < nodes.Length)
+        {
+            var callee = nodes[node.Left];
+            if (callee.Kind == ExpressionNodeKind.Identifier)
+            {
+                var funcName = callee.Token.AsSpan(expression);
+
+                // Status check functions: only in if conditions
+                var isIfContext = context is ExpressionValidationContext.JobIf or ExpressionValidationContext.StepIf;
+                if (!isIfContext && IsStatusCheckFunction(funcName))
+                {
+                    var funcNameText = Encoding.UTF8.GetString(funcName);
+                    report(
+                        this,
+                        $"function \"{funcNameText}\" is not allowed here. \"{funcNameText}\" is only available in \"if\" conditions of jobs and steps",
+                        location,
+                        target);
+                }
+
+                // hashFiles: only at step level (not job.if)
+                if (IsHashFilesFunction(funcName) && !Availability.IsStepLevel(context))
+                {
+                    report(
+                        this,
+                        $"function \"hashFiles\" is not allowed here. \"hashFiles\" is only available in step-level expressions",
+                        location,
+                        target);
+                }
             }
         }
 
@@ -505,5 +709,171 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         bodyLength = closeOffset;
         nextSearchStart = bodyStart + closeOffset + 2;
         return true;
+    }
+
+    private void CheckStrategy(Strategy? strategy, Job job)
+    {
+        if (strategy is null) return;
+
+        CheckNode(strategy.FailFast, ExpressionValidationContext.JobStrategy, "job.strategy.fail-fast", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+        CheckNode(strategy.MaxParallel, ExpressionValidationContext.JobStrategy, "job.strategy.max-parallel", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+
+        if (strategy.Matrix is { } matrix)
+        {
+            CheckNode(Arena.GetStringExpression(matrix.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.matrix", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+
+            if (matrix.Rows is { Count: > 0 })
+            {
+                foreach (var pair in matrix.Rows)
+                {
+                    CheckMatrixValues(pair.Value.Values, ExpressionValidationContext.JobStrategy, "job.strategy.matrix", job);
+                    CheckNode(Arena.GetStringExpression(pair.Value.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.matrix", static (rule, message, location, j) =>
+                        rule.AddJobError(j, message, location), job);
+                }
+            }
+            if (matrix.Include is { Count: > 0 })
+            {
+                foreach (var combo in matrix.Include)
+                {
+                    CheckNode(Arena.GetStringExpression(combo.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.include", static (rule, message, location, j) =>
+                        rule.AddJobError(j, message, location), job);
+                    CheckMatrixCombinationEntries(combo.Entries, ExpressionValidationContext.JobStrategy, "job.strategy.include", job);
+                }
+            }
+            if (matrix.Exclude is { Count: > 0 })
+            {
+                foreach (var combo in matrix.Exclude)
+                {
+                    CheckNode(Arena.GetStringExpression(combo.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.exclude", static (rule, message, location, j) =>
+                        rule.AddJobError(j, message, location), job);
+                    CheckMatrixCombinationEntries(combo.Entries, ExpressionValidationContext.JobStrategy, "job.strategy.exclude", job);
+                }
+            }
+        }
+    }
+
+    private void CheckMatrixValues(IReadOnlyList<RawYamlValue>? values, ExpressionValidationContext context, string sinkName, Job job)
+    {
+        if (values is null) return;
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (values[i] is RawYamlString str)
+            {
+                CheckNode(str.Value, context, sinkName, static (rule, message, location, j) =>
+                    rule.AddJobError(j, message, location), job);
+            }
+        }
+    }
+
+    private void CheckMatrixCombinationEntries(IReadOnlyList<SliceMap<RawYamlValue>>? entries, ExpressionValidationContext context, string sinkName, Job job)
+    {
+        if (entries is null) return;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            foreach (var pair in entries[i])
+            {
+                if (pair.Value is RawYamlString str)
+                {
+                    CheckNode(str.Value, context, sinkName, static (rule, message, location, j) =>
+                        rule.AddJobError(j, message, location), job);
+                }
+            }
+        }
+    }
+
+    private void CheckContainer(Container? container, ExpressionValidationContext imageCtx, ExpressionValidationContext credentialsCtx, ExpressionValidationContext envCtx, ExpressionValidationContext optionsCtx, Job job)
+    {
+        if (container is null) return;
+
+        CheckNode(container.Image, imageCtx, "job.container.image", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+        CheckNode(container.Options, optionsCtx, "job.container.options", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+        CheckEnv(container.Env, envCtx, "job.container.env", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+
+        if (container.Credentials is { } creds)
+        {
+            CheckNode(creds.Username, credentialsCtx, "job.container.credentials.username", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+            CheckNode(creds.Password, credentialsCtx, "job.container.credentials.password", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+            CheckNode(Arena.GetStringExpression(creds.Expression), credentialsCtx, "job.container.credentials", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+        }
+    }
+
+    private void CheckServices(Services? services, Job job)
+    {
+        if (services is null) return;
+
+        CheckNode(Arena.GetStringExpression(services.Expression), ExpressionValidationContext.JobServices, "job.services", static (rule, message, location, j) =>
+            rule.AddJobError(j, message, location), job);
+
+        if (services.ServiceMap is not { Count: > 0 }) return;
+
+        foreach (var pair in services.ServiceMap)
+        {
+            var svc = pair.Value;
+            var svcContainer = svc.Container;
+            if (svcContainer is null) continue;
+
+            CheckNode(svcContainer.Image, ExpressionValidationContext.JobServices, "job.services.image", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+            CheckNode(svcContainer.Options, ExpressionValidationContext.JobServices, "job.services.options", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+            CheckEnv(svcContainer.Env, ExpressionValidationContext.JobServicesEnv, "job.services.env", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+
+            if (svcContainer.Credentials is { } svcCreds)
+            {
+                CheckNode(svcCreds.Username, ExpressionValidationContext.JobServicesCredentials, "job.services.credentials.username", static (rule, message, location, j) =>
+                    rule.AddJobError(j, message, location), job);
+                CheckNode(svcCreds.Password, ExpressionValidationContext.JobServicesCredentials, "job.services.credentials.password", static (rule, message, location, j) =>
+                    rule.AddJobError(j, message, location), job);
+                CheckNode(Arena.GetStringExpression(svcCreds.Expression), ExpressionValidationContext.JobServicesCredentials, "job.services.credentials", static (rule, message, location, j) =>
+                    rule.AddJobError(j, message, location), job);
+            }
+        }
+    }
+
+    private void CheckNode<TTarget>(
+        IntNodeId node,
+        ExpressionValidationContext context,
+        string sinkName,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!node.HasValue) return;
+        CheckNode(Arena.GetIntExpression(node), context, sinkName, report, target);
+    }
+
+    private static bool IsStatusCheckFunction(ReadOnlySpan<byte> nameUtf8)
+    {
+        return EqualsAsciiIgnoreCase(nameUtf8, "success"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "failure"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "cancelled"u8)
+            || EqualsAsciiIgnoreCase(nameUtf8, "always"u8);
+    }
+
+    private static bool IsHashFilesFunction(ReadOnlySpan<byte> nameUtf8)
+    {
+        return EqualsAsciiIgnoreCase(nameUtf8, "hashfiles"u8);
+    }
+
+    private static bool IsBuiltinContext(ReadOnlySpan<byte> nameUtf8)
+    {
+        var builtins = Generated.ContextTypes.BuiltinContextTypes;
+        for (var i = 0; i < builtins.Length; i++)
+        {
+            if (EqualsAsciiIgnoreCase(nameUtf8, builtins[i].NameUtf8))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

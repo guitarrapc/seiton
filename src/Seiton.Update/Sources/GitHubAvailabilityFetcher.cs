@@ -93,6 +93,17 @@ internal sealed class GitHubAvailabilityFetcher
         UpdateLogger.Info($"[parse:availability:sources] wrote {paths.ParsedDocsPath}");
     }
 
+    /// <summary>
+    /// Workflow keys whose context availability is not listed in the upstream docs table
+    /// but must be tracked (typically with empty contexts = "expressions not allowed here").
+    /// </summary>
+    private static readonly Dictionary<string, List<string>> SupplementedEntries = new(StringComparer.Ordinal)
+    {
+        ["defaults.run.shell"] = [],
+        ["jobs.<job_id>.steps.id"] = [],
+        ["jobs.<job_id>.steps.shell"] = [],
+    };
+
     public void MergeParsedSources(string repoRoot)
     {
         var paths = Paths(repoRoot);
@@ -112,9 +123,20 @@ internal sealed class GitHubAvailabilityFetcher
         }) ?? throw new InvalidDataException($"Invalid parsed availability snapshot: {paths.ParsedDocsPath}");
 
         // Passthrough: emit all per-key entries as-is from parsed source.
-        var entries = parsed.Entries
-            .Where(static x => !string.IsNullOrEmpty(x.WorkflowKey) && x.Contexts.Count > 0)
-            .Select(static x => new { workflowKey = x.WorkflowKey, contexts = x.Contexts })
+        // Empty contexts lists are valid (they mean "no expression contexts allowed").
+        var entryMap = parsed.Entries
+            .Where(static x => !string.IsNullOrEmpty(x.WorkflowKey))
+            .ToDictionary(static x => x.WorkflowKey!, static x => x.Contexts, StringComparer.Ordinal);
+
+        // Add supplemented entries that are not in the upstream docs table
+        foreach (var (key, contexts) in SupplementedEntries)
+        {
+            entryMap.TryAdd(key, contexts);
+        }
+
+        var entries = entryMap
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .Select(static x => new { workflowKey = x.Key, contexts = x.Value })
             .ToArray();
 
         var snapshot = new

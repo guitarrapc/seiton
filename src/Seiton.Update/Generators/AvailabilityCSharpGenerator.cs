@@ -143,6 +143,38 @@ internal sealed partial class AvailabilityCSharpGenerator
         sb.AppendLine();
         sb.AppendLine("            return false;");
         sb.AppendLine("        }");
+
+        // GetAvailableRoots
+        sb.AppendLine();
+        sb.AppendLine("        public static byte[][] GetAvailableRoots(ExpressionValidationContext context)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            return context switch");
+        sb.AppendLine("            {");
+        foreach (var (enumName, _, _) in entries)
+        {
+            sb.AppendLine($"                ExpressionValidationContext.{enumName} => {enumName}Roots,");
+        }
+        sb.AppendLine("                _ => [],");
+        sb.AppendLine("            };");
+        sb.AppendLine("        }");
+
+        // FormatAvailableContexts
+        sb.AppendLine();
+        sb.AppendLine("        public static string FormatAvailableContexts(ExpressionValidationContext context)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var roots = GetAvailableRoots(context);");
+        sb.AppendLine("            if (roots.Length == 0) return \"no context is available here\";");
+        sb.AppendLine("            var sb = new System.Text.StringBuilder(\"available contexts are \");");
+        sb.AppendLine("            for (var i = 0; i < roots.Length; i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (i > 0) sb.Append(\", \");");
+        sb.AppendLine("                sb.Append('\\\"');");
+        sb.AppendLine("                sb.Append(System.Text.Encoding.UTF8.GetString(roots[i]));");
+        sb.AppendLine("                sb.Append('\\\"');");
+        sb.AppendLine("            }");
+        sb.AppendLine("            return sb.ToString();");
+        sb.AppendLine("        }");
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
 

@@ -10,6 +10,7 @@ namespace Seiton.Core.Parsing
     public enum ExpressionValidationContext
     {
         Concurrency,
+        DefaultsRunShell,
         Env,
         RunName,
         WorkflowCallInputsDefault,
@@ -37,9 +38,11 @@ namespace Seiton.Core.Parsing
         JobWith,
         StepContinueOnError,
         StepEnv,
+        StepId,
         StepIf,
         StepName,
         StepRun,
+        StepShell,
         StepTimeoutMinutes,
         StepWith,
         StepWorkingDirectory,
@@ -57,6 +60,10 @@ namespace Seiton.Core.Generated
             "github"u8.ToArray(),
             "inputs"u8.ToArray(),
             "vars"u8.ToArray(),
+        ];
+
+        static readonly byte[][] DefaultsRunShellRoots =
+        [
         ];
 
         static readonly byte[][] EnvRoots =
@@ -349,6 +356,10 @@ namespace Seiton.Core.Generated
             "steps"u8.ToArray(),
         ];
 
+        static readonly byte[][] StepIdRoots =
+        [
+        ];
+
         static readonly byte[][] StepIfRoots =
         [
             "github"u8.ToArray(),
@@ -391,6 +402,10 @@ namespace Seiton.Core.Generated
             "env"u8.ToArray(),
             "secrets"u8.ToArray(),
             "steps"u8.ToArray(),
+        ];
+
+        static readonly byte[][] StepShellRoots =
+        [
         ];
 
         static readonly byte[][] StepTimeoutMinutesRoots =
@@ -443,6 +458,7 @@ namespace Seiton.Core.Generated
             return context switch
             {
                 ExpressionValidationContext.Concurrency => Contains(ConcurrencyRoots, rootName),
+                ExpressionValidationContext.DefaultsRunShell => Contains(DefaultsRunShellRoots, rootName),
                 ExpressionValidationContext.Env => Contains(EnvRoots, rootName),
                 ExpressionValidationContext.RunName => Contains(RunNameRoots, rootName),
                 ExpressionValidationContext.WorkflowCallInputsDefault => Contains(WorkflowCallInputsDefaultRoots, rootName),
@@ -470,9 +486,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobWith => Contains(JobWithRoots, rootName),
                 ExpressionValidationContext.StepContinueOnError => Contains(StepContinueOnErrorRoots, rootName),
                 ExpressionValidationContext.StepEnv => Contains(StepEnvRoots, rootName),
+                ExpressionValidationContext.StepId => Contains(StepIdRoots, rootName),
                 ExpressionValidationContext.StepIf => Contains(StepIfRoots, rootName),
                 ExpressionValidationContext.StepName => Contains(StepNameRoots, rootName),
                 ExpressionValidationContext.StepRun => Contains(StepRunRoots, rootName),
+                ExpressionValidationContext.StepShell => Contains(StepShellRoots, rootName),
                 ExpressionValidationContext.StepTimeoutMinutes => Contains(StepTimeoutMinutesRoots, rootName),
                 ExpressionValidationContext.StepWith => Contains(StepWithRoots, rootName),
                 ExpressionValidationContext.StepWorkingDirectory => Contains(StepWorkingDirectoryRoots, rootName),
@@ -484,9 +502,11 @@ namespace Seiton.Core.Generated
         {
             return context is ExpressionValidationContext.StepContinueOnError
                 or ExpressionValidationContext.StepEnv
+                or ExpressionValidationContext.StepId
                 or ExpressionValidationContext.StepIf
                 or ExpressionValidationContext.StepName
                 or ExpressionValidationContext.StepRun
+                or ExpressionValidationContext.StepShell
                 or ExpressionValidationContext.StepTimeoutMinutes
                 or ExpressionValidationContext.StepWith
                 or ExpressionValidationContext.StepWorkingDirectory;
@@ -497,6 +517,7 @@ namespace Seiton.Core.Generated
             return context switch
             {
                 ExpressionValidationContext.Concurrency => "workflow",
+                ExpressionValidationContext.DefaultsRunShell => "workflow",
                 ExpressionValidationContext.Env => "workflow",
                 ExpressionValidationContext.RunName => "workflow",
                 ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call",
@@ -524,9 +545,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobWith => "job",
                 ExpressionValidationContext.StepContinueOnError => "step",
                 ExpressionValidationContext.StepEnv => "step",
+                ExpressionValidationContext.StepId => "step",
                 ExpressionValidationContext.StepIf => "step if",
                 ExpressionValidationContext.StepName => "step",
                 ExpressionValidationContext.StepRun => "step",
+                ExpressionValidationContext.StepShell => "step",
                 ExpressionValidationContext.StepTimeoutMinutes => "step",
                 ExpressionValidationContext.StepWith => "step",
                 ExpressionValidationContext.StepWorkingDirectory => "step",
@@ -539,6 +562,7 @@ namespace Seiton.Core.Generated
             return context switch
             {
                 ExpressionValidationContext.Concurrency => "workflow",
+                ExpressionValidationContext.DefaultsRunShell => "workflow",
                 ExpressionValidationContext.Env => "workflow",
                 ExpressionValidationContext.RunName => "workflow",
                 ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call",
@@ -566,9 +590,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobWith => "job",
                 ExpressionValidationContext.StepContinueOnError => "step",
                 ExpressionValidationContext.StepEnv => "step",
+                ExpressionValidationContext.StepId => "step",
                 ExpressionValidationContext.StepIf => "step",
                 ExpressionValidationContext.StepName => "step",
                 ExpressionValidationContext.StepRun => "step",
+                ExpressionValidationContext.StepShell => "step",
                 ExpressionValidationContext.StepTimeoutMinutes => "step",
                 ExpressionValidationContext.StepWith => "step",
                 ExpressionValidationContext.StepWorkingDirectory => "step",
@@ -587,6 +613,66 @@ namespace Seiton.Core.Generated
             }
 
             return false;
+        }
+
+        public static byte[][] GetAvailableRoots(ExpressionValidationContext context)
+        {
+            return context switch
+            {
+                ExpressionValidationContext.Concurrency => ConcurrencyRoots,
+                ExpressionValidationContext.DefaultsRunShell => DefaultsRunShellRoots,
+                ExpressionValidationContext.Env => EnvRoots,
+                ExpressionValidationContext.RunName => RunNameRoots,
+                ExpressionValidationContext.WorkflowCallInputsDefault => WorkflowCallInputsDefaultRoots,
+                ExpressionValidationContext.WorkflowCallOutputsValue => WorkflowCallOutputsValueRoots,
+                ExpressionValidationContext.JobConcurrency => JobConcurrencyRoots,
+                ExpressionValidationContext.JobContainer => JobContainerRoots,
+                ExpressionValidationContext.JobContainerCredentials => JobContainerCredentialsRoots,
+                ExpressionValidationContext.JobContainerEnv => JobContainerEnvRoots,
+                ExpressionValidationContext.JobContainerImage => JobContainerImageRoots,
+                ExpressionValidationContext.JobContinueOnError => JobContinueOnErrorRoots,
+                ExpressionValidationContext.JobDefaultsRun => JobDefaultsRunRoots,
+                ExpressionValidationContext.JobEnv => JobEnvRoots,
+                ExpressionValidationContext.JobEnvironment => JobEnvironmentRoots,
+                ExpressionValidationContext.JobEnvironmentUrl => JobEnvironmentUrlRoots,
+                ExpressionValidationContext.JobIf => JobIfRoots,
+                ExpressionValidationContext.JobName => JobNameRoots,
+                ExpressionValidationContext.JobOutputs => JobOutputsRoots,
+                ExpressionValidationContext.JobRunsOn => JobRunsOnRoots,
+                ExpressionValidationContext.JobSecrets => JobSecretsRoots,
+                ExpressionValidationContext.JobServices => JobServicesRoots,
+                ExpressionValidationContext.JobServicesCredentials => JobServicesCredentialsRoots,
+                ExpressionValidationContext.JobServicesEnv => JobServicesEnvRoots,
+                ExpressionValidationContext.JobStrategy => JobStrategyRoots,
+                ExpressionValidationContext.JobTimeoutMinutes => JobTimeoutMinutesRoots,
+                ExpressionValidationContext.JobWith => JobWithRoots,
+                ExpressionValidationContext.StepContinueOnError => StepContinueOnErrorRoots,
+                ExpressionValidationContext.StepEnv => StepEnvRoots,
+                ExpressionValidationContext.StepId => StepIdRoots,
+                ExpressionValidationContext.StepIf => StepIfRoots,
+                ExpressionValidationContext.StepName => StepNameRoots,
+                ExpressionValidationContext.StepRun => StepRunRoots,
+                ExpressionValidationContext.StepShell => StepShellRoots,
+                ExpressionValidationContext.StepTimeoutMinutes => StepTimeoutMinutesRoots,
+                ExpressionValidationContext.StepWith => StepWithRoots,
+                ExpressionValidationContext.StepWorkingDirectory => StepWorkingDirectoryRoots,
+                _ => [],
+            };
+        }
+
+        public static string FormatAvailableContexts(ExpressionValidationContext context)
+        {
+            var roots = GetAvailableRoots(context);
+            if (roots.Length == 0) return "no context is available here";
+            var sb = new System.Text.StringBuilder("available contexts are ");
+            for (var i = 0; i < roots.Length; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append('\"');
+                sb.Append(System.Text.Encoding.UTF8.GetString(roots[i]));
+                sb.Append('\"');
+            }
+            return sb.ToString();
         }
     }
 }

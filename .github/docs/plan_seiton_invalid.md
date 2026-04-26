@@ -921,7 +921,62 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 ### Phase 4 実装記録
 
-(未着手)
+**変更ファイル**:
+
+- `data/sources/availability/github/availability.json`: 3 件の補足エントリ追加 (`defaults.run.shell`, `jobs.<job_id>.steps.id`, `jobs.<job_id>.steps.shell` — すべて空 contexts)
+- `src/Seiton.Update/Sources/GitHubAvailabilityFetcher.cs`: `SupplementedEntries` に上記 3 エントリ追加
+- `src/Seiton.Update/Generators/AvailabilityCSharpGenerator.cs`: `GetAvailableRoots()` と `FormatAvailableContexts()` メソッド生成を追加
+- `src/Seiton.Core/Generated/Availability.g.cs`: 再生成 — 37 エントリ (34→37)、新メソッド `GetAvailableRoots` / `FormatAvailableContexts` / `IsStepLevel` 拡張
+- `src/Seiton.Core/Linting/Rules/ExprUndefinedVarRule.cs`: 大幅拡張 (~510→~770 行)
+  - `VisitWorkflowPre`: `RunName`, `Env`, `Concurrency.Group`, `Defaults.Run.Shell`/`WorkingDirectory` チェック追加
+  - `VisitEvent` (新規): `WorkflowCallEvent.Inputs[].Default` チェック
+  - `VisitJobPre`: `Name`, `TimeoutMinutes`, `ContinueOnError`, `RunsOn`, `Concurrency`, `Environment`, `Defaults.Run`, `Outputs`, `Strategy` (CheckStrategy), `Container` (CheckContainer), `Services` (CheckServices), `WorkflowCall.Secrets` チェック追加
+  - `VisitStep`: `Name`, `Id`, `ContinueOnError`, `TimeoutMinutes`, `Shell`, `WorkingDirectory` チェック追加
+  - `CheckNode` オーバーロード: `FloatNodeId`, `BoolNodeId`, `IntNodeId` 対応
+  - 新ヘルパー: `CheckStrategy()`, `CheckMatrixValues()`, `CheckMatrixCombinationEntries()`, `CheckContainer()`, `CheckServices()`
+  - `IsStatusCheckFunction()` / `IsHashFilesFunction()` / `IsBuiltinContext()` ヘルパー追加
+  - `VisitExpressionNode`: ビルトインコンテキスト (12 種) と未知コンテキストを区別 — 前者は "context \"X\" is not allowed here. available contexts are ..." 後者は "... undefined context \"X\""
+  - ステータス関数 (`always`/`failure`/`success`/`cancelled`) は `JobIf`/`StepIf` のみ許可
+  - `hashFiles` はステップレベルのみ許可
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: 9 件の新テストメソッド追加 + 既存 10 アサーション更新
+
+**新テスト (9 メソッド, 43 ケース)**:
+1. `ContextAvailability_WorkflowLevel_TableDriven` — 5 cases
+2. `ContextAvailability_JobLevel_TableDriven` — 15 cases
+3. `ContextAvailability_StepLevel_TableDriven` — 5 cases
+4. `EnvContextBanned_TableDriven` — 4 cases
+5. `JobIfEnvBanned_TableDriven` — 3 cases
+6. `ShellKeyContextAvailability_TableDriven` — 3 cases
+7. `SpecialFunctionAvailability_TableDriven` — 7 cases
+8. `StepIdNoContext_TableDriven` — 1 case
+9. `MessageIncludesAvailableContexts_TableDriven` — 2 cases
+
+**テスト結果**: 全 791 テスト通過 (757→791, +34)
+
+**ベンチマーク結果** (CoreLintBenchmark — parse + lint):
+
+| Size   | FixEnabled | Mean      | Allocated |
+|--------|-----------|-----------|-----------|
+| Small  | False     | 65.53 μs  | 17.29 KB  |
+| Small  | True      | 72.19 μs  | 17.70 KB  |
+| Medium | False     | 1,491 μs  | 120.58 KB |
+| Medium | True      | 2,052 μs  | 127.00 KB |
+| Large  | False     | 19,429 μs | 567.77 KB |
+| Large  | True      | 33,242 μs | 597.92 KB |
+
+CoreParsingBenchmark (WorkflowParser.Parse — AST + rules):
+
+| Size   | Mean       | Allocated |
+|--------|-----------|-----------|
+| Small  | 40.35 μs  | 6.74 KB   |
+| Medium | 1,034 μs  | 47.55 KB  |
+| Large  | 19,166 μs | 213.54 KB |
+
+**設計判断**:
+- 未知コンテキスト (`foobar` 等) と、既知だが利用不可コンテキスト (`env` in `job.if` 等) を区別。`BuiltinContextTypes` (12 種) に含まれるかで判定
+- `FormatAvailableContexts()` はエラーパスのみで呼ばれるため allocation 許容
+- shell キー (`defaults.run.shell`, `steps.shell`) は GitHub Actions 仕様で式不可。空 contexts で表現
+- `steps.id` も式不可 (GitHub Actions 仕様)。空 contexts で表現
 
 ### Phase 5 実装記録
 
