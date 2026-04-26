@@ -41,6 +41,9 @@ internal static class ExpectedKeys
     /// <summary>Expected keys for on.<event_name></summary>
     internal const string OnEventKeys = "\"types\"";
 
+    /// <summary>Expected keys for on.merge_group</summary>
+    internal const string OnMergeGroupKeys = "\"branches\", \"branches-ignore\"";
+
     /// <summary>Expected keys for on.pull_request</summary>
     internal const string OnPullRequestKeys = "\"branches\", \"branches-ignore\", \"paths\", \"paths-ignore\"";
 
@@ -57,7 +60,7 @@ internal static class ExpectedKeys
     internal const string OnWorkflowDispatchKeys = "\"inputs\"";
 
     /// <summary>Expected keys for on.workflow_run</summary>
-    internal const string OnWorkflowRunKeys = "\"branches\", \"branches-ignore\"";
+    internal const string OnWorkflowRunKeys = "\"branches\", \"branches-ignore\", \"workflows\"";
 
     /// <summary>Keys valid for run-form steps (with 'run')</summary>
     internal const string RunStepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"working-directory\"";

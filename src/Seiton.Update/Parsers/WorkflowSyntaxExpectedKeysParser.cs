@@ -38,6 +38,7 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
         ["on.workflow_call.secrets.<secret_id>"] = "workflow-call-secret",
         ["on.workflow_dispatch"] = "on-workflow-dispatch",
         ["on.workflow_dispatch.inputs.<input_id>"] = "workflow-dispatch-input",
+        ["on.merge_group"] = "on-merge-group",
         ["defaults"] = "defaults",
         ["defaults.run"] = "defaults-run",
         ["jobs.<job_id>"] = "job",
@@ -60,6 +61,16 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
     {
         ["jobs.<job_id>.container.credentials"] = ("credentials", "Keys valid for credentials mapping", ["password", "username"]),
         ["jobs.<job_id>.runs-on"] = ("runs-on", "Keys valid for runs-on mapping form", ["group", "labels"]),
+        ["on.merge_group"] = ("on-merge-group", "Expected keys for on.merge_group", ["branches", "branches-ignore"]),
+    };
+
+    /// <summary>
+    /// Extra keys to merge into heading-extracted sections.
+    /// These are documented in body text rather than as separate <c>##</c> headings.
+    /// </summary>
+    private static readonly Dictionary<string, List<string>> SupplementalKeys = new(StringComparer.Ordinal)
+    {
+        ["on-workflow-run"] = ["workflows"],
     };
 
     /// <summary>
@@ -118,6 +129,21 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
 
             sections.Add(new ExpectedKeySection(name, description,
                 keys.OrderBy(static k => k, StringComparer.Ordinal).ToList()));
+        }
+
+        // Merge supplemental keys into heading-extracted sections
+        foreach (var (sectionName, extraKeys) in SupplementalKeys)
+        {
+            var existing = sections.FindIndex(s => s.Name == sectionName);
+            if (existing >= 0)
+            {
+                var section = sections[existing];
+                var merged = section.Keys.Concat(extraKeys)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static k => k, StringComparer.Ordinal)
+                    .ToList();
+                sections[existing] = new ExpectedKeySection(section.Name, section.Description, merged);
+            }
         }
 
         // Sort all sections by name for deterministic output

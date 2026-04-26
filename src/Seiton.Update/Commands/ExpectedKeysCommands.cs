@@ -9,7 +9,13 @@ internal static class ExpectedKeysCommands
     {
         var fetcher = new GitHubExpectedKeysFetcher();
         var manifest = await fetcher.FetchAsync(repoRoot);
-        UpdateLogger.Info($"[fetch:expected-keys] completed. manifest dataset={manifest.Dataset}");
+
+        var manifestService = new ManifestService();
+        var manifestData = manifestService.Load(repoRoot);
+        manifestData = manifestService.Upsert(manifestData, manifest);
+        manifestService.Save(repoRoot, manifestData);
+
+        UpdateLogger.Info($"[fetch:expected-keys] completed. manifest updated. dataset={manifest.Dataset}");
         return 0;
     }
 

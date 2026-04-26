@@ -11,7 +11,7 @@ internal static class ContextTypesCommands
         var fetcher = new GitHubContextTypesFetcher();
         var entry = await fetcher.FetchAsync(repoRoot);
 
-        var manifestService = new WebhookManifestService();
+        var manifestService = new ManifestService();
         var manifest = manifestService.Load(repoRoot);
         manifest = manifestService.Upsert(manifest, entry);
         manifestService.Save(repoRoot, manifest);

@@ -1029,7 +1029,7 @@ public sealed class ParserTests
                         paths: [src/**]
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "\"paths\" filter is not available for merge_group event. it is only for push, pull_request, pull_request_target events"
+                "\"paths\" filter is not available for merge_group event. it is only for pull_request, pull_request_target, push events"
             ),
             (
                 "tags not available for pull_request",
@@ -1049,7 +1049,7 @@ public sealed class ParserTests
                         branches: [main]
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "\"branches\" filter is not available for pull_request_review event. it is only for merge_group, push, pull_request, pull_request_target, workflow_run events"
+                "\"branches\" filter is not available for pull_request_review event. it is only for merge_group, pull_request, pull_request_target, push, workflow_run events"
             ),
         };
 

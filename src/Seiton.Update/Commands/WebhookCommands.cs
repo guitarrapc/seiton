@@ -11,7 +11,7 @@ internal static class WebhookCommands
         var fetcher = new GitHubWebhookFetcher();
         var entry = await fetcher.FetchAsync(repoRoot, excludeSchemaOnly);
 
-        var manifestService = new WebhookManifestService();
+        var manifestService = new ManifestService();
         var manifest = manifestService.Load(repoRoot);
         manifest = manifestService.Upsert(manifest, entry);
         manifestService.Save(repoRoot, manifest);

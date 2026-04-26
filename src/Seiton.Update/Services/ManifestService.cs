@@ -3,7 +3,7 @@ using Seiton.Update.Model;
 
 namespace Seiton.Update.Services;
 
-internal sealed class WebhookManifestService
+internal sealed class ManifestService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
