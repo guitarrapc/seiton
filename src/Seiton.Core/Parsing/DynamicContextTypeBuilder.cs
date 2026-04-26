@@ -389,7 +389,8 @@ internal static class DynamicContextTypeBuilder
     {
         if (job.Outputs is not { Count: > 0 } outputs || utf8Yaml is null)
         {
-            return ExprType.Object(dynamicPropertyType: ExprType.String);
+            // No outputs defined — return strict empty so that any outputs.X is flagged as undefined
+            return ExprType.Object(strict: true);
         }
 
         var props = new Dictionary<Utf8String, ExprType>(outputs.Count);
@@ -410,27 +411,46 @@ internal static class DynamicContextTypeBuilder
         for (var i = 0; i < on.Count; i++)
         {
             var ev = on[i];
-            if (ev is WorkflowCallEvent callEvent
-                && callEvent.Inputs is { Count: > 0 } callInputs)
+            if (ev is WorkflowCallEvent { Inputs: { Count: > 0 } callInputs })
             {
                 return (InputsKeyUtf8, BuildWorkflowCallInputsType(callInputs));
             }
 
-            if (ev is WorkflowDispatchEvent dispatchEvent
-                && dispatchEvent.Inputs is { Count: > 0 } dispatchInputs
+            if (ev is WorkflowDispatchEvent { Inputs: { Count: > 0 } dispatchInputs }
                 && utf8Yaml is not null)
             {
                 return (InputsKeyUtf8, BuildWorkflowDispatchInputsType(dispatchInputs, utf8Yaml));
             }
         }
 
-        return (InputsKeyUtf8, looseDynamic);
+        // No inputs defined — return strict empty so that any inputs.X is flagged as undefined.
+        return (InputsKeyUtf8, ExprType.Object(strict: true));
     }
 
     private static ObjectExprType BuildWorkflowCallInputsType(IReadOnlyList<WorkflowCallEventInput> inputs)
     {
-        var props = new Dictionary<Utf8String, ExprType>(inputs.Count);
-        for (var i = 0; i < inputs.Count; i++)
+        return BuildWorkflowCallInputsTypeUpTo(inputs, inputs.Count);
+    }
+
+    /// <summary>
+    /// Builds a strict inputs type including only inputs defined before the given index.
+    /// Used for incremental validation of input default expressions.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildWorkflowCallInputsOverrideUpTo(
+        IReadOnlyList<WorkflowCallEventInput> inputs, int upToIndex)
+    {
+        return (InputsKeyUtf8, BuildWorkflowCallInputsTypeUpTo(inputs, upToIndex));
+    }
+
+    private static ObjectExprType BuildWorkflowCallInputsTypeUpTo(IReadOnlyList<WorkflowCallEventInput> inputs, int count)
+    {
+        if (count <= 0)
+        {
+            return ExprType.Object(strict: true);
+        }
+
+        var props = new Dictionary<Utf8String, ExprType>(count);
+        for (var i = 0; i < count; i++)
         {
             var input = inputs[i];
             var type = input.Type switch

@@ -512,10 +512,10 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 | # | 対処 | 対象テスト | 分類 |
 |---|---|---|---|
-| 6-1 | expr-undefined-var の検出スコープ拡大 | `inputs_without_workflow_call_event`, `issue151_child_of_child_job`, `workflow_call_outputs_sema`, `run_name_check_expr`, `expr_in_default_input` | C-3c |
-| 6-2 | runs-on/strategy 式の型チェック | `object_at_runner_label` | C-3b |
-| 6-3 | fromJSON 引数の JSON バリデーション | `invalid_json_in_fromjson` | C-3e |
-| 6-4 | ダブルクォートリテラル検出改善 | `issue193` | C-3f |
+| 6-1 | ~~expr-undefined-var の検出スコープ拡大~~ **完了** — inputs strict empty + job outputs strict empty + input default 順序チェック | `inputs_without_workflow_call_event`, `issue151_child_of_child_job`, `workflow_call_outputs_sema`, `run_name_check_expr`, `expr_in_default_input` | C-3c |
+| 6-2 | ~~runs-on/strategy 式の型チェック~~ **既存検出済み** — object at runs-on は既にテンプレート型チェックで検出 | `object_at_runner_label` | C-3b |
+| 6-3 | ~~fromJSON 引数の JSON バリデーション~~ **既存検出済み** — パーサーレベルで broken JSON 検出済み | `invalid_json_in_fromjson` | C-3e |
+| 6-4 | ~~ダブルクォートリテラル検出改善~~ **既存検出済み** — 式パーサーで double quote エラー + single quote ヒント | `issue193` | C-3f |
 
 ### Phase 7: 追加検出 (Low)
 
@@ -1012,7 +1012,72 @@ CoreParsingBenchmark (WorkflowParser.Parse — AST + rules):
 
 ### Phase 6 実装記録
 
-(未着手)
+**実装済み項目**: 6-1 (新規実装), 6-2/6-3/6-4 (既存検出確認)
+**テスト**: 794 → 799 (+5 新規テスト)、全通過
+**ベンチマーク**: 回帰なし。ゼロアロケーション維持
+
+#### 6-1: expr-undefined-var 検出スコープ拡大
+
+**事前調査結果**: 5 テストケース中 2 件 (`issue151_child_of_child_job`, `run_name_check_expr`) は既に Phase 4 で完全対応済みだった。残り 3 件を修正:
+
+**6-1a: inputs_without_workflow_call_event**
+
+- **根本原因**: `BuildInputsOverride` が workflow_call/workflow_dispatch イベントがない場合に `looseDynamic` を返していた → `inputs.X` のプロパティアクセスがチェックされない
+- **修正**: `DynamicContextTypeBuilder.BuildInputsOverride` のフォールバックを `ExprType.Object(strict: true)` (strict empty) に変更。inputs コンテキストは利用可能だがプロパティは未定義
+
+**6-1b: workflow_call_outputs_sema (line 6)**
+
+- **根本原因**: `BuildJobOutputsType` が outputs 未定義ジョブに対して `ExprType.Object(dynamicPropertyType: ExprType.String)` (non-strict dynamic) を返していた → `jobs.job0.outputs.some_output` がチェックされない
+- **修正**: `DynamicContextTypeBuilder.BuildJobOutputsType` のフォールバックを `ExprType.Object(strict: true)` (strict empty) に変更。outputs 未定義ジョブは空 outputs
+
+**6-1c: expr_in_default_input**
+
+- **根本原因**: `VisitEvent` が `CheckNode` → `ValidateExpression` を呼ぶが、`_hasOverrides=false` (VisitJobPre でのみ true) のためプロパティチェックがスキップされていた。また `_inputsOverride` は全 inputs で構築されるため前方参照も検出不可
+- **修正**:
+  - `DynamicContextTypeBuilder.BuildWorkflowCallInputsOverrideUpTo(inputs, upToIndex)` を新規追加: 指定インデックスまでの inputs のみを含む strict override を生成
+  - `ExprUndefinedVarRule.CheckNodeWithOverrides` を新規追加: `_hasOverrides` に依存せず明示的な overrides 配列でプロパティチェックを実行
+  - `VisitEvent` をループインデックス付きに書き換え: 各 input.Default に対して `BuildWorkflowCallInputsOverrideUpTo(inputs, currentIndex)` で incremental override を構築
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/DynamicContextTypeBuilder.cs`:
+  - `BuildInputsOverride`: フォールバックを strict empty に変更
+  - `BuildJobOutputsType`: フォールバックを strict empty に変更
+  - `BuildWorkflowCallInputsOverrideUpTo` (新規): incremental inputs override 生成
+  - `BuildWorkflowCallInputsTypeUpTo` (新規): 既存 `BuildWorkflowCallInputsType` を count パラメータ付きに汎化
+- `src/Seiton.Core/Linting/Rules/ExprUndefinedVarRule.cs`:
+  - `VisitEvent`: incremental override 使用に書き換え
+  - `CheckNodeWithOverrides` (新規): 明示的 overrides でプロパティチェック実行
+
+**テスト追加**:
+- `RuleRegression_ExprUndefinedVarRule_InputsWithoutWorkflowCall_TableDriven` (2 cases)
+- `RuleRegression_ExprUndefinedVarRule_WorkflowCallOutputsSema_TableDriven` (2 cases)
+- `RuleRegression_ExprUndefinedVarRule_InputDefaultForwardReference_TableDriven` (3 cases)
+
+#### 6-2: object_at_runner_label (既存検出確認)
+
+- seiton は `[expr-undefined-var]` テンプレート型チェックで `"object value converted to "[Object]"` を検出済み
+- actionlint のメッセージ形式 (`type of expression at "runs-on" must be string or array`) とは異なるが機能的に同等
+
+#### 6-3: fromJSON broken JSON (既存検出確認)
+
+- seiton は `ExpressionSemanticAnalyzer.ValidateFromJsonLiteral` でパーサーレベルの JSON バリデーションを実装済み
+- 3 件の broken JSON エラー (unterminated string, unterminated array, empty string) を正しく検出
+- actionlint の 5 件の型推論エラー (null/array/object template evaluation, function argument type mismatch) は未対応 — 完全な型推論システムが必要
+
+**テスト追加**:
+- `RuleRegression_FromJsonBrokenJson` (1 test, 4 YAML variants)
+
+#### 6-4: double-quote string literal (既存検出確認)
+
+- 式パーサーの `ParsePrimary` で `'"'` 検出時に `"got unexpected character '\"'; only single quotes are available for string delimiter in expressions"` エラーを報告済み
+- double-quoted 文字列をスキップして後続のパースを継続
+
+**テスト追加**:
+- `RuleRegression_ExpressionParser_DoubleQuoteDetection` (1 test)
+
+**教訓**:
+- `_hasOverrides` フラグに依存する設計では、Job スコープ外 (VisitEvent) でのプロパティチェックが動作しない。`CheckNodeWithOverrides` パターンで明示的 overrides を渡すことで解決
+- `looseDynamic` → strict empty の変更は「未定義プロパティ検出」の根本修正だが、既存テストとの互換性に注意が必要。今回は既存 27 テストすべて通過を確認
 
 ### Phase 7 実装記録
 

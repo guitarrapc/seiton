@@ -8151,6 +8151,216 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
+    // expr-undefined-var scope expansion
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_InputsWithoutWorkflowCall_TableDriven()
+    {
+        var cases = new[]
+        {
+            // When no workflow_call event, inputs has no properties → inputs.some_input is undefined
+            new RuleCase(
+            "ng-inputs-without-workflow-call",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ inputs.some_input }}
+            """,
+            ["property 'some_input' is not defined in 'inputs' object"]),
+            // With workflow_call + defined input → OK
+            new RuleCase(
+            "ok-inputs-with-workflow-call",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        my_input:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ inputs.my_input }}
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_WorkflowCallOutputsSema_TableDriven()
+    {
+        var cases = new[]
+        {
+            // job0 has no outputs → jobs.job0.outputs.some_output is undefined
+            new RuleCase(
+            "ng-workflow-call-output-no-job-outputs",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        output1:
+                            value: ${{ jobs.job0.outputs.some_output }}
+            jobs:
+                job0:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hi
+            """,
+            ["property 'some_output' is not defined"]),
+            // job1 has outputs but unknown_output is not among them
+            new RuleCase(
+            "ng-workflow-call-output-unknown-property",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        output2:
+                            value: ${{ jobs.job1.outputs.unknown_output }}
+            jobs:
+                job1:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        foo: bar
+                    steps:
+                        - run: echo hello
+            """,
+            ["property 'unknown_output' is not defined"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_InputDefaultForwardReference_TableDriven()
+    {
+        var cases = new[]
+        {
+            // input2 not yet defined when input1.default references it
+            new RuleCase(
+            "ng-input-default-forward-ref",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                            default: ${{ inputs.input2 }}
+                        input2:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["property 'input2' is not defined in 'inputs' object"]),
+            // input3 references itself — not yet defined
+            new RuleCase(
+            "ng-input-default-self-ref",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                        input2:
+                            type: string
+                        input3:
+                            type: boolean
+                            default: ${{ inputs.input3 }}
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["property 'input3' is not defined in 'inputs' object"]),
+            // input2 references input1 (already defined) → OK
+            new RuleCase(
+            "ok-input-default-back-ref",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                        input2:
+                            type: string
+                            default: ${{ inputs.input1 }}
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // fromJSON broken JSON validation
+
+    [Test]
+    public async Task RuleRegression_FromJsonBrokenJson()
+    {
+        // fromJSON validation is done in the parser (not linter rule), so diagnostics have RuleId=null
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                foo:
+                    strategy:
+                        matrix:
+                            include:
+                                - invalid1: ${{ fromJSON('"foo') }}
+                                - invalid2: ${{ fromJSON('["foo"') }}
+                                - invalid3: ${{ fromJSON('') }}
+                                - valid: ${{ fromJSON('"hello"') }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """);
+        var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "fromjson-test.yml");
+        var fromJsonErrors = result.Diagnostics
+            .Where(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal) && x.Message.Contains("JSON", StringComparison.Ordinal))
+            .ToArray();
+
+        // 3 broken JSON errors, none for valid JSON
+        await Assert.That(fromJsonErrors).HasCount().EqualTo(3);
+        await Assert.That(fromJsonErrors[0].Message).Contains("not valid JSON");
+        await Assert.That(fromJsonErrors[1].Message).Contains("not valid JSON");
+        await Assert.That(fromJsonErrors[2].Message).Contains("not valid JSON");
+    }
+
+    // double-quote string literal detection
+
+    [Test]
+    public async Task RuleRegression_ExpressionParser_DoubleQuoteDetection()
+    {
+        // Double-quote in expression should produce a parse error suggesting single quotes
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                foo:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          continue-on-error: ${{ env.OS == "macos-latest" }}
+            """);
+        var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "issue193.yml");
+
+        // Parser diagnostics have RuleId=null. Check all diagnostics.
+        var hasDoubleQuoteError = result.Diagnostics.Any(x =>
+            x.Message.Contains("'\"'", StringComparison.Ordinal) &&
+            x.Message.Contains("single quote", StringComparison.OrdinalIgnoreCase));
+        await Assert.That(hasDoubleQuoteError).IsTrue();
+    }
+
     [Test]
     public async Task RuleRegression_RunEnvContextDirectUseRule_TableDriven()
     {

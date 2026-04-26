@@ -84,10 +84,25 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             if (wce.Inputs is { } inputs)
             {
-                foreach (var input in inputs)
+                for (var idx = 0; idx < inputs.Count; idx++)
                 {
-                    CheckNode(input.Default, ExpressionValidationContext.WorkflowCallInputsDefault, "on.workflow_call.inputs.default", static (rule, message, location, e) =>
-                        rule.AddWorkflowError(rule._currentWorkflow!, message, location), ev);
+                    var input = inputs[idx];
+                    if (!input.Default.HasValue)
+                    {
+                        continue;
+                    }
+
+                    // Build incremental inputs override: only inputs defined before current index
+                    var incrementalInputsOverride = DynamicContextTypeBuilder.BuildWorkflowCallInputsOverrideUpTo(inputs, idx);
+
+                    CheckNodeWithOverrides(
+                        input.Default,
+                        ExpressionValidationContext.WorkflowCallInputsDefault,
+                        "on.workflow_call.inputs.default",
+                        [incrementalInputsOverride],
+                        static (rule, message, location, e) =>
+                            rule.AddWorkflowError(rule._currentWorkflow!, message, location),
+                        ev);
                 }
             }
         }
@@ -492,6 +507,73 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             var d = propertyDiagnostics[i];
             report(this, d.Message, d.Location, target);
+        }
+    }
+
+    /// <summary>
+    /// Checks a string node with explicit overrides instead of the per-job overrides.
+    /// Used for contexts like workflow_call input defaults where overrides are computed per-node.
+    /// </summary>
+    private void CheckNodeWithOverrides<TTarget>(
+        StringNodeId node,
+        ExpressionValidationContext context,
+        string sinkName,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!node.HasValue || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        var value = Arena.GetStringValue(node);
+        if (value.Length == 0)
+        {
+            return;
+        }
+
+        var searchStart = 0;
+        while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
+        {
+            searchStart = nextSearchStart;
+            var expression = TrimAsciiWhiteSpace(value.Slice(bodyStart, bodyLength));
+            if (expression.Length == 0)
+            {
+                continue;
+            }
+
+            var parseResult = Config.ParseExpression(expression);
+            if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+            {
+                continue;
+            }
+
+            var location = Arena.GetStringRange(node);
+
+            // Context availability check
+            VisitExpressionNode(
+                parseResult.RootNode,
+                parentId: -1,
+                parseResult.Nodes,
+                parseResult.Arguments,
+                expression,
+                context,
+                sinkName,
+                location,
+                report,
+                target);
+
+            // Property access check with explicit overrides
+            var propertyDiagnostics = _propertyDiagnostics;
+            propertyDiagnostics.Clear();
+            ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline(
+                parseResult, expression, location, overrides, propertyDiagnostics);
+            for (var i = 0; i < propertyDiagnostics.Count; i++)
+            {
+                var d = propertyDiagnostics[i];
+                report(this, d.Message, d.Location, target);
+            }
         }
     }
 
