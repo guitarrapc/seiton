@@ -8,9 +8,7 @@ namespace Seiton.Update.Tests;
 /// </summary>
 public sealed class WorkflowSyntaxExpectedKeysParserTests
 {
-    // ────────────────────────────────────────────────────────────
     // ExtractHeadings
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ExtractHeadings_ExtractsBacktickedHeadings()
@@ -68,9 +66,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(headings[1]).IsEqualTo("on");
     }
 
-    // ────────────────────────────────────────────────────────────
     // SplitSegments
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task SplitSegments_SimpleDotSeparated()
@@ -115,9 +111,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(segments[0]).IsEqualTo("name");
     }
 
-    // ────────────────────────────────────────────────────────────
     // ExpandAlternatives
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task ExpandAlternatives_NoPipes_SinglePath()
@@ -157,9 +151,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(expanded[3]).IsEquivalentTo(new List<string> { "on", "pull_request", "paths-ignore" });
     }
 
-    // ────────────────────────────────────────────────────────────
     // BuildParentChildMap
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task BuildParentChildMap_SingleSegmentHeading_RegistersUnderRoot()
@@ -245,9 +237,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         }
     }
 
-    // ────────────────────────────────────────────────────────────
     // NormalizeSectionName
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task NormalizeSectionName_KnownPaths()
@@ -267,9 +257,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(name).IsEqualTo("some-unknown-path");
     }
 
-    // ────────────────────────────────────────────────────────────
     // Full Parse integration
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task Parse_SyntheticMarkdown_ExtractsExpectedSections()
@@ -416,9 +404,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(onPr.Keys).Contains("paths-ignore");
     }
 
-    // ────────────────────────────────────────────────────────────
     // Contract test against committed raw markdown
-    // ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task Parse_CommittedRawMarkdown_ExtractsComprehensiveSections()

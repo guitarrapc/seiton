@@ -97,6 +97,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         var value = Arena.GetStringValue(valueNode);
+        var valueSlice = Arena.GetStringSlice(valueNode);
+        var lineStarts = Config.GetLineStarts();
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -108,63 +110,102 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
                 continue;
             }
 
+            // Compute trim offset: how many bytes were trimmed from the left
+            var rawExpression = value.Slice(bodyStart, bodyLength);
+            var trimOffset = 0;
+            while (trimOffset < rawExpression.Length && IsAsciiWhiteSpace(rawExpression[trimOffset]))
+            {
+                trimOffset++;
+            }
+
             var parseResult = Config.ParseExpression(expression);
             if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
             {
                 continue;
             }
 
-            if (!ContainsUntrustedEventReference(parseResult, expression))
-            {
-                continue;
-            }
-
-            AddStepError(
-                step,
-                $"template injection risk: {sinkName} contains expression referencing untrusted github.event/github context data",
-                Arena.GetStringRange(valueNode));
-            return;
+            ReportUntrustedReferences(step, parseResult, expression, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
         }
     }
 
-    private static bool ContainsUntrustedEventReference(ExpressionParseResult parseResult, ReadOnlySpan<byte> expression)
+    private void ReportUntrustedReferences(
+        Step step,
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expression,
+        Utf8Slice valueSlice,
+        int bodyStart,
+        int trimOffset,
+        int[] lineStarts,
+        string sinkName)
     {
-        return ContainsUntrustedEventReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, safeDepth: 0);
+        CollectUntrustedReferences(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, safeDepth: 0,
+            step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
     }
 
-    private static bool ContainsUntrustedEventReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression, int safeDepth)
+    private void CollectUntrustedReferences(
+        int nodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression,
+        int safeDepth,
+        Step step,
+        Utf8Slice valueSlice,
+        int bodyStart,
+        int trimOffset,
+        int[] lineStarts,
+        string sinkName)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
-            return false;
+            return;
         }
 
         if (safeDepth == 0 && IsUntrustedReference(nodeId, nodes, expression))
         {
-            return true;
+            EmitUntrustedDiagnostic(step, nodeId, nodes, expression, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+            // Also check index expressions within this path for nested untrusted references
+            CollectNestedIndexReferences(nodeId, nodes, arguments, expression, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+            return;
         }
 
         var node = nodes[nodeId];
-        return node.Kind switch
+        switch (node.Kind)
         {
-            ExpressionNodeKind.Unary => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth),
-            ExpressionNodeKind.Binary => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth)
-                || ContainsUntrustedEventReference(node.Right, nodes, arguments, expression, safeDepth),
-            ExpressionNodeKind.MemberAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth),
-            ExpressionNodeKind.WildcardAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth),
-            ExpressionNodeKind.IndexAccess => ContainsUntrustedEventReference(node.Left, nodes, arguments, expression, safeDepth)
-                || ContainsUntrustedEventReference(node.Right, nodes, arguments, expression, safeDepth),
-            ExpressionNodeKind.FunctionCall => ContainsUntrustedEventReferenceInFunction(node, nodes, arguments, expression, safeDepth),
-            _ => false,
-        };
+            case ExpressionNodeKind.Unary:
+                CollectUntrustedReferences(node.Left, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+            case ExpressionNodeKind.Binary:
+                CollectUntrustedReferences(node.Left, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                CollectUntrustedReferences(node.Right, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+            case ExpressionNodeKind.MemberAccess:
+                CollectUntrustedReferences(node.Left, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+            case ExpressionNodeKind.WildcardAccess:
+                CollectUntrustedReferences(node.Left, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+            case ExpressionNodeKind.IndexAccess:
+                CollectUntrustedReferences(node.Left, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                CollectUntrustedReferences(node.Right, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+            case ExpressionNodeKind.FunctionCall:
+                CollectUntrustedReferencesInFunction(node, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+        }
     }
 
-    private static bool ContainsUntrustedEventReferenceInFunction(
+    private void CollectUntrustedReferencesInFunction(
         ExpressionNode functionCallNode,
         ExpressionNode[] nodes,
         int[] arguments,
         ReadOnlySpan<byte> expression,
-        int safeDepth)
+        int safeDepth,
+        Step step,
+        Utf8Slice valueSlice,
+        int bodyStart,
+        int trimOffset,
+        int[] lineStarts,
+        string sinkName)
     {
         var calleeSafeDepth = safeDepth;
         if (IsSafeFunctionCall(functionCallNode, nodes, expression))
@@ -172,10 +213,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             calleeSafeDepth++;
         }
 
-        if (ContainsUntrustedEventReference(functionCallNode.Left, nodes, arguments, expression, safeDepth))
-        {
-            return true;
-        }
+        CollectUntrustedReferences(functionCallNode.Left, nodes, arguments, expression, safeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
 
         for (var i = 0; i < functionCallNode.ArgCount; i++)
         {
@@ -185,13 +223,136 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
                 continue;
             }
 
-            if (ContainsUntrustedEventReference(arguments[argIndex], nodes, arguments, expression, calleeSafeDepth))
+            CollectUntrustedReferences(arguments[argIndex], nodes, arguments, expression, calleeSafeDepth, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+        }
+    }
+
+    /// <summary>Walk a matched untrusted path tree and check IndexAccess right-side sub-expressions for nested untrusted references.</summary>
+    private void CollectNestedIndexReferences(
+        int nodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression,
+        Step step,
+        Utf8Slice valueSlice,
+        int bodyStart,
+        int trimOffset,
+        int[] lineStarts,
+        string sinkName)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return;
+        }
+
+        var node = nodes[nodeId];
+        switch (node.Kind)
+        {
+            case ExpressionNodeKind.MemberAccess:
+            case ExpressionNodeKind.WildcardAccess:
+                CollectNestedIndexReferences(node.Left, nodes, arguments, expression, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+            case ExpressionNodeKind.IndexAccess:
+                CollectNestedIndexReferences(node.Left, nodes, arguments, expression, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                CollectUntrustedReferences(node.Right, nodes, arguments, expression, safeDepth: 0, step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName);
+                break;
+        }
+    }
+
+    private void EmitUntrustedDiagnostic(
+        Step step,
+        int nodeId,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> expression,
+        Utf8Slice valueSlice,
+        int bodyStart,
+        int trimOffset,
+        int[] lineStarts,
+        string sinkName)
+    {
+        // Build the dotted path string for the untrusted reference
+        Span<PathSegment> segments = stackalloc PathSegment[16];
+        if (!TryBuildPathSegments(nodeId, nodes, expression, segments, out var segCount))
+        {
+            return;
+        }
+
+        var pathString = BuildPathString(segments[..segCount], expression);
+
+        // Find the root identifier token offset (leftmost identifier in the chain)
+        var rootTokenOffset = FindRootIdentifierOffset(nodeId, nodes);
+
+        // Compute precise position: absolute offset in UTF-8 YAML
+        var absoluteStart = valueSlice.Offset + bodyStart + trimOffset + rootTokenOffset;
+        var start = OffsetToLineColumn(lineStarts, absoluteStart);
+
+        // End position spans the entire path expression
+        var lastNode = nodes[nodeId];
+        var endOffset = lastNode.Token.Offset + lastNode.Token.Length;
+        var absoluteEnd = valueSlice.Offset + bodyStart + trimOffset + endOffset;
+        var end = OffsetToLineColumn(lineStarts, absoluteEnd - 1);
+
+        var location = new TextRange(
+            Start: absoluteStart,
+            Length: absoluteEnd - absoluteStart,
+            StartLine: start.Line,
+            StartColumn: start.Column,
+            EndLine: end.Line,
+            EndColumn: end.Column);
+
+        var message = $"\"{pathString}\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable.";
+        AddStepError(step, message, location);
+    }
+
+    private static int FindRootIdentifierOffset(int nodeId, ExpressionNode[] nodes)
+    {
+        var current = nodeId;
+        while (current >= 0 && current < nodes.Length)
+        {
+            var node = nodes[current];
+            if (node.Kind == ExpressionNodeKind.Identifier)
             {
-                return true;
+                return node.Token.Offset;
+            }
+
+            if (node.Kind is ExpressionNodeKind.MemberAccess or ExpressionNodeKind.WildcardAccess or ExpressionNodeKind.IndexAccess)
+            {
+                current = node.Left;
+            }
+            else
+            {
+                break;
             }
         }
 
-        return false;
+        return 0;
+    }
+
+    private static string BuildPathString(ReadOnlySpan<PathSegment> segments, ReadOnlySpan<byte> expression)
+    {
+        var sb = new System.Text.StringBuilder(64);
+        for (var i = 0; i < segments.Length; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append('.');
+            }
+
+            if (segments[i].IsWildcard)
+            {
+                sb.Append('*');
+            }
+            else
+            {
+                var span = segments[i].Token.AsSpan(expression);
+                for (var j = 0; j < span.Length; j++)
+                {
+                    sb.Append((char)span[j]);
+                }
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static bool IsSafeFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)

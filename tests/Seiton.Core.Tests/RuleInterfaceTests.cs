@@ -5889,7 +5889,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github.event.pull_request.title }}"
             """,
-            ["template injection risk", "run", "github.event"]),
+            ["\"github.event.pull_request.title\" is potentially untrusted"]),
             new RuleCase(
             "ok-env-maps-github-event-comment-body",
             """
@@ -5913,7 +5913,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github['event'].pull_request.title }}"
             """,
-            ["template injection risk", "run", "github context"]),
+            ["\"github.event.pull_request.title\" is potentially untrusted"]),
             new RuleCase(
             "ok-run-uses-github-event-number-not-leaf",
             """
@@ -5935,7 +5935,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github.head_ref }}"
             """,
-            ["template injection risk", "run", "github context"]),
+            ["\"github.head_ref\" is potentially untrusted"]),
             new RuleCase(
             "ok-safe-function-contains-untrusted-input",
             """
@@ -5968,7 +5968,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ format('{0}', github.event.issue.title) }}"
             """,
-            ["template injection risk", "run", "github context"]),
+            ["\"github.event.issue.title\" is potentially untrusted"]),
             new RuleCase(
             "ng-github-script-with-untrusted-input",
             """
@@ -5981,7 +5981,7 @@ public sealed class RuleInterfaceTests
                           with:
                             script: console.log('${{ github.event.head_commit.author.name }}')
             """,
-            ["template injection risk", "script", "github context"]),
+            ["\"github.event.head_commit.author.name\" is potentially untrusted"]),
             new RuleCase(
             "ok-github-script-with-safe-expression",
             """
@@ -6018,10 +6018,144 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo '${{ toJSON(github.event.*.body) }}'
             """,
-            ["template injection risk", "run", "github context"]),
+            ["is potentially untrusted"]),
         };
 
         await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
+    }
+
+    // Template injection — position precision & per-reference reporting
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_PerReferenceReporting_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-single-untrusted-reference-names-path",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.head_commit.message }}"
+            """,
+            ["\"github.event.head_commit.message\" is potentially untrusted"]),
+            new RuleCase(
+            "ng-nested-untrusted-reports-all-three",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ github.event.pages[github.event.commits[github.event.issue.title].author.name].page_name }}
+            """,
+            [
+                "\"github.event.pages.*.page_name\" is potentially untrusted",
+                "\"github.event.commits.*.author.name\" is potentially untrusted",
+                "\"github.event.issue.title\" is potentially untrusted",
+            ]),
+            new RuleCase(
+            "ng-two-expressions-in-one-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.head_commit.message }}" and "${{ github.head_ref }}"
+            """,
+            [
+                "\"github.event.head_commit.message\" is potentially untrusted",
+                "\"github.head_ref\" is potentially untrusted",
+            ]),
+            new RuleCase(
+            "ng-github-script-names-path",
+            """
+            on: issues
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                            script: console.log('${{ github.event.head_commit.author.name }}')
+            """,
+            ["\"github.event.head_commit.author.name\" is potentially untrusted"]),
+        };
+
+        await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_PositionPrecision()
+    {
+        // actionlint expects 6:41 for: echo "Checking commit '${{ github.event.head_commit.message }}'"
+        // Col 41 = start of "github" inside the expression body
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "Checking commit '${{ github.event.head_commit.message }}'"
+            """);
+        var result = new LintEngine([new TemplateInjectionRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "position-test.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "template-injection").ToArray();
+
+        await Assert.That(diagnostics).HasCount().EqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("github.event.head_commit.message");
+
+        // The untrusted reference starts at the "g" of "github" inside the expression
+        var line6 = yaml.Split('\n')[5]; // 0-based index for line 6
+        var expectedCol = line6.IndexOf("github.event.head_commit.message", StringComparison.Ordinal) + 1; // 1-based
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(6);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(expectedCol);
+    }
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_NestedUntrustedPositions()
+    {
+        // actionlint expects 7:23, 7:42, 7:63 for nested untrusted references
+        var yaml = NormalizeYaml("""
+            name: Test
+            on: pull_request
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ github.event.pages[github.event.commits[github.event.issue.title].author.name].page_name }}
+            """);
+        var result = new LintEngine([new TemplateInjectionRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "nested-test.yml");
+        var diagnostics = result.Diagnostics
+            .Where(x => x.RuleId == "template-injection")
+            .OrderBy(x => x.Location.StartColumn)
+            .ToArray();
+
+        await Assert.That(diagnostics).HasCount().EqualTo(3);
+
+        // All on line 7
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(7);
+        await Assert.That(diagnostics[1].Location.StartLine).IsEqualTo(7);
+        await Assert.That(diagnostics[2].Location.StartLine).IsEqualTo(7);
+
+        // Check messages name correct paths
+        await Assert.That(diagnostics[0].Message).Contains("github.event.pages.*.page_name");
+        await Assert.That(diagnostics[1].Message).Contains("github.event.commits.*.author.name");
+        await Assert.That(diagnostics[2].Message).Contains("github.event.issue.title");
+
+        // Verify column positions
+        var line7 = yaml.Split('\n')[6]; // 0-based for line 7
+        var col1 = line7.IndexOf("github.event.pages[", StringComparison.Ordinal) + 1;
+        var col2 = line7.IndexOf("github.event.commits[", StringComparison.Ordinal) + 1;
+        var col3 = line7.IndexOf("github.event.issue.title", StringComparison.Ordinal) + 1;
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(col1);
+        await Assert.That(diagnostics[1].Location.StartColumn).IsEqualTo(col2);
+        await Assert.That(diagnostics[2].Location.StartColumn).IsEqualTo(col3);
     }
 
     [Test]
@@ -7284,7 +7418,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4-1: Context availability — missing field visits ──────────
+    // Context availability — missing field visits
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_WorkflowLevel_TableDriven()
@@ -7672,7 +7806,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4-1: env context banned in workflow/job env ──────────
+    // env context banned in workflow/job env
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_EnvContextBanned_TableDriven()
@@ -7742,7 +7876,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4-1: env context banned in job-level if ──────────
+    // env context banned in job-level if
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_JobIfEnvBanned_TableDriven()
@@ -7791,7 +7925,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4-2: shell key context availability ──────────
+    // shell key context availability
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_ShellKeyContextAvailability_TableDriven()
@@ -7846,7 +7980,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4-3: special function availability ──────────
+    // special function availability
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_SpecialFunctionAvailability_TableDriven()
@@ -7952,7 +8086,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4: step.id no context allowed ──────────
+    // step.id no context allowed
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_StepIdNoContext_TableDriven()
@@ -7977,7 +8111,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
 
-    // ────────── Phase 4: available context listing in message ──────────
+    // available context listing in message
 
     [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_MessageIncludesAvailableContexts_TableDriven()

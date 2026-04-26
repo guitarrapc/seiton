@@ -502,7 +502,7 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 | 5-1 | ~~permissions ルールの空文字列検出~~ **完了** | `issue170_empty_permissions` | B-1 |
 | 5-2 | deprecated-commands の列位置修正 | `deprecated_workflow_commands` | B-3 |
 | 5-3 | ~~needs-graph の報告位置・メッセージ改善~~ **完了** — needs 値位置 + サイクルパス明示 | `minimal_cycle_in_needs`, `random_order_cycle_in_needs` | B-4 |
-| 5-4 | template-injection の位置精度改善 | `one_error`, `nested_untrusted_input` | C-3d |
+| 5-4 | ~~template-injection の位置精度改善~~ **完了** — per-reference 報告 + 精密位置 + 具体パスメッセージ | `one_error`, `nested_untrusted_input` | C-3d |
 | 5-5 | if-cond の定数畳み込み改善 | `if_cond_constants` | B-7 |
 | 5-6 | if-cond の `${{ }}` 前後テキスト検出 | `if_cond_edge_cases_trailing_leading_chars` | B-7 |
 
@@ -980,7 +980,35 @@ CoreParsingBenchmark (WorkflowParser.Parse — AST + rules):
 
 ### Phase 5 実装記録
 
-(未着手)
+**実装済み項目**: 5-4 (5-1, 5-2, 5-3, 5-5, 5-6 は過去フェーズで完了済み)
+**テスト**: 791 → 794 (+3 新規テスト)、全通過
+**ベンチマーク**: 回帰なし。ゼロアロケーション維持
+
+#### 5-4: template-injection per-reference 報告 + 精密位置 + 具体パスメッセージ
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/TemplateInjectionRule.cs`:
+  - `CheckSink` を全面改修: 早期 `return` 削除し、全 `${{ }}` 式内の全 untrusted reference を個別報告
+  - `ContainsUntrustedEventReference` (bool 返却) を `CollectUntrustedReferences` (void, emit per-reference) に置換
+  - `CollectNestedIndexReferences` 追加: マッチしたパスツリー内の IndexAccess 右辺を再帰的に検査 (ネストされた untrusted reference を検出)
+  - `EmitUntrustedDiagnostic`: 精密位置計算 (root identifier の Token.Offset から絶対オフセットを算出) + `BuildPathString` でドット区切りパス文字列を生成
+  - `FindRootIdentifierOffset`: MemberAccess/WildcardAccess/IndexAccess チェインの左端 Identifier のオフセットを返す
+  - メッセージ形式: `"github.event.head_commit.message" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable.`
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`:
+  - 既存 6 ng テストケースの期待メッセージを新形式に更新
+  - `RuleRegression_TemplateInjectionRule_PerReferenceReporting_TableDriven` (新規): 4 ケース — single path naming, nested 3-reference 全報告, two-expressions-in-one-run, github-script path naming
+  - `RuleRegression_TemplateInjectionRule_PositionPrecision` (新規): line:col が expression 内の `github` 開始位置を指すことを検証
+  - `RuleRegression_TemplateInjectionRule_NestedUntrustedPositions` (新規): 3 ネスト untrusted reference が各々正しい line:col を持つことを検証
+
+**位置計算の仕組み**:
+- `absoluteStart = valueSlice.Offset + bodyStart + trimOffset + rootTokenOffset`
+  - `valueSlice.Offset`: YAML ソース内の文字列値の絶対開始位置
+  - `bodyStart`: `${{ }}` 内の body 開始位置 (文字列値先頭からの相対)
+  - `trimOffset`: body 先頭の空白文字数 (TrimAsciiWhiteSpace と同じ量)
+  - `rootTokenOffset`: expression AST 内の root Identifier Token.Offset (trimmed expression 先頭からの相対)
+
+**教訓**:
+- ネストされた untrusted reference (例: `github.event.pages[github.event.commits[github.event.issue.title].author.name].page_name`) では、外側のパスマッチ後に IndexAccess の右辺を再帰的に検査する必要がある。`IsUntrustedReference` がマッチした時点で左辺チェインの再帰を停止しつつ、IndexAccess 右辺のみ再帰する `CollectNestedIndexReferences` パターンが有効
 
 ### Phase 6 実装記録
 
