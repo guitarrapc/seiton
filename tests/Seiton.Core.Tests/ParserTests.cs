@@ -3761,7 +3761,7 @@ public sealed class ParserTests
         throw new InvalidOperationException("Could not locate repository root.");
     }
 
-    // C-1 regression: YAML parse error line number should not be off-by-one
+    // regression: YAML parse error line number should not be off-by-one
     [Test]
     public async Task Parse_BrokenYaml_ReportsCorrectLineNumber()
     {
@@ -3772,7 +3772,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(6);
     }
 
-    // C-5 regression: webhook known-but-disallowed option must include key name in message
+    // regression: webhook known-but-disallowed option must include key name in message
     [Test]
     public async Task Parse_WebhookOptionNotAllowed_MessageContainsKeyName()
     {
@@ -3782,7 +3782,7 @@ public sealed class ParserTests
         await Assert.That(diag.Message).Contains("tags");
     }
 
-    // C-9 regression: timeout-minutes parse error must have valid position
+    // regression: timeout-minutes parse error must have valid position
     [Test]
     public async Task Parse_TimeoutMinutesInvalidValue_ReportsCorrectPosition()
     {
@@ -3889,7 +3889,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
     }
 
-    // C-4 regression: job-level secrets exclusion
+    // regression: job-level secrets exclusion
 
     [Test]
     public async Task Parse_JobName_WithSecretsContext_ReportsSemanticError()
@@ -3999,7 +3999,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
     }
 
-    // C-5 regression: environment.url has extended contexts (job, runner, env, steps)
+    // regression: environment.url has extended contexts (job, runner, env, steps)
 
     [Test]
     public async Task Parse_JobEnvironmentUrl_WithStepsContext_NoError()
@@ -4042,7 +4042,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
     }
 
-    // C-6 regression: container/service env has extended contexts
+    // regression: container/service env has extended contexts
 
     [Test]
     public async Task Parse_JobContainerEnv_WithRunnerContext_NoError()
@@ -4065,7 +4065,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'runner' is not available", StringComparison.Ordinal))).IsFalse();
     }
 
-    // C-7 regression: container/service credentials includes env
+    // regression: container/service credentials includes env
 
     [Test]
     public async Task Parse_JobContainerCredentials_WithEnvContext_NoError()
@@ -4089,7 +4089,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal))).IsFalse();
     }
 
-    // C-8 regression: defaults.run includes env, excludes secrets
+    // regression: defaults.run includes env, excludes secrets
 
     [Test]
     public async Task Parse_JobDefaultsRun_WithEnvContext_NoError()
@@ -4131,7 +4131,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
     }
 
-    // C-9 regression: fail-fast parse error must have valid position
+    // regression: fail-fast parse error must have valid position
     [Test]
     public async Task Parse_FailFastInvalidValue_ReportsCorrectPosition()
     {
@@ -4143,7 +4143,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartColumn).IsEqualTo(18);
     }
 
-    // C-9 regression: max-parallel parse error must have valid position
+    // regression: max-parallel parse error must have valid position
     [Test]
     public async Task Parse_MaxParallelInvalidValue_ReportsCorrectPosition()
     {
@@ -4155,7 +4155,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartColumn).IsEqualTo(21);
     }
 
-    // B-1 regression: null scalar position for "permissions:" with no value should report the
+    // regression: null scalar position for "permissions:" with no value should report the
     // permissions line, not the next token's line. VYaml advances past the null scalar to the
     // next key; ResolveEmptyScalarStart must walk backward past the next key's colon.
     [Test]
@@ -4170,7 +4170,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(4);
     }
 
-    // B-1 regression: null scalar position at workflow level "permissions:" should report
+    // regression: null scalar position at workflow level "permissions:" should report
     // the correct line even when the next key is "jobs:".
     [Test]
     public async Task Parse_NullScalarPermissions_WorkflowLevel_ReportsPermissionsLine()
@@ -4183,7 +4183,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(2);
     }
 
-    // B-2 regression: empty step id (id: "") should report "must not be empty", not "must be scalar"
+    // regression: empty step id (id: "") should report "must not be empty", not "must be scalar"
     [Test]
     public async Task Parse_EmptyStepId_ReportsEmptyNotScalar()
     {
@@ -4194,5 +4194,104 @@ public sealed class ParserTests
         // Must say "must not be empty", NOT "must be scalar"
         await Assert.That(diag.Message).Contains("must not be empty");
         await Assert.That(diag.Message).DoesNotContain("must be scalar");
+    }
+
+    // regression: Utf8Slice internal representation must not leak into error messages
+    [Test]
+    public async Task Parse_NonSequenceSteps_MessageDoesNotContainUtf8Slice()
+    {
+        var yaml = "on: push\njobs:\n  myJob:\n    runs-on: ubuntu-latest\n    steps: notASequence\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("steps must be sequence"));
+        await Assert.That(diag.Message).IsNotEmpty();
+        await Assert.That(diag.Message).Contains("job 'myJob'");
+        await Assert.That(diag.Message).DoesNotContain("Utf8Slice");
+    }
+
+    // regression: linter should not produce 0:0 position for steps with empty uses
+    [Test]
+    public async Task Lint_StepWithoutRunOrUses_NoZeroZeroUnpinnedUses()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - name: broken\n"u8;
+        var lintResult = new LintEngine([new Seiton.Core.Linting.Rules.UnpinnedUsesRule()])
+            .Check(yaml.ToArray(), "test.yaml");
+        // After the fix, no unpinned-uses diagnostic should be emitted for empty uses
+        var hasUnpinned = lintResult.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+        await Assert.That(hasUnpinned).IsFalse();
+    }
+
+    // regression: container: null is valid (means no container)
+    [Test]
+    public async Task Parse_ContainerNull_NoDiagnostic()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    container: null\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var hasContainerDiag = result.Diagnostics.Any(d => d.Message.Contains("container"));
+        await Assert.That(hasContainerDiag).IsFalse();
+    }
+
+    // regression: service entrypoint and command are valid keys
+    [Test]
+    public async Task Parse_ServiceEntrypointAndCommand_NoDiagnostic()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    services:\n      redis:\n        image: redis\n        entrypoint: redis-server\n        command: --save 60 1\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var hasUnexpectedDiag = result.Diagnostics.Any(d => d.Message.Contains("unexpected") && (d.Message.Contains("entrypoint") || d.Message.Contains("command")));
+        await Assert.That(hasUnexpectedDiag).IsFalse();
+    }
+
+    // regression: nested scalar anchors inside outer recording resolve correctly
+    [Test]
+    public async Task Parse_NestedScalarAnchorInsideOuterRecording_Resolves()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              test1:
+                runs-on: ubuntu-latest
+                steps:
+                  - &step
+                    run: echo hello
+                    if: &cond true
+                  - run: echo two
+                    if: *cond
+            """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        // *cond should resolve correctly — no "if must be scalar" error
+        var hasIfDiag = result.Diagnostics.Any(d => d.Message.Contains("if must be scalar"));
+        await Assert.That(hasIfDiag).IsFalse();
+    }
+
+    // regression: nested scalar anchor inside job anchor resolves for alias replay
+    [Test]
+    public async Task Parse_NestedScalarAnchorInsideJobAnchor_Resolves()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              test1: &job
+                runs-on: &runner ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                    with:
+                      ref: *runner
+              test2: *job
+            """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        // *runner should resolve — no "recursive alias" or "must be scalar" errors
+        var hasRunnerDiag = result.Diagnostics.Any(d =>
+            d.Message.Contains("recursive alias") || d.Message.Contains("must be scalar"));
+        await Assert.That(hasRunnerDiag).IsFalse();
+    }
+
+    // regression: GetScalarTag returns Null for YAML null scalars
+    [Test]
+    public async Task Parse_NullScalarTag_ReturnsNull()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    container: null\n    steps:\n      - run: echo\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        // If ScalarTag.Null is returned correctly, container: null doesn't produce a parse error
+        var hasParseDiag = result.Diagnostics.Any(d => d.Message.Contains("container must be"));
+        await Assert.That(hasParseDiag).IsFalse();
     }
 }

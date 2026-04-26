@@ -1839,6 +1839,18 @@ public sealed class RuleInterfaceTests
                     uses: owner/repo/.github/workflows/reusable.yml@main
             """,
             ["not pinned to a full-length commit SHA"]),
+            // regression: step without run/uses produces empty uses — should not trigger unpinned-uses rule
+            new RuleCase(
+            "ok-empty-uses-from-parser-error",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - name: broken step with no run or uses
+            """,
+            []),
         };
 
         await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases);
@@ -2400,7 +2412,7 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
     }
 
-    // B-4 regression: cycle diagnostics should report at the needs value position (actionable)
+    // regression: cycle diagnostics should report at the needs value position (actionable)
     // with a cycle path in the message for clarity
     [Test]
     public async Task RuleRegression_NeedsGraphRule_CyclePosition()
@@ -5147,7 +5159,7 @@ public sealed class RuleInterfaceTests
                         - run: echo "::set-env name=TOKEN::x"
             """,
             ["deprecated command '::set-env'", "$GITHUB_ENV"]),
-            // B-3 regression: multi-line run script should report all deprecated commands
+            // regression: multi-line run script should report all deprecated commands
             new RuleCase(
             "ng-multiline-multiple-deprecated",
             """
@@ -5244,7 +5256,7 @@ public sealed class RuleInterfaceTests
                           run: echo ok
             """,
             []),
-            // B-7 regression: null literal should be detected as constant (falsy)
+            // regression: null literal should be detected as constant (falsy)
             new RuleCase(
             "ng-step-if-null-literal",
             """
@@ -5257,7 +5269,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always false"]),
-            // B-7 regression: number literal should be detected as constant (0 = falsy)
+            // regression: number literal should be detected as constant (0 = falsy)
             new RuleCase(
             "ng-step-if-number-zero",
             """
@@ -5270,7 +5282,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always false"]),
-            // B-7 regression: non-zero number is truthy
+            // regression: non-zero number is truthy
             new RuleCase(
             "ng-step-if-number-truthy",
             """
@@ -5283,7 +5295,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always true"]),
-            // B-7 regression: empty string literal is falsy
+            // regression: empty string literal is falsy
             new RuleCase(
             "ng-step-if-empty-string",
             """
@@ -5296,7 +5308,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always false"]),
-            // B-7 regression: non-empty string literal is truthy
+            // regression: non-empty string literal is truthy
             new RuleCase(
             "ng-step-if-nonempty-string",
             """
@@ -5309,7 +5321,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always true"]),
-            // B-7 regression: mixed type constant expression (true && 42 || !null)
+            // regression: mixed type constant expression (true && 42 || !null)
             new RuleCase(
             "ng-step-if-mixed-constant",
             """
@@ -5322,7 +5334,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always true"]),
-            // B-7 regression: pure function with constant args (contains + format)
+            // regression: pure function with constant args (contains + format)
             new RuleCase(
             "ng-step-if-constant-function",
             """
@@ -5335,7 +5347,7 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["step if condition is always true"]),
-            // B-7: ok case — impure function (success) should not be flagged
+            // ok case — impure function (success) should not be flagged
             new RuleCase(
             "ok-step-if-impure-function",
             """
@@ -9876,7 +9888,7 @@ public sealed class RuleInterfaceTests
         }
     }
 
-    // C-6/C-7/C-8 regression: parser + lint rule duplicate diagnostics are suppressed
+    // regression: parser + lint rule duplicate diagnostics are suppressed
     [Test]
     public async Task LintEngine_DuplicateParserAndLintDiagnostics_AreDeduplicated()
     {

@@ -70,6 +70,11 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         var uses = Arena.GetStringValue(actionExec.Uses);
+        if (uses.Length == 0)
+        {
+            // Empty uses value: the parser already reported an error for this step.
+            return;
+        }
         var usesLocation = actionExec.UsesKeyRange ?? Arena.GetStringRange(actionExec.Uses);
         var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(actionExec.Uses), uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("docker://"u8))

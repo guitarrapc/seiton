@@ -22,6 +22,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id → (name, position)
     private HashSet<int>? _referencedAnchorIds;                                       // anchor ids used by aliases
     private List<(string Name, TextPosition Position)>? _recursiveAliases;            // recursive alias occurrences
+    private List<(int Id, List<AnchorEvent> Events, int Depth)>? _nestedRecordings;  // nested anchors inside outer recording
 
     /// <summary>Creates a new adapter wrapping the given UTF-8 YAML bytes for pull-based parsing.</summary>
     public VYamlStreamAdapter(Memory<byte> bytes)
@@ -73,6 +74,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             if (_currentRecording != null)
             {
                 _currentRecording.Add(_virtualCurrent);
+                ForwardToNestedRecordings(_virtualCurrent);
                 TrackAnchorDepth(_virtualCurrent.Kind);
             }
             return true;
@@ -160,6 +162,31 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         {
             var snapshot = SnapshotCurrentEvent(eventType);
             _currentRecording.Add(snapshot);
+
+            // Nested anchor inside existing recording: store independently so aliases
+            // to it can resolve within the same or later recordings.
+            if (hasAnchor && isAnchorOpener
+                && (_anchorStore == null || !_anchorStore.ContainsKey(currentAnchor.Id)))
+            {
+                _anchorStore ??= new Dictionary<int, List<AnchorEvent>>();
+                _definedAnchors ??= new Dictionary<int, (string Name, TextPosition Position)>();
+                _definedAnchors[currentAnchor.Id] = (currentAnchor.Name.ToString(), snapshot.Start);
+
+                if (currentKind == YamlEventKind.Scalar)
+                {
+                    // Scalar: single event — store immediately.
+                    _anchorStore[currentAnchor.Id] = new List<AnchorEvent> { snapshot };
+                }
+                else
+                {
+                    // Mapping/Sequence: start nested recording to capture all child events.
+                    _nestedRecordings ??= new List<(int Id, List<AnchorEvent> Events, int Depth)>();
+                    _nestedRecordings.Add((currentAnchor.Id, new List<AnchorEvent> { snapshot }, 1));
+                }
+            }
+
+            ForwardToNestedRecordings(snapshot);
+
             TrackAnchorDepth(currentKind);
         }
 
@@ -565,6 +592,11 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         if (_isReplaying)
             return _virtualCurrent.Tag;
 
+        // Check VYaml's internal null-scalar flag before GetScalarUtf8() — null scalars
+        // return an empty span but should be tagged as Null, not Str.
+        if (_parser.IsNullScalar())
+            return ScalarTag.Null;
+
         var value = GetScalarUtf8();
         if (value.Length == 0)
         {
@@ -659,6 +691,43 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         _anchorStore[_recordingId] = _currentRecording!;
         _currentRecording = null;
         _recordingDepth = 0;
+
+        // Discard any nested recordings that weren't completed (shouldn't happen in well-formed YAML).
+        _nestedRecordings?.Clear();
+    }
+
+    /// <summary>
+    /// Forwards an event to any active nested recordings (mapping/sequence anchors inside outer recording).
+    /// Completes a nested recording when its depth reaches zero.
+    /// </summary>
+    private void ForwardToNestedRecordings(AnchorEvent snapshot)
+    {
+        if (_nestedRecordings is not { Count: > 0 })
+            return;
+
+        for (var i = _nestedRecordings.Count - 1; i >= 0; i--)
+        {
+            var (nId, nEvents, nDepth) = _nestedRecordings[i];
+            // Skip if this is the anchor opener event that was already added when the nested recording started.
+            if (nEvents.Count == 1 && nDepth == 1
+                && nEvents[0].Kind == snapshot.Kind && nEvents[0].Start == snapshot.Start)
+                continue;
+            nEvents.Add(snapshot);
+            if (snapshot.Kind is YamlEventKind.SequenceStart or YamlEventKind.MappingStart)
+                nDepth++;
+            else if (snapshot.Kind is YamlEventKind.SequenceEnd or YamlEventKind.MappingEnd)
+            {
+                nDepth--;
+                if (nDepth == 0)
+                {
+                    _anchorStore ??= new Dictionary<int, List<AnchorEvent>>();
+                    _anchorStore[nId] = nEvents;
+                    _nestedRecordings.RemoveAt(i);
+                    continue;
+                }
+            }
+            _nestedRecordings[i] = (nId, nEvents, nDepth);
+        }
     }
 
     /// <summary>

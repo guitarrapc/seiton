@@ -115,6 +115,13 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
+            // container: null is valid YAML meaning "no container" — skip without error.
+            if (reader.GetScalarTag() == ScalarTag.Null)
+            {
+                reader.Read();
+                return default;
+            }
+
             var scalarImage = ParseString(ref reader, arena, out var ctrErr, out var ctrMark);
             if (ctrErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", ctrMark);
             if (!scalarImage.HasValue)
@@ -236,6 +243,11 @@ public static partial class WorkflowParser
 
                         options = ParseString(ref reader, arena, out var optErr, out var optMark);
                         if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", optMark);
+                        continue;
+                    case ContainerMappingKey.Entrypoint:
+                    case ContainerMappingKey.Command:
+                        // Valid service container keys — parse and discard (not stored in AST).
+                        reader.SkipCurrentNode();
                         continue;
                     default:
                         reader.SkipCurrentNode();

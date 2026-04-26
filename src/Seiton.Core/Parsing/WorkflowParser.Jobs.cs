@@ -236,7 +236,7 @@ public static partial class WorkflowParser
                         {
                             if (reader.CurrentKind != YamlEventKind.SequenceStart)
                             {
-                                AddError(diagnostics, $"job '{jobId}' steps must be sequence", reader.CurrentStart);
+                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' steps must be sequence", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else

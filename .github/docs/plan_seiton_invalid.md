@@ -729,7 +729,43 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 ### Phase 1 実装記録
 
-(未着手)
+**テスト**: 723 → 730 (7 件追加)
+**ベンチマーク**: 回帰なし
+
+#### 1-1: `Utf8Slice` 内部表現のエラーメッセージリーク修正
+
+- **原因**: `WorkflowParser.Jobs.cs` の `steps must be sequence` エラーで `jobId` (Utf8Slice) を `DecodeUtf8(source, jobId)` せず直接文字列補間に渡していた
+- **修正**: `$"job '{DecodeUtf8(source, jobId)}' steps must be sequence"` に変更
+- **対象ファイル**: `WorkflowParser.Jobs.cs`
+
+#### 1-2: 位置 `0:0` のエラーを正しい位置に修正
+
+- **原因**: `UnpinnedUsesRule` が `uses: ''` (パーサーエラーでデフォルト空値が設定されたステップ) に対して `invalid reference format` を報告し、デフォルト `TextRange` (0:0) になっていた
+- **修正**: `UnpinnedUsesRule.VisitStep` で `uses.Length == 0` を早期リターン
+- **対象ファイル**: `UnpinnedUsesRule.cs`
+
+#### 1-3: OK テストデータでの `[parse]` エラー修正
+
+3 つのサブ問題:
+
+**1-3a: YAML anchor の入れ子解決不良** (`anchors.yaml`)
+- **原因**: `VYamlStreamAdapter` でアンカー録画中に内側で定義されたスカラーアンカー (`&cond`, `&runner`) が独立して `_anchorStore` に格納されず、同じ録画内や後続の `*alias` が解決不能 → "if must be scalar" / "recursive alias" 偽エラー
+- **修正**: 録画中のスカラーアンカーを即座に `_anchorStore` に独立格納。マッピング/シーケンスアンカーは `_nestedRecordings` リストで追跡し、深さが 0 になった時点で格納
+- **対象ファイル**: `VYamlStreamAdapter.cs` (フィールド `_nestedRecordings` 追加、`ForwardToNestedRecordings` ヘルパー追加)
+
+**1-3b: `container: null` の偽エラー** (`container_syntax.yaml`)
+- **原因**: `GetScalarTag()` が VYaml の `IsNullScalar()` を確認せず `GetScalarUtf8()` の空スパンに `ScalarTag.Str` を返していた → `ParseContainerLike` が null スカラーをエラーとして扱った
+- **修正**: (1) `GetScalarTag()` で `_parser.IsNullScalar()` を先行チェックし `ScalarTag.Null` を返す、(2) `ParseContainerLike` で `ScalarTag.Null` の場合は `reader.Read()` してスキップ
+- **対象ファイル**: `VYamlStreamAdapter.cs`, `WorkflowParser.Containers.cs`
+
+**1-3c: サービスの `entrypoint`/`command` キー未対応** (`container_syntax.yaml`)
+- **原因**: `ContainerKeyTable` に `entrypoint` と `command` が含まれていなかった → "unexpected key" エラー
+- **修正**: `ContainerMappingKey` に `Entrypoint=6`, `Command=7` を追加、`ContainerKeyTable.KeyCount` を 8 に更新、`ContainerDuplicateSubKey` にエントリ追加、`ParseContainerLike` の switch に `case Entrypoint/Command: reader.SkipCurrentNode()` を追加
+- **対象ファイル**: `WorkflowParser.MappingKeys.Extended.cs`, `WorkflowParser.Containers.cs`
+
+#### 1-4: 行番号の 0-based → 1-based 統一
+
+- **調査結果**: `TextPosition` は仕様上 1-based (Line/Column)。`ComputeTextPositionFromOffset` も正しく 1-based で計算。既存の `new TextPosition(0, 1, 1)` も正しい。0:0 問題は 1-2 および 1-3a で修正済みのデフォルト `TextPosition(0, 0, 0)` リーク問題であり、体系的な 0-based 問題は存在しなかった
 
 ### Phase 2 実装記録
 
