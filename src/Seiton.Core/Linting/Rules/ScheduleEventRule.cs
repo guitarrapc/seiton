@@ -44,6 +44,12 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
     {
         var yaml = Config.Utf8Yaml!;
         var cronUtf8 = Arena.GetStringSlice(cronNode).AsSpan(yaml);
+        if (cronUtf8.IsEmpty)
+        {
+            AddEventError(scheduleEvent, "on.schedule cron must not be empty", Arena.GetStringRange(cronNode));
+            return;
+        }
+
         if (!TryParseCronUtf8(cronUtf8, out var cron, out var reason))
         {
             AddEventError(scheduleEvent, $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' is invalid: {reason}", Arena.GetStringRange(cronNode));
@@ -70,6 +76,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
         var span = TrimAscii(Arena.GetStringSlice(timezoneNode).AsSpan(yaml));
         if (span.IsEmpty)
         {
+            AddEventError(scheduleEvent, "on.schedule timezone must not be empty", Arena.GetStringRange(timezoneNode));
             return;
         }
 

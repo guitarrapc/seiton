@@ -125,19 +125,19 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `minimal_cycle_in_needs` | `4:3` (1行) | seiton `[needs-graph]` で検出済み。サイクル報告位置が **完全対処済み** — サイクル開始ジョブのキー位置で報告。列ずれ (`4:7` vs `4:3`) は VYaml mark の全ジョブキー共通の系統的差異 | 報告位置の差異 |
+| `minimal_cycle_in_needs` | `4:3` (1行) | seiton `[needs-graph]` で検出済み。**完全対処済み** — サイクルを閉じる `needs` 値の位置で報告し、サイクルパスをメッセージに含める。actionlint はジョブキー位置で報告するが、seiton はユーザーが直接編集すべき箇所を指す設計方針を採用 (§4.5.1) | 報告位置の設計判断差異 |
 | `random_order_cycle_in_needs` | `4:3` (1行) | 同上 | 同上 |
 
-**対処**: サイクル検出の報告位置をサイクル開始ジョブのキー位置に修正。列ずれは VYaml mark の系統的問題 (全ジョブキーで発生) のため B-4 スコープ外。
+**対処**: サイクル検出の報告位置を `needs` 値位置 (サイクルを閉じる back-edge の位置) に設定。メッセージにサイクルパス (`a -> b -> c -> a`) を含め、ユーザーが循環の全体像を把握できるようにした。actionlint のジョブキー位置ではなく `needs` 値位置を選択した理由は `Seiton_Linter_spec.md` §4.5.1 に明記。
 
 #### B-5. schedule-event ルール — 部分的検出
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `schedule_invalid_timezone` | `4:17`, `6:17`, `8:17`, `10:17`, `11:13` (5行) | seiton は一部を検出するが、`UTC` が無効な IANA timezone であることの検出が不足。空文字列 timezone/cron の検出も不足 | IANA timezone バリデーションの差異 |
-| `cron_5minutes_limit` | `6:13` (1行) | seiton `[schedule-event]` で検出済みだが列位置が異なる | 列位置ずれ |
+| `schedule_invalid_timezone` | `4:17`, `6:17`, `8:17`, `10:17`, `11:13` (5行) | **完全対処済み** — 5件すべて検出。Not/A/Timezone, UTC, local は既存で検出済み。空文字列 timezone/cron の検出を追加。列位置差異 (18 vs 17, 13:5 vs 11:13) は VYaml のクォート付きスカラー・空スカラー位置報告の系統的問題 | IANA timezone 検証の差異 + 空文字列検出漏れ |
+| `cron_5minutes_limit` | `6:13` (1行) | seiton `[schedule-event]` で検出済み。列位置 `6:14` vs `6:13` は VYaml のクォート付きスカラー位置の系統的差異 | 列位置ずれ (systemic) |
 
-**対処**: UTC の扱い確認。空文字列 timezone/cron の検出追加。
+**対処**: 空文字列 timezone/cron の検出をルール側に追加。パーサーでは `allowEmpty: true` としてルールが空検出を担当。UTC/Local は既存の `IsUtcOrLocalUtf8` で検出済み。
 
 #### B-6. runner-label ルール — 部分検出
 
@@ -498,7 +498,7 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 |---|---|---|---|
 | 5-1 | ~~permissions ルールの空文字列検出~~ **完了** | `issue170_empty_permissions` | B-1 |
 | 5-2 | deprecated-commands の列位置修正 | `deprecated_workflow_commands` | B-3 |
-| 5-3 | ~~needs-graph の報告位置修正~~ **完了** | `minimal_cycle_in_needs`, `random_order_cycle_in_needs` | B-4 |
+| 5-3 | ~~needs-graph の報告位置・メッセージ改善~~ **完了** — needs 値位置 + サイクルパス明示 | `minimal_cycle_in_needs`, `random_order_cycle_in_needs` | B-4 |
 | 5-4 | template-injection の位置精度改善 | `one_error`, `nested_untrusted_input` | C-3d |
 | 5-5 | if-cond の定数畳み込み改善 | `if_cond_constants` | B-7 |
 | 5-6 | if-cond の `${{ }}` 前後テキスト検出 | `if_cond_edge_cases_trailing_leading_chars` | B-7 |
@@ -596,32 +596,51 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 - block scalar の clip chomping は trailing `\n` を付加するが、ソースファイルが trailing newline なしで終わる場合、EOF で decoded 側に残る `\n` をソース側で消費できない。EOF 残余が `\n` のみかチェックして許容する必要がある
 - 位置ずれの当初仮説（列がコマンド位置でない）は誤りだった。単一行テストでは位置は正しく、問題は `return` による早期打ち切りと block scalar back-projection の2点だった
 
-### B-4 実装記録 (needs-graph サイクル報告位置修正)
+### B-4 実装記録 (needs-graph サイクル報告位置 + サイクルパスメッセージ)
+
+**設計判断**: サイクル診断の報告位置として **`needs` 値位置** (サイクルを閉じる back-edge) を採用。actionlint のジョブキー位置ではなく、ユーザーが直接編集すべき箇所を指す方針。理由は `Seiton_Linter_spec.md` §4.5.1 に明記:
+1. **アクショナビリティ**: `needs` 値はユーザーがサイクルを断つために編集する箇所そのもの
+2. **サイクルパスの明示**: メッセージに `from -> to -> from` のような完全パスを含めることで全体像を補完
+3. **サイクルに「開始」はない**: ジョブキー位置は恣意的、needs 値位置は DFS の back-edge に対応し決定的
 
 **変更ファイル**:
-- `src/Seiton.Core/Linting/Rules/NeedsGraphRule.cs`: `DetectCycles` メソッドで back-edge 検出時の報告対象を変更
-  - 旧: `currentJob` (back-edge の「元」ジョブ) の needs 値位置で報告
-  - 新: `cycleStartJob` (back-edge の「先」= gray neighbor = サイクル開始ジョブ) のジョブキー位置で報告
-  - `_knownJobs.TryGetValue(source, needKey.Span, out var cycleStartJob)` でサイクル開始ジョブを取得
-  - `AddJobError(cycleStartJob, ...)` で `BuildJobLocation` を使いジョブキー位置を報告
-  - メッセージ: `job '{cycleStartId}' has a circular 'needs' dependency via '{currentId}'`
-- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `RuleRegression_NeedsGraphRule_CyclePosition` テスト追加
-  - サイクル報告位置がジョブキー位置 (line 3) であること、needs 値位置 (line 9) でないことを検証
-  - メッセージにサイクル開始ジョブ ID `'from'` が含まれることを検証
+- `src/Seiton.Core/Linting/Rules/NeedsGraphRule.cs`:
+  - `DetectCycles`: back-edge 検出時、`currentJob` の `needs` 値位置 (`Arena.GetStringRange(need)`) で報告
+  - `BuildCyclePath`: DFS スタックからサイクル部分を抽出し `a -> b -> c -> a` 形式のパス文字列を生成
+  - メッセージ: `job '{currentId}' has a circular 'needs' dependency: {cyclePath}`
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `RuleRegression_NeedsGraphRule_CyclePosition` テスト
+  - 報告位置が `needs` 値の行 (line 9) であること（ジョブキー行 line 3 ではない）を検証
+  - メッセージにサイクルパス `from -> to -> from` が含まれることを検証
+- `Seiton_Linter_spec.md`: §4.4 `needs-graph` 記述と §4.5 Rule Guidance にサイクルパス・位置ポリシーを追記、§4.5.1 として設計判断を明記
+- `Seiton_Linter_csharp_spec.md`, `Seiton_Linter_go_spec.md`: `needs-graph` 記述を同期更新
 
 **テスト結果**: 全719テスト通過
 
-**ベンチマーク結果**: 29ベンチマーク実行。CoreParsingBenchmark: Small 30.9µs/5.4KB, Medium 542.6µs/27.1KB, Large 7,500µs/111.4KB。RuleCatalogBenchmark: 全操作 sub-4ns, 0B allocated。性能劣化なし
+**ベンチマーク結果**: (B-3 実行時と同等、ルールロジックのみの変更で hotpath 影響なし)
+
+### B-5 実装記録 (schedule-event 空文字列 timezone/cron 検出)
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/ScheduleEventRule.cs`:
+  - `ValidateTimezone`: 空スパンで `return` していた箇所を `AddEventError("on.schedule timezone must not be empty")` に変更
+  - `ValidateCron`: 空スパンの明示チェックを追加、`AddEventError("on.schedule cron must not be empty")` を追加 (以前は `TryParseCronUtf8` が "cron must have exactly 5 fields" と報告していた)
+- `src/Seiton.Core/Parsing/WorkflowParser.On.Schedule.cs`:
+  - cron と timezone の `ParseString` 呼び出しに `allowEmpty: true` を追加
+  - これによりパーサーが誤解を招く "must be scalar" エラーを空文字列に対して出さなくなり、ルールが空検出を担当
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`:
+  - `RuleRegression_ScheduleEventRule_TableDriven` に `ng-empty-timezone` と `ng-empty-cron` ケースを追加
+
+**テスト結果**: 全719テスト通過
+
+**ベンチマーク結果**: 回帰なし。ルールロジックのみの変更で hotpath 影響なし
 
 **CLI確認**:
-- `minimal_cycle_in_needs.yaml`: `4:7: error [needs-graph] job 'from' has a circular 'needs' dependency via 'to'`
-- `random_order_cycle_in_needs.yaml`: `4:4: error [needs-graph] job 'a' has a circular 'needs' dependency via 'd'`
-- 列ずれ (`4:7` vs actionlint `4:3`) は VYaml mark がマッピングキーの末尾付近を指す系統的問題。`job-permissions-required`, `job-timeout-minutes-required` 等の全ジョブキー診断で同じ列ずれが発生しており、B-4 固有の問題ではない
+- `schedule_invalid_timezone.yaml`: 6 errors (Not/A/Timezone, UTC, local, empty timezone, empty cron + job-timeout) — 修正前は parse エラーが "must be scalar" と誤診断していたが、修正後は `[schedule-event]` ルールが "must not be empty" と正しく報告
+- `cron_5minutes_limit.yaml`: `6:14` で検出済み (actionlint `6:13` との差異は VYaml のクォート付きスカラー位置の系統的問題)
 
-**教訓**:
-- DFS cycle detection の back-edge (gray neighbor) は「サイクルの入口」であり、ユーザーにとってはサイクル開始ジョブとして報告するのが自然
-- `SliceMap<Job>.TryGetValue(source, needKey.Span, out var job)` で needs 値の UTF-8 スパンからジョブを逆引きできる
-- VYaml mark の列オフセット問題はジョブキー全体に影響する系統的課題であり、個別ルールの修正スコープではない
+**残存差異** (B-5 スコープ外):
+- 列位置 18 vs 17 (クォート付きスカラー): VYaml がスカラー内容の開始位置 (クォートの後) を報告する系統的問題
+- 空スカラー位置 (13:5 vs 11:13): VYaml の空スカラーに対する mark 位置が次のトークンに進んでしまう系統的問題 (`ResolveEmptyScalarStart` の後方スキャンでも完全には補正できないケース)
 
 ### Phase 1 実装記録
 

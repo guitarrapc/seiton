@@ -98,7 +98,7 @@ public static partial class WorkflowParser
                 switch (sk)
                 {
                     case OnScheduleEntryMappingKey.Cron:
-                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be scalar");
+                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be scalar", allowEmpty: true);
                         if (cron.HasValue)
                         {
                             range = arena.GetStringRange(cron);
@@ -106,7 +106,7 @@ public static partial class WorkflowParser
 
                         continue;
                     case OnScheduleEntryMappingKey.Timezone:
-                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be scalar");
+                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be scalar", allowEmpty: true);
                         continue;
                     default:
                         if (!reader.End)

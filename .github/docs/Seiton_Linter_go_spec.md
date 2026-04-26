@@ -232,7 +232,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `unpinned-image` | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
 | `dangerous-triggers` | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
 | `job-permissions-required` | Warn when a job omits explicit `permissions` configuration. |
-| `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
+| `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. Cycle diagnostics report at the `needs` value position that closes the cycle, with the full cycle path in the message. |
 | `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
 | `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
 | `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |

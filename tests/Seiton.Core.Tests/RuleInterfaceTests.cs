@@ -2400,7 +2400,8 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
     }
 
-    // B-4 regression: cycle diagnostics should report at the job key position (not needs value)
+    // B-4 regression: cycle diagnostics should report at the needs value position (actionable)
+    // with a cycle path in the message for clarity
     [Test]
     public async Task RuleRegression_NeedsGraphRule_CyclePosition()
     {
@@ -2424,14 +2425,16 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diags.Length).IsGreaterThanOrEqualTo(1);
 
-        // The cycle should be reported at the cycle-start job key position, not at the needs value position.
-        // After NormalizeYaml: "from:" is at line 3 and "to:" is at line 8.
-        // The needs value "from" inside job "to" would be at line 9 — that's the WRONG position.
+        // The cycle should be reported at the needs VALUE position (where the user wrote the dependency),
+        // NOT at the job key position. This is intentionally different from actionlint which reports
+        // at the job key — seiton prefers actionable positions pointing at the fixable location.
         var cycleD = diags[0];
-        // Must report on the cycle-start job (line 3 for "from"), not at the needs value (line 9)
-        await Assert.That(cycleD.Location.StartLine).IsEqualTo(3);
-        // Message should mention the cycle-start job
-        await Assert.That(cycleD.Message).Contains("'from'");
+        // After NormalizeYaml: "needs: [to]" is at line 4, "needs: [from]" is at line 9.
+        // DFS visits "from" first, hits back-edge when "to"'s needs references "from".
+        // Report is at "to"'s needs value position (line 9 for "from" inside "to"'s needs).
+        await Assert.That(cycleD.Location.StartLine).IsEqualTo(9);
+        // Message should include cycle path
+        await Assert.That(cycleD.Message).Contains("from -> to -> from");
     }
 
     [Test]
@@ -3660,6 +3663,33 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["timezone", "invalid"]),
+            new RuleCase(
+            "ng-empty-timezone",
+            """
+            on:
+                schedule:
+                    - cron: "0 0 * * *"
+                      timezone: ""
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["timezone", "must not be empty"]),
+            new RuleCase(
+            "ng-empty-cron",
+            """
+            on:
+                schedule:
+                    - cron: ""
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["cron", "must not be empty"]),
         };
 
         await AssertRuleCases(new ScheduleEventRule(), "schedule-event", cases);

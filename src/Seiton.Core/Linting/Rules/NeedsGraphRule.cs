@@ -117,13 +117,12 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 if (neighborColor == 1) // gray: back-edge = cycle
                 {
-                    // Report cycle at the cycle-start job (the gray neighbor), matching actionlint behavior
-                    if (_knownJobs.TryGetValue(source, needKey.Span, out var cycleStartJob))
-                    {
-                        var cycleStartId = Decode(Arena.GetStringSlice(cycleStartJob.Id));
-                        var currentId = Decode(Arena.GetStringSlice(currentJob.Id));
-                        AddJobError(cycleStartJob, $"job '{cycleStartId}' has a circular 'needs' dependency via '{currentId}'");
-                    }
+                    // Report at the needs value position (actionable: user sees which `needs` entry creates the cycle)
+                    // Build cycle path from DFS stack for informative message
+                    var cyclePath = BuildCyclePath(source, stack, needKey);
+                    var currentId = Decode(Arena.GetStringSlice(currentJob.Id));
+                    var needText = Decode(Arena.GetStringSlice(need));
+                    AddJobError(currentJob, $"job '{currentId}' has a circular 'needs' dependency: {cyclePath}", Arena.GetStringRange(need));
                 }
                 else if (neighborColor == 0)
                 {
@@ -132,6 +131,53 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Builds a human-readable cycle path string from the DFS stack.
+    /// Example: "a -> b -> c -> a"
+    /// </summary>
+    private string BuildCyclePath(byte[] source, Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
+    {
+        // Stack contains the gray path from root to current node.
+        // Find cycleTarget in the stack to extract only the cycle portion.
+        var stackArray = stack.ToArray(); // top-of-stack first
+        Array.Reverse(stackArray); // now root-first order
+
+        var sb = new System.Text.StringBuilder();
+        var inCycle = false;
+        foreach (var (key, _) in stackArray)
+        {
+            if (!inCycle && key.Equals(cycleTarget))
+            {
+                inCycle = true;
+            }
+
+            if (inCycle)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(" -> ");
+                }
+
+                if (_knownJobs.TryGetValue(source, key.Span, out var job))
+                {
+                    sb.Append(Decode(Arena.GetStringSlice(job.Id)));
+                }
+            }
+        }
+
+        // Close the cycle by appending the target again
+        if (sb.Length > 0)
+        {
+            sb.Append(" -> ");
+            if (_knownJobs.TryGetValue(source, cycleTarget.Span, out var targetJob))
+            {
+                sb.Append(Decode(Arena.GetStringSlice(targetJob.Id)));
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

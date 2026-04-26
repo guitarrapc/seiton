@@ -135,7 +135,7 @@ Column definitions:
 | `unpinned-image` | ✓ | — | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
 | `dangerous-triggers` | ✓ | — | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
 | `job-permissions-required` | ✓ | — | Warn when a job omits explicit `permissions` configuration. |
-| `needs-graph` | ✓ | — | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. |
+| `needs-graph` | ✓ | — | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. Cycle diagnostics report at the `needs` value position that closes the cycle, with the full cycle path in the message (see §4.5 design note). |
 | `shell-name` | ✓ | — | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
 | `runner-label` | ✓ | — | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. |
 | `runner-no-latest` | ✓ | — | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
@@ -194,6 +194,18 @@ This section provides operator-facing guidance for each default rule.
 - Relationship to §4.4: §4.4 remains the normative source of rule IDs and required behavior. This section is explanatory and operational.
 - Auto-fix status here follows §8.4 (including partial-fix boundaries).
 
+#### 4.5.1 Diagnostic Position Policy — `needs-graph` Cycle Detection
+
+**Design decision**: Seiton reports cycle diagnostics at the **`needs` value position** (the specific dependency entry that closes the cycle), not at the job key position.
+
+This is an intentional divergence from actionlint, which reports at the job key position. The rationale:
+
+1. **Actionability**: The `needs` value is the exact YAML token the user must edit to break the cycle. Pointing at the job key requires the user to scroll down and find the relevant `needs` entry themselves, especially in large job definitions.
+2. **Cycle path in message**: Seiton includes the full cycle path in the diagnostic message (e.g., `from -> to -> from`), compensating for the positional specificity by also giving the user the full picture. actionlint's message describes the cycle relationship but without a linear path representation.
+3. **No natural "start"**: A dependency cycle has no inherent starting point. Reporting at the back-edge `needs` value is a deterministic choice tied to DFS traversal order, and it points to a directly editable location.
+
+This policy applies only to cycle diagnostics. Other `needs-graph` diagnostics (unknown targets, duplicates) already report at the `needs` value position.
+
 ### 4.6 Known Partial Parity (actionlint)
 
 Seiton’s default rules still do not replicate every actionlint diagnostic, but several former gaps are now covered.
@@ -217,7 +229,7 @@ Residual gaps continue to be tracked as parity-hardening work items in the imple
 | `unpinned-image` | Warns when container image refs are not digest pinned. | `docker://repo/image:tag`, `container.image: repo/image:latest`. | Prevents mutable-tag drift and image substitution risk. | Pin images with `@sha256:<digest>` for deterministic pulls. | ✗ (default), ✓ (network-assisted remediation phase) | Digest pinning does not validate image trust posture. Add signature/attestation verification policy. |
 | `dangerous-triggers` | Flags high-risk trigger events. | `pull_request_target`, `workflow_run` from untrusted context. | These events often execute with elevated trust boundaries. | Restrict trigger scope, add strict condition guards, or replace with safer events. | ✗ | Trigger hardening is insufficient without command/data sanitization in downstream steps. |
 | `job-permissions-required` | Requires explicit job-level permissions declaration. | Job omits `permissions:`. | Prevents unintended default token scope inheritance. | Add explicit `permissions` mapping per job with least privilege. | ✓ | Explicit map can still be over-privileged. Review each scope against actual API calls. |
-| `needs-graph` | Validates dependency graph integrity. | Unknown `needs` target, self-cycle, multi-job cycle. | Prevents deadlock/invalid scheduling and unclear execution order. | Fix job IDs, remove cycles, and redesign dependency boundaries. | ✗ | Graph correctness does not ensure artifact safety. Review cross-job data exposure channels. |
+| `needs-graph` | Validates dependency graph integrity. Cycle diagnostics point to the `needs` value that closes the cycle and include the full cycle path in the message. | Unknown `needs` target, self-cycle, multi-job cycle. | Prevents deadlock/invalid scheduling and unclear execution order. | Fix job IDs, remove cycles, and redesign dependency boundaries. | ✗ | Graph correctness does not ensure artifact safety. Review cross-job data exposure channels. |
 | `shell-name` | Validates shell identifiers in defaults and run steps. | Unsupported shell string (`fish` where unsupported). | Prevents runtime mismatch and script portability issues. | Use supported shell names or adjust script to runtime-supported shell. | ✗ | Supported shell still may differ by runner image. Validate commands on target runner matrix. |
 | `runner-label` | Warns on unknown hosted runner labels. | `runs-on: ubuntu-9999` or mistyped hosted label. | Prevents queue/runtime failures from invalid labels. | Use known hosted labels or explicit self-hosted labels intentionally. | ✗ | Known label can still be policy-incompatible (cost/compliance). Align with org runner policy. |
 | `runner-no-latest` | Discourages moving `*-latest` labels. | `ubuntu-latest`, `windows-latest`, `macos-latest`. | Reduces breakage from implicit platform upgrades. | Use explicit versioned labels (for example `ubuntu-24.04`). | ✗ | Version pinning still requires lifecycle updates. Track runner deprecation announcements. |
