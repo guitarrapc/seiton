@@ -77,13 +77,14 @@ public static partial class WorkflowParser
                 }
 
                 var serviceNameNode = arena.AddString(serviceName, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length));
+                var serviceKeyStart = new TextPosition(serviceMark.Offset - serviceNameUtf8.Length, serviceMark.Line, serviceMark.Col - serviceNameUtf8.Length);
                 reader.Read();
                 if (reader.End)
                 {
                     break;
                 }
 
-                var container = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, serviceName, isService: true, requireImage: true);
+                var container = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceKeyStart);
                 if (container is not null)
                 {
                     map.Add(new SliceMap<Service>.Entry(serviceName, new Service
@@ -110,14 +111,19 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static Container? ParseContainerLike<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage)
+    private static Container? ParseContainerLike<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage, TextPosition sectionKeyStart)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            // container: null is valid YAML meaning "no container" — skip without error.
+            // container: null (explicit) is valid YAML meaning "no container" — skip without error.
+            // container:       (implicit empty) is invalid — report error.
             if (reader.GetScalarTag() == ScalarTag.Null)
             {
+                if (reader.GetScalarUtf8().Length == 0)
+                {
+                    AddError(diagnostics, "string should not be empty", reader.CurrentStart);
+                }
                 reader.Read();
                 return default;
             }
@@ -176,7 +182,9 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, FormatContainerSectionName(source, jobId, serviceName, isService)))
+            // VYaml reports key mark at colon position — adjust to key start
+            var keyStart = new TextPosition(keyMark.Offset - keyUtf8.Length, keyMark.Line, keyMark.Col - keyUtf8.Length);
+            if (IsMergeKey(keyUtf8, keyStart, diagnostics, FormatContainerSectionName(source, jobId, serviceName, isService)))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -189,7 +197,7 @@ public static partial class WorkflowParser
                 var ck = (ContainerMappingKey)containerKeyOrdinal;
                 if (!TrySetBit(ref seen, containerKeyOrdinal))
                 {
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyMark);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyStart);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -222,7 +230,7 @@ public static partial class WorkflowParser
                         }
                         continue;
                     case ContainerMappingKey.Credentials:
-                        credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService);
+                        credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService, keyStart);
                         continue;
                     case ContainerMappingKey.Env:
                         env = ParseEnvNode(
@@ -277,7 +285,7 @@ public static partial class WorkflowParser
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
-                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of \"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"", keyMark);
+                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of \"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"", keyStart);
                         if (!reader.End) reader.SkipCurrentNode();
                         continue;
                     default:
@@ -292,7 +300,7 @@ public static partial class WorkflowParser
             var expectedKeys = isService
                 ? "\"command\", \"credentials\", \"env\", \"entrypoint\", \"image\", \"options\", \"ports\", \"volumes\""
                 : "\"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"";
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyStart);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -312,7 +320,7 @@ public static partial class WorkflowParser
         if (requireImage && !hasImage)
         {
             var sectionType = isService ? "\"services\"" : "\"container\"";
-            AddError(diagnostics, $"\"image\" is missing in {sectionType} section", new TextPosition(0, 1, 1));
+            AddError(diagnostics, $"\"image\" is missing in {sectionType} section", sectionKeyStart);
         }
 
         return new Container
@@ -327,7 +335,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)
+    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.18: expression form is accepted as Credentials { Expression }
@@ -336,7 +344,18 @@ public static partial class WorkflowParser
         {
             if (reader.GetScalarUtf8().Length == 0)
             {
+                AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
                 AddError(diagnostics, "\"credentials\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
+                reader.Read();
+                return default;
+            }
+
+            // Non-expression scalars are not valid credentials (need mapping or ${{ }})
+            if (!ContainsExpression(reader.GetScalarUtf8()))
+            {
+                var scalarCredMark = reader.CurrentStart;
+                AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
+                AddError(diagnostics, "\"credentials\" section is scalar node but mapping node is expected", scalarCredMark);
                 reader.Read();
                 return default;
             }
@@ -383,8 +402,9 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))
-            {
+            // VYaml reports key mark at colon position — adjust to key start
+            var keyStart = new TextPosition(keyMark.Offset - keyUtf8.Length, keyMark.Line, keyMark.Col - keyUtf8.Length);
+            if (IsMergeKey(keyUtf8, keyStart, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))            {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
                 continue;
@@ -397,7 +417,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, credKeyOrdinal))
                 {
                     var dupName = crk == CredentialsMappingKey.Username ? "username" : "password";
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyMark);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyStart);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -440,7 +460,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of \"password\", \"username\"", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of \"password\", \"username\"", keyStart);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -453,7 +473,7 @@ public static partial class WorkflowParser
         // spec §3.18 / §12: credentials mapping form requires both `username` and `password`
         if (!hasUsername || !hasPassword)
         {
-            AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", new TextPosition(0, 1, 1));
+            AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
         }
 
         return new Credentials

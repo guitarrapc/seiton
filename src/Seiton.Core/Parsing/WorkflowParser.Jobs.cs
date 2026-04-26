@@ -392,7 +392,8 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true);
+                            var containerKeyStart = new TextPosition(keyMark.Offset - keyLen, keyMark.Line, keyMark.Col - keyLen);
+                            containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true, containerKeyStart);
                         }
 
                         break;

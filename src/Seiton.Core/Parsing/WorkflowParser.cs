@@ -666,7 +666,7 @@ public static partial class WorkflowParser
             var valueUtf8 = reader.GetScalarUtf8();
             if (!ExpressionScanHelpers.ContainsExpressionMarker(valueUtf8))
             {
-                AddError(diagnostics, $"{error}; expecting a single ${{{{...}}}} expression or mapping value for env section, but found plain text node", reader.CurrentStart);
+                AddError(diagnostics, $"expecting a single ${{{{...}}}} expression or mapping value for \"env\" section, but found plain text node", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 return null;
             }

@@ -1897,7 +1897,7 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-scalar-anchor.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         // The null scalar env is not a valid mapping — expect a parse error but not fatal
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("expecting a single", StringComparison.Ordinal) && d.Message.Contains("\"env\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1926,7 +1926,7 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-scalar-anchor-redef.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         // env: &credentials with null value is not valid
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("expecting a single", StringComparison.Ordinal) && d.Message.Contains("\"env\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1943,7 +1943,7 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
         await Assert.That(result.HasFatalError).IsFalse();
         // Expect parse/lint diagnostics but no fatal crash
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("expecting a single", StringComparison.Ordinal) && d.Message.Contains("\"env\" section", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("recursive alias", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 

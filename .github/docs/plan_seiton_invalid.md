@@ -800,16 +800,23 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 #### 2-6: container/services 構造バリデーション強化
 
-**変更ファイル**: `WorkflowParser.Containers.cs`
+**変更ファイル**: `WorkflowParser.Containers.cs`, `WorkflowParser.Jobs.cs`, `WorkflowParser.cs`
 - `entrypoint`/`command` コンテナ非対応エラーメッセージ改善
 - 空マッピング・空 credentials 検出
 - credentials unknown key・不完全メッセージ改善
+- `container:` (暗黙 null) → `string should not be empty` エラー追加。`container: null` (明示 null) は OK 維持
+- 非 expression scalar credentials (`credentials: 'user:pass'`) → `"credentials" section is scalar node but mapping node is expected` + `both "username" and "password"` エラー追加
+- env 平文エラーメッセージ改善: `expecting a single ${{...}} expression or mapping value for "env" section, but found plain text node`
+- `"image" is missing` 位置: `TextPosition(0,1,1)` → container/service キー位置
+- `both "username" and "password"` 位置: `TextPosition(0,1,1)` → credentials キー位置
+- VYaml キー位置補正: `keyMark` (コロン位置) → `keyStart` (キー名先頭位置) へ調整。`keyMark.Col - keyUtf8.Length`
+- `credentialsKeyMark` を `ParseCredentials` に渡し、空/スカラー/不完全すべてのケースで正しい位置を報告
 
 **テスト結果**: 全 730 テスト通過、ベンチマーク ゼロアロケーション維持
 
-**検出状況**: `missing_jobs`/`missing_on` 完全一致。`issue280_runs_on` 17件中11件一致。`empty_sequence_or_string` 16件中11+2近似一致。`invalid_container_syntax` 23件中約18件一致。
+**検出状況**: `invalid_container_syntax` 期待 23 件中: メッセージ全 21 parse エラー一致 (+ 2 lint ルール)、位置 16/21 一致。残り 5 件は VYaml `CurrentMark` の非空スカラー値位置ずれ (1行先を報告する既知動作) — アダプター改修が必要な課題として記録
 
-**未実施項目**: 2-3 (unused anchor 位置), 2-5 (step 空要素), 2-7 (schedule mapping, 既動作中), `container:null` 暗黙 null 区別不能のためスキップ, `options` 要素空文字列は choice type で正当のため維持
+**未実施項目**: 2-3 (unused anchor 位置), 2-5 (step 空要素), 2-7 (schedule mapping, 既動作中), VYaml 非空スカラー値位置ずれ (ports/volumes/credentials scalar/env の5箇所)
 
 ### Phase 3 実装記録
 
