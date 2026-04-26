@@ -154,10 +154,10 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `if_cond_constants` | 11行期待 | seiton `[if-cond]` で 8行検出。3行不足（`true` のバリエーション、`contains(...)` 定数畳み込み） | 定数畳み込みの深さが不足 |
-| `if_cond_edge_cases_trailing_leading_chars` | 6行期待 | seiton が `${{ }} ` の前後に余分な文字がある場合の always-true 検出が不足 | `${{ }}` 前後テキスト検出未実装 |
+| `if_cond_constants` | 11行期待 | **10行検出に改善** (8→10)。定数畳み込みを拡張し null/数値/文字列リテラル + 純粋関数 (contains, startsWith, endsWith, format) の定数評価を追加。残り1行 (`snapshot.if: true` line 31) はパーサーが `snapshot` キーを解析しないため if-cond ルールに到達しない | 定数畳み込みの深さが不足 → **対処済み** (null/number/string/function 対応) |
+| `if_cond_edge_cases_trailing_leading_chars` | 6行期待 | **完全対処済み** — 6件すべて検出。`${{ }}` 前後テキスト検出は既存実装で対応済みだった | `${{ }}` 前後テキスト検出未実装 → **実装済み確認** |
 
-**対処**: 定数畳み込みの改善。`${{ }}` 前後テキスト検出の実装。
+**対処**: `IsConstantBool` を `TryEvaluateConstant` に拡張。GitHub Actions の truthiness ルール (null=falsy, 0=falsy, ""=falsy, NaN=falsy) に従い全リテラル型を評価。純粋関数は引数がすべて定数の場合のみ評価。`snapshot.if` の未検出はパーサー側の制限 (C-1 カテゴリ)。
 
 #### B-8. merge_key_unsupported — 位置ずれ
 

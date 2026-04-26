@@ -5244,6 +5244,110 @@ public sealed class RuleInterfaceTests
                           run: echo ok
             """,
             []),
+            // B-7 regression: null literal should be detected as constant (falsy)
+            new RuleCase(
+            "ng-step-if-null-literal",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ null }}
+                          run: echo ng
+            """,
+            ["step if condition is always false"]),
+            // B-7 regression: number literal should be detected as constant (0 = falsy)
+            new RuleCase(
+            "ng-step-if-number-zero",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ 0 }}
+                          run: echo ng
+            """,
+            ["step if condition is always false"]),
+            // B-7 regression: non-zero number is truthy
+            new RuleCase(
+            "ng-step-if-number-truthy",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ 42 }}
+                          run: echo ng
+            """,
+            ["step if condition is always true"]),
+            // B-7 regression: empty string literal is falsy
+            new RuleCase(
+            "ng-step-if-empty-string",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ '' }}
+                          run: echo ng
+            """,
+            ["step if condition is always false"]),
+            // B-7 regression: non-empty string literal is truthy
+            new RuleCase(
+            "ng-step-if-nonempty-string",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ 'hello' }}
+                          run: echo ng
+            """,
+            ["step if condition is always true"]),
+            // B-7 regression: mixed type constant expression (true && 42 || !null)
+            new RuleCase(
+            "ng-step-if-mixed-constant",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: true && 42 || !null
+                          run: echo ng
+            """,
+            ["step if condition is always true"]),
+            // B-7 regression: pure function with constant args (contains + format)
+            new RuleCase(
+            "ng-step-if-constant-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b') }}
+                          run: echo ng
+            """,
+            ["step if condition is always true"]),
+            // B-7: ok case — impure function (success) should not be flagged
+            new RuleCase(
+            "ok-step-if-impure-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ contains(github.event.head_commit.message, 'skip') }}
+                          run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new IfCondRule(), "if-cond", cases);
