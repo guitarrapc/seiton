@@ -433,7 +433,14 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
             if (sourceIndex >= source.Length)
             {
-                return false;
+                // At source EOF, trailing newlines from block scalar clip chomping are allowed.
+                for (var k = valueIndex; k < utf8.Length; k++)
+                {
+                    if (utf8[k] != (byte)'\n') return false;
+                }
+
+                length = sourceIndex - start;
+                return true;
             }
 
             var valueByte = utf8[valueIndex];
@@ -447,6 +454,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                     }
 
                     sourceIndex += 2;
+                    atLineStart = true;
                     continue;
                 }
 

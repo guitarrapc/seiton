@@ -21,19 +21,16 @@ public sealed class DeprecatedCommandsRule() : RuleBase(RuleId.DeprecatedCommand
         if (ContainsAsciiIgnoreCase(script, "::set-output"u8))
         {
             AddStepWarning(step, "run script uses deprecated command '::set-output'; use $GITHUB_OUTPUT instead", Arena.GetStringRange(run.Run));
-            return;
         }
 
         if (ContainsAsciiIgnoreCase(script, "::save-state"u8))
         {
             AddStepWarning(step, "run script uses deprecated command '::save-state'; use $GITHUB_STATE instead", Arena.GetStringRange(run.Run));
-            return;
         }
 
         if (ContainsAsciiIgnoreCase(script, "::add-path"u8))
         {
             AddStepWarning(step, "run script uses deprecated command '::add-path'; use $GITHUB_PATH instead", Arena.GetStringRange(run.Run));
-            return;
         }
 
         if (ContainsAsciiIgnoreCase(script, "::set-env"u8))

@@ -159,7 +159,13 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             idNode = ParseString(ref reader, arena, out var idErr, out var idMark);
-                            if (idErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar", idMark);
+                            if (idErr)
+                            {
+                                var idMsg = idNode.HasValue
+                                    ? $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must not be empty"
+                                    : $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar";
+                                AddError(diagnostics, idMsg, idMark);
+                            }
                         }
 
                         break;

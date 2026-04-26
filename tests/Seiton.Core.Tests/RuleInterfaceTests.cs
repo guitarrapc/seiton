@@ -3148,7 +3148,7 @@ public sealed class RuleInterfaceTests
                         - id: ''
                           run: echo ng
             """,
-            ["step id", "contains invalid characters"]),
+            ["step id", "must not be empty"]),
             new RuleCase(
             "ng-job-id-starts-with-digit",
             """
@@ -5008,6 +5008,20 @@ public sealed class RuleInterfaceTests
                         - run: echo "::set-env name=TOKEN::x"
             """,
             ["deprecated command '::set-env'", "$GITHUB_ENV"]),
+            // B-3 regression: multi-line run script should report all deprecated commands
+            new RuleCase(
+            "ng-multiline-multiple-deprecated",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: |
+                            echo "::set-output name=foo::bar"
+                            echo "::set-env name=TOKEN::x"
+            """,
+            ["deprecated command '::set-output'", "deprecated command '::set-env'"]),
         };
 
         await AssertRuleCases(new DeprecatedCommandsRule(), "deprecated-commands", cases);

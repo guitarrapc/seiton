@@ -4126,4 +4126,17 @@ public sealed class ParserTests
         // Must be on the "permissions:" line (line 2), NOT the "jobs:" line (line 3)
         await Assert.That(diag.Location.StartLine).IsEqualTo(2);
     }
+
+    // B-2 regression: empty step id (id: "") should report "must not be empty", not "must be scalar"
+    [Test]
+    public async Task Parse_EmptyStepId_ReportsEmptyNotScalar()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        id: \"\"\n"u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("id") && d.Message.Contains("must"));
+        await Assert.That(diag.Message).IsNotEmpty();
+        // Must say "must not be empty", NOT "must be scalar"
+        await Assert.That(diag.Message).Contains("must not be empty");
+        await Assert.That(diag.Message).DoesNotContain("must be scalar");
+    }
 }

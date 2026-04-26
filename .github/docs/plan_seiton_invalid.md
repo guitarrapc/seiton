@@ -94,17 +94,32 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `invalid_id` | `3:3`, `7:13`, `8:3`, `12:13`, `13:3`, `17:13` (6行) | seiton `[id-naming]` で検出済み。空文字列 step id (`22:13`) は未検出 | ルール名差異 + 空文字列ケース漏れ |
+| `invalid_id` | `3:3`, `7:13`, `8:3`, `12:13`, `13:3`, `17:13` (6行) | seiton `[id-naming]` で検出済み。空文字列 step id (`22:13`) も **完全対処済み** — パーサーとルールの両方で空文字列を区別して検出 | ルール名差異 + 空文字列ケース漏れ |
 
 **対処**: 空文字列 step id の検出追加。
+
+**実施済み**:
+- `WorkflowParser.Steps.cs`: `StepMappingKey.Id` ケースで `idNode.HasValue` を使い空スカラー (empty) と非スカラー (mapping 等) を区別。空文字列は `"must not be empty"` メッセージ、非スカラーは `"must be scalar"` メッセージ
+- `IdNamingRule.cs`: `ValidateId` メソッドに空文字列の明示チェックを追加。空の場合は `"{kind} must not be empty"` メッセージ（旧: `"contains invalid characters"` という不正確なメッセージ）
+- テスト: `ParserTests` に `Parse_EmptyStepId_ReportsEmptyNotScalar` を追加
+- テスト: `RuleRegression_IdNamingRule_TableDriven` の `ng-step-id-empty` ケースの期待メッセージを `"must not be empty"` に更新
+- 全718テスト通過
 
 #### B-3. deprecated-commands ルール — 列位置ずれ
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `deprecated_workflow_commands` | `8:14`, `9:14`, `10:14`, `11:14` (4行) | seiton `[deprecated-commands]` で検出済みだが列位置が異なる | run スクリプト内の位置指定方式が異なる |
+| `deprecated_workflow_commands` | `8:14`, `9:14`, `10:14`, `11:14` (4行) | seiton `[deprecated-commands]` で検出済み。位置は元々一致。複数コマンド報告と block scalar back-projection が **完全対処済み** | run スクリプト内の位置指定方式が異なる → 実際は一致していた。early return で1ステップ1件しか報告されない問題 + block scalar EOF 境界バグ |
 
-**対処**: 列位置をコマンド名の先頭に合わせる。
+**対処**: ~~列位置をコマンド名の先頭に合わせる~~ 列位置は元々正しかった。複数 deprecated command の全件報告 + VYaml block scalar back-projection の EOF 境界修正。
+
+**実施済み**:
+- `DeprecatedCommandsRule.cs`: 各 `ContainsAsciiIgnoreCase` チェック後の `return` を削除し、1ステップ内の複数 deprecated command をすべて報告
+- `VYamlStreamAdapter.cs`: `TryMeasureSourceLength` に 2 件の修正:
+  - CRLF ケースで `atLineStart = true` が設定されていなかったバグを修正（CRLF 改行後のインデントスキップが効かなかった）
+  - ソース EOF で残りが `\n` のみ (block scalar clip chomping による trailing newline) の場合に成功として扱う
+- テスト: `RuleRegression_DeprecatedCommandsRule_TableDriven` に `ng-multiline-multiple-deprecated` ケースを追加（`::set-output` + `::set-env` の両方検出を検証）
+- 全718テスト通過
 
 #### B-4. needs-graph ルール — 位置ずれ
 
@@ -550,6 +565,36 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 **ベンチマーク結果**: Allocated は +0.5%〜+2% (Medium/Large)、Mean は ShortRun (N=3) のため変動あり（+10-17%）だが `ResolveEmptyScalarStart` は null/empty scalar のみのレアパスのため実質影響なし
 
 **CLIで確認**: `issue170_empty_permissions.yaml` の出力が `13:13` → `12:17` に修正され、actionlint の期待値と一致
+
+### B-2 実装記録 (id-naming 空文字列 step id 検出)
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/WorkflowParser.Steps.cs`: `StepMappingKey.Id` ケースで `idNode.HasValue` 判定を追加し空スカラーと非スカラーで異なるエラーメッセージ
+- `src/Seiton.Core/Linting/Rules/IdNamingRule.cs`: `ValidateId` に `value.Length == 0` チェックを追加、空文字列用メッセージ `"must not be empty"`
+- `tests/Seiton.Core.Tests/ParserTests.cs`: `Parse_EmptyStepId_ReportsEmptyNotScalar` テスト追加
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `ng-step-id-empty` の期待メッセージを更新
+
+**テスト結果**: 全718テスト通過
+
+**教訓**: `ParseString` は非スカラー入力には `default` (`HasValue=false`) を返し、空スカラーには有効ノード (`HasValue=true`, `Value.Length=0`) を返す。この区別を使い分けることで「空文字列」と「型不正」を正確に報告できる。
+
+### B-3 実装記録 (deprecated-commands 複数報告 + block scalar 修正)
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/DeprecatedCommandsRule.cs`: `return` 4件削除（全 deprecated command を報告）
+- `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs`: `TryMeasureSourceLength` に2件修正
+  - CRLF 改行後の `atLineStart = true` 設定漏れ修正
+  - ソース EOF 時に残りが `\n` のみなら成功扱い（block scalar clip chomping 対応）
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`: `ng-multiline-multiple-deprecated` テストケース追加
+
+**テスト結果**: 全718テスト通過
+
+**ベンチマーク結果**: 29ベンチマーク実行。LintEngine.Check: Small 51.59µs (15.49KB), Medium 901.14µs (97.35KB), Large 12,196µs (453.21KB)。`TryMeasureSourceLength` の修正は block scalar のレアパスのため実質パフォーマンス影響なし
+
+**教訓**:
+- `TryResolveNormalizedSlice` は decoded (VYaml) の UTF-8 値をソースバイト列に back-project する。CRLF のある Windows 環境ではソース側が `\r\n` だが decoded 側は `\n` のみになるため、CRLF スキップ後に `atLineStart = true` を設定しないとインデントスキップが効かず anchor 不一致となる
+- block scalar の clip chomping は trailing `\n` を付加するが、ソースファイルが trailing newline なしで終わる場合、EOF で decoded 側に残る `\n` をソース側で消費できない。EOF 残余が `\n` のみかチェックして許容する必要がある
+- 位置ずれの当初仮説（列がコマンド位置でない）は誤りだった。単一行テストでは位置は正しく、問題は `return` による早期打ち切りと block scalar back-projection の2点だった
 
 ### Phase 1 実装記録
 

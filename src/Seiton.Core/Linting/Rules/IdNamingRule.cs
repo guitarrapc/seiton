@@ -57,7 +57,9 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         }
 
         var idText = Decode(Arena.GetStringSlice(idNode));
-        var message = $"{kind} '{idText}' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]";
+        var message = value.Length == 0
+            ? $"{kind} must not be empty"
+            : $"{kind} '{idText}' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]";
 
         if (_currentJob is not null)
         {
