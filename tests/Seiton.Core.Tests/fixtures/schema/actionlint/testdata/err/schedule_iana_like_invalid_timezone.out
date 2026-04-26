@@ -1,0 +1,1 @@
+test.yaml:4:17: on.schedule timezone 'Asia/Somewhere' is invalid [schedule-event]
