@@ -4293,4 +4293,303 @@ public sealed class ParserTests
         var hasParseDiag = result.Diagnostics.Any(d => d.Message.Contains("container must be"));
         await Assert.That(hasParseDiag).IsFalse();
     }
+
+    // regression: Unused anchor position accuracy
+    [Test]
+    public async Task Parse_UnusedAnchor_ReportsCorrectPosition()
+    {
+        // &unused_env is at line 5, col 22
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n        env: &unused_env\n          FOO: bar\n      - run: echo done\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unused_env") && d.Message.Contains("not used"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(14);
+    }
+
+    [Test]
+    public async Task Parse_UnusedAnchor_OnScalar_ReportsAnchorPosition()
+    {
+        // on: &anchor push — the anchor &anchor starts at col 5
+        var yaml = "on: &anchor push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("\"anchor\"") && d.Message.Contains("not used"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(1);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task Parse_UnusedAnchor_NestedInMapping_ReportsAnchorPosition()
+    {
+        // env: &unused at col 10
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env: &unused\n      FOO: bar\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("\"unused\"") && d.Message.Contains("not used"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(5);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(10);
+    }
+
+    // regression: Step empty element detection
+    [Test]
+    public async Task Parse_StepNullElement_ReportsEmptyAndMissingRunUses()
+    {
+        // `- null` should produce two diagnostics
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - null\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diags = result.Diagnostics;
+        await Assert.That(diags.Any(d => d.Message.Contains("element of \"steps\" section should not be empty"))).IsTrue();
+        await Assert.That(diags.Any(d => d.Message.Contains("step must run script with \"run\" section or run action with \"uses\" section"))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepBareDash_ReportsEmptyAndMissingRunUses()
+    {
+        // bare `-` produces null scalar
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      -\n      - run: echo ok\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diags = result.Diagnostics;
+        await Assert.That(diags.Any(d => d.Message.Contains("element of \"steps\" section should not be empty"))).IsTrue();
+        await Assert.That(diags.Any(d => d.Message.Contains("step must run script"))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepEmptyMapping_ReportsEmptyAndMissingRunUses()
+    {
+        // `- {}` produces MappingStart then MappingEnd with no keys
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - { }\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diags = result.Diagnostics;
+        await Assert.That(diags.Any(d => d.Message.Contains("element of \"steps\" section should not be empty"))).IsTrue();
+        await Assert.That(diags.Any(d => d.Message.Contains("step must run script"))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepNullElement_Position_PointsToElement()
+    {
+        // line 6: "      - null" — the null scalar starts at col 9
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - null\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("element of \"steps\" section should not be empty"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(6);
+    }
+
+    // regression: Step coexistence: run-first then uses
+    [Test]
+    public async Task Parse_StepRunThenUses_ReportsUnexpectedRunForAction()
+    {
+        // run: appears first, then uses: → run is unexpected for action step
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n        uses: actions/checkout@v4\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"run\" for step to execute action"));
+        await Assert.That(diag.Message).Contains("expected one of");
+        await Assert.That(diag.Message).Contains("\"uses\"");
+    }
+
+    [Test]
+    public async Task Parse_StepUsesThenRun_ReportsUnexpectedUsesForRun()
+    {
+        // uses: appears first, then run: → uses is unexpected for run step
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        run: echo hello\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"uses\" for step to run shell command"));
+        await Assert.That(diag.Message).Contains("expected one of");
+        await Assert.That(diag.Message).Contains("\"run\"");
+    }
+
+    [Test]
+    public async Task Parse_StepRunThenUses_PositionPointsToRunKey()
+    {
+        // run: on line 6 at col 9
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n        uses: actions/checkout@v4\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"run\" for step to execute action"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(6);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(9);
+    }
+
+    // regression: Step secondary key conflicts
+    [Test]
+    public async Task Parse_ActionStepWithShell_ReportsUnexpectedShell()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        shell: bash\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"shell\" for step to execute action"));
+        await Assert.That(diag.Message).Contains("expected one of");
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
+    public async Task Parse_ActionStepWithWorkingDirectory_ReportsUnexpectedWD()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        working-directory: /foo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"working-directory\" for step to execute action"))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_RunStepWithWith_ReportsUnexpectedWith()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        with:\n          foo: bar\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"with\" for step to run shell command"));
+        await Assert.That(diag.Message).Contains("expected one of");
+    }
+
+    [Test]
+    public async Task Parse_ActionStepWithUnknownKey_ReportsUnexpectedForAction()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        foobar: baz\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"foobar\" for step to execute action"));
+        await Assert.That(diag.Message).Contains("expected one of");
+    }
+
+    [Test]
+    public async Task Parse_RunStepWithUnknownKey_ReportsUnexpectedForRun()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        foobar: baz\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"foobar\" for step to run shell command"));
+        await Assert.That(diag.Message).Contains("expected one of");
+    }
+
+    // regression: Step missing run/uses message
+    [Test]
+    public async Task Parse_StepWithOnlyName_ReportsNewMissingRunUsesMessage()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - name: no-exec\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("step must run script"));
+        await Assert.That(diag.Message).IsEqualTo("step must run script with \"run\" section or run action with \"uses\" section");
+    }
+
+    // regression: "with" section scalar → mapping expected
+    [Test]
+    public async Task Parse_StepWithScalar_ReportsScalarNotMapping()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with: foo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("\"with\" section is scalar node but mapping node is expected"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7);
+    }
+
+    // regression: "steps" must be sequence node with tag info
+    [Test]
+    public async Task Parse_StepsNullScalar_ReportsSequenceNodeWithNullTag()
+    {
+        // steps: (empty, null scalar) → "steps" section must be sequence node but got scalar node with "!!null" tag
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
+        await Assert.That(diag.Message).Contains("scalar node");
+        await Assert.That(diag.Message).Contains("\"!!null\" tag");
+    }
+
+    [Test]
+    public async Task Parse_StepsStringScalar_ReportsSequenceNodeWithoutTag()
+    {
+        // steps: notASequence → scalar without !!null tag
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps: notASequence\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("\"steps\" section must be sequence node"));
+        await Assert.That(diag.Message).Contains("scalar node");
+        await Assert.That(diag.Message).DoesNotContain("\"!!null\"");
+    }
+
+    [Test]
+    public async Task Parse_StepsMapping_ReportsSequenceNodeGotMapping()
+    {
+        // steps: {foo: bar} → mapping node
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      foo: bar\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
+        await Assert.That(diag.Message).Contains("mapping node");
+    }
+
+    // regression: "steps" section is missing in job
+    [Test]
+    public async Task Parse_JobMissingSteps_ReportsNewMissingMessage()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("\"steps\" section is missing"));
+        await Assert.That(diag.Message).IsEqualTo("\"steps\" section is missing in job \"build\"");
+    }
+
+    // regression:Schedule message wording
+    [Test]
+    public async Task Parse_ScheduleScalar_ReportsConfiguredWithMapping()
+    {
+        var yaml = "on: schedule\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("schedule"));
+        await Assert.That(diag.Message).IsEqualTo("schedule event must be configured with mapping");
+    }
+
+    [Test]
+    public async Task Parse_ScheduleInSequence_ReportsConfiguredWithMapping()
+    {
+        var yaml = "on: [push, schedule]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("schedule"));
+        await Assert.That(diag.Message).IsEqualTo("schedule event must be configured with mapping");
+    }
+
+    [Test]
+    public async Task Parse_ScheduleScalar_Position_PointsToEventName()
+    {
+        // on: schedule — "schedule" starts at col 5
+        var yaml = "on: schedule\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("schedule event must be configured"));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(1);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
+    }
+
+    // regression: VYaml non-empty scalar position accuracy
+    [Test]
+    public async Task Parse_ContainerImageScalar_PositionPointsToImageValue()
+    {
+        // container: ubuntu:20.04 — "ubuntu:20.04" starts at col 16
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    container: ubuntu:20.04\n    steps:\n      - run: echo\n"u8;
+        var bytes = yaml.ToArray();
+        var result = WorkflowParser.Parse(bytes, "test.yaml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        var container = result.Workflow!.Jobs.Get(bytes, "test"u8)!.Container;
+        await Assert.That(container).IsNotNull();
+    }
+
+    [Test]
+    public async Task Parse_RunsOnScalar_PositionPointsToLabelValue()
+    {
+        // runs-on: ubuntu-latest — "ubuntu-latest" starts at col 14
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var bytes = yaml.ToArray();
+        var result = WorkflowParser.Parse(bytes, "test.yaml");
+        var runner = result.Workflow!.Jobs.Get(bytes, "test"u8)!.RunsOn;
+        await Assert.That(runner).IsNotNull();
+        var arena = result.Arena!;
+        var labels = runner!.Labels;
+        await Assert.That(labels).IsNotNull();
+        var labelStr = Encoding.UTF8.GetString(arena.GetStringValue(labels![0]));
+        await Assert.That(labelStr).IsEqualTo("ubuntu-latest");
+        var range = arena.GetStringRange(labels[0]);
+        await Assert.That(range.StartLine).IsEqualTo(4);
+        await Assert.That(range.StartColumn).IsEqualTo(14);
+    }
+
+    [Test]
+    public async Task Parse_StepRunValue_PositionPointsToScalarContent()
+    {
+        // run: echo hello — "echo hello" starts at col 14
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n"u8;
+        var bytes = yaml.ToArray();
+        var result = WorkflowParser.Parse(bytes, "test.yaml");
+        var arena = result.Arena!;
+        var step = result.Workflow!.Jobs.Get(bytes, "test"u8)!.Steps![0];
+        var exec = (ExecRun)step.Exec;
+        var range = arena.GetStringRange(exec.Run);
+        await Assert.That(range.StartLine).IsEqualTo(6);
+        await Assert.That(range.StartColumn).IsEqualTo(14);
+    }
 }

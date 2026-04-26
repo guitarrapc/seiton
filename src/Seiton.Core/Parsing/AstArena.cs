@@ -214,7 +214,7 @@ public sealed class AstArena : IDisposable
     /// <summary>Gets the raw UTF-8 source bytes that this arena indexes into.</summary>
     public byte[] Source => _source;
 
-    // ---- String allocation ----
+    // String allocation
 
     /// <summary>Allocates a string node with no embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -233,7 +233,7 @@ public sealed class AstArena : IDisposable
         return StringNodeId.FromIndex(_stringCount++);
     }
 
-    // ---- Bool allocation ----
+    // Bool allocation
 
     /// <summary>Allocates a bool node with no embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -252,7 +252,7 @@ public sealed class AstArena : IDisposable
         return BoolNodeId.FromIndex(_boolCount++);
     }
 
-    // ---- Int allocation ----
+    // Int allocation
 
     /// <summary>Allocates an integer node.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -263,7 +263,7 @@ public sealed class AstArena : IDisposable
         return IntNodeId.FromIndex(_intCount++);
     }
 
-    // ---- Float allocation ----
+    // Float allocation
 
     /// <summary>Allocates a float node with no embedded expression.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -283,7 +283,7 @@ public sealed class AstArena : IDisposable
         return FloatNodeId.FromIndex(_floatCount++);
     }
 
-    // ---- String read ----
+    // String read
 
     /// <summary>Resolves a string node's UTF-8 value bytes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -325,7 +325,7 @@ public sealed class AstArena : IDisposable
         return _strings[id.Index].Expression;
     }
 
-    // ---- Bool read ----
+    // Bool read
 
     /// <summary>Resolves a bool node's value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -351,7 +351,7 @@ public sealed class AstArena : IDisposable
         return _bools[id.Index].Expression;
     }
 
-    // ---- Int read ----
+    // Int read
 
     /// <summary>Resolves an integer node's value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -377,7 +377,7 @@ public sealed class AstArena : IDisposable
         return _ints[id.Index].Expression;
     }
 
-    // ---- Float read ----
+    // Float read
 
     /// <summary>Resolves a float node's value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -403,7 +403,7 @@ public sealed class AstArena : IDisposable
         return _floats[id.Index].Expression;
     }
 
-    // ---- Private ----
+    // Private
 
     private static void Grow<T>(ref T[] array)
     {
@@ -420,7 +420,7 @@ public sealed class AstArena : IDisposable
         }
     }
 
-    // ---- Debug helpers (§6.2 debugging experience) ----
+    // Debug helpers (§6.2 debugging experience)
 
     /// <summary>
     /// Returns a human-readable representation of the string value for a handle.

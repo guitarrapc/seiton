@@ -12,7 +12,7 @@ internal static class SliceMapTestExtensions
     /// Gets a value by UTF-8 key. Throws KeyNotFoundException if not found.
     /// Replaces dictionary indexer pattern: map[key].
     /// </summary>
-    public static TValue Get<TValue>(this SliceMap<TValue> map, byte[] source, ReadOnlySpan<byte> key)
+    public static TValue Get<TValue>(this SliceMap<TValue> map, ReadOnlySpan<byte> source, ReadOnlySpan<byte> key)
     {
         if (map.TryGetValue(source, key, out var value))
             return value;
