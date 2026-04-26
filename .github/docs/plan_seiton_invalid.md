@@ -163,9 +163,12 @@ seiton が検出しているが、位置やメッセージが actionlint と異�
 
 | テストケース | 期待 line:col | seiton の状態 | 原因 |
 |---|---|---|---|
-| `merge_key_unsupported` | `8:7`, `21:11`, `27:9` (3行) | seiton `[parse]` で検出済みだが位置が異なる場合あり | 位置報告の差異 |
+| `merge_key_unsupported` | `8:7`, `21:11`, `27:9` (3行) | **完全対処済み** — 3件すべて正しい位置で検出。(1) VYaml の `CurrentMark` が `<<` キーの末尾を指す問題を `IsMergeKey`/`TryRegisterDynamicKey` でキー長分の位置補正。(2) step env のマージキーメッセージが `"env must be mapping does not support..."` と結合されていた問題を `sectionName` パラメータで分離。(3) step レベルのマージキーが "unexpected step key" として誤報告されていた問題を `IsMergeKey` チェック追加で修正 | 位置報告の差異 + メッセージ品質 + step マージキー未検出 |
 
-**対処**: 位置の確認と調整。
+**対処**: 3件の修正:
+1. **位置修正**: `IsMergeKey` と `TryRegisterDynamicKey` で VYaml の `CurrentMark` がキー末尾を指す問題を `keyMark.Column - keyUtf8.Length` で補正
+2. **メッセージ修正**: `ParseEnvNode` に `sectionName` パラメータを追加。`TryRegisterDynamicKey` に渡す `mappingName` をエラー文字列 (`"env must be mapping"`) からセクション名 (`"step[N] env"`) に分離
+3. **step マージキー検出**: `WorkflowParser.Steps.cs` の step mapping ループに `IsMergeKey` チェックを追加。修正前は `Utf8MappingDispatch` で不一致→ "unexpected step key" として報告されていた
 
 ---
 
@@ -666,6 +669,63 @@ seiton は actionlint にないルールを持っており、actionlint の OK �
 
 **追加の修正ポイント**:
 - `ParseStringOrStringSequence` 経由でパースされたリスト内 expression ラベル (`'${{matrix.os}}'`) は `Arena.GetStringExpression` が false を返す。`ExpressionScanHelpers.ContainsExpressionMarker` を使うことで raw 文字列内の `${{ }}` マーカーも検出可能。この修正は expression 判定の偽陰性バグの修正でもある
+
+### B-7 実装記録 (if-cond 定数畳み込み拡張)
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/IfCondRule.cs`:
+  - `IsConstantBool` を `TryEvaluateConstant` に拡張。`ConstantResult` 型で Null/Bool/Number/String を表現
+  - GitHub Actions の truthiness ルールに従い全リテラル型を評価: null=falsy, 0=falsy, ""=falsy, NaN=falsy
+  - 純粋関数の定数畳み込み: `contains`, `startsWith`, `endsWith` (bool返却)、`format` (string返却)
+  - 引数がすべて定数の場合のみ関数を評価。非定数引数がある場合は NotConstant を返す
+  - `&&`/`||` の短絡評価: falsy `&&` x → falsy (右辺不要)、truthy `||` x → truthy (右辺不要)
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.cs`:
+  - `RuleRegression_IfCondRule_TableDriven` に B-7 テストケース 8 件追加:
+    `ng-step-if-null-literal`, `ng-step-if-number-zero`, `ng-step-if-number-truthy`,
+    `ng-step-if-empty-string`, `ng-step-if-nonempty-string`, `ng-step-if-mixed-constant`,
+    `ng-step-if-constant-function`, `ok-step-if-impure-function`
+
+**テスト結果**: 全720テスト通過 (720→720、テストケース数は test method 単位で変化なし)
+
+**ベンチマーク結果**: 回帰なし。ルールロジックのみの変更で hotpath 影響なし
+
+**CLI確認**:
+- `if_cond_constants.yaml`: 10件検出 (8→10)。line 38 (`true && 42 || !null`) と line 40 (`contains(format(...))`) を新規検出
+- `if_cond_edge_cases_trailing_leading_chars.yaml`: 6件検出 (変化なし、既に完全対応)
+- 残り1件 (`snapshot.if: true` line 31) はパーサーが `snapshot` キーを解析しないため if-cond ルールに到達しない (C-1 カテゴリ)
+
+### B-8 実装記録 (merge_key_unsupported 位置ずれ + メッセージ品質 + step 検出)
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/WorkflowParser.ScalarParsing.cs`:
+  - `IsMergeKey`: VYaml の `CurrentMark` がキー末尾を指す問題を `keyMark.Column - keyUtf8.Length` で補正
+  - `TryRegisterDynamicKey`: 同様の位置補正を merge key 検出時に適用
+- `src/Seiton.Core/Parsing/WorkflowParser.cs`:
+  - `ParseEnvNode` に `sectionName` パラメータ (optional) を追加
+  - `TryRegisterDynamicKey` の `mappingName` に `sectionName ?? error` を使用（エラー文字列とセクション名を分離）
+- `src/Seiton.Core/Parsing/WorkflowParser.Steps.cs`:
+  - step mapping ループに `IsMergeKey` チェックを追加（`Utf8MappingDispatch` の前）
+  - 修正前: `<<` が "unexpected step key" として誤報告 → 修正後: "does not support merge key '<<'"
+- `src/Seiton.Core/Parsing/WorkflowParser.Jobs.cs`: `ParseEnvNode` 呼び出しに `sectionName` 追加
+- `src/Seiton.Core/Parsing/WorkflowParser.Containers.cs`: 同上
+- `src/Seiton.Core/Parsing/WorkflowParser.ActionMetadata.cs`: 同上
+- `tests/Seiton.Core.Tests/ParserTests.cs`:
+  - `Parse_MergeKey_ReportsCorrectPosition`: 位置精度テスト (workflow_call inputs col 7, env col 11)
+  - `Parse_MergeKey_StepLevel_ReportsAsMergeKey`: step マージキー検出テスト (col 9, "does not support merge key")
+  - `Parse_MergeKey_EnvMessage_NotGarbled`: env メッセージ品質テスト ("must be mapping" 非含有)
+
+**テスト結果**: 全723テスト通過 (720→723、+3 新規テスト)
+
+**ベンチマーク結果**: 回帰なし。パーサーの分岐追加のみで hotpath 影響なし
+
+**CLI確認**:
+- `merge_key_unsupported.yaml`: `8:7`, `21:11`, `27:9` — 3件すべて actionlint 期待位置と一致
+  - 修正前: `8:9`, `21:13`, `27:11` (すべて col +2)
+  - メッセージ: `"on.workflow_call.inputs does not support merge key '<<'"`, `"job 'test' step[2] env does not support merge key '<<'"`, `"job 'test' step[4] does not support merge key '<<'"`
+
+**教訓**:
+- VYaml の `CurrentMark` は non-empty スカラーでも正確でない場合がある。特に `<<` マージキーではキー末尾 (`:` 位置) を指す。通常のキー (`run`, `uses` 等) では正しい位置を返すため、`<<` 特有の問題
+- `ParseEnvNode` の `error` パラメータは型エラーメッセージ (`"env must be mapping"`) として設計されているが、`TryRegisterDynamicKey` の `mappingName` (セクション名) としても使い回されていた。用途の異なる文字列を分離するのが正しい設計
 
 ### Phase 1 実装記録
 

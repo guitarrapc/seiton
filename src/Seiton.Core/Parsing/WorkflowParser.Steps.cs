@@ -114,6 +114,13 @@ public static partial class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
 
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}]"))
+            {
+                reader.Read();
+                if (!reader.End) reader.SkipCurrentNode();
+                continue;
+            }
+
             if (Utf8MappingDispatch.TryMatchFirstOrdered<StepMappingKeyTable>(keyUtf8, out var stepKeyOrd))
             {
                 var keyLen = keyUtf8.Length;
@@ -251,7 +258,8 @@ public static partial class WorkflowParser
                                 ref reader, arena, diagnostics,
                                 source,
                                 $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env must be mapping",
-                                ExpressionValidationContext.StepEnv);
+                                ExpressionValidationContext.StepEnv,
+                                $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] env");
                         }
 
                         break;

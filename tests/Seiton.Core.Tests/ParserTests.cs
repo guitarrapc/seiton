@@ -1574,6 +1574,62 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
     }
 
+    [Test]
+    public async Task Parse_MergeKey_ReportsCorrectPosition()
+    {
+        // B-8: merge key positions should point to the '<<' key, not past it
+        var yaml = "on:\n  workflow_call:\n    inputs:\n      <<: &inputs\n        foo:\n          type: string\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: env\n        env:\n          <<: &default_env\n            FOO: BAR\n      - run: env\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
+
+        // workflow_call inputs merge key at line 4, col 7 (6 spaces + <<)
+        await Assert.That(mergeKeyDiags.Length).IsGreaterThanOrEqualTo(2);
+        var inputMerge = mergeKeyDiags.First(d => d.Message.Contains("workflow_call", StringComparison.Ordinal));
+        await Assert.That(inputMerge.Location.StartLine).IsEqualTo(4);
+        await Assert.That(inputMerge.Location.StartColumn).IsEqualTo(7);
+
+        // step env merge key at line 13, col 11 (10 spaces + <<)
+        var envMerge = mergeKeyDiags.First(d => d.Message.Contains("env", StringComparison.Ordinal));
+        await Assert.That(envMerge.Location.StartLine).IsEqualTo(13);
+        await Assert.That(envMerge.Location.StartColumn).IsEqualTo(11);
+    }
+
+    [Test]
+    public async Task Parse_MergeKey_StepLevel_ReportsAsMergeKey()
+    {
+        // B-8: step-level merge key should be reported as merge key, not "unexpected step key"
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - &default_step\n        run: echo hello\n      - <<: *default_step\n        run: echo bye\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
+
+        await Assert.That(mergeKeyDiags.Length).IsGreaterThanOrEqualTo(1);
+        var stepMerge = mergeKeyDiags[0];
+        await Assert.That(stepMerge.Message).Contains("does not support merge key '<<'");
+        // step merge key at line 8, col 9 (8 spaces + <<)
+        await Assert.That(stepMerge.Location.StartLine).IsEqualTo(8);
+        await Assert.That(stepMerge.Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
+    public async Task Parse_MergeKey_EnvMessage_NotGarbled()
+    {
+        // B-8: env merge key message should not contain "must be mapping" prefix
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: env\n        env:\n          <<: &e\n            FOO: BAR\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
+
+        await Assert.That(mergeKeyDiags.Length).IsGreaterThanOrEqualTo(1);
+        var envMerge = mergeKeyDiags[0];
+        // Should NOT contain "must be mapping" in the merge key error
+        await Assert.That(envMerge.Message).DoesNotContain("must be mapping");
+        // Should contain "env" section reference
+        await Assert.That(envMerge.Message).Contains("env");
+        await Assert.That(envMerge.Message).Contains("does not support merge key '<<'");
+    }
+
     // YAML anchor / alias tests
 
     [Test]

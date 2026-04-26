@@ -668,7 +668,8 @@ public static partial class WorkflowParser
                                 ref reader, arena, diagnostics,
                                 source,
                                 "action runs env must be mapping",
-                                ExpressionValidationContext.StepEnv);
+                                ExpressionValidationContext.StepEnv,
+                                "action runs env");
                         }
 
                         continue;

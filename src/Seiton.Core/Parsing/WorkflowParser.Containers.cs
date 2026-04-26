@@ -210,7 +210,8 @@ public static partial class WorkflowParser
                             ref reader, arena, diagnostics,
                             source,
                             $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
-                            isService ? ExpressionValidationContext.JobServicesEnv : ExpressionValidationContext.JobContainerEnv);
+                            isService ? ExpressionValidationContext.JobServicesEnv : ExpressionValidationContext.JobContainerEnv,
+                            $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env");
                         continue;
                     case ContainerMappingKey.Ports:
                     case ContainerMappingKey.Volumes:

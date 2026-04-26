@@ -364,7 +364,8 @@ public static partial class WorkflowParser
                                 ref reader, arena, diagnostics,
                                 source,
                                 "workflow env must be mapping",
-                                ExpressionValidationContext.Env);
+                                ExpressionValidationContext.Env,
+                                "workflow env");
                         }
 
                         continue;
@@ -654,7 +655,7 @@ public static partial class WorkflowParser
         finally { scopes.Dispose(); }
     }
 
-    private static Env? ParseEnvNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext expressionContext)
+    private static Env? ParseEnvNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext expressionContext, string? sectionName = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -719,7 +720,7 @@ public static partial class WorkflowParser
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
-                    error))
+                    sectionName ?? error))
                 {
                     reader.Read();
                     if (!reader.End)

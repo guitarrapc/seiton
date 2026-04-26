@@ -396,11 +396,17 @@ public static partial class WorkflowParser
     /// <summary>
     /// Checks if the key is the YAML merge key '&lt;&lt;' and rejects it.
     /// Returns true if the key IS a merge key (caller should skip key+value).
+    /// VYaml's CurrentMark for the '&lt;&lt;' key points past the key text (at the ':'),
+    /// so we adjust the position back by the key length to report the correct column.
     /// </summary>
     private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, string mappingName)
     {
         if (!keyUtf8.SequenceEqual("<<"u8)) return false;
-        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+        var correctedMark = new TextPosition(
+            keyMark.Offset - keyUtf8.Length,
+            keyMark.Line,
+            keyMark.Column - keyUtf8.Length);
+        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", correctedMark);
         return true;
     }
 
@@ -423,7 +429,11 @@ public static partial class WorkflowParser
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
-            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+            var correctedMark = new TextPosition(
+                keyMark.Offset - keyUtf8.Length,
+                keyMark.Line,
+                keyMark.Column - keyUtf8.Length);
+            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", correctedMark);
             return false;
         }
 

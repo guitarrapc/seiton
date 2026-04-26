@@ -220,7 +220,7 @@ public static partial class WorkflowParser
 
                         if (!reader.End)
                         {
-                            envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.JobEnv);
+                            envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be mapping", ExpressionValidationContext.JobEnv, $"job '{DecodeUtf8(source, jobId)}' env");
                         }
 
                         break;
