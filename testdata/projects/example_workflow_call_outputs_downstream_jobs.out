@@ -1,1 +1,0 @@
-workflows/test.yaml:13:24: property "tag" is not defined in object type {version: string} [expression]
