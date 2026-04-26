@@ -29,7 +29,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
 
         var headings = WorkflowSyntaxExpectedKeysParser.ExtractHeadings(md);
 
-        await Assert.That(headings).HasCount().EqualTo(3);
+        await Assert.That(headings).Count().IsEqualTo(3);
         await Assert.That(headings[0]).IsEqualTo("name");
         await Assert.That(headings[1]).IsEqualTo("on");
         await Assert.That(headings[2]).IsEqualTo("jobs.<job_id>.steps[*].run");
@@ -52,7 +52,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
 
         var headings = WorkflowSyntaxExpectedKeysParser.ExtractHeadings(md);
 
-        await Assert.That(headings).HasCount().EqualTo(1);
+        await Assert.That(headings).Count().IsEqualTo(1);
         await Assert.That(headings[0]).IsEqualTo("name");
     }
 
@@ -63,7 +63,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
 
         var headings = WorkflowSyntaxExpectedKeysParser.ExtractHeadings(md);
 
-        await Assert.That(headings).HasCount().EqualTo(2);
+        await Assert.That(headings).Count().IsEqualTo(2);
         await Assert.That(headings[0]).IsEqualTo("name");
         await Assert.That(headings[1]).IsEqualTo("on");
     }
@@ -77,7 +77,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
     {
         var segments = WorkflowSyntaxExpectedKeysParser.SplitSegments("jobs.<job_id>.container.image");
 
-        await Assert.That(segments).HasCount().EqualTo(4);
+        await Assert.That(segments).Count().IsEqualTo(4);
         await Assert.That(segments[0]).IsEqualTo("jobs");
         await Assert.That(segments[1]).IsEqualTo("<job_id>");
         await Assert.That(segments[2]).IsEqualTo("container");
@@ -89,7 +89,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
     {
         var segments = WorkflowSyntaxExpectedKeysParser.SplitSegments("jobs.<job_id>.steps[*].id");
 
-        await Assert.That(segments).HasCount().EqualTo(4);
+        await Assert.That(segments).Count().IsEqualTo(4);
         await Assert.That(segments[2]).IsEqualTo("steps[*]");
         await Assert.That(segments[3]).IsEqualTo("id");
     }
@@ -100,7 +100,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         var segments = WorkflowSyntaxExpectedKeysParser.SplitSegments(
             "on.<push|pull_request|pull_request_target>.<paths|paths-ignore>");
 
-        await Assert.That(segments).HasCount().EqualTo(3);
+        await Assert.That(segments).Count().IsEqualTo(3);
         await Assert.That(segments[0]).IsEqualTo("on");
         await Assert.That(segments[1]).IsEqualTo("<push|pull_request|pull_request_target>");
         await Assert.That(segments[2]).IsEqualTo("<paths|paths-ignore>");
@@ -111,7 +111,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
     {
         var segments = WorkflowSyntaxExpectedKeysParser.SplitSegments("name");
 
-        await Assert.That(segments).HasCount().EqualTo(1);
+        await Assert.That(segments).Count().IsEqualTo(1);
         await Assert.That(segments[0]).IsEqualTo("name");
     }
 
@@ -125,7 +125,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         var segments = new List<string> { "on", "<event_name>", "types" };
         var expanded = WorkflowSyntaxExpectedKeysParser.ExpandAlternatives(segments);
 
-        await Assert.That(expanded).HasCount().EqualTo(1);
+        await Assert.That(expanded).Count().IsEqualTo(1);
         await Assert.That(expanded[0]).IsEquivalentTo(new List<string> { "on", "<event_name>", "types" });
     }
 
@@ -135,7 +135,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         var segments = new List<string> { "on", "push", "<branches|tags>" };
         var expanded = WorkflowSyntaxExpectedKeysParser.ExpandAlternatives(segments);
 
-        await Assert.That(expanded).HasCount().EqualTo(2);
+        await Assert.That(expanded).Count().IsEqualTo(2);
         await Assert.That(expanded[0]).IsEquivalentTo(new List<string> { "on", "push", "branches" });
         await Assert.That(expanded[1]).IsEquivalentTo(new List<string> { "on", "push", "tags" });
     }
@@ -146,7 +146,7 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         var segments = new List<string> { "on", "<push|pull_request>", "<paths|paths-ignore>" };
         var expanded = WorkflowSyntaxExpectedKeysParser.ExpandAlternatives(segments);
 
-        await Assert.That(expanded).HasCount().EqualTo(4);
+        await Assert.That(expanded).Count().IsEqualTo(4);
         // push × paths
         await Assert.That(expanded[0]).IsEquivalentTo(new List<string> { "on", "push", "paths" });
         // push × paths-ignore

@@ -9873,7 +9873,7 @@ public sealed class RuleInterfaceTests
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("requires runs-on")).ToArray();
-        await Assert.That(runsOnDiags).HasCount().EqualTo(1);
+        await Assert.That(runsOnDiags).Count().IsEqualTo(1);
     }
 
     [Test]
@@ -9891,7 +9891,7 @@ public sealed class RuleInterfaceTests
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var bothDiags = result.Diagnostics.Where(d => d.Message.Contains("cannot have both uses and steps")).ToArray();
-        await Assert.That(bothDiags).HasCount().EqualTo(1);
+        await Assert.That(bothDiags).Count().IsEqualTo(1);
     }
 
     // C-3: hashFiles function context restriction (parser-level diagnostic)
