@@ -360,6 +360,17 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(runsOn).IsNotNull();
         await Assert.That(runsOn!.Keys).Contains("group");
         await Assert.That(runsOn.Keys).Contains("labels");
+
+        // Check additional body-text-only sections are always present
+        var concurrency = model.Sections.FirstOrDefault(s => s.Name == "concurrency");
+        await Assert.That(concurrency).IsNotNull();
+        await Assert.That(concurrency!.Keys).Contains("cancel-in-progress");
+        await Assert.That(concurrency.Keys).Contains("group");
+
+        var scheduleEntry = model.Sections.FirstOrDefault(s => s.Name == "schedule-entry");
+        await Assert.That(scheduleEntry).IsNotNull();
+        await Assert.That(scheduleEntry!.Keys).Contains("cron");
+        await Assert.That(scheduleEntry.Keys).Contains("timezone");
     }
 
     [Test]
@@ -511,6 +522,46 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         var runsOn = model.Sections.First(s => s.Name == "runs-on");
         await Assert.That(runsOn.Keys).Contains("group");
         await Assert.That(runsOn.Keys).Contains("labels");
+
+        // additional body-text-only sections
+        var concurrency = model.Sections.First(s => s.Name == "concurrency");
+        await Assert.That(concurrency.Keys).Contains("cancel-in-progress");
+        await Assert.That(concurrency.Keys).Contains("group");
+
+        var environment = model.Sections.First(s => s.Name == "environment");
+        await Assert.That(environment.Keys).Contains("name");
+        await Assert.That(environment.Keys).Contains("url");
+        await Assert.That(environment.Keys).Contains("deployment");
+
+        var scheduleEntry = model.Sections.First(s => s.Name == "schedule-entry");
+        await Assert.That(scheduleEntry.Keys).Contains("cron");
+        await Assert.That(scheduleEntry.Keys).Contains("timezone");
+
+        var webhookEventOption = model.Sections.First(s => s.Name == "webhook-event-option");
+        await Assert.That(webhookEventOption.Keys).Contains("branches");
+        await Assert.That(webhookEventOption.Keys).Contains("types");
+        await Assert.That(webhookEventOption.Keys).Contains("workflows");
+
+        var wfCallInputField = model.Sections.First(s => s.Name == "workflow-call-input-field");
+        await Assert.That(wfCallInputField.Keys).Contains("default");
+        await Assert.That(wfCallInputField.Keys).Contains("description");
+        await Assert.That(wfCallInputField.Keys).Contains("required");
+        await Assert.That(wfCallInputField.Keys).Contains("type");
+
+        var wfCallSecretField = model.Sections.First(s => s.Name == "workflow-call-secret-field");
+        await Assert.That(wfCallSecretField.Keys).Contains("description");
+        await Assert.That(wfCallSecretField.Keys).Contains("required");
+
+        var wfCallOutputField = model.Sections.First(s => s.Name == "workflow-call-output-field");
+        await Assert.That(wfCallOutputField.Keys).Contains("description");
+        await Assert.That(wfCallOutputField.Keys).Contains("value");
+
+        var wfDispatchInputField = model.Sections.First(s => s.Name == "workflow-dispatch-input-field");
+        await Assert.That(wfDispatchInputField.Keys).Contains("default");
+        await Assert.That(wfDispatchInputField.Keys).Contains("description");
+        await Assert.That(wfDispatchInputField.Keys).Contains("options");
+        await Assert.That(wfDispatchInputField.Keys).Contains("required");
+        await Assert.That(wfDispatchInputField.Keys).Contains("type");
     }
 
     private static string FindRepoRoot()

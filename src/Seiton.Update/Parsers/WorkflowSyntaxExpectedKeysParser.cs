@@ -74,6 +74,25 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
     };
 
     /// <summary>
+    /// Sections whose keys are entirely documented in body text (or referenced via reusable includes)
+    /// and cannot be derived from <c>## `...`</c> headings at all. Unlike <see cref="SupplementedSections"/>
+    /// these are always added regardless of heading extraction results, because some share a parent path
+    /// with heading-derived sections but use a different section name (e.g. <c>workflow-call-input-field</c>
+    /// vs heading-derived <c>workflow-call-input</c>).
+    /// </summary>
+    private static readonly List<ExpectedKeySection> AdditionalSections =
+    [
+        new("concurrency", "Expected keys for concurrency section", ["cancel-in-progress", "group"]),
+        new("environment", "Expected keys for jobs.<job_id>.environment", ["deployment", "name", "url"]),
+        new("schedule-entry", "Expected keys for on.schedule entry", ["cron", "timezone"]),
+        new("webhook-event-option", "Expected keys for on.<event_name> options", ["branches", "branches-ignore", "paths", "paths-ignore", "tags", "tags-ignore", "types", "workflows"]),
+        new("workflow-call-input-field", "Expected keys for on.workflow_call.inputs.<input_id> fields", ["default", "description", "required", "type"]),
+        new("workflow-call-output-field", "Expected keys for on.workflow_call.outputs.<output_id> fields", ["description", "value"]),
+        new("workflow-call-secret-field", "Expected keys for on.workflow_call.secrets.<secret_id> fields", ["description", "required"]),
+        new("workflow-dispatch-input-field", "Expected keys for on.workflow_dispatch.inputs.<input_id> fields", ["default", "description", "options", "required", "type"]),
+    ];
+
+    /// <summary>
     /// Parses the raw workflow-syntax.md content and extracts expected key groups
     /// for all documented sections.
     /// </summary>
@@ -144,6 +163,12 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
                     .ToList();
                 sections[existing] = new ExpectedKeySection(section.Name, section.Description, merged);
             }
+        }
+
+        // Add body-text-only sections that cannot be derived from headings
+        foreach (var additional in AdditionalSections)
+        {
+            sections.Add(additional);
         }
 
         // Sort all sections by name for deterministic output

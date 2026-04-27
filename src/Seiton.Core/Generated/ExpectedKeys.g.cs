@@ -11,6 +11,9 @@ internal static class ExpectedKeys
     /// <summary>Keys valid for action-form steps (with 'uses')</summary>
     internal const string ActionStepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"timeout-minutes\", \"uses\", \"with\"";
 
+    /// <summary>Expected keys for concurrency section</summary>
+    internal const string ConcurrencyKeys = "\"cancel-in-progress\", \"group\"";
+
     /// <summary>Expected keys for jobs.<job_id>.container</summary>
     internal const string ContainerKeys = "\"credentials\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"";
 
@@ -22,6 +25,9 @@ internal static class ExpectedKeys
 
     /// <summary>Expected keys for defaults.run</summary>
     internal const string DefaultsRunKeys = "\"shell\", \"working-directory\"";
+
+    /// <summary>Expected keys for jobs.<job_id>.environment</summary>
+    internal const string EnvironmentKeys = "\"deployment\", \"name\", \"url\"";
 
     /// <summary>Expected keys for jobs.<job_id></summary>
     internal const string JobKeys = "\"concurrency\", \"container\", \"continue-on-error\", \"defaults\", \"env\", \"environment\", \"if\", \"name\", \"needs\", \"outputs\", \"permissions\", \"runs-on\", \"secrets\", \"services\", \"snapshot\", \"steps\", \"strategy\", \"timeout-minutes\", \"uses\", \"with\"";
@@ -68,6 +74,9 @@ internal static class ExpectedKeys
     /// <summary>Keys valid for runs-on mapping form</summary>
     internal const string RunsOnKeys = "\"group\", \"labels\"";
 
+    /// <summary>Expected keys for on.schedule entry</summary>
+    internal const string ScheduleEntryKeys = "\"cron\", \"timezone\"";
+
     /// <summary>Expected keys for jobs.<job_id>.services.<service_id></summary>
     internal const string ServiceKeys = "\"command\", \"credentials\", \"entrypoint\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"";
 
@@ -83,39 +92,30 @@ internal static class ExpectedKeys
     /// <summary>Expected keys for jobs.<job_id>.strategy.matrix</summary>
     internal const string StrategyMatrixKeys = "\"exclude\", \"include\"";
 
+    /// <summary>Expected keys for on.<event_name> options</summary>
+    internal const string WebhookEventOptionKeys = "\"branches\", \"branches-ignore\", \"paths\", \"paths-ignore\", \"tags\", \"tags-ignore\", \"types\", \"workflows\"";
+
     /// <summary>Top-level workflow keys</summary>
     internal const string WorkflowKeys = "\"concurrency\", \"defaults\", \"env\", \"jobs\", \"name\", \"on\", \"permissions\", \"run-name\"";
 
     /// <summary>Expected keys for on.workflow_call.inputs.<input_id></summary>
     internal const string WorkflowCallInputKeys = "\"type\"";
 
-    /// <summary>Expected keys for on.workflow_call.secrets.<secret_id></summary>
-    internal const string WorkflowCallSecretKeys = "\"required\"";
-
-    /// <summary>Expected keys for on.workflow_dispatch.inputs.<input_id></summary>
-    internal const string WorkflowDispatchInputKeys = "\"required\", \"type\"";
-
-    /// <summary>Expected keys for concurrency section</summary>
-    internal const string ConcurrencyKeys = "\"cancel-in-progress\", \"group\"";
-
-    /// <summary>Expected keys for jobs.<job_id>.environment</summary>
-    internal const string EnvironmentKeys = "\"deployment\", \"name\", \"url\"";
-
-    /// <summary>Expected keys for on.schedule entry</summary>
-    internal const string ScheduleEntryKeys = "\"cron\", \"timezone\"";
-
     /// <summary>Expected keys for on.workflow_call.inputs.<input_id> fields</summary>
     internal const string WorkflowCallInputFieldKeys = "\"default\", \"description\", \"required\", \"type\"";
-
-    /// <summary>Expected keys for on.workflow_call.secrets.<secret_id> fields</summary>
-    internal const string WorkflowCallSecretFieldKeys = "\"description\", \"required\"";
 
     /// <summary>Expected keys for on.workflow_call.outputs.<output_id> fields</summary>
     internal const string WorkflowCallOutputFieldKeys = "\"description\", \"value\"";
 
+    /// <summary>Expected keys for on.workflow_call.secrets.<secret_id></summary>
+    internal const string WorkflowCallSecretKeys = "\"required\"";
+
+    /// <summary>Expected keys for on.workflow_call.secrets.<secret_id> fields</summary>
+    internal const string WorkflowCallSecretFieldKeys = "\"description\", \"required\"";
+
+    /// <summary>Expected keys for on.workflow_dispatch.inputs.<input_id></summary>
+    internal const string WorkflowDispatchInputKeys = "\"required\", \"type\"";
+
     /// <summary>Expected keys for on.workflow_dispatch.inputs.<input_id> fields</summary>
     internal const string WorkflowDispatchInputFieldKeys = "\"default\", \"description\", \"options\", \"required\", \"type\"";
-
-    /// <summary>Expected keys for on.<event_name> options</summary>
-    internal const string WebhookEventOptionKeys = "\"branches\", \"branches-ignore\", \"paths\", \"paths-ignore\", \"tags\", \"tags-ignore\", \"types\", \"workflows\"";
 }
