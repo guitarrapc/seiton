@@ -2085,6 +2085,16 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_RecursiveAliasInMatrix_ReportsUnexpectedAlias()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        include: &recursive_include\n          - os: ubuntu-latest\n            nested: *recursive_include\n    steps:\n      - run: echo test\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-matrix.yml");
+        // The matrix value position should report an alias-specific message, not generic "unsupported shape"
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected alias node", StringComparison.Ordinal) && d.Message.Contains("matrix", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_RecursiveAnchors_NestedAnchorResolvesCorrectly()
     {
         // Tests that *recursive1 resolves (nested anchor stored) and *recursive2 is detected as recursive

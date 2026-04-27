@@ -445,7 +445,7 @@ invalid_steps,-,,11,"test.yaml:29:7: element of ""steps"" section should not be 
 invalid_steps,-,,12,"test.yaml:29:7: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 issue-610_recursive_raw_yaml_value,1,"test.yaml:10:21: recursive alias ""recursive_include"" is found. anchor was declared at line:8, column:18 [syntax-check]",-,,MISS
 issue-610_recursive_raw_yaml_value,2,"test.yaml:10:21: unexpected alias node on parsing value in matrix row [syntax-check]",-,,MISS
-issue-610_recursive_raw_yaml_value,-,,1,"test.yaml:11:9: job 'test' matrix value has unsupported shape [syntax-check]",EXTRA
+issue-610_recursive_raw_yaml_value,-,,1,"test.yaml:11:9: unexpected alias node on parsing value in matrix row of job 'test' [syntax-check]",EXTRA
 issue-610_recursive_raw_yaml_value,-,,2,"test.yaml:11:9: recursive alias ""recursive_include"" is found. anchor was declared at line:8, column:18 [syntax-check]",EXTRA
 issue102,1,"test.yaml:8:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 issue102,-,,1,"test.yaml:8:13: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA

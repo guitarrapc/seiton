@@ -1216,7 +1216,7 @@ recursive alias メッセージにアンカー宣言位置を追加: `recursive 
 
 **残差異:**
 - 行・列差異 (COL_DIFF): seiton の値位置ポリシーにより位置が異なる。設計差異。
-- matrix メッセージ差異: `unsupported shape` vs `unexpected alias node` — 同じ問題の異なる表現。低優先度。
+- ~~matrix メッセージ差異: `unsupported shape` vs `unexpected alias node` — 同じ問題の異なる表現。低優先度。~~ → `ParseRawYamlValue` で `YamlEventKind.Alias` を検出し `unexpected alias node on parsing value in matrix row` メッセージを出力するよう改善。汎用 fallback `unsupported shape` は残しつつ、alias 専用の具体的なメッセージを優先。
 
 #### 低優先度 — 1行差異・設計方針差異
 

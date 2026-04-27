@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -460,6 +460,13 @@ public static partial class WorkflowParser
                 Items = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, "matrix"u8, exprContext),
                 Range = BuildScalarLocation(startMark, 0),
             };
+        }
+
+        if (reader.CurrentKind == YamlEventKind.Alias)
+        {
+            AddError(diagnostics, $"unexpected alias node on parsing value in matrix row of job '{DecodeUtf8(source, jobId)}'", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return new RawYamlString { Value = arena.AddString(default, false, default) };
         }
 
         AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value has unsupported shape", reader.CurrentStart);
