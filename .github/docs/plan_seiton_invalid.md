@@ -527,16 +527,20 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **現状**: フェーズ 1.1 で述べたとおり、Parser と Linter の両方から同一の context availability エラーが報告される。
 
-**対処方針**: フェーズ 1.1 の対処で解決
+**対処方針**: フェーズ 1.1 の対処で解決済み。3.3 の `ParseIntOrExpression` 導入により `context_availability.seiton.out` から `must be integer` 誤報も消滅。
 
-#### 3.3 `invalid_int_at_max_parallel` — 正常値への誤報
+#### 3.3 `invalid_int_at_max_parallel` — 正常値への誤報 ✅ DONE
 
 **対象 fixture**: `invalid_int_at_max_parallel`
 
-**現状**: seiton は `ok2` ジョブ (expression `${{ ... }}` を使用) に対して `must be integer` エラーを誤って出す。
+**現状**: ~~seiton は `ok2` ジョブ (expression `${{ ... }}` を使用) に対して `must be integer` エラーを誤って出す。~~
 
 **対処方針**:
-- `${{ }}` 式の場合は integer チェックをスキップする
+- `ParseIntOrExpression` を `WorkflowParser.ExpressionIntegration.cs` に追加 (`ParseBoolOrExpression`/`ParseFloatOrExpression` と同じパターン)
+- `AstArena.AddInt` に expression-backed オーバーロードを追加
+- `WorkflowParser.Strategy.cs` の max-parallel パースを `ParseIntOrExpression` に切り替え
+- expression-backed の場合は `<= 0` チェックもスキップ (`GetIntExpression` が default でない場合)
+- `context_availability` fixture の誤報 (`143:21 must be integer`) も同時に解消
 
 **影響 fixture 数**: 1 fixture, 1 extra line
 
@@ -634,7 +638,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 31 | `invalid_float_at_timeout_minutes` | 🔧 | A: メッセージ | 1 | P2 | 型エラーメッセージ差異 |
 | 32 | `invalid_id` | 🔧 | A: メッセージ | 1.15 | P1 | ID 検証メッセージ統一 |
 | 33 | `invalid_image_version_event` | 🔧 | A: メッセージ | 1 | P2 | メッセージ形式差異 |
-| 34 | `invalid_int_at_max_parallel` | 🔧🔴 | A+D: メッセージ+誤報 | 1, 3.3 | P2 | 式に対する誤報 + メッセージ差異 |
+| 34 | `invalid_int_at_max_parallel` | ✅ | A+D: メッセージ+誤報 | 1, 3.3 | P2 | ParseIntOrExpression で式誤報解消 |
 | 35 | `invalid_json_in_fromjson` | ⚠️ | C: 検出漏れ | 2.6 | P2 | fromJSON 型推論不足 |
 | 36 | `invalid_permissions` | 🔧 | A: メッセージ | 1.11 | P3 | scope 一覧差異 (seiton が正しい) |
 | 37 | `invalid_runner_labels` | 🔧 | A: メッセージ | 1.14 | P2 | メッセージフォーマット微調整 |

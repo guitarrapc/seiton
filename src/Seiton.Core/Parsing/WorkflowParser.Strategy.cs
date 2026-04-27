@@ -129,9 +129,9 @@ public static partial class WorkflowParser
                     case StrategyMappingKey.MaxParallel:
                         if (!reader.End)
                         {
-                            maxParallel = ParseInt(ref reader, arena, out var mpErr, out var mpMark);
+                            maxParallel = ParseIntOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobStrategy, out var mpErr, out var mpMark);
                             if (mpErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer", mpMark);
-                            if (maxParallel.HasValue && arena.GetIntValue(maxParallel) <= 0)
+                            if (maxParallel.HasValue && arena.GetIntExpression(maxParallel) == default && arena.GetIntValue(maxParallel) <= 0)
                             {
                                 AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be greater than 0", keyMark);
                             }

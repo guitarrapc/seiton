@@ -73,32 +73,32 @@ context_availability,36,"/test\.yaml:228:35: context ""runner"" is not allowed h
 context_availability,37,"/test\.yaml:228:59: context ""secrets"" is not allowed here\. .+ \[expression\]/",-,,MISS
 context_availability,38,"/test\.yaml:250:25: context ""env"" is not allowed here\. .+ \[expression\]/",-,,MISS
 context_availability,39,"/test\.yaml:252:22: context ""env"" is not allowed here\. .+ \[expression\]/",-,,MISS
-context_availability,-,,1,"test.yaml:143:21: job 'test' strategy.max-parallel must be integer [syntax-check]",EXTRA
-context_availability,-,,2,"test.yaml:225:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
-context_availability,-,,3,"test.yaml:240:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
-context_availability,-,,4,"test.yaml:3:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflow...",EXTRA
-context_availability,-,,5,"test.yaml:10:8: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""secrets"". called ...",EXTRA
-context_availability,-,,6,"test.yaml:15:28: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
-context_availability,-,,7,"test.yaml:25:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
-context_availability,-,,8,"test.yaml:48:32: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
-context_availability,-,,9,"test.yaml:57:19: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,10,"test.yaml:68:16: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,11,"test.yaml:71:24: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
-context_availability,-,,12,"test.yaml:78:28: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,13,"test.yaml:82:14: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
-context_availability,-,,14,"test.yaml:84:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,15,"test.yaml:90:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,16,"test.yaml:93:12: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,17,"test.yaml:96:9: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called in...",EXTRA
-context_availability,-,,18,"test.yaml:99:11: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,19,"test.yaml:106:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,20,"test.yaml:106:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,21,"test.yaml:111:16: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,22,"test.yaml:115:21: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,23,"test.yaml:127:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,24,"test.yaml:134:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,25,"test.yaml:139:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,26,"test.yaml:141:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,1,"test.yaml:225:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
+context_availability,-,,2,"test.yaml:240:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
+context_availability,-,,3,"test.yaml:3:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflow...",EXTRA
+context_availability,-,,4,"test.yaml:10:8: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""secrets"". called ...",EXTRA
+context_availability,-,,5,"test.yaml:15:28: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
+context_availability,-,,6,"test.yaml:25:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
+context_availability,-,,7,"test.yaml:48:32: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,8,"test.yaml:57:19: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,9,"test.yaml:68:16: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,10,"test.yaml:71:24: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,11,"test.yaml:78:28: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,12,"test.yaml:82:14: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,13,"test.yaml:84:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,14,"test.yaml:90:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,15,"test.yaml:93:12: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,16,"test.yaml:96:9: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called in...",EXTRA
+context_availability,-,,17,"test.yaml:99:11: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,18,"test.yaml:106:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,19,"test.yaml:106:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,20,"test.yaml:111:16: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,21,"test.yaml:115:21: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,22,"test.yaml:127:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,23,"test.yaml:134:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,24,"test.yaml:139:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,25,"test.yaml:141:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,26,"test.yaml:143:21: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
 context_availability,-,,27,"test.yaml:146:22: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
 context_availability,-,,28,"test.yaml:160:13: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""st...",EXTRA
 context_availability,-,,29,"test.yaml:183:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
@@ -365,7 +365,6 @@ invalid_int_at_max_parallel,-,,1,"test.yaml:7:21: job 'error1' strategy.max-para
 invalid_int_at_max_parallel,-,,2,"test.yaml:13:21: job 'error2' strategy.max-parallel must be integer [syntax-check]",EXTRA
 invalid_int_at_max_parallel,-,,3,"test.yaml:25:7: job 'error4' strategy.max-parallel must be greater than 0 [syntax-check]",EXTRA
 invalid_int_at_max_parallel,-,,4,"test.yaml:31:7: job 'error5' strategy.max-parallel must be greater than 0 [syntax-check]",EXTRA
-invalid_int_at_max_parallel,-,,5,"test.yaml:43:21: job 'ok2' strategy.max-parallel must be integer [syntax-check]",EXTRA
 invalid_json_in_fromjson,1,"test.yaml:12:37: broken JSON string is passed to fromJSON() at offset 4: unexpected end of JSON input [expression]",-,,MISS
 invalid_json_in_fromjson,2,"test.yaml:13:37: broken JSON string is passed to fromJSON() at offset 6: unexpected end of JSON input [expression]",-,,MISS
 invalid_json_in_fromjson,3,"test.yaml:14:37: broken JSON string is passed to fromJSON() at offset 0: unexpected end of JSON input [expression]",-,,MISS

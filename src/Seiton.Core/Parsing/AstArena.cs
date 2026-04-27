@@ -263,6 +263,15 @@ public sealed class AstArena : IDisposable
         return IntNodeId.FromIndex(_intCount++);
     }
 
+    /// <summary>Allocates an integer node with an embedded expression.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public IntNodeId AddInt(long value, StringNodeId expression, TextRange range)
+    {
+        if (_intCount == _ints.Length) Grow(ref _ints);
+        _ints[_intCount] = new IntNodeData(value, expression, range);
+        return IntNodeId.FromIndex(_intCount++);
+    }
+
     // Float allocation
 
     /// <summary>Allocates a float node with no embedded expression.</summary>

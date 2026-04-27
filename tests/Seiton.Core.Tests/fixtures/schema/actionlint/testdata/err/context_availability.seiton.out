@@ -1,4 +1,3 @@
-test.yaml:143:21: job 'test' strategy.max-parallel must be integer [syntax-check]
 test.yaml:225:5: unexpected key "snapshot" for "job" section. expected one of "concurrency", "container", "continue-on-error", "defaults", "env", "environment", "if", "name", "needs", "outputs", "permissions", "runs-on", "secrets", "services", "snapshot", "steps", "strategy", "timeout-minutes", "uses", "with" [syntax-check]
 test.yaml:240:5: unexpected key "snapshot" for "job" section. expected one of "concurrency", "container", "continue-on-error", "defaults", "env", "environment", "if", "name", "needs", "outputs", "permissions", "runs-on", "secrets", "services", "snapshot", "steps", "strategy", "timeout-minutes", "uses", "with" [syntax-check]
 test.yaml:3:31: context "env" is not allowed here. available contexts are "github", "inputs", "vars". called in workflow run-name [expression]
@@ -24,6 +23,7 @@ test.yaml:127:13: context "env" is not allowed here. available contexts are "git
 test.yaml:134:19: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs". called in job strategy [expression]
 test.yaml:139:19: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs". called in job strategy [expression]
 test.yaml:141:18: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs". called in job strategy [expression]
+test.yaml:143:21: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs". called in job strategy [expression]
 test.yaml:146:22: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in job timeout-minutes [expression]
 test.yaml:160:13: context "secrets" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix", "job", "runner", "env", "steps". called in step if [expression]
 test.yaml:183:19: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in job with [expression]

@@ -188,6 +188,57 @@ public static partial class WorkflowParser
         return arena.AddFloat(0, expressionNode, range);
     }
 
+    private static IntNodeId ParseIntOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        needsError = false;
+        errorMark = default;
+
+        if (reader.End)
+        {
+            return default;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            needsError = true;
+            errorMark = reader.CurrentStart;
+            reader.SkipCurrentNode();
+            return default;
+        }
+
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
+        var range = BuildScalarLocation(mark, valueUtf8.Length);
+
+        if (TryParseInt64(valueUtf8, tag, out var value))
+        {
+            var intNode = arena.AddInt(value, range);
+            reader.Read();
+            return intNode;
+        }
+
+        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
+        if (!expressionNode.HasValue)
+        {
+            return default;
+        }
+
+        // If the string doesn't contain an expression, it's not a valid integer
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(expressionNode, arena))
+        {
+            needsError = true;
+            errorMark = mark;
+            return default;
+        }
+
+        return arena.AddInt(0, expressionNode, range);
+    }
+
     private static void ParseConditionalExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
         where TReader : IYamlStreamReader, allows ref struct
     {
