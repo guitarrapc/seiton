@@ -132,6 +132,26 @@ app.Add("verify-context-types", () =>
     }
 });
 
+app.Add("sync-event-payload-types", () =>
+{
+    var code = EventPayloadTypesCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-event-payload-types failed with code {code}");
+    }
+});
+
+app.Add("verify-event-payload-types", () =>
+{
+    var code = EventPayloadTypesCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-event-payload-types failed with code {code}");
+    }
+});
+
 app.Add("sync-function-specs", () =>
 {
     var code = FunctionSpecsCommands.Sync(repoRoot);
@@ -745,7 +765,18 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return ExpectedKeysCommands.Sync(repoRoot);
+        code = ExpectedKeysCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return EventPayloadTypesCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "event-payload-types")
+    {
+        return EventPayloadTypesCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -860,7 +891,18 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return ExpectedKeysCommands.Verify(repoRoot);
+        code = ExpectedKeysCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return EventPayloadTypesCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "event-payload-types")
+    {
+        return EventPayloadTypesCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");
