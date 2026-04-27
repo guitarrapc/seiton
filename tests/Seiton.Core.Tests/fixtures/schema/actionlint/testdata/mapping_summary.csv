@@ -721,7 +721,7 @@ workflow_call_job,-,,1,"test.yaml:4:3: job 'call1' cannot have both uses and ste
 workflow_call_job,-,,2,"test.yaml:6:5: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [syntax-check]",EXTRA
 workflow_call_job,-,,3,"test.yaml:9:3: job 'call2' key 'with' requires uses [workflow-call]",EXTRA
 workflow_call_job,-,,4,"test.yaml:16:3: job 'call3' key 'secrets' requires uses [workflow-call]",EXTRA
-workflow_call_job,-,,5,"test.yaml:25:18: job 'call4' uses must be string [syntax-check]",EXTRA
+workflow_call_job,-,,5,"test.yaml:25:18: job 'call4' uses must be string and should not be empty [syntax-check]",EXTRA
 workflow_call_job,-,,6,"test.yaml:23:3: ""runs-on"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,7,"test.yaml:23:3: ""steps"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,8,"test.yaml:4:3: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [workflow-call]",EXTRA

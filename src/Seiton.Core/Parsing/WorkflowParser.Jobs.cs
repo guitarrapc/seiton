@@ -279,7 +279,14 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             var usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
-                            if (usesErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' uses must be string", usesMark);
+                            if (usesErr)
+                            {
+                                var usesMsg = usesNode.HasValue
+                                    ? $"job '{DecodeUtf8(source, jobId)}' uses must be string and should not be empty"
+                                    : $"job '{DecodeUtf8(source, jobId)}' uses must be string";
+                                AddError(diagnostics, usesMsg, usesMark);
+                            }
+
                             workflowCallNode = new WorkflowCall
                             {
                                 Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
@@ -549,35 +556,36 @@ public static partial class WorkflowParser
         }
 
         var decodedJobId = DecodeUtf8(source, jobId);
-        var hasUses = workflowCallNode is not null && arena.GetStringValue(workflowCallNode.Uses).Length > 0;
+        var hasUsesKey = workflowCallNode is not null && workflowCallNode.UsesKeyRange is not null;
+        var hasUsesValue = hasUsesKey && arena.GetStringValue(workflowCallNode!.Uses).Length > 0;
         var hasSteps = stepsNode is not null;
         var hasRunsOn = runsOnNode is not null;
 
         // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `steps`
-        if (hasUses && hasSteps)
+        if (hasUsesValue && hasSteps)
         {
             AddError(diagnostics, $"job '{decodedJobId}' cannot have both uses and steps", jobIdMark);
         }
 
         // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `runs-on`
-        if (hasUses && hasRunsOn)
+        if (hasUsesValue && hasRunsOn)
         {
             AddError(diagnostics, $"job '{decodedJobId}' cannot have both uses and runs-on", jobIdMark);
         }
 
         // spec §3.10 post-validation: normal jobs require `runs-on`
-        if (!hasUses && !hasRunsOn)
+        if (!hasUsesKey && !hasRunsOn)
         {
             AddError(diagnostics, $"\"runs-on\" section is missing in job \"{decodedJobId}\"", jobIdMark);
         }
 
         // spec §3.10 post-validation: normal jobs require `steps`
-        if (!hasUses && !hasSteps)
+        if (!hasUsesKey && !hasSteps)
         {
             AddError(diagnostics, $"\"steps\" section is missing in job \"{decodedJobId}\"", jobIdMark);
         }
 
-        if (!hasUses && workflowCallNode is not null)
+        if (!hasUsesKey && workflowCallNode is not null)
         {
             // spec §3.10 post-validation: `with` is only valid for reusable workflow calls via `uses`
             if (workflowCallNode.Inputs.HasValue && workflowCallNode.Inputs.Value.Count > 0)
@@ -593,7 +601,7 @@ public static partial class WorkflowParser
         }
 
         // spec §3.10.1: steps-only keys are invalid when the job calls a reusable workflow via `uses`
-        if (hasUses && stepsOnlyKeyInReusable is not null)
+        if (hasUsesValue && stepsOnlyKeyInReusable is not null)
         {
             AddError(
                 diagnostics,

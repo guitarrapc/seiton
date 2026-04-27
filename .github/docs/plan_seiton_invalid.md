@@ -1075,7 +1075,7 @@ on.push.paths must be string or array of strings      ← 修正後
 
 ---
 
-##### 4.J `workflow_call_job` — 3 MISS, 7 EXTRA
+##### 4.J `workflow_call_job` — 3 MISS, 7 EXTRA → ✅ 実装済み (1 MISS → 0 改善, EXTRA 減)
 
 **具体例:**
 
@@ -1098,9 +1098,9 @@ test.yaml:36:11: uses format invalid "foo/bar/..."     COL    test.yaml:36:5:  u
 **MISS 原因と改善案:**
 
 1. **24:10 string empty** (MISS): actionlint は空 uses を "string should not be empty" で報告。seiton は "uses must be scalar" (型エラー) で報告。
-   - **改善案:** `ParseString` で空文字列を `"string should not be empty"` として報告するか、既存の型エラーを維持。空文字列の場合のメッセージを統一。
+   - **改善案:** `ParseString` で空文字列を `"string should not be empty"` として報告する。他のルールにおける空文字列の場合にも、同様に型エラーではなく空文字列エラーを報告するように統一する。これによりユーザーフレンドリーなメッセージになる。
 2. **24:10** に対応する MISS 2 行: 上記と同根 — uses が空なので reusable workflow 検証がスキップされ、runs-on/steps 必須チェックが代わりに走る。
-3. **URL サフィックス欠落** (COL_DIFF): seiton の reusable workflow エラーに `see https://docs.github.com/...` URL がない。§4.3 設計方針。
+3. **URL サフィックス欠落** (COL_DIFF): seiton の reusable workflow エラーに `see https://docs.github.com/...` URL を加える。
 
 **EXTRA 原因:**
 - `4:3 cannot have both uses and steps`: seiton が uses+steps の両方の存在を検出 — actionlint は片方のみ。有用な追加検出。

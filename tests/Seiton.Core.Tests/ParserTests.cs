@@ -2120,6 +2120,20 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_EmptyUses_ReportsStringNotEmpty_NotMissingRunsOnSteps()
+    {
+        var yaml = "on: push\njobs:\n  call4:\n    uses:\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-uses.yml");
+        var messages = result.Diagnostics.Select(d => d.Message).ToArray();
+        // Should report job-scoped "uses must be string and should not be empty"
+        await Assert.That(messages.Any(m => m.Contains("job 'call4' uses must be string and should not be empty", StringComparison.Ordinal))).IsEqualTo(true);
+        // Should NOT report missing runs-on/steps when uses key was present
+        await Assert.That(messages.Any(m => m.Contains("runs-on\" section is missing", StringComparison.Ordinal))).IsEqualTo(false);
+        await Assert.That(messages.Any(m => m.Contains("steps\" section is missing", StringComparison.Ordinal))).IsEqualTo(false);
+    }
+
+    [Test]
     public async Task Parse_NullScalarAnchor_DoesNotCrash()
     {
         // env: &anchor with no value (null scalar) should not cause a fatal parse error.
