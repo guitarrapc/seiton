@@ -326,7 +326,7 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Concurrency:
                         if (!reader.End)
                         {
-                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be string or object", ExpressionValidationContext.JobConcurrency);
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' concurrency must be string or object", ExpressionValidationContext.JobConcurrency, keyMark);
                         }
 
                         break;

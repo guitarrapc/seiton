@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
@@ -1232,6 +1232,39 @@ public sealed class ParserTests
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"defaults-missing-run-{i}.yml");
             await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"defaults\" section should have \"run\" section", StringComparison.Ordinal))).IsTrue();
         }
+    }
+
+    [Test]
+    public async Task Parse_DefaultsNull_ReportsShouldHaveRunAndNotEmpty()
+    {
+        var yaml = """
+        on: push
+        defaults:
+        jobs: {}
+        """.Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-null.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"defaults\" section should have \"run\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"defaults\" section should not be empty. please remove this section if it's unnecessary", StringComparison.Ordinal))).IsTrue();
+        // Must NOT emit the generic "must be object" error for null defaults
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("must be object", StringComparison.Ordinal))).IsEqualTo(false);
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyMissingGroup_ReportsAtKeyLine()
+    {
+        var yaml = """
+        on: push
+        concurrency:
+            cancel-in-progress: true
+        jobs: {}
+        """.Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "concurrency-key-pos.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("group name is missing", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotEmpty();
+        // Should report at the "concurrency:" key line (line 2), not the mapping body
+        await Assert.That(diag.Location.StartLine).IsEqualTo(2);
     }
 
     [Test]

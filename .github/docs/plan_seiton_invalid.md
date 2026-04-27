@@ -1039,28 +1039,16 @@ on.push.paths must be string or array of strings      ← 修正後
 
 ---
 
-##### 4.H `missing_required_keys` — 3 MISS, 2 EXTRA
+##### 4.H `missing_required_keys` — ✅ 実装済み (3 MISS → 0, 2 EXTRA → 0)
 
-**具体例:**
+**実装記録:**
 
-```
-# .out (actionlint)                                    # .seiton.out (seiton)
-test.yaml:5:7:  "type" is missing...          MATCH    test.yaml:5:7:  "type" is missing...
-test.yaml:8:7:  "value" is missing...         MATCH    test.yaml:8:7:  "value" is missing...
-test.yaml:10:10: defaults should have "run"   MISS     test.yaml:10:10: workflow defaults must be mapping  ← EXTRA (異なるメッセージ)
-test.yaml:10:10: defaults should not be empty MISS     (なし)
-test.yaml:12:1: group name is missing...      MISS     test.yaml:13:21: group name is missing...  ← COL_DIFF
-test.yaml:17:3: "runs-on" is missing...       MATCH    test.yaml:17:3: "runs-on" is missing...
-test.yaml:17:3: "steps" is missing...         MATCH    test.yaml:17:3: "steps" is missing...
-test.yaml:18:5: name is missing...            COL      test.yaml:19:10: name is missing...
-```
+1. **defaults null → 2 メッセージ**: `ParseDefaultsNode` で null scalar の場合、`"defaults" section should have "run" section` + `"defaults" section should not be empty. please remove this section if it's unnecessary` を出力。非 null scalar/sequence は従来の "must be object" を維持。
+2. **concurrency group 位置**: `ParseConcurrencyNode` に `TextPosition keyMark` パラメータを追加。group 未検出時のエラー位置を `mappingMark` から `keyMark` に変更 (12:1 にマッチ)。
+3. テスト: `Parse_DefaultsNull_ReportsShouldHaveRunAndNotEmpty`, `Parse_ConcurrencyMissingGroup_ReportsAtKeyLine` 追加。
+4. 全 1033 テスト通過、ベンチマーク回帰なし (Allocated 変化なし)。
 
-**MISS 原因と改善案:**
-
-1. **10:10 defaults "run" section** (MISS): actionlint は空 defaults に対して「run セクションが必要」と「空にするな」の 2 メッセージを出す。seiton は「mapping でなければならない」1 メッセージのみ。
-   - **改善案:** 空 mapping の defaults に対して「defaults.run is required」メッセージを追加。現在の "must be mapping" は null/scalar の場合のみに限定かつ空にするなも追加する。
-2. **10:10 defaults empty** (MISS): 上記と同根。
-3. **12:1→13:21** (COL_DIFF): concurrency の group name 位置差異 — seiton は値位置で報告。
+**残: environment name 位置差 (18:5 vs 19:10) は COL_DIFF のみ。**
 
 ---
 

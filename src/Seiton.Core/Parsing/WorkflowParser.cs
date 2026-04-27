@@ -388,7 +388,7 @@ public static partial class WorkflowParser
                     case WorkflowRootMappingKey.Concurrency:
                         if (!reader.End)
                         {
-                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be string or object", ExpressionValidationContext.Concurrency);
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be string or object", ExpressionValidationContext.Concurrency, keyMark);
                         }
 
                         continue;
@@ -631,7 +631,7 @@ public static partial class WorkflowParser
                 }
 
                 // Use the slice stored in the arena (computed by ParseString's single GetScalarSlice call)
-                // to avoid calling GetScalarSlice twice for the same scalar — which would advance the cursor
+                // to avoid calling GetScalarSlice twice for the same scalar 窶・which would advance the cursor
                 // past the value and cause a position mismatch.
                 var valueSlice = arena.GetStringSlice(valueNode);
 
@@ -664,7 +664,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            // Check if the scalar contains an expression — plain text scalars are not valid for env
+            // Check if the scalar contains an expression 窶・plain text scalars are not valid for env
             var valueUtf8 = reader.GetScalarUtf8();
             if (!ExpressionScanHelpers.ContainsExpressionMarker(valueUtf8))
             {
@@ -776,7 +776,17 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, error, reader.CurrentStart);
+            var mark = reader.CurrentStart;
+            if (reader.CurrentKind == YamlEventKind.Scalar && reader.GetScalarTag() == ScalarTag.Null)
+            {
+                AddError(diagnostics, "\"defaults\" section should have \"run\" section", mark);
+                AddError(diagnostics, "\"defaults\" section should not be empty. please remove this section if it's unnecessary", mark);
+            }
+            else
+            {
+                AddError(diagnostics, error, mark);
+            }
+
             reader.SkipCurrentNode();
             return default;
         }
@@ -921,7 +931,7 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        // spec §3.7 / §12: defaults.run is required in mapping form
+        // spec ﾂｧ3.7 / ﾂｧ12: defaults.run is required in mapping form
         if (!hasRun)
         {
             AddError(diagnostics, "\"defaults\" section should have \"run\" section", mappingMark);
@@ -940,7 +950,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext)
+    private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext, TextPosition keyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -981,9 +991,9 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var keyMark = reader.CurrentStart;
+            var innerKeyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "concurrency"))
+            if (IsMergeKey(keyUtf8, innerKeyMark, diagnostics, "concurrency"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -997,7 +1007,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, concurrencyKeyOrdinal))
                 {
                     var dupName = ck == ConcurrencyMappingKey.Group ? "group" : "cancel-in-progress";
-                    AddError(diagnostics, $"concurrency contains duplicate key: {dupName}", keyMark);
+                    AddError(diagnostics, $"concurrency contains duplicate key: {dupName}", innerKeyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -1026,7 +1036,7 @@ public static partial class WorkflowParser
 
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", innerKeyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -1036,10 +1046,10 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        // spec §3.8 / §12: concurrency.group is required
+        // spec ﾂｧ3.8 / ﾂｧ12: concurrency.group is required
         if (!groupNode.HasValue)
         {
-            AddError(diagnostics, "group name is missing in \"concurrency\" section", mappingMark);
+            AddError(diagnostics, "group name is missing in \"concurrency\" section", keyMark);
             return default;
         }
 
