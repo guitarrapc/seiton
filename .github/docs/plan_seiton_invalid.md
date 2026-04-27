@@ -1027,20 +1027,7 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 
 ---
 
-## 6. `.out` 期待値の調整方針
-
-以下のケースでは actionlint の `.out` ファイルを seiton 向けに調整する:
-
-1. **URL サフィックス差異**: seiton はメッセージに URL を含まない → `.out` を regex 化して URL 部分をオプショナル化
-2. **値位置 vs キー位置**: seiton は値の位置を報告する設計 → `.out` の列位置を seiton に合わせる
-3. **seiton が正しい差異**: permission scope 一覧 (`vulnerability-alerts` 含む) → `.out` を seiton に合わせる
-4. **snapshot キー**: seiton は非サポート → snapshot 関連の期待行を除外
-
-`.out` 調整は、seiton の実装変更では対応できない設計方針上の差異のみに限定する。
-
----
-
-## 7. 実装記録
+## 8. 実装記録
 
 > 各フェーズの実装結果をここに記録する。
 
