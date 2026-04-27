@@ -223,13 +223,13 @@ glob_more,5,"test.yaml:10:14: character '/' is invalid for branch and tag names.
 glob_more,6,"test.yaml:11:12: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,7,"test.yaml:12:13: invalid glob pattern. unexpected character '0' while checking character range in []. start of range '9'...",-,,MISS
 glob_more,8,"test.yaml:14:8: string should not be empty [syntax-check]",-,,MISS
-glob_more,9,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",-,,MISS
+glob_more,9,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",10,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
 glob_more,10,"test.yaml:17:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",-,,MISS
-glob_more,11,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",-,,MISS
-glob_more,12,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",-,,MISS
+glob_more,11,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",13,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",MATCH
+glob_more,12,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",14,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",MATCH
 glob_more,13,"test.yaml:20:9: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at ht...",-,,MISS
-glob_more,14,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",-,,MISS
-glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",-,,MISS
+glob_more,14,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",15,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",MATCH
+glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",16,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",MATCH
 glob_more,16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",-,,MISS
 glob_more,17,"test.yaml:27:13: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,18,"test.yaml:34:20: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
@@ -241,6 +241,8 @@ glob_more,-,,5,"test.yaml:10:9: character '/' is invalid for branch and tag name
 glob_more,-,,7,"test.yaml:10:9: character '\' is invalid for branch and tag names. only special characters [, ?, +, *, \, ! can be escap...",EXTRA
 glob_more,-,,8,"test.yaml:11:9: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter p...",EXTRA
 glob_more,-,,9,"test.yaml:12:9: invalid glob pattern. unexpected character '0' while checking character range in []. start of range '9' ...",EXTRA
+glob_more,-,,11,"test.yaml:16:10: invalid glob pattern. '\b' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \, !, +, #...",EXTRA
+glob_more,-,,12,"test.yaml:17:1: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at ht...",EXTRA
 if_cond_constants,1,"test.yaml:8:13: constant expression ""true"" in condition. remove the if: section [if-cond]",2,"test.yaml:8:13: constant expression ""true"" in condition. remove the if: section [if-cond]",MATCH
 if_cond_constants,2,"test.yaml:10:13: constant expression ""false"" in condition. remove the if: section [if-cond]",3,"test.yaml:10:13: constant expression ""false"" in condition. remove the if: section [if-cond]",MATCH
 if_cond_constants,3,"test.yaml:12:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS

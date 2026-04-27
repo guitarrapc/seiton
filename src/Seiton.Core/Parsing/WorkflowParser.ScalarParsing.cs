@@ -141,23 +141,22 @@ public static partial class WorkflowParser
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                var node = ParseString(ref reader, arena, out needsError, out errorMark, allowElemEmpty);
-                if (needsError)
+                var node = ParseString(ref reader, arena, out var elemError, out var elemMark, allowElemEmpty);
+                if (elemError)
                 {
-                    // Element-level error: use the same errorMessage pattern
-                    // The caller will provide the error message, so just propagate the first error
-                    break;
+                    // Record first element error for caller, but continue parsing remaining
+                    // elements so that downstream lint rules (e.g. GlobPatternRule) can validate them.
+                    if (!needsError)
+                    {
+                        needsError = true;
+                        errorMark = elemMark;
+                    }
+                    continue;
                 }
                 if (node.HasValue)
                 {
                     list.Add(node);
                 }
-            }
-
-            // Continue reading remaining elements even after error
-            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-            {
-                reader.SkipCurrentNode();
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
