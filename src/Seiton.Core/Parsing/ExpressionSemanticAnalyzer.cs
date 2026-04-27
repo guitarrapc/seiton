@@ -719,10 +719,15 @@ public static class ExpressionSemanticAnalyzer
 
         if (leftType is ArrayExprType arrayType)
         {
-            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            if (arrayType.ElementType is ObjectExprType elemObj)
             {
-                return arrayType.ElementType;
+                if (elemObj.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propType))
+                {
+                    return ExprType.ArrayOf(propType);
+                }
             }
+
+            return ExprType.ArrayOf(ExprType.Any);
         }
 
         return ExprType.Any;
@@ -776,17 +781,17 @@ public static class ExpressionSemanticAnalyzer
         ReadOnlySpan<byte> expressionUtf8)
     {
         var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
-        if (leftType is ArrayExprType arrayType)
+        if (leftType is ArrayExprType)
         {
-            return arrayType.ElementType;
+            return leftType;
         }
 
         if (leftType is ObjectExprType objectType)
         {
-            return objectType.DynamicPropertyType ?? ExprType.Any;
+            return ExprType.ArrayOf(objectType.DynamicPropertyType ?? ExprType.Any);
         }
 
-        return ExprType.Any;
+        return ExprType.ArrayOf(ExprType.Any);
     }
 
     private static ExprType InferFunctionCallType(
@@ -1632,10 +1637,15 @@ public static class ExpressionSemanticAnalyzer
 
         if (leftType is ArrayExprType arrayType)
         {
-            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            if (arrayType.ElementType is ObjectExprType elemObj)
             {
-                return arrayType.ElementType;
+                if (elemObj.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propType))
+                {
+                    return ExprType.ArrayOf(propType);
+                }
             }
+
+            return ExprType.ArrayOf(ExprType.Any);
         }
 
         return ExprType.Any;
@@ -1691,16 +1701,16 @@ public static class ExpressionSemanticAnalyzer
         (byte[] NameUtf8, ExprType Type)[] overrides)
     {
         var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
-        if (leftType is ArrayExprType arrayType)
+        if (leftType is ArrayExprType)
         {
-            return arrayType.ElementType;
+            return leftType;
         }
 
         if (leftType is ObjectExprType objectType)
         {
-            return objectType.DynamicPropertyType ?? ExprType.Any;
+            return ExprType.ArrayOf(objectType.DynamicPropertyType ?? ExprType.Any);
         }
 
-        return ExprType.Any;
+        return ExprType.ArrayOf(ExprType.Any);
     }
 }

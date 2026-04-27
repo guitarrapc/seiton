@@ -19,6 +19,7 @@ internal static class DynamicContextTypeBuilder
     internal static readonly byte[] NeedsKeyUtf8 = "needs"u8.ToArray();
     internal static readonly byte[] InputsKeyUtf8 = "inputs"u8.ToArray();
     internal static readonly byte[] SecretsKeyUtf8 = "secrets"u8.ToArray();
+    internal static readonly byte[] GithubKeyUtf8 = "github"u8.ToArray();
 
     // Static Utf8String keys reused across all needs entries
     private static readonly Utf8String resultKey = new("result"u8);
@@ -666,5 +667,58 @@ internal static class DynamicContextTypeBuilder
         }
 
         return (JobsKeyUtf8, ExprType.Object(props, strict: true));
+    }
+
+    /// <summary>
+    /// Builds a github context type override that narrows <c>github.event</c> to the payload type
+    /// of the workflow's trigger event(s). When only one webhook event is declared, the event
+    /// property is set to that event's payload type. Otherwise the default loose type is used.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildGithubOverride(IReadOnlyList<Event> onEvents, AstArena arena, byte[]? utf8Yaml)
+    {
+        if (utf8Yaml is null)
+        {
+            return (GithubKeyUtf8, ContextTypes.BuiltinContextTypes[0].Type);
+        }
+
+        ObjectExprType? eventPayloadType = null;
+
+        // Resolve event payload type: use concrete type only when exactly one webhook event is declared
+        var webhookCount = 0;
+        for (var i = 0; i < onEvents.Count; i++)
+        {
+            if (onEvents[i] is WebhookEvent we && we.Hook.HasValue)
+            {
+                webhookCount++;
+                var nameUtf8 = arena.GetStringValue(we.Hook);
+                if (EventPayloadTypes.TryGetEventPayloadType(nameUtf8, out var payloadType))
+                {
+                    eventPayloadType = payloadType;
+                }
+            }
+        }
+
+        // Multiple webhook events: can't narrow to a single event type
+        if (webhookCount != 1)
+        {
+            eventPayloadType = null;
+        }
+
+        if (eventPayloadType is null)
+        {
+            return (GithubKeyUtf8, ContextTypes.BuiltinContextTypes[0].Type);
+        }
+
+        // Build a new github type with the narrowed event property
+        var builtinGithub = (ObjectExprType)ContextTypes.BuiltinContextTypes[0].Type;
+        var newProps = new Dictionary<Utf8String, ExprType>(builtinGithub.Properties!.Count);
+        foreach (var kvp in builtinGithub.Properties!)
+        {
+            newProps[kvp.Key] = kvp.Value;
+        }
+
+        // Replace the event property with the narrowed type
+        newProps[new Utf8String("event"u8)] = eventPayloadType;
+        return (GithubKeyUtf8, ExprType.Object(newProps, strict: true));
     }
 }

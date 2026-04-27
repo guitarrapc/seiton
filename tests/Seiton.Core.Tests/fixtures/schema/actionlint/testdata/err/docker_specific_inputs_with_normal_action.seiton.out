@@ -1,0 +1,2 @@
+test.yaml:7:15: unknown input 'args' for action 'rhysd/action-setup-vim@v1' [action]
+test.yaml:7:15: unknown input 'entrypoint' for action 'rhysd/action-setup-vim@v1' [action]

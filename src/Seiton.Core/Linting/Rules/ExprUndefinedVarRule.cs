@@ -20,9 +20,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private Workflow? _currentWorkflow;
     private (byte[] NameUtf8, ExprType Type) _inputsOverride;
     private (byte[] NameUtf8, ExprType Type) _secretsOverride;
+    private (byte[] NameUtf8, ExprType Type) _githubOverride;
     // Reusable fixed-size override arrays to avoid per-job allocation
-    private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[4];
-    private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[5];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[5];
+    private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[6];
     private bool _hasOverrides;
     private readonly List<Diagnostic> _propertyDiagnostics = new();
     // Per-job state for incremental step override building
@@ -38,6 +39,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _currentWorkflow = workflow;
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
         _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
+        _githubOverride = DynamicContextTypeBuilder.BuildGithubOverride(workflow.On, Arena, Config.Utf8Yaml);
         _hasOverrides = false;
 
         if (!string.IsNullOrEmpty(Config.FilePath) && Path.IsPathFullyQualified(Config.FilePath))
@@ -197,17 +199,19 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _currentJobSteps = job.Steps;
         _currentStepIndex = 0;
 
-        // job scope: matrix, needs, inputs, secrets available (steps is NOT available in job scope)
+        // job scope: matrix, needs, inputs, secrets, github available (steps is NOT available in job scope)
         _jobScopeOverrides[0] = matrixOverride;
         _jobScopeOverrides[1] = needsOverride;
         _jobScopeOverrides[2] = _inputsOverride;
         _jobScopeOverrides[3] = _secretsOverride;
+        _jobScopeOverrides[4] = _githubOverride;
         // step scope: initialize with empty steps (will be rebuilt per-step in VisitStep)
         _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
         _stepScopeOverrides[4] = _secretsOverride;
+        _stepScopeOverrides[5] = _githubOverride;
         _hasOverrides = true;
 
         CheckNode(job.If, ExpressionValidationContext.JobIf, "job.if", static (rule, message, location, targetJob) =>

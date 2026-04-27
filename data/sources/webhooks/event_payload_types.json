@@ -5,304 +5,757 @@
     {
       "name": "branch_protection_rule",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "rule", "type": "object" },
-        { "name": "changes", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "rule",
+          "type": "object"
+        },
+        {
+          "name": "changes",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "check_run",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "check_run", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "check_run",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "check_suite",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "check_suite", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "check_suite",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "create",
       "properties": [
-        { "name": "ref", "type": "string" },
-        { "name": "ref_type", "type": "string" },
-        { "name": "master_branch", "type": "string" },
-        { "name": "description", "type": "string" },
-        { "name": "pusher_type", "type": "string" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "ref",
+          "type": "string"
+        },
+        {
+          "name": "ref_type",
+          "type": "string"
+        },
+        {
+          "name": "master_branch",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "pusher_type",
+          "type": "string"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "delete",
       "properties": [
-        { "name": "ref", "type": "string" },
-        { "name": "ref_type", "type": "string" },
-        { "name": "pusher_type", "type": "string" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "ref",
+          "type": "string"
+        },
+        {
+          "name": "ref_type",
+          "type": "string"
+        },
+        {
+          "name": "pusher_type",
+          "type": "string"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "deployment",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "deployment", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "deployment",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "deployment_status",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "deployment_status", "type": "object" },
-        { "name": "deployment", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "deployment_status",
+          "type": "object"
+        },
+        {
+          "name": "deployment",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "discussion",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "discussion", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "discussion",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "discussion_comment",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "discussion", "type": "object" },
-        { "name": "comment", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "discussion",
+          "type": "object"
+        },
+        {
+          "name": "comment",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "fork",
       "properties": [
-        { "name": "forkee", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "forkee",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "gollum",
       "properties": [
-        { "name": "pages", "type": "array", "elementType": { "type": "object" } },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "pages",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "issue_comment",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "issue", "type": "object" },
-        { "name": "comment", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "issue",
+          "type": "object"
+        },
+        {
+          "name": "comment",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "issues",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "issue", "type": "object" },
-        { "name": "changes", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "issue",
+          "type": "object"
+        },
+        {
+          "name": "changes",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "label",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "label", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "merge_group",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "merge_group", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "merge_group",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "milestone",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "milestone", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "milestone",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "page_build",
       "properties": [
-        { "name": "build", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "build",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "public",
       "properties": [
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "pull_request",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "number", "type": "number" },
-        { "name": "pull_request", "type": "object" },
-        { "name": "changes", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "number",
+          "type": "number"
+        },
+        {
+          "name": "pull_request",
+          "type": "object"
+        },
+        {
+          "name": "changes",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "pull_request_review",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "review", "type": "object" },
-        { "name": "pull_request", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "review",
+          "type": "object"
+        },
+        {
+          "name": "pull_request",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "pull_request_review_comment",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "comment", "type": "object" },
-        { "name": "pull_request", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "comment",
+          "type": "object"
+        },
+        {
+          "name": "pull_request",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "pull_request_target",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "number", "type": "number" },
-        { "name": "pull_request", "type": "object" },
-        { "name": "changes", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "number",
+          "type": "number"
+        },
+        {
+          "name": "pull_request",
+          "type": "object"
+        },
+        {
+          "name": "changes",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "push",
       "properties": [
-        { "name": "ref", "type": "string" },
-        { "name": "before", "type": "string" },
-        { "name": "after", "type": "string" },
-        { "name": "created", "type": "bool" },
-        { "name": "deleted", "type": "bool" },
-        { "name": "forced", "type": "bool" },
-        { "name": "base_ref", "type": "string" },
-        { "name": "compare", "type": "string" },
-        { "name": "commits", "type": "array", "elementType": { "type": "object" } },
-        { "name": "head_commit", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "pusher", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "ref",
+          "type": "string"
+        },
+        {
+          "name": "before",
+          "type": "string"
+        },
+        {
+          "name": "after",
+          "type": "string"
+        },
+        {
+          "name": "created",
+          "type": "bool"
+        },
+        {
+          "name": "deleted",
+          "type": "bool"
+        },
+        {
+          "name": "forced",
+          "type": "bool"
+        },
+        {
+          "name": "base_ref",
+          "type": "string"
+        },
+        {
+          "name": "compare",
+          "type": "string"
+        },
+        {
+          "name": "commits",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "head_commit",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "pusher",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "registry_package",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "registry_package", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "registry_package",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "release",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "release", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "release",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "repository_dispatch",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "branch", "type": "string" },
-        { "name": "client_payload", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "branch",
+          "type": "string"
+        },
+        {
+          "name": "client_payload",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "schedule",
       "properties": [
-        { "name": "schedule", "type": "string" }
+        {
+          "name": "schedule",
+          "type": "string"
+        }
       ]
     },
     {
       "name": "status",
       "properties": [
-        { "name": "sha", "type": "string" },
-        { "name": "name", "type": "string" },
-        { "name": "state", "type": "string" },
-        { "name": "description", "type": "string" },
-        { "name": "target_url", "type": "string" },
-        { "name": "context", "type": "string" },
-        { "name": "branches", "type": "array", "elementType": { "type": "object" } },
-        { "name": "commit", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "sha",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "state",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "target_url",
+          "type": "string"
+        },
+        {
+          "name": "context",
+          "type": "string"
+        },
+        {
+          "name": "branches",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "commit",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "watch",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     },
     {
       "name": "workflow_dispatch",
       "properties": [
-        { "name": "inputs", "type": "object" },
-        { "name": "ref", "type": "string" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" },
-        { "name": "workflow", "type": "string" }
+        {
+          "name": "inputs",
+          "type": "object"
+        },
+        {
+          "name": "ref",
+          "type": "string"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        },
+        {
+          "name": "workflow",
+          "type": "string"
+        }
       ]
     },
     {
       "name": "workflow_run",
       "properties": [
-        { "name": "action", "type": "string" },
-        { "name": "workflow_run", "type": "object" },
-        { "name": "workflow", "type": "object" },
-        { "name": "repository", "type": "object" },
-        { "name": "sender", "type": "object" }
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "workflow_run",
+          "type": "object"
+        },
+        {
+          "name": "workflow",
+          "type": "object"
+        },
+        {
+          "name": "repository",
+          "type": "object"
+        },
+        {
+          "name": "sender",
+          "type": "object"
+        }
       ]
     }
   ]

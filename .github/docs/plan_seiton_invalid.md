@@ -45,11 +45,11 @@ actionlint の `.out` ファイルは変更せず、seiton 側のメッセージ
 
 | Fixture | 理由 | フェーズ | 状態 |
 |---|---|---|---|
-| `docker_specific_inputs_with_normal_action` | `rhysd/action-setup-vim` カタログ未登録 | 2.7 | カタログ追加で対応可 |
+| `docker_specific_inputs_with_normal_action` | `rhysd/action-setup-vim` カタログ追加済み | 2.7 | ✅ 実装済み (input 検出) |
 | `expr_check_in_matrix_row_assign` | object dereference 型チェック | 2.2 | ✅ 実装済み |
 | `outdated_actions` | outdated-action-runner マッピング | 2.8 | ✅ 実装済み |
-| `outdated_popular_action` | 同上 (`actions/stale` 未登録) | 2.8 | 部分対応 |
-| `outputs_of_action_skipping_inputs_check` | `octokit/request-action` カタログ未登録 | 2.3 | カタログ追加で対応可 |
+| `outdated_popular_action` | `actions/stale` カタログ追加済み | 2.8 | ✅ 実装済み |
+| `outputs_of_action_skipping_inputs_check` | `octokit/request-action` カタログ追加済み | 2.3 | ✅ 実装済み (output 検出) |
 | `pyflakes_job_default_shell` | pyflakes 連携なし (スコープ外) | 4 | - |
 | `pyflakes_step_shell` | 同上 | 4 | - |
 | `pyflakes_workflow_default_shell` | 同上 | 4 | - |
@@ -800,17 +800,18 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 2.10 | reusable_workflow_empty_secrets | ✅ 空 `secrets:` (null) を「secrets 宣言なし」として処理。`BuildSecretsOverride` で空 secrets を strict empty object に変換 | `WorkflowParser.On.WorkflowCall.cs`, `DynamicContextTypeBuilder.cs` |
 | 2.4 | invalid_comparisons 型チェック | ✅ 空オブジェクトの型推論修正 (`{}` → `ObjectExprType`)。配列要素型の推論追加。`AreEqualityCompatible` で配列要素型の互換性チェック追加。7/7 → 6/7 検出 (array<bool> vs array<object> は未対応) | `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs` |
 | 2.2 | matrix row assign 型チェック | ✅ マトリックス行のスカラー値が `${{ expr }}` の場合、式の型推論を実行。`ValidatePropertyAccessWithOverrides` で非オブジェクト型のプロパティアクセスエラーを検出 | `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs` |
+| 2.3 | action output プロパティ検証 | ✅ `octokit/request-action` をカタログ追加。`this_output_does_not_exist` プロパティエラーを検出。ただし seiton は `owner`/`repo` を未定義 input として報告 (actionlint は input チェックをスキップ) | `targets.json`, `popular_actions.json`, `PopularActions.g.cs` |
+| 2.7 | Docker 固有 input 検証 | ✅ `rhysd/action-setup-vim` をカタログ追加。`entrypoint`/`args` を未定義 input として検出 | `targets.json`, `popular_actions.json`, `PopularActions.g.cs` |
+| 2.1 | evaluated_template 型改善 | ✅ github.event のイベント固有型システム追加。ワイルドカードセマンティクス修正 (`arr.*` → Array 型)。`github.event.commits.*` を array として検出 (3/4)。`steps.cache.outputs` は同一位置の重複排除により1件のみ表示 | `EventPayloadTypes.g.cs`, `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs`, `ExprUndefinedVarRule.cs` |
+| 2.5 | workflow_dispatch inputs 型チェック | ✅ github.event イベント型によりインデックス型チェック改善。`github.event.inputs[...]` の配列インデックス型エラー3件追加検出 | `EventPayloadTypes.g.cs` (push/workflow_dispatch 定義) |
 
-#### 未実施 (データギャップ・型システム制約)
+#### 未実施 (設計上の制約)
 
 | # | 項目 | 理由 |
 |---|------|------|
-| 2.1 | evaluated_template | `github.event` が `AnyExprType` のため、object/array/null の具体型表示ができない。型システムの拡張が必要 |
-| 2.3 | action output プロパティ検証 | `octokit/request-action` がカタログに未登録。カタログ追加で対応可能 |
-| 2.5 | workflow_dispatch inputs 型チェック | 部分的に動作 (`inputs.select` 検出、`github[inputs.boolean]` 検出)。配列インデックスの型チェックは `github.event.*` が `AnyExprType` のため未検出 |
-| 2.6 | fromJSON 型推論 | fromJSON() の戻り値型推論が未実装。JSON リテラル引数からの型推論が必要 |
-| 2.7 | Docker 固有 input 検証 | `rhysd/action-setup-vim` がカタログに未登録。カタログ追加で対応可能 |
-| 2.9 | object_at_runner_label | runs-on のコンテキスト固有型チェック未実装。現在は汎用的な template type check のみ |
+| 2.1 (残り) | evaluated_template `steps.cache.outputs` | 同一 YAML ノード内の複数 `${{ }}` が同一位置・同一メッセージで重複排除される (DiagnosticIdentity dedup)。per-expression 位置追跡が必要 |
+| 2.6 | fromJSON 型推論 | fromJSON() の戻り値型推論は既に JSON リテラル引数に対して実装済み。非リテラル引数の型推論は未対応 |
+| 2.9 | object_at_runner_label | runs-on コンテキスト固有の型チェック (message style差異)。seiton は template type check で検出、actionlint は runs-on 専用チェック |
 | 2.11 | workflow_call_outputs_sema | メッセージ差異のみ (seiton: `'name' object`, actionlint: `object type {props}`)。検出は正常に動作 |
 
 ### フェーズ 3 実装記録
