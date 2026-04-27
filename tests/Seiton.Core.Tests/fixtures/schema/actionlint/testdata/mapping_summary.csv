@@ -202,9 +202,13 @@ expr_check_in_env_var_name,1,"test.yaml:4:7: context ""runner"" is not allowed h
 expr_check_in_env_var_name,2,"test.yaml:12:13: property ""foooooo"" is not defined in object type {arch: string; debug: string; environment: string; nam...",-,,MISS
 expr_check_in_env_var_name,3,"test.yaml:14:11: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""matrix"", ""needs"", ""se...",-,,MISS
 expr_check_in_env_var_name,4,"test.yaml:14:11: property ""fooooooo"" is not defined in object type {arch: string; debug: string; environment: string; na...",-,,MISS
-expr_check_in_env_var_name,-,,1,"test.yaml:4:3: workflow.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
-expr_check_in_env_var_name,-,,2,"test.yaml:14:7: job.env key '${{ runner.fooooooo }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
-expr_check_in_env_var_name,-,,3,"test.yaml:18:11: step.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
+expr_check_in_env_var_name,-,,1,"test.yaml:4:3: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""secrets"". calle...",EXTRA
+expr_check_in_env_var_name,-,,2,"test.yaml:12:9: property ""foooooo"" is not defined in object type {arch: string; debug: string; environment: string; name...",EXTRA
+expr_check_in_env_var_name,-,,3,"test.yaml:14:7: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strat...",EXTRA
+expr_check_in_env_var_name,-,,4,"test.yaml:14:7: property ""fooooooo"" is not defined in object type {arch: string; debug: string; environment: string; nam...",EXTRA
+expr_check_in_env_var_name,-,,5,"test.yaml:4:3: workflow.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
+expr_check_in_env_var_name,-,,6,"test.yaml:14:7: job.env key '${{ runner.fooooooo }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
+expr_check_in_env_var_name,-,,7,"test.yaml:18:11: step.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 expr_check_in_matrix_row_assign,1,"test.yaml:12:23: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",-,,MISS
 expr_check_in_matrix_row_assign,-,,1,"test.yaml:12:19: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",EXTRA
 expr_check_in_services,1,"test.yaml:9:15: ""services"" section is scalar node but mapping node is expected [syntax-check]",-,,MISS
@@ -254,15 +258,14 @@ if_cond_constants,5,"test.yaml:16:13: constant expression ""true"" in condition.
 if_cond_constants,6,"test.yaml:18:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
 if_cond_constants,7,"test.yaml:21:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
 if_cond_constants,8,"test.yaml:23:9: constant expression ""false"" in condition. remove the if: section [if-cond]",8,"test.yaml:23:9: constant expression ""false"" in condition. remove the if: section [if-cond]",MATCH
-if_cond_constants,9,"test.yaml:31:11: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
-if_cond_constants,10,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",9,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",MATCH
-if_cond_constants,11,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",10,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",MATCH
+if_cond_constants,9,"test.yaml:31:11: constant expression ""true"" in condition. remove the if: section [if-cond]",9,"test.yaml:31:11: constant expression ""true"" in condition. remove the if: section [if-cond]",MATCH
+if_cond_constants,10,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",10,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",MATCH
+if_cond_constants,11,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",11,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",MATCH
 if_cond_constants,-,,3,"test.yaml:12:14: constant expression ""true"" in condition. remove the if: section [if-cond]",EXTRA
 if_cond_constants,-,,4,"test.yaml:14:14: constant expression ""false"" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,5,"test.yaml:16:14: constant expression ""true "" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,6,"test.yaml:19:11: constant expression ""true
-"" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,7,"test.yaml:21:14: constant expression "" true"" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,5,"test.yaml:16:14: constant expression ""true"" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,6,"test.yaml:19:11: constant expression ""true"" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,7,"test.yaml:21:14: constant expression ""true"" in condition. remove the if: section [if-cond]",EXTRA
 if_cond_edge_cases_trailing_leading_chars,1,"test.yaml:8:13: if: condition ""${{ false }}\n"" is always evaluated to true because extra characters are around ${{ }} [i...",-,,MISS
 if_cond_edge_cases_trailing_leading_chars,2,"test.yaml:11:13: if: condition ""${{ false }} "" is always evaluated to true because extra characters are around ${{ }} [i...",-,,MISS
 if_cond_edge_cases_trailing_leading_chars,3,"test.yaml:13:13: if: condition "" ${{ false }}"" is always evaluated to true because extra characters are around ${{ }} [i...",-,,MISS
@@ -598,7 +601,8 @@ schedule_invalid_timezone,1,"test.yaml:4:17: invalid timezone ""Not/A/Timezone""
 schedule_invalid_timezone,2,"test.yaml:6:17: invalid timezone ""UTC"" in schedule event. it must be a valid IANA timezone name [events]",-,,MISS
 schedule_invalid_timezone,3,"test.yaml:8:17: invalid timezone ""local"" in schedule event. it must be a valid IANA timezone name [events]",-,,MISS
 schedule_invalid_timezone,4,"test.yaml:10:17: string should not be empty [syntax-check]",-,,MISS
-schedule_invalid_timezone,5,"test.yaml:11:13: string should not be empty [syntax-check]",1,"test.yaml:11:13: string should not be empty [syntax-check]",MATCH
+schedule_invalid_timezone,5,"test.yaml:11:13: string should not be empty [syntax-check]",-,,MISS
+schedule_invalid_timezone,-,,1,"test.yaml:11:13: ""schedule"" section should not be empty [syntax-check]",EXTRA
 schedule_invalid_timezone,-,,2,"test.yaml:4:18: on.schedule timezone 'Not/A/Timezone' is invalid [schedule-event]",EXTRA
 schedule_invalid_timezone,-,,3,"test.yaml:6:18: on.schedule timezone 'UTC' is invalid [schedule-event]",EXTRA
 schedule_invalid_timezone,-,,4,"test.yaml:8:18: on.schedule timezone 'local' is invalid [schedule-event]",EXTRA

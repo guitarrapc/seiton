@@ -5612,6 +5612,52 @@ public sealed class RuleInterfaceTests
                           run: echo ok
             """,
             []),
+            // regression: trailing whitespace in bare constant should be trimmed in message text
+            new RuleCase(
+            "ng-step-if-constant-trailing-space",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: 'true '
+                          run: echo ng
+            """,
+            ["constant expression \"true\" in condition. remove the if: section"]),
+            // regression: leading whitespace in bare constant should be trimmed in message text
+            new RuleCase(
+            "ng-step-if-constant-leading-space",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ' false'
+                          run: echo ng
+            """,
+            ["constant expression \"false\" in condition. remove the if: section"]),
+            // regression: block scalar newline in constant should be trimmed in message text
+            new RuleCase(
+            "ng-step-if-constant-block-scalar",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          true\n        run: echo ng\n",
+            ["constant expression \"true\" in condition. remove the if: section"]),
+            // regression: snapshot.if constant should be detected
+            new RuleCase(
+            "ng-snapshot-if-constant",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: test
+                        if: true
+                    steps:
+                        - run: echo ng
+            """,
+            ["constant expression \"true\" in condition. remove the if: section"]),
         };
 
         await AssertRuleCases(new IfCondRule(), "if-cond", cases);
@@ -6593,6 +6639,60 @@ public sealed class RuleInterfaceTests
                             repository: ${{ unknown.repository }}
             """,
             ["undefined context \"unknown\""]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_EnvKeyExpression_TableDriven()
+    {
+        var cases = new[]
+        {
+            // env key with valid runner property — should only get portability warning (from EnvVarRule, not here)
+            new RuleCase(
+            "ok-env-key-valid-runner-property",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hi
+                          env:
+                            ${{ runner.name }}: ''
+            """,
+            []),
+            // env key with invalid runner property — should report property not defined
+            new RuleCase(
+            "ng-container-env-key-invalid-property",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: node:14.16
+                        env:
+                            ${{ runner.foooooo }}: ''
+                    steps:
+                        - run: echo hi
+            """,
+            ["property \"foooooo\" is not defined in object type"]),
+            // job env key with invalid runner property
+            new RuleCase(
+            "ng-job-env-key-invalid-property",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        ${{ runner.fooooooo }}: ''
+                    steps:
+                        - run: echo hi
+            """,
+            ["property \"fooooooo\" is not defined in object type"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

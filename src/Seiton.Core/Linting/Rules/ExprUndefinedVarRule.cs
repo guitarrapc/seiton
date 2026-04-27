@@ -372,6 +372,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             var envVar = pair.Value;
             var keyName = Decode(Arena.GetStringSlice(envVar.Name));
+            CheckNode(envVar.Name, context, $"{sinkName}-key", report, target);
             CheckNode(envVar.Value, context, $"{sinkName}.{keyName}", report, target);
         }
     }

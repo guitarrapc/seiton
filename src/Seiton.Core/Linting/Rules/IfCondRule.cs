@@ -15,6 +15,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
     public override void VisitJobPre(Job job)
     {
         ValidateCondition(job.If, job, null);
+
+        // snapshot.if
+        if (job.Snapshot is { } snapshot)
+        {
+            ValidateCondition(snapshot.If, job, null);
+        }
     }
 
     public override void VisitStep(Step step)
@@ -75,7 +81,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 
         if (IsConstantBool(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, out var value))
         {
-            var expressionText = Encoding.UTF8.GetString(expression);
+            var expressionText = Encoding.UTF8.GetString(expression).Trim();
             var message = $"constant expression \"{expressionText}\" in condition. remove the if: section";
             if (job is not null)
             {

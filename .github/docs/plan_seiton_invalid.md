@@ -1136,7 +1136,7 @@ test.yaml:16:16: "workflows" should not be empty     MISS   test.yaml:16:5: "wor
 
 ---
 
-##### 4.L `if_cond_constants` — 2 MISS, 1 EXTRA
+##### 4.L `if_cond_constants` — ~~2 MISS, 1 EXTRA~~ ✅ DONE (0 MISS, 0 EXTRA)
 
 **具体例:**
 
@@ -1146,16 +1146,13 @@ test.yaml:18:13: "true" in condition                 →      test.yaml:19:11: "
 test.yaml:31:11: "true" in condition (snapshot.if)   MISS   (なし)
 ```
 
-**MISS 原因と改善案:**
-
-1. **18:13→19:11** (LINE_DIFF): multi-line YAML scalar (`if: |\n  true`) で seiton が改行を含む値テキスト `"true\n"` を報告し、位置も 19:11 (値の開始) になる。actionlint は trim 後のテキスト `"true"` を 18:13 (キー位置) で報告。
-   - **改善案:** `IfCondRule` で定数式テキストを trim してから表示する。位置は値位置ポリシーとして維持。
-2. **31:11 snapshot.if** (MISS): `snapshot.if: true` の定数式検出が未実装。
-   - **改善案:** `IfCondRule.VisitJobPre` に `snapshot.If` のチェックを追加。snapshot.if の availability は実装済み (4.C) なので、IfCondRule 側の拡張のみ。
+**実装済み:**
+1. `IfCondRule` で定数式テキストを `.Trim()` してから表示するよう修正。`"true "` → `"true"`, `"true\n"` → `"true"` 等。
+2. `IfCondRule.VisitJobPre` に `snapshot.If` のチェックを追加。line 31 の MISS を解消。
 
 ---
 
-##### 4.M `invalid_json_in_fromjson` — 2 MISS, 3 EXTRA
+##### 4.M `invalid_json_in_fromjson` — 2 MISS, 3 EXTRA (フェーズ 2.6 へ延期)
 
 **具体例:**
 
@@ -1184,7 +1181,7 @@ test.yaml:28:32: contains() 1st arg not assignable      MISS       (なし)
 
 ---
 
-##### 4.N `expr_check_in_env_var_name` — 2 MISS, 1 EXTRA
+##### 4.N `expr_check_in_env_var_name` — ~~2 MISS, 1 EXTRA~~ ✅ DONE (0 MISS, 1 EXTRA)
 
 **具体例:**
 
@@ -1197,13 +1194,11 @@ test.yaml:14:11: property "fooooooo" not defined             MISS  (なし)
                                                                    test.yaml:18:11: env key '${{runner.name}}' not portable  ← EXTRA
 ```
 
-**MISS 原因と改善案:**
+**実装済み:**
+`ExprUndefinedVarRule.CheckEnv` で env キーに対しても `CheckNode` を呼び出すよう修正。env キー内の `${{ runner.foooooo }}` のような式に対して property チェック + context availability チェックが機能するようになった。
 
-1. **12:13, 14:11 property not defined** (MISS × 2): actionlint は env キー内の式の property access もチェックする (`runner.foooooo` → "foooooo" not defined)。seiton は env キー内の式を portability 警告のみで処理し、property チェックを行わない。
-   - **改善案:** env キー内の式に対しても `ExprUndefinedVarRule` の property チェックを適用する。現在は env キーの式を lint パスに渡していない可能性がある。
-
-**EXTRA 原因:**
-- 18:11 step-level env key: actionlint は step-level の env キーに対してはコンテキスト/property チェックをしない (正当な runner context のため)。seiton は portability 警告を出す — 有用な追加検出。
+**EXTRA 維持:**
+- 18:11 step-level env key: seiton は portability 警告を出す — 有用な追加検出。
 
 ---
 
