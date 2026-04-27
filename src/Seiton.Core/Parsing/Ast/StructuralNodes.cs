@@ -139,6 +139,8 @@ public sealed class MatrixCombinations
 /// <summary>Base class for unstructured YAML values in matrix entries.</summary>
 public abstract class RawYamlValue
 {
+    /// <summary>Source location of this value node. Used for diagnostic reporting.</summary>
+    public TextRange Range { get; init; }
 }
 
 /// <summary>A raw YAML scalar text value.</summary>

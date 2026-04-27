@@ -52,7 +52,14 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             // bytes by searching backward from the mark position.
             if (_parser.CurrentEventType == ParseEventType.Scalar)
             {
-                if (_parser.IsNullScalar() || _parser.GetScalarAsUtf8().Length == 0)
+                if (_parser.IsNullScalar())
+                {
+                    // Implicit null — backward-scan from next token.
+                    var correctedOffset = ResolveEmptyScalarStart(mark.Position);
+                    return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
+                }
+
+                if (_parser.GetScalarAsUtf8().Length == 0)
                 {
                     var correctedOffset = ResolveEmptyScalarStart(mark.Position);
                     return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
@@ -964,15 +971,28 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             }
         }
 
-        // If we stopped at a '-' (YAML block sequence indicator), skip over it and continue
-        // the backward whitespace scan so the quote check can find e.g. - '' on the prior line.
+        // If we stopped at a '-' (YAML block sequence indicator), speculatively skip over it
+        // to look for quotes (e.g. - '' or - ""). If no quotes are found, the '-' is the
+        // sequence indicator for this null entry — return the position right after it.
         if (pos > 0 && source[pos - 1] == (byte)'-')
         {
+            var afterDash = pos;
             pos--;
             while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
             {
                 pos--;
             }
+
+            // Check for '' or "" before the dash
+            if (pos >= 2
+                && source[pos - 1] == source[pos - 2]
+                && source[pos - 1] is (byte)'\'' or (byte)'"')
+            {
+                return pos - 2;
+            }
+
+            // No quotes found; return position right after the '-'.
+            return afterDash;
         }
 
         // Check for '' (two single-quotes) or "" (two double-quotes) immediately before pos.
@@ -981,6 +1001,26 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             && source[pos - 1] is (byte)'\'' or (byte)'"')
         {
             return pos - 2;  // offset of the opening quote
+        }
+
+        // Check for explicit YAML null text ("null", "~", "Null", "NULL") that the backward
+        // scan stopped right after. Return the start of the null keyword instead of the end.
+        if (pos >= 4)
+        {
+            var s = source.Slice(pos - 4, 4);
+            if ((s[0] == (byte)'n' && s[1] == (byte)'u' && s[2] == (byte)'l' && s[3] == (byte)'l')
+                || (s[0] == (byte)'N' && s[1] == (byte)'u' && s[2] == (byte)'l' && s[3] == (byte)'l')
+                || (s[0] == (byte)'N' && s[1] == (byte)'U' && s[2] == (byte)'L' && s[3] == (byte)'L'))
+            {
+                if (pos - 4 == 0 || source[pos - 5] is (byte)' ' or (byte)'\t' or (byte)'-')
+                    return pos - 4;
+            }
+        }
+
+        if (pos >= 1 && source[pos - 1] == (byte)'~'
+            && (pos - 1 == 0 || source[pos - 2] is (byte)' ' or (byte)'\t' or (byte)'-'))
+        {
+            return pos - 1;
         }
 
         return pos;

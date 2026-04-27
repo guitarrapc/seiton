@@ -5268,6 +5268,58 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_MatrixRule_ExcludeObjectValueReportsAtValueLine()
+    {
+        // Object value in exclude: diagnostic must point to the exclude entry line, not the matrix range
+        var yaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.os.runner }}
+                    strategy:
+                        matrix:
+                            os:
+                                - {'runner': 'ubuntu-latest'}
+                            exclude:
+                                - os: {'runner': 'windows-latest'}
+                    steps:
+                        - run: echo ng
+            """
+            .Replace("\r\n", "\n");
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-obj.yml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("does not match"));
+        await Assert.That(diag.Message).IsNotNull();
+        // The exclude entry is on line 10-11 area — diagnostic must not be on line 7 (matrix range)
+        await Assert.That(diag.Location.StartLine).IsGreaterThanOrEqualTo(10);
+    }
+
+    [Test]
+    public async Task RuleRegression_MatrixRule_ExcludeArrayValueReportsAtValueLine()
+    {
+        // Array value in exclude: diagnostic must point to the exclude entry line, not the matrix range
+        var yaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.os[0] }}
+                    strategy:
+                        matrix:
+                            os:
+                                - ['ubuntu', 'latest']
+                            exclude:
+                                - os: ['macos', 'latest']
+                    steps:
+                        - run: echo ng
+            """
+            .Replace("\r\n", "\n");
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-arr.yml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("does not match"));
+        await Assert.That(diag.Message).IsNotNull();
+        // The exclude entry is on line 10-11 area — diagnostic must not be on line 7 (matrix range)
+        await Assert.That(diag.Location.StartLine).IsGreaterThanOrEqualTo(10);
+    }
+
+    [Test]
     public async Task RuleRegression_EnvVarRule_TableDriven()
     {
         var cases = new[]

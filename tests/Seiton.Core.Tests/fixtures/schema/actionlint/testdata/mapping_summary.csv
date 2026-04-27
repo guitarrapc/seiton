@@ -235,7 +235,7 @@ glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: 
 glob_more,16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
 glob_more,17,"test.yaml:27:13: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,18,"test.yaml:34:20: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
-glob_more,-,,1,"test.yaml:13:11: on.push.paths must be scalar or sequence of scalar [syntax-check]",EXTRA
+glob_more,-,,1,"test.yaml:14:8: on.push.paths must be scalar or sequence of scalar [syntax-check]",EXTRA
 glob_more,-,,2,"test.yaml:6:10: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",EXTRA
 glob_more,-,,3,"test.yaml:7:1: character ' ' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *. see ...",EXTRA
 glob_more,-,,4,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not end with / and ... see `man git-che...",EXTRA
@@ -421,13 +421,13 @@ invalid_snapshot,-,,5,"test.yaml:8:11: context ""foo"" is not allowed here. unde
 invalid_steps,1,"test.yaml:8:9: unexpected key ""run"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if"", ...",1,"test.yaml:8:9: unexpected key ""run"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if"", ...",MATCH
 invalid_steps,2,"test.yaml:11:9: unexpected key ""uses"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",2,"test.yaml:11:9: unexpected key ""uses"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",MATCH
 invalid_steps,3,"test.yaml:14:9: unexpected key ""shell"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",3,"test.yaml:14:9: unexpected key ""shell"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",MATCH
-invalid_steps,4,"test.yaml:17:9: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",-,,MISS
-invalid_steps,5,"test.yaml:17:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
+invalid_steps,4,"test.yaml:17:9: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",4,"test.yaml:17:9: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",MATCH
+invalid_steps,5,"test.yaml:17:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",5,"test.yaml:17:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",MATCH
 invalid_steps,6,"test.yaml:18:3: ""steps"" section is missing in job ""test2"" [syntax-check]",7,"test.yaml:18:3: ""steps"" section is missing in job ""test2"" [syntax-check]",MATCH
 invalid_steps,7,"test.yaml:21:11: ""steps"" section must be sequence node but got scalar node with ""!!null"" tag [syntax-check]",6,"test.yaml:21:11: ""steps"" section must be sequence node but got scalar node with ""!!null"" tag [syntax-check]",MATCH
 invalid_steps,8,"test.yaml:25:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
-invalid_steps,9,"test.yaml:27:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",-,,MISS
-invalid_steps,10,"test.yaml:27:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
+invalid_steps,9,"test.yaml:27:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",9,"test.yaml:27:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",MATCH
+invalid_steps,10,"test.yaml:27:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",10,"test.yaml:27:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",MATCH
 invalid_steps,11,"test.yaml:28:9: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",-,,MISS
 invalid_steps,12,"test.yaml:28:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 invalid_steps,13,"test.yaml:29:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
@@ -437,11 +437,7 @@ invalid_steps,16,"test.yaml:39:9: unexpected key ""working-directory"" for step 
 invalid_steps,17,"test.yaml:41:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",16,"test.yaml:41:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",MATCH
 invalid_steps,18,"test.yaml:45:9: unexpected key ""foooo"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",17,"test.yaml:45:9: unexpected key ""foooo"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",MATCH
 invalid_steps,19,"test.yaml:47:9: unexpected key ""foooo"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ...",18,"test.yaml:47:9: unexpected key ""foooo"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ...",MATCH
-invalid_steps,-,,4,"test.yaml:17:13: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-...",EXTRA
-invalid_steps,-,,5,"test.yaml:17:13: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 invalid_steps,-,,8,"test.yaml:25:12: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
-invalid_steps,-,,9,"test.yaml:26:17: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-...",EXTRA
-invalid_steps,-,,10,"test.yaml:26:17: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 invalid_steps,-,,11,"test.yaml:29:7: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",EXTRA
 invalid_steps,-,,12,"test.yaml:29:7: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 issue-610_recursive_raw_yaml_value,1,"test.yaml:10:21: recursive alias ""recursive_include"" is found. anchor was declared at line:8, column:18 [syntax-check]",-,,MISS
@@ -502,36 +498,27 @@ macos_10.15_removed,1,"/test\.yaml:5:14: label ""macos-10\.15"" is unknown\. ava
 macos_10.15_removed,2,"/test\.yaml:9:14: label ""macos-10"" is unknown\. available labels are .+ \[runner-label\]/",2,"test.yaml:9:14: label ""macos-10"" is unknown. available labels are ""ubuntu-latest"", ""ubuntu-24.04"", ... and more. if it i...",MATCH
 matrix_exclude_mismatch,1,"test.yaml:14:13: ""operating-system"" in ""exclude"" section does not exist in matrix. available matrix configurations are ""...",-,,MISS
 matrix_exclude_mismatch,2,"test.yaml:16:17: value ""ubuntu-latest"" in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""ru...",-,,MISS
-matrix_exclude_mismatch,3,"test.yaml:18:17: value [""ubuntu-latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""...",-,,MISS
-matrix_exclude_mismatch,4,"test.yaml:20:17: value {""runner"": {""name"": ""ubuntu-latest""}} in ""exclude"" does not match in matrix ""os"" combinations. po...",-,,MISS
-matrix_exclude_mismatch,5,"test.yaml:22:17: value {""runner"": ""windows-latest""} in ""exclude"" does not match in matrix ""os"" combinations. possible va...",-,,MISS
-matrix_exclude_mismatch,6,"test.yaml:25:18: value [""gnome""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are ""gnome"" [...",-,,MISS
+matrix_exclude_mismatch,3,"test.yaml:18:17: value [""ubuntu-latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""...",3,"test.yaml:18:17: value [""ubuntu-latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""...",MATCH
+matrix_exclude_mismatch,4,"test.yaml:20:17: value {""runner"": {""name"": ""ubuntu-latest""}} in ""exclude"" does not match in matrix ""os"" combinations. po...",4,"test.yaml:20:17: value {""runner"": {""name"": ""ubuntu-latest""}} in ""exclude"" does not match in matrix ""os"" combinations. po...",MATCH
+matrix_exclude_mismatch,5,"test.yaml:22:17: value {""runner"": ""windows-latest""} in ""exclude"" does not match in matrix ""os"" combinations. possible va...",5,"test.yaml:22:17: value {""runner"": ""windows-latest""} in ""exclude"" does not match in matrix ""os"" combinations. possible va...",MATCH
+matrix_exclude_mismatch,6,"test.yaml:25:18: value [""gnome""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are ""gnome"" [...",6,"test.yaml:25:18: value [""gnome""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are ""gnome"" [...",MATCH
 matrix_exclude_mismatch,7,"test.yaml:28:18: value ""kde"" in ""exclude"" does not match in matrix ""gui"" combinations. possible values are ""gnome"" [matr...",-,,MISS
-matrix_exclude_mismatch,8,"test.yaml:42:17: value [""macos"", ""latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",-,,MISS
-matrix_exclude_mismatch,9,"test.yaml:44:17: value [""ubuntu"", ""22.04""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",-,,MISS
-matrix_exclude_mismatch,10,"test.yaml:46:17: value [""ubuntu"", {""version"": ""22.04""}] in ""exclude"" does not match in matrix ""os"" combinations. possibl...",-,,MISS
-matrix_exclude_mismatch,11,"test.yaml:49:18: value [{""name"": ""gnome""}] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are...",-,,MISS
-matrix_exclude_mismatch,12,"test.yaml:52:18: value [""gnome"", ""x11""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are [""...",-,,MISS
-matrix_exclude_mismatch,-,,1,"test.yaml:7:11: value [""gnome""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are ""gnome"" [m...",EXTRA
-matrix_exclude_mismatch,-,,2,"test.yaml:7:11: value [""ubuntu-latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""r...",EXTRA
-matrix_exclude_mismatch,-,,3,"test.yaml:7:11: value {""runner"": ""windows-latest""} in ""exclude"" does not match in matrix ""os"" combinations. possible val...",EXTRA
-matrix_exclude_mismatch,-,,4,"test.yaml:7:11: value {""runner"": {""name"": ""ubuntu-latest""}} in ""exclude"" does not match in matrix ""os"" combinations. pos...",EXTRA
-matrix_exclude_mismatch,-,,5,"test.yaml:14:13: job 'object' strategy.matrix.exclude references unknown axis 'operating-system' [matrix]",EXTRA
-matrix_exclude_mismatch,-,,6,"test.yaml:16:18: value ""ubuntu-latest"" in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""ru...",EXTRA
+matrix_exclude_mismatch,8,"test.yaml:42:17: value [""macos"", ""latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",8,"test.yaml:42:17: value [""macos"", ""latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",MATCH
+matrix_exclude_mismatch,9,"test.yaml:44:17: value [""ubuntu"", ""22.04""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",9,"test.yaml:44:17: value [""ubuntu"", ""22.04""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",MATCH
+matrix_exclude_mismatch,10,"test.yaml:46:17: value [""ubuntu"", {""version"": ""22.04""}] in ""exclude"" does not match in matrix ""os"" combinations. possibl...",10,"test.yaml:46:17: value [""ubuntu"", {""version"": ""22.04""}] in ""exclude"" does not match in matrix ""os"" combinations. possibl...",MATCH
+matrix_exclude_mismatch,11,"test.yaml:49:18: value [{""name"": ""gnome""}] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are...",11,"test.yaml:49:18: value [{""name"": ""gnome""}] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are...",MATCH
+matrix_exclude_mismatch,12,"test.yaml:52:18: value [""gnome"", ""x11""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are [""...",12,"test.yaml:52:18: value [""gnome"", ""x11""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are [""...",MATCH
+matrix_exclude_mismatch,-,,1,"test.yaml:14:13: job 'object' strategy.matrix.exclude references unknown axis 'operating-system' [matrix]",EXTRA
+matrix_exclude_mismatch,-,,2,"test.yaml:16:18: value ""ubuntu-latest"" in ""exclude"" does not match in matrix ""os"" combinations. possible values are {""ru...",EXTRA
 matrix_exclude_mismatch,-,,7,"test.yaml:28:19: value ""kde"" in ""exclude"" does not match in matrix ""gui"" combinations. possible values are ""gnome"" [matr...",EXTRA
-matrix_exclude_mismatch,-,,8,"test.yaml:35:11: value [""gnome"", ""x11""] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are [""...",EXTRA
-matrix_exclude_mismatch,-,,9,"test.yaml:35:11: value [""macos"", ""latest""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",EXTRA
-matrix_exclude_mismatch,-,,10,"test.yaml:35:11: value [""ubuntu"", ""22.04""] in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",EXTRA
-matrix_exclude_mismatch,-,,11,"test.yaml:35:11: value [""ubuntu"", {""version"": ""22.04""}] in ""exclude"" does not match in matrix ""os"" combinations. possibl...",EXTRA
-matrix_exclude_mismatch,-,,12,"test.yaml:35:11: value [{""name"": ""gnome""}] in ""exclude"" does not match in matrix ""gui"" combinations. possible values are...",EXTRA
 matrix_exclude_no_match,1,"test.yaml:20:15: value {""matrix"": ""macos""} in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",-,,MISS
 matrix_exclude_no_match,2,"test.yaml:25:15: value {""matrix"": ""riscv""} in ""exclude"" does not match in matrix ""arch"" combinations. possible values ar...",-,,MISS
 matrix_exclude_no_match,3,"test.yaml:27:15: value {""foo"": ""bar"", ""matrix"": ""ubuntu""} in ""exclude"" does not match in matrix ""os"" combinations. possi...",-,,MISS
 matrix_exclude_no_match,4,"test.yaml:33:15: value {""foo"": ""bar"", ""matrix"": ""arm""} in ""exclude"" does not match in matrix ""arch"" combinations. possib...",-,,MISS
-matrix_exclude_no_match,-,,1,"test.yaml:7:11: value {""foo"": ""bar"", ""matrix"": ""arm""} in ""exclude"" does not match in matrix ""arch"" combinations. possibl...",EXTRA
-matrix_exclude_no_match,-,,2,"test.yaml:7:11: value {""foo"": ""bar"", ""matrix"": ""ubuntu""} in ""exclude"" does not match in matrix ""os"" combinations. possib...",EXTRA
-matrix_exclude_no_match,-,,3,"test.yaml:7:11: value {""matrix"": ""macos""} in ""exclude"" does not match in matrix ""os"" combinations. possible values are {...",EXTRA
-matrix_exclude_no_match,-,,4,"test.yaml:7:11: value {""matrix"": ""riscv""} in ""exclude"" does not match in matrix ""arch"" combinations. possible values are...",EXTRA
+matrix_exclude_no_match,-,,1,"test.yaml:20:21: value {""matrix"": ""macos""} in ""exclude"" does not match in matrix ""os"" combinations. possible values are ...",EXTRA
+matrix_exclude_no_match,-,,2,"test.yaml:25:21: value {""matrix"": ""riscv""} in ""exclude"" does not match in matrix ""arch"" combinations. possible values ar...",EXTRA
+matrix_exclude_no_match,-,,3,"test.yaml:27:21: value {""foo"": ""bar"", ""matrix"": ""ubuntu""} in ""exclude"" does not match in matrix ""os"" combinations. possi...",EXTRA
+matrix_exclude_no_match,-,,4,"test.yaml:33:21: value {""foo"": ""bar"", ""matrix"": ""arm""} in ""exclude"" does not match in matrix ""arch"" combinations. possib...",EXTRA
 matrix_exclude_value_mismatch,1,"test.yaml:9:19: value ""13"" in ""exclude"" does not match in matrix ""node"" combinations. possible values are ""10"", ""12"", ""1...",1,"test.yaml:9:19: value ""13"" in ""exclude"" does not match in matrix ""node"" combinations. possible values are ""10"", ""12"", ""1...",MATCH
 merge_key_unsupported,1,"test.yaml:8:7: GitHub Actions does not support YAML merge key ""<<"" [syntax-check]",-,,MISS
 merge_key_unsupported,2,"test.yaml:21:11: GitHub Actions does not support YAML merge key ""<<"" [syntax-check]",-,,MISS

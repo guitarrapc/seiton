@@ -431,6 +431,11 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             return Arena.GetStringRange(str.Value);
         }
 
+        if (value.Range.StartLine > 0)
+        {
+            return value.Range;
+        }
+
         return fallback;
     }
 

@@ -658,7 +658,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 36 | `invalid_permissions` | PERFECT | 12 | 12 | 12 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 37 | `invalid_runner_labels` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 列差異1 |
 | 38 | `invalid_snapshot` | MIXED | 5 | 5 | 1 | 1 | 2 | 2 | ✅ | C+D: snapshot パース実装済み。未検出2 (image-name 必須, 空文字列位置差異), 余剰2 (snapshot.if context検証追加 + glob検証追加) |
-| 39 | `invalid_steps` | MIXED | 19 | 18 | 12 | 2 | 5 | 4 | | A+B+C: 一致12, 列差異2, 未検出5, 余剰4 |
+| 39 | `invalid_steps` | MIXED | 19 | 18 | 15 | 2 | 2 | 1 | ✅ | B+C: 位置改善済み (17:9, 27:8)。残: col差異2 (25:12, 29:7), 未検出2 (28:9 empty mapping), 余剰1 (29:7 elem) |
 | 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 3 | 0 | 0 | 2 | 3 | | A: メッセージ差異 |
 | 41 | `issue102` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
 | 42 | `issue151_child_of_child_job` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
@@ -670,7 +670,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 48 | `issue558_...permissions` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
 | 49 | `macos_10.15_removed` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
 | 50 | `macos12_runner` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 51 | `matrix_exclude_mismatch` | MIXED | 12 | 12 | 1 | 2 | 9 | 9 | | B+C: 報告位置設計差異 |
+| 51 | `matrix_exclude_mismatch` | MIXED | 12 | 12 | 9 | 2 | 1 | 1 | ✅ | B: 位置改善済み (object/array Range 追加)。残: col差異2 (16:18, 28:19), メッセージ差異1 (unknown axis) |
 | 52 | `matrix_exclude_no_match` | MIXED | 4 | 4 | 0 | 0 | 4 | 4 | | A: メッセージ差異 |
 | 53 | `matrix_exclude_value_mismatch` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
 | 54 | `merge_key_unsupported` | PERFECT | 3 | 3 | 3 | 0 | 0 | 0 | ✅ | 完全一致 |
@@ -744,8 +744,8 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | `exclusive_webhook_filters` | ~~9~~→0 | ~~9~~→0 | ✅ 排他フィルター位置改善済み。全9行 PERFECT MATCH |
 | `context_availability` | ~~7~~→1 | ~~3~~→1 | ✅ workflow_call output value + snapshot.if + service entrypoint/command 実装済み。残り: services 式形式 (1 MISS), seiton がより正確 (1 EXTRA) |
 | `issue280_runs_on` | ~~6~~→5 | ~~8~~→7 | ✅ 位置改善済み (34:13, 40:14, 58:15)。残: Cause C regex (5 MISS), WCol (3), requires-labels/x64 (7 EXTRA) |
-| `invalid_steps` | 5 | 4 | 空ステップ/不正ステップの報告位置 |
-| `matrix_exclude_mismatch` | 9 | 9 | exclude 報告位置の設計差異 |
+| `invalid_steps` | ~~5~~→2 | ~~4~~→1 | ✅ null/bare-dash 位置改善済み (17:9, 27:8 MATCH) |
+| `matrix_exclude_mismatch` | ~~9~~→1 | ~~9~~→1 | ✅ RawYamlValue.Range 追加で object/array 値位置改善 |
 
 ---
 
@@ -893,93 +893,95 @@ actionlint は空文字 `""` に対して "string should not be empty" **と** "
 
 ---
 
-#### 4.E `invalid_steps` — 5 MISS, 4 EXTRA
+#### 4.E `invalid_steps` — ~~5 MISS, 4 EXTRA~~ → ✅ 2 MISS, 1 EXTRA (実装済み)
 
-**現象:** null/空ステップの位置が1行ずれている。→ 4.D の `ResolveEmptyScalarStart` 修正により一部改善。
+**現象:** null/空ステップの位置が1行ずれている。→ 4.D の `ResolveEmptyScalarStart` 修正により一部改善済み。さらに null テキスト検出と bare dash 修正を追加。
 
 | 期待 | seiton (修正前) | seiton (修正後) | 内容 |
 |------|----------------|----------------|------|
-| 17:9 | 18:8 | 17:13 | null ステップ (`- null`) — empty + must run/uses (WCol: col 9→13) |
-| 17:9 | 18:8 | 17:13 | 同上 |
-| 21:11 | 22:8 | 21:11 | null steps セクション (`steps:` の値が null) ← **MATCH に改善** |
-| 28:9 | 29:7 | 26:17 | 空マッピングステップ (`- { }`) — empty + must run/uses (WCol: col 9→17) |
-| 28:9 | 29:7 | 26:17 | 同上 |
+| 17:9 | 17:13 | 17:9 | null ステップ (`- null`) — ✅ **MATCH** (null テキスト検出追加) |
+| 17:9 | 17:13 | 17:9 | 同上 — ✅ **MATCH** |
+| 21:11 | 21:11 | 21:11 | null steps セクション — **既に MATCH** |
+| 25:9 | 25:12 | 25:12 | `- shell: bash` ステップ — WCol (col 9→12、VYaml の値位置) |
+| 27:8 | 27:8 | 27:8 | bare dash (`-`) — ✅ **MATCH** (dash ブロック修正) |
+| 27:8 | 27:8 | 27:8 | 同上 — ✅ **MATCH** |
+| 28:9 | — | — | 空マッピングステップ (`- { }`) — **MISS** (VYaml MappingStart が 29:7 を返す) |
+| 28:9 | — | — | 同上 — **MISS** |
+| 29:9 | 29:7 | 29:7 | `- run: echo done` 直後の行 — WCol (col 9→7、VYaml 制限) |
 
-**根本原因:** パーサーが null/空 YAML シーケンス要素の位置を、その要素自体ではなく次の要素の位置で報告している。
+**実装記録:**
 
-```yaml
-steps:
-  - null     # line 17 — VYaml は null Scalar イベントを line 17 で返すはず
-test2:       # line 18 — seiton は 18:8 で報告 ← 1行ずれ
-```
+- **修正 1: null テキスト検出** — `VYamlStreamAdapter.ResolveEmptyScalarStart` に明示的 null キーワード検出を追加。後方スキャンが `null`/`Null`/`NULL`/`~` テキストの末尾で停止していたため、テキストの先頭位置を返すよう修正。
+- **修正 2: bare dash 位置** — `ResolveEmptyScalarStart` の dash ブロックで、引用符が見つからない場合に `afterDash` (dash 直後の位置) を返すよう変更。修正前はダッシュを超えて後方スキャンを続行し、前行の末尾位置 (26:17) を返していた。
+- **テスト**: `Parse_NullStepExplicit_ReportsEmptyAtNullText`, `Parse_BareDashStep_ReportsEmptyAtDashPosition` (2 tests)
+- **重要な教訓**: `_parser.GetScalarAsUtf8()` は null scalar で **クラッシュ**する。`CurrentStart` で null scalar のルーティングを試みたが失敗。`ResolveEmptyScalarStart` 側で null テキストを検出する方式に落ち着いた。
 
-**改善案:** `WorkflowParser.Steps.cs` の `ParseStep` で、VYaml の null Scalar イベントの Mark を即座に保持し、エラー報告に使用する。現在は `reader.Read()` 後の位置を使っている可能性がある。
+**現在の状態 (Match=15, WCol=2, Miss=2, Extra=1):**
 
-```csharp
-// ParseStep 内の null/非マッピング要素検出箇所
-// 修正前: reader.Read() 後の mark を使用
-// 修正後: reader.Read() 前の mark (null scalar の位置) を使用
-var nullMark = GetCurrentMark();  // ← null 要素の位置を保持
-reader.Read();  // skip null scalar
-AddError(diagnostics, "element of \"steps\" section should not be empty...", nullMark);
-```
+**MISS 行 (2 行):**
+- 28:9 × 2: 空フローマッピング (`- { }`) — VYaml が MappingStart を 29:7 で返すため、正しい位置 28:9 を取得できない。VYaml の制限。
+
+**WCol 行 (2 行):**
+- 25:9→25:12 (col +3): `- shell: bash` の値位置 vs キー位置
+- 29:9→29:7 (col -2): VYaml の MappingStart 位置ずれ
+
+**EXTRA 行 (1 行):**
+- 29:7 "element of steps" — seiton が空フローマッピングの要素空検出を追加報告
 
 ---
 
-#### 4.F `matrix_exclude_mismatch` — 9 MISS, 9 EXTRA
+#### 4.F `matrix_exclude_mismatch` — ~~9 MISS, 9 EXTRA~~ → ✅ 1 MISS, 1 EXTRA (実装済み)
 
-**現象:** メッセージは完全一致。非 string 型の exclude 値の位置が `exclude:` セクション開始位置にフォールバックしている。
+**現象 (修正前):** メッセージは完全一致。非 string 型の exclude 値の位置が `exclude:` セクション開始位置にフォールバックしていた。
 
 ```
 actionlint:  test.yaml:18:17: value ["ubuntu-latest"] in "exclude" ...  ← 個別 entry の値位置
 seiton:      test.yaml:7:11:  value ["ubuntu-latest"] in "exclude" ...  ← exclude セクション開始位置
 ```
 
-| 期待行 | seiton行 | exclude 値の型 |
-|--------|---------|--------------|
-| 18:17 | 7:11 | array `['ubuntu-latest']` |
-| 20:17 | 7:11 | object `{runner: {name: ...}}` |
-| 22:17 | 7:11 | object `{runner: 'windows-latest'}` |
-| 25:18 | 7:11 | array `['gnome']` |
-| 42:17 | 35:11 | array `['macos', 'latest']` |
-| 44:17 | 35:11 | array `['ubuntu', '22.04']` |
-| 46:17 | 35:11 | array `['ubuntu', {version: ...}]` |
-| 49:18 | 35:11 | array `[{name: 'gnome'}]` |
-| 52:18 | 35:11 | array `['gnome', 'x11']` |
-
-**根本原因:** `MatrixRule.GetRawYamlValueLocation()` の実装:
+**修正:** `RawYamlValue` 基底クラスに `TextRange Range` プロパティを追加し、`ParseRawYamlValue` で MappingStart/SequenceStart の `startMark` をキャプチャ。`MatrixRule.GetRawYamlValueLocation` を更新して `value.Range` を使用。
 
 ```csharp
+// StructuralNodes.cs
+public abstract class RawYamlValue
+{
+    public TextRange Range { get; init; }
+}
+
+// MatrixRule.cs
 private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback)
 {
     if (value is RawYamlString str)
         return Arena.GetStringRange(str.Value);
-    return fallback;  // ← object/array は matrix.Range にフォールバック
+    if (value.Range.StartLine > 0)
+        return value.Range;
+    return fallback;
 }
 ```
 
-`RawYamlString` 以外の型 (`RawYamlObject`, `RawYamlArray`) は位置情報を持たないため、`matrix.Range` (= `exclude:` キーの位置) にフォールバックしている。
+**実装記録:**
 
-**改善案:** `RawYamlValue` の各サブタイプに位置情報を追加する:
+- **変更 1**: `StructuralNodes.cs` — `RawYamlValue` に `TextRange Range { get; init; }` 追加
+- **変更 2**: `WorkflowParser.Strategy.cs` — `ParseRawYamlValue` で MappingStart/SequenceStart の `startMark` をキャプチャし `BuildScalarLocation(startMark, 0)` で Range に設定
+- **変更 3**: `MatrixRule.cs` — `GetRawYamlValueLocation` に `value.Range.StartLine > 0` チェック追加
+- **テスト**: `RuleRegression_MatrixRule_ExcludeObjectValueReportsAtValueLine`, `RuleRegression_MatrixRule_ExcludeArrayValueReportsAtValueLine` (2 tests)
 
-```csharp
-// 案1: RawYamlValue に Range プロパティを追加
-abstract record RawYamlValue(TextRange Range);
+**現在の状態 (Match=9, WCol=2, Miss=1, Extra=1):**
 
-// 案2: GetRawYamlValueLocation を再帰的に改善
-private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback)
-{
-    return value switch
-    {
-        RawYamlString str => Arena.GetStringRange(str.Value),
-        RawYamlObject obj when obj.Entries.Length > 0
-            => GetRawYamlValueLocation(obj.Entries[0].Value, fallback), // 最初の要素位置
-        RawYamlArray arr when arr.Items.Length > 0
-            => GetRawYamlValueLocation(arr.Items[0], fallback), // 最初の要素位置
-        _ => fallback,
-    };
-}
-```
+| 期待行 | seiton (修正前) | seiton (修正後) | 状態 |
+|--------|---------------|---------------|------|
+| 14:13 | 14:13 (msg diff) | 14:13 (msg diff) | MISS+EXTRA (メッセージ差異: "unknown axis" vs "does not exist") |
+| 16:17 | 7:11 | 16:18 | WCol (+1) — 値位置ポリシー |
+| 18:17 | 7:11 | 18:17 | ✅ MATCH |
+| 20:17 | 7:11 | 20:17 | ✅ MATCH |
+| 22:17 | 7:11 | 22:17 | ✅ MATCH |
+| 25:18 | 7:11 | 25:18 | ✅ MATCH |
+| 28:18 | 7:11 | 28:19 | WCol (+1) — 値位置ポリシー |
+| 42:17 | 35:11 | 42:17 | ✅ MATCH |
+| 44:17 | 35:11 | 44:17 | ✅ MATCH |
+| 46:17 | 35:11 | 46:17 | ✅ MATCH |
+| 49:18 | 35:11 | 49:18 | ✅ MATCH |
+| 52:18 | 35:11 | 52:18 | ✅ MATCH |
 
 #### 中優先度 — 個別の検出改善
 

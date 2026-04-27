@@ -444,17 +444,21 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingStart)
         {
+            var startMark = reader.CurrentStart;
             return new RawYamlObject
             {
                 Properties = ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, exprContext),
+                Range = BuildScalarLocation(startMark, 0),
             };
         }
 
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
         {
+            var startMark = reader.CurrentStart;
             return new RawYamlArray
             {
                 Items = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, "matrix"u8, exprContext),
+                Range = BuildScalarLocation(startMark, 0),
             };
         }
 

@@ -2531,6 +2531,30 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_NullStepExplicit_ReportsEmptyAtNullText()
+    {
+        // `- null` on line 7 — diagnostic must point to "null" text (col 9), not past it
+        var yaml = "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n      - null\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-step.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("element of \"steps\" section should not be empty"));
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(9); // col at 'n' of "null"
+    }
+
+    [Test]
+    public async Task Parse_BareDashStep_ReportsEmptyAtDashPosition()
+    {
+        // bare `-` on line 8 — diagnostic must point to after the dash (col 8)
+        var yaml = "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - foo: aaa\n        bar: bbb\n      -\n      - run: echo done\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "bare-dash-step.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("element of \"steps\" section should not be empty"));
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(8);  // bare `-` on line 8
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(8); // col right after '-'
+    }
+
+    [Test]
     public async Task Parse_StepWithoutRunOrUses_ReportsError()
     {
         var yaml = """
