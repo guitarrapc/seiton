@@ -454,6 +454,50 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_ExclusiveFilterError_ReportsAtIgnoreKeyPosition()
+    {
+        // branches-ignore is at line 4, column 9
+        var yaml = "on:\n  push:\n    branches: [main]\n    branches-ignore: [dev]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-position.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("both \"branches\" and \"branches-ignore\"", StringComparison.Ordinal));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task Parse_ExclusiveFilterError_TagsIgnore_ReportsAtIgnoreKeyPosition()
+    {
+        // tags-ignore is at line 4, column 5
+        var yaml = "on:\n  push:\n    tags: [v*]\n    tags-ignore: [v0.*]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-tags-position.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("both \"tags\" and \"tags-ignore\"", StringComparison.Ordinal));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task Parse_ExclusiveFilterError_PathsIgnore_ReportsAtIgnoreKeyPosition()
+    {
+        // paths-ignore is at line 4, column 5
+        var yaml = "on:\n  pull_request:\n    paths: [src/**]\n    paths-ignore: [docs/**]\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-paths-position.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("both \"paths\" and \"paths-ignore\"", StringComparison.Ordinal));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task Parse_ExclusiveFilterError_IgnoreFirst_ReportsAtLaterKey()
+    {
+        // branches-ignore first (line 3), branches second (line 4) → report at branches (line 4)
+        var yaml = "on:\n  merge_group:\n    branches-ignore: bar\n    branches: foo\njobs: {}\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-ignore-first-position.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("both \"branches\" and \"branches-ignore\"", StringComparison.Ordinal));
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
     public async Task Parse_OnMergeGroupValidTypes_NoError()
     {
         var yaml = """

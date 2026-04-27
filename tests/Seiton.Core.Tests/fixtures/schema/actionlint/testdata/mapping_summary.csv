@@ -179,15 +179,15 @@ exclusive_webhook_filters,6,"test.yaml:16:5: both ""branches"" and ""branches-ig
 exclusive_webhook_filters,7,"test.yaml:19:5: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""pull_request_target"". note: u...",-,,MISS
 exclusive_webhook_filters,8,"test.yaml:21:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""pull_request_target"". n...",-,,MISS
 exclusive_webhook_filters,9,"test.yaml:25:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""workflow_run"". note: us...",-,,MISS
-exclusive_webhook_filters,-,,1,"test.yaml:2:3: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""merge_group"". note: use ...",EXTRA
-exclusive_webhook_filters,-,,2,"test.yaml:5:3: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""push"". note: use '!' to ...",EXTRA
-exclusive_webhook_filters,-,,3,"test.yaml:5:3: both ""tags"" and ""tags-ignore"" filters cannot be used for the same event ""push"". note: use '!' to negate p...",EXTRA
-exclusive_webhook_filters,-,,4,"test.yaml:5:3: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""push"". note: use '!' to negate...",EXTRA
-exclusive_webhook_filters,-,,5,"test.yaml:12:3: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""pull_request"". note: us...",EXTRA
-exclusive_webhook_filters,-,,6,"test.yaml:12:3: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""pull_request"". note: use '!' ...",EXTRA
-exclusive_webhook_filters,-,,7,"test.yaml:17:3: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""pull_request_target"". n...",EXTRA
-exclusive_webhook_filters,-,,8,"test.yaml:17:3: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""pull_request_target"". note: u...",EXTRA
-exclusive_webhook_filters,-,,9,"test.yaml:22:3: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""workflow_run"". note: us...",EXTRA
+exclusive_webhook_filters,-,,1,"test.yaml:4:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""merge_group"". note: use ...",EXTRA
+exclusive_webhook_filters,-,,2,"test.yaml:9:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""push"". note: use '!' to ...",EXTRA
+exclusive_webhook_filters,-,,3,"test.yaml:11:5: both ""tags"" and ""tags-ignore"" filters cannot be used for the same event ""push"". note: use '!' to negate ...",EXTRA
+exclusive_webhook_filters,-,,4,"test.yaml:7:5: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""push"". note: use '!' to negate...",EXTRA
+exclusive_webhook_filters,-,,5,"test.yaml:16:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""pull_request"". note: us...",EXTRA
+exclusive_webhook_filters,-,,6,"test.yaml:14:5: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""pull_request"". note: use '!' ...",EXTRA
+exclusive_webhook_filters,-,,7,"test.yaml:21:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""pull_request_target"". n...",EXTRA
+exclusive_webhook_filters,-,,8,"test.yaml:19:5: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""pull_request_target"". note: u...",EXTRA
+exclusive_webhook_filters,-,,9,"test.yaml:25:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""workflow_run"". note: us...",EXTRA
 expr_check_in_credentials,1,"test.yaml:15:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",1,"test.yaml:15:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",MATCH
 expr_check_in_credentials,2,"test.yaml:15:20: ""credentials"" section is scalar node but mapping node is expected [syntax-check]",2,"test.yaml:15:20: ""credentials"" section is scalar node but mapping node is expected [syntax-check]",MATCH
 expr_check_in_credentials,3,"test.yaml:22:20: type of expression at ""credentials"" must be object but found type string [expression]",5,"test.yaml:22:20: type of expression at ""credentials"" must be object but found type string [expression]",MATCH

@@ -636,15 +636,15 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 14 | `env_context_banned` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
 | 15 | `errors_in_anchor` | COL_DIFF | 5 | 5 | 3 | 2 | 0 | 0 | | B: 一致3, 列差異2 |
 | 16 | `evaluated_template` | MISSING | 4 | 3 | 2 | 1 | 1 | 0 | ✅ | B+C: 一致2, 列差異1, 未検出1 (steps.cache.outputs) |
-| 17 | `exclusive_webhook_filters` | MIXED | 9 | 9 | 0 | 0 | 9 | 9 | ✅ | A+B: メッセージ改善済みだが位置が異なる |
+| 17 | `exclusive_webhook_filters` | PERFECT | 9 | 9 | 9 | 0 | 0 | 0 | ✅ | ✅ 位置改善: イベント名→排他フィルターキー位置。全9行 PERFECT MATCH |
 | 18 | `expr_check_in_credentials` | PERFECT | 6 | 6 | 6 | 0 | 0 | 0 | | 完全一致 |
 | 19 | `expr_check_in_env_var_name` | MIXED | 4 | 3 | 0 | 2 | 2 | 1 | | B+C+D: 列差異2, 未検出2, 余剰1 |
 | 20 | `expr_check_in_matrix_row_assign` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | ✅ | B: 列差異1 (値位置ポリシー) |
 | 21 | `expr_check_in_services` | MISSING | 2 | 1 | 1 | 0 | 1 | 0 | | C: 未検出1 |
 | 22 | `expr_in_default_input` | MISSING | 4 | 2 | 0 | 2 | 2 | 0 | | B+C: 列差異2, 未検出2 |
 | 23 | `github_script_untrusted_input` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A+B: 行位置差異 |
-| 24 | `glob_more` | MIXED | 18 | 16 | 5 | 7 | 4 | 2 | ✅ | C: error recovery 実装済み (10→4 MISS) |
-| 25 | `if_cond_constants` | MIXED | 11 | 12 | 5 | 4 | 2 | 3 | ✅ | B+C+D: 一致5, 列差異4, 未検出2, 余剰3 (snapshot) |
+| 24 | `glob_more` | MIXED | 18 | 18 | 8 | 9 | 1 | 1 | ✅ | C: error recovery + snapshot/image_version glob 実装済み (10→1 MISS) |
+| 25 | `if_cond_constants` | MIXED | 11 | 10 | 5 | 4 | 2 | 1 | ✅ | B+C: 一致5, 列差異4, 未検出2, 余剰1 (snapshot 余剰解消) |
 | 26 | `if_cond_edge_cases_trailing_leading_chars` | MIXED | 6 | 6 | 2 | 3 | 1 | 1 | ✅ | B+C: 一致2, 列差異3, 未検出1, 余剰1 |
 | 27 | `inputs_without_workflow_call_event` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
 | 28 | `invalid_comparisons` | MIXED | 7 | 7 | 1 | 5 | 1 | 1 | ✅ | B+C: 一致1, 列差異5, 未検出1, 余剰1 |
@@ -657,7 +657,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 35 | `invalid_json_in_fromjson` | MIXED | 9 | 10 | 4 | 3 | 2 | 3 | ✅ | B+C+D: 一致4, 列差異3, 未検出2, 余剰3 |
 | 36 | `invalid_permissions` | PERFECT | 12 | 12 | 12 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 37 | `invalid_runner_labels` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 列差異1 |
-| 38 | `invalid_snapshot` | MIXED | 5 | 2 | 1 | 0 | 4 | 1 | ⬜ | E: snapshot 非サポート (4未検出) |
+| 38 | `invalid_snapshot` | MIXED | 5 | 4 | 1 | 1 | 3 | 2 | ✅ | C+D: snapshot パース実装済み。未検出3 (image-name 必須, expr context, 空文字列位置差異), 余剰2 |
 | 39 | `invalid_steps` | MIXED | 19 | 18 | 12 | 2 | 5 | 4 | | A+B+C: 一致12, 列差異2, 未検出5, 余剰4 |
 | 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 3 | 0 | 0 | 2 | 3 | | A: メッセージ差異 |
 | 41 | `issue102` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
@@ -740,8 +740,8 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 | Fixture | Miss | Extra | 主な原因 |
 |---------|------|-------|----------|
-| `glob_more` | ~~10~~→4 | ~~1~~→2 | ✅ error recovery 実装済み。残り: image_version (2), snapshot (1), block scalar (1) |
-| `exclusive_webhook_filters` | 9 | 9 | 報告位置がイベント開始行 vs フィルターキー行 |
+| `glob_more` | ~~10~~→~~4~~→1 | ~~1~~→~~2~~→1 | ✅ error recovery + snapshot/image_version glob 実装済み。残り: block scalar (1 MISS, 1 EXTRA) |
+| `exclusive_webhook_filters` | ~~9~~→0 | ~~9~~→0 | ✅ 排他フィルター位置改善済み。全9行 PERFECT MATCH |
 | `context_availability` | 7 | 3 | 一部 context 未検出 + snapshot 余剰 |
 | `issue280_runs_on` | 6 | 8 | 空ラベル・位置差異が大きい |
 | `invalid_steps` | 5 | 4 | 空ステップ/不正ステップの報告位置 |
@@ -788,66 +788,43 @@ paths:
 - `WorkflowParser.On.Webhook.cs` の filter パース処理で、null/不正エントリをスキップしつつ後続エントリのパースを継続する (error recovery)
 - `GlobPatternRule` 側の修正は不要 — パーサーが後続エントリを AST に含めれば自動的に lint される
 
-**原因 B: `image_version` は非標準 webhook イベント (2 行)**
+**原因 B: `image_version.versions` の glob 検証 (2 行)** — ✅ 実装済み
 
-`image_version.versions` は GitHub Container Registry のイメージバージョンイベント。`GlobPatternRule.VisitEvent()` は `WebhookEvent` の `Branches`/`Tags`/`Paths` フィルターのみ検証するため、`versions` フィルターは対象外。
+`image_version.versions` は GitHub Container Registry のイメージバージョンイベント。`GlobPatternRule.VisitEvent()` を拡張し `ImageVersionEvent.Versions` の glob 検証を追加。2行とも検出されるようになった (COL_DIFF)。
 
-**改善案:** `image_version.versions` の glob 検証を追加。ただし利用頻度が低いため低優先。
+**原因 C: `jobs.test.snapshot.version` (1 行)** — ✅ 実装済み
 
-**原因 C: `jobs.test.snapshot.version` (1 行)**
-
-`snapshot` は job レベルのキーだが、パーサーの `IsKnownJobKey()` に含まれていないため unknown key として `SkipCurrentNode()` される。内部フィールド (`version: 'v[0-'`) は一切パースされず、glob 検証も到達しない。`ExpectedKeys.JobKeys` には `"snapshot"` が含まれるが、これは expected 一覧表示用で、パース処理は未実装。snapshot 機能は GitHub の限定プレビューのためスコープ外として維持。
+`snapshot` job キーのパースを完全実装。`JobNodeMappingKey.Snapshot` を追加し、`ParseSnapshotNode` メソッドで `version`/`image-name`/`if` をパース。`GlobPatternRule.VisitJobPre` で `snapshot.version` の glob 検証を追加。1行が検出されるようになった (COL_DIFF)。
 
 ---
 
-#### 4.B `exclusive_webhook_filters` — 9 MISS, 9 EXTRA
+#### 4.B `exclusive_webhook_filters` — ~~9 MISS, 9 EXTRA~~ → ✅ 0 MISS, 0 EXTRA (PERFECT MATCH)
 
-**現象:** メッセージは完全一致。位置のみ異なる。
+**現象 (修正前):** メッセージは完全一致。位置のみ異なる。
 
 ```
-actionlint:  test.yaml:4:5:  both "branches" and "branches-ignore" ...  ← branches-ignore キー位置
+actionlint:  test.yaml:4:5:  both "branches" and "branches-ignore" ...  ← 後に出現するキー位置
 seiton:      test.yaml:2:3:  both "branches" and "branches-ignore" ...  ← イベント名 (merge_group) 位置
 ```
 
-| 期待行 | seiton行 | イベント | 位置差異 |
-|--------|---------|---------|---------|
-| 4:5 | 2:3 | merge_group | イベント名 vs branches-ignore キー |
-| 7:5 | 5:3 | push | 同上 (paths-ignore) |
-| 9:5 | 5:3 | push | 同上 (branches-ignore) |
-| 11:5 | 5:3 | push | 同上 (tags-ignore) |
-| 14:5 | 12:3 | pull_request | 同上 (paths-ignore) |
-| 16:5 | 12:3 | pull_request | 同上 (branches-ignore) |
-| 19:5 | 17:3 | pull_request_target | 同上 (paths-ignore) |
-| 21:5 | 17:3 | pull_request_target | 同上 (branches-ignore) |
-| 25:5 | 22:3 | workflow_run | 同上 (branches-ignore) |
+**修正:** `WorkflowParser.On.Webhook.cs` の `ParseWebhookEventWithOptions()` と `ParseOnEventOptions()` の両メソッドで、排他フィルターエラーの報告位置を **後に出現したキー** の位置に変更。
 
-**根本原因:** `WorkflowParser.On.Webhook.cs` の `ParseWebhookEventWithOptions()` で排他フィルターエラーを `eventMark` (イベント名の位置) で報告している。actionlint は後に出現する *-ignore キーの位置で報告。
+- 各フィルターキー (`branches`/`branches-ignore`, `tags`/`tags-ignore`, `paths`/`paths-ignore`) の `keyMark` をパースループ内で記録
+- 排他チェック時に `Offset` 比較で後に出現したキーの mark を使用
 
 ```csharp
-// 現在の実装 (WorkflowParser.On.Webhook.cs:166-180)
+// 修正後 (WorkflowParser.On.Webhook.cs)
+TextPosition branchesMark = default;
+TextPosition branchesIgnoreMark = default;
+// ... パースループ内で keyMark を記録 ...
 if (hasBranches && hasBranchesIgnore)
 {
-    AddError(diagnostics, "...", eventMark);  // ← eventMark = イベント名位置
+    var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
+    AddError(diagnostics, "...", mark);  // ← 後に出現したキー位置
 }
 ```
 
-**改善案:**
-- 排他フィルター検出時に、`*-ignore` キーの位置 (パース中に `branchesIgnoreMark` 等として保存) を使って報告する
-- パースループ内で各フィルターキーの `Mark` を記録し、排他チェック時にそのマークを使用
-
-```csharp
-// 改善案
-TextRange branchesIgnoreMark = default;
-// ... パースループ内 ...
-case "branches-ignore":
-    branchesIgnoreMark = keyMark;
-    // ...
-// ... 排他チェック ...
-if (hasBranches && hasBranchesIgnore)
-{
-    AddError(diagnostics, "...", branchesIgnoreMark);  // ← *-ignore キー位置
-}
-```
+**結果:** 全9行が actionlint と完全一致 (PERFECT MATCH)。
 
 ---
 
@@ -865,8 +842,8 @@ if (hasBranches && hasBranchesIgnore)
 | 250:25 | `env` | `services.nginx.entrypoint` | C: service entrypoint 未検証 |
 | 252:22 | `env` | `services.nginx.command` | C: service command 未検証 |
 
-**EXTRA 行 (3 行):**
-- `225:5`, `240:5`: snapshot キー警告 (非標準キーとして検出 — 正常動作)
+**EXTRA 行 (3→1 行):**
+- ~~`225:5`, `240:5`: snapshot キー警告 (非標準キーとして検出 — 正常動作)~~ → snapshot パース実装により解消
 - `106:31`: runs-on 行に2つの式 `${{ runner.OS }} ${{ env.FOO }}` があり、seiton は2つとも検出。actionlint は `runner` のみ期待 → seiton がより正確
 
 **原因 A: `workflow_dispatch.inputs.*.value` の式検証 (1 行)**
@@ -1144,3 +1121,29 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 - **Unit**: `ScalarHelpersTests.ParseStringOrStringSequence_MultipleEmptyEntriesReportFirstError` — 複数空エントリで最初のエラーのみ報告を検証
 - **Integration**: `RuleRegression_GlobPatternRule_Syntax_TableDriven` に `ng-glob-errors-detected-after-null-entry-in-paths` ケース追加 — null エントリ後の `!`, `  foo`, `.` が全て検出されることを検証
 - **Red/Green 確認済み**: 修正 revert 時に 3 テスト失敗、修正適用で全 1017 テスト通過
+
+### snapshot パース + glob 検証実装記録
+
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 4.A+ | snapshot パース + glob 検証 | ✅ `Snapshot` AST モデル追加 (`Version`, `ImageName`, `If`)。`JobNodeMappingKey.Snapshot` 追加、`ParseSnapshotNode` メソッド実装。`GlobPatternRule` に `VisitJobPre` 追加で `snapshot.version` の glob 検証。`GlobPatternRule.VisitEvent` に `ImageVersionEvent.Versions` の glob 検証追加。`ValidatePattern` を `Action<string, TextRange>` ベースにリファクタリングし Event/Job 共用化。glob_more MISS 4→1, EXTRA 2→1 | `Job.cs`, `WorkflowParser.Jobs.cs`, `GlobPatternRule.cs` |
+
+#### テスト
+
+- **Unit**: `RuleRegression_GlobPatternRule_SnapshotVersion_TableDriven` — unclosed bracket + valid version
+- **Unit**: `RuleRegression_GlobPatternRule_ImageVersionVersions_TableDriven` — unclosed bracket + lone bang
+- **Red/Green 確認済み**: 実装前に2テスト失敗 (no diagnostics)、実装後に全 1019 テスト通過
+
+### フェーズ 4.B 実装記録
+
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 4.B | exclusive_webhook_filters 位置改善 | ✅ `ParseWebhookEventWithOptions` と `ParseOnEventOptions` の両メソッドで、排他フィルターエラーの報告位置を `eventMark` (イベント名位置) から **後に出現したフィルターキーの `keyMark`** に変更。`TextPosition.Offset` 比較で後方キーを選択。全9行が actionlint と PERFECT MATCH | `WorkflowParser.On.Webhook.cs` |
+
+#### テスト
+
+- **Unit**: `Parse_ExclusiveFilterError_ReportsAtIgnoreKeyPosition` — branches/branches-ignore で後方キー位置を検証
+- **Unit**: `Parse_ExclusiveFilterError_TagsIgnore_ReportsAtIgnoreKeyPosition` — tags/tags-ignore
+- **Unit**: `Parse_ExclusiveFilterError_PathsIgnore_ReportsAtIgnoreKeyPosition` — paths/paths-ignore
+- **Unit**: `Parse_ExclusiveFilterError_IgnoreFirst_ReportsAtLaterKey` — ignore が先に出現する逆順ケース (branches キー位置を検証)
+- **Red/Green 確認済み**: 実装前に3テスト失敗 (line 2 = event name)、実装後に全 1023 テスト通過
