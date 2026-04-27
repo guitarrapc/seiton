@@ -140,8 +140,6 @@ public static partial class WorkflowParser
             return new Job { Id = jobIdNode, Range = arena.GetStringRange(jobIdNode) };
         }
 
-        string? stepsOnlyKeyInReusable = null;
-        TextPosition stepsOnlyKeyInReusableMark = default;
         ulong seen = 0;
         Span<long> jobKeyFirstMark = stackalloc long[20];
 
@@ -195,12 +193,6 @@ public static partial class WorkflowParser
                 switch (jobKey)
                 {
                     case JobNodeMappingKey.RunsOn:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "runs-on";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             runsOnNode = ParseRunsOnNode(ref reader, arena, diagnostics, source, jobId);
@@ -229,12 +221,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Env:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "env";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             envNode = ParseEnvNode(ref reader, arena, diagnostics, source, $"job '{DecodeUtf8(source, jobId)}' env must be object", ExpressionValidationContext.JobEnv, $"job '{DecodeUtf8(source, jobId)}' env");
@@ -243,12 +229,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Steps:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "steps";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -317,12 +297,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Environment:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "environment";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             environmentNode = ParseEnvironmentNode(ref reader, arena, diagnostics, source, jobId);
@@ -339,12 +313,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Outputs:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "outputs";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             outputsNode = ParseOutputsNode(ref reader, arena, diagnostics, source, jobId);
@@ -353,12 +321,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Defaults:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "defaults";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"job '{DecodeUtf8(source, jobId)}' defaults must be object", ExpressionValidationContext.JobDefaultsRun);
@@ -367,12 +329,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.TimeoutMinutes:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "timeout-minutes";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobTimeoutMinutes, out var tmErr, out var tmMark);
@@ -386,12 +342,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.ContinueOnError:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "continue-on-error";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobContinueOnError, out var coeErr, out var coeMark);
@@ -417,12 +367,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Container:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "container";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             containerNode = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, default, isService: false, requireImage: true, keyMark);
@@ -431,12 +375,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Services:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "services";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             servicesNode = ParseServices(ref reader, arena, diagnostics, source, jobId);
@@ -505,12 +443,6 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Snapshot:
-                        if (stepsOnlyKeyInReusable is null)
-                        {
-                            stepsOnlyKeyInReusable = "snapshot";
-                            stepsOnlyKeyInReusableMark = keyMark;
-                        }
-
                         if (!reader.End)
                         {
                             snapshotNode = ParseSnapshotNode(ref reader, arena, diagnostics, source, jobId);
@@ -523,16 +455,9 @@ public static partial class WorkflowParser
             }
 
             var isKnownKey = IsKnownJobKey(keyUtf8);
-            var hasStepsOnlyName = TryGetStepsOnlyReusableJobKeyName(keyUtf8, out var stepsOnlyKeyName);
             var unknownJobKey = !isKnownKey ? Encoding.UTF8.GetString(keyUtf8) : null;
 
             reader.Read();
-
-            if (stepsOnlyKeyInReusable is null && hasStepsOnlyName)
-            {
-                stepsOnlyKeyInReusable = stepsOnlyKeyName;
-                stepsOnlyKeyInReusableMark = keyMark;
-            }
 
             if (isKnownKey)
             {
@@ -600,15 +525,6 @@ public static partial class WorkflowParser
             }
         }
 
-        // spec §3.10.1: steps-only keys are invalid when the job calls a reusable workflow via `uses`
-        if (hasUsesValue && stepsOnlyKeyInReusable is not null)
-        {
-            AddError(
-                diagnostics,
-                $"when job '{decodedJobId}' calls reusable workflow with uses, key '{stepsOnlyKeyInReusable}' is not allowed",
-                stepsOnlyKeyInReusableMark);
-        }
-
         return new Job
         {
             Id = jobIdNode,
@@ -651,22 +567,6 @@ public static partial class WorkflowParser
             || keyUtf8.SequenceEqual("outputs"u8)
             || keyUtf8.SequenceEqual("secrets"u8)
             || keyUtf8.SequenceEqual("with"u8);
-    }
-
-    private static bool TryGetStepsOnlyReusableJobKeyName(ReadOnlySpan<byte> keyUtf8, out string keyName)
-    {
-        if (keyUtf8.SequenceEqual("runs-on"u8)) { keyName = "runs-on"; return true; }
-        if (keyUtf8.SequenceEqual("environment"u8)) { keyName = "environment"; return true; }
-        if (keyUtf8.SequenceEqual("outputs"u8)) { keyName = "outputs"; return true; }
-        if (keyUtf8.SequenceEqual("env"u8)) { keyName = "env"; return true; }
-        if (keyUtf8.SequenceEqual("defaults"u8)) { keyName = "defaults"; return true; }
-        if (keyUtf8.SequenceEqual("steps"u8)) { keyName = "steps"; return true; }
-        if (keyUtf8.SequenceEqual("timeout-minutes"u8)) { keyName = "timeout-minutes"; return true; }
-        if (keyUtf8.SequenceEqual("continue-on-error"u8)) { keyName = "continue-on-error"; return true; }
-        if (keyUtf8.SequenceEqual("container"u8)) { keyName = "container"; return true; }
-
-        keyName = string.Empty;
-        return false;
     }
 
     private static bool IsKnownStepKey(ReadOnlySpan<byte> keyUtf8)

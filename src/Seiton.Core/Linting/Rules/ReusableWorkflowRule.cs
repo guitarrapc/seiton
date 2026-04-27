@@ -71,7 +71,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
                 var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
                 AddJobError(
                     job,
-                    $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\"",
+                    $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
                     BuildUsesLocation(workflowCall));
                 return;
             }
@@ -93,7 +93,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobError(
                 job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\"",
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
                 BuildUsesLocation(workflowCall));
             return;
         }
@@ -107,7 +107,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobError(
                 job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\"",
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
                 BuildUsesLocation(workflowCall));
             return;
         }
@@ -127,7 +127,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobError(
                 job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\"",
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
                 BuildUsesLocation(workflowCall));
         }
     }

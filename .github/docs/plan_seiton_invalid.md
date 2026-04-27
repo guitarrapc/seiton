@@ -1075,7 +1075,7 @@ on.push.paths must be string or array of strings      ← 修正後
 
 ---
 
-##### 4.J `workflow_call_job` — 3 MISS, 7 EXTRA → ✅ 実装済み (1 MISS → 0 改善, EXTRA 減)
+##### 4.J `workflow_call_job` — 3 MISS, 7 EXTRA → ✅ 実装済み (MISS → 0, EXTRA 重複解消, URL サフィックス追加)
 
 **具体例:**
 

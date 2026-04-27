@@ -3243,12 +3243,7 @@ public sealed class ParserTests
             var yaml = BuildYaml(c.Body);
             var fileName = $"job-reuse-forbidden-{c.Name}.yml";
 
-            var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), fileName);
-            if (!result.Diagnostics.Any(x => x.Message.Contains($"key '{c.Key}' is not allowed", StringComparison.Ordinal)))
-            {
-                throw new InvalidOperationException($"parser case '{c.Name}' diagnostics: {string.Join(" | ", result.Diagnostics.Select(x => x.Message))}");
-            }
-
+            // Forbidden-key check is now handled by linter (ReusableWorkflowRule), not parser
             var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), fileName);
             if (!lintResult.Diagnostics.Any(x => x.Message.Contains($"key '{c.Key}' is not allowed", StringComparison.Ordinal)))
             {

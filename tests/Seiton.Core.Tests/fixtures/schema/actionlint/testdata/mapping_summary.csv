@@ -718,17 +718,16 @@ workflow_call_job,6,"test.yaml:30:11: reusable workflow call ""/foo/bar/workflow
 workflow_call_job,7,"test.yaml:33:11: reusable workflow call ""foo/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/path/t...",-,,MISS
 workflow_call_job,8,"test.yaml:36:11: reusable workflow call ""foo/bar/workflow.yml"" at ""uses"" is not following the format ""owner/repo/path/to...",-,,MISS
 workflow_call_job,-,,1,"test.yaml:4:3: job 'call1' cannot have both uses and steps [syntax-check]",EXTRA
-workflow_call_job,-,,2,"test.yaml:6:5: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [syntax-check]",EXTRA
-workflow_call_job,-,,3,"test.yaml:9:3: job 'call2' key 'with' requires uses [workflow-call]",EXTRA
-workflow_call_job,-,,4,"test.yaml:16:3: job 'call3' key 'secrets' requires uses [workflow-call]",EXTRA
-workflow_call_job,-,,5,"test.yaml:25:18: job 'call4' uses must be string and should not be empty [syntax-check]",EXTRA
-workflow_call_job,-,,6,"test.yaml:23:3: ""runs-on"" section is missing in job ""call4"" [syntax-check]",EXTRA
-workflow_call_job,-,,7,"test.yaml:23:3: ""steps"" section is missing in job ""call4"" [syntax-check]",EXTRA
-workflow_call_job,-,,8,"test.yaml:4:3: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [workflow-call]",EXTRA
-workflow_call_job,-,,9,"test.yaml:27:5: reusable workflow call ""./foo/bar/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/p...",EXTRA
-workflow_call_job,-,,10,"test.yaml:30:5: reusable workflow call ""/foo/bar/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/pa...",EXTRA
-workflow_call_job,-,,11,"test.yaml:33:5: reusable workflow call ""foo/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/path/to...",EXTRA
-workflow_call_job,-,,12,"test.yaml:36:5: reusable workflow call ""foo/bar/workflow.yml"" at ""uses"" is not following the format ""owner/repo/path/to/...",EXTRA
+workflow_call_job,-,,2,"test.yaml:9:3: job 'call2' key 'with' requires uses [workflow-call]",EXTRA
+workflow_call_job,-,,3,"test.yaml:16:3: job 'call3' key 'secrets' requires uses [workflow-call]",EXTRA
+workflow_call_job,-,,4,"test.yaml:25:18: job 'call4' uses must be string and should not be empty [syntax-check]",EXTRA
+workflow_call_job,-,,5,"test.yaml:23:3: ""runs-on"" section is missing in job ""call4"" [syntax-check]",EXTRA
+workflow_call_job,-,,6,"test.yaml:23:3: ""steps"" section is missing in job ""call4"" [syntax-check]",EXTRA
+workflow_call_job,-,,7,"test.yaml:4:3: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [workflow-call]",EXTRA
+workflow_call_job,-,,8,"test.yaml:27:5: reusable workflow call ""./foo/bar/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/p...",EXTRA
+workflow_call_job,-,,9,"test.yaml:30:5: reusable workflow call ""/foo/bar/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/pa...",EXTRA
+workflow_call_job,-,,10,"test.yaml:33:5: reusable workflow call ""foo/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/path/to...",EXTRA
+workflow_call_job,-,,11,"test.yaml:36:5: reusable workflow call ""foo/bar/workflow.yml"" at ""uses"" is not following the format ""owner/repo/path/to/...",EXTRA
 workflow_call_outputs_sema,1,"test.yaml:6:20: property ""some_output"" is not defined in object type {} [expression]",-,,MISS
 workflow_call_outputs_sema,2,"test.yaml:9:20: property ""unknown_output"" is not defined in object type {foo: string} [expression]",-,,MISS
 workflow_call_outputs_sema,-,,1,"test.yaml:6:16: property ""some_output"" is not defined in object type {} [expression]",EXTRA

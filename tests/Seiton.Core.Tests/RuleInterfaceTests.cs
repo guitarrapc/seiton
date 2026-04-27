@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.Rules;
@@ -286,7 +286,8 @@ public sealed class RuleInterfaceTests
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
 
-        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+        // Parser no longer emits forbidden-key diagnostics (linter handles them)
+        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -11586,5 +11587,41 @@ public sealed class RuleInterfaceTests
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_InvalidFormat_IncludesDocUrl()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            reuse:
+                uses: "foo/bar/workflow.yml"
+        """u8;
+
+        var result = new LintEngine([new ReusableWorkflowRule()]).Check(yaml.ToArray(), "test.yaml");
+        var msgs = result.Diagnostics.Where(d => d.Message.Contains("is not following the format", StringComparison.Ordinal)).ToArray();
+        await Assert.That(msgs.Length).IsGreaterThan(0);
+        await Assert.That(msgs[0].Message.Contains("see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_ReusableWorkflowSteps_NoDuplicateForbiddenKeyDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            call1:
+                uses: owner/repo/.github/workflows/reuse.yml@main
+                steps:
+                    - run: echo hello
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        // Count messages about "steps" being not allowed — should be exactly 1, not 2 (parser + linter)
+        var stepsNotAllowed = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(stepsNotAllowed).HasCount().EqualTo(1);
     }
 }
