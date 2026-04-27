@@ -120,9 +120,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                     // Report at the needs value position (actionable: user sees which `needs` entry creates the cycle)
                     // Build cycle path from DFS stack for informative message
                     var cyclePath = BuildCyclePath(source, stack, needKey);
-                    var currentId = Decode(Arena.GetStringSlice(currentJob.Id));
-                    var needText = Decode(Arena.GetStringSlice(need));
-                    AddJobError(currentJob, $"job '{currentId}' has a circular 'needs' dependency: {cyclePath}", Arena.GetStringRange(need));
+                    AddJobError(currentJob, $"cyclic dependencies in \"needs\" job configurations are detected. detected cycle is {cyclePath}", Arena.GetStringRange(need));
                 }
                 else if (neighborColor == 0)
                 {
@@ -162,7 +160,9 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 if (_knownJobs.TryGetValue(source, key.Span, out var job))
                 {
+                    sb.Append('"');
                     sb.Append(Decode(Arena.GetStringSlice(job.Id)));
+                    sb.Append('"');
                 }
             }
         }
@@ -173,7 +173,9 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
             sb.Append(" -> ");
             if (_knownJobs.TryGetValue(source, cycleTarget.Span, out var targetJob))
             {
+                sb.Append('"');
                 sb.Append(Decode(Arena.GetStringSlice(targetJob.Id)));
+                sb.Append('"');
             }
         }
 

@@ -261,7 +261,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "merge-key.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("workflow does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("GitHub Actions does not support YAML merge key \"<<\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -319,7 +319,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-dispatch-inputs-merge.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch.inputs does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("GitHub Actions does not support YAML merge key \"<<\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -405,7 +405,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-exclusive.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both branches and branches-ignore", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"branches\" and \"branches-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -420,7 +420,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-push-tags-exclusive.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both tags and tags-ignore", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"tags\" and \"tags-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -435,7 +435,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-pr-paths-exclusive.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both paths and paths-ignore", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"paths\" and \"paths-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -450,7 +450,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-merge-group-branches-exclusive.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot use both branches and branches-ignore", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"branches\" and \"branches-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1602,7 +1602,7 @@ public sealed class ParserTests
             new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "step must run script"]),
             new ErrFixtureExpectation("missing_on.yaml", ["\"on\" section is missing in workflow"]),
             new ErrFixtureExpectation("missing_jobs.yaml", ["\"jobs\" section is missing in workflow"]),
-            new ErrFixtureExpectation("merge_key_unsupported.yaml", ["does not support merge key '<<'"]),
+            new ErrFixtureExpectation("merge_key_unsupported.yaml", ["GitHub Actions does not support YAML merge key \"<<\""]),
             new ErrFixtureExpectation("undefined_anchor.yaml", ["yaml parse failure"]),
             new ErrFixtureExpectation("recursive_anchors.yaml", ["recursive alias"]),
         };
@@ -1689,7 +1689,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
 
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("does not support merge key '<<'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("GitHub Actions does not support YAML merge key \"<<\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1724,7 +1724,7 @@ public sealed class ParserTests
 
         await Assert.That(mergeKeyDiags.Length).IsGreaterThanOrEqualTo(1);
         var stepMerge = mergeKeyDiags[0];
-        await Assert.That(stepMerge.Message).Contains("does not support merge key '<<'");
+        await Assert.That(stepMerge.Message).Contains("GitHub Actions does not support YAML merge key \"<<\"");
         // step merge key at line 8, col 9 (8 spaces + <<)
         await Assert.That(stepMerge.Location.StartLine).IsEqualTo(8);
         await Assert.That(stepMerge.Location.StartColumn).IsEqualTo(9);
@@ -1745,7 +1745,7 @@ public sealed class ParserTests
         await Assert.That(envMerge.Message).DoesNotContain("must be mapping");
         // Should contain "env" section reference
         await Assert.That(envMerge.Message).Contains("env");
-        await Assert.That(envMerge.Message).Contains("does not support merge key '<<'");
+        await Assert.That(envMerge.Message).Contains("GitHub Actions does not support YAML merge key \"<<\"");
     }
 
     // YAML anchor / alias tests

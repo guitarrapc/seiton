@@ -9,6 +9,8 @@ public sealed class DeprecatedCommandsRule() : RuleBase(RuleId.DeprecatedCommand
 {
     public override string Name => "Deprecated Commands Rule";
 
+    private const string DocsUrl = "https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions";
+
     public override void VisitStep(Step step)
     {
         if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
@@ -20,22 +22,22 @@ public sealed class DeprecatedCommandsRule() : RuleBase(RuleId.DeprecatedCommand
 
         if (ContainsAsciiIgnoreCase(script, "::set-output"u8))
         {
-            AddStepWarning(step, "run script uses deprecated command '::set-output'; use $GITHUB_OUTPUT instead", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"set-output\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_OUTPUT` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
         }
 
         if (ContainsAsciiIgnoreCase(script, "::save-state"u8))
         {
-            AddStepWarning(step, "run script uses deprecated command '::save-state'; use $GITHUB_STATE instead", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"save-state\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_STATE` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
         }
 
         if (ContainsAsciiIgnoreCase(script, "::add-path"u8))
         {
-            AddStepWarning(step, "run script uses deprecated command '::add-path'; use $GITHUB_PATH instead", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"add-path\" was deprecated. use `echo \"{{path}}\" >> $GITHUB_PATH` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
         }
 
         if (ContainsAsciiIgnoreCase(script, "::set-env"u8))
         {
-            AddStepWarning(step, "run script uses deprecated command '::set-env'; use $GITHUB_ENV instead", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"set-env\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_ENV` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
         }
     }
 }

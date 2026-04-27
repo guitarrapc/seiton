@@ -163,17 +163,17 @@ public static partial class WorkflowParser
 
         if (hasBranches && hasBranchesIgnore)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both branches and branches-ignore", eventMark);
+            AddError(diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", eventMark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both tags and tags-ignore", eventMark);
+            AddError(diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", eventMark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both paths and paths-ignore", eventMark);
+            AddError(diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", eventMark);
         }
 
         return new WebhookEvent
@@ -450,17 +450,17 @@ public static partial class WorkflowParser
 
         if (hasBranches && hasBranchesIgnore)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both branches and branches-ignore", eventMark);
+            AddError(diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", eventMark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both tags and tags-ignore", eventMark);
+            AddError(diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", eventMark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name} cannot use both paths and paths-ignore", eventMark);
+            AddError(diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", eventMark);
         }
     }
 

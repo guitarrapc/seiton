@@ -402,7 +402,7 @@ public static partial class WorkflowParser
     private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, string mappingName)
     {
         if (!keyUtf8.SequenceEqual("<<"u8)) return false;
-        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+        AddError(diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
         return true;
     }
 
@@ -425,7 +425,7 @@ public static partial class WorkflowParser
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
-            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+            AddError(diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
             return false;
         }
 

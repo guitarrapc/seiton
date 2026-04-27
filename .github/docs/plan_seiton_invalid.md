@@ -19,6 +19,28 @@
 1. **1.1 context availability 重複報告の修正**: Parser 側の context/function/hashFiles availability チェックを削除し、Linter の `expr-undefined-var` ルールに一本化。33 テストを更新。
 2. **1.2〜1.20 .out 期待値の統一**: 全 78 の `.seiton.out` ファイルを seiton の実出力に合わせて更新。seiton のメッセージはユーザーにとって分かりやすいため、actionlint のメッセージ形式に寄せるのではなく、`.out`と`.seiton.out`の意味がズレていないならば seiton のメッセージを維持する方針で調整。
 
+### フェーズ 1 追加実施 (1.1〜1.9 メッセージ改善)
+
+actionlint の `.out` ファイルは変更せず、seiton 側のメッセージ形式を改善した。テスト比較は以下の方針:
+
+- **`.out` ファイル**: actionlint のオリジナル期待値。変更しない。
+- **`.seiton.out` ファイル**: seiton の実出力に基づく期待値。seiton のメッセージ形式に合わせて管理。
+- **メッセージ比較**: `.out` と `.seiton.out` の対応は「対応表 (マッピング)」で管理する。リテラル一致や正規表現ではなく、意味的に同じ検出であることをマッピングテーブルで表現する。
+
+#### 実施済み項目
+
+| # | 項目 | 変更内容 | 変更ファイル |
+|---|------|----------|-------------|
+| 1.1 | context availability スコープ情報 | `ExprUndefinedVarRule` に `FormatScopeName()` 追加。メッセージ末尾に `. called in {scope}` を付与 | `ExprUndefinedVarRule.cs` |
+| 1.2 | template injection URL | メッセージ末尾に GitHub セキュリティハードニング URL を追加 | `TemplateInjectionRule.cs` |
+| 1.3 | duplicate key メッセージ | `key "{key}" is duplicated in "{section}" section. previously defined at line:X,col:Y` + case-insensitive note | `WorkflowParser.ScalarParsing.cs`, `WorkflowParser.Jobs.cs` |
+| 1.4 | unexpected key 期待キー一覧 | `unexpected key "{key}" for "{section}" section. expected one of ...` 形式に統一。`ExpectedKeys.g.cs` に 9 セクション追加 | 12+ パーサーファイル, `ExpectedKeys.g.cs` |
+| 1.5 | if-cond 式内容表示 | 定数式: `constant expression "{expr}" in condition`、always-true: `if: condition "{text}" is always evaluated to true` | `IfCondRule.cs` |
+| 1.6 | merge key メッセージ | `GitHub Actions does not support YAML merge key "<<". occurred in {mappingName}` | `WorkflowParser.ScalarParsing.cs` |
+| 1.7 | needs-graph cycle メッセージ | `cyclic dependencies in "needs" job configurations are detected. detected cycle is {cyclePath}` (ジョブ名を `"` で括る) | `NeedsGraphRule.cs` |
+| 1.8 | deprecated commands メッセージ | `workflow command "{cmd}" was deprecated. use \`echo ...\` instead: {DocsUrl}` | `DeprecatedCommandsRule.cs` |
+| 1.9 | exclusive webhook filters | `both "{X}" and "{X}-ignore" filters cannot be used for the same event "{event}". note: use '!' to negate patterns` | `WorkflowParser.On.Webhook.cs` |
+
 ### 未マッチ 9 fixtures (検出ギャップ — フェーズ 2 以降)
 
 | Fixture | 理由 | フェーズ |
@@ -80,7 +102,7 @@ actionlint 固有の機能 (shellcheck/pyflakes 連携、snapshot キー) など
 
 多数の fixture で「検出しているがメッセージが違う」だけで MISS になっている。`.out` の regex にマッチするようメッセージを調整する。
 
-#### 1.1 context availability メッセージ統一
+#### 1.1 context availability メッセージ統一 ✅ 実施済み
 
 **対象 fixtures**: `context_availability`, `env_context_banned`, `issue155_env_in_job_level_if`, `shell_key_context_availability`, `strategy_matrix_runner_context`, `special_function_availability`
 
@@ -99,7 +121,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: ~6 fixtures, ~80+ expected lines
 
-#### 1.2 template-injection メッセージ統一
+#### 1.2 template-injection メッセージ統一 ✅ 実施済み
 
 **対象 fixtures**: `one_error`, `nested_untrusted_input`, `github_script_untrusted_input`
 
@@ -112,7 +134,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 3 fixtures, ~5 expected lines
 
-#### 1.3 duplicate key メッセージ統一
+#### 1.3 duplicate key メッセージ統一 ✅ 実施済み
 
 **対象 fixtures**: `duplicate_keys`, `upper_case_duplicate_keys`
 
@@ -125,7 +147,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 2 fixtures, ~13 expected lines
 
-#### 1.4 unexpected key メッセージ統一
+#### 1.4 unexpected key メッセージ統一 ✅ 実施済み
 
 **対象 fixtures**: `unexpected_keys`, `case_sensitive_keys`
 
@@ -137,7 +159,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 2 fixtures, ~33 expected lines
 
-#### 1.5 if-cond メッセージ統一
+#### 1.5 if-cond メッセージ統一 ✅ 実施済み
 
 **対象 fixtures**: `if_cond_constants`, `if_cond_edge_cases_trailing_leading_chars`
 
@@ -152,7 +174,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 2 fixtures, ~17 expected lines
 
-#### 1.6 merge key メッセージ統一
+#### 1.6 merge key メッセージ統一 ✅ 実施済み
 
 **対象 fixture**: `merge_key_unsupported`
 
@@ -163,7 +185,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 1 fixture, 3 expected lines
 
-#### 1.7 needs-graph cycle メッセージ統一
+#### 1.7 needs-graph cycle メッセージ統一 ✅ 実施済み
 
 **対象 fixtures**: `minimal_cycle_in_needs`, `random_order_cycle_in_needs`
 
@@ -172,23 +194,22 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 **対処方針**:
 - 位置の差異は seiton のポリシーとして維持 (§4.5.1)
 - メッセージ形式を可能な範囲で actionlint に近づける
-- **注意**: これは意図的な設計差異のため `.out` 期待値の調整も検討
+- **注意**: これは意図的な設計差異
 
 **影響 fixture 数**: 2 fixtures, 2 expected lines
 
-#### 1.8 deprecated-commands メッセージ統一
+#### 1.8 deprecated-commands メッセージ統一 ✅ 実施済み
 
 **対象 fixture**: `deprecated_workflow_commands`
 
 **現状**: seiton は `run script uses deprecated command '::set-output'; use $GITHUB_OUTPUT instead` 形式。actionlint は `workflow command "set-output" was deprecated. use ... instead: https://...` 形式で URL 付き。
 
 **対処方針**:
-- メッセージ形式を actionlint に近づける (URL は省略)
-- `::` プレフィックスを除去して command 名だけにする
+- URLを追加
 
 **影響 fixture 数**: 1 fixture, 4 expected lines
 
-#### 1.9 exclusive webhook filters メッセージ統一
+#### 1.9 exclusive webhook filters メッセージ統一 ✅ 実施済み
 
 **対象 fixture**: `exclusive_webhook_filters`
 
@@ -196,7 +217,6 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **対処方針**:
 - メッセージ形式に `note: use '!' to negate patterns` を追加
-- 報告位置をフィルターキーの位置に変更 (後方のフィルターキー行)
 
 **影響 fixture 数**: 1 fixture, 9 expected lines
 
@@ -209,7 +229,6 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 **対処方針**:
 - activity type メッセージ形式を統一
 - filter availability メッセージのイベント一覧ソート順は seiton のまま維持
-- `.out` 期待値を seiton のソート順に合わせるか、regex 化する
 
 **影響 fixture 数**: 1 fixture, 13 expected lines
 

@@ -2299,7 +2299,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["circular 'needs' dependency"]),
+            ["cyclic dependencies in \"needs\" job configurations are detected"]),
             new RuleCase(
             "ng-two-job-cycle",
             """
@@ -2318,7 +2318,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo b
             """,
-            ["circular 'needs' dependency"]),
+            ["cyclic dependencies in \"needs\" job configurations are detected"]),
             new RuleCase(
             "ng-three-job-cycle",
             """
@@ -2343,7 +2343,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo c
             """,
-            ["circular 'needs' dependency"]),
+            ["cyclic dependencies in \"needs\" job configurations are detected"]),
         };
 
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
@@ -2433,7 +2433,7 @@ public sealed class RuleInterfaceTests
             """);
 
         var result = new LintEngine([new NeedsGraphRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        var diags = result.Diagnostics.Where(x => x.RuleId == "needs-graph" && x.Message.Contains("circular")).ToArray();
+        var diags = result.Diagnostics.Where(x => x.RuleId == "needs-graph" && x.Message.Contains("cyclic")).ToArray();
 
         await Assert.That(diags.Length).IsGreaterThanOrEqualTo(1);
 
@@ -2446,7 +2446,7 @@ public sealed class RuleInterfaceTests
         // Report is at "to"'s needs value position (line 9 for "from" inside "to"'s needs).
         await Assert.That(cycleD.Location.StartLine).IsEqualTo(9);
         // Message should include cycle path
-        await Assert.That(cycleD.Message).Contains("from -> to -> from");
+        await Assert.That(cycleD.Message).Contains("\"from\" -> \"to\" -> \"from\"");
     }
 
     [Test]
@@ -5216,7 +5216,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "::set-output name=result::ok"
             """,
-            ["deprecated command '::set-output'", "$GITHUB_OUTPUT"]),
+            ["workflow command \"set-output\" was deprecated", "$GITHUB_OUTPUT"]),
             new RuleCase(
             "ng-set-env-command",
             """
@@ -5227,7 +5227,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "::set-env name=TOKEN::x"
             """,
-            ["deprecated command '::set-env'", "$GITHUB_ENV"]),
+            ["workflow command \"set-env\" was deprecated", "$GITHUB_ENV"]),
             // regression: multi-line run script should report all deprecated commands
             new RuleCase(
             "ng-multiline-multiple-deprecated",
@@ -5241,7 +5241,7 @@ public sealed class RuleInterfaceTests
                             echo "::set-output name=foo::bar"
                             echo "::set-env name=TOKEN::x"
             """,
-            ["deprecated command '::set-output'", "deprecated command '::set-env'"]),
+            ["workflow command \"set-output\" was deprecated", "workflow command \"set-env\" was deprecated"]),
         };
 
         await AssertRuleCases(new DeprecatedCommandsRule(), "deprecated-commands", cases);
