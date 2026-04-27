@@ -214,6 +214,7 @@ expr_check_in_env_var_name,-,,1,"test.yaml:4:3: workflow.env key '${{ runner.nam
 expr_check_in_env_var_name,-,,2,"test.yaml:14:7: job.env key '${{ runner.fooooooo }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 expr_check_in_env_var_name,-,,3,"test.yaml:18:11: step.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 expr_check_in_matrix_row_assign,1,"test.yaml:12:23: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",-,,MISS
+expr_check_in_matrix_row_assign,-,,1,"test.yaml:12:14: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",EXTRA
 expr_check_in_services,1,"test.yaml:9:15: ""services"" section is scalar node but mapping node is expected [syntax-check]",-,,MISS
 expr_check_in_services,2,"test.yaml:14:15: type of expression at ""services"" must be object but found type string [expression]",1,"test.yaml:14:15: type of expression at ""services"" must be object but found type string [expression]",MATCH
 expr_in_default_input,1,"test.yaml:7:22: property ""input2"" is not defined in object type {} [expression]",-,,MISS
@@ -290,8 +291,10 @@ invalid_comparisons,7,"test.yaml:28:24: ""bool"" value cannot be compared to ""a
 invalid_comparisons,-,,1,"test.yaml:22:14: number value cannot be compared to null value with '>' operator [expression]",EXTRA
 invalid_comparisons,-,,2,"test.yaml:24:14: bool value cannot be compared to bool value with '<' operator [expression]",EXTRA
 invalid_comparisons,-,,3,"test.yaml:28:24: bool value cannot be compared to any value with '<=' operator [syntax-check]",EXTRA
-invalid_comparisons,-,,4,"test.yaml:18:14: number value cannot be compared to array<any> value with '!=' operator [expression]",EXTRA
-invalid_comparisons,-,,5,"test.yaml:28:14: bool value cannot be compared to array<any> value with '<=' operator [expression]",EXTRA
+invalid_comparisons,-,,4,"test.yaml:16:14: string value cannot be compared to object value with '==' operator [expression]",EXTRA
+invalid_comparisons,-,,5,"test.yaml:18:14: number value cannot be compared to array<any> value with '!=' operator [expression]",EXTRA
+invalid_comparisons,-,,6,"test.yaml:26:14: string value cannot be compared to object value with '>=' operator [expression]",EXTRA
+invalid_comparisons,-,,7,"test.yaml:28:14: bool value cannot be compared to array<any> value with '<=' operator [expression]",EXTRA
 invalid_container_syntax,1,"test.yaml:11:5: ""image"" is missing in ""container"" section [syntax-check]",2,"test.yaml:11:5: ""image"" is missing in ""container"" section [syntax-check]",MATCH
 invalid_container_syntax,2,"test.yaml:11:16: ""container"" section should not be empty. please remove this section if it's unnecessary [syntax-check]",1,"test.yaml:11:16: ""container"" section should not be empty. please remove this section if it's unnecessary [syntax-check]",MATCH
 invalid_container_syntax,3,"test.yaml:16:15: string should not be empty [syntax-check]",3,"test.yaml:16:15: string should not be empty [syntax-check]",MATCH
@@ -567,9 +570,9 @@ object_at_runner_label,1,"test.yaml:10:14: type of expression at ""runs-on"" mus
 object_at_runner_label,-,,1,"test.yaml:10:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
 one_error,1,"test.yaml:6:41: ""github.event.head_commit.message"" is potentially untrusted. avoid using it directly in inline scripts. ...",-,,MISS
 one_error,-,,1,"test.yaml:6:41: ""github.event.head_commit.message"" is potentially untrusted. avoid using it directly in inline scripts. ...",EXTRA
-outdated_actions,1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",-,,MISS
-outdated_actions,2,"test.yaml:10:15: the runner of ""actions/checkout@v3"" action is too old to run on GitHub Actions. update the action's ver...",-,,MISS
-outdated_popular_action,1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",-,,MISS
+outdated_actions,1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",MATCH
+outdated_actions,2,"test.yaml:10:15: the runner of ""actions/checkout@v3"" action is too old to run on GitHub Actions. update the action's ver...",2,"test.yaml:10:15: the runner of ""actions/checkout@v3"" action is too old to run on GitHub Actions. update the action's ver...",MATCH
+outdated_popular_action,1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",MATCH
 outdated_popular_action,2,"test.yaml:10:15: the runner of ""actions/stale@v4"" action is too old to run on GitHub Actions. update the action's versio...",-,,MISS
 outputs_map_object,1,"/{string => string}/",-,,MISS
 outputs_map_object,-,,1,"test.yaml:9:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
@@ -598,7 +601,7 @@ recursive_anchors,-,,7,"test.yaml:11:12: recursive alias ""recursive1"" is found
 recursive_anchors,-,,8,"test.yaml:13:7: recursive alias ""recursive2"" is found [syntax-check]",EXTRA
 recursive_anchors,-,,9,"test.yaml:15:7: recursive alias ""recursive1"" is found [syntax-check]",EXTRA
 reusable_workflow_empty_secrets,1,"/test\.yaml:12:23: property ""calling_workflow_secret"" is not defined in object type {.+} \[expression\]/",-,,MISS
-reusable_workflow_empty_secrets,-,,1,"test.yaml:6:5: on.workflow_call.secrets must be mapping [syntax-check]",EXTRA
+reusable_workflow_empty_secrets,-,,1,"test.yaml:12:14: property 'CALLING_WORKFLOW_SECRET' is not defined in 'secrets' object [expression]",EXTRA
 run_name_check_expr,1,"test.yaml:2:25: undefined variable ""hoge"". available variables are ""env"", ""github"", ""inputs"", ""job"", ""matrix"", ""needs"", ...",-,,MISS
 run_name_check_expr,-,,1,"test.yaml:2:11: context ""hoge"" is not allowed here. undefined context ""hoge"". called in workflow run-name [expression]",EXTRA
 runner_labels_conflict_matrix,1,"test.yaml:6:14: label ""windows-latest"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your ...",1,"test.yaml:6:14: label ""windows-latest"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your ...",MATCH
@@ -693,10 +696,11 @@ upper_case_duplicate_keys,8,"test.yaml:42:11: key ""FOO"" is duplicated in ""wit
 upper_case_duplicate_keys,9,"test.yaml:44:11: reusable workflow call ""owner/repo@main"" at ""uses"" is not following the format ""owner/repo/path/to/work...",-,,MISS
 upper_case_duplicate_keys,10,"test.yaml:47:7: key ""FOO_input"" is duplicated in ""with"" section. previously defined at line:46,col:7. note that this key...",8,"test.yaml:47:7: key ""FOO_input"" is duplicated in ""with"" section. previously defined at line:46,col:7. note that this key...",MATCH
 upper_case_duplicate_keys,11,"test.yaml:50:7: key ""FOO_secret"" is duplicated in ""secrets"" section. previously defined at line:49,col:7. note that this...",9,"test.yaml:50:7: key ""FOO_secret"" is duplicated in ""secrets"" section. previously defined at line:49,col:7. note that this...",MATCH
-upper_case_duplicate_keys,-,,10,"test.yaml:18:3: workflow.env key 'foo' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
+upper_case_duplicate_keys,-,,10,"test.yaml:44:5: reusable workflow call ""owner/repo@main"" at ""uses"" is not following the format ""owner/repo/path/to/workf...",EXTRA
+upper_case_duplicate_keys,-,,11,"test.yaml:18:3: workflow.env key 'foo' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 variables_type_check,1,"test.yaml:8:24: receiver of object dereference ""bar"" must be type of object but got ""string"" [expression]",-,,MISS
 variables_type_check,2,"test.yaml:9:20: object, array, and null values should not be evaluated in template with ${{ }} but evaluating the value ...",-,,MISS
-variables_type_check,-,,1,"test.yaml:8:24: receiver of object dereference ""bar"" must be type of object but got ""string"" [syntax-check]",EXTRA
+variables_type_check,-,,1,"test.yaml:8:14: receiver of object dereference ""bar"" must be type of object but got ""string"" [expression]",EXTRA
 variables_type_check,-,,2,"test.yaml:9:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
 workflow_call_event,1,"test.yaml:5:7: ""type"" is missing at ""input0"" input of workflow_call event [syntax-check]",1,"test.yaml:5:7: ""type"" is missing at ""input0"" input of workflow_call event [syntax-check]",MATCH
 workflow_call_event,2,"test.yaml:6:7: ""type"" is missing at ""input1"" input of workflow_call event [syntax-check]",2,"test.yaml:6:7: ""type"" is missing at ""input1"" input of workflow_call event [syntax-check]",MATCH
@@ -738,6 +742,10 @@ workflow_call_job,-,,5,"test.yaml:26:8: job 'call4' uses must be scalar [syntax-
 workflow_call_job,-,,6,"test.yaml:23:3: ""runs-on"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,7,"test.yaml:23:3: ""steps"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,8,"test.yaml:4:3: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [workflow-call]",EXTRA
+workflow_call_job,-,,9,"test.yaml:27:5: reusable workflow call ""./foo/bar/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/p...",EXTRA
+workflow_call_job,-,,10,"test.yaml:30:5: reusable workflow call ""/foo/bar/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/pa...",EXTRA
+workflow_call_job,-,,11,"test.yaml:33:5: reusable workflow call ""foo/workflow.yml@main"" at ""uses"" is not following the format ""owner/repo/path/to...",EXTRA
+workflow_call_job,-,,12,"test.yaml:36:5: reusable workflow call ""foo/bar/workflow.yml"" at ""uses"" is not following the format ""owner/repo/path/to/...",EXTRA
 workflow_call_outputs_sema,1,"test.yaml:6:20: property ""some_output"" is not defined in object type {} [expression]",-,,MISS
 workflow_call_outputs_sema,2,"test.yaml:9:20: property ""unknown_output"" is not defined in object type {foo: string} [expression]",-,,MISS
 workflow_call_outputs_sema,-,,1,"test.yaml:6:16: property 'some_output' is not defined in 'jobs' object [expression]",EXTRA

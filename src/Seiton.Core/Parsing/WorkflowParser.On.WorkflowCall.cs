@@ -365,6 +365,17 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
+            // Empty/null secrets: treat as "no secrets declared" (strict empty object)
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var scalarUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(scalarUtf8) || scalarUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                    return new SliceMap<WorkflowCallEventSecret>();
+                }
+            }
+
             AddError(diagnostics, "on.workflow_call.secrets must be mapping", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;

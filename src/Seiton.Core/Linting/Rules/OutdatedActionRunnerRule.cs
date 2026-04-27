@@ -47,7 +47,7 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
         if (maxDeprecated > 0 && TryExtractMajorVersion(usesValue, out var majorVersion) && majorVersion <= maxDeprecated)
         {
             var usesStr = Decode(Arena.GetStringSlice(actionExec.Uses));
-            AddStepError(step, $"the runner of \"{usesStr}\" action is too old to run on GitHub Actions. update the action's version to fix this problem", Arena.GetStringRange(actionExec.Uses));
+            AddStepError(step, $"the runner of \"{usesStr}\" action is too old to run on GitHub Actions. update the action's version to fix this issue", Arena.GetStringRange(actionExec.Uses));
             return;
         }
 
@@ -64,7 +64,7 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
         }
 
         var usesStr2 = Decode(Arena.GetStringSlice(actionExec.Uses));
-        AddStepError(step, $"the runner of \"{usesStr2}\" action is too old to run on GitHub Actions. update the action's version to fix this problem", Arena.GetStringRange(actionExec.Uses));
+        AddStepError(step, $"the runner of \"{usesStr2}\" action is too old to run on GitHub Actions. update the action's version to fix this issue", Arena.GetStringRange(actionExec.Uses));
     }
 
     /// <summary>

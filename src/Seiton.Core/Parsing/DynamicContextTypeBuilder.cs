@@ -196,7 +196,7 @@ internal static class DynamicContextTypeBuilder
         {
             foreach (var row in rows)
             {
-                props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml);
+                props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml, arena);
             }
         }
 
@@ -234,7 +234,7 @@ internal static class DynamicContextTypeBuilder
     /// When all values are arrays, returns an array type.
     /// Otherwise returns Any.
     /// </summary>
-    private static ExprType InferMatrixRowType(MatrixRow row, byte[] utf8Yaml)
+    private static ExprType InferMatrixRowType(MatrixRow row, byte[] utf8Yaml, AstArena? arena = null)
     {
         if (row.Expression.HasValue || row.Values is null || row.Values.Count == 0)
         {
@@ -254,12 +254,12 @@ internal static class DynamicContextTypeBuilder
 
         if (allArrays)
         {
-            return ExprType.EmptyArray;
+            return InferArrayRowElementType(row, utf8Yaml);
         }
 
         if (allScalars)
         {
-            return ExprType.String;
+            return InferScalarRowType(row, utf8Yaml, arena);
         }
 
         if (!allObjects)
@@ -295,7 +295,7 @@ internal static class DynamicContextTypeBuilder
             }
         }
 
-        return mergedProps is { Count: > 0 }
+        return mergedProps is not null
             ? ExprType.Object(mergedProps, strict: true)
             : ExprType.Any;
     }
@@ -320,6 +320,123 @@ internal static class DynamicContextTypeBuilder
         }
 
         return ExprType.Object(props, strict: true);
+    }
+
+    /// <summary>
+    /// Infers the array element type from array values in a matrix row.
+    /// If all arrays have similar structure, infers a specific element type; otherwise falls back to Any.
+    /// </summary>
+    private static ArrayExprType InferArrayRowElementType(MatrixRow row, byte[] utf8Yaml)
+    {
+        // Look at the first array's element types to infer the element type
+        ExprType? elementType = null;
+        for (var i = 0; i < row.Values!.Count; i++)
+        {
+            if (row.Values[i] is not RawYamlArray arr || arr.Items is null || arr.Items.Count == 0)
+            {
+                continue;
+            }
+
+            // Use the first item's type as representative
+            var firstItemType = InferRawValueType(arr.Items[0], utf8Yaml);
+            if (elementType is null)
+            {
+                elementType = firstItemType;
+            }
+            else if (elementType.GetType() != firstItemType.GetType())
+            {
+                // Conflicting element types across arrays — fall back to Any
+                return ExprType.EmptyArray;
+            }
+        }
+
+        return elementType is not null
+            ? new ArrayExprType(elementType)
+            : ExprType.EmptyArray;
+    }
+
+    /// <summary>
+    /// Infers the type of a matrix row whose values are all scalars.
+    /// If all scalars are pure <c>${{ expr }}</c> expressions with the same inferred type, uses that type.
+    /// Otherwise returns String (default scalar type).
+    /// </summary>
+    private static ExprType InferScalarRowType(MatrixRow row, byte[] utf8Yaml, AstArena? arena)
+    {
+        ExprType? unifiedType = null;
+        var allSameType = true;
+
+        for (var i = 0; i < row.Values!.Count; i++)
+        {
+            var str = (RawYamlString)row.Values[i];
+            if (!str.Value.HasValue || arena is null)
+            {
+                unifiedType ??= ExprType.String;
+                continue;
+            }
+
+            var value = arena.GetStringValue(str.Value);
+
+            var exprType = TryInferExpressionType(value);
+            if (exprType is null)
+            {
+                // Not a pure expression — treat as string
+                if (unifiedType is not null && unifiedType is not StringExprType)
+                {
+                    allSameType = false;
+                }
+                unifiedType ??= ExprType.String;
+                continue;
+            }
+
+            if (unifiedType is null)
+            {
+                unifiedType = exprType;
+            }
+            else if (unifiedType.GetType() != exprType.GetType())
+            {
+                allSameType = false;
+            }
+        }
+
+        if (!allSameType || unifiedType is null or AnyExprType)
+        {
+            return ExprType.Any;
+        }
+
+        return unifiedType;
+    }
+
+    /// <summary>
+    /// If <paramref name="scalar"/> is a pure <c>${{ expr }}</c> expression, parses it and infers the type.
+    /// Returns null if not a pure expression.
+    /// </summary>
+    private static ExprType? TryInferExpressionType(ReadOnlySpan<byte> scalar)
+    {
+        // Must be a pure expression: ${{ ... }}
+        var trimmed = scalar.Trim((byte)' ');
+        if (!trimmed.StartsWith("${{"u8) || !trimmed.EndsWith("}}"u8))
+        {
+            return null;
+        }
+
+        // Extract the expression body
+        var body = trimmed[3..^2].Trim((byte)' ');
+        if (body.IsEmpty)
+        {
+            return null;
+        }
+
+        var parseResult = ExpressionParser.Parse(body);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return null;
+        }
+
+        return ExpressionSemanticAnalyzer.InferType(
+            parseResult.RootNode,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            body);
     }
 
     /// <summary>
@@ -494,15 +611,25 @@ internal static class DynamicContextTypeBuilder
         for (var i = 0; i < on.Count; i++)
         {
             var ev = on[i];
-            if (ev is WorkflowCallEvent { Secrets: { Count: > 0 } secrets } && utf8Yaml is not null)
+            if (ev is WorkflowCallEvent { Secrets: not null } wce)
             {
-                var props = new Dictionary<Utf8String, ExprType>(secrets.Count);
-                foreach (var pair in secrets)
+                var secrets = wce.Secrets.Value;
+                if (secrets.Count == 0)
                 {
-                    props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
+                    // Empty secrets: explicitly declared as empty → strict empty object
+                    return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>(), strict: true));
                 }
 
-                return (SecretsKeyUtf8, ExprType.Object(props, strict: true));
+                if (utf8Yaml is not null)
+                {
+                    var props = new Dictionary<Utf8String, ExprType>(secrets.Count);
+                    foreach (var pair in secrets)
+                    {
+                        props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
+                    }
+
+                    return (SecretsKeyUtf8, ExprType.Object(props, strict: true));
+                }
             }
         }
 

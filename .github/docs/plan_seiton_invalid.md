@@ -41,19 +41,19 @@ actionlint の `.out` ファイルは変更せず、seiton 側のメッセージ
 | 1.8 | deprecated commands メッセージ | `workflow command "{cmd}" was deprecated. use \`echo ...\` instead: {DocsUrl}` | `DeprecatedCommandsRule.cs` |
 | 1.9 | exclusive webhook filters | `both "{X}" and "{X}-ignore" filters cannot be used for the same event "{event}". note: use '!' to negate patterns` | `WorkflowParser.On.Webhook.cs` |
 
-### 未マッチ 9 fixtures (検出ギャップ — フェーズ 2 以降)
+### 未マッチ fixtures (検出ギャップ — フェーズ 2 以降)
 
-| Fixture | 理由 | フェーズ |
-|---|---|---|
-| `docker_specific_inputs_with_normal_action` | Docker 固有 input 検証未実装 | 2 |
-| `expr_check_in_matrix_row_assign` | object dereference 型チェック未実装 | 2 |
-| `outdated_actions` | outdated-action-runner が SeitonOnlyRules でフィルタ中 | 2 |
-| `outdated_popular_action` | 同上 | 2 |
-| `outputs_of_action_skipping_inputs_check` | action output プロパティ検証未実装 | 2 |
-| `pyflakes_job_default_shell` | pyflakes 連携なし (スコープ外) | 4 |
-| `pyflakes_step_shell` | 同上 | 4 |
-| `pyflakes_workflow_default_shell` | 同上 | 4 |
-| `shellcheck_default_shell_detection` | shellcheck 連携なし (スコープ外) | 4 |
+| Fixture | 理由 | フェーズ | 状態 |
+|---|---|---|---|
+| `docker_specific_inputs_with_normal_action` | `rhysd/action-setup-vim` カタログ未登録 | 2.7 | カタログ追加で対応可 |
+| `expr_check_in_matrix_row_assign` | object dereference 型チェック | 2.2 | ✅ 実装済み |
+| `outdated_actions` | outdated-action-runner マッピング | 2.8 | ✅ 実装済み |
+| `outdated_popular_action` | 同上 (`actions/stale` 未登録) | 2.8 | 部分対応 |
+| `outputs_of_action_skipping_inputs_check` | `octokit/request-action` カタログ未登録 | 2.3 | カタログ追加で対応可 |
+| `pyflakes_job_default_shell` | pyflakes 連携なし (スコープ外) | 4 | - |
+| `pyflakes_step_shell` | 同上 | 4 | - |
+| `pyflakes_workflow_default_shell` | 同上 | 4 | - |
+| `shellcheck_default_shell_detection` | shellcheck 連携なし (スコープ外) | 4 | - |
 
 ### 完全一致 fixtures (10)
 
@@ -619,7 +619,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 17 | `exclusive_webhook_filters` | 🔧 | A+B: メッセージ+位置 | 1.9 | P1 | フィルターキー位置 + メッセージ |
 | 18 | `expr_check_in_credentials` | ✅ | - | - | - | 完全一致 |
 | 19 | `expr_check_in_env_var_name` | 🔧⚠️ | A+C: メッセージ+検出漏れ | 1.1, 2 | P2 | context availability + property 未定義 |
-| 20 | `expr_check_in_matrix_row_assign` | ⚠️ | C: 検出漏れ | 2.2 | P2 | object dereference 型チェック |
+| 20 | `expr_check_in_matrix_row_assign` | ✅ | C→A: 型チェック実装済み | 2.2 | P2 | matrix row expression 型推論で検出 |
 | 21 | `expr_check_in_services` | 🔧 | A: メッセージ | 1 | P3 | services scalar のメッセージ |
 | 22 | `expr_in_default_input` | 🔧 | B: 列位置 | 1 | P2 | 列位置差異 |
 | 23 | `github_script_untrusted_input` | 🔧 | A+B: メッセージ+位置 | 1.2 | P2 | URL なし + 行位置差異 |
@@ -627,7 +627,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 25 | `if_cond_constants` | 🔧 | A: メッセージ | 1.5 | P1 | 定数式内容をメッセージに含める |
 | 26 | `if_cond_edge_cases_trailing_leading_chars` | 🔧 | A+B: メッセージ+位置 | 1.5 | P1 | 条件式テキスト + 行位置 |
 | 27 | `inputs_without_workflow_call_event` | 🔧 | A+B: メッセージ+位置 | 1 | P2 | メッセージ形式差異 |
-| 28 | `invalid_comparisons` | ⚠️ | C: 検出漏れ | 2.4 | P2 | 比較演算子の型チェック不足 |
+| 28 | `invalid_comparisons` | 🔧 | A: 6/7 検出 | 2.4 | P2 | 空オブジェクト型修正で改善 |
 | 29 | `invalid_container_syntax` | 🔧 | B: 位置 | 1 | P3 | credentials 位置 1 行ずれ |
 | 30 | `invalid_event_filters` | 🔧 | A: メッセージ | 1.10 | P1 | activity type + filter メッセージ統一 |
 | 31 | `invalid_float_at_timeout_minutes` | 🔧 | A: メッセージ | 1 | P2 | 型エラーメッセージ差異 |
@@ -662,8 +662,8 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 60 | `no_job` | 🔧 | A: メッセージ | 1 | P3 | `jobs must be mapping` vs `should not be empty` |
 | 61 | `object_at_runner_label` | ⚠️ | C: 検出漏れ | 2.9 | P2 | runs-on 型チェック |
 | 62 | `one_error` | 🔧 | A: メッセージ | 1.2 | P2 | URL なし |
-| 63 | `outdated_actions` | ⚠️ | C: 検出漏れ (mapping 問題) | 2.8 | P1 | RuleIdMap 追加 |
-| 64 | `outdated_popular_action` | ⚠️ | C: 検出漏れ (mapping 問題) | 2.8 | P1 | RuleIdMap 追加 |
+| 63 | `outdated_actions` | 🔧 | A: マッピング修正済み | 2.8 | P1 | RuleIdMap 追加。actions/stale 未登録 |
+| 64 | `outdated_popular_action` | 🔧 | A: マッピング修正済み | 2.8 | P1 | actions/stale 未登録 |
 | 65 | `outputs_map_object` | 🔧 | A: メッセージ | 1 | P3 | 型表示差異 |
 | 66 | `outputs_of_action_skipping_inputs_check` | ⚠️ | C: 検出漏れ | 2.3 | P2 | action output 検証 |
 | 67 | `pyflakes_job_default_shell` | ⬜ | E: スコープ外 | 4.2 | - | pyflakes 非サポート |
@@ -671,7 +671,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 69 | `pyflakes_workflow_default_shell` | ⬜ | E: スコープ外 | 4.2 | - | pyflakes 非サポート |
 | 70 | `random_order_cycle_in_needs` | 🔧 | A+B: メッセージ+位置 | 1.7 | P2 | 設計方針差異 |
 | 71 | `recursive_anchors` | 🔧 | A: メッセージ | 1 | P2 | recursive alias メッセージ差異 |
-| 72 | `reusable_workflow_empty_secrets` | ⚠️ | C: 検出漏れ | 2.10 | P3 | 空 secrets 処理 |
+| 72 | `reusable_workflow_empty_secrets` | ✅ | C→A: 空 secrets 処理修正 | 2.10 | P3 | strict empty object に変換 |
 | 73 | `run_name_check_expr` | 🔧🔴 | A+D: メッセージ+重複 | 1 | P2 | undefined context 重複報告 |
 | 74 | `runner_labels_conflict_matrix` | 🔧 | A: メッセージ | 1.14 | P2 | conflict メッセージ差異 |
 | 75 | `schedule_event_with_no_config_1` | ✅ | - | - | - | 完全一致 |
@@ -690,7 +690,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 88 | `workflow_call_event` | 🔧 | A: メッセージ | 1.16 | P1 | メッセージ形式統一 |
 | 89 | `workflow_call_inputs` | 🔧 | A+B: メッセージ+位置 | 1 | P2 | メッセージ + 位置 |
 | 90 | `workflow_call_invalid_secrets` | 🔧 | A: メッセージ | 1 | P3 | メッセージ差異 |
-| 91 | `workflow_call_job` | 🔧⚠️ | A+C: メッセージ+検出漏れ | 1.18, 2.12 | P1 | メッセージ統一 + uses 検証 |
+| 91 | `workflow_call_job` | 🔧 | A+C: uses フォーマット検証追加 | 1.18, 2.12 | P1 | 4 uses 形式エラー検出 |
 | 92 | `workflow_call_outputs_sema` | 🔧 | A: メッセージ | 2.11 | P2 | 型表示改善 |
 | 93 | `workflow_call_outputs_syntax` | 🔧 | A: メッセージ | 1 | P2 | メッセージ形式差異 |
 | 94 | `workflow_call_required_default` | ✅ | - | - | - | 完全一致 |
@@ -791,7 +791,27 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 ### フェーズ 2 実装記録
 
-(未実施)
+#### 実施済み
+
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 2.8 | outdated action runner マッピング | ✅ `outdated-action-runner` を `SeitonOnlyRules` から除外、`RuleIdMap` に `action` マッピング追加。メッセージを `fix this issue` に修正 | `ActionlintCompatTests.cs`, `OutdatedActionRunnerRule.cs` |
+| 2.12 | reusable workflow uses フォーマット検証 | ✅ リモート uses の形式検証追加 (`owner/repo/path@ref` or `./path`)。ローカルパスの `@ref` 検証もファイルコンテキストなしで動作するよう改善 | `ReusableWorkflowRule.cs`, `RuleInterfaceTests.cs` |
+| 2.10 | reusable_workflow_empty_secrets | ✅ 空 `secrets:` (null) を「secrets 宣言なし」として処理。`BuildSecretsOverride` で空 secrets を strict empty object に変換 | `WorkflowParser.On.WorkflowCall.cs`, `DynamicContextTypeBuilder.cs` |
+| 2.4 | invalid_comparisons 型チェック | ✅ 空オブジェクトの型推論修正 (`{}` → `ObjectExprType`)。配列要素型の推論追加。`AreEqualityCompatible` で配列要素型の互換性チェック追加。7/7 → 6/7 検出 (array<bool> vs array<object> は未対応) | `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs` |
+| 2.2 | matrix row assign 型チェック | ✅ マトリックス行のスカラー値が `${{ expr }}` の場合、式の型推論を実行。`ValidatePropertyAccessWithOverrides` で非オブジェクト型のプロパティアクセスエラーを検出 | `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs` |
+
+#### 未実施 (データギャップ・型システム制約)
+
+| # | 項目 | 理由 |
+|---|------|------|
+| 2.1 | evaluated_template | `github.event` が `AnyExprType` のため、object/array/null の具体型表示ができない。型システムの拡張が必要 |
+| 2.3 | action output プロパティ検証 | `octokit/request-action` がカタログに未登録。カタログ追加で対応可能 |
+| 2.5 | workflow_dispatch inputs 型チェック | 部分的に動作 (`inputs.select` 検出、`github[inputs.boolean]` 検出)。配列インデックスの型チェックは `github.event.*` が `AnyExprType` のため未検出 |
+| 2.6 | fromJSON 型推論 | fromJSON() の戻り値型推論が未実装。JSON リテラル引数からの型推論が必要 |
+| 2.7 | Docker 固有 input 検証 | `rhysd/action-setup-vim` がカタログに未登録。カタログ追加で対応可能 |
+| 2.9 | object_at_runner_label | runs-on のコンテキスト固有型チェック未実装。現在は汎用的な template type check のみ |
+| 2.11 | workflow_call_outputs_sema | メッセージ差異のみ (seiton: `'name' object`, actionlint: `object type {props}`)。検出は正常に動作 |
 
 ### フェーズ 3 実装記録
 

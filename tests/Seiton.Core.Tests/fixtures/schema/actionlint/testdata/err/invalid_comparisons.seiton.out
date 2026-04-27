@@ -1,5 +1,7 @@
 test.yaml:22:14: number value cannot be compared to null value with '>' operator [expression]
 test.yaml:24:14: bool value cannot be compared to bool value with '<' operator [expression]
 test.yaml:28:24: bool value cannot be compared to any value with '<=' operator [syntax-check]
+test.yaml:16:14: string value cannot be compared to object value with '==' operator [expression]
 test.yaml:18:14: number value cannot be compared to array<any> value with '!=' operator [expression]
+test.yaml:26:14: string value cannot be compared to object value with '>=' operator [expression]
 test.yaml:28:14: bool value cannot be compared to array<any> value with '<=' operator [expression]

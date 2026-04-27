@@ -504,6 +504,42 @@ public sealed class RuleInterfaceTests
                     container: node:20
             """,
             ["calls reusable workflow with uses"]),
+            new RuleCase(
+            "ng-remote-missing-ref",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: "foo/bar/workflow.yml"
+            """,
+            ["is not following the format"]),
+            new RuleCase(
+            "ng-remote-absolute-path",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: "/foo/bar/workflow.yml@main"
+            """,
+            ["is not following the format"]),
+            new RuleCase(
+            "ng-remote-missing-repo-path",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: "foo/workflow.yml@main"
+            """,
+            ["is not following the format"]),
+            new RuleCase(
+            "ok-remote-valid-format",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/path/to/workflow.yml@main
+            """,
+            []),
         };
 
         await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);

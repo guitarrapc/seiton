@@ -1003,9 +1003,21 @@ public static class ExpressionSemanticAnalyzer
     /// </summary>
     private static bool AreEqualityCompatible(ExprType left, ExprType right)
     {
-        // Same base type is always compatible
+        // Same base type — check deeper for arrays and objects
         if (left.GetType() == right.GetType())
         {
+            // For arrays, check element type compatibility
+            if (left is ArrayExprType leftArr && right is ArrayExprType rightArr)
+            {
+                // Any element type is always compatible
+                if (leftArr.ElementType is AnyExprType || rightArr.ElementType is AnyExprType)
+                {
+                    return true;
+                }
+
+                return AreEqualityCompatible(leftArr.ElementType, rightArr.ElementType);
+            }
+
             return true;
         }
 
@@ -1426,15 +1438,27 @@ public static class ExpressionSemanticAnalyzer
         List<Diagnostic> diagnostics)
     {
         var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+
+        // Non-object concrete types: accessing .property on a non-object value is an error
+        if (leftType is StringExprType or NumberExprType or BoolExprType or NullExprType)
+        {
+            var propName = Encoding.UTF8.GetString(node.Token.AsSpan(expressionUtf8));
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"receiver of object dereference \"{propName}\" must be type of object but got \"{leftType.TypeName}\"",
+                expressionLocation));
+            return;
+        }
+
         if (leftType is not ObjectExprType { Strict: true } strictObj)
         {
             return;
         }
 
-        var propName = node.Token.AsSpan(expressionUtf8);
-        if (!strictObj.TryGetProperty(propName, out _))
+        var propNameSpan = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
-            var propNameText = Encoding.UTF8.GetString(propName);
+            var propNameText = Encoding.UTF8.GetString(propNameSpan);
             var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,

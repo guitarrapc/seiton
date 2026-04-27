@@ -36,6 +36,7 @@ public sealed class ActionlintCompatTests
         ["workflow-call-input-default"] = "workflow-call-input-default",
         ["popular-action-inputs"] = "action",
         ["local-action-inputs"] = "action",
+        ["outdated-action-runner"] = "action",
     };
 
     // Seiton-only rule IDs that have no actionlint equivalent and should be excluded.
@@ -70,7 +71,6 @@ public sealed class ActionlintCompatTests
         "forbidden-uses",
         "ref-version-mismatch",
         "use-trusted-publishing",
-        "outdated-action-runner",
         "run-env-context-direct-use",
         "run-secrets-context-direct-use",
         "run-inputs-context-direct-use",
