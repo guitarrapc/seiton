@@ -58,7 +58,7 @@ var noChangeCount = 0;
 
 foreach (var yamlPath in Directory.EnumerateFiles(errDir, "*.yaml").OrderBy(p => p, StringComparer.Ordinal))
 {
-    var outPath = Path.ChangeExtension(yamlPath, ".out");
+    var outPath = Path.ChangeExtension(yamlPath, ".seiton.out");
     if (!File.Exists(outPath)) continue;
 
     var name = Path.GetFileNameWithoutExtension(yamlPath);

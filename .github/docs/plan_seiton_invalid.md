@@ -17,7 +17,7 @@
 ### フェーズ 1 実施内容
 
 1. **1.1 context availability 重複報告の修正**: Parser 側の context/function/hashFiles availability チェックを削除し、Linter の `expr-undefined-var` ルールに一本化。33 テストを更新。
-2. **1.2〜1.20 .out 期待値の統一**: 全 78 の `.out` ファイルを seiton の実出力に合わせて更新。seiton のメッセージはユーザーにとって分かりやすいため、actionlint のメッセージ形式に寄せるのではなく、`.out` 側を seiton に合わせた。
+2. **1.2〜1.20 .out 期待値の統一**: 全 78 の `.seiton.out` ファイルを seiton の実出力に合わせて更新。seiton のメッセージはユーザーにとって分かりやすいため、actionlint のメッセージ形式に寄せるのではなく、`.out`と`.seiton.out`の意味がズレていないならば seiton のメッセージを維持する方針で調整。
 
 ### 未マッチ 9 fixtures (検出ギャップ — フェーズ 2 以降)
 
@@ -108,7 +108,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 **対処方針**:
 - メッセージ末尾は URL なしのまま維持 (seiton のポリシー)
 - `.out` を seiton 向けに書き換えるか、regex をより柔軟にする
-- **推奨**: `.out` 期待値を調整 (seiton は URL を含まない設計方針)
+- **推奨**: seitonにURLを含めてよりユーザーフレンドリーに。メッセージの差異は意味の違いではなく、ユーザーへの情報提供の差異であるため、seiton のメッセージを維持する方針で調整することを推奨。
 
 **影響 fixture 数**: 3 fixtures, ~5 expected lines
 
