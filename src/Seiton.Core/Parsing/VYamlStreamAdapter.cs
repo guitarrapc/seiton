@@ -134,6 +134,10 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 _recursiveAliases ??= new List<(string, TextPosition)>();
                 var mark = _parser.CurrentMark;
                 _recursiveAliases.Add((unresolvableAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col)));
+
+                // Mark the anchor as referenced so it's not reported as unused
+                _referencedAnchorIds ??= new HashSet<int>();
+                _referencedAnchorIds.Add(unresolvableAnchor.Id);
             }
             // Record an Alias placeholder into the current recording (if any) so that the
             // stored event sequence remains structurally complete and can be replayed correctly.
@@ -257,6 +261,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 // faithful (mirrors what Read() does for every non-alias event).
                 var snapshot = SnapshotCurrentEvent(_parser.CurrentEventType);
                 _currentRecording.Add(snapshot);
+                ForwardToNestedRecordings(snapshot);
                 TrackAnchorDepth(snapshot.Kind);
             }
             return;

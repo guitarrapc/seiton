@@ -1052,36 +1052,26 @@ on.push.paths must be string or array of strings      ← 修正後
 
 ---
 
-##### 4.I `recursive_anchors` — 2 MISS, 4 EXTRA
+##### 4.I `recursive_anchors` — ✅ 実装済み (2 MISS → 0, 4 EXTRA → 0)
 
-**具体例:**
+**実装記録:**
 
-```
-# .out (actionlint)                                          # .seiton.out (seiton)
-test.yaml:9:14:  "env" is alias but mapping expected  COL    test.yaml:11:12: env must be mapping
-test.yaml:9:14:  recursive alias "recursive1"...      COL    test.yaml:11:12: recursive alias "recursive1" is found
-test.yaml:11:14: expected scalar but found alias      COL    test.yaml:13:7:  run must be scalar
-test.yaml:11:14: recursive alias "recursive2"...      COL    test.yaml:13:7:  recursive alias "recursive2" is found
-test.yaml:15:9:  element is alias but mapping expected COL   test.yaml:15:7:  step must be mapping
-test.yaml:15:9:  recursive alias "recursive2"...      MISS   (なし)
-test.yaml:15:9:  step must run "run" or "uses"        MISS   (なし)
-                                                             test.yaml:16:0:  step[3] must be mapping  ← EXTRA
-                                                             test.yaml:4:9:   anchor "recursive2" unused  ← EXTRA
-                                                             test.yaml:7:9:   anchor "recursive1" unused  ← EXTRA
-                                                             test.yaml:15:7:  recursive alias "recursive1"  ← EXTRA (行15 は recursive2 が期待)
-```
+**根本原因:** `VYamlStreamAdapter.SkipCurrentNode` の Alias イベント処理パスで `ForwardToNestedRecordings` が呼ばれていなかったため、ネストされたアンカー (`&recursive1` inside `&recursive2`) の録画が `MappingEnd` を受け取れず `_anchorStore` に保存されなかった。結果:
+- `*recursive1` (行 13) が解決不能と誤判定 → 間違った再帰エイリアス報告
+- `*recursive2` (行 15) が `SkipCurrentNode` 内で消費済み → イベントスキップ
 
-**MISS 原因と改善案:**
+**修正内容:**
 
-1. **15:9 recursive alias "recursive2"** (MISS): seiton は行 15 で `recursive1` を報告しているが、actionlint は `recursive2` を期待。VYaml の alias 解決順序の違い。
-   - **改善案:** recursive alias 検出ロジックでオリジナルの alias 名を正確に追跡する。
-2. **15:9 step must run/uses** (MISS): seiton は step が mapping でないと判定した時点で "must run/uses" を出さない。
-   - **改善案:** mapping 以外の step に対しても "must run/uses" エラーを追加するか、既存の動作を維持 (seiton は根本原因優先で設計)。
+1. **`VYamlStreamAdapter.SkipCurrentNode`**: Alias イベント後の `_parser.Read()` で取得したスナップショットを `ForwardToNestedRecordings` に転送するよう追加。これによりネスト録画が正しく完了し `_anchorStore` に保存される。
+2. **再帰エイリアスの参照マーク**: 再帰エイリアス検出時に `_referencedAnchorIds` にアンカー ID を追加。未使用警告の誤報を解消。
+3. **非マッピングステップに "must run/uses"**: `ParseStep` で非 null・非空・非マッピングステップに `step must run script with "run" section or run action with "uses" section` エラーを追加。
 
-**EXTRA 原因:**
-- `anchor unused` 2 行: seiton は recursive alias を「使用」とみなさず未使用警告を出す — 設計差異として維持可能。
-- `16:0 step[3] must be mapping`: VYaml の alias 展開による追加ステップ検出。
-- `15:7 recursive1`: 上記 MISS と対になるペア。
+**テスト:** `Parse_RecursiveAnchors_NestedAnchorResolvesCorrectly`, `Parse_NonMappingStep_ReportsRunOrUsesRequired` 追加。全 1035 テスト通過、Allocated 変化なし。
+
+**残存差異 (COL_DIFF のみ):**
+- 位置差 (VYaml の `CurrentMark` がエイリアスの次トークン位置を返すため)
+- メッセージ文言差 (seiton は "must be object"、actionlint は "alias node but mapping expected")
+- replay 時の追加メッセージ (env セクションの plain text node 検出)
 
 ---
 

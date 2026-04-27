@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -88,6 +88,7 @@ public static partial class WorkflowParser
             else
             {
                 AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] must be object", reader.CurrentStart);
+                AddError(diagnostics, "step must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
             }
             reader.SkipCurrentNode();
             return default;

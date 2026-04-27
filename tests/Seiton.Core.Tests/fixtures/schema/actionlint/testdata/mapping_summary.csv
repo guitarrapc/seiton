@@ -443,8 +443,7 @@ invalid_steps,-,,12,"test.yaml:29:7: step must run script with ""run"" section o
 issue-610_recursive_raw_yaml_value,1,"test.yaml:10:21: recursive alias ""recursive_include"" is found. anchor was declared at line:8, column:18 [syntax-check]",-,,MISS
 issue-610_recursive_raw_yaml_value,2,"test.yaml:10:21: unexpected alias node on parsing value in matrix row [syntax-check]",-,,MISS
 issue-610_recursive_raw_yaml_value,-,,1,"test.yaml:11:9: job 'test' matrix value has unsupported shape [syntax-check]",EXTRA
-issue-610_recursive_raw_yaml_value,-,,2,"test.yaml:8:18: anchor ""recursive_include"" is defined but not used [syntax-check]",EXTRA
-issue-610_recursive_raw_yaml_value,-,,3,"test.yaml:11:9: recursive alias ""recursive_include"" is found [syntax-check]",EXTRA
+issue-610_recursive_raw_yaml_value,-,,2,"test.yaml:11:9: recursive alias ""recursive_include"" is found [syntax-check]",EXTRA
 issue102,1,"test.yaml:8:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 issue102,-,,1,"test.yaml:8:13: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 issue151_child_of_child_job,1,"test.yaml:26:31: property ""first"" is not defined in object type {second: {outputs: {second: string}; result: string}} [e...",-,,MISS
@@ -577,13 +576,13 @@ recursive_anchors,6,"test.yaml:15:9: recursive alias ""recursive2"" is found. an
 recursive_anchors,7,"test.yaml:15:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 recursive_anchors,-,,1,"test.yaml:11:12: job 'test' step[1] env must be object [syntax-check]",EXTRA
 recursive_anchors,-,,2,"test.yaml:13:7: job 'test' step[1] run must be string [syntax-check]",EXTRA
-recursive_anchors,-,,3,"test.yaml:15:7: job 'test' step[2] must be object [syntax-check]",EXTRA
-recursive_anchors,-,,4,"test.yaml:16:0: job 'test' step[3] must be object [syntax-check]",EXTRA
-recursive_anchors,-,,5,"test.yaml:4:9: anchor ""recursive2"" is defined but not used [syntax-check]",EXTRA
-recursive_anchors,-,,6,"test.yaml:7:9: anchor ""recursive1"" is defined but not used [syntax-check]",EXTRA
+recursive_anchors,-,,3,"test.yaml:11:9: expecting a single ${{...}} expression or mapping value for ""env"" section, but found plain text node [sy...",EXTRA
+recursive_anchors,-,,4,"test.yaml:9:12: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
+recursive_anchors,-,,5,"test.yaml:16:0: job 'test' step[3] must be object [syntax-check]",EXTRA
+recursive_anchors,-,,6,"test.yaml:16:0: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 recursive_anchors,-,,7,"test.yaml:11:12: recursive alias ""recursive1"" is found [syntax-check]",EXTRA
 recursive_anchors,-,,8,"test.yaml:13:7: recursive alias ""recursive2"" is found [syntax-check]",EXTRA
-recursive_anchors,-,,9,"test.yaml:15:7: recursive alias ""recursive1"" is found [syntax-check]",EXTRA
+recursive_anchors,-,,9,"test.yaml:16:0: recursive alias ""recursive2"" is found [syntax-check]",EXTRA
 reusable_workflow_empty_secrets,1,"/test\.yaml:12:23: property ""calling_workflow_secret"" is not defined in object type {.+} \[expression\]/",-,,MISS
 reusable_workflow_empty_secrets,-,,1,"test.yaml:12:19: property ""CALLING_WORKFLOW_SECRET"" is not defined in object type {} [expression]",EXTRA
 run_name_check_expr,1,"test.yaml:2:25: undefined variable ""hoge"". available variables are ""env"", ""github"", ""inputs"", ""job"", ""matrix"", ""needs"", ...",-,,MISS

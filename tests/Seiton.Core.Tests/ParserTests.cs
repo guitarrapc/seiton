@@ -2075,6 +2075,51 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_RecursiveAnchors_NestedAnchorResolvesCorrectly()
+    {
+        // Tests that *recursive1 resolves (nested anchor stored) and *recursive2 is detected as recursive
+        var yaml = """
+        on: push
+        jobs:
+          test: &recursive2
+            runs-on: ubuntu-latest
+            steps:
+              - &recursive1
+                env: *recursive1
+                run: *recursive2
+              - *recursive1
+              - *recursive2
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-nested.yml");
+        // *recursive2 should be detected as recursive alias with the correct name
+        var recursiveAliases = result.Diagnostics.Where(d => d.Message.Contains("recursive alias", StringComparison.Ordinal)).ToArray();
+        await Assert.That(recursiveAliases.Count(d => d.Message.Contains("\"recursive2\""))).IsGreaterThanOrEqualTo(1);
+        // No unused anchor warnings — recursive aliases should count as references
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("is defined but not used", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_NonMappingStep_ReportsRunOrUsesRequired()
+    {
+        // Non-mapping, non-null step (e.g. alias that doesn't expand to mapping) should report "must run/uses"
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - 42
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "non-mapping-step.yml");
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("must be object", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("step must run script", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_NullScalarAnchor_DoesNotCrash()
     {
         // env: &anchor with no value (null scalar) should not cause a fatal parse error.
