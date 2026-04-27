@@ -113,16 +113,16 @@ cron_5minutes_limit,-,,1,"test.yaml:6:14: scheduled job runs too frequently. it 
 dedup_errors,1,"test.yaml:9:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""i...",1,"test.yaml:9:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""i...",MATCH
 deprecated_action_inputs,1,"test.yaml:9:11: avoid using deprecated input ""packages_dir"" in action ""pypa/gh-action-pypi-publish@release/v1"": The inpu...",-,,MISS
 deprecated_action_inputs,2,"test.yaml:10:11: avoid using deprecated input ""repository_url"" in action ""pypa/gh-action-pypi-publish@release/v1"": The i...",-,,MISS
-deprecated_action_inputs,-,,1,"test.yaml:7:15: avoid using deprecated input ""packages_dir"" in action ""pypa/gh-action-pypi-publish@release/v1"": The inpu...",EXTRA
-deprecated_action_inputs,-,,2,"test.yaml:7:15: avoid using deprecated input ""repository_url"" in action ""pypa/gh-action-pypi-publish@release/v1"": The in...",EXTRA
+deprecated_action_inputs,-,,1,"test.yaml:9:25: avoid using deprecated input ""packages_dir"" in action ""pypa/gh-action-pypi-publish@release/v1"": The inpu...",EXTRA
+deprecated_action_inputs,-,,2,"test.yaml:10:27: avoid using deprecated input ""repository_url"" in action ""pypa/gh-action-pypi-publish@release/v1"": The i...",EXTRA
 deprecated_workflow_commands,1,"test.yaml:8:14: workflow command ""set-output"" was deprecated. use `echo ""{name}={value}"" >> $GITHUB_OUTPUT` instead: htt...",1,"test.yaml:8:14: workflow command ""set-output"" was deprecated. use `echo ""{name}={value}"" >> $GITHUB_OUTPUT` instead: htt...",MATCH
 deprecated_workflow_commands,2,"test.yaml:9:14: workflow command ""save-state"" was deprecated. use `echo ""{name}={value}"" >> $GITHUB_STATE` instead: http...",2,"test.yaml:9:14: workflow command ""save-state"" was deprecated. use `echo ""{name}={value}"" >> $GITHUB_STATE` instead: http...",MATCH
 deprecated_workflow_commands,3,"test.yaml:10:14: workflow command ""set-env"" was deprecated. use `echo ""{name}={value}"" >> $GITHUB_ENV` instead: https://...",3,"test.yaml:10:14: workflow command ""set-env"" was deprecated. use `echo ""{name}={value}"" >> $GITHUB_ENV` instead: https://...",MATCH
 deprecated_workflow_commands,4,"test.yaml:11:14: workflow command ""add-path"" was deprecated. use `echo ""{path}"" >> $GITHUB_PATH` instead: https://docs.g...",4,"test.yaml:11:14: workflow command ""add-path"" was deprecated. use `echo ""{path}"" >> $GITHUB_PATH` instead: https://docs.g...",MATCH
 docker_specific_inputs_with_normal_action,1,"test.yaml:9:11: input ""entrypoint"" is not defined in action ""rhysd/action-setup-vim@v1"". available inputs are ""configure...",-,,MISS
 docker_specific_inputs_with_normal_action,2,"test.yaml:10:11: input ""args"" is not defined in action ""rhysd/action-setup-vim@v1"". available inputs are ""configure-args...",-,,MISS
-docker_specific_inputs_with_normal_action,-,,1,"test.yaml:7:15: unknown input 'args' for action 'rhysd/action-setup-vim@v1' [action]",EXTRA
-docker_specific_inputs_with_normal_action,-,,2,"test.yaml:7:15: unknown input 'entrypoint' for action 'rhysd/action-setup-vim@v1' [action]",EXTRA
+docker_specific_inputs_with_normal_action,-,,1,"test.yaml:9:23: unknown input 'entrypoint' for action 'rhysd/action-setup-vim@v1' [action]",EXTRA
+docker_specific_inputs_with_normal_action,-,,2,"test.yaml:10:17: unknown input 'args' for action 'rhysd/action-setup-vim@v1' [action]",EXTRA
 duplicate_keys,1,"test.yaml:9:9: key ""FOO"" is duplicated in ""matrix"" section. previously defined at line:8,col:9. note that this key is ca...",1,"test.yaml:9:9: key ""FOO"" is duplicated in ""matrix"" section. previously defined at line:8,col:9. note that this key is ca...",MATCH
 duplicate_keys,2,"test.yaml:12:5: key ""runs-on"" is duplicated in ""test"" job. previously defined at line:11,col:5 [syntax-check]",2,"test.yaml:12:5: key ""runs-on"" is duplicated in ""test"" job. previously defined at line:11,col:5 [syntax-check]",MATCH
 empty,1,"test.yaml:1:1: workflow is empty [syntax-check]",-,,MISS
@@ -568,8 +568,8 @@ outdated_popular_action,2,"test.yaml:10:15: the runner of ""actions/stale@v4"" a
 outputs_map_object,1,"/{string => string}/",-,,MISS
 outputs_map_object,-,,1,"test.yaml:9:19: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
 outputs_of_action_skipping_inputs_check,1,"test.yaml:16:40: property ""this_output_does_not_exist"" is not defined in object type {data: string; headers: string; sta...",-,,MISS
-outputs_of_action_skipping_inputs_check,-,,1,"test.yaml:7:15: unknown input 'owner' for action 'octokit/request-action@v2.x' [action]",EXTRA
-outputs_of_action_skipping_inputs_check,-,,2,"test.yaml:7:15: unknown input 'repo' for action 'octokit/request-action@v2.x' [action]",EXTRA
+outputs_of_action_skipping_inputs_check,-,,1,"test.yaml:11:18: unknown input 'owner' for action 'octokit/request-action@v2.x' [action]",EXTRA
+outputs_of_action_skipping_inputs_check,-,,2,"test.yaml:12:17: unknown input 'repo' for action 'octokit/request-action@v2.x' [action]",EXTRA
 outputs_of_action_skipping_inputs_check,-,,3,"test.yaml:16:36: property ""this_output_does_not_exist"" is not defined in object type {data: string; headers: string; sta...",EXTRA
 pyflakes_job_default_shell,1,"/test\.yaml:9:9: pyflakes reported issue in this script: .+ \[pyflakes\]/",-,,MISS
 pyflakes_step_shell,1,"/test\.yaml:7:9: pyflakes reported issue in this script: .+ \[pyflakes\]/",-,,MISS

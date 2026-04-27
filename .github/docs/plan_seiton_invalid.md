@@ -1,7 +1,7 @@
 # Seiton vs actionlint 互換性改善計画
 
 > actionlint testdata/err/ fixtures に対する seiton の検出結果を分析し、改善すべき項目を優先度別にまとめた計画書。
-> 対象: `tests/Seiton.Core.Tests/fixtures/schema/actionlint/testdata/err/` の 99 fixtures。
+> 対象: `tests/Seiton.Core.Tests/fixtures/schema/actionlint/testdata/` のfixtures。
 
 ---
 
@@ -544,14 +544,17 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 1 fixture, 1 extra line
 
-#### 3.4 `deprecated_action_inputs` — 行位置の報告先
+#### 3.4 `deprecated_action_inputs` — 行位置の報告先 ✅ DONE
 
 **対象 fixture**: `deprecated_action_inputs`
 
-**現状**: seiton は uses 行 (line 7) で deprecated input を報告。actionlint は個別の input 行 (line 9, 10) で報告。
+**現状**: ~~seiton は uses 行 (line 7) で deprecated input を報告。actionlint は個別の input 行 (line 9, 10) で報告。~~
 
 **対処方針**:
-- deprecated input の報告位置を個別 input 行に変更
+- `PopularActionInputsRule` の `AddStepWarning` に `Arena.GetStringRange(pair.Value)` を渡し、input 値の位置で報告するように変更
+- uses 行 (7:15) → input 値行 (9:25, 10:27) に移動
+- actionlint はキー位置 (9:11, 10:11) で報告するが、seiton は値位置報告の設計方針 (§4.4) に従う
+- unknown input の報告位置も同様に値位置に変更
 
 **影響 fixture 数**: 1 fixture, 2 expected lines
 
@@ -610,7 +613,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 3 | `context_availability` | 🔧🔴 | A+D: メッセージ+重複 | 1.1 | P1 | Parser/Linter 重複。統一で大幅改善 |
 | 4 | `cron_5minutes_limit` | 🔧 | B: 列位置 | 1.13 | P2 | 列位置1ずれ + メッセージ形式 |
 | 5 | `dedup_errors` | ✅ | D: 重複 | 3.1 | P1 | anchor 展開で 11 重複。パーサー診断 dedup で解決 |
-| 6 | `deprecated_action_inputs` | 🔧 | B: 行位置 | 3.4 | P2 | uses 行 vs input 行 |
+| 6 | `deprecated_action_inputs` | ✅ | B: 行位置 | 3.4 | P2 | input 値位置で報告するように修正 |
 | 7 | `deprecated_workflow_commands` | 🔧 | A: メッセージ | 1.8 | P2 | メッセージ形式差異 |
 | 8 | `docker_specific_inputs_with_normal_action` | ⚠️ | C: 検出漏れ | 2.7 | P2 | Docker 固有 input 検証なし |
 | 9 | `duplicate_keys` | 🔧 | A: メッセージ | 1.3 | P2 | "previously defined at" 追加 |
@@ -825,4 +828,9 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 ### フェーズ 3 実装記録
 
-(未実施)
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 3.1 | dedup_errors anchor 展開 dedup | ✅ `LintEngine` でパーサー診断を `DiagnosticIdentity` で重複排除。12 → 1 行に削減 | `LintEngine.cs` |
+| 3.2 | context availability 重複 | ✅ フェーズ 1.1 で解決済み + 3.3 の ParseIntOrExpression で must be integer 誤報も消滅 | - |
+| 3.3 | invalid_int_at_max_parallel 式誤報 | ✅ `ParseIntOrExpression` 追加。`${{ }}` 式を有効な max-parallel として受理 | `WorkflowParser.ExpressionIntegration.cs`, `WorkflowParser.Strategy.cs`, `AstArena.cs` |
+| 3.4 | deprecated_action_inputs 行位置 | ✅ `AddStepWarning` に `Arena.GetStringRange(pair.Value)` を渡し input 値位置で報告。uses 行 (7:15) → input 値行 (9:25, 10:27) | `PopularActionInputsRule.cs` |
