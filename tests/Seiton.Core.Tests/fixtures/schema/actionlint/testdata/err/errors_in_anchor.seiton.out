@@ -1,7 +1,5 @@
 test.yaml:4:13: on.pull_request.types contains unsupported activity type: created [syntax-check]
 test.yaml:20:9: unexpected key "with" for step to run shell command. expected one of "continue-on-error", "env", "id", "if", "name", "run", "shell", "timeout-minutes", "working-directory" [syntax-check]
-test.yaml:20:9: unexpected key "with" for step to run shell command. expected one of "continue-on-error", "env", "id", "if", "name", "run", "shell", "timeout-minutes", "working-directory" [syntax-check]
-test.yaml:20:9: unexpected key "with" for step to run shell command. expected one of "continue-on-error", "env", "id", "if", "name", "run", "shell", "timeout-minutes", "working-directory" [syntax-check]
 test.yaml:28:28: "with" section is scalar node but mapping node is expected [syntax-check]
 test.yaml:20:15: anchor "valid_inputs" is defined but not used [syntax-check]
 test.yaml:28:15: anchor "valid_inputs" is defined but not used [syntax-check]

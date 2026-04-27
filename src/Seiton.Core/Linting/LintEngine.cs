@@ -87,7 +87,14 @@ public sealed class LintEngine
         }
 
         _diagnostics.Clear();
-        _diagnostics.AddRange(parseResult.Diagnostics);
+        _seen.Clear();
+        for (var i = 0; i < parseResult.Diagnostics.Length; i++)
+        {
+            if (_seen.Add(new DiagnosticIdentity(parseResult.Diagnostics[i])))
+            {
+                _diagnostics.Add(parseResult.Diagnostics[i]);
+            }
+        }
 
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);

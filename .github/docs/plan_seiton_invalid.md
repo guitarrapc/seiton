@@ -508,15 +508,16 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 ### フェーズ 3: 重複・余剰検出の修正 (中優先度)
 
-#### 3.1 `dedup_errors` — アンカー展開時の診断重複
+#### 3.1 `dedup_errors` — アンカー展開時の診断重複 ✅ DONE
 
 **対象 fixture**: `dedup_errors`
 
-**現状**: seiton は YAML anchor `*step` の展開ごとに `unexpected key "with" for step to run shell command` を 11 回出す。actionlint は 1 回のみ (dedup 済み)。
+**現状**: ~~seiton は YAML anchor `*step` の展開ごとに `unexpected key "with" for step to run shell command` を 11 回出す。actionlint は 1 回のみ (dedup 済み)。~~
 
 **対処方針**:
-- anchor 展開由来の診断を重複排除する
-- 同一メッセージ・同一位置の診断を dedup する
+- `LintEngine` でパーサー診断を `_diagnostics` に追加する際、`DiagnosticIdentity` (severity + message + startLine) で重複排除するようにした
+- VYaml はアンカー alias 展開時に元の位置情報をそのまま再生するため、同一位置・同一メッセージの診断が複数回発生していた
+- 既存の `_seen` HashSet を再利用し、パーサー診断同士の dedup を追加
 
 **影響 fixture 数**: 1 fixture, 11 extra lines
 
@@ -604,7 +605,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 2 | `case_sensitive_keys` | 🔧 | A: メッセージ | 1.4 | P1 | unexpected key メッセージに期待キー一覧を追加 |
 | 3 | `context_availability` | 🔧🔴 | A+D: メッセージ+重複 | 1.1 | P1 | Parser/Linter 重複。統一で大幅改善 |
 | 4 | `cron_5minutes_limit` | 🔧 | B: 列位置 | 1.13 | P2 | 列位置1ずれ + メッセージ形式 |
-| 5 | `dedup_errors` | 🔴 | D: 重複 | 3.1 | P1 | anchor 展開で 11 重複。dedup 必要 |
+| 5 | `dedup_errors` | ✅ | D: 重複 | 3.1 | P1 | anchor 展開で 11 重複。パーサー診断 dedup で解決 |
 | 6 | `deprecated_action_inputs` | 🔧 | B: 行位置 | 3.4 | P2 | uses 行 vs input 行 |
 | 7 | `deprecated_workflow_commands` | 🔧 | A: メッセージ | 1.8 | P2 | メッセージ形式差異 |
 | 8 | `docker_specific_inputs_with_normal_action` | ⚠️ | C: 検出漏れ | 2.7 | P2 | Docker 固有 input 検証なし |
