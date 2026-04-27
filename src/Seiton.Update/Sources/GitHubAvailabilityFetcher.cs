@@ -100,6 +100,9 @@ internal sealed class GitHubAvailabilityFetcher
     private static readonly Dictionary<string, List<string>> SupplementedEntries = new(StringComparer.Ordinal)
     {
         ["defaults.run.shell"] = [],
+        ["jobs.<job_id>.services.<service_id>.command"] = ["github", "needs", "strategy", "matrix", "vars", "inputs"],
+        ["jobs.<job_id>.services.<service_id>.entrypoint"] = ["github", "needs", "strategy", "matrix", "vars", "inputs"],
+        ["jobs.<job_id>.snapshot.if"] = ["github", "needs", "strategy", "matrix", "vars", "inputs"],
         ["jobs.<job_id>.steps.id"] = [],
         ["jobs.<job_id>.steps.shell"] = [],
     };

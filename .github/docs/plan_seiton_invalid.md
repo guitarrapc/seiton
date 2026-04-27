@@ -622,7 +622,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 |---|---------|------|-----|-----|-------|------|------|-------|------|------|
 | 1 | `assign_expression` | EXTRA | 3 | 7 | 0 | 3 | 0 | 4 | | B+D: 列差異3 + 余剰4 (型メッセージ詳細化) |
 | 2 | `case_sensitive_keys` | MISSING | 22 | 21 | 21 | 0 | 1 | 0 | | C: 1行未検出 |
-| 3 | `context_availability` | MIXED | 39 | 35 | 0 | 32 | 7 | 3 | | B+C+D: 列差異32, 未検出7, 余剰3 (snapshot) |
+| 3 | `context_availability` | MIXED | 39 | 39 | 0 | 32 | 1 | 1 | | B+C+D: 列差異32, 未検出1 (services式形式), 余剰1 (seitonがより正確) |
 | 4 | `cron_5minutes_limit` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
 | 5 | `dedup_errors` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 6 | `deprecated_action_inputs` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
@@ -657,7 +657,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 35 | `invalid_json_in_fromjson` | MIXED | 9 | 10 | 4 | 3 | 2 | 3 | ✅ | B+C+D: 一致4, 列差異3, 未検出2, 余剰3 |
 | 36 | `invalid_permissions` | PERFECT | 12 | 12 | 12 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 37 | `invalid_runner_labels` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 列差異1 |
-| 38 | `invalid_snapshot` | MIXED | 5 | 4 | 1 | 1 | 3 | 2 | ✅ | C+D: snapshot パース実装済み。未検出3 (image-name 必須, expr context, 空文字列位置差異), 余剰2 |
+| 38 | `invalid_snapshot` | MIXED | 5 | 5 | 1 | 1 | 2 | 2 | ✅ | C+D: snapshot パース実装済み。未検出2 (image-name 必須, 空文字列位置差異), 余剰2 (snapshot.if context検証追加 + glob検証追加) |
 | 39 | `invalid_steps` | MIXED | 19 | 18 | 12 | 2 | 5 | 4 | | A+B+C: 一致12, 列差異2, 未検出5, 余剰4 |
 | 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 3 | 0 | 0 | 2 | 3 | | A: メッセージ差異 |
 | 41 | `issue102` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
@@ -742,7 +742,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 |---------|------|-------|----------|
 | `glob_more` | ~~10~~→~~4~~→1 | ~~1~~→~~2~~→1 | ✅ error recovery + snapshot/image_version glob 実装済み。残り: block scalar (1 MISS, 1 EXTRA) |
 | `exclusive_webhook_filters` | ~~9~~→0 | ~~9~~→0 | ✅ 排他フィルター位置改善済み。全9行 PERFECT MATCH |
-| `context_availability` | 7 | 3 | 一部 context 未検出 + snapshot 余剰 |
+| `context_availability` | ~~7~~→1 | ~~3~~→1 | ✅ workflow_call output value + snapshot.if + service entrypoint/command 実装済み。残り: services 式形式 (1 MISS), seiton がより正確 (1 EXTRA) |
 | `issue280_runs_on` | 6 | 8 | 空ラベル・位置差異が大きい |
 | `invalid_steps` | 5 | 4 | 空ステップ/不正ステップの報告位置 |
 | `matrix_exclude_mismatch` | 9 | 9 | exclude 報告位置の設計差異 |
@@ -828,52 +828,32 @@ if (hasBranches && hasBranchesIgnore)
 
 ---
 
-#### 4.C `context_availability` — 7 MISS, 3 EXTRA
+#### 4.C `context_availability` — ~~7 MISS, 3 EXTRA~~ → 1 MISS, 1 EXTRA
 
-**MISSING 行の内訳:**
+**MISSING 行の内訳 (7→1):**
 
-| Line | コンテキスト | 場所 | 原因分類 |
-|------|------------|------|---------|
-| 41:20 | `env` | `workflow_dispatch.inputs.bbb.value` | A: input value フィールド未検証 |
-| 217:34 | `env` | `snapshot.if` | B: snapshot 非サポート |
-| 228:15 | `env` | `snapshot.if` (複数式) | B: 同上 |
-| 228:35 | `runner` | `snapshot.if` (同一行) | B: 同上 |
-| 228:59 | `secrets` | `snapshot.if` (同一行) | B: 同上 |
-| 250:25 | `env` | `services.nginx.entrypoint` | C: service entrypoint 未検証 |
-| 252:22 | `env` | `services.nginx.command` | C: service command 未検証 |
+| Line | コンテキスト | 場所 | 原因分類 | 状態 |
+|------|------------|------|---------|------|
+| 41:20 | `env` | `workflow_call.outputs.bbb.value` | A: output value の root context 未検証 | ✅ 解消 |
+| 217:34 | `env` | `services` expression form | D: services 式形式の lint パスで env 未検出 | 残存 |
+| 228:15 | `env` | `snapshot.if` (複数式) | B: snapshot 非サポート | ✅ 解消 (COL_DIFF) |
+| 228:35 | `runner` | `snapshot.if` (同一行) | B: 同上 | ✅ 解消 (COL_DIFF) |
+| 228:59 | `secrets` | `snapshot.if` (同一行) | B: 同上 | ✅ 解消 (COL_DIFF) |
+| 250:25 | `env` | `services.nginx.entrypoint` | C: service entrypoint 未検証 | ✅ 解消 |
+| 252:22 | `env` | `services.nginx.command` | C: service command 未検証 | ✅ 解消 |
 
 **EXTRA 行 (3→1 行):**
 - ~~`225:5`, `240:5`: snapshot キー警告 (非標準キーとして検出 — 正常動作)~~ → snapshot パース実装により解消
 - `106:31`: runs-on 行に2つの式 `${{ runner.OS }} ${{ env.FOO }}` があり、seiton は2つとも検出。actionlint は `runner` のみ期待 → seiton がより正確
 
-**原因 A: `workflow_dispatch.inputs.*.value` の式検証 (1 行)**
+**修正内容:**
 
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      bbb:
-        value: ${{ env.FOO }}   # ← 検証されていない
-```
+- **A (workflow_call output value)**: `VisitWorkflowPost` を `CheckNodeWithOverrides` ベースに書き換え。root context availability + property access の両方を統合的に検証。
+- **B (snapshot.if)**: `JobSnapshotIf` を `ExpressionValidationContext` に追加 (availability.json + sync-availability)。パーサーで `JobIf` → `JobSnapshotIf` に変更。`ExprUndefinedVarRule.VisitJobPre` に `snapshot.If` チェック追加。contexts は `JobName` と同等 (github, needs, strategy, matrix, vars, inputs)。
+- **C (service entrypoint/command)**: `Container` AST に `Entrypoint`/`Command` プロパティ追加。パーサーで `SkipCurrentNode()` → `ParseStringAndValidateExpression` に変更。`JobServicesEntrypoint`/`JobServicesCommand` を availability に追加。`CheckServices` に entrypoint/command の `CheckNode` 追加。
 
-`workflow_dispatch` の `inputs` 内の `value` フィールドで使用される式のコンテキスト可用性チェックが未実装。
-
-**改善案:** パーサーで `workflow_dispatch.inputs.*.value` の式を解析し、適切な `ExpressionScope` (`WorkflowDispatchInputDefault` 相当) を割り当てる。
-
-**原因 B: snapshot フィールド (4 行)** — snapshot は非標準。スコープ外として維持。
-
-**原因 C: service `entrypoint`/`command` の式検証 (2 行)**
-
-```yaml
-services:
-  nginx:
-    entrypoint: ${{ env.SERVICE_ENTRYPOINT }}  # ← 検証されていない
-    command: ${{ env.SERVICE_COMMAND }}         # ← 検証されていない
-```
-
-`services.*.entrypoint` と `services.*.command` フィールドの式が解析されていないか、コンテキスト可用性スコープが設定されていない。
-
-**改善案:** パーサーで service の `entrypoint`/`command` を式対応フィールドとしてパースし、`ExpressionScope.JobServicesCredentials` 相当のスコープを割り当てる。
+**残存 (1 MISS):**
+- `217:34`: `services: ${{ inputs.bool || env.FOO }}` — services 式形式のパース時 expression validation で `env` が検出されない。既存の制限 (別 issue)。
 
 ---
 
@@ -1027,7 +1007,7 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 
 1. **値位置報告** (§4.4): 27 COL_DIFF fixtures — seiton はキーではなく値位置を報告
 2. **shellcheck/pyflakes 非サポート** (§4.2): 4 fixtures (17 行)
-3. **snapshot 非サポート** (§4.1): `invalid_snapshot` + `context_availability`/`if_cond_constants` の一部余剰行
+3. ~~**snapshot 非サポート** (§4.1)~~ → snapshot パース + context availability 実装済み
 
 ---
 
@@ -1147,3 +1127,26 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 - **Unit**: `Parse_ExclusiveFilterError_PathsIgnore_ReportsAtIgnoreKeyPosition` — paths/paths-ignore
 - **Unit**: `Parse_ExclusiveFilterError_IgnoreFirst_ReportsAtLaterKey` — ignore が先に出現する逆順ケース (branches キー位置を検証)
 - **Red/Green 確認済み**: 実装前に3テスト失敗 (line 2 = event name)、実装後に全 1023 テスト通過
+
+### フェーズ 4.C 実装記録
+
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 4.C-A | workflow_call output value root context 検証 | ✅ `VisitWorkflowPost` を `CheckNodeWithOverrides` ベースに書き換え。root context availability + property access 検証を統合。`env` が `WorkflowCallOutputsValue` スコープで検出されるようになった | `ExprUndefinedVarRule.cs` |
+| 4.C-B | snapshot.if context availability | ✅ `JobSnapshotIf` を `ExpressionValidationContext` に追加。availability.json に `jobs.<job_id>.snapshot.if` エントリ追加 (contexts: github, needs, strategy, matrix, vars, inputs)。パーサーで `JobIf` → `JobSnapshotIf` に変更。`VisitJobPre` に snapshot.If チェック追加。`isIfContext` にも追加 | `Availability.g.cs` (generated), `WorkflowParser.Jobs.cs`, `ExprUndefinedVarRule.cs`, `availability.json` |
+| 4.C-C | service entrypoint/command context availability | ✅ `Container` AST に `Entrypoint`/`Command` プロパティ追加。パーサーで `SkipCurrentNode()` → `ParseStringAndValidateExpression` に変更 (`JobServicesEntrypoint`/`JobServicesCommand` context)。`CheckServices` に lint チェック追加 | `StructuralNodes.cs`, `WorkflowParser.Containers.cs`, `ExprUndefinedVarRule.cs`, `Availability.g.cs` (generated), `availability.json` |
+
+#### テスト
+
+- **Unit**: `RuleRegression_ExprUndefinedVarRule_ContextAvailability4C_TableDriven` — 8ケース:
+  - `ng-workflow-call-output-value-env-not-allowed` — output value で env 不可を検証
+  - `ok-workflow-call-output-value-jobs-context` — jobs context は許可
+  - `ng-snapshot-if-env-not-allowed` — snapshot.if で env 不可
+  - `ng-snapshot-if-runner-not-allowed` — snapshot.if で runner 不可
+  - `ng-snapshot-if-secrets-not-allowed` — snapshot.if で secrets 不可
+  - `ok-snapshot-if-strategy-matrix-allowed` — snapshot.if で strategy/matrix は許可
+  - `ng-service-entrypoint-env-not-allowed` — entrypoint で env 不可
+  - `ng-service-command-env-not-allowed` — command で env 不可
+  - `ok-service-entrypoint-github-context` — entrypoint で github は許可
+- **Red/Green 確認済み**: 実装前に `ng-workflow-call-output-value-env-not-allowed` で失敗 (no diagnostics)、実装後に全 1024 テスト通過
+- **Benchmark**: CoreParsingBenchmark + CoreLintBenchmark 完了。allocation スパイクなし

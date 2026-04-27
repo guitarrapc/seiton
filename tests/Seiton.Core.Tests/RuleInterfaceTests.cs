@@ -6546,6 +6546,163 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability4C_TableDriven()
+    {
+        var cases = new[]
+        {
+            // 4.C-A: workflow_call output value should check root context availability
+            new RuleCase(
+            "ng-workflow-call-output-value-env-not-allowed",
+            """
+            on:
+              workflow_call:
+                outputs:
+                  result:
+                    value: ${{ env.FOO }}
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ok-workflow-call-output-value-jobs-context",
+            """
+            on:
+              workflow_call:
+                outputs:
+                  result:
+                    value: ${{ jobs.build.outputs.foo }}
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                outputs:
+                  foo: bar
+                steps:
+                  - run: echo ok
+            """,
+            []),
+
+            // 4.C-B: snapshot.if should be checked for context availability
+            new RuleCase(
+            "ng-snapshot-if-env-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                snapshot:
+                  image-name: my-image
+                  if: ${{ env.FOO == 'foo' }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ng-snapshot-if-runner-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                snapshot:
+                  image-name: my-image
+                  if: ${{ runner.name == 'foo' }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"runner\" is not allowed here"]),
+
+            new RuleCase(
+            "ng-snapshot-if-secrets-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                snapshot:
+                  image-name: my-image
+                  if: ${{ secrets.FOO == 'foo' }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"secrets\" is not allowed here"]),
+
+            new RuleCase(
+            "ok-snapshot-if-strategy-matrix-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    foo: [a, b]
+                snapshot:
+                  image-name: my-image
+                  if: ${{ matrix.foo == 'a' && strategy.fail-fast }}
+                steps:
+                  - run: echo ok
+            """,
+            []),
+
+            // 4.C-C: service entrypoint/command should be checked for context availability
+            new RuleCase(
+            "ng-service-entrypoint-env-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services:
+                  nginx:
+                    image: nginx
+                    entrypoint: ${{ env.FOO }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ng-service-command-env-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services:
+                  nginx:
+                    image: nginx
+                    command: ${{ env.FOO }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ok-service-entrypoint-github-context",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services:
+                  nginx:
+                    image: nginx
+                    entrypoint: ${{ github.actor }}
+                steps:
+                  - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_DynamicContext_TableDriven()
     {
         var cases = new[]

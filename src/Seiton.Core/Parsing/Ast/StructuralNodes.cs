@@ -174,6 +174,10 @@ public sealed class Container
 
     public StringNodeId Options { get; init; }
 
+    public StringNodeId Entrypoint { get; init; }
+
+    public StringNodeId Command { get; init; }
+
     public TextRange Range { get; init; }
 }
 

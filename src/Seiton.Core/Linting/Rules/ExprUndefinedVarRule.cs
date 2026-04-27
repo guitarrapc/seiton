@@ -136,47 +136,14 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             foreach (var pair in outputs)
             {
                 var output = pair.Value;
-                if (!output.Value.HasValue)
-                {
-                    continue;
-                }
-
-                var value = Arena.GetStringValue(output.Value);
-                if (value.Length == 0)
-                {
-                    continue;
-                }
-
-                var nodeRange = Arena.GetStringRange(output.Value);
-                var searchStart = 0;
-                while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
-                {
-                    searchStart = nextSearchStart;
-                    var expression = TrimAsciiWhiteSpace(value.Slice(bodyStart, bodyLength));
-                    if (expression.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    // Validate context availability
-                    var parseResult = Config.ParseExpression(expression);
-                    if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
-                    {
-                        continue;
-                    }
-
-                    // Validate property access against jobs context
-                    var exprLocation = ComputeExpressionLocation(nodeRange, value, bodyStart - 3);
-                    var propertyDiagnostics = _propertyDiagnostics;
-                    propertyDiagnostics.Clear();
-                    ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline(
-                        parseResult, expression, exprLocation, overrides, propertyDiagnostics);
-                    for (var d = 0; d < propertyDiagnostics.Count; d++)
-                    {
-                        var diag = propertyDiagnostics[d];
-                        AddWorkflowError(workflow, diag.Message, diag.Location);
-                    }
-                }
+                CheckNodeWithOverrides(
+                    output.Value,
+                    ExpressionValidationContext.WorkflowCallOutputsValue,
+                    "workflow_call output value",
+                    overrides,
+                    static (rule, message, location, w) =>
+                        rule.AddWorkflowError(w, message, location),
+                    workflow);
             }
         }
     }
@@ -291,6 +258,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 
         // job.services
         CheckServices(job.Services, job);
+
+        // job.snapshot.if
+        if (job.Snapshot is { } snapshot)
+        {
+            CheckNode(snapshot.If, ExpressionValidationContext.JobSnapshotIf, "snapshot.if", static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+        }
 
         // job.secrets (reusable workflow call)
         var callSecrets = job.WorkflowCall?.Secrets;
@@ -640,7 +614,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 var funcName = callee.Token.AsSpan(expression);
 
                 // Status check functions: only in if conditions
-                var isIfContext = context is ExpressionValidationContext.JobIf or ExpressionValidationContext.StepIf;
+                var isIfContext = context is ExpressionValidationContext.JobIf or ExpressionValidationContext.StepIf or ExpressionValidationContext.JobSnapshotIf;
                 if (!isIfContext && IsStatusCheckFunction(funcName))
                 {
                     var funcNameText = Encoding.UTF8.GetString(funcName);
@@ -1006,6 +980,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 rule.AddJobError(j, message, location), job);
             CheckNode(svcContainer.Options, ExpressionValidationContext.JobServices, "job.services.options", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
+            CheckNode(svcContainer.Entrypoint, ExpressionValidationContext.JobServicesEntrypoint, "job.services.entrypoint", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
+            CheckNode(svcContainer.Command, ExpressionValidationContext.JobServicesCommand, "job.services.command", static (rule, message, location, j) =>
+                rule.AddJobError(j, message, location), job);
             CheckEnv(svcContainer.Env, ExpressionValidationContext.JobServicesEnv, "job.services.env", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
 
@@ -1084,8 +1062,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         ExpressionValidationContext.JobRunsOn => "job runs-on",
         ExpressionValidationContext.JobSecrets => "job secrets",
         ExpressionValidationContext.JobServices => "job services",
+        ExpressionValidationContext.JobServicesCommand => "job services command",
         ExpressionValidationContext.JobServicesCredentials => "job services credentials",
+        ExpressionValidationContext.JobServicesEntrypoint => "job services entrypoint",
         ExpressionValidationContext.JobServicesEnv => "job services env",
+        ExpressionValidationContext.JobSnapshotIf => "snapshot if",
         ExpressionValidationContext.JobStrategy => "job strategy",
         ExpressionValidationContext.JobTimeoutMinutes => "job timeout-minutes",
         ExpressionValidationContext.JobWith => "job with",

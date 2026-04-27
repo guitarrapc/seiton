@@ -777,7 +777,7 @@ public static partial class WorkflowParser
                     case SnapshotMappingKey.If:
                         if (!reader.End)
                         {
-                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobIf, out var ifErr, out var ifMark);
+                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobSnapshotIf, out var ifErr, out var ifMark);
                             if (ifErr) AddError(diagnostics, $"{section}.if must be scalar", ifMark);
                         }
 

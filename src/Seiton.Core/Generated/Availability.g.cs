@@ -31,8 +31,11 @@ namespace Seiton.Core.Parsing
         JobRunsOn,
         JobSecrets,
         JobServices,
+        JobServicesCommand,
         JobServicesCredentials,
+        JobServicesEntrypoint,
         JobServicesEnv,
+        JobSnapshotIf,
         JobStrategy,
         JobTimeoutMinutes,
         JobWith,
@@ -272,6 +275,16 @@ namespace Seiton.Core.Generated
             "matrix"u8.ToArray(),
         ];
 
+        static readonly byte[][] JobServicesCommandRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
+        ];
+
         static readonly byte[][] JobServicesCredentialsRoots =
         [
             "github"u8.ToArray(),
@@ -282,6 +295,16 @@ namespace Seiton.Core.Generated
             "matrix"u8.ToArray(),
             "env"u8.ToArray(),
             "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobServicesEntrypointRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
         ];
 
         static readonly byte[][] JobServicesEnvRoots =
@@ -296,6 +319,16 @@ namespace Seiton.Core.Generated
             "runner"u8.ToArray(),
             "env"u8.ToArray(),
             "secrets"u8.ToArray(),
+        ];
+
+        static readonly byte[][] JobSnapshotIfRoots =
+        [
+            "github"u8.ToArray(),
+            "inputs"u8.ToArray(),
+            "vars"u8.ToArray(),
+            "needs"u8.ToArray(),
+            "strategy"u8.ToArray(),
+            "matrix"u8.ToArray(),
         ];
 
         static readonly byte[][] JobStrategyRoots =
@@ -479,8 +512,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobRunsOn => Contains(JobRunsOnRoots, rootName),
                 ExpressionValidationContext.JobSecrets => Contains(JobSecretsRoots, rootName),
                 ExpressionValidationContext.JobServices => Contains(JobServicesRoots, rootName),
+                ExpressionValidationContext.JobServicesCommand => Contains(JobServicesCommandRoots, rootName),
                 ExpressionValidationContext.JobServicesCredentials => Contains(JobServicesCredentialsRoots, rootName),
+                ExpressionValidationContext.JobServicesEntrypoint => Contains(JobServicesEntrypointRoots, rootName),
                 ExpressionValidationContext.JobServicesEnv => Contains(JobServicesEnvRoots, rootName),
+                ExpressionValidationContext.JobSnapshotIf => Contains(JobSnapshotIfRoots, rootName),
                 ExpressionValidationContext.JobStrategy => Contains(JobStrategyRoots, rootName),
                 ExpressionValidationContext.JobTimeoutMinutes => Contains(JobTimeoutMinutesRoots, rootName),
                 ExpressionValidationContext.JobWith => Contains(JobWithRoots, rootName),
@@ -538,8 +574,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobRunsOn => "job",
                 ExpressionValidationContext.JobSecrets => "reusable workflow call secrets",
                 ExpressionValidationContext.JobServices => "job",
+                ExpressionValidationContext.JobServicesCommand => "job",
                 ExpressionValidationContext.JobServicesCredentials => "job",
+                ExpressionValidationContext.JobServicesEntrypoint => "job",
                 ExpressionValidationContext.JobServicesEnv => "job",
+                ExpressionValidationContext.JobSnapshotIf => "job",
                 ExpressionValidationContext.JobStrategy => "strategy",
                 ExpressionValidationContext.JobTimeoutMinutes => "job",
                 ExpressionValidationContext.JobWith => "job",
@@ -583,8 +622,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobRunsOn => "job",
                 ExpressionValidationContext.JobSecrets => "reusable workflow_call secrets",
                 ExpressionValidationContext.JobServices => "job",
+                ExpressionValidationContext.JobServicesCommand => "job",
                 ExpressionValidationContext.JobServicesCredentials => "job",
+                ExpressionValidationContext.JobServicesEntrypoint => "job",
                 ExpressionValidationContext.JobServicesEnv => "job",
+                ExpressionValidationContext.JobSnapshotIf => "job",
                 ExpressionValidationContext.JobStrategy => "job",
                 ExpressionValidationContext.JobTimeoutMinutes => "job",
                 ExpressionValidationContext.JobWith => "job",
@@ -641,8 +683,11 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobRunsOn => JobRunsOnRoots,
                 ExpressionValidationContext.JobSecrets => JobSecretsRoots,
                 ExpressionValidationContext.JobServices => JobServicesRoots,
+                ExpressionValidationContext.JobServicesCommand => JobServicesCommandRoots,
                 ExpressionValidationContext.JobServicesCredentials => JobServicesCredentialsRoots,
+                ExpressionValidationContext.JobServicesEntrypoint => JobServicesEntrypointRoots,
                 ExpressionValidationContext.JobServicesEnv => JobServicesEnvRoots,
+                ExpressionValidationContext.JobSnapshotIf => JobSnapshotIfRoots,
                 ExpressionValidationContext.JobStrategy => JobStrategyRoots,
                 ExpressionValidationContext.JobTimeoutMinutes => JobTimeoutMinutesRoots,
                 ExpressionValidationContext.JobWith => JobWithRoots,

@@ -216,6 +216,17 @@
       ]
     },
     {
+      "workflowKey": "jobs.\u003Cjob_id\u003E.services.\u003Cservice_id\u003E.command",
+      "contexts": [
+        "github",
+        "needs",
+        "strategy",
+        "matrix",
+        "vars",
+        "inputs"
+      ]
+    },
+    {
       "workflowKey": "jobs.\u003Cjob_id\u003E.services.\u003Cservice_id\u003E.credentials",
       "contexts": [
         "github",
@@ -225,6 +236,17 @@
         "env",
         "vars",
         "secrets",
+        "inputs"
+      ]
+    },
+    {
+      "workflowKey": "jobs.\u003Cjob_id\u003E.services.\u003Cservice_id\u003E.entrypoint",
+      "contexts": [
+        "github",
+        "needs",
+        "strategy",
+        "matrix",
+        "vars",
         "inputs"
       ]
     },
@@ -240,6 +262,17 @@
         "env",
         "vars",
         "secrets",
+        "inputs"
+      ]
+    },
+    {
+      "workflowKey": "jobs.\u003Cjob_id\u003E.snapshot.if",
+      "contexts": [
+        "github",
+        "needs",
+        "strategy",
+        "matrix",
+        "vars",
         "inputs"
       ]
     },

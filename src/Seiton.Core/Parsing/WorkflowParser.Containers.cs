@@ -163,6 +163,8 @@ public static partial class WorkflowParser
         StringNodeId[]? ports = null;
         StringNodeId[]? volumes = null;
         StringNodeId options = default;
+        StringNodeId entrypoint = default;
+        StringNodeId command = default;
         ulong seen = 0;
         reader.Read(); // consume mapping
 
@@ -277,8 +279,19 @@ public static partial class WorkflowParser
                     case ContainerMappingKey.Command:
                         if (isService)
                         {
-                            // Valid service container keys — parse and discard (not stored in AST).
-                            reader.SkipCurrentNode();
+                            var svcFieldContext = ck == ContainerMappingKey.Entrypoint
+                                ? ExpressionValidationContext.JobServicesEntrypoint
+                                : ExpressionValidationContext.JobServicesCommand;
+                            var svcField = ParseStringAndValidateExpression(
+                                ref reader, arena, diagnostics,
+                                svcFieldContext,
+                                out var svcFieldErr, out var svcFieldMark,
+                                parseWholeValueIfNoEmbedded: false);
+                            if (svcFieldErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{ContainerDuplicateSubKey(ck)} must be scalar", svcFieldMark);
+                            if (ck == ContainerMappingKey.Entrypoint)
+                                entrypoint = svcField;
+                            else
+                                command = svcField;
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
@@ -328,6 +341,8 @@ public static partial class WorkflowParser
             Ports = ports,
             Volumes = volumes,
             Options = options,
+            Entrypoint = entrypoint,
+            Command = command,
             Range = range,
         };
     }
