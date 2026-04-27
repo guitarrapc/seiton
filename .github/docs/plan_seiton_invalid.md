@@ -666,7 +666,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 44 | `issue170_empty_permissions` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
 | 45 | `issue193` | EXTRA | 1 | 2 | 1 | 0 | 0 | 1 | | D: 余剰1 (追加診断) |
 | 46 | `issue207_work_dir_with_uses` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 47 | `issue280_runs_on` | MIXED | 17 | 19 | 4 | 7 | 6 | 8 | | A+B+C+D: 大幅差異 |
+| 47 | `issue280_runs_on` | MIXED | 17 | 19 | 9 | 3 | 5 | 7 | ✅ | B: 位置改善済み (34:13, 40:14, 58:15)。残: Cause C (5 MISS regex), WCol (3), requires-labels/x64 (7 EXTRA) |
 | 48 | `issue558_...permissions` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
 | 49 | `macos_10.15_removed` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
 | 50 | `macos12_runner` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
@@ -743,7 +743,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | `glob_more` | ~~10~~→~~4~~→1 | ~~1~~→~~2~~→1 | ✅ error recovery + snapshot/image_version glob 実装済み。残り: block scalar (1 MISS, 1 EXTRA) |
 | `exclusive_webhook_filters` | ~~9~~→0 | ~~9~~→0 | ✅ 排他フィルター位置改善済み。全9行 PERFECT MATCH |
 | `context_availability` | ~~7~~→1 | ~~3~~→1 | ✅ workflow_call output value + snapshot.if + service entrypoint/command 実装済み。残り: services 式形式 (1 MISS), seiton がより正確 (1 EXTRA) |
-| `issue280_runs_on` | 6 | 8 | 空ラベル・位置差異が大きい |
+| `issue280_runs_on` | ~~6~~→5 | ~~8~~→7 | ✅ 位置改善済み (34:13, 40:14, 58:15)。残: Cause C regex (5 MISS), WCol (3), requires-labels/x64 (7 EXTRA) |
 | `invalid_steps` | 5 | 4 | 空ステップ/不正ステップの報告位置 |
 | `matrix_exclude_mismatch` | 9 | 9 | exclude 報告位置の設計差異 |
 
@@ -857,56 +857,53 @@ if (hasBranches && hasBranchesIgnore)
 
 ---
 
-#### 4.D `issue280_runs_on` — 6 MISS, 8 EXTRA
+#### 4.D `issue280_runs_on` — ~~6 MISS, 8 EXTRA~~ → 5 MISS, 7 EXTRA (実装済み)
 
-**MISSING 行の内訳:**
+**実装記録:**
+
+- **修正箇所**: `VYamlStreamAdapter.ResolveEmptyScalarStart` にトークンスキップブロックを追加
+- **根本原因**: VYaml の `CurrentMark.Position` が mapping 内 null/empty scalar に対して次のトークンの `:` 位置を返す。既存の後方スキャンは直前に空白がある前提だったが、ネストされた mapping では空白がなく非空白文字 (次のキー名) があるため、正しい位置に到達できなかった。
+- **修正内容**: `pos == nextTokenPosition` かつ直前が非空白の場合、まず非空白 (次のトークン文字列) を後方にスキップし、次に空白/改行をスキップする新ブロックを追加。
+- **テスト**: `Parse_RunsOnMappingGroupNull_ReportsEmptyAtGroupLine`, `Parse_RunsOnMappingGroupEmptyQuoted_ReportsEmptyAtQuoteLine`, `Parse_RunsOnMappingLabelsEmptyQuoted_ReportsEmptyAtQuoteLine` (3 tests)
+- **影響**: 9 つの `.seiton.out` ファイルで位置改善 (issue280_runs_on, empty_sequence_or_string, glob_more, invalid_container_syntax, invalid_image_version_event, invalid_steps, schedule_invalid_timezone, workflow_call_job, workflow_call_outputs_syntax)
+- **ベンチマーク**: Mean +10%/Allocated +10% 閾値内。回帰なし。
+
+**現在の状態 (Match=9, WCol=3, Miss=5, Extra=7):**
+
+**MISS 行 (5 行 — 全て Cause C):**
 
 | Line | 期待内容 | 原因分類 |
-|------|---------|---------|
-| 7:13 | `string should not be empty` | A: regex により label unknown にマッチ済み (WC), ただし本体の empty string は未マッチ |
-| 17:14 | `string should not be empty` | A: 同上 |
-| 34:13 | `string should not be empty` | B: seiton は 35:10 で報告 (行ずれ) |
-| 40:14 | `string should not be empty` | B: seiton は 41:10 で報告 (行ずれ) |
-| 58:15 | regex `label "" is unknown` | C: seiton は 59:10 で報告 (行ずれ + unknown 未検出) |
-| 58:15 | `string should not be empty` | B: seiton は 59:10 で報告 (行ずれ) |
+|------|---------|----------|
+| 7:13 | regex `label "" is unknown` | C: seiton は "string should not be empty" で報告 (根本原因優先) |
+| 17:14 | regex `label "" is unknown` | C: 同上 |
+| 22:22 | regex `label "" is unknown` | C: 同上 |
+| 58:15 | regex `label "" is unknown` | C: 同上 |
+| 64:21 | regex `label "" is unknown` | C: 同上 |
 
-**EXTRA 行 (8 行):**
+**WCol 行 (3 行):**
+- 22:22→22:21 (col -1), 64:21→64:20 (col -1), 71:9→71:14 (col +5)
+
+**EXTRA 行 (7 行):**
 - 5 行: `job 'testX' runs-on requires labels` at 1:1 — seiton 独自の構造検証
 - 2 行: `label "x64" is unknown` — seiton が x64 を unknown label として正しく検出 (actionlint は空文字 label のみ検出)
-- 1 行: 行ずれした empty string 検出
 
-**原因 B: mapping 形式 runs-on での位置ずれ (4 行)**
+**原因 C: 空文字 label に対する "unknown label" 未検出 — 設計判断として維持**
 
-```yaml
-# test6: group が空
-runs-on:
-  group:      # line 34 — actionlint: 34:13
-              # seiton: 35:10 (次の行の steps キー位置?)
-```
-
-`group:` や `labels:` の値が空 (null scalar) の場合、seiton は値位置ではなくパーサーが進んだ後の位置を報告している。
-
-**改善案:** `WorkflowParser.Jobs.cs` の `ParseRunsOnNode` で、null/空 scalar の位置を正しく取得する。VYaml が null scalar に対して返す Mark 位置を使用すること。
-
-**原因 C: 空文字 label に対する "unknown label" 未検出**
-
-actionlint は空文字 `""` に対して "string should not be empty" **と** "label '' is unknown" の両方を報告する。seiton は前者のみ。
-
-**改善案:** 改善しない (設計判断)。`string should not be empty` の方が根本原因を示しており、空文字に対する "unknown label" は冗長。
+actionlint は空文字 `""` に対して "string should not be empty" **と** "label '' is unknown" の両方を報告する。seiton は前者のみ。`string should not be empty` の方が根本原因を示しており、空文字に対する "unknown label" は冗長。
 
 ---
 
 #### 4.E `invalid_steps` — 5 MISS, 4 EXTRA
 
-**現象:** null/空ステップの位置が1行ずれている。
+**現象:** null/空ステップの位置が1行ずれている。→ 4.D の `ResolveEmptyScalarStart` 修正により一部改善。
 
-| 期待 | seiton | 内容 |
-|------|--------|------|
-| 17:9 | 18:8 | null ステップ (`- null`) — empty + must run/uses |
-| 17:9 | 18:8 | 同上 |
-| 21:11 | 22:8 | null steps セクション (`steps:` の値が null) |
-| 28:9 | 29:7 | 空マッピングステップ (`- { }`) — empty + must run/uses |
-| 28:9 | 29:7 | 同上 |
+| 期待 | seiton (修正前) | seiton (修正後) | 内容 |
+|------|----------------|----------------|------|
+| 17:9 | 18:8 | 17:13 | null ステップ (`- null`) — empty + must run/uses (WCol: col 9→13) |
+| 17:9 | 18:8 | 17:13 | 同上 |
+| 21:11 | 22:8 | 21:11 | null steps セクション (`steps:` の値が null) ← **MATCH に改善** |
+| 28:9 | 29:7 | 26:17 | 空マッピングステップ (`- { }`) — empty + must run/uses (WCol: col 9→17) |
+| 28:9 | 29:7 | 26:17 | 同上 |
 
 **根本原因:** パーサーが null/空 YAML シーケンス要素の位置を、その要素自体ではなく次の要素の位置で報告している。
 

@@ -148,15 +148,13 @@ empty_sequence_or_string,8,"test.yaml:22:14: ""matrix values"" section should no
 empty_sequence_or_string,9,"test.yaml:23:18: ""include"" section should not be empty [syntax-check]",8,"test.yaml:23:18: ""include"" section should not be empty [syntax-check]",MATCH
 empty_sequence_or_string,10,"test.yaml:24:18: ""exclude"" section should not be empty [syntax-check]",9,"test.yaml:24:18: ""exclude"" section should not be empty [syntax-check]",MATCH
 empty_sequence_or_string,11,"test.yaml:26:14: string should not be empty [syntax-check]",10,"test.yaml:26:14: string should not be empty [syntax-check]",MATCH
-empty_sequence_or_string,12,"test.yaml:28:11: string should not be empty [syntax-check]",-,,MISS
-empty_sequence_or_string,13,"test.yaml:30:11: string should not be empty [syntax-check]",-,,MISS
+empty_sequence_or_string,12,"test.yaml:28:11: string should not be empty [syntax-check]",11,"test.yaml:28:11: string should not be empty [syntax-check]",MATCH
+empty_sequence_or_string,13,"test.yaml:30:11: string should not be empty [syntax-check]",12,"test.yaml:30:11: string should not be empty [syntax-check]",MATCH
 empty_sequence_or_string,14,"test.yaml:31:14: ""runs-on"" section should not be empty [syntax-check]",13,"test.yaml:31:14: ""runs-on"" section should not be empty [syntax-check]",MATCH
 empty_sequence_or_string,15,"test.yaml:32:12: ""needs"" section should not be empty [syntax-check]",14,"test.yaml:32:12: ""needs"" section should not be empty [syntax-check]",MATCH
 empty_sequence_or_string,16,"test.yaml:37:15: ""labels"" section should not be empty [syntax-check]",15,"test.yaml:37:15: ""labels"" section should not be empty [syntax-check]",MATCH
 empty_sequence_or_string,-,,4,"test.yaml:14:5: on.push.types is not supported [syntax-check]",EXTRA
 empty_sequence_or_string,-,,6,"test.yaml:16:5: ""workflows"" filter is not available for push event. it is only for workflow_run events [syntax-check]",EXTRA
-empty_sequence_or_string,-,,11,"test.yaml:29:14: string should not be empty [syntax-check]",EXTRA
-empty_sequence_or_string,-,,12,"test.yaml:31:12: string should not be empty [syntax-check]",EXTRA
 empty_sequence_or_string,-,,16,"test.yaml:22:9: job 'test1' strategy.matrix axis 'foo' has no values; remove the axis or provide at least one value [mat...",EXTRA
 env_context_banned,1,"test.yaml:6:15: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""secrets"", ""vars"". see htt...",-,,MISS
 env_context_banned,2,"test.yaml:14:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""matrix"", ""needs"", ""secre...",-,,MISS
@@ -237,7 +235,7 @@ glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: 
 glob_more,16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
 glob_more,17,"test.yaml:27:13: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,18,"test.yaml:34:20: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
-glob_more,-,,1,"test.yaml:14:8: on.push.paths must be scalar or sequence of scalar [syntax-check]",EXTRA
+glob_more,-,,1,"test.yaml:13:11: on.push.paths must be scalar or sequence of scalar [syntax-check]",EXTRA
 glob_more,-,,2,"test.yaml:6:10: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",EXTRA
 glob_more,-,,3,"test.yaml:7:1: character ' ' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *. see ...",EXTRA
 glob_more,-,,4,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not end with / and ... see `man git-che...",EXTRA
@@ -297,7 +295,7 @@ invalid_container_syntax,3,"test.yaml:16:15: string should not be empty [syntax-
 invalid_container_syntax,4,"test.yaml:21:5: ""image"" is missing in ""container"" section [syntax-check]",4,"test.yaml:21:5: ""image"" is missing in ""container"" section [syntax-check]",MATCH
 invalid_container_syntax,5,"test.yaml:29:14: string should not be empty [syntax-check]",5,"test.yaml:29:14: string should not be empty [syntax-check]",MATCH
 invalid_container_syntax,6,"test.yaml:30:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",6,"test.yaml:30:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",MATCH
-invalid_container_syntax,7,"test.yaml:30:19: ""credentials"" section should not be empty. please remove this section if it's unnecessary [syntax-check...",-,,MISS
+invalid_container_syntax,7,"test.yaml:30:19: ""credentials"" section should not be empty. please remove this section if it's unnecessary [syntax-check...",7,"test.yaml:30:19: ""credentials"" section should not be empty. please remove this section if it's unnecessary [syntax-check...",MATCH
 invalid_container_syntax,8,"test.yaml:37:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",8,"test.yaml:37:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",MATCH
 invalid_container_syntax,9,"test.yaml:45:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",9,"test.yaml:45:7: both ""username"" and ""password"" must be specified in ""credentials"" section [syntax-check]",MATCH
 invalid_container_syntax,10,"test.yaml:53:14: ""ports"" section must be sequence node but got scalar node with ""!!int"" tag [syntax-check]",10,"test.yaml:53:14: ""ports"" section must be sequence node but got scalar node with ""!!int"" tag [syntax-check]",MATCH
@@ -314,7 +312,6 @@ invalid_container_syntax,20,"test.yaml:97:9: both ""username"" and ""password"" 
 invalid_container_syntax,21,"test.yaml:110:21: ""password"" section in ""redis"" service should be specified via secrets. do not put password value direc...",23,"test.yaml:110:21: ""password"" section in ""redis"" service should be specified via secrets. do not put password value direc...",MATCH
 invalid_container_syntax,22,"test.yaml:117:7: unexpected key ""entrypoint"" for ""container"" section. expected one of ""credentials"", ""env"", ""image"", ""op...",20,"test.yaml:117:7: unexpected key ""entrypoint"" for ""container"" section. expected one of ""credentials"", ""env"", ""image"", ""op...",MATCH
 invalid_container_syntax,23,"test.yaml:118:7: unexpected key ""command"" for ""container"" section. expected one of ""credentials"", ""env"", ""image"", ""optio...",21,"test.yaml:118:7: unexpected key ""command"" for ""container"" section. expected one of ""credentials"", ""env"", ""image"", ""optio...",MATCH
-invalid_container_syntax,-,,7,"test.yaml:31:10: ""credentials"" section should not be empty. please remove this section if it's unnecessary [syntax-check...",EXTRA
 invalid_event_filters,1,"test.yaml:3:12: invalid activity type ""opened"" for ""merge_group"" Webhook event. available types are ""checks_requested"" [...",-,,MISS
 invalid_event_filters,2,"test.yaml:4:5: ""paths"" filter is not available for merge_group event. it is only for push, pull_request, pull_request_ta...",-,,MISS
 invalid_event_filters,3,"test.yaml:5:5: ""paths-ignore"" filter is not available for merge_group event. it is only for push, pull_request, pull_req...",-,,MISS
@@ -360,9 +357,9 @@ invalid_image_version_event,1,"test.yaml:4:12: ""names"" section must be sequenc
 invalid_image_version_event,2,"test.yaml:6:16: string should not be empty [syntax-check]",-,,MISS
 invalid_image_version_event,3,"test.yaml:8:5: unexpected key ""entrypoint"" for ""image_version"" section. expected one of ""names"", ""versions"" [syntax-chec...",-,,MISS
 invalid_image_version_event,-,,1,"test.yaml:4:12: on.image_version.names must be sequence of scalar [syntax-check]",EXTRA
-invalid_image_version_event,-,,2,"test.yaml:6:19: on.image_version.versions must be sequence of scalar [syntax-check]",EXTRA
+invalid_image_version_event,-,,2,"test.yaml:5:34: on.image_version.versions must be sequence of scalar [syntax-check]",EXTRA
 invalid_image_version_event,-,,3,"test.yaml:8:5: on.image_version does not support option: entrypoint [syntax-check]",EXTRA
-invalid_image_version_event,-,,4,"test.yaml:6:19: string should not be empty [glob]",EXTRA
+invalid_image_version_event,-,,4,"test.yaml:5:34: string should not be empty [glob]",EXTRA
 invalid_int_at_max_parallel,1,"test.yaml:7:21: expecting a single ${{...}} expression or integer literal, but found plain text node [syntax-check]",-,,MISS
 invalid_int_at_max_parallel,2,"test.yaml:13:21: expected scalar node for integer value but found scalar node with ""!!float"" tag [syntax-check]",-,,MISS
 invalid_int_at_max_parallel,3,"test.yaml:19:21: expecting a single ${{...}} expression or integer literal, but found plain text node [syntax-check]",-,,MISS
@@ -427,10 +424,10 @@ invalid_steps,3,"test.yaml:14:9: unexpected key ""shell"" for step to execute ac
 invalid_steps,4,"test.yaml:17:9: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",-,,MISS
 invalid_steps,5,"test.yaml:17:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 invalid_steps,6,"test.yaml:18:3: ""steps"" section is missing in job ""test2"" [syntax-check]",7,"test.yaml:18:3: ""steps"" section is missing in job ""test2"" [syntax-check]",MATCH
-invalid_steps,7,"test.yaml:21:11: ""steps"" section must be sequence node but got scalar node with ""!!null"" tag [syntax-check]",-,,MISS
+invalid_steps,7,"test.yaml:21:11: ""steps"" section must be sequence node but got scalar node with ""!!null"" tag [syntax-check]",6,"test.yaml:21:11: ""steps"" section must be sequence node but got scalar node with ""!!null"" tag [syntax-check]",MATCH
 invalid_steps,8,"test.yaml:25:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
-invalid_steps,9,"test.yaml:27:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",9,"test.yaml:27:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",MATCH
-invalid_steps,10,"test.yaml:27:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",10,"test.yaml:27:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",MATCH
+invalid_steps,9,"test.yaml:27:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",-,,MISS
+invalid_steps,10,"test.yaml:27:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 invalid_steps,11,"test.yaml:28:9: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",-,,MISS
 invalid_steps,12,"test.yaml:28:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 invalid_steps,13,"test.yaml:29:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
@@ -440,10 +437,11 @@ invalid_steps,16,"test.yaml:39:9: unexpected key ""working-directory"" for step 
 invalid_steps,17,"test.yaml:41:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",16,"test.yaml:41:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",MATCH
 invalid_steps,18,"test.yaml:45:9: unexpected key ""foooo"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",17,"test.yaml:45:9: unexpected key ""foooo"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",MATCH
 invalid_steps,19,"test.yaml:47:9: unexpected key ""foooo"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ...",18,"test.yaml:47:9: unexpected key ""foooo"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ...",MATCH
-invalid_steps,-,,4,"test.yaml:18:8: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",EXTRA
-invalid_steps,-,,5,"test.yaml:18:8: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
-invalid_steps,-,,6,"test.yaml:22:8: ""steps"" section must be sequence node but got scalar node with ""!!null"" tag [syntax-check]",EXTRA
+invalid_steps,-,,4,"test.yaml:17:13: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-...",EXTRA
+invalid_steps,-,,5,"test.yaml:17:13: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 invalid_steps,-,,8,"test.yaml:25:12: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
+invalid_steps,-,,9,"test.yaml:26:17: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-...",EXTRA
+invalid_steps,-,,10,"test.yaml:26:17: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 invalid_steps,-,,11,"test.yaml:29:7: element of ""steps"" section should not be empty. please remove this section if it's unnecessary [syntax-c...",EXTRA
 invalid_steps,-,,12,"test.yaml:29:7: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 issue-610_recursive_raw_yaml_value,1,"test.yaml:10:21: recursive alias ""recursive_include"" is found. anchor was declared at line:8, column:18 [syntax-check]",-,,MISS
@@ -478,24 +476,21 @@ issue280_runs_on,5,"test.yaml:17:14: string should not be empty [syntax-check]",
 issue280_runs_on,6,"/test\.yaml:22:22: label """" is unknown\. available labels are .+\. if it is a custom label for self-hosted runner, set l...",-,,MISS
 issue280_runs_on,7,"test.yaml:22:22: string should not be empty [syntax-check]",-,,MISS
 issue280_runs_on,8,"test.yaml:28:7: unexpected key ""groups"" for ""runs-on"" section. expected one of ""group"", ""labels"" [syntax-check]",5,"test.yaml:28:7: unexpected key ""groups"" for ""runs-on"" section. expected one of ""group"", ""labels"" [syntax-check]",MATCH
-issue280_runs_on,9,"test.yaml:34:13: string should not be empty [syntax-check]",-,,MISS
-issue280_runs_on,10,"test.yaml:40:14: string should not be empty [syntax-check]",-,,MISS
+issue280_runs_on,9,"test.yaml:34:13: string should not be empty [syntax-check]",7,"test.yaml:34:13: string should not be empty [syntax-check]",MATCH
+issue280_runs_on,10,"test.yaml:40:14: string should not be empty [syntax-check]",9,"test.yaml:40:14: string should not be empty [syntax-check]",MATCH
 issue280_runs_on,11,"test.yaml:46:14: expected scalar node for string value but found sequence node with ""!!seq"" tag [syntax-check]",11,"test.yaml:46:14: expected scalar node for string value but found sequence node with ""!!seq"" tag [syntax-check]",MATCH
 issue280_runs_on,12,"test.yaml:52:15: ""labels"" section should not be empty [syntax-check]",13,"test.yaml:52:15: ""labels"" section should not be empty [syntax-check]",MATCH
 issue280_runs_on,13,"/test\.yaml:58:15: label """" is unknown\. available labels are .+\. if it is a custom label for self-hosted runner, set l...",-,,MISS
-issue280_runs_on,14,"test.yaml:58:15: string should not be empty [syntax-check]",-,,MISS
+issue280_runs_on,14,"test.yaml:58:15: string should not be empty [syntax-check]",14,"test.yaml:58:15: string should not be empty [syntax-check]",MATCH
 issue280_runs_on,15,"/test\.yaml:64:21: label """" is unknown\. available labels are .+\. if it is a custom label for self-hosted runner, set l...",-,,MISS
 issue280_runs_on,16,"test.yaml:64:21: string should not be empty [syntax-check]",-,,MISS
 issue280_runs_on,17,"test.yaml:71:9: ""labels"" section must be sequence node but got mapping node with ""!!map"" tag [syntax-check]",-,,MISS
-issue280_runs_on,-,,4,"test.yaml:22:25: string should not be empty [syntax-check]",EXTRA
+issue280_runs_on,-,,4,"test.yaml:22:21: string should not be empty [syntax-check]",EXTRA
 issue280_runs_on,-,,6,"test.yaml:1:1: job 'test5' runs-on requires labels [syntax-check]",EXTRA
-issue280_runs_on,-,,7,"test.yaml:35:10: string should not be empty [syntax-check]",EXTRA
 issue280_runs_on,-,,8,"test.yaml:1:1: job 'test6' runs-on requires labels [syntax-check]",EXTRA
-issue280_runs_on,-,,9,"test.yaml:41:10: string should not be empty [syntax-check]",EXTRA
 issue280_runs_on,-,,10,"test.yaml:1:1: job 'test7' runs-on requires labels [syntax-check]",EXTRA
 issue280_runs_on,-,,12,"test.yaml:1:1: job 'test8' runs-on requires labels [syntax-check]",EXTRA
-issue280_runs_on,-,,14,"test.yaml:59:10: string should not be empty [syntax-check]",EXTRA
-issue280_runs_on,-,,15,"test.yaml:64:24: string should not be empty [syntax-check]",EXTRA
+issue280_runs_on,-,,15,"test.yaml:64:20: string should not be empty [syntax-check]",EXTRA
 issue280_runs_on,-,,16,"test.yaml:71:14: ""labels"" section must be sequence node but got mapping node with ""!!map"" tag [syntax-check]",EXTRA
 issue280_runs_on,-,,17,"test.yaml:1:1: job 'test12' runs-on requires labels [syntax-check]",EXTRA
 issue280_runs_on,-,,18,"test.yaml:22:16: label ""x64"" is unknown. available labels are ""ubuntu-latest"", ""ubuntu-24.04"", ... and more. if it is a ...",EXTRA
@@ -624,7 +619,7 @@ schedule_invalid_timezone,-,,1,"test.yaml:4:18: on.schedule timezone 'Not/A/Time
 schedule_invalid_timezone,-,,2,"test.yaml:6:18: on.schedule timezone 'UTC' is invalid [schedule-event]",EXTRA
 schedule_invalid_timezone,-,,3,"test.yaml:8:18: on.schedule timezone 'local' is invalid [schedule-event]",EXTRA
 schedule_invalid_timezone,-,,4,"test.yaml:10:17: on.schedule timezone must not be empty [schedule-event]",EXTRA
-schedule_invalid_timezone,-,,5,"test.yaml:13:5: on.schedule cron must not be empty [schedule-event]",EXTRA
+schedule_invalid_timezone,-,,5,"test.yaml:11:13: on.schedule cron must not be empty [schedule-event]",EXTRA
 shell_key_context_availability,1,"/test\.yaml:6:16: context ""env"" is not allowed here\. no context is available here\. .+ \[expression\]/",-,,MISS
 shell_key_context_availability,2,"/test\.yaml:18:20: context ""env"" is not allowed here\. no context is available here\. .+ \[expression\]/",-,,MISS
 shell_key_context_availability,-,,1,"test.yaml:6:12: context ""env"" is not allowed here. no context is available here. called in workflow defaults.run [expres...",EXTRA
@@ -742,7 +737,7 @@ workflow_call_job,-,,1,"test.yaml:4:3: job 'call1' cannot have both uses and ste
 workflow_call_job,-,,2,"test.yaml:6:5: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [syntax-check]",EXTRA
 workflow_call_job,-,,3,"test.yaml:9:3: job 'call2' key 'with' requires uses [workflow-call]",EXTRA
 workflow_call_job,-,,4,"test.yaml:16:3: job 'call3' key 'secrets' requires uses [workflow-call]",EXTRA
-workflow_call_job,-,,5,"test.yaml:26:8: job 'call4' uses must be scalar [syntax-check]",EXTRA
+workflow_call_job,-,,5,"test.yaml:25:18: job 'call4' uses must be scalar [syntax-check]",EXTRA
 workflow_call_job,-,,6,"test.yaml:23:3: ""runs-on"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,7,"test.yaml:23:3: ""steps"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,8,"test.yaml:4:3: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [workflow-call]",EXTRA
@@ -758,8 +753,7 @@ workflow_call_outputs_syntax,1,"test.yaml:6:7: ""value"" is missing at ""missing
 workflow_call_outputs_syntax,2,"test.yaml:8:7: ""value"" is missing at ""missing-all"" output of workflow_call event [syntax-check]",2,"test.yaml:8:7: ""value"" is missing at ""missing-all"" output of workflow_call event [syntax-check]",MATCH
 workflow_call_outputs_syntax,3,"test.yaml:12:9: unexpected key ""unknown-section"" for outputs at workflow_call event. expected one of ""description"", ""val...",3,"test.yaml:12:9: unexpected key ""unknown-section"" for outputs at workflow_call event. expected one of ""description"", ""val...",MATCH
 workflow_call_outputs_syntax,4,"test.yaml:16:7: key ""duplicate-key"" is duplicated in ""outputs"" section. previously defined at line:13,col:7. note that t...",4,"test.yaml:16:7: key ""duplicate-key"" is duplicated in ""outputs"" section. previously defined at line:13,col:7. note that t...",MATCH
-workflow_call_outputs_syntax,5,"test.yaml:21:15: string should not be empty [syntax-check]",-,,MISS
-workflow_call_outputs_syntax,-,,5,"test.yaml:22:5: string should not be empty [syntax-check]",EXTRA
+workflow_call_outputs_syntax,5,"test.yaml:21:15: string should not be empty [syntax-check]",5,"test.yaml:21:15: string should not be empty [syntax-check]",MATCH
 workflow_call_required_default,1,"test.yaml:7:18: workflow_call input 'path' has the default value but is also required. if an input is required, its defa...",1,"test.yaml:7:18: workflow_call input 'path' has the default value but is also required. if an input is required, its defa...",MATCH
 workflow_call_secrets,1,"/test\.yaml:14:23: property ""secret1"" is not defined in object type {.*secret0: string.*}/",-,,MISS
 workflow_call_secrets,-,,1,"test.yaml:14:19: property ""secret1"" is not defined in object type {secret0: string} [expression]",EXTRA

@@ -1,4 +1,4 @@
 test.yaml:4:12: on.image_version.names must be sequence of scalar [syntax-check]
-test.yaml:6:19: on.image_version.versions must be sequence of scalar [syntax-check]
+test.yaml:5:34: on.image_version.versions must be sequence of scalar [syntax-check]
 test.yaml:8:5: on.image_version does not support option: entrypoint [syntax-check]
-test.yaml:6:19: string should not be empty [glob]
+test.yaml:5:34: string should not be empty [glob]

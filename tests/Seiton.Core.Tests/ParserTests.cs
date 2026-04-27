@@ -2495,6 +2495,42 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_RunsOnMappingGroupNull_ReportsEmptyAtGroupLine()
+    {
+        // group: has null value on line 4 — diagnostic must point to line 4, not to the next line
+        var yaml = "on: push\njobs:\n  j:\n    runs-on:\n      group:\n    steps:\n      - run: echo ok\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "group-null.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "group:" is on line 5
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(13); // col after "group: "
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingGroupEmptyQuoted_ReportsEmptyAtQuoteLine()
+    {
+        // group: '' on line 5 — diagnostic must point to '', not to the next line
+        var yaml = "on: push\njobs:\n  j:\n    runs-on:\n      group: ''\n    steps:\n      - run: echo ok\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "group-empty.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "group: ''" is on line 5
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(14); // col at ''
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingLabelsEmptyQuoted_ReportsEmptyAtQuoteLine()
+    {
+        // labels: '' on line 5 — diagnostic must point to '', not to the next line
+        var yaml = "on: push\njobs:\n  j:\n    runs-on:\n      labels: ''\n    steps:\n      - run: echo ok\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "labels-empty.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "labels: ''" is on line 5
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(15); // col at ''
+    }
+
+    [Test]
     public async Task Parse_StepWithoutRunOrUses_ReportsError()
     {
         var yaml = """

@@ -898,6 +898,23 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             pos--;
         }
 
+        // If the initial whitespace scan found no whitespace at all, VYaml's mark may be
+        // positioned inside the next token (e.g. at the ':' of "steps:" after a null mapping
+        // value). Walk backward past the token characters and then through whitespace/newlines
+        // to locate the empty scalar's actual line.
+        if (pos == nextTokenPosition && pos > 0
+            && source[pos - 1] is not ((byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r'))
+        {
+            while (pos > 0 && source[pos - 1] is not ((byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r'))
+                pos--;
+            while (pos > 0 && source[pos - 1] is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r')
+            {
+                if (source[pos - 1] is (byte)'\n' or (byte)'\r')
+                    crossedNewline = true;
+                pos--;
+            }
+        }
+
         // If the whitespace scan did NOT cross a newline and we stopped at a ':', VYaml's mark
         // may have landed right after the next key's colon.
         // Two detection strategies:
