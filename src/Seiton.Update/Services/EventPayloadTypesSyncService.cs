@@ -42,7 +42,22 @@ internal sealed class EventPayloadTypesSyncService
 
     private static string ResolveSourcePath(string repoRoot)
     {
-        return Path.Combine(repoRoot, "data", "sources", "webhooks", "event_payload_types.json");
+        // Prefer new canonical path; fall back to legacy hand-written path
+        var canonicalPath = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "event_payload_types.json");
+        if (File.Exists(canonicalPath))
+        {
+            return canonicalPath;
+        }
+
+        var legacyPath = EventPayloadTypesSourcePathResolver.ResolveLegacy(repoRoot);
+        if (File.Exists(legacyPath))
+        {
+            return legacyPath;
+        }
+
+        throw new FileNotFoundException(
+            "event_payload_types.json not found. Run fetch-event-payload-types first.",
+            canonicalPath);
     }
 
     private static EventPayloadTypesModel ParseSource(string sourcePath)

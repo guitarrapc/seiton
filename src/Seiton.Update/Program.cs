@@ -132,6 +132,36 @@ app.Add("verify-context-types", () =>
     }
 });
 
+app.Add("fetch-event-payload-types", async () =>
+{
+    var code = await EventPayloadTypesCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-event-payload-types failed with code {code}");
+    }
+});
+
+app.Add("fetch-event-payload-types-sources", async () =>
+{
+    var code = await EventPayloadTypesCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-event-payload-types-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-event-payload-types-sources", () =>
+{
+    var code = EventPayloadTypesCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-event-payload-types-sources failed with code {code}");
+    }
+});
+
 app.Add("sync-event-payload-types", () =>
 {
     var code = EventPayloadTypesCommands.Sync(repoRoot);
@@ -633,17 +663,6 @@ app.Add("merge-runner-labels-sources", () =>
     {
         Environment.ExitCode = code;
         throw new InvalidOperationException($"merge-runner-labels-sources failed with code {code}");
-    }
-});
-
-// Compare local snapshot against actionlint reference (parity check only, no staleness check).
-app.Add("parity-webhooks", () =>
-{
-    var code = WebhookCommands.ParityCheck(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"parity-webhooks failed with code {code}");
     }
 });
 

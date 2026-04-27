@@ -12,6 +12,16 @@
       }
     },
     {
+      "dataset": "event-payload-types",
+      "sourceUrls": [
+        "https://docs.github.com/en/webhooks/webhook-events-and-payloads"
+      ],
+      "fetchedAtUtc": "2026-04-27T08:59:17.1798644\u002B00:00",
+      "rawFileHashes": {
+        "webhook-events-and-payloads.html": "sha256:feb6aa24c4236ba1b276b6f7e5e148c86483eefd007765e7f07cf9eecdbd3553"
+      }
+    },
+    {
       "dataset": "function-specs",
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/expressions.md"

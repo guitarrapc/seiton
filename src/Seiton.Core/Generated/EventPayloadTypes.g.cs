@@ -12,13 +12,27 @@ internal static class EventPayloadTypes
 {
     internal static readonly ObjectExprType DefaultEventType = ExprType.Object(dynamicPropertyType: ExprType.Any);
 
+    private static readonly ObjectExprType BranchProtectionConfigurationEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
     private static readonly ObjectExprType BranchProtectionRuleEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
-            { new Utf8String("rule"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
-            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("rule"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
@@ -28,6 +42,9 @@ internal static class EventPayloadTypes
         {
             { new Utf8String("action"u8), ExprType.String },
             { new Utf8String("check_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -38,6 +55,37 @@ internal static class EventPayloadTypes
         {
             { new Utf8String("action"u8), ExprType.String },
             { new Utf8String("check_suite"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType CodeScanningAlertEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("alert"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("commit_oid"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("ref"u8), ExprType.String },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType CommitCommentEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("comment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -46,11 +94,40 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType CreateEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
+            { new Utf8String("description"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("master_branch"u8), ExprType.String },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("pusher_type"u8), ExprType.String },
             { new Utf8String("ref"u8), ExprType.String },
             { new Utf8String("ref_type"u8), ExprType.String },
-            { new Utf8String("master_branch"u8), ExprType.String },
-            { new Utf8String("description"u8), ExprType.String },
-            { new Utf8String("pusher_type"u8), ExprType.String },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType CustomPropertyEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("definition"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType CustomPropertyValuesEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("new_property_values"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("old_property_values"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -59,9 +136,38 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType DeleteEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("pusher_type"u8), ExprType.String },
             { new Utf8String("ref"u8), ExprType.String },
             { new Utf8String("ref_type"u8), ExprType.String },
-            { new Utf8String("pusher_type"u8), ExprType.String },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType DependabotAlertEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("alert"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType DeployKeyEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("key"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -72,8 +178,50 @@ internal static class EventPayloadTypes
         {
             { new Utf8String("action"u8), ExprType.String },
             { new Utf8String("deployment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType DeploymentProtectionRuleEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("deployment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("deployment_callback_url"u8), ExprType.String },
+            { new Utf8String("environment"u8), ExprType.String },
+            { new Utf8String("event"u8), ExprType.String },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("pull_requests"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("ref"u8), ExprType.String },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sha"u8), ExprType.String },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType DeploymentReviewEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("approver"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("comment"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("reviewers"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("since"u8), ExprType.String },
+            { new Utf8String("workflow_job_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow_job_runs"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("workflow_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
 
@@ -81,10 +229,16 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
-            { new Utf8String("deployment_status"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("check_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("deployment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("deployment_status"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
 
@@ -92,7 +246,11 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("answer"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("discussion"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -102,8 +260,11 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
-            { new Utf8String("discussion"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("comment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("discussion"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -112,8 +273,19 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType ForkEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("forkee"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType GithubAppAuthorizationEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
@@ -121,9 +293,57 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType GollumEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("pages"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType InstallationEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repositories"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("requester"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType InstallationRepositoriesEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repositories_added"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("repositories_removed"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository_selection"u8), ExprType.String },
+            { new Utf8String("requester"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType InstallationTargetEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("account"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("target_type"u8), ExprType.String },
         },
         dynamicPropertyType: ExprType.Any);
 
@@ -131,8 +351,27 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
-            { new Utf8String("issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("comment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType IssueDependenciesEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("blocked_issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("blocked_issue_id"u8), ExprType.Number },
+            { new Utf8String("blocking_issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("blocking_issue_id"u8), ExprType.Number },
+            { new Utf8String("blocking_issue_repo"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -142,8 +381,11 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("assignee"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
-            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -153,9 +395,56 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("label"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType MarketplacePurchaseEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("effective_date"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("marketplace_purchase"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("previous_marketplace_purchase"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType MemberEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("member"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType MembershipEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("member"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("scope"u8), ExprType.String },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("team"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
 
@@ -163,7 +452,23 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("merge_group"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType MetaEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("hook"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("hook_id"u8), ExprType.Number },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -173,7 +478,49 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("milestone"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType OrgBlockEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("blocked_user"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType OrganizationEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("membership"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType PackageEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("package"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -183,7 +530,109 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("build"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("id"u8), ExprType.Number },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType PersonalAccessTokenRequestEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("personal_access_token_request"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType PingEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("hook"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("hook_id"u8), ExprType.Number },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("zen"u8), ExprType.String },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType ProjectEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("project"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType ProjectCardEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("project_card"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType ProjectColumnEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("project_column"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType ProjectsV2EventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("projects_v2"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType ProjectsV2ItemEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("projects_v2_item"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType ProjectsV2StatusUpdateEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("projects_v2_status_update"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
@@ -191,6 +640,9 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType PublicEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -200,9 +652,12 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("assignee"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("number"u8), ExprType.Number },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("pull_request"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
-            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -212,9 +667,12 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
-            { new Utf8String("review"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("pull_request"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("review"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
@@ -224,9 +682,27 @@ internal static class EventPayloadTypes
         {
             { new Utf8String("action"u8), ExprType.String },
             { new Utf8String("comment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("pull_request"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType PullRequestReviewThreadEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("pull_request"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("thread"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("updated_at"u8), ExprType.String },
         },
         dynamicPropertyType: ExprType.Any);
 
@@ -234,9 +710,12 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("assignee"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("number"u8), ExprType.Number },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("pull_request"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
-            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -245,18 +724,21 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType PushEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
-            { new Utf8String("ref"u8), ExprType.String },
-            { new Utf8String("before"u8), ExprType.String },
             { new Utf8String("after"u8), ExprType.String },
+            { new Utf8String("base_ref"u8), ExprType.String },
+            { new Utf8String("before"u8), ExprType.String },
+            { new Utf8String("commits"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
+            { new Utf8String("compare"u8), ExprType.String },
             { new Utf8String("created"u8), ExprType.Bool },
             { new Utf8String("deleted"u8), ExprType.Bool },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("forced"u8), ExprType.Bool },
-            { new Utf8String("base_ref"u8), ExprType.String },
-            { new Utf8String("compare"u8), ExprType.String },
-            { new Utf8String("commits"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
             { new Utf8String("head_commit"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
-            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("pusher"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("ref"u8), ExprType.String },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
@@ -265,6 +747,9 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("registry_package"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
@@ -275,8 +760,36 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("release"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType RepositoryEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType RepositoryAdvisoryEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository_advisory"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
@@ -287,6 +800,47 @@ internal static class EventPayloadTypes
             { new Utf8String("action"u8), ExprType.String },
             { new Utf8String("branch"u8), ExprType.String },
             { new Utf8String("client_payload"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType RepositoryImportEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("status"u8), ExprType.String },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType RepositoryRulesetEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository_ruleset"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType RepositoryVulnerabilityAlertEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("alert"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -299,19 +853,164 @@ internal static class EventPayloadTypes
         },
         dynamicPropertyType: ExprType.Any);
 
+    private static readonly ObjectExprType SecretScanningAlertEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("alert"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("assignee"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType SecretScanningAlertLocationEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("alert"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("location"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType SecretScanningScanEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("completed_at"u8), ExprType.String },
+            { new Utf8String("custom_pattern_name"u8), ExprType.String },
+            { new Utf8String("custom_pattern_scope"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("secret_types"u8), ExprType.ArrayOf(ExprType.String) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("source"u8), ExprType.String },
+            { new Utf8String("started_at"u8), ExprType.String },
+            { new Utf8String("type"u8), ExprType.String },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType SecurityAdvisoryEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("security_advisory"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType SecurityAndAnalysisEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("changes"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType SponsorshipEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sponsorship"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType StarEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("starred_at"u8), ExprType.String },
+        },
+        dynamicPropertyType: ExprType.Any);
+
     private static readonly ObjectExprType StatusEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
-            { new Utf8String("sha"u8), ExprType.String },
-            { new Utf8String("name"u8), ExprType.String },
-            { new Utf8String("state"u8), ExprType.String },
-            { new Utf8String("description"u8), ExprType.String },
-            { new Utf8String("target_url"u8), ExprType.String },
-            { new Utf8String("context"u8), ExprType.String },
+            { new Utf8String("avatar_url"u8), ExprType.String },
             { new Utf8String("branches"u8), ExprType.ArrayOf(ExprType.Object(dynamicPropertyType: ExprType.Any)) },
             { new Utf8String("commit"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("context"u8), ExprType.String },
+            { new Utf8String("created_at"u8), ExprType.String },
+            { new Utf8String("description"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("id"u8), ExprType.Number },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("name"u8), ExprType.String },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sha"u8), ExprType.String },
+            { new Utf8String("state"u8), ExprType.String },
+            { new Utf8String("target_url"u8), ExprType.String },
+            { new Utf8String("updated_at"u8), ExprType.String },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType SubIssuesEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("parent_issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("parent_issue_id"u8), ExprType.Number },
+            { new Utf8String("parent_issue_repo"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sub_issue"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sub_issue_id"u8), ExprType.Number },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType TeamEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("team"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
+    private static readonly ObjectExprType TeamAddEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("team"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
 
@@ -319,6 +1018,9 @@ internal static class EventPayloadTypes
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
@@ -327,7 +1029,10 @@ internal static class EventPayloadTypes
     private static readonly ObjectExprType WorkflowDispatchEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("inputs"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("ref"u8), ExprType.String },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
@@ -335,20 +1040,43 @@ internal static class EventPayloadTypes
         },
         dynamicPropertyType: ExprType.Any);
 
+    private static readonly ObjectExprType WorkflowJobEventType = ExprType.Object(
+        new Dictionary<Utf8String, ExprType>
+        {
+            { new Utf8String("action"u8), ExprType.String },
+            { new Utf8String("deployment"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow_job"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+        },
+        dynamicPropertyType: ExprType.Any);
+
     private static readonly ObjectExprType WorkflowRunEventType = ExprType.Object(
         new Dictionary<Utf8String, ExprType>
         {
             { new Utf8String("action"u8), ExprType.String },
-            { new Utf8String("workflow_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
-            { new Utf8String("workflow"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("enterprise"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("installation"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("organization"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("repository"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
             { new Utf8String("sender"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
+            { new Utf8String("workflow_run"u8), ExprType.Object(dynamicPropertyType: ExprType.Any) },
         },
         dynamicPropertyType: ExprType.Any);
 
 
     internal static bool TryGetEventPayloadType(ReadOnlySpan<byte> eventNameUtf8, out ObjectExprType payloadType)
     {
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "branch_protection_configuration"u8))
+        {
+            payloadType = BranchProtectionConfigurationEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "branch_protection_rule"u8))
         {
             payloadType = BranchProtectionRuleEventType;
@@ -367,9 +1095,33 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "code_scanning_alert"u8))
+        {
+            payloadType = CodeScanningAlertEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "commit_comment"u8))
+        {
+            payloadType = CommitCommentEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "create"u8))
         {
             payloadType = CreateEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "custom_property"u8))
+        {
+            payloadType = CustomPropertyEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "custom_property_values"u8))
+        {
+            payloadType = CustomPropertyValuesEventType;
             return true;
         }
 
@@ -379,9 +1131,33 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "dependabot_alert"u8))
+        {
+            payloadType = DependabotAlertEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "deploy_key"u8))
+        {
+            payloadType = DeployKeyEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "deployment"u8))
         {
             payloadType = DeploymentEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "deployment_protection_rule"u8))
+        {
+            payloadType = DeploymentProtectionRuleEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "deployment_review"u8))
+        {
+            payloadType = DeploymentReviewEventType;
             return true;
         }
 
@@ -409,15 +1185,45 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "github_app_authorization"u8))
+        {
+            payloadType = GithubAppAuthorizationEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "gollum"u8))
         {
             payloadType = GollumEventType;
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "installation"u8))
+        {
+            payloadType = InstallationEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "installation_repositories"u8))
+        {
+            payloadType = InstallationRepositoriesEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "installation_target"u8))
+        {
+            payloadType = InstallationTargetEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "issue_comment"u8))
         {
             payloadType = IssueCommentEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "issue_dependencies"u8))
+        {
+            payloadType = IssueDependenciesEventType;
             return true;
         }
 
@@ -433,9 +1239,33 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "marketplace_purchase"u8))
+        {
+            payloadType = MarketplacePurchaseEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "member"u8))
+        {
+            payloadType = MemberEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "membership"u8))
+        {
+            payloadType = MembershipEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "merge_group"u8))
         {
             payloadType = MergeGroupEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "meta"u8))
+        {
+            payloadType = MetaEventType;
             return true;
         }
 
@@ -445,9 +1275,75 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "org_block"u8))
+        {
+            payloadType = OrgBlockEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "organization"u8))
+        {
+            payloadType = OrganizationEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "package"u8))
+        {
+            payloadType = PackageEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "page_build"u8))
         {
             payloadType = PageBuildEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "personal_access_token_request"u8))
+        {
+            payloadType = PersonalAccessTokenRequestEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "ping"u8))
+        {
+            payloadType = PingEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "project"u8))
+        {
+            payloadType = ProjectEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "project_card"u8))
+        {
+            payloadType = ProjectCardEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "project_column"u8))
+        {
+            payloadType = ProjectColumnEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "projects_v2"u8))
+        {
+            payloadType = ProjectsV2EventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "projects_v2_item"u8))
+        {
+            payloadType = ProjectsV2ItemEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "projects_v2_status_update"u8))
+        {
+            payloadType = ProjectsV2StatusUpdateEventType;
             return true;
         }
 
@@ -475,6 +1371,12 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "pull_request_review_thread"u8))
+        {
+            payloadType = PullRequestReviewThreadEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "pull_request_target"u8))
         {
             payloadType = PullRequestTargetEventType;
@@ -499,9 +1401,39 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "repository"u8))
+        {
+            payloadType = RepositoryEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "repository_advisory"u8))
+        {
+            payloadType = RepositoryAdvisoryEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "repository_dispatch"u8))
         {
             payloadType = RepositoryDispatchEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "repository_import"u8))
+        {
+            payloadType = RepositoryImportEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "repository_ruleset"u8))
+        {
+            payloadType = RepositoryRulesetEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "repository_vulnerability_alert"u8))
+        {
+            payloadType = RepositoryVulnerabilityAlertEventType;
             return true;
         }
 
@@ -511,9 +1443,69 @@ internal static class EventPayloadTypes
             return true;
         }
 
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "secret_scanning_alert"u8))
+        {
+            payloadType = SecretScanningAlertEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "secret_scanning_alert_location"u8))
+        {
+            payloadType = SecretScanningAlertLocationEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "secret_scanning_scan"u8))
+        {
+            payloadType = SecretScanningScanEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "security_advisory"u8))
+        {
+            payloadType = SecurityAdvisoryEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "security_and_analysis"u8))
+        {
+            payloadType = SecurityAndAnalysisEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "sponsorship"u8))
+        {
+            payloadType = SponsorshipEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "star"u8))
+        {
+            payloadType = StarEventType;
+            return true;
+        }
+
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "status"u8))
         {
             payloadType = StatusEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "sub_issues"u8))
+        {
+            payloadType = SubIssuesEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "team"u8))
+        {
+            payloadType = TeamEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "team_add"u8))
+        {
+            payloadType = TeamAddEventType;
             return true;
         }
 
@@ -526,6 +1518,12 @@ internal static class EventPayloadTypes
         if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "workflow_dispatch"u8))
         {
             payloadType = WorkflowDispatchEventType;
+            return true;
+        }
+
+        if (SpanHelpers.EqualsAsciiIgnoreCase(eventNameUtf8, "workflow_job"u8))
+        {
+            payloadType = WorkflowJobEventType;
             return true;
         }
 

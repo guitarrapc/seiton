@@ -1,9 +1,35 @@
 ﻿using Seiton.Update.Services;
+using Seiton.Update.Sources;
 
 namespace Seiton.Update.Commands;
 
 internal static class EventPayloadTypesCommands
 {
+    public static async Task<int> Fetch(string repoRoot)
+    {
+        var fetcher = new GitHubEventPayloadTypesFetcher();
+        var manifestEntry = await fetcher.FetchAsync(repoRoot);
+        var manifestService = new ManifestService();
+        var manifest = manifestService.Load(repoRoot);
+        manifest = manifestService.Upsert(manifest, manifestEntry);
+        manifestService.Save(repoRoot, manifest);
+        return 0;
+    }
+
+    public static async Task<int> FetchSources(string repoRoot)
+    {
+        var fetcher = new GitHubEventPayloadTypesFetcher();
+        await fetcher.FetchSourceFilesAsync(repoRoot);
+        return 0;
+    }
+
+    public static int ParseSources(string repoRoot)
+    {
+        var fetcher = new GitHubEventPayloadTypesFetcher();
+        fetcher.ParseLocalSourceFiles(repoRoot);
+        return 0;
+    }
+
     public static int Sync(string repoRoot)
     {
         var service = new EventPayloadTypesSyncService();
