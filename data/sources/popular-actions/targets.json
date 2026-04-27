@@ -45,6 +45,13 @@
       "maxDeprecatedMajorVersion": 3
     },
     {
+      "actionRef": "actions/stale@v10",
+      "uses": "actions/stale",
+      "url": "https://raw.githubusercontent.com/actions/stale/v10/action.yml",
+      "rawFileName": "actions_stale.action.yml",
+      "maxDeprecatedMajorVersion": 8
+    },
+    {
       "actionRef": "actions/upload-artifact@v7",
       "uses": "actions/upload-artifact",
       "url": "https://raw.githubusercontent.com/actions/upload-artifact/v7/action.yml",
@@ -59,6 +66,13 @@
       "maxDeprecatedMajorVersion": 2
     },
     {
+      "actionRef": "octokit/request-action@v3.0.0",
+      "uses": "octokit/request-action",
+      "url": "https://raw.githubusercontent.com/octokit/request-action/v3.0.0/action.yml",
+      "rawFileName": "octokit_request-action.action.yml",
+      "maxDeprecatedMajorVersion": 0
+    },
+    {
       "actionRef": "pypa/gh-action-pypi-publish@release/v1",
       "uses": "pypa/gh-action-pypi-publish",
       "url": "https://raw.githubusercontent.com/pypa/gh-action-pypi-publish/release/v1/action.yml",
@@ -70,6 +84,13 @@
       "uses": "reviewdog/action-actionlint",
       "url": "https://raw.githubusercontent.com/reviewdog/action-actionlint/v1/action.yml",
       "rawFileName": "reviewdog_action-actionlint.action.yml",
+      "maxDeprecatedMajorVersion": 0
+    },
+    {
+      "actionRef": "rhysd/action-setup-vim@v1",
+      "uses": "rhysd/action-setup-vim",
+      "url": "https://raw.githubusercontent.com/rhysd/action-setup-vim/v1/action.yml",
+      "rawFileName": "rhysd_action-setup-vim.action.yml",
       "maxDeprecatedMajorVersion": 0
     }
   ]

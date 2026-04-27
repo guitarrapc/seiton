@@ -360,6 +360,241 @@
       "runsUsing": "node24"
     },
     {
+      "actionRef": "actions/stale@v10",
+      "uses": "actions/stale",
+      "inputs": [
+        {
+          "name": "any-of-issue-labels",
+          "required": false
+        },
+        {
+          "name": "any-of-labels",
+          "required": false
+        },
+        {
+          "name": "any-of-pr-labels",
+          "required": false
+        },
+        {
+          "name": "ascending",
+          "required": false
+        },
+        {
+          "name": "close-issue-label",
+          "required": false
+        },
+        {
+          "name": "close-issue-message",
+          "required": false
+        },
+        {
+          "name": "close-issue-reason",
+          "required": false
+        },
+        {
+          "name": "close-pr-label",
+          "required": false
+        },
+        {
+          "name": "close-pr-message",
+          "required": false
+        },
+        {
+          "name": "days-before-close",
+          "required": false
+        },
+        {
+          "name": "days-before-issue-close",
+          "required": false
+        },
+        {
+          "name": "days-before-issue-stale",
+          "required": false
+        },
+        {
+          "name": "days-before-pr-close",
+          "required": false
+        },
+        {
+          "name": "days-before-pr-stale",
+          "required": false
+        },
+        {
+          "name": "days-before-stale",
+          "required": false
+        },
+        {
+          "name": "debug-only",
+          "required": false
+        },
+        {
+          "name": "delete-branch",
+          "required": false
+        },
+        {
+          "name": "enable-statistics",
+          "required": false
+        },
+        {
+          "name": "exempt-all-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-all-issue-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-all-issue-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-all-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-all-pr-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-all-pr-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-draft-pr",
+          "required": false
+        },
+        {
+          "name": "exempt-issue-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-issue-labels",
+          "required": false
+        },
+        {
+          "name": "exempt-issue-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-pr-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-pr-labels",
+          "required": false
+        },
+        {
+          "name": "exempt-pr-milestones",
+          "required": false
+        },
+        {
+          "name": "ignore-issue-updates",
+          "required": false
+        },
+        {
+          "name": "ignore-pr-updates",
+          "required": false
+        },
+        {
+          "name": "ignore-updates",
+          "required": false
+        },
+        {
+          "name": "include-only-assigned",
+          "required": false
+        },
+        {
+          "name": "labels-to-add-when-unstale",
+          "required": false
+        },
+        {
+          "name": "labels-to-remove-when-stale",
+          "required": false
+        },
+        {
+          "name": "labels-to-remove-when-unstale",
+          "required": false
+        },
+        {
+          "name": "only-issue-labels",
+          "required": false
+        },
+        {
+          "name": "only-issue-types",
+          "required": false
+        },
+        {
+          "name": "only-labels",
+          "required": false
+        },
+        {
+          "name": "only-pr-labels",
+          "required": false
+        },
+        {
+          "name": "operations-per-run",
+          "required": false
+        },
+        {
+          "name": "remove-issue-stale-when-updated",
+          "required": false
+        },
+        {
+          "name": "remove-pr-stale-when-updated",
+          "required": false
+        },
+        {
+          "name": "remove-stale-when-updated",
+          "required": false
+        },
+        {
+          "name": "repo-token",
+          "required": false
+        },
+        {
+          "name": "sort-by",
+          "required": false
+        },
+        {
+          "name": "stale-issue-label",
+          "required": false
+        },
+        {
+          "name": "stale-issue-message",
+          "required": false
+        },
+        {
+          "name": "stale-pr-label",
+          "required": false
+        },
+        {
+          "name": "stale-pr-message",
+          "required": false
+        },
+        {
+          "name": "start-date",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "closed-issues-prs"
+        },
+        {
+          "name": "staled-issues-prs"
+        }
+      ],
+      "runsUsing": "node24"
+    },
+    {
       "actionRef": "actions/upload-artifact@v7",
       "uses": "actions/upload-artifact",
       "inputs": [
@@ -443,6 +678,32 @@
         }
       ],
       "outputs": [],
+      "runsUsing": "node24"
+    },
+    {
+      "actionRef": "octokit/request-action@v3.0.0",
+      "uses": "octokit/request-action",
+      "inputs": [
+        {
+          "name": "mediaType",
+          "required": false
+        },
+        {
+          "name": "route",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "data"
+        },
+        {
+          "name": "headers"
+        },
+        {
+          "name": "status"
+        }
+      ],
       "runsUsing": "node24"
     },
     {
@@ -558,6 +819,37 @@
       ],
       "outputs": [],
       "runsUsing": "docker"
+    },
+    {
+      "actionRef": "rhysd/action-setup-vim@v1",
+      "uses": "rhysd/action-setup-vim",
+      "inputs": [
+        {
+          "name": "configure-args",
+          "required": false
+        },
+        {
+          "name": "neovim",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        },
+        {
+          "name": "version",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "executable"
+        },
+        {
+          "name": "vim-dir"
+        }
+      ],
+      "runsUsing": "node24"
     }
   ]
 }

@@ -50,10 +50,15 @@
         "https://raw.githubusercontent.com/actions/setup-dotnet/v5/action.yml",
         "https://raw.githubusercontent.com/actions/setup-go/v6/action.yml",
         "https://raw.githubusercontent.com/actions/setup-node/v6/action.yml",
+        "https://raw.githubusercontent.com/actions/stale/v10/action.yml",
         "https://raw.githubusercontent.com/actions/upload-artifact/v7/action.yml",
-        "https://raw.githubusercontent.com/docker/login-action/v4/action.yml"
+        "https://raw.githubusercontent.com/docker/login-action/v4/action.yml",
+        "https://raw.githubusercontent.com/octokit/request-action/v3.0.0/action.yml",
+        "https://raw.githubusercontent.com/pypa/gh-action-pypi-publish/release/v1/action.yml",
+        "https://raw.githubusercontent.com/reviewdog/action-actionlint/v1/action.yml",
+        "https://raw.githubusercontent.com/rhysd/action-setup-vim/v1/action.yml"
       ],
-      "fetchedAtUtc": "2026-04-24T17:19:46.9405509\u002B00:00",
+      "fetchedAtUtc": "2026-04-27T08:01:31.6557020\u002B00:00",
       "rawFileHashes": {
         "actions_cache.action.yml": "sha256:c04edf35104c16c8944076df01561748bac9cd10941417e467a236e508e52dda",
         "actions_checkout.action.yml": "sha256:8295fcc7299d02005f7c3a7f8a6b59a0c4e0577697b471c0e90aa5d4c6212130",
@@ -61,8 +66,13 @@
         "actions_setup-dotnet.action.yml": "sha256:c5f836742c82b726497caac0dee66e58c97b03373a53f624fe4e2ffe5ed8d7e6",
         "actions_setup-go.action.yml": "sha256:cbfae748992b96b9a1bfa3f1679d17c898c78375aad8a0d0184820683c82c482",
         "actions_setup-node.action.yml": "sha256:ad45f1922115116fb4706651d0a9262332bc4e4f11eb2021e09789dd1af18085",
+        "actions_stale.action.yml": "sha256:42c2129639c5e66ee659a85f3ab6bc67a05f46f1691f9fc1d2575035e30d06f4",
         "actions_upload-artifact.action.yml": "sha256:c5979822866a72362e609844b6ebe77d4b7e759af68cc1c2c425dcf51481fab4",
-        "docker_login-action.action.yml": "sha256:e15d3a9a4c036bdcd4ee245c494a952c522c4d55e79d276d57ed849ce76e39f2"
+        "docker_login-action.action.yml": "sha256:e15d3a9a4c036bdcd4ee245c494a952c522c4d55e79d276d57ed849ce76e39f2",
+        "octokit_request-action.action.yml": "sha256:bb286e504a0e382a926ee922bd1cd2dd15d390b60220cc9bf97e442db65ebd80",
+        "pypa_gh-action-pypi-publish.action.yml": "sha256:31014244416b6a8b44882377770964566806e4510acb2bab5b36674ad36b0006",
+        "reviewdog_action-actionlint.action.yml": "sha256:89826862aec8a9939cdb27e189335acb47d241f0f2df5ded462b2d21aa073c0c",
+        "rhysd_action-setup-vim.action.yml": "sha256:0f702bb4a94e4d14477cf3c800eb0d226e02c322bf5790bd537400ceff09cdea"
       }
     },
     {
