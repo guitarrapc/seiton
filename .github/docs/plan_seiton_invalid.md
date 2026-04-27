@@ -644,7 +644,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 22 | `expr_in_default_input` | MISSING | 4 | 2 | 0 | 2 | 2 | 0 | | B+C: 列差異2, 未検出2 |
 | 23 | `github_script_untrusted_input` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A+B: 行位置差異 |
 | 24 | `glob_more` | MIXED | 18 | 18 | 8 | 9 | 1 | 1 | ✅ | C: error recovery + snapshot/image_version glob 実装済み (10→1 MISS) |
-| 25 | `if_cond_constants` | MIXED | 11 | 10 | 5 | 4 | 2 | 1 | ✅ | B+C: 一致5, 列差異4, 未検出2, 余剰1 (snapshot 余剰解消) |
+| 25 | `if_cond_constants` | MIXED | 11 | 10 | 5 | 4 | 2 | 1 | ✅ | B+C: 一致5, 列差異4, 未検出2 (snapshot.if + multi-line), 余剰1 (18:13→19:11 行ずれ) |
 | 26 | `if_cond_edge_cases_trailing_leading_chars` | MIXED | 6 | 6 | 2 | 3 | 1 | 1 | ✅ | B+C: 一致2, 列差異3, 未検出1, 余剰1 |
 | 27 | `inputs_without_workflow_call_event` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
 | 28 | `invalid_comparisons` | MIXED | 7 | 7 | 1 | 5 | 1 | 1 | ✅ | B+C: 一致1, 列差異5, 未検出1, 余剰1 |
@@ -659,7 +659,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 37 | `invalid_runner_labels` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 列差異1 |
 | 38 | `invalid_snapshot` | MIXED | 5 | 5 | 1 | 1 | 2 | 2 | ✅ | C+D: snapshot パース実装済み。未検出2 (image-name 必須, 空文字列位置差異), 余剰2 (snapshot.if context検証追加 + glob検証追加) |
 | 39 | `invalid_steps` | MIXED | 19 | 18 | 15 | 2 | 2 | 1 | ✅ | B+C: 位置改善済み (17:9, 27:8)。残: col差異2 (25:12, 29:7), 未検出2 (28:9 empty mapping), 余剰1 (29:7 elem) |
-| 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 3 | 0 | 0 | 2 | 3 | | A: メッセージ差異 |
+| 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 3 | 0 | 1 | 1 | 2 | | B+D: 列差異1, 未検出1 (alias メッセージ差異), 余剰2 (unsupported shape + anchor unused) |
 | 41 | `issue102` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
 | 42 | `issue151_child_of_child_job` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
 | 43 | `issue155_env_in_job_level_if` | COL_DIFF | 4 | 4 | 2 | 2 | 0 | 0 | ✅ | B: 一致2, 列差異2 (値位置ポリシー) |
@@ -987,15 +987,278 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 
 | Fixture | Miss | Extra | 主な原因 |
 |---------|------|-------|----------|
-| `missing_required_keys` | 3 | 2 | メッセージ形式差異 |
-| `recursive_anchors` | 3 | 5 | メッセージ形式差異 |
-| `workflow_call_job` | 3 | 7 | uses フォーマット検証の残り |
-| `empty_sequence_or_string` | 3 | 3 | メッセージ/位置差異 |
-| `if_cond_constants` | 2 | 3 | snapshot 余剰 + 残り未検出 |
-| `invalid_json_in_fromjson` | 2 | 3 | fromJSON 型推論の残り |
-| `expr_check_in_env_var_name` | 2 | 1 | property 未定義検出 |
-| `expr_in_default_input` | 2 | 0 | 列差異+未検出 |
-| `issue-610_recursive_raw_yaml_value` | 2 | 3 | recursive alias メッセージ差異 |
+| `missing_required_keys` | 3 | 2 | メッセージ形式差異 + defaults パース差異 |
+| `recursive_anchors` | 2 | 4 | recursive alias メッセージ差異 + unused anchor 余剰 |
+| `workflow_call_job` | 3 | 7 | uses フォーマット検証 + 重複 extra |
+| `empty_sequence_or_string` | 3 | 3 | イベント filter 差異 + matrix axis 余剰 |
+| `if_cond_constants` | 2 | 1 | snapshot.if + multi-line if 位置差異 |
+| `invalid_json_in_fromjson` | 2 | 3 | fromJSON 型推論不足 + template 型チェック差異 |
+| `expr_check_in_env_var_name` | 2 | 1 | property 未定義検出 vs portability 警告 |
+| `expr_in_default_input` | 2 | 0 | input default の型チェック未実装 |
+| `issue-610_recursive_raw_yaml_value` | 1 | 1 | recursive alias メッセージ差異 |
+
+---
+
+##### 4.G `scalar or sequence` メッセージのユーザーフレンドリー化
+
+**現象:** パーサーが型不一致を報告する際、YAML 仕様用語 "scalar" や "sequence" を使用している。
+
+```
+on.push.paths must be scalar or sequence of scalar
+```
+
+ユーザーにとっては `scalar = string`、`sequence of scalar = array of strings` のことなので、以下のように変更すべき:
+
+```
+on.push.paths must be string or array of strings
+```
+
+**影響範囲:** `src/Seiton.Core/Parsing/` 内の 22+ 箇所:
+
+| 現在のメッセージパターン | 提案する変更 | ファイル |
+|---|---|---|
+| `must be scalar or sequence of scalar` | `must be string or array of strings` | `WorkflowParser.On.Webhook.cs` (18箇所), `WorkflowParser.Jobs.cs` (1箇所), `WorkflowParser.On.WorkflowDispatch.cs` (1箇所) |
+| `must be scalar` (単独) | `must be string` | `WorkflowParser.Steps.cs`, `WorkflowParser.On.WorkflowCall.cs` 等 |
+| `must be sequence or scalar` | `must be array or string` | `WorkflowParser.Strategy.cs` (7箇所) |
+| `must be mapping` | `must be object` | 各所 |
+| `key must be scalar` | `key must be string` | 各所 |
+| `must be scalar or mapping` | `must be string or object` | `WorkflowParser.Strategy.cs` |
+| `must be scalar, mapping, or sequence` | `must be string, object, or array` | `WorkflowParser.Strategy.cs` |
+| `action runs args must be scalar or sequence` | `action runs args must be string or array` | `WorkflowParser.ActionMetadata.cs` |
+
+**注意事項:**
+- テスト内の期待メッセージ文字列も同時に更新が必要
+- `.seiton.out` ベースラインの再生成が必要
+- actionlint の `.out` とのメッセージ比較には影響なし (actionlint は別の文言を使用)
+
+---
+
+##### 4.H `missing_required_keys` — 3 MISS, 2 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                    # .seiton.out (seiton)
+test.yaml:5:7:  "type" is missing...          MATCH    test.yaml:5:7:  "type" is missing...
+test.yaml:8:7:  "value" is missing...         MATCH    test.yaml:8:7:  "value" is missing...
+test.yaml:10:10: defaults should have "run"   MISS     test.yaml:10:10: workflow defaults must be mapping  ← EXTRA (異なるメッセージ)
+test.yaml:10:10: defaults should not be empty MISS     (なし)
+test.yaml:12:1: group name is missing...      MISS     test.yaml:13:21: group name is missing...  ← COL_DIFF
+test.yaml:17:3: "runs-on" is missing...       MATCH    test.yaml:17:3: "runs-on" is missing...
+test.yaml:17:3: "steps" is missing...         MATCH    test.yaml:17:3: "steps" is missing...
+test.yaml:18:5: name is missing...            COL      test.yaml:19:10: name is missing...
+```
+
+**MISS 原因と改善案:**
+
+1. **10:10 defaults "run" section** (MISS): actionlint は空 defaults に対して「run セクションが必要」と「空にするな」の 2 メッセージを出す。seiton は「mapping でなければならない」1 メッセージのみ。
+   - **改善案:** 空 mapping の defaults に対して「defaults.run is required」メッセージを追加。現在の "must be mapping" は null/scalar の場合のみに限定。
+2. **10:10 defaults empty** (MISS): 上記と同根。
+3. **12:1→13:21** (COL_DIFF): concurrency の group name 位置差異 — seiton は値位置で報告。
+
+---
+
+##### 4.I `recursive_anchors` — 2 MISS, 4 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                          # .seiton.out (seiton)
+test.yaml:9:14:  "env" is alias but mapping expected  COL    test.yaml:11:12: env must be mapping
+test.yaml:9:14:  recursive alias "recursive1"...      COL    test.yaml:11:12: recursive alias "recursive1" is found
+test.yaml:11:14: expected scalar but found alias      COL    test.yaml:13:7:  run must be scalar
+test.yaml:11:14: recursive alias "recursive2"...      COL    test.yaml:13:7:  recursive alias "recursive2" is found
+test.yaml:15:9:  element is alias but mapping expected COL   test.yaml:15:7:  step must be mapping
+test.yaml:15:9:  recursive alias "recursive2"...      MISS   (なし)
+test.yaml:15:9:  step must run "run" or "uses"        MISS   (なし)
+                                                             test.yaml:16:0:  step[3] must be mapping  ← EXTRA
+                                                             test.yaml:4:9:   anchor "recursive2" unused  ← EXTRA
+                                                             test.yaml:7:9:   anchor "recursive1" unused  ← EXTRA
+                                                             test.yaml:15:7:  recursive alias "recursive1"  ← EXTRA (行15 は recursive2 が期待)
+```
+
+**MISS 原因と改善案:**
+
+1. **15:9 recursive alias "recursive2"** (MISS): seiton は行 15 で `recursive1` を報告しているが、actionlint は `recursive2` を期待。VYaml の alias 解決順序の違い。
+   - **改善案:** recursive alias 検出ロジックでオリジナルの alias 名を正確に追跡する。
+2. **15:9 step must run/uses** (MISS): seiton は step が mapping でないと判定した時点で "must run/uses" を出さない。
+   - **改善案:** mapping 以外の step に対しても "must run/uses" エラーを追加するか、既存の動作を維持 (seiton は根本原因優先で設計)。
+
+**EXTRA 原因:**
+- `anchor unused` 2 行: seiton は recursive alias を「使用」とみなさず未使用警告を出す — 設計差異として維持可能。
+- `16:0 step[3] must be mapping`: VYaml の alias 展開による追加ステップ検出。
+- `15:7 recursive1`: 上記 MISS と対になるペア。
+
+---
+
+##### 4.J `workflow_call_job` — 3 MISS, 7 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                           # .seiton.out (seiton)
+test.yaml:6:5:   uses+steps, key 'steps' not allowed  COL    test.yaml:6:5:   key 'steps' is not allowed
+test.yaml:10:5:  "with" requires "uses"               COL    test.yaml:9:3:   key 'with' requires uses
+test.yaml:17:5:  "secrets" requires "uses"             COL    test.yaml:16:3:  key 'secrets' requires uses
+test.yaml:24:10: string should not be empty            MISS   test.yaml:25:18: uses must be scalar  ← EXTRA (別メッセージ)
+test.yaml:27:11: uses format invalid "./foo/..."       COL    test.yaml:27:5:  uses format invalid "./foo/..."
+test.yaml:30:11: uses format invalid "/foo/..."        COL    test.yaml:30:5:  uses format invalid "/foo/..."
+test.yaml:33:11: uses format invalid "foo/..."         COL    test.yaml:33:5:  uses format invalid "foo/..."
+test.yaml:36:11: uses format invalid "foo/bar/..."     COL    test.yaml:36:5:  uses format invalid "foo/bar/..."
+                                                              test.yaml:4:3:   cannot have both uses and steps  ← EXTRA
+                                                              test.yaml:23:3:  "runs-on" is missing  ← EXTRA
+                                                              test.yaml:23:3:  "steps" is missing  ← EXTRA
+                                                              test.yaml:4:3:   key 'steps' not allowed  ← EXTRA (重複)
+```
+
+**MISS 原因と改善案:**
+
+1. **24:10 string empty** (MISS): actionlint は空 uses を "string should not be empty" で報告。seiton は "uses must be scalar" (型エラー) で報告。
+   - **改善案:** `ParseString` で空文字列を `"string should not be empty"` として報告するか、既存の型エラーを維持。空文字列の場合のメッセージを統一。
+2. **24:10** に対応する MISS 2 行: 上記と同根 — uses が空なので reusable workflow 検証がスキップされ、runs-on/steps 必須チェックが代わりに走る。
+3. **URL サフィックス欠落** (COL_DIFF): seiton の reusable workflow エラーに `see https://docs.github.com/...` URL がない。§4.3 設計方針。
+
+**EXTRA 原因:**
+- `4:3 cannot have both uses and steps`: seiton が uses+steps の両方の存在を検出 — actionlint は片方のみ。有用な追加検出。
+- `23:3 runs-on/steps missing`: 空 uses ジョブに対する構造チェック — actionlint は空文字検出のみ。
+- `4:3 key 'steps' not allowed` (重複): workflow-call ルールと syntax-check ルールの両方で同じ問題を報告。dedup 候補。
+
+---
+
+##### 4.K `empty_sequence_or_string` — 3 MISS, 3 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                         # .seiton.out (seiton)
+test.yaml:10:13: string should not be empty          MISS   (なし — 空 cron 文字列未検出)
+test.yaml:14:12: "types" section should not be empty MISS   test.yaml:14:5: on.push.types is not supported  ← EXTRA
+test.yaml:16:16: "workflows" should not be empty     MISS   test.yaml:16:5: "workflows" filter not available  ← EXTRA
+                                                            test.yaml:22:9: matrix axis 'foo' has no values  ← EXTRA
+```
+
+**MISS 原因と改善案:**
+
+1. **10:13 empty cron string** (MISS): `schedule: - cron: ''` で空文字列が検出されない。
+   - **改善案:** schedule cron パーサーで空文字列チェックを追加。
+2. **14:12 empty types** (MISS+EXTRA ペア): seiton は `push` イベントに `types` が存在すること自体をエラーにする (`types is not supported`)。actionlint は空配列であることをエラーにする。seiton の方がより正確な診断だが、メッセージが異なるため MISS 扱い。
+   - **改善案:** 設計方針として維持 — seiton の「types 非サポート」の方が根本原因を示す。
+3. **16:16 empty workflows** (MISS+EXTRA ペア): 同上パターン。seiton は `push` に workflows filter が使えないことを指摘。
+   - **改善案:** 設計方針として維持。
+
+**EXTRA:**
+- `22:9 matrix axis 'foo' has no values`: seiton の独自 lint ルール — 空軸の検出は有用な追加診断。維持。
+
+---
+
+##### 4.L `if_cond_constants` — 2 MISS, 1 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                         # .seiton.out (seiton)
+test.yaml:18:13: "true" in condition                 →      test.yaml:19:11: "true\n" in condition  ← EXTRA (行ずれ + 改行含む)
+test.yaml:31:11: "true" in condition (snapshot.if)   MISS   (なし)
+```
+
+**MISS 原因と改善案:**
+
+1. **18:13→19:11** (LINE_DIFF): multi-line YAML scalar (`if: |\n  true`) で seiton が改行を含む値テキスト `"true\n"` を報告し、位置も 19:11 (値の開始) になる。actionlint は trim 後のテキスト `"true"` を 18:13 (キー位置) で報告。
+   - **改善案:** `IfCondRule` で定数式テキストを trim してから表示する。位置は値位置ポリシーとして維持。
+2. **31:11 snapshot.if** (MISS): `snapshot.if: true` の定数式検出が未実装。
+   - **改善案:** `IfCondRule.VisitJobPre` に `snapshot.If` のチェックを追加。snapshot.if の availability は実装済み (4.C) なので、IfCondRule 側の拡張のみ。
+
+---
+
+##### 4.M `invalid_json_in_fromjson` — 2 MISS, 3 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                               # .seiton.out (seiton)
+test.yaml:12:37: broken JSON at offset 4               COL        test.yaml:12:28: fromJSON() argument is not valid JSON...
+test.yaml:24:19: evaluating null type                   →          test.yaml:24:19: property "null" not defined...  ← 異なるメッセージ
+test.yaml:25:19: evaluating array<string>               COL        test.yaml:25:19: array value → "[Array]"
+test.yaml:26:19: evaluating {array:...; bool:...}       COL        test.yaml:26:19: object value → "[Object]"
+test.yaml:28:32: contains() 1st arg not assignable      MISS       (なし)
+test.yaml:28:32: contains() 1st arg not assignable      MISS       (なし)
+                                                                   test.yaml:9:19:  null value in ${{}}  ← EXTRA
+                                                                   test.yaml:10:20: array value in ${{}}  ← EXTRA
+                                                                   test.yaml:11:21: object value in ${{}}  ← EXTRA
+```
+
+**MISS 原因と改善案:**
+
+1. **28:32 contains() 型チェック** (MISS × 2): `contains(fromJSON('...'), ...)` で、fromJSON の戻り値が object 型なのに contains の第一引数 (array|string) に渡されるケース。seiton は fromJSON の戻り値型推論が未実装のため、contains の引数型チェックが機能しない。
+   - **改善案:** `fromJSON()` の引数が文字列リテラルの場合、JSON をパースして具体的な戻り値型 (`{array: array<bool>; bool: bool}` 等) を推論する。高コスト — フェーズ 2.6 と統合。
+2. **24:19 null 型** (COL_DIFF + メッセージ差異): actionlint は `evaluating the value of type null` で型情報を表示。seiton は `property "null" is not defined` — 別の問題として検出。
+   - **改善案:** fromJSON 型推論の実装後、テンプレート型チェックで正しい型名を表示。
+
+**EXTRA 原因:**
+- 9:19, 10:20, 11:21: matrix include 内の fromJSON 結果の template 型チェック — seiton がより早い段階 (include 行) で null/array/object の template 使用を検出。有用な追加検出。
+
+---
+
+##### 4.N `expr_check_in_env_var_name` — 2 MISS, 1 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                               # .seiton.out (seiton)
+test.yaml:4:7:   context "runner" not allowed (workflow env)  COL  test.yaml:4:3:  env key '${{runner.name}}' not portable
+test.yaml:12:13: property "foooooo" not defined              MISS  (なし)
+test.yaml:14:11: context "runner" not allowed (job env)      COL   test.yaml:14:7: env key '${{runner.fooooooo}}' not portable
+test.yaml:14:11: property "fooooooo" not defined             MISS  (なし)
+                                                                   test.yaml:18:11: env key '${{runner.name}}' not portable  ← EXTRA
+```
+
+**MISS 原因と改善案:**
+
+1. **12:13, 14:11 property not defined** (MISS × 2): actionlint は env キー内の式の property access もチェックする (`runner.foooooo` → "foooooo" not defined)。seiton は env キー内の式を portability 警告のみで処理し、property チェックを行わない。
+   - **改善案:** env キー内の式に対しても `ExprUndefinedVarRule` の property チェックを適用する。現在は env キーの式を lint パスに渡していない可能性がある。
+
+**EXTRA 原因:**
+- 18:11 step-level env key: actionlint は step-level の env キーに対してはコンテキスト/property チェックをしない (正当な runner context のため)。seiton は portability 警告を出す — 有用な追加検出。
+
+---
+
+##### 4.O `expr_in_default_input` — 2 MISS, 0 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                               # .seiton.out (seiton)
+test.yaml:7:22:  property "input2" not defined              COL    test.yaml:7:18:  property "input2" not defined
+test.yaml:15:22: property "input3" not defined              COL    test.yaml:15:18: property "input3" not defined
+test.yaml:19:18: type of input "input4" must be bool        MISS   (なし)
+test.yaml:23:18: type of input "input5" must be number      MISS   (なし)
+```
+
+**MISS 原因と改善案:**
+
+1. **19:18, 23:18 input default 型チェック** (MISS × 2): `workflow_call.inputs.input4` の型が `boolean` だが default 値が `inputs.input1` (string 型) — 型不一致。seiton は input default の型チェックを未実装。
+   - **改善案:** `ExprUndefinedVarRule` で workflow_call input の default 値の式を検証する際、input の declared type (boolean/number) と式の推論型 (string) の不一致を検出する。
+
+---
+
+##### 4.P `issue-610_recursive_raw_yaml_value` — 1 MISS, 1 EXTRA
+
+**具体例:**
+
+```
+# .out (actionlint)                                               # .seiton.out (seiton)
+test.yaml:10:21: recursive alias "recursive_include"    COL        test.yaml:11:9: recursive alias "recursive_include" is found
+test.yaml:10:21: unexpected alias on parsing matrix row COL        test.yaml:11:9: matrix value has unsupported shape  ← 異なるメッセージ
+                                                                   test.yaml:8:18: anchor "recursive_include" unused  ← EXTRA
+```
+
+**MISS 原因と改善案:**
+
+1. **メッセージ差異** (COL_DIFF): actionlint は `unexpected alias node on parsing value in matrix row`、seiton は `matrix value has unsupported shape`。同じ問題を検出しているがメッセージが異なる。
+   - **改善案:** メッセージを `unexpected alias node on parsing value in matrix row` に近づける。低優先度。
+
+**EXTRA:**
+- `8:18 anchor unused`: 4.I と同じパターン — recursive alias を使用とみなさない。設計差異として維持。
 
 #### 低優先度 — 1行差異・設計方針差異
 
