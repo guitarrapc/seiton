@@ -1,4 +1,4 @@
-// on.schedule — scheduled event and cron entry parsing.
+﻿// on.schedule — scheduled event and cron entry parsing.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -108,6 +108,10 @@ public static partial class WorkflowParser
                         if (cron.HasValue)
                         {
                             range = arena.GetStringRange(cron);
+                            if (arena.GetStringValue(cron).Length == 0)
+                            {
+                                AddError(diagnostics, "\"schedule\" section should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                            }
                         }
 
                         continue;

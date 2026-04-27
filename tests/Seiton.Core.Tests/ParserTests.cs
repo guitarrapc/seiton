@@ -4897,4 +4897,23 @@ public sealed class ParserTests
         await Assert.That(range.StartLine).IsEqualTo(6);
         await Assert.That(range.StartColumn).IsEqualTo(14);
     }
+
+    [Test]
+    public async Task Parse_ScheduleEmptyCron_ReportsStringNotEmpty()
+    {
+        var yaml = """
+        on:
+          schedule:
+            - cron: ''
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+        """
+        .Replace("\r\n", "\n");
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-cron.yml");
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
+    }
 }

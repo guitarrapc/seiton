@@ -598,12 +598,12 @@ schedule_invalid_timezone,1,"test.yaml:4:17: invalid timezone ""Not/A/Timezone""
 schedule_invalid_timezone,2,"test.yaml:6:17: invalid timezone ""UTC"" in schedule event. it must be a valid IANA timezone name [events]",-,,MISS
 schedule_invalid_timezone,3,"test.yaml:8:17: invalid timezone ""local"" in schedule event. it must be a valid IANA timezone name [events]",-,,MISS
 schedule_invalid_timezone,4,"test.yaml:10:17: string should not be empty [syntax-check]",-,,MISS
-schedule_invalid_timezone,5,"test.yaml:11:13: string should not be empty [syntax-check]",-,,MISS
-schedule_invalid_timezone,-,,1,"test.yaml:4:18: on.schedule timezone 'Not/A/Timezone' is invalid [schedule-event]",EXTRA
-schedule_invalid_timezone,-,,2,"test.yaml:6:18: on.schedule timezone 'UTC' is invalid [schedule-event]",EXTRA
-schedule_invalid_timezone,-,,3,"test.yaml:8:18: on.schedule timezone 'local' is invalid [schedule-event]",EXTRA
-schedule_invalid_timezone,-,,4,"test.yaml:10:17: on.schedule timezone must not be empty [schedule-event]",EXTRA
-schedule_invalid_timezone,-,,5,"test.yaml:11:13: on.schedule cron must not be empty [schedule-event]",EXTRA
+schedule_invalid_timezone,5,"test.yaml:11:13: string should not be empty [syntax-check]",1,"test.yaml:11:13: string should not be empty [syntax-check]",MATCH
+schedule_invalid_timezone,-,,2,"test.yaml:4:18: on.schedule timezone 'Not/A/Timezone' is invalid [schedule-event]",EXTRA
+schedule_invalid_timezone,-,,3,"test.yaml:6:18: on.schedule timezone 'UTC' is invalid [schedule-event]",EXTRA
+schedule_invalid_timezone,-,,4,"test.yaml:8:18: on.schedule timezone 'local' is invalid [schedule-event]",EXTRA
+schedule_invalid_timezone,-,,5,"test.yaml:10:17: on.schedule timezone must not be empty [schedule-event]",EXTRA
+schedule_invalid_timezone,-,,6,"test.yaml:11:13: on.schedule cron must not be empty [schedule-event]",EXTRA
 shell_key_context_availability,1,"/test\.yaml:6:16: context ""env"" is not allowed here\. no context is available here\. .+ \[expression\]/",-,,MISS
 shell_key_context_availability,2,"/test\.yaml:18:20: context ""env"" is not allowed here\. no context is available here\. .+ \[expression\]/",-,,MISS
 shell_key_context_availability,-,,1,"test.yaml:6:12: context ""env"" is not allowed here. no context is available here. called in workflow defaults.run [expres...",EXTRA

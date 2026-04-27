@@ -1109,13 +1109,13 @@ test.yaml:36:11: uses format invalid "foo/bar/..."     COL    test.yaml:36:5:  u
 
 ---
 
-##### 4.K `empty_sequence_or_string` — 3 MISS, 3 EXTRA
+##### 4.K `empty_sequence_or_string` — 3 MISS, 3 EXTRA → ✅ 設計方針として維持 (全 MISS は意図的な差異) + 空 cron 検出追加
 
 **具体例:**
 
 ```
 # .out (actionlint)                                         # .seiton.out (seiton)
-test.yaml:10:13: string should not be empty          MISS   (なし — 空 cron 文字列未検出)
+test.yaml:10:13: string should not be empty          MISS   (なし — choice option 空文字列は設計上許容)
 test.yaml:14:12: "types" section should not be empty MISS   test.yaml:14:5: on.push.types is not supported  ← EXTRA
 test.yaml:16:16: "workflows" should not be empty     MISS   test.yaml:16:5: "workflows" filter not available  ← EXTRA
                                                             test.yaml:22:9: matrix axis 'foo' has no values  ← EXTRA
@@ -1123,12 +1123,13 @@ test.yaml:16:16: "workflows" should not be empty     MISS   test.yaml:16:5: "wor
 
 **MISS 原因と改善案:**
 
-1. **10:13 empty cron string** (MISS): `schedule: - cron: ''` で空文字列が検出されない。
-   - **改善案:** schedule cron パーサーで空文字列チェックを追加。
+1. **10:13 empty option string** (MISS): `workflow_dispatch.inputs.bar.options: ['']` で空文字列が検出されない。実際のフィクスチャは `workflow_dispatch` の choice options の空文字列。
+   - **設計方針として維持:** seiton は `spec §3.4.3` に基づき choice-type inputs の空文字列 `''` を "no selection" プレースホルダーとして正当と見なす。`Parse_OnWorkflowDispatch_ChoiceOptionsAllowEmptyString` テストで意図的にバリデーション済み。
+   - **追加対応:** `schedule.cron: ''` の空文字列チェックは別途実装済み (`Parse_ScheduleEmptyCron_ReportsStringNotEmpty` テスト)。cron は GitHub Actions で invalid のため検出必須。
 2. **14:12 empty types** (MISS+EXTRA ペア): seiton は `push` イベントに `types` が存在すること自体をエラーにする (`types is not supported`)。actionlint は空配列であることをエラーにする。seiton の方がより正確な診断だが、メッセージが異なるため MISS 扱い。
-   - **改善案:** 設計方針として維持 — seiton の「types 非サポート」の方が根本原因を示す。
+   - **設計方針として維持** — seiton の「types 非サポート」の方が根本原因を示す。
 3. **16:16 empty workflows** (MISS+EXTRA ペア): 同上パターン。seiton は `push` に workflows filter が使えないことを指摘。
-   - **改善案:** 設計方針として維持。
+   - **設計方針として維持。**
 
 **EXTRA:**
 - `22:9 matrix axis 'foo' has no values`: seiton の独自 lint ルール — 空軸の検出は有用な追加診断。維持。
