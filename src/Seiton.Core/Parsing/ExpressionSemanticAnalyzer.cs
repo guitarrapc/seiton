@@ -1594,7 +1594,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    private static ExprType InferTypeWithOverrides(
+    internal static ExprType InferTypeWithOverrides(
         int nodeId,
         ReadOnlySpan<ExpressionNode> nodes,
         ReadOnlySpan<int> arguments,

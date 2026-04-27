@@ -21,7 +21,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     // Anchor usage tracking for unused-anchor detection
     private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id → (name, position)
     private HashSet<int>? _referencedAnchorIds;                                       // anchor ids used by aliases
-    private List<(string Name, TextPosition Position)>? _recursiveAliases;            // recursive alias occurrences
+    private List<(string Name, TextPosition Position, TextPosition AnchorPosition)>? _recursiveAliases;            // recursive alias occurrences
     private List<(int Id, List<AnchorEvent> Events, int Depth)>? _nestedRecordings;  // nested anchors inside outer recording
 
     /// <summary>Creates a new adapter wrapping the given UTF-8 YAML bytes for pull-based parsing.</summary>
@@ -131,9 +131,12 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             // (Truly undefined anchors cause VYaml to throw before reaching here.)
             if (_currentRecording != null && _parser.TryGetCurrentAnchor(out var unresolvableAnchor))
             {
-                _recursiveAliases ??= new List<(string, TextPosition)>();
+                _recursiveAliases ??= new List<(string, TextPosition, TextPosition)>();
                 var mark = _parser.CurrentMark;
-                _recursiveAliases.Add((unresolvableAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col)));
+                var anchorPos = _definedAnchors != null && _definedAnchors.TryGetValue(unresolvableAnchor.Id, out var anchorEntry)
+                    ? anchorEntry.Position
+                    : default;
+                _recursiveAliases.Add((unresolvableAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col), anchorPos));
 
                 // Mark the anchor as referenced so it's not reported as unused
                 _referencedAnchorIds ??= new HashSet<int>();
@@ -774,12 +777,12 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
     /// <summary>
     /// Returns recursive alias occurrences detected during parsing.
-    /// Each entry contains the anchor name and the position where the recursive alias was found.
+    /// Each entry contains the anchor name, the position where the recursive alias was found, and the anchor's declaration position.
     /// </summary>
-    public ReadOnlySpan<(string Name, TextPosition Position)> GetRecursiveAliases(Span<(string Name, TextPosition Position)> buffer)
+    public ReadOnlySpan<(string Name, TextPosition Position, TextPosition AnchorPosition)> GetRecursiveAliases(Span<(string Name, TextPosition Position, TextPosition AnchorPosition)> buffer)
     {
         if (_recursiveAliases == null || _recursiveAliases.Count == 0)
-            return ReadOnlySpan<(string Name, TextPosition Position)>.Empty;
+            return ReadOnlySpan<(string Name, TextPosition Position, TextPosition AnchorPosition)>.Empty;
 
         var count = Math.Min(_recursiveAliases.Count, buffer.Length);
         for (int i = 0; i < count; i++)

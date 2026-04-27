@@ -105,9 +105,73 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                         static (rule, message, location, e) =>
                             rule.AddWorkflowError(rule._currentWorkflow!, message, location),
                         ev);
+
+                    // Type check: inferred expression type vs declared input type
+                    if (input.Type is WorkflowCallInputType.Boolean or WorkflowCallInputType.Number)
+                    {
+                        ValidateInputDefaultType(input, [incrementalInputsOverride]);
+                    }
                 }
             }
         }
+    }
+
+    private void ValidateInputDefaultType(WorkflowCallEventInput input, (byte[] NameUtf8, ExprType Type)[] overrides)
+    {
+        var value = Arena.GetStringValue(input.Default);
+        if (value.Length == 0)
+        {
+            return;
+        }
+
+        var searchStart = 0;
+        if (!TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out _))
+        {
+            return;
+        }
+
+        var expression = TrimAsciiWhiteSpace(value.Slice(bodyStart, bodyLength));
+        if (expression.Length == 0)
+        {
+            return;
+        }
+
+        var parseResult = Config.ParseExpression(expression);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return;
+        }
+
+        var inferredType = ExpressionSemanticAnalyzer.InferTypeWithOverrides(
+            parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, overrides);
+
+        var expectedTypeName = input.Type switch
+        {
+            WorkflowCallInputType.Boolean => "bool",
+            WorkflowCallInputType.Number => "number",
+            _ => null,
+        };
+
+        if (expectedTypeName is null)
+        {
+            return;
+        }
+
+        // Only report when the inferred type is concrete and mismatched
+        if (inferredType is AnyExprType or ObjectExprType or ArrayExprType or NullExprType)
+        {
+            return;
+        }
+
+        if (inferredType.TypeName == expectedTypeName)
+        {
+            return;
+        }
+
+        var inputName = Encoding.UTF8.GetString(input.Id.Span);
+        var message = $"type of input \"{inputName}\" must be {expectedTypeName} but found type {inferredType.TypeName}";
+        var location = Arena.GetStringRange(input.Default);
+        AddWorkflowError(_currentWorkflow!, message, location);
     }
 
     public override void VisitWorkflowPost(Workflow workflow)

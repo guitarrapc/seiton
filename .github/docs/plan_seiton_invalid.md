@@ -1202,43 +1202,21 @@ test.yaml:14:11: property "fooooooo" not defined             MISS  (なし)
 
 ---
 
-##### 4.O `expr_in_default_input` — 2 MISS, 0 EXTRA
+##### 4.O `expr_in_default_input` — ~~2 MISS, 0 EXTRA~~ ✅ DONE (0 MISS, 0 EXTRA)
 
-**具体例:**
-
-```
-# .out (actionlint)                                               # .seiton.out (seiton)
-test.yaml:7:22:  property "input2" not defined              COL    test.yaml:7:18:  property "input2" not defined
-test.yaml:15:22: property "input3" not defined              COL    test.yaml:15:18: property "input3" not defined
-test.yaml:19:18: type of input "input4" must be bool        MISS   (なし)
-test.yaml:23:18: type of input "input5" must be number      MISS   (なし)
-```
-
-**MISS 原因と改善案:**
-
-1. **19:18, 23:18 input default 型チェック** (MISS × 2): `workflow_call.inputs.input4` の型が `boolean` だが default 値が `inputs.input1` (string 型) — 型不一致。seiton は input default の型チェックを未実装。
-   - **改善案:** `ExprUndefinedVarRule` で workflow_call input の default 値の式を検証する際、input の declared type (boolean/number) と式の推論型 (string) の不一致を検出する。
+**実装済み:**
+`ExprUndefinedVarRule.VisitEvent` に `ValidateInputDefaultType` メソッドを追加。workflow_call input の default 値式の推論型と declared type (boolean/number) の不一致を検出。`ExpressionSemanticAnalyzer.InferTypeWithOverrides` を internal に昇格して利用。
 
 ---
 
-##### 4.P `issue-610_recursive_raw_yaml_value` — 1 MISS, 1 EXTRA
+##### 4.P `issue-610_recursive_raw_yaml_value` — ~~1 MISS, 1 EXTRA~~ ✅ 改善済み (COL_DIFF のみ)
 
-**具体例:**
+**実装済み:**
+recursive alias メッセージにアンカー宣言位置を追加: `recursive alias "recursive_include" is found. anchor was declared at line:8, column:18`。`VYamlStreamAdapter` の recursive alias 検出時に `_definedAnchors` からアンカー位置を取得し、メッセージに含めるよう変更。
 
-```
-# .out (actionlint)                                               # .seiton.out (seiton)
-test.yaml:10:21: recursive alias "recursive_include"    COL        test.yaml:11:9: recursive alias "recursive_include" is found
-test.yaml:10:21: unexpected alias on parsing matrix row COL        test.yaml:11:9: matrix value has unsupported shape  ← 異なるメッセージ
-                                                                   test.yaml:8:18: anchor "recursive_include" unused  ← EXTRA
-```
-
-**MISS 原因と改善案:**
-
-1. **メッセージ差異** (COL_DIFF): actionlint は `unexpected alias node on parsing value in matrix row`、seiton は `matrix value has unsupported shape`。同じ問題を検出しているがメッセージが異なる。
-   - **改善案:** メッセージを `unexpected alias node on parsing value in matrix row` に近づける。低優先度。
-
-**EXTRA:**
-- `8:18 anchor unused`: 4.I と同じパターン — recursive alias を使用とみなさない。設計差異として維持。
+**残差異:**
+- 行・列差異 (COL_DIFF): seiton の値位置ポリシーにより位置が異なる。設計差異。
+- matrix メッセージ差異: `unsupported shape` vs `unexpected alias node` — 同じ問題の異なる表現。低優先度。
 
 #### 低優先度 — 1行差異・設計方針差異
 

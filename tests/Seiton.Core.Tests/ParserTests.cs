@@ -2075,6 +2075,16 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_RecursiveAlias_IncludesAnchorDeclarationPosition()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - &recursive\n        run: echo hello\n        env: *recursive\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-alias.yml");
+        var recursive = result.Diagnostics.First(d => d.Message.Contains("recursive alias", StringComparison.Ordinal));
+        await Assert.That(recursive.Message).Contains("anchor was declared at line:");
+    }
+
+    [Test]
     public async Task Parse_RecursiveAnchors_NestedAnchorResolvesCorrectly()
     {
         // Tests that *recursive1 resolves (nested anchor stored) and *recursive2 is detected as recursive

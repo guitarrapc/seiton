@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -67,7 +67,7 @@ public static partial class WorkflowParser
             // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
             var unusedBuf = new (string Name, TextPosition Position)[8];
             var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
-            var recursiveBuf = new (string Name, TextPosition Position)[8];
+            var recursiveBuf = new (string Name, TextPosition Position, TextPosition AnchorPosition)[8];
             var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
 
             var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2 + unusedAnchors.Length + recursiveAliases.Length);
@@ -86,8 +86,11 @@ public static partial class WorkflowParser
 
                 for (var i = 0; i < recursiveAliases.Length; i++)
                 {
-                    var (name, pos) = recursiveAliases[i];
-                    AddError(ref diagnostics, $"recursive alias \"{name}\" is found", pos);
+                    var (name, pos, anchorPos) = recursiveAliases[i];
+                    var message = anchorPos.Line > 0
+                        ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
+                        : $"recursive alias \"{name}\" is found";
+                    AddError(ref diagnostics, message, pos);
                 }
 
                 if (isAmbiguous)

@@ -6699,6 +6699,92 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_InputDefaultTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            // ok: boolean default with boolean expression
+            new RuleCase(
+            "ok-bool-default-bool-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: boolean
+                  input2:
+                    type: boolean
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """,
+            []),
+            // ok: number default with number expression
+            new RuleCase(
+            "ok-number-default-number-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: number
+                  input2:
+                    type: number
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """,
+            []),
+            // ng: boolean input with string expression
+            new RuleCase(
+            "ng-bool-default-string-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: string
+                  input2:
+                    type: boolean
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ng
+            """,
+            ["type of input \"input2\" must be bool but found type string"]),
+            // ng: number input with string expression
+            new RuleCase(
+            "ng-number-default-string-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: string
+                  input2:
+                    type: number
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ng
+            """,
+            ["type of input \"input2\" must be number but found type string"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability4C_TableDriven()
     {
         var cases = new[]
