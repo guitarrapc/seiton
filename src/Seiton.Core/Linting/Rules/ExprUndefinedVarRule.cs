@@ -601,12 +601,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             if (!Availability.IsRootContextAvailable(context, rootName))
             {
                 var rootNameText = Encoding.UTF8.GetString(rootName);
+                var scopeText = FormatScopeName(context);
                 if (IsBuiltinContext(rootName))
                 {
                     var availableText = Availability.FormatAvailableContexts(context);
                     report(
                         this,
-                        $"context \"{rootNameText}\" is not allowed here. {availableText}",
+                        $"context \"{rootNameText}\" is not allowed here. {availableText}. called in {scopeText}",
                         location,
                         target);
                 }
@@ -614,7 +615,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 {
                     report(
                         this,
-                        $"context \"{rootNameText}\" is not allowed here. undefined context \"{rootNameText}\"",
+                        $"context \"{rootNameText}\" is not allowed here. undefined context \"{rootNameText}\". called in {scopeText}",
                         location,
                         target);
                 }
@@ -634,9 +635,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 if (!isIfContext && IsStatusCheckFunction(funcName))
                 {
                     var funcNameText = Encoding.UTF8.GetString(funcName);
+                    var scopeText = FormatScopeName(context);
                     report(
                         this,
-                        $"function \"{funcNameText}\" is not allowed here. \"{funcNameText}\" is only available in \"if\" conditions of jobs and steps",
+                        $"function \"{funcNameText}\" is not allowed here. \"{funcNameText}\" is only available in \"if\" conditions of jobs and steps. called in {scopeText}",
                         location,
                         target);
                 }
@@ -644,9 +646,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 // hashFiles: only at step level (not job.if)
                 if (IsHashFilesFunction(funcName) && !Availability.IsStepLevel(context))
                 {
+                    var scopeText = FormatScopeName(context);
                     report(
                         this,
-                        $"function \"hashFiles\" is not allowed here. \"hashFiles\" is only available in step-level expressions",
+                        $"function \"hashFiles\" is not allowed here. \"hashFiles\" is only available in step-level expressions. called in {scopeText}",
                         location,
                         target);
                 }
@@ -1009,4 +1012,46 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
         return false;
     }
+
+    private static string FormatScopeName(ExpressionValidationContext context) => context switch
+    {
+        ExpressionValidationContext.Concurrency => "workflow concurrency",
+        ExpressionValidationContext.DefaultsRunShell => "workflow defaults.run",
+        ExpressionValidationContext.Env => "workflow env",
+        ExpressionValidationContext.RunName => "workflow run-name",
+        ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call input default",
+        ExpressionValidationContext.WorkflowCallOutputsValue => "workflow_call output value",
+        ExpressionValidationContext.JobConcurrency => "job concurrency",
+        ExpressionValidationContext.JobContainer => "job container",
+        ExpressionValidationContext.JobContainerCredentials => "job container credentials",
+        ExpressionValidationContext.JobContainerEnv => "job container env",
+        ExpressionValidationContext.JobContainerImage => "job container image",
+        ExpressionValidationContext.JobContinueOnError => "job continue-on-error",
+        ExpressionValidationContext.JobDefaultsRun => "job defaults.run",
+        ExpressionValidationContext.JobEnv => "job env",
+        ExpressionValidationContext.JobEnvironment => "job environment",
+        ExpressionValidationContext.JobEnvironmentUrl => "job environment.url",
+        ExpressionValidationContext.JobIf => "job if",
+        ExpressionValidationContext.JobName => "job name",
+        ExpressionValidationContext.JobOutputs => "job outputs",
+        ExpressionValidationContext.JobRunsOn => "job runs-on",
+        ExpressionValidationContext.JobSecrets => "job secrets",
+        ExpressionValidationContext.JobServices => "job services",
+        ExpressionValidationContext.JobServicesCredentials => "job services credentials",
+        ExpressionValidationContext.JobServicesEnv => "job services env",
+        ExpressionValidationContext.JobStrategy => "job strategy",
+        ExpressionValidationContext.JobTimeoutMinutes => "job timeout-minutes",
+        ExpressionValidationContext.JobWith => "job with",
+        ExpressionValidationContext.StepContinueOnError => "step continue-on-error",
+        ExpressionValidationContext.StepEnv => "step env",
+        ExpressionValidationContext.StepId => "step id",
+        ExpressionValidationContext.StepIf => "step if",
+        ExpressionValidationContext.StepName => "step name",
+        ExpressionValidationContext.StepRun => "step run",
+        ExpressionValidationContext.StepShell => "step shell",
+        ExpressionValidationContext.StepTimeoutMinutes => "step timeout-minutes",
+        ExpressionValidationContext.StepWith => "step with",
+        ExpressionValidationContext.StepWorkingDirectory => "step working-directory",
+        _ => "unknown scope",
+    };
 }

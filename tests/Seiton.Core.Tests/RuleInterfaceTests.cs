@@ -5276,7 +5276,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job if condition is always false"]),
+            ["constant expression \"false\" in condition. remove the if: section"]),
             new RuleCase(
             "ng-step-if-constant-true",
             """
@@ -5288,7 +5288,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ !false }}
                           run: echo ng
             """,
-            ["step if condition is always true"]),
+            ["constant expression \"!false\" in condition. remove the if: section"]),
             new RuleCase(
             "ng-step-if-always-true-multi-expression",
             """
@@ -5337,7 +5337,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ null }}
                           run: echo ng
             """,
-            ["step if condition is always false"]),
+            ["constant expression \"null\" in condition. remove the if: section"]),
             // regression: number literal should be detected as constant (0 = falsy)
             new RuleCase(
             "ng-step-if-number-zero",
@@ -5350,7 +5350,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ 0 }}
                           run: echo ng
             """,
-            ["step if condition is always false"]),
+            ["constant expression \"0\" in condition. remove the if: section"]),
             // regression: non-zero number is truthy
             new RuleCase(
             "ng-step-if-number-truthy",
@@ -5363,7 +5363,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ 42 }}
                           run: echo ng
             """,
-            ["step if condition is always true"]),
+            ["constant expression \"42\" in condition. remove the if: section"]),
             // regression: empty string literal is falsy
             new RuleCase(
             "ng-step-if-empty-string",
@@ -5376,7 +5376,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ '' }}
                           run: echo ng
             """,
-            ["step if condition is always false"]),
+            ["constant expression \"''\" in condition. remove the if: section"]),
             // regression: non-empty string literal is truthy
             new RuleCase(
             "ng-step-if-nonempty-string",
@@ -5389,7 +5389,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ 'hello' }}
                           run: echo ng
             """,
-            ["step if condition is always true"]),
+            ["constant expression \"'hello'\" in condition. remove the if: section"]),
             // regression: mixed type constant expression (true && 42 || !null)
             new RuleCase(
             "ng-step-if-mixed-constant",
@@ -5402,7 +5402,7 @@ public sealed class RuleInterfaceTests
                         - if: true && 42 || !null
                           run: echo ng
             """,
-            ["step if condition is always true"]),
+            ["constant expression \"true && 42 || !null\" in condition. remove the if: section"]),
             // regression: pure function with constant args (contains + format)
             new RuleCase(
             "ng-step-if-constant-function",
@@ -5415,7 +5415,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b') }}
                           run: echo ng
             """,
-            ["step if condition is always true"]),
+            ["constant expression"]),
             // ok case — impure function (success) should not be flagged
             new RuleCase(
             "ok-step-if-impure-function",

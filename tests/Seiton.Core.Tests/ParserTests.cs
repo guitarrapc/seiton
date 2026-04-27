@@ -232,7 +232,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "unknown.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected workflow key: foobar", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" for \"workflow\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -276,7 +276,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-duplicate.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on contains duplicate key: PUSH", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key \"PUSH\" is duplicated in \"on\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -297,7 +297,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-duplicate.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs contains duplicate key: BUILD", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key \"BUILD\" is duplicated in \"jobs\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -532,7 +532,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-disallowed-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch does not support option: paths", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("expected \"inputs\" key for \"workflow_dispatch\" section but got \"paths\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1596,8 +1596,8 @@ public sealed class ParserTests
         {
             new ErrFixtureExpectation("empty.yaml", ["workflow root must be mapping"]),
             new ErrFixtureExpectation("empty_on.yaml", ["unknown event in on"]),
-            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected workflow key", "unexpected job key"]),
-            new ErrFixtureExpectation("duplicate_keys.yaml", ["contains duplicate key"]),
+            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "for \"job\" section"]),
+            new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "step must run script"]),
             new ErrFixtureExpectation("missing_on.yaml", ["\"on\" section is missing in workflow"]),

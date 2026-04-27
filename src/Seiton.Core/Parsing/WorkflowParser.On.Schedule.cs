@@ -126,7 +126,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.schedule option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

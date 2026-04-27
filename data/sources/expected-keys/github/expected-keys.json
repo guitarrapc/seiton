@@ -296,6 +296,82 @@
         "required",
         "type"
       ]
+    },
+    {
+      "name": "concurrency",
+      "description": "Expected keys for concurrency section",
+      "keys": [
+        "cancel-in-progress",
+        "group"
+      ]
+    },
+    {
+      "name": "environment",
+      "description": "Expected keys for jobs.\u003Cjob_id\u003E.environment",
+      "keys": [
+        "deployment",
+        "name",
+        "url"
+      ]
+    },
+    {
+      "name": "schedule-entry",
+      "description": "Expected keys for on.schedule entry",
+      "keys": [
+        "cron",
+        "timezone"
+      ]
+    },
+    {
+      "name": "workflow-call-input-field",
+      "description": "Expected keys for on.workflow_call.inputs.\u003Cinput_id\u003E fields",
+      "keys": [
+        "default",
+        "description",
+        "required",
+        "type"
+      ]
+    },
+    {
+      "name": "workflow-call-secret-field",
+      "description": "Expected keys for on.workflow_call.secrets.\u003Csecret_id\u003E fields",
+      "keys": [
+        "description",
+        "required"
+      ]
+    },
+    {
+      "name": "workflow-call-output-field",
+      "description": "Expected keys for on.workflow_call.outputs.\u003Coutput_id\u003E fields",
+      "keys": [
+        "description",
+        "value"
+      ]
+    },
+    {
+      "name": "workflow-dispatch-input-field",
+      "description": "Expected keys for on.workflow_dispatch.inputs.\u003Cinput_id\u003E fields",
+      "keys": [
+        "default",
+        "description",
+        "options",
+        "required",
+        "type"
+      ]
+    },
+    {
+      "name": "webhook-event-option",
+      "description": "Expected keys for on.\u003Cevent_name\u003E options",
+      "keys": [
+        "branches",
+        "branches-ignore",
+        "paths",
+        "paths-ignore",
+        "tags",
+        "tags-ignore",
+        "types",
+        "workflows"
+      ]
     }
   ]
 }

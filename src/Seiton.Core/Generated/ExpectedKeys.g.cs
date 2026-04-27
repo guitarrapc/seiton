@@ -94,4 +94,28 @@ internal static class ExpectedKeys
 
     /// <summary>Expected keys for on.workflow_dispatch.inputs.<input_id></summary>
     internal const string WorkflowDispatchInputKeys = "\"required\", \"type\"";
+
+    /// <summary>Expected keys for concurrency section</summary>
+    internal const string ConcurrencyKeys = "\"cancel-in-progress\", \"group\"";
+
+    /// <summary>Expected keys for jobs.<job_id>.environment</summary>
+    internal const string EnvironmentKeys = "\"deployment\", \"name\", \"url\"";
+
+    /// <summary>Expected keys for on.schedule entry</summary>
+    internal const string ScheduleEntryKeys = "\"cron\", \"timezone\"";
+
+    /// <summary>Expected keys for on.workflow_call.inputs.<input_id> fields</summary>
+    internal const string WorkflowCallInputFieldKeys = "\"default\", \"description\", \"required\", \"type\"";
+
+    /// <summary>Expected keys for on.workflow_call.secrets.<secret_id> fields</summary>
+    internal const string WorkflowCallSecretFieldKeys = "\"description\", \"required\"";
+
+    /// <summary>Expected keys for on.workflow_call.outputs.<output_id> fields</summary>
+    internal const string WorkflowCallOutputFieldKeys = "\"description\", \"value\"";
+
+    /// <summary>Expected keys for on.workflow_dispatch.inputs.<input_id> fields</summary>
+    internal const string WorkflowDispatchInputFieldKeys = "\"default\", \"description\", \"options\", \"required\", \"type\"";
+
+    /// <summary>Expected keys for on.<event_name> options</summary>
+    internal const string WebhookEventOptionKeys = "\"branches\", \"branches-ignore\", \"paths\", \"paths-ignore\", \"tags\", \"tags-ignore\", \"types\", \"workflows\"";
 }

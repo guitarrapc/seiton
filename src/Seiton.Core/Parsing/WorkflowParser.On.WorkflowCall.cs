@@ -84,7 +84,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"on.workflow_call does not support option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -290,7 +290,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_call input option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for inputs at workflow_call event. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -519,7 +519,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_call secret option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -710,7 +710,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_call output option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for outputs at workflow_call event. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

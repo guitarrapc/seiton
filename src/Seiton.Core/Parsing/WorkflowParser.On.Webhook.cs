@@ -155,7 +155,7 @@ public static partial class WorkflowParser
                 }
             }
 
-            AddError(diagnostics, $"unexpected on.{eventInfo.Name} option: {unknownKeyText}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
             if (!reader.End) { reader.SkipCurrentNode(); }
         }
 
@@ -439,7 +439,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.{eventInfo.Name} option: {unknownKey}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
             reader.SkipCurrentNode();
         }
 

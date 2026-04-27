@@ -300,7 +300,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             EndLine: end.Line,
             EndColumn: end.Column);
 
-        var message = $"\"{pathString}\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable.";
+        var message = $"\"{pathString}\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details";
         AddStepError(step, message, location);
     }
 

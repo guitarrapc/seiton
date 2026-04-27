@@ -52,7 +52,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"on.repository_dispatch does not support option: {unknown}", keyMark);
+            AddError(diagnostics, $"expected \"types\" key for \"repository_dispatch\" section but got \"{unknown}\"", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

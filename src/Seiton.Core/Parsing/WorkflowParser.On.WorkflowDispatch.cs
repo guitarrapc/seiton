@@ -52,7 +52,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"on.workflow_dispatch does not support option: {unknown}", keyMark);
+            AddError(diagnostics, $"expected \"inputs\" key for \"workflow_dispatch\" section but got \"{unknown}\"", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -238,7 +238,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_dispatch input option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

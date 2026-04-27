@@ -476,7 +476,9 @@ public static partial class WorkflowParser
             reader.Read();
             AddError(
                 diagnostics,
-                parseMode == ParseMode.ActionMetadata ? $"unexpected action metadata key: {unknownKey}" : $"unexpected workflow key: {unknownKey}",
+                parseMode == ParseMode.ActionMetadata
+                    ? $"unexpected key \"{unknownKey}\" for \"action metadata\" section. expected one of {Generated.ExpectedKeys.WorkflowKeys}"
+                    : $"unexpected key \"{unknownKey}\" for \"workflow\" section. expected one of {Generated.ExpectedKeys.WorkflowKeys}",
                 keyMark);
             if (!reader.End)
             {
@@ -892,7 +894,7 @@ public static partial class WorkflowParser
 
                     var unknownRunKey = Encoding.UTF8.GetString(runKeyUtf8);
                     reader.Read();
-                    AddError(diagnostics, $"unexpected workflow defaults.run key: {unknownRunKey}", runKeyMark);
+                    AddError(diagnostics, $"unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}", runKeyMark);
                     if (!reader.End) reader.SkipCurrentNode();
                 }
 
@@ -909,7 +911,7 @@ public static partial class WorkflowParser
 
             var unknownDefaultsKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected workflow defaults key: {unknownDefaultsKey}", keyMark);
+            AddError(diagnostics, $"expected \"run\" key for \"defaults\" section but got \"{unknownDefaultsKey}\"", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -1024,7 +1026,7 @@ public static partial class WorkflowParser
 
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected workflow concurrency key: {unknownConcurrencyKey}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

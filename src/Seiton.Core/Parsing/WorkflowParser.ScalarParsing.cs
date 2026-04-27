@@ -439,7 +439,11 @@ public static partial class WorkflowParser
                 : EqualsAsciiIgnoreCase(prev, keyUtf8);
             if (isMatch)
             {
-                AddError(diagnostics, $"{mappingName} contains duplicate key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
+                var keyText = Encoding.UTF8.GetString(keyUtf8);
+                var sectionName = ExtractSectionDisplayName(mappingName);
+                var (prevLine, prevCol) = ComputeLineColumn(source, prevOffset);
+                var caseNote = caseSensitive ? "" : ". note that this key is case insensitive";
+                AddError(diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}{caseNote}", keyMark);
                 return false;
             }
         }
@@ -451,6 +455,16 @@ public static partial class WorkflowParser
         }
 
         return true;
+    }
+
+    /// <summary>Extracts the last segment of a dotted or spaced mapping name for display (e.g. "on.workflow_call.inputs" → "inputs").</summary>
+    private static string ExtractSectionDisplayName(string mappingName)
+    {
+        var dotIndex = mappingName.LastIndexOf('.');
+        if (dotIndex >= 0) return mappingName.Substring(dotIndex + 1);
+        var spaceIndex = mappingName.LastIndexOf(' ');
+        if (spaceIndex >= 0) return mappingName.Substring(spaceIndex + 1);
+        return mappingName;
     }
 
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)

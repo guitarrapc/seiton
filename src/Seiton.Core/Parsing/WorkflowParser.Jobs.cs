@@ -139,6 +139,7 @@ public static partial class WorkflowParser
         string? stepsOnlyKeyInReusable = null;
         TextPosition stepsOnlyKeyInReusableMark = default;
         ulong seen = 0;
+        Span<long> jobKeyFirstMark = stackalloc long[20];
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
@@ -172,9 +173,19 @@ public static partial class WorkflowParser
                 reader.Read();
                 if (!TrySetBit(ref seen, jobKeyOrd))
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' contains duplicate key: {JobNodeDuplicateKeyName(jobKey)}", keyMark);
+                    var dupName = JobNodeDuplicateKeyName(jobKey);
+                    var jobIdText = DecodeUtf8(source, jobId);
+                    var prevMark = jobKeyFirstMark[jobKeyOrd];
+                    var prevLine = (int)(prevMark >> 32);
+                    var prevCol = (int)(prevMark & 0xFFFFFFFF);
+                    AddError(diagnostics, $"key \"{dupName}\" is duplicated in \"{jobIdText}\" job. previously defined at line:{prevLine},col:{prevCol}", keyMark);
                     if (!reader.End) reader.SkipCurrentNode();
                     continue;
+                }
+
+                if (jobKeyOrd < jobKeyFirstMark.Length)
+                {
+                    jobKeyFirstMark[jobKeyOrd] = ((long)keyMark.Line << 32) | (uint)keyMark.Col;
                 }
 
                 switch (jobKey)
@@ -507,7 +518,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"unexpected job key '{unknownJobKey}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -906,7 +917,7 @@ public static partial class WorkflowParser
 
             var unknownEnvKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected environment key '{unknownEnvKey}' in job '{DecodeUtf8(source, jobId)}'", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

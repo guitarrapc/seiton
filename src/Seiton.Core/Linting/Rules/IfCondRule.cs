@@ -40,14 +40,16 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         // Examples: "${{ expr }}\n" (block scalar), "${{ expr }} " (trailing space), "${{ e1 }} && ${{ e2 }}"
         if (IsAlwaysTrueTemplate(raw))
         {
+            var conditionText = FormatConditionText(raw);
+            var message = $"if: condition \"{conditionText}\" is always evaluated to true because extra characters are around ${{{{ }}}}";
             if (job is not null)
             {
-                AddJobWarning(job, "job if condition is always evaluated to true because extra characters are around ${{ }}", Arena.GetStringRange(condition));
+                AddJobWarning(job, message, Arena.GetStringRange(condition));
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, "step if condition is always evaluated to true because extra characters are around ${{ }}", Arena.GetStringRange(condition));
+                AddStepWarning(step, message, Arena.GetStringRange(condition));
             }
 
             return;
@@ -73,15 +75,16 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 
         if (IsConstantBool(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, out var value))
         {
-            var boolText = value ? "true" : "false";
+            var expressionText = Encoding.UTF8.GetString(expression);
+            var message = $"constant expression \"{expressionText}\" in condition. remove the if: section";
             if (job is not null)
             {
-                AddJobWarning(job, $"job if condition is always {boolText}", Arena.GetStringRange(condition));
+                AddJobWarning(job, message, Arena.GetStringRange(condition));
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, $"step if condition is always {boolText}", Arena.GetStringRange(condition));
+                AddStepWarning(step, message, Arena.GetStringRange(condition));
             }
         }
     }
@@ -337,5 +340,18 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         }
 
         return false;
+    }
+
+    /// <summary>Converts raw UTF-8 condition bytes to a displayable string, escaping newlines.</summary>
+    private static string FormatConditionText(ReadOnlySpan<byte> raw)
+    {
+        var text = Encoding.UTF8.GetString(raw);
+        // Trim trailing newline that block scalars produce, but show it as \n in the message
+        if (text.EndsWith('\n'))
+        {
+            text = text.TrimEnd('\n') + "\\n";
+        }
+
+        return text;
     }
 }
