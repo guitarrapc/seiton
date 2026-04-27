@@ -7,24 +7,25 @@
 
 ## 0. 現状サマリ
 
-| 指標 | フェーズ 1 実施前 | フェーズ 1 実施後 | フェーズ 2+3 実施後 |
-|---|---|---|---|
-| 完全一致 (PERFECT) fixtures | 10 / 99 | 90 / 99 | 29 / 99 ※ |
-| 列差異のみ (COL_DIFF) fixtures | - | - | 27 / 99 |
-| 行レベルマッチ率 (line+col or line) | 95 / 503 (18%) | 473 / 498 (94%) | 391 / 503 (77.7%) |
-| 完全一致マッチ率 (line+col exact) | - | - | 248 / 503 (49.3%) |
-| 列差異マッチ (same line, diff col) | - | - | 143 / 503 (28.4%) |
-| 未マッチ期待行 (MISSING) | 408 | 25 | 112 |
-| 余剰 seiton 行 (EXTRA) | 423 | 0 | 91 |
+| 指標 | フェーズ 1 実施前 | フェーズ 1 実施後 | フェーズ 2+3 実施後 | フェーズ 4 実施後 |
+|---|---|---|---|---|
+| 完全一致 (PERFECT) fixtures | 10 / 99 | 90 / 99 | 29 / 99 ※ | 19 / 99 ※※ |
+| 列差異のみ (COL_DIFF) fixtures | - | - | 27 / 99 | 41 / 99 |
+| 行レベルマッチ率 (line+col or line) | 95 / 503 (18%) | 473 / 498 (94%) | 391 / 503 (77.7%) | 444 / 503 (88.3%) |
+| 完全一致マッチ率 (line+col exact) | - | - | 248 / 503 (49.3%) | 206 / 503 (40.9%) |
+| 列差異マッチ (same line, diff col/msg) | - | - | 143 / 503 (28.4%) | 238 / 503 (47.3%) |
+| 未マッチ期待行 (MISSING) | 408 | 25 | 112 | 59 |
+| 余剰 seiton 行 (EXTRA) | 423 | 0 | 91 | 60 |
 
 ※ フェーズ 1 実施直後は `.seiton.out` を seiton 実出力に合わせて管理していたため PERFECT が多かった。フェーズ 2+3 でメッセージ・位置を actionlint に近づける改善を行ったため、`.seiton.out` が `.out` とのギャップを正確に反映するようになった。
 
-**fixture 状態分布**:
-- **PERFECT** (完全一致): 29 fixtures — actionlint `.out` と完全に一致
-- **COL_DIFF** (列差異のみ): 27 fixtures — 同じ行で検出しているが列位置が異なる (seiton の値位置報告ポリシー)
-- **EXTRA** (余剰のみ): 3 fixtures — seiton が追加の有用な診断を出す
-- **MISSING** (検出漏れのみ): 11 fixtures — 一部の行が未検出
-- **MIXED** (複合): 29 fixtures — 複数種類のギャップが混在
+※※ フェーズ 4 の PERFECT 減少は比較手法の改善 (regex パターン対応) による再分類。実際の検出能力は向上している (MISS 112→59, EXTRA 91→60)。COL_DIFF が 27→41 に増加したのは、以前 MIXED だった fixtures が改善されて COL_DIFF のみになったため。
+
+**fixture 状態分布 (フェーズ 4 実施後)**:
+- **PERFECT** (完全一致): 19 fixtures — actionlint `.out` と完全に一致 (regex マッチ含む)
+- **COL_DIFF** (列差異のみ): 41 fixtures — 同じ行で検出しているが列位置またはメッセージ形式が異なる (検出漏れ・余剰なし)
+- **MISSING** (検出漏れのみ): 5 fixtures — 一部の行が未検出 (うち 4 は pyflakes/shellcheck スコープ外)
+- **MIXED** (複合): 34 fixtures — 複数種類のギャップが混在
 
 ### フェーズ 1 実施内容
 
@@ -67,20 +68,29 @@ actionlint の `.out` ファイルは変更せず、seiton 側のメッセージ
 | `pyflakes_workflow_default_shell` | 同上 | 4 | - |
 | `shellcheck_default_shell_detection` | shellcheck 連携なし (スコープ外) | 4 | - |
 
-### 完全一致 fixtures (10)
+### 完全一致 fixtures (19 — PERFECT)
 
-これらは actionlint 期待と完全に一致しており、変更不要。
+regex パターン対応のマッチングで actionlint 期待と完全に一致。
 
-1. `expr_check_in_credentials`
-2. `issue558_read_write_none_are_not_always_valid_permissions`
-3. `matrix_exclude_value_mismatch`
-4. `workflow_call_required_default`
-5. `missing_jobs`
-6. `missing_on`
-7. `issue207_work_dir_with_uses`
-8. `issue170_empty_permissions` (部分一致、EXTRA なし)
-9. `schedule_event_with_no_config_1`
-10. `schedule_event_with_no_config_2`
+1. `dedup_errors` ✅
+2. `deprecated_workflow_commands` ✅
+3. `duplicate_keys` ✅
+4. `expr_check_in_credentials`
+5. `invalid_container_syntax` ✅
+6. `issue207_work_dir_with_uses`
+7. `issue558_read_write_none_are_not_always_valid_permissions`
+8. `macos_10.15_removed` (regex)
+9. `macos12_runner` (regex)
+10. `matrix_exclude_value_mismatch`
+11. `missing_jobs`
+12. `missing_on`
+13. `outdated_actions` ✅
+14. `outdated_popular_action` ✅
+15. `runner_labels_conflict_matrix`
+16. `schedule_event_with_no_config_1`
+17. `schedule_event_with_no_config_2`
+18. `workflow_call_outputs_syntax` ✅
+19. `workflow_call_required_default`
 
 ---
 
@@ -610,114 +620,115 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 ---
 
-## 3. fixture 別詳細一覧 (最新分析: フェーズ 2+3 実施後)
+## 3. fixture 別詳細一覧 (最新分析: フェーズ 4 実施後)
 
 ### 凡例
 
 - **比較状態**: `PERFECT` 完全一致 / `COL_DIFF` 列差異のみ / `EXTRA` 余剰のみ / `MISSING` 検出漏れのみ / `MIXED` 複合
 - **実装状態**: `✅` 実装済み / `⬜` スコープ外 / 空欄 = 未対応
 - **問題区分**: A: メッセージ差異 / B: 位置差異 / C: 検出漏れ / D: 重複・余剰 / E: スコープ外
+- **比較手法**: `.out` の regex パターン (`/pattern/`) を regex マッチで比較。同一行判定は行番号一致で行い、完全一致 (行+列+メッセージ) / 列差異 (同一行, 列またはメッセージ異なる) / MISS / EXTRA に分類。
 
 | # | Fixture | 比較 | Exp | Sei | Match | WCol | Miss | Extra | 実装 | 備考 |
 |---|---------|------|-----|-----|-------|------|------|-------|------|------|
-| 1 | `assign_expression` | EXTRA | 3 | 7 | 0 | 3 | 0 | 4 | | B+D: 列差異3 + 余剰4 (型メッセージ詳細化) |
-| 2 | `case_sensitive_keys` | MISSING | 22 | 21 | 21 | 0 | 1 | 0 | | C: 1行未検出 |
-| 3 | `context_availability` | MIXED | 39 | 39 | 0 | 32 | 1 | 1 | | B+C+D: 列差異32, 未検出1 (services式形式), 余剰1 (seitonがより正確) |
+| 1 | `assign_expression` | MIXED | 3 | 7 | 0 | 3 | 0 | 4 | | B+D: 列差異3 + 余剰4 (型メッセージ詳細化、include検証追加) |
+| 2 | `case_sensitive_keys` | MIXED | 22 | 21 | 18 | 3 | 1 | 0 | | A+B: 一致18, 列差異3 (メッセージ形式差異), 未検出1 (step RUN キー) |
+| 3 | `context_availability` | MIXED | 39 | 39 | 0 | 38 | 1 | 1 | ✅ | B+C: 列差異38 (regex/msg形式), 未検出1 (services式形式 217:34), 余剰1 (106:31 seitonがより正確) |
 | 4 | `cron_5minutes_limit` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
 | 5 | `dedup_errors` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 6 | `deprecated_action_inputs` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
 | 7 | `deprecated_workflow_commands` | PERFECT | 4 | 4 | 4 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 8 | `docker_specific_inputs_with_normal_action` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
 | 9 | `duplicate_keys` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 10 | `empty` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 11 | `empty_image_names_and_versions` | MIXED | 2 | 2 | 0 | 1 | 1 | 1 | | B+C+D: 列差異1, 未検出1, 余剰1 |
-| 12 | `empty_on` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 13 | `empty_sequence_or_string` | MIXED | 16 | 16 | 11 | 2 | 3 | 3 | | A+B: 一致11, 列差異2, 未検出3, 余剰3 |
+| 10 | `empty` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 11 | `empty_image_names_and_versions` | MIXED | 2 | 2 | 0 | 1 | 1 | 1 | | B+C+D: 列差異1, 未検出1 (empty image version), 余剰1 |
+| 12 | `empty_on` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (メッセージ形式差異) |
+| 13 | `empty_sequence_or_string` | MIXED | 16 | 16 | 13 | 2 | 1 | 1 | ✅ | A+B: 一致13, 列差異2, 未検出1 (choice empty string — 設計方針で許容), 余剰1 (matrix axis empty — seiton独自) |
 | 14 | `env_context_banned` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
 | 15 | `errors_in_anchor` | COL_DIFF | 5 | 5 | 3 | 2 | 0 | 0 | | B: 一致3, 列差異2 |
-| 16 | `evaluated_template` | MISSING | 4 | 3 | 2 | 1 | 1 | 0 | ✅ | B+C: 一致2, 列差異1, 未検出1 (steps.cache.outputs) |
-| 17 | `exclusive_webhook_filters` | PERFECT | 9 | 9 | 9 | 0 | 0 | 0 | ✅ | ✅ 位置改善: イベント名→排他フィルターキー位置。全9行 PERFECT MATCH |
+| 16 | `evaluated_template` | MIXED | 4 | 3 | 0 | 3 | 1 | 0 | ✅ | B+C: 列差異3, 未検出1 (steps.cache.outputs 型推論不足) |
+| 17 | `exclusive_webhook_filters` | COL_DIFF | 9 | 9 | 0 | 9 | 0 | 0 | ✅ | B: 列差異9 (メッセージ形式差異 — note サフィックスの有無)。位置は完全一致 |
 | 18 | `expr_check_in_credentials` | PERFECT | 6 | 6 | 6 | 0 | 0 | 0 | | 完全一致 |
-| 19 | `expr_check_in_env_var_name` | MIXED | 4 | 3 | 0 | 2 | 2 | 1 | | B+C+D: 列差異2, 未検出2, 余剰1 |
+| 19 | `expr_check_in_env_var_name` | MIXED | 4 | 7 | 0 | 4 | 0 | 3 | ✅ | B+D: 列差異4 (全4行同一行で検出), 余剰3 (portability 警告 — seiton独自の有用な追加検出) |
 | 20 | `expr_check_in_matrix_row_assign` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | ✅ | B: 列差異1 (値位置ポリシー) |
-| 21 | `expr_check_in_services` | MISSING | 2 | 1 | 1 | 0 | 1 | 0 | | C: 未検出1 |
-| 22 | `expr_in_default_input` | MISSING | 4 | 2 | 0 | 2 | 2 | 0 | | B+C: 列差異2, 未検出2 |
-| 23 | `github_script_untrusted_input` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A+B: 行位置差異 |
-| 24 | `glob_more` | MIXED | 18 | 18 | 8 | 9 | 1 | 1 | ✅ | C: error recovery + snapshot/image_version glob 実装済み (10→1 MISS) |
-| 25 | `if_cond_constants` | MIXED | 11 | 10 | 5 | 4 | 2 | 1 | ✅ | B+C: 一致5, 列差異4, 未検出2 (snapshot.if + multi-line), 余剰1 (18:13→19:11 行ずれ) |
-| 26 | `if_cond_edge_cases_trailing_leading_chars` | MIXED | 6 | 6 | 2 | 3 | 1 | 1 | ✅ | B+C: 一致2, 列差異3, 未検出1, 余剰1 |
-| 27 | `inputs_without_workflow_call_event` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 28 | `invalid_comparisons` | MIXED | 7 | 7 | 1 | 5 | 1 | 1 | ✅ | B+C: 一致1, 列差異5, 未検出1, 余剰1 |
-| 29 | `invalid_container_syntax` | MIXED | 23 | 23 | 22 | 0 | 1 | 1 | | A+B: 一致22, 未検出1, 余剰1 |
-| 30 | `invalid_event_filters` | PERFECT | 13 | 13 | 13 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 31 | `invalid_float_at_timeout_minutes` | MISSING | 4 | 3 | 1 | 2 | 1 | 0 | | B+C: 列差異2, 未検出1 |
-| 32 | `invalid_id` | PERFECT | 7 | 7 | 7 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 33 | `invalid_image_version_event` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 列差異1 |
-| 34 | `invalid_int_at_max_parallel` | MISSING | 5 | 4 | 2 | 2 | 1 | 0 | ✅ | B+C: 列差異2, 未検出1 (error3 quoted string) |
-| 35 | `invalid_json_in_fromjson` | MIXED | 9 | 10 | 4 | 3 | 2 | 3 | ✅ | B+C+D: 一致4, 列差異3, 未検出2, 余剰3 |
-| 36 | `invalid_permissions` | PERFECT | 12 | 12 | 12 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 37 | `invalid_runner_labels` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 列差異1 |
-| 38 | `invalid_snapshot` | MIXED | 5 | 5 | 1 | 1 | 2 | 2 | ✅ | C+D: snapshot パース実装済み。未検出2 (image-name 必須, 空文字列位置差異), 余剰2 (snapshot.if context検証追加 + glob検証追加) |
-| 39 | `invalid_steps` | MIXED | 19 | 18 | 15 | 2 | 2 | 1 | ✅ | B+C: 位置改善済み (17:9, 27:8)。残: col差異2 (25:12, 29:7), 未検出2 (28:9 empty mapping), 余剰1 (29:7 elem) |
-| 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 3 | 0 | 1 | 1 | 2 | | B+D: 列差異1, 未検出1 (alias メッセージ差異), 余剰2 (unsupported shape + anchor unused) |
-| 41 | `issue102` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 42 | `issue151_child_of_child_job` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 43 | `issue155_env_in_job_level_if` | COL_DIFF | 4 | 4 | 2 | 2 | 0 | 0 | ✅ | B: 一致2, 列差異2 (値位置ポリシー) |
-| 44 | `issue170_empty_permissions` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
-| 45 | `issue193` | EXTRA | 1 | 2 | 1 | 0 | 0 | 1 | | D: 余剰1 (追加診断) |
+| 21 | `expr_check_in_services` | MISSING | 2 | 1 | 1 | 0 | 1 | 0 | | C: 未検出1 (services 式形式の property チェック) |
+| 22 | `expr_in_default_input` | COL_DIFF | 4 | 4 | 2 | 2 | 0 | 0 | ✅ | B: 一致2, 列差異2 (値位置ポリシー) |
+| 23 | `github_script_untrusted_input` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A+B: 行位置差異 (seiton は別の行で検出) |
+| 24 | `glob_more` | MIXED | 18 | 18 | 7 | 10 | 1 | 1 | ✅ | B+C: 一致7, 列差異10, 未検出1 (block scalar改行), 余剰1 |
+| 25 | `if_cond_constants` | MIXED | 11 | 11 | 6 | 4 | 1 | 1 | ✅ | B+C: 一致6, 列差異4, 未検出1 (multi-line if行位置), 余剰1 (行ずれ) |
+| 26 | `if_cond_edge_cases_trailing_leading_chars` | MIXED | 6 | 6 | 2 | 3 | 1 | 1 | ✅ | B+C: 一致2, 列差異3, 未検出1 (行位置差異), 余剰1 |
+| 27 | `inputs_without_workflow_call_event` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 28 | `invalid_comparisons` | MIXED | 7 | 7 | 0 | 6 | 1 | 1 | ✅ | B+C: 列差異6, 未検出1 (array<bool> vs array<{}>), 余剰1 (重複検出) |
+| 29 | `invalid_container_syntax` | PERFECT | 23 | 23 | 23 | 0 | 0 | 0 | ✅ | 完全一致 |
+| 30 | `invalid_event_filters` | COL_DIFF | 13 | 13 | 0 | 13 | 0 | 0 | ✅ | B: 列差異13 (メッセージ形式差異 — regex パターン) |
+| 31 | `invalid_float_at_timeout_minutes` | MIXED | 4 | 3 | 0 | 3 | 1 | 0 | | B+C: 列差異3, 未検出1 (quoted string float検出) |
+| 32 | `invalid_id` | COL_DIFF | 7 | 7 | 6 | 1 | 0 | 0 | ✅ | B: 一致6, 列差異1 |
+| 33 | `invalid_image_version_event` | MIXED | 3 | 4 | 0 | 2 | 1 | 2 | | B+C+D: 列差異2, 未検出1, 余剰2 |
+| 34 | `invalid_int_at_max_parallel` | MIXED | 5 | 4 | 0 | 4 | 1 | 0 | ✅ | B+C: 列差異4, 未検出1 (quoted string integer検出) |
+| 35 | `invalid_json_in_fromjson` | MIXED | 9 | 10 | 0 | 7 | 2 | 3 | ✅ | B+C+D: 列差異7, 未検出2 (contains()型チェック), 余剰3 (template型チェック — seiton独自) |
+| 36 | `invalid_permissions` | COL_DIFF | 12 | 12 | 8 | 4 | 0 | 0 | ✅ | B: 一致8, 列差異4 (scope一覧差異) |
+| 37 | `invalid_runner_labels` | COL_DIFF | 3 | 3 | 2 | 1 | 0 | 0 | | B: 一致2, 列差異1 |
+| 38 | `invalid_snapshot` | MIXED | 5 | 5 | 0 | 3 | 2 | 2 | ✅ | B+C+D: 列差異3, 未検出2 (image-name必須, 空文字列位置差), 余剰2 (glob検証+context検証追加) |
+| 39 | `invalid_steps` | MIXED | 19 | 18 | 15 | 2 | 2 | 1 | ✅ | B+C: 一致15, 列差異2, 未検出2 (28:9 空flow mapping — VYaml制限), 余剰1 |
+| 40 | `issue-610_recursive_raw_yaml_value` | MIXED | 2 | 2 | 0 | 0 | 2 | 2 | ✅ | B: 全2行同一行で検出 (10→11行ずれ + メッセージにjob名追加)。実質COL_DIFF相当 |
+| 41 | `issue102` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 42 | `issue151_child_of_child_job` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 43 | `issue155_env_in_job_level_if` | COL_DIFF | 4 | 4 | 0 | 4 | 0 | 0 | ✅ | B: 列差異4 (値位置ポリシー + regex形式) |
+| 44 | `issue170_empty_permissions` | COL_DIFF | 2 | 2 | 1 | 1 | 0 | 0 | | B: 一致1, 列差異1 |
+| 45 | `issue193` | MIXED | 1 | 2 | 0 | 1 | 0 | 1 | | B+D: 列差異1, 余剰1 (追加診断) |
 | 46 | `issue207_work_dir_with_uses` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 47 | `issue280_runs_on` | MIXED | 17 | 19 | 9 | 3 | 5 | 7 | ✅ | B: 位置改善済み (34:13, 40:14, 58:15)。残: Cause C (5 MISS regex), WCol (3), requires-labels/x64 (7 EXTRA) |
+| 47 | `issue280_runs_on` | MIXED | 17 | 19 | 6 | 8 | 3 | 5 | ✅ | B+C+D: 一致6, 列差異8, 未検出3 (empty label regex), 余剰5 (requires-labels/x64) |
 | 48 | `issue558_...permissions` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
-| 49 | `macos_10.15_removed` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 |
-| 50 | `macos12_runner` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 51 | `matrix_exclude_mismatch` | MIXED | 12 | 12 | 9 | 2 | 1 | 1 | ✅ | B: 位置改善済み (object/array Range 追加)。残: col差異2 (16:18, 28:19), メッセージ差異1 (unknown axis) |
-| 52 | `matrix_exclude_no_match` | MIXED | 4 | 4 | 0 | 0 | 4 | 4 | | A: メッセージ差異 |
+| 49 | `macos_10.15_removed` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | | 完全一致 (regex マッチ) |
+| 50 | `macos12_runner` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 (regex マッチ) |
+| 51 | `matrix_exclude_mismatch` | COL_DIFF | 12 | 12 | 9 | 3 | 0 | 0 | ✅ | B: 一致9, 列差異3 (値位置ポリシー + メッセージ差異1) |
+| 52 | `matrix_exclude_no_match` | COL_DIFF | 4 | 4 | 0 | 4 | 0 | 0 | | B: 列差異4 (メッセージ形式差異 — 同一行で検出) |
 | 53 | `matrix_exclude_value_mismatch` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 54 | `merge_key_unsupported` | PERFECT | 3 | 3 | 3 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 55 | `minimal_cycle_in_needs` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | ✅ | B: 設計方針差異 (値位置報告) |
+| 54 | `merge_key_unsupported` | COL_DIFF | 3 | 3 | 0 | 3 | 0 | 0 | ✅ | B: 列差異3 (メッセージ形式差異) |
+| 55 | `minimal_cycle_in_needs` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | ✅ | B: 設計方針差異 (値位置報告 — 行番号ずれ) |
 | 56 | `missing_jobs` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
 | 57 | `missing_on` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 58 | `missing_required_keys` | MIXED | 8 | 7 | 5 | 0 | 3 | 2 | | A+C: 一致5, 未検出3, 余剰2 |
-| 59 | `nested_untrusted_input` | PERFECT | 3 | 3 | 3 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 60 | `no_job` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 61 | `object_at_runner_label` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 62 | `one_error` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | ✅ | 完全一致 |
+| 58 | `missing_required_keys` | MIXED | 8 | 8 | 7 | 0 | 1 | 1 | ✅ | A: 一致7, 未検出1 (environment name位置差), 余剰1 (同) |
+| 59 | `nested_untrusted_input` | COL_DIFF | 3 | 3 | 0 | 3 | 0 | 0 | ✅ | B: 列差異3 (メッセージ形式差異 — regex) |
+| 60 | `no_job` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (メッセージ形式差異) |
+| 61 | `object_at_runner_label` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | ✅ | B: 列差異1 (メッセージ形式差異) |
+| 62 | `one_error` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | ✅ | B: 列差異1 (メッセージ形式差異 — regex) |
 | 63 | `outdated_actions` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 64 | `outdated_popular_action` | PERFECT | 2 | 2 | 2 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 65 | `outputs_map_object` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A: メッセージ差異 |
-| 66 | `outputs_of_action_skipping_inputs_check` | EXTRA | 1 | 3 | 0 | 1 | 0 | 2 | ✅ | B+D: 列差異1, 余剰2 (追加 input 検証) |
+| 65 | `outputs_map_object` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A: メッセージ差異 (行番号ずれ) |
+| 66 | `outputs_of_action_skipping_inputs_check` | MIXED | 1 | 3 | 0 | 1 | 0 | 2 | ✅ | B+D: 列差異1, 余剰2 (追加 input 検証 — seiton独自) |
 | 67 | `pyflakes_job_default_shell` | MISSING | 1 | 0 | 0 | 0 | 1 | 0 | ⬜ | E: pyflakes 非サポート |
 | 68 | `pyflakes_step_shell` | MISSING | 3 | 0 | 0 | 0 | 3 | 0 | ⬜ | E: pyflakes 非サポート |
 | 69 | `pyflakes_workflow_default_shell` | MISSING | 1 | 0 | 0 | 0 | 1 | 0 | ⬜ | E: pyflakes 非サポート |
-| 70 | `random_order_cycle_in_needs` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | ✅ | B: 設計方針差異 (値位置報告) |
-| 71 | `recursive_anchors` | MIXED | 7 | 9 | 0 | 4 | 3 | 5 | | A+B+D: 列差異4, 未検出3, 余剰5 |
+| 70 | `random_order_cycle_in_needs` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | ✅ | B: 設計方針差異 (値位置報告 — 行番号ずれ) |
+| 71 | `recursive_anchors` | MIXED | 7 | 9 | 0 | 3 | 4 | 6 | ✅ | A+B+D: 列差異3, 未検出4 (alias handling差異), 余剰6 (replay時追加メッセージ) |
 | 72 | `reusable_workflow_empty_secrets` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | ✅ | B: 列差異1 (値位置ポリシー) |
-| 73 | `run_name_check_expr` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
+| 73 | `run_name_check_expr` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
 | 74 | `runner_labels_conflict_matrix` | PERFECT | 3 | 3 | 3 | 0 | 0 | 0 | | 完全一致 |
 | 75 | `schedule_event_with_no_config_1` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
 | 76 | `schedule_event_with_no_config_2` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
 | 77 | `schedule_iana_like_invalid_timezone` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
-| 78 | `schedule_invalid_timezone` | MIXED | 5 | 5 | 1 | 3 | 1 | 1 | | B+C: 列差異3, 未検出1, 余剰1 |
-| 79 | `shell_key_context_availability` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
+| 78 | `schedule_invalid_timezone` | MIXED | 5 | 6 | 0 | 5 | 0 | 1 | | B+D: 列差異5, 余剰1 (cron empty追加検出) |
+| 79 | `shell_key_context_availability` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー + regex形式) |
 | 80 | `shellcheck_default_shell_detection` | MISSING | 12 | 0 | 0 | 0 | 12 | 0 | ⬜ | E: shellcheck 非サポート |
-| 81 | `special_function_availability` | COL_DIFF | 8 | 8 | 0 | 8 | 0 | 0 | ✅ | B: 列差異8 (値位置ポリシー) |
-| 82 | `strategy_matrix_runner_context` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | ✅ | B: 列差異1 (値位置ポリシー) |
-| 83 | `undefined_anchor` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A: メッセージ差異 |
-| 84 | `unexpected_keys` | PERFECT | 19 | 19 | 19 | 0 | 0 | 0 | ✅ | 完全一致 |
-| 85 | `unused_anchors` | COL_DIFF | 6 | 6 | 5 | 1 | 0 | 0 | | B: 列差異1 |
-| 86 | `upper_case_duplicate_keys` | MIXED | 11 | 11 | 9 | 1 | 1 | 1 | ✅ | B+C: 一致9, 列差異1, 未検出1, 余剰1 |
-| 87 | `variables_type_check` | COL_DIFF | 2 | 2 | 1 | 1 | 0 | 0 | | B: 列差異1 |
-| 88 | `workflow_call_event` | COL_DIFF | 14 | 14 | 12 | 2 | 0 | 0 | | B: 列差異2 |
-| 89 | `workflow_call_inputs` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 90 | `workflow_call_invalid_secrets` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 91 | `workflow_call_job` | MIXED | 8 | 12 | 1 | 4 | 3 | 7 | ✅ | B+C+D: 列差異4, 未検出3, 余剰7 |
+| 81 | `special_function_availability` | COL_DIFF | 8 | 8 | 0 | 8 | 0 | 0 | ✅ | B: 列差異8 (値位置ポリシー + regex形式) |
+| 82 | `strategy_matrix_runner_context` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | ✅ | A: メッセージ差異 (regex形式、行番号ずれ) |
+| 83 | `undefined_anchor` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A: メッセージ差異 (行番号ずれ) |
+| 84 | `unexpected_keys` | COL_DIFF | 19 | 19 | 17 | 2 | 0 | 0 | ✅ | B: 一致17, 列差異2 |
+| 85 | `unused_anchors` | COL_DIFF | 6 | 6 | 5 | 1 | 0 | 0 | | B: 一致5, 列差異1 |
+| 86 | `upper_case_duplicate_keys` | MIXED | 11 | 11 | 9 | 1 | 1 | 1 | ✅ | B+C: 一致9, 列差異1, 未検出1 (case-insensitive note), 余剰1 |
+| 87 | `variables_type_check` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | | B: 列差異2 (値位置ポリシー) |
+| 88 | `workflow_call_event` | COL_DIFF | 14 | 14 | 8 | 6 | 0 | 0 | | B: 一致8, 列差異6 |
+| 89 | `workflow_call_inputs` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 90 | `workflow_call_invalid_secrets` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (メッセージ形式差異) |
+| 91 | `workflow_call_job` | MIXED | 8 | 11 | 0 | 4 | 4 | 7 | ✅ | B+C+D: 列差異4, 未検出4 (empty uses + msg形式), 余剰7 (構造検証追加) |
 | 92 | `workflow_call_outputs_sema` | COL_DIFF | 2 | 2 | 0 | 2 | 0 | 0 | ✅ | B: 列差異2 (値位置ポリシー) |
-| 93 | `workflow_call_outputs_syntax` | MIXED | 5 | 5 | 4 | 0 | 1 | 1 | | A+C: 一致4, 未検出1, 余剰1 |
+| 93 | `workflow_call_outputs_syntax` | PERFECT | 5 | 5 | 5 | 0 | 0 | 0 | ✅ | 完全一致 |
 | 94 | `workflow_call_required_default` | PERFECT | 1 | 1 | 1 | 0 | 0 | 0 | | 完全一致 |
-| 95 | `workflow_call_secrets` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 96 | `workflow_dispatch_input_types` | MISSING | 13 | 12 | 12 | 0 | 1 | 0 | | C: 未検出1 |
-| 97 | `workflow_dispatch_more_than_25_inputs` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
-| 98 | `workflow_dispatch_type_check_inputs` | MIXED | 10 | 15 | 0 | 9 | 1 | 6 | ✅ | B+C+D: 列差異9, 未検出1, 余剰6 |
+| 95 | `workflow_call_secrets` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 96 | `workflow_dispatch_input_types` | MIXED | 13 | 12 | 1 | 11 | 1 | 0 | | B+C: 一致1, 列差異11, 未検出1 (empty option string — msg形式差) |
+| 97 | `workflow_dispatch_more_than_25_inputs` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 (値位置ポリシー) |
+| 98 | `workflow_dispatch_type_check_inputs` | MIXED | 10 | 15 | 0 | 9 | 1 | 6 | ✅ | B+C+D: 列差異9, 未検出1 (property access型), 余剰6 (template injection警告) |
 | 99 | `yaml_syntax_error` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | A+B: メッセージ+列差異 |
 
 ---
@@ -1220,18 +1231,109 @@ recursive alias メッセージにアンカー宣言位置を追加: `recursive 
 
 #### 低優先度 — 1行差異・設計方針差異
 
-多数の COL_DIFF fixtures は seiton の値位置報告ポリシーによるもので、修正不要。
-1行だけの MISSING/EXTRA は個別のメッセージ微調整で対応可能。
+多数の COL_DIFF fixtures (41) は seiton の値位置報告ポリシーまたはメッセージ形式差異によるもので、修正不要。
+1行の MISSING/EXTRA は個別のメッセージ微調整で対応可能だが、多くは設計差異。
 
 ### 設計方針として維持する差異 (修正しない)
 
-1. **値位置報告** (§4.4): 27 COL_DIFF fixtures — seiton はキーではなく値位置を報告
+1. **値位置報告** (§4.4): 41 COL_DIFF fixtures — seiton はキーではなく値位置を報告
 2. **shellcheck/pyflakes 非サポート** (§4.2): 4 fixtures (17 行)
 3. ~~**snapshot 非サポート** (§4.1)~~ → snapshot パース + context availability 実装済み
+4. **seiton 独自の有用な検出**: template injection, portability, 構造検証等の EXTRA は維持 (削除しない)
 
 ---
 
-## 5. 検証ルール
+## 5. 今後の改善優先度サマリ (フェーズ 4 実施後)
+
+### 全体概況
+
+フェーズ 1〜4 の改善により、99 fixtures 中 60 fixtures (PERFECT 19 + COL_DIFF 41) が「検出漏れ・余剰なし」の状態に到達。残り 34 MIXED + 5 MISSING のうち、スコープ外 (shellcheck/pyflakes) 4 fixtures を除いた **35 fixtures に改善余地** がある。
+
+| 分類 | fixtures数 | 影響行数 | 説明 |
+|------|-----------|---------|------|
+| **PERFECT** | 19 | 0 | 完全一致 (regex マッチ含む) |
+| **COL_DIFF のみ** | 41 | 238 行 | 同一行で検出しているが列位置またはメッセージ形式が異なる。設計方針として維持 |
+| **MISSING のみ** | 5 | 18 行 | 4 は pyflakes/shellcheck (スコープ外)、1 は `expr_check_in_services` (1行) |
+| **MIXED** | 34 | 59 miss + 60 extra | 複合的なギャップ |
+
+### 残差異の原因別分類
+
+| 原因 | MISS行数 | EXTRA行数 | 対応方針 |
+|------|---------|----------|---------|
+| **設計方針 (値位置報告)** | ~8 | ~8 | 修正しない — seiton の設計方針 |
+| **メッセージ形式差異** | ~12 | ~12 | 同一行で検出しているが文言が異なる。低優先度 |
+| **seiton独自の有用な検出** | 0 | ~25 | 維持 — template injection, portability, 構造検証等 |
+| **検出能力差** | ~22 | 0 | 改善候補 (fromJSON型推論, alias処理, 型チェック) |
+| **スコープ外** | 17 | 0 | 対応しない — shellcheck/pyflakes |
+
+### 改善候補 (優先度順)
+
+#### 高優先度 — 改善コスト対効果が高い
+
+| Fixture | Miss | Extra | 主な原因 | 推奨アクション |
+|---------|------|-------|----------|--------------|
+| `workflow_call_job` | 4 | 7 | 空 uses 検出 + msg形式 + 構造検証余剰 | 空 uses → "string should not be empty" 統一、重複 extra の dedup |
+| `recursive_anchors` | 4 | 6 | alias 処理の根本差異 | VYaml alias replay の改善 (高コスト) |
+| `issue280_runs_on` | 3 | 5 | 空 label "unknown" regex + requires-labels | 空文字 label への "unknown label" 追加は設計判断。EXTRA は有用 |
+| `invalid_json_in_fromjson` | 2 | 3 | fromJSON 型推論 (contains 型チェック) | fromJSON 戻り値型推論の拡充 (§2.6 延期済み) |
+
+#### 中優先度 — 個別の小改善
+
+| Fixture | Miss | Extra | 主な原因 | 推奨アクション |
+|---------|------|-------|----------|--------------|
+| `invalid_snapshot` | 2 | 2 | "image-name" 必須チェック + 空文字位置差 | image-name 必須バリデーション追加 |
+| `invalid_steps` | 2 | 1 | 空 flow mapping (VYaml制限) | VYaml の MappingStart 位置制限。改善困難 |
+| `workflow_dispatch_type_check_inputs` | 1 | 6 | property access 型 + template injection余剰 | EXTRA は template injection 警告で有用。MISS は index 型エラー形式差 |
+| `workflow_dispatch_input_types` | 1 | 0 | empty option string メッセージ形式 | メッセージ形式の微調整 |
+| `invalid_float_at_timeout_minutes` | 1 | 0 | quoted string float検出 | quoted string の float パース |
+| `invalid_int_at_max_parallel` | 1 | 0 | quoted string integer検出 | quoted string の integer パース |
+| `case_sensitive_keys` | 1 | 0 | step "RUN" キー未検出 | step unexpected key の case-insensitive 検出改善 |
+| `evaluated_template` | 1 | 0 | steps.cache.outputs 型推論 | step output の具体型推論 (高コスト) |
+| `context_availability` | 1 | 1 | services 式形式の env 検出 | services expression form での context availability 改善 |
+| `expr_check_in_services` | 1 | 0 | services 式形式 property チェック | 上記と同根 |
+
+#### 低優先度 — 設計差異・1行差異
+
+以下は 1 行の差異で、多くは設計方針 (値位置報告, メッセージ形式) による差異:
+
+| Fixture | Miss | Extra | 分類 |
+|---------|------|-------|------|
+| `empty_image_names_and_versions` | 1 | 1 | メッセージ差異 |
+| `empty_sequence_or_string` | 1 | 1 | 設計方針 (choice空文字許容) + seiton独自検出 |
+| `glob_more` | 1 | 1 | block scalar 改行 (VYaml制限) |
+| `if_cond_constants` | 1 | 1 | multi-line if 行位置差異 |
+| `if_cond_edge_cases_trailing_leading_chars` | 1 | 1 | 行位置差異 |
+| `invalid_comparisons` | 1 | 1 | array<bool> vs array<{}> 型チェック |
+| `upper_case_duplicate_keys` | 1 | 1 | case-insensitive note 差異 |
+| `missing_required_keys` | 1 | 1 | environment name 位置差 |
+| `github_script_untrusted_input` | 1 | 1 | 行位置差異 |
+| `invalid_image_version_event` | 1 | 2 | メッセージ差異 + 余剰 |
+| `outputs_map_object` | 1 | 1 | メッセージ差異 |
+| `undefined_anchor` | 1 | 1 | メッセージ差異 |
+| `minimal_cycle_in_needs` | 1 | 1 | 値位置報告 (行番号ずれ) |
+| `random_order_cycle_in_needs` | 1 | 1 | 値位置報告 (行番号ずれ) |
+| `strategy_matrix_runner_context` | 1 | 1 | メッセージ差異 (regex形式) |
+
+#### EXTRA のみ — seiton 独自の有用な検出
+
+| Fixture | Extra | 内容 |
+|---------|-------|------|
+| `assign_expression` | 4 | 型チェック詳細化 + include 検証 + template 型チェック |
+| `expr_check_in_env_var_name` | 3 | portability 警告 (env key に式を使用) |
+| `outputs_of_action_skipping_inputs_check` | 2 | 追加 input 検証 |
+| `workflow_dispatch_type_check_inputs` | 6 | template injection 警告 |
+| `schedule_invalid_timezone` | 1 | cron empty 追加検出 |
+| `issue193` | 1 | 追加診断 |
+
+### 設計方針として維持する差異 (修正しない)
+
+1. **値位置報告** (§4.4): 41 COL_DIFF fixtures — seiton はキーではなく値位置を報告
+2. **shellcheck/pyflakes 非サポート** (§4.2): 4 fixtures (17 行)
+3. **seiton 独自の有用な検出**: template injection, portability, 構造検証等の EXTRA は維持
+
+---
+
+## 6. 検証ルール
 
 各フェーズの実装完了前に、以下の検証を必ず行うこと:
 
