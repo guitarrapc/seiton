@@ -1,4 +1,4 @@
-﻿// on.repository_dispatch — types and options.
+// on.repository_dispatch — types and options.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -12,7 +12,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.repository_dispatch must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.repository_dispatch must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new RepositoryDispatchEvent { EventName = nameNode, Types = null, Range = arena.GetStringRange(nameNode) };
         }
@@ -24,7 +24,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.repository_dispatch option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.repository_dispatch option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {

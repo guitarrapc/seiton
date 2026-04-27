@@ -6,7 +6,7 @@ assign_expression,-,,1,"test.yaml:7:19: on.workflow_dispatch input required must
 assign_expression,-,,2,"test.yaml:11:20: on.workflow_dispatch input required must be bool [syntax-check]",EXTRA
 assign_expression,-,,3,"test.yaml:20:22: job 'test1' strategy.max-parallel must be integer [syntax-check]",EXTRA
 assign_expression,-,,4,"test.yaml:24:23: job 'test1' timeout-minutes must be number or expression [syntax-check]",EXTRA
-assign_expression,-,,5,"test.yaml:44:13: job 'test3' strategy.matrix.include item must be mapping [syntax-check]",EXTRA
+assign_expression,-,,5,"test.yaml:44:13: job 'test3' strategy.matrix.include item must be object [syntax-check]",EXTRA
 assign_expression,-,,6,"test.yaml:44:11: ""include"" section should not be empty [syntax-check]",EXTRA
 assign_expression,-,,7,"test.yaml:52:14: array value in ${{ }} will be converted to string ""[Array]"" [expression]",EXTRA
 case_sensitive_keys,1,"test.yaml:2:1: unexpected key ""NAME"" for ""workflow"" section. expected one of ""concurrency"", ""defaults"", ""env"", ""jobs"", ""...",1,"test.yaml:2:1: unexpected key ""NAME"" for ""workflow"" section. expected one of ""concurrency"", ""defaults"", ""env"", ""jobs"", ""...",MATCH
@@ -130,11 +130,11 @@ docker_specific_inputs_with_normal_action,-,,2,"test.yaml:10:17: unknown input '
 duplicate_keys,1,"test.yaml:9:9: key ""FOO"" is duplicated in ""matrix"" section. previously defined at line:8,col:9. note that this key is ca...",1,"test.yaml:9:9: key ""FOO"" is duplicated in ""matrix"" section. previously defined at line:8,col:9. note that this key is ca...",MATCH
 duplicate_keys,2,"test.yaml:12:5: key ""runs-on"" is duplicated in ""test"" job. previously defined at line:11,col:5 [syntax-check]",2,"test.yaml:12:5: key ""runs-on"" is duplicated in ""test"" job. previously defined at line:11,col:5 [syntax-check]",MATCH
 empty,1,"test.yaml:1:1: workflow is empty [syntax-check]",-,,MISS
-empty,-,,1,"test.yaml:1:0: workflow root must be mapping [syntax-check]",EXTRA
+empty,-,,1,"test.yaml:1:0: workflow root must be object [syntax-check]",EXTRA
 empty_image_names_and_versions,1,"test.yaml:3:12: ""names"" section should not be empty [syntax-check]",-,,MISS
 empty_image_names_and_versions,2,"test.yaml:4:15: ""versions"" section should not be empty [syntax-check]",-,,MISS
-empty_image_names_and_versions,-,,1,"test.yaml:4:5: on.image_version.names must be sequence of scalar [syntax-check]",EXTRA
-empty_image_names_and_versions,-,,2,"test.yaml:6:4: on.image_version.versions must be sequence of scalar [syntax-check]",EXTRA
+empty_image_names_and_versions,-,,1,"test.yaml:4:5: on.image_version.names must be array of strings [syntax-check]",EXTRA
+empty_image_names_and_versions,-,,2,"test.yaml:6:4: on.image_version.versions must be array of strings [syntax-check]",EXTRA
 empty_on,1,"test.yaml:1:4: string should not be empty [syntax-check]",-,,MISS
 empty_on,-,,1,"test.yaml:1:4: unknown event in on:  [syntax-check]",EXTRA
 empty_sequence_or_string,1,"test.yaml:2:13: ""schedule"" section should not be empty [syntax-check]",1,"test.yaml:2:13: ""schedule"" section should not be empty [syntax-check]",MATCH
@@ -235,7 +235,7 @@ glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: 
 glob_more,16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
 glob_more,17,"test.yaml:27:13: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,18,"test.yaml:34:20: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
-glob_more,-,,1,"test.yaml:14:8: on.push.paths must be scalar or sequence of scalar [syntax-check]",EXTRA
+glob_more,-,,1,"test.yaml:14:8: on.push.paths must be string or array of strings [syntax-check]",EXTRA
 glob_more,-,,2,"test.yaml:6:10: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",EXTRA
 glob_more,-,,3,"test.yaml:7:1: character ' ' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *. see ...",EXTRA
 glob_more,-,,4,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not end with / and ... see `man git-che...",EXTRA
@@ -356,8 +356,8 @@ invalid_id,-,,1,"test.yaml:22:13: string should not be empty [id]",EXTRA
 invalid_image_version_event,1,"test.yaml:4:12: ""names"" section must be sequence node but got scalar node with ""!!str"" tag [syntax-check]",-,,MISS
 invalid_image_version_event,2,"test.yaml:6:16: string should not be empty [syntax-check]",-,,MISS
 invalid_image_version_event,3,"test.yaml:8:5: unexpected key ""entrypoint"" for ""image_version"" section. expected one of ""names"", ""versions"" [syntax-chec...",-,,MISS
-invalid_image_version_event,-,,1,"test.yaml:4:12: on.image_version.names must be sequence of scalar [syntax-check]",EXTRA
-invalid_image_version_event,-,,2,"test.yaml:5:34: on.image_version.versions must be sequence of scalar [syntax-check]",EXTRA
+invalid_image_version_event,-,,1,"test.yaml:4:12: on.image_version.names must be array of strings [syntax-check]",EXTRA
+invalid_image_version_event,-,,2,"test.yaml:5:34: on.image_version.versions must be array of strings [syntax-check]",EXTRA
 invalid_image_version_event,-,,3,"test.yaml:8:5: on.image_version does not support option: entrypoint [syntax-check]",EXTRA
 invalid_image_version_event,-,,4,"test.yaml:5:34: string should not be empty [glob]",EXTRA
 invalid_int_at_max_parallel,1,"test.yaml:7:21: expecting a single ${{...}} expression or integer literal, but found plain text node [syntax-check]",-,,MISS
@@ -413,9 +413,9 @@ invalid_snapshot,2,"test.yaml:8:15: undefined variable ""foo"". available variab
 invalid_snapshot,3,"test.yaml:10:16: string should not be empty [syntax-check]",-,,MISS
 invalid_snapshot,4,"test.yaml:12:7: unexpected key ""image-id"" for ""snapshot"" section. expected one of ""if"", ""image-name"", ""version"" [syntax-...",-,,MISS
 invalid_snapshot,5,"test.yaml:20:7: ""snapshot"" section value must be string or mapping but found sequence node [syntax-check]",-,,MISS
-invalid_snapshot,-,,1,"test.yaml:11:23: job 'test1' snapshot.version must be scalar [syntax-check]",EXTRA
+invalid_snapshot,-,,1,"test.yaml:11:23: job 'test1' snapshot.version must be string [syntax-check]",EXTRA
 invalid_snapshot,-,,2,"test.yaml:12:7: unexpected key ""image-id"" for ""job 'test1' snapshot"". expected one of ""version"", ""image-name"", ""if"" [syn...",EXTRA
-invalid_snapshot,-,,3,"test.yaml:20:7: job 'test2' snapshot must be mapping [syntax-check]",EXTRA
+invalid_snapshot,-,,3,"test.yaml:20:7: job 'test2' snapshot must be object [syntax-check]",EXTRA
 invalid_snapshot,-,,4,"test.yaml:11:23: string should not be empty [glob]",EXTRA
 invalid_snapshot,-,,5,"test.yaml:8:11: context ""foo"" is not allowed here. undefined context ""foo"". called in snapshot if [expression]",EXTRA
 invalid_steps,1,"test.yaml:8:9: unexpected key ""run"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if"", ...",1,"test.yaml:8:9: unexpected key ""run"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if"", ...",MATCH
@@ -538,7 +538,7 @@ missing_required_keys,5,"test.yaml:12:1: group name is missing in ""concurrency"
 missing_required_keys,6,"test.yaml:17:3: ""runs-on"" section is missing in job ""test"" [syntax-check]",6,"test.yaml:17:3: ""runs-on"" section is missing in job ""test"" [syntax-check]",MATCH
 missing_required_keys,7,"test.yaml:17:3: ""steps"" section is missing in job ""test"" [syntax-check]",7,"test.yaml:17:3: ""steps"" section is missing in job ""test"" [syntax-check]",MATCH
 missing_required_keys,8,"test.yaml:18:5: name is missing in ""environment"" section [syntax-check]",-,,MISS
-missing_required_keys,-,,3,"test.yaml:10:10: workflow defaults must be mapping [syntax-check]",EXTRA
+missing_required_keys,-,,3,"test.yaml:10:10: workflow defaults must be object [syntax-check]",EXTRA
 missing_required_keys,-,,4,"test.yaml:13:21: group name is missing in ""concurrency"" section [syntax-check]",EXTRA
 missing_required_keys,-,,5,"test.yaml:19:10: name is missing in ""environment"" section [syntax-check]",EXTRA
 nested_untrusted_input,1,"test.yaml:7:23: ""github.event.pages.*.page_name"" is potentially untrusted. avoid using it directly in inline scripts. in...",-,,MISS
@@ -548,7 +548,7 @@ nested_untrusted_input,-,,1,"test.yaml:7:23: ""github.event.pages.*.page_name"" 
 nested_untrusted_input,-,,2,"test.yaml:7:42: ""github.event.commits.*.author.name"" is potentially untrusted. avoid using it directly in inline scripts...",EXTRA
 nested_untrusted_input,-,,3,"test.yaml:7:63: ""github.event.issue.title"" is potentially untrusted. avoid using it directly in inline scripts. instead,...",EXTRA
 no_job,1,"test.yaml:3:6: ""jobs"" section should not be empty. please remove this section if it's unnecessary [syntax-check]",-,,MISS
-no_job,-,,1,"test.yaml:3:6: jobs must be mapping [syntax-check]",EXTRA
+no_job,-,,1,"test.yaml:3:6: jobs must be object [syntax-check]",EXTRA
 object_at_runner_label,1,"test.yaml:10:14: type of expression at ""runs-on"" must be string or array but found type ""{foo: string}"" [expression]",-,,MISS
 object_at_runner_label,-,,1,"test.yaml:10:14: type of expression at ""runs-on"" must be string or array but found type ""{foo: any}"" [expression]",EXTRA
 one_error,1,"test.yaml:6:41: ""github.event.head_commit.message"" is potentially untrusted. avoid using it directly in inline scripts. ...",-,,MISS
@@ -577,10 +577,10 @@ recursive_anchors,4,"test.yaml:11:14: recursive alias ""recursive2"" is found. a
 recursive_anchors,5,"test.yaml:15:9: element of ""steps"" section is alias node but mapping node is expected [syntax-check]",-,,MISS
 recursive_anchors,6,"test.yaml:15:9: recursive alias ""recursive2"" is found. anchor was declared at line:4, column:9 [syntax-check]",-,,MISS
 recursive_anchors,7,"test.yaml:15:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
-recursive_anchors,-,,1,"test.yaml:11:12: job 'test' step[1] env must be mapping [syntax-check]",EXTRA
-recursive_anchors,-,,2,"test.yaml:13:7: job 'test' step[1] run must be scalar [syntax-check]",EXTRA
-recursive_anchors,-,,3,"test.yaml:15:7: job 'test' step[2] must be mapping [syntax-check]",EXTRA
-recursive_anchors,-,,4,"test.yaml:16:0: job 'test' step[3] must be mapping [syntax-check]",EXTRA
+recursive_anchors,-,,1,"test.yaml:11:12: job 'test' step[1] env must be object [syntax-check]",EXTRA
+recursive_anchors,-,,2,"test.yaml:13:7: job 'test' step[1] run must be string [syntax-check]",EXTRA
+recursive_anchors,-,,3,"test.yaml:15:7: job 'test' step[2] must be object [syntax-check]",EXTRA
+recursive_anchors,-,,4,"test.yaml:16:0: job 'test' step[3] must be object [syntax-check]",EXTRA
 recursive_anchors,-,,5,"test.yaml:4:9: anchor ""recursive2"" is defined but not used [syntax-check]",EXTRA
 recursive_anchors,-,,6,"test.yaml:7:9: anchor ""recursive1"" is defined but not used [syntax-check]",EXTRA
 recursive_anchors,-,,7,"test.yaml:11:12: recursive alias ""recursive1"" is found [syntax-check]",EXTRA
@@ -704,7 +704,7 @@ workflow_call_event,13,"test.yaml:45:5: unexpected key ""unknown"" for ""workflo
 workflow_call_event,14,"test.yaml:51:23: property ""unknown_input"" is not defined in object type {input0: any; input1: any; input2: string; input...",-,,MISS
 workflow_call_event,-,,3,"test.yaml:13:15: on.workflow_call input type 'unknown' is invalid; must be one of boolean, number, string [syntax-check]",EXTRA
 workflow_call_event,-,,4,"test.yaml:16:19: on.workflow_call input required must be bool [syntax-check]",EXTRA
-workflow_call_event,-,,8,"test.yaml:35:14: on.workflow_call input type must be scalar [syntax-check]",EXTRA
+workflow_call_event,-,,8,"test.yaml:35:14: on.workflow_call input type must be string [syntax-check]",EXTRA
 workflow_call_event,-,,12,"test.yaml:51:19: property ""unknown_input"" is not defined in object type {input0: string; input1: string; input2: string;...",EXTRA
 workflow_call_event,-,,13,"test.yaml:26:18: workflow_call input 'input6' has number type but default is not numeric [workflow-call-input-default]",EXTRA
 workflow_call_event,-,,14,"test.yaml:30:18: workflow_call input 'input7' has boolean type but default is not 'true' or 'false' [workflow-call-input...",EXTRA
@@ -724,7 +724,7 @@ workflow_call_job,-,,1,"test.yaml:4:3: job 'call1' cannot have both uses and ste
 workflow_call_job,-,,2,"test.yaml:6:5: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [syntax-check]",EXTRA
 workflow_call_job,-,,3,"test.yaml:9:3: job 'call2' key 'with' requires uses [workflow-call]",EXTRA
 workflow_call_job,-,,4,"test.yaml:16:3: job 'call3' key 'secrets' requires uses [workflow-call]",EXTRA
-workflow_call_job,-,,5,"test.yaml:25:18: job 'call4' uses must be scalar [syntax-check]",EXTRA
+workflow_call_job,-,,5,"test.yaml:25:18: job 'call4' uses must be string [syntax-check]",EXTRA
 workflow_call_job,-,,6,"test.yaml:23:3: ""runs-on"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,7,"test.yaml:23:3: ""steps"" section is missing in job ""call4"" [syntax-check]",EXTRA
 workflow_call_job,-,,8,"test.yaml:4:3: when job 'call1' calls reusable workflow with uses, key 'steps' is not allowed [workflow-call]",EXTRA

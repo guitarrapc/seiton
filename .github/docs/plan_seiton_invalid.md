@@ -999,37 +999,43 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 
 ---
 
-##### 4.G `scalar or sequence` メッセージのユーザーフレンドリー化
+##### 4.G `scalar or sequence` メッセージのユーザーフレンドリー化 ✅ 実装済み
 
-**現象:** パーサーが型不一致を報告する際、YAML 仕様用語 "scalar" や "sequence" を使用している。
-
-```
-on.push.paths must be scalar or sequence of scalar
-```
-
-ユーザーにとっては `scalar = string`、`sequence of scalar = array of strings` のことなので、以下のように変更すべき:
+**現象:** パーサーが型不一致を報告する際、YAML 仕様用語 "scalar" や "sequence" を使用していた。
 
 ```
-on.push.paths must be string or array of strings
+on.push.paths must be scalar or sequence of scalar   ← 修正前
+on.push.paths must be string or array of strings      ← 修正後
 ```
 
-**影響範囲:** `src/Seiton.Core/Parsing/` 内の 22+ 箇所:
+**実装記録:**
 
-| 現在のメッセージパターン | 提案する変更 | ファイル |
-|---|---|---|
-| `must be scalar or sequence of scalar` | `must be string or array of strings` | `WorkflowParser.On.Webhook.cs` (18箇所), `WorkflowParser.Jobs.cs` (1箇所), `WorkflowParser.On.WorkflowDispatch.cs` (1箇所) |
-| `must be scalar` (単独) | `must be string` | `WorkflowParser.Steps.cs`, `WorkflowParser.On.WorkflowCall.cs` 等 |
-| `must be sequence or scalar` | `must be array or string` | `WorkflowParser.Strategy.cs` (7箇所) |
-| `must be mapping` | `must be object` | 各所 |
-| `key must be scalar` | `key must be string` | 各所 |
-| `must be scalar or mapping` | `must be string or object` | `WorkflowParser.Strategy.cs` |
-| `must be scalar, mapping, or sequence` | `must be string, object, or array` | `WorkflowParser.Strategy.cs` |
-| `action runs args must be scalar or sequence` | `action runs args must be string or array` | `WorkflowParser.ActionMetadata.cs` |
+- 13 パーサーファイルで 100+ 箇所のメッセージを一括置換
+- テスト内の期待メッセージ文字列 (ParserTests.cs, RuleInterfaceTests.cs) も同時に更新
+- `.seiton.out` ベースライン 99 ファイルを再生成
+- ベンチマーク回帰なし
 
-**注意事項:**
-- テスト内の期待メッセージ文字列も同時に更新が必要
-- `.seiton.out` ベースラインの再生成が必要
-- actionlint の `.out` とのメッセージ比較には影響なし (actionlint は別の文言を使用)
+**置換ルール:**
+
+| 修正前 | 修正後 |
+|---|---|
+| `must be scalar or sequence of scalar` | `must be string or array of strings` |
+| `must be scalar or sequence` | `must be string or array` |
+| `must be sequence of scalar` | `must be array of strings` |
+| `must be sequence or scalar` | `must be array or string` |
+| `must be scalar, mapping, or sequence` | `must be string, object, or array` |
+| `must be scalar, sequence, or expression` | `must be string, array, or expression` |
+| `must be scalar or mapping` | `must be string or object` |
+| `must be mapping or expression` | `must be object or expression` |
+| `must be mapping` | `must be object` |
+| `must be sequence` | `must be array` |
+| `key must be scalar` | `key must be string` |
+| `must be scalar` | `must be string` |
+
+**除外 (変更しない):**
+- `"steps" section must be sequence node but got {nodeKind} node{tagStr}` — YAML ノード用語 + タグ表示が意図的
+- `"labels" section must be sequence node but got mapping node with "!!map" tag` — 同上
+- `"{pvKey}" section must be sequence node but got scalar node with "{pvTagStr}" tag` — 同上
 
 ---
 
@@ -1052,7 +1058,7 @@ test.yaml:18:5: name is missing...            COL      test.yaml:19:10: name is 
 **MISS 原因と改善案:**
 
 1. **10:10 defaults "run" section** (MISS): actionlint は空 defaults に対して「run セクションが必要」と「空にするな」の 2 メッセージを出す。seiton は「mapping でなければならない」1 メッセージのみ。
-   - **改善案:** 空 mapping の defaults に対して「defaults.run is required」メッセージを追加。現在の "must be mapping" は null/scalar の場合のみに限定。
+   - **改善案:** 空 mapping の defaults に対して「defaults.run is required」メッセージを追加。現在の "must be mapping" は null/scalar の場合のみに限定かつ空にするなも追加する。
 2. **10:10 defaults empty** (MISS): 上記と同根。
 3. **12:1→13:21** (COL_DIFF): concurrency の group name 位置差異 — seiton は値位置で報告。
 

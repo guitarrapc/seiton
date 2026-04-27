@@ -1,4 +1,4 @@
-﻿// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
+// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
 
 using System.Text;
 using Seiton.Core.Generated;
@@ -40,7 +40,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"on.{eventInfo.Name} option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, $"on.{eventInfo.Name} option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd) { reader.SkipCurrentNode(); }
                 continue;
@@ -105,7 +105,7 @@ public static partial class WorkflowParser
                         var branchesNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches"u8.Length));
                         var brSeqMark = reader.CurrentStart;
                         var brValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var brErr, out var brMark);
-                        if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar", brMark);
+                        if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings", brMark);
                         else if (brValues.Length == 0) AddError(diagnostics, "\"branches\" section should not be empty", brSeqMark);
                         branches = new WebhookEventFilter { Name = branchesNameNode, Values = brValues };
                         continue;
@@ -115,7 +115,7 @@ public static partial class WorkflowParser
                         branchesIgnoreMark = keyMark;
                         var branchesIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches-ignore"u8.Length));
                         var biValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var biErr, out var biMark);
-                        if (biErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar", biMark);
+                        if (biErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches-ignore must be string or array of strings", biMark);
                         branchesIgnore = new WebhookEventFilter { Name = branchesIgnoreNameNode, Values = biValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.Tags:
@@ -124,7 +124,7 @@ public static partial class WorkflowParser
                         tagsMark = keyMark;
                         var tagsNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags"u8.Length));
                         var tValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tErr, out var tMark);
-                        if (tErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar", tMark);
+                        if (tErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags must be string or array of strings", tMark);
                         tags = new WebhookEventFilter { Name = tagsNameNode, Values = tValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.TagsIgnore:
@@ -133,7 +133,7 @@ public static partial class WorkflowParser
                         tagsIgnoreMark = keyMark;
                         var tagsIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags-ignore"u8.Length));
                         var tiValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tiErr, out var tiMark);
-                        if (tiErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar", tiMark);
+                        if (tiErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags-ignore must be string or array of strings", tiMark);
                         tagsIgnore = new WebhookEventFilter { Name = tagsIgnoreNameNode, Values = tiValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.Paths:
@@ -142,7 +142,7 @@ public static partial class WorkflowParser
                         pathsMark = keyMark;
                         var pathsNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths"u8.Length));
                         var pValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pErr, out var pMark);
-                        if (pErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar", pMark);
+                        if (pErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths must be string or array of strings", pMark);
                         paths = new WebhookEventFilter { Name = pathsNameNode, Values = pValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.PathsIgnore:
@@ -151,14 +151,14 @@ public static partial class WorkflowParser
                         pathsIgnoreMark = keyMark;
                         var pathsIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths-ignore"u8.Length));
                         var piValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var piErr, out var piMark);
-                        if (piErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar", piMark);
+                        if (piErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths-ignore must be string or array of strings", piMark);
                         pathsIgnore = new WebhookEventFilter { Name = pathsIgnoreNameNode, Values = piValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.Workflows:
                         if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: workflows", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         var wSeqMark = reader.CurrentStart;
                         workflows = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var wErr, out var wMark);
-                        if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar", wMark);
+                        if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings", wMark);
                         else if (workflows is { Length: 0 }) AddError(diagnostics, "\"workflows\" section should not be empty", wSeqMark);
                         continue;
                     default:
@@ -227,7 +227,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name}.types must be scalar or sequence of scalar", reader.CurrentStart);
+            AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -241,7 +241,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name}.types must be scalar or sequence of scalar", reader.CurrentStart);
+                    AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
@@ -335,7 +335,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"on.{eventInfo.Name} option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, $"on.{eventInfo.Name} option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -396,41 +396,41 @@ public static partial class WorkflowParser
                         reader.Read();
                         hasBranches = true;
                         branchesMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.BranchesIgnore:
                         reader.Read();
                         hasBranchesIgnore = true;
                         branchesIgnoreMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Tags:
                         reader.Read();
                         hasTags = true;
                         tagsMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.TagsIgnore:
                         reader.Read();
                         hasTagsIgnore = true;
                         tagsIgnoreMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Paths:
                         reader.Read();
                         hasPaths = true;
                         pathsMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.PathsIgnore:
                         reader.Read();
                         hasPathsIgnore = true;
                         pathsIgnoreMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Workflows:
                         reader.Read();
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.workflows must be scalar or sequence of scalar");
+                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Inputs:
                     case OnEventOptionsExtendedMappingKey.Secrets:
@@ -443,7 +443,7 @@ public static partial class WorkflowParser
                                 : "outputs";
                         if (reader.CurrentKind != YamlEventKind.MappingStart)
                         {
-                            AddError(diagnostics, $"on.{eventInfo.Name}.{iosName} must be mapping", reader.CurrentStart);
+                            AddError(diagnostics, $"on.{eventInfo.Name}.{iosName} must be object", reader.CurrentStart);
                         }
 
                         reader.SkipCurrentNode();
@@ -511,7 +511,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name}.types must be scalar or sequence of scalar", reader.CurrentStart);
+            AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
             reader.SkipCurrentNode();
             return;
         }
@@ -521,7 +521,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"on.{eventInfo.Name}.types must be scalar or sequence of scalar", reader.CurrentStart);
+                AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 continue;
             }

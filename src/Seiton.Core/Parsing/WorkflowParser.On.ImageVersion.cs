@@ -1,4 +1,4 @@
-﻿// on.image_version — names and versions lists.
+// on.image_version — names and versions lists.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -12,7 +12,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.image_version must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.image_version must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ImageVersionEvent { EventName = nameNode, Names = null, Versions = null, Range = arena.GetStringRange(nameNode) };
         }
@@ -25,7 +25,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.image_version option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.image_version option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -63,10 +63,10 @@ public static partial class WorkflowParser
                 switch (ivk)
                 {
                     case OnImageVersionMappingKey.Names:
-                        names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be sequence of scalar");
+                        names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be array of strings");
                         continue;
                     case OnImageVersionMappingKey.Versions:
-                        versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be sequence of scalar");
+                        versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be array of strings");
                         continue;
                     default:
                         if (!reader.End)

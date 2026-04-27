@@ -1,2 +1,2 @@
-test.yaml:4:5: on.image_version.names must be sequence of scalar [syntax-check]
-test.yaml:6:4: on.image_version.versions must be sequence of scalar [syntax-check]
+test.yaml:4:5: on.image_version.names must be array of strings [syntax-check]
+test.yaml:6:4: on.image_version.versions must be array of strings [syntax-check]

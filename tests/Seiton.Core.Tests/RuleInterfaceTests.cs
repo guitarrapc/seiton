@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.Rules;
@@ -38,7 +38,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.HasFatalError).IsTrue();
         await Assert.That(result.Workflow).IsNull();
         await Assert.That(result.Diagnostics).HasSingleItem();
-        await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be mapping");
+        await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be object");
         await Assert.That(result.Diagnostics[0].FilePath).IsEqualTo("fatal.yml");
     }
 

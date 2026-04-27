@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
@@ -355,7 +355,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-seq.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on sequence item must be scalar event name", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on sequence item must be string event name", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -548,7 +548,7 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-invalid.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.pull_request.types must be scalar or sequence of scalar", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.pull_request.types must be string or array of strings", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1120,9 +1120,9 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-input-null.yml");
-        // input0 has null body — should report "type is missing" not "must be mapping"
+        // input0 has null body — should report "type is missing" not "must be object"
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"type\" is missing at \"input0\" input of workflow_call event", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("input must be mapping", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("input must be object", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1140,7 +1140,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-secret-null.yml");
         // secret0 has null body — should NOT report error (secrets have no required fields)
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secret must be mapping", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secret must be object", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1157,9 +1157,9 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-null.yml");
-        // missing-all has null body — should report "value is missing" not "must be mapping"
+        // missing-all has null body — should report "value is missing" not "must be object"
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"value\" is missing at \"missing-all\" output of workflow_call event", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("output must be mapping", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("output must be object", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1379,7 +1379,7 @@ public sealed class ParserTests
                     image_version: true
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "on.image_version must be mapping"
+                "on.image_version must be object"
             ),
             (
                 "unknown-option",
@@ -1399,7 +1399,7 @@ public sealed class ParserTests
                         names: one
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "on.image_version.names must be sequence of scalar"
+                "on.image_version.names must be array of strings"
             ),
             (
                 "versions-must-be-sequence",
@@ -1410,7 +1410,7 @@ public sealed class ParserTests
                             foo: bar
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "on.image_version.versions must be sequence of scalar"
+                "on.image_version.versions must be array of strings"
             ),
         };
 
@@ -1437,7 +1437,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-type.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs must be object", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1638,7 +1638,7 @@ public sealed class ParserTests
         // This keeps the corpus test resilient to wording differences versus actionlint output.
         var expectations = new[]
         {
-            new ErrFixtureExpectation("empty.yaml", ["workflow root must be mapping"]),
+            new ErrFixtureExpectation("empty.yaml", ["workflow root must be object"]),
             new ErrFixtureExpectation("empty_on.yaml", ["unknown event in on"]),
             new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "for \"job\" section"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
@@ -1718,7 +1718,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
         await Assert.That(result.Diagnostics.Length).IsGreaterThan(0);
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("must be mapping", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("must be object", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     [Test]
@@ -1777,7 +1777,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MergeKey_EnvMessage_NotGarbled()
     {
-        // B-8: env merge key message should not contain "must be mapping" prefix
+        // B-8: env merge key message should not contain "must be object" prefix
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: env\n        env:\n          <<: &e\n            FOO: BAR\n";
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
@@ -1785,8 +1785,8 @@ public sealed class ParserTests
 
         await Assert.That(mergeKeyDiags.Length).IsGreaterThanOrEqualTo(1);
         var envMerge = mergeKeyDiags[0];
-        // Should NOT contain "must be mapping" in the merge key error
-        await Assert.That(envMerge.Message).DoesNotContain("must be mapping");
+        // Should NOT contain "must be object" in the merge key error
+        await Assert.That(envMerge.Message).DoesNotContain("must be object");
         // Should contain "env" section reference
         await Assert.That(envMerge.Message).Contains("env");
         await Assert.That(envMerge.Message).Contains("GitHub Actions does not support YAML merge key \"<<\"");
@@ -2723,7 +2723,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-mapping.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("must be object", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2741,7 +2741,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-strategy-shape.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy must be object", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2761,7 +2761,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-matrix-include-shape.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy.matrix.include must be sequence or scalar", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy.matrix.include must be array or string", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3115,7 +3115,7 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-services-shape.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("services must be mapping", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("services must be object", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4401,7 +4401,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(2);
     }
 
-    // regression: empty step id (id: "") should report "must not be empty", not "must be scalar"
+    // regression: empty step id (id: "") should report "must not be empty", not "must be string"
     [Test]
     public async Task Parse_EmptyStepId_ReportsEmptyNotScalar()
     {
@@ -4409,9 +4409,9 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("string should not be empty"));
         await Assert.That(diag.Message).IsNotEmpty();
-        // Must say "string should not be empty", NOT "must be scalar"
+        // Must say "string should not be empty", NOT "must be string"
         await Assert.That(diag.Message).Contains("string should not be empty");
-        await Assert.That(diag.Message).DoesNotContain("must be scalar");
+        await Assert.That(diag.Message).DoesNotContain("must be string");
     }
 
     // regression: Utf8Slice internal representation must not leak into error messages
@@ -4474,8 +4474,8 @@ public sealed class ParserTests
                     if: *cond
             """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
-        // *cond should resolve correctly — no "if must be scalar" error
-        var hasIfDiag = result.Diagnostics.Any(d => d.Message.Contains("if must be scalar"));
+        // *cond should resolve correctly — no "if must be string" error
+        var hasIfDiag = result.Diagnostics.Any(d => d.Message.Contains("if must be string"));
         await Assert.That(hasIfDiag).IsFalse();
     }
 
@@ -4495,9 +4495,9 @@ public sealed class ParserTests
               test2: *job
             """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
-        // *runner should resolve — no "recursive alias" or "must be scalar" errors
+        // *runner should resolve — no "recursive alias" or "must be string" errors
         var hasRunnerDiag = result.Diagnostics.Any(d =>
-            d.Message.Contains("recursive alias") || d.Message.Contains("must be scalar"));
+            d.Message.Contains("recursive alias") || d.Message.Contains("must be string"));
         await Assert.That(hasRunnerDiag).IsFalse();
     }
 

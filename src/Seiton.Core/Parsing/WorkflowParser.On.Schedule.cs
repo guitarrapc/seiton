@@ -1,4 +1,4 @@
-﻿// on.schedule — scheduled event and cron entry parsing.
+// on.schedule — scheduled event and cron entry parsing.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -16,7 +16,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, "on.schedule must be sequence", reader.CurrentStart);
+            AddError(diagnostics, "on.schedule must be array", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ScheduledEvent { EventName = nameNode, Schedules = [], Range = arena.GetStringRange(nameNode) };
         }
@@ -31,7 +31,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
-                    AddError(diagnostics, "on.schedule item must be mapping", reader.CurrentStart);
+                    AddError(diagnostics, "on.schedule item must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
@@ -67,7 +67,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.schedule item key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.schedule item key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -104,7 +104,7 @@ public static partial class WorkflowParser
                 switch (sk)
                 {
                     case OnScheduleEntryMappingKey.Cron:
-                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be scalar", allowEmpty: true);
+                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be string", allowEmpty: true);
                         if (cron.HasValue)
                         {
                             range = arena.GetStringRange(cron);
@@ -112,7 +112,7 @@ public static partial class WorkflowParser
 
                         continue;
                     case OnScheduleEntryMappingKey.Timezone:
-                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be scalar", allowEmpty: true);
+                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be string", allowEmpty: true);
                         continue;
                     default:
                         if (!reader.End)

@@ -17,7 +17,7 @@ public static partial class WorkflowParser
                 out var svcErr,
                 out var svcMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (svcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", svcMark);
+            if (svcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be object or expression", svcMark);
             return !expression.HasValue
                 ? null
                 : new Services { Expression = expression, Range = arena.GetStringRange(expression) };
@@ -25,7 +25,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be mapping or expression", reader.CurrentStart);
+            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be object or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -43,7 +43,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -133,7 +133,7 @@ public static partial class WorkflowParser
                 if (scalarImage.HasValue)
                     AddError(diagnostics, "string should not be empty", ctrMark);
                 else
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", ctrMark);
+                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", ctrMark);
             }
             if (!scalarImage.HasValue)
             {
@@ -149,7 +149,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be scalar or mapping", reader.CurrentStart);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -172,7 +172,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -216,7 +216,7 @@ public static partial class WorkflowParser
                         hasImage = true;
                         if (reader.CurrentKind != YamlEventKind.Scalar)
                         {
-                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", reader.CurrentStart);
+                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", reader.CurrentStart);
                         }
 
                         image = ParseString(ref reader, arena, out var imgErr, out var imgMark);
@@ -225,7 +225,7 @@ public static partial class WorkflowParser
                             if (image.HasValue)
                                 AddError(diagnostics, "string should not be empty", imgMark);
                             else
-                                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be scalar", imgMark);
+                                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", imgMark);
                         }
                         continue;
                     case ContainerMappingKey.Credentials:
@@ -235,7 +235,7 @@ public static partial class WorkflowParser
                         env = ParseEnvNode(
                             ref reader, arena, diagnostics,
                             source,
-                            $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be mapping or expression",
+                            $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be object or expression",
                             isService ? ExpressionValidationContext.JobServicesEnv : ExpressionValidationContext.JobContainerEnv,
                             $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env");
                         continue;
@@ -269,11 +269,11 @@ public static partial class WorkflowParser
                     case ContainerMappingKey.Options:
                         if (reader.CurrentKind != YamlEventKind.Scalar)
                         {
-                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", reader.CurrentStart);
+                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be string", reader.CurrentStart);
                         }
 
                         options = ParseString(ref reader, arena, out var optErr, out var optMark);
-                        if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be scalar", optMark);
+                        if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be string", optMark);
                         continue;
                     case ContainerMappingKey.Entrypoint:
                     case ContainerMappingKey.Command:
@@ -287,7 +287,7 @@ public static partial class WorkflowParser
                                 svcFieldContext,
                                 out var svcFieldErr, out var svcFieldMark,
                                 parseWholeValueIfNoEmbedded: false);
-                            if (svcFieldErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{ContainerDuplicateSubKey(ck)} must be scalar", svcFieldMark);
+                            if (svcFieldErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{ContainerDuplicateSubKey(ck)} must be string", svcFieldMark);
                             if (ck == ContainerMappingKey.Entrypoint)
                                 entrypoint = svcField;
                             else
@@ -386,7 +386,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be mapping or expression", reader.CurrentStart);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be object or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -403,7 +403,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -446,7 +446,7 @@ public static partial class WorkflowParser
                             out var unErr,
                             out var unMark,
                             parseWholeValueIfNoEmbedded: false);
-                        if (unErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be scalar", unMark);
+                        if (unErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be string", unMark);
                         continue;
                     case CredentialsMappingKey.Password:
                         hasPassword = true;
@@ -456,7 +456,7 @@ public static partial class WorkflowParser
                             out var pwErr,
                             out var pwMark,
                             parseWholeValueIfNoEmbedded: false);
-                        if (pwErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be scalar", pwMark);
+                        if (pwErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be string", pwMark);
                         continue;
                     default:
                         if (!reader.End)

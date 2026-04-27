@@ -1,4 +1,4 @@
-﻿// on.workflow_dispatch — inputs and dispatch input field parsing.
+// on.workflow_dispatch — inputs and dispatch input field parsing.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -12,7 +12,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_dispatch must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_dispatch must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new WorkflowDispatchEvent { EventName = nameNode, Inputs = null, Range = arena.GetStringRange(nameNode) };
         }
@@ -24,7 +24,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_dispatch option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.workflow_dispatch option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -72,7 +72,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_dispatch.inputs must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_dispatch.inputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -87,7 +87,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "on.workflow_dispatch.inputs key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "on.workflow_dispatch.inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -150,7 +150,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_dispatch input must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_dispatch input must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new DispatchInput { Name = nameNode, Description = description, Required = required, Default = defaultValue, Type = type, Options = options, Range = arena.GetStringRange(nameNode) };
         }
@@ -160,7 +160,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_dispatch input option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.workflow_dispatch input option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -205,13 +205,13 @@ public static partial class WorkflowParser
                 switch (fk)
                 {
                     case WorkflowDispatchInputFieldKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input description must be scalar");
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input description must be string");
                         continue;
                     case WorkflowDispatchInputFieldKey.Required:
                         required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_dispatch input required must be bool");
                         continue;
                     case WorkflowDispatchInputFieldKey.Default:
-                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input default must be scalar", allowEmpty: true);
+                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input default must be string", allowEmpty: true);
                         continue;
                     case WorkflowDispatchInputFieldKey.Type:
                         type = ParseDispatchInputType(ref reader, arena, diagnostics);
@@ -221,7 +221,7 @@ public static partial class WorkflowParser
                         var optSeqMark = reader.CurrentStart;
                         options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
                         if (optErr)
-                            AddError(diagnostics, "on.workflow_dispatch input options must be scalar or sequence of scalar", optMark);
+                            AddError(diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
                         else if (options is { Length: 0 })
                             AddError(diagnostics, "\"options\" section should not be empty", optSeqMark);
                         continue;
@@ -267,7 +267,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
-            AddError(diagnostics, "on.workflow_dispatch input type must be scalar", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_dispatch input type must be string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return DispatchInputType.None;
         }

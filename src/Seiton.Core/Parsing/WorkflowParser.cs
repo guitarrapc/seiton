@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -249,7 +249,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "workflow root must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "workflow root must be object", reader.CurrentStart);
             return new ParseResult(default, default, diagnostics.ToArray(), HasFatalError: true);
         }
 
@@ -281,7 +281,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "workflow key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "workflow key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -318,13 +318,13 @@ public static partial class WorkflowParser
                 switch (wk)
                 {
                     case WorkflowRootMappingKey.Name:
-                        nameNode = ParseString(ref reader, arena, diagnostics, "name must be scalar");
+                        nameNode = ParseString(ref reader, arena, diagnostics, "name must be string");
                         continue;
                     case WorkflowRootMappingKey.RunName:
                         runNameNode = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
                             ExpressionValidationContext.RunName,
-                            "run-name must be scalar",
+                            "run-name must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     case WorkflowRootMappingKey.On:
@@ -333,7 +333,7 @@ public static partial class WorkflowParser
                         {
                             if (reader.CurrentKind is not YamlEventKind.Scalar and not YamlEventKind.MappingStart and not YamlEventKind.SequenceStart)
                             {
-                                AddError(diagnostics, "on must be scalar, mapping, or sequence", reader.CurrentStart);
+                                AddError(diagnostics, "on must be string, object, or array", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else
@@ -349,7 +349,7 @@ public static partial class WorkflowParser
                         {
                             if (reader.CurrentKind != YamlEventKind.MappingStart)
                             {
-                                AddError(diagnostics, "jobs must be mapping", reader.CurrentStart);
+                                AddError(diagnostics, "jobs must be object", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else
@@ -365,7 +365,7 @@ public static partial class WorkflowParser
                             envNode = ParseEnvNode(
                                 ref reader, arena, diagnostics,
                                 source,
-                                "workflow env must be mapping",
+                                "workflow env must be object",
                                 ExpressionValidationContext.Env,
                                 "workflow env");
                         }
@@ -374,21 +374,21 @@ public static partial class WorkflowParser
                     case WorkflowRootMappingKey.Permissions:
                         if (!reader.End)
                         {
-                            permissionsNode = ParsePermissionsNode(ref reader, arena, diagnostics, source, "workflow permissions must be scalar or mapping");
+                            permissionsNode = ParsePermissionsNode(ref reader, arena, diagnostics, source, "workflow permissions must be string or object");
                         }
 
                         continue;
                     case WorkflowRootMappingKey.Defaults:
                         if (!reader.End)
                         {
-                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, "workflow defaults must be mapping");
+                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, "workflow defaults must be object");
                         }
 
                         continue;
                     case WorkflowRootMappingKey.Concurrency:
                         if (!reader.End)
                         {
-                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be scalar or mapping", ExpressionValidationContext.Concurrency);
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, "workflow concurrency must be string or object", ExpressionValidationContext.Concurrency);
                         }
 
                         continue;
@@ -432,7 +432,7 @@ public static partial class WorkflowParser
                 switch (ak)
                 {
                     case ActionMetadataRootMappingKey.Description:
-                        actionDescription = ParseString(ref reader, arena, diagnostics, "action description must be scalar");
+                        actionDescription = ParseString(ref reader, arena, diagnostics, "action description must be string");
                         continue;
                     case ActionMetadataRootMappingKey.Inputs:
                         if (!reader.End)
@@ -823,7 +823,7 @@ public static partial class WorkflowParser
 
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
-                    AddError(diagnostics, "workflow defaults.run must be mapping", reader.CurrentStart);
+                    AddError(diagnostics, "workflow defaults.run must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
@@ -836,7 +836,7 @@ public static partial class WorkflowParser
                 {
                     if (reader.CurrentKind != YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, "workflow defaults.run must be mapping", reader.CurrentStart);
+                        AddError(diagnostics, "workflow defaults.run must be object", reader.CurrentStart);
                         reader.SkipCurrentNode();
                         if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                         {
@@ -874,13 +874,13 @@ public static partial class WorkflowParser
                         {
                             case DefaultsRunMappingKey.Shell:
                                 shellNode = expressionContext.HasValue
-                                    ? ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext.Value, "workflow defaults.run.shell must be scalar", false)
-                                    : ParseString(ref reader, arena, diagnostics, "workflow defaults.run.shell must be scalar");
+                                    ? ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext.Value, "workflow defaults.run.shell must be string", false)
+                                    : ParseString(ref reader, arena, diagnostics, "workflow defaults.run.shell must be string");
                                 continue;
                             case DefaultsRunMappingKey.WorkingDirectory:
                                 workingDirectoryNode = expressionContext.HasValue
-                                    ? ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext.Value, "workflow defaults.run.working-directory must be scalar", false)
-                                    : ParseString(ref reader, arena, diagnostics, "workflow defaults.run.working-directory must be scalar");
+                                    ? ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext.Value, "workflow defaults.run.working-directory must be string", false)
+                                    : ParseString(ref reader, arena, diagnostics, "workflow defaults.run.working-directory must be string");
                                 continue;
                             default:
                                 if (!reader.End)
@@ -1009,7 +1009,7 @@ public static partial class WorkflowParser
                 switch (ck)
                 {
                     case ConcurrencyMappingKey.Group:
-                        groupNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.group must be scalar", parseWholeValueIfNoEmbedded: false);
+                        groupNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.group must be string", parseWholeValueIfNoEmbedded: false);
                         continue;
                     case ConcurrencyMappingKey.CancelInProgress:
                         cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
@@ -1125,7 +1125,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "job id must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "job id must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {

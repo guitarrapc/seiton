@@ -1,4 +1,4 @@
-﻿using System.Collections.Frozen;
+using System.Collections.Frozen;
 using System.Text;
 using Seiton.Core.Parsing.Ast;
 
@@ -72,7 +72,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action inputs must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "action inputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -87,7 +87,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "action inputs key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "action inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -147,7 +147,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action input must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "action input must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ActionMetadataInput
             {
@@ -165,7 +165,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action input option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "action input option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -214,16 +214,16 @@ public static partial class WorkflowParser
                 switch (iok)
                 {
                     case ActionMetadataInputOptionKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "action input description must be scalar");
+                        description = ParseString(ref reader, arena, diagnostics, "action input description must be string");
                         continue;
                     case ActionMetadataInputOptionKey.Required:
                         required = ParseBoolNode(ref reader, arena, diagnostics, "action input required must be bool");
                         continue;
                     case ActionMetadataInputOptionKey.Default:
-                        defaultValue = ParseString(ref reader, arena, diagnostics, "action input default must be scalar", allowEmpty: true);
+                        defaultValue = ParseString(ref reader, arena, diagnostics, "action input default must be string", allowEmpty: true);
                         continue;
                     case ActionMetadataInputOptionKey.DeprecationMessage:
-                        deprecationMessage = ParseString(ref reader, arena, diagnostics, "action input deprecationMessage must be scalar");
+                        deprecationMessage = ParseString(ref reader, arena, diagnostics, "action input deprecationMessage must be string");
                         continue;
                     default:
                         if (!reader.End)
@@ -265,7 +265,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action outputs must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "action outputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -280,7 +280,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "action outputs key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "action outputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -338,7 +338,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action output must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "action output must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ActionMetadataOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
@@ -348,7 +348,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action output option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "action output option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -390,13 +390,13 @@ public static partial class WorkflowParser
                 switch (ook)
                 {
                     case ActionMetadataOutputOptionKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "action output description must be scalar");
+                        description = ParseString(ref reader, arena, diagnostics, "action output description must be string");
                         continue;
                     case ActionMetadataOutputOptionKey.Value:
                         value = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
                             ExpressionValidationContext.StepRun,
-                            "action output value must be scalar",
+                            "action output value must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     default:
@@ -437,7 +437,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action branding must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "action branding must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -451,7 +451,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action branding key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "action branding key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -493,10 +493,10 @@ public static partial class WorkflowParser
                 switch (bk)
                 {
                     case ActionMetadataBrandingKey.Icon:
-                        icon = ParseString(ref reader, arena, diagnostics, "action branding icon must be scalar");
+                        icon = ParseString(ref reader, arena, diagnostics, "action branding icon must be string");
                         continue;
                     case ActionMetadataBrandingKey.Color:
-                        color = ParseString(ref reader, arena, diagnostics, "action branding color must be scalar");
+                        color = ParseString(ref reader, arena, diagnostics, "action branding color must be string");
                         continue;
                     default:
                         if (!reader.End)
@@ -559,7 +559,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action runs must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "action runs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -582,7 +582,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action runs key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "action runs key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -623,36 +623,36 @@ public static partial class WorkflowParser
                 switch (rk)
                 {
                     case ActionMetadataRunsMappingKey.Using:
-                        usingNode = ParseString(ref reader, arena, diagnostics, "action runs using must be scalar");
+                        usingNode = ParseString(ref reader, arena, diagnostics, "action runs using must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Main:
-                        main = ParseString(ref reader, arena, diagnostics, "action runs main must be scalar");
+                        main = ParseString(ref reader, arena, diagnostics, "action runs main must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Pre:
-                        pre = ParseString(ref reader, arena, diagnostics, "action runs pre must be scalar");
+                        pre = ParseString(ref reader, arena, diagnostics, "action runs pre must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Post:
-                        post = ParseString(ref reader, arena, diagnostics, "action runs post must be scalar");
+                        post = ParseString(ref reader, arena, diagnostics, "action runs post must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.PreIf:
                         preIf = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
                             ExpressionValidationContext.StepIf,
-                            "action runs pre-if must be scalar",
+                            "action runs pre-if must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     case ActionMetadataRunsMappingKey.PostIf:
                         postIf = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
                             ExpressionValidationContext.StepIf,
-                            "action runs post-if must be scalar",
+                            "action runs post-if must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     case ActionMetadataRunsMappingKey.Image:
-                        image = ParseString(ref reader, arena, diagnostics, "action runs image must be scalar");
+                        image = ParseString(ref reader, arena, diagnostics, "action runs image must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Entrypoint:
-                        entrypoint = ParseString(ref reader, arena, diagnostics, "action runs entrypoint must be scalar");
+                        entrypoint = ParseString(ref reader, arena, diagnostics, "action runs entrypoint must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Args:
                         if (!reader.End)
@@ -667,7 +667,7 @@ public static partial class WorkflowParser
                             env = ParseEnvNode(
                                 ref reader, arena, diagnostics,
                                 source,
-                                "action runs env must be mapping",
+                                "action runs env must be object",
                                 ExpressionValidationContext.StepEnv,
                                 "action runs env");
                         }
@@ -678,7 +678,7 @@ public static partial class WorkflowParser
                         {
                             if (reader.CurrentKind != YamlEventKind.SequenceStart)
                             {
-                                AddError(diagnostics, "action runs steps must be sequence", reader.CurrentStart);
+                                AddError(diagnostics, "action runs steps must be array", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else
@@ -743,7 +743,7 @@ public static partial class WorkflowParser
                 reader.Read();
                 while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
                 {
-                    var s = ParseString(ref reader, arena, diagnostics, "action runs args entry must be scalar");
+                    var s = ParseString(ref reader, arena, diagnostics, "action runs args entry must be string");
                     if (s.HasValue)
                     {
                         list.Add(s);
@@ -762,11 +762,11 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var single = ParseString(ref reader, arena, diagnostics, "action runs args must be scalar or sequence");
+            var single = ParseString(ref reader, arena, diagnostics, "action runs args must be string or array");
             return !single.HasValue ? null : [single];
         }
 
-        AddError(diagnostics, "action runs args must be scalar or sequence", reader.CurrentStart);
+        AddError(diagnostics, "action runs args must be string or array", reader.CurrentStart);
         reader.SkipCurrentNode();
         return default;
     }
