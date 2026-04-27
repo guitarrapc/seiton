@@ -1,0 +1,3 @@
+test.yaml:8:7: GitHub Actions does not support YAML merge key "<<". occurred in on.workflow_call.inputs [syntax-check]
+test.yaml:21:11: GitHub Actions does not support YAML merge key "<<". occurred in job 'test' step[2] env [syntax-check]
+test.yaml:27:9: GitHub Actions does not support YAML merge key "<<". occurred in job 'test' step[4] [syntax-check]

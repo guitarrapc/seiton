@@ -26,12 +26,12 @@ public sealed class JobStructureRule() : RuleBase(RuleId.JobStructure)
 
         if (!hasUses && !hasRunsOn)
         {
-            AddJobError(job, $"job '{jobId}' requires runs-on (or uses)");
+            AddJobError(job, $"\"runs-on\" section is missing in job \"{jobId}\"");
         }
 
         if (!hasUses && !hasSteps)
         {
-            AddJobError(job, $"job '{jobId}' requires steps (or uses)");
+            AddJobError(job, $"\"steps\" section is missing in job \"{jobId}\"");
         }
     }
 }

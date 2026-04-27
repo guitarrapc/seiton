@@ -72,7 +72,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             }
 
             var labelText = Decode(Arena.GetStringSlice(label));
-            AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(label));
+            AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(label));
         }
     }
 
@@ -106,7 +106,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 // Different OS family from what we already saw
                 var labelText = Decode(Arena.GetStringSlice(label));
                 var firstText = Decode(Arena.GetStringSlice(firstOsLabel));
-                AddJobError(job, $"job '{jobId}' runs-on label '{labelText}' conflicts with label '{firstText}'", Arena.GetStringRange(label));
+                var firstRange = Arena.GetStringRange(firstOsLabel);
+                AddJobError(job, $"label \"{labelText}\" conflicts with label \"{firstText}\" defined at line:{firstRange.StartLine},col:{firstRange.StartColumn}. note: to run your job on each workers, use matrix", Arena.GetStringRange(label));
                 // Continue checking remaining labels — don't return early
             }
             else if (seenOsFamilies == 0)
@@ -194,7 +195,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 }
 
                 var valueText = Decode(Arena.GetStringSlice(scalar.Value));
-                AddJobError(job, $"job '{jobId}' runs-on label '{valueText}' conflicts with label '{firstOsLabelText}'", Arena.GetStringRange(scalar.Value));
+                var firstRange = Arena.GetStringRange(firstOsLabel);
+                AddJobError(job, $"label \"{valueText}\" conflicts with label \"{firstOsLabelText}\" defined at line:{firstRange.StartLine},col:{firstRange.StartColumn}. note: to run your job on each workers, use matrix", Arena.GetStringRange(scalar.Value));
             }
         }
     }
@@ -356,7 +358,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                     }
 
                     var labelText = Decode(Arena.GetStringSlice(scalar.Value));
-                    AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(scalar.Value));
+                    AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(scalar.Value));
                     break;
                 }
 
@@ -401,7 +403,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                         }
 
                         var elemText = Decode(Arena.GetStringSlice(element.Value));
-                        AddJobWarning(job, $"job '{jobId}' runs-on label '{elemText}' is not a known GitHub-hosted runner label", Arena.GetStringRange(element.Value));
+                        AddJobWarning(job, $"label \"{elemText}\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(element.Value));
                     }
 
                     break;

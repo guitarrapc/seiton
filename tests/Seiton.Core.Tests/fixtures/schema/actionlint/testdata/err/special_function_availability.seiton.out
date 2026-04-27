@@ -1,0 +1,8 @@
+test.yaml:11:13: function "always" is not allowed here. "always" is only available in "if" conditions of jobs and steps. called in job strategy [expression]
+test.yaml:12:13: function "cancelled" is not allowed here. "cancelled" is only available in "if" conditions of jobs and steps. called in job strategy [expression]
+test.yaml:13:13: function "success" is not allowed here. "success" is only available in "if" conditions of jobs and steps. called in job strategy [expression]
+test.yaml:14:13: function "failure" is not allowed here. "failure" is only available in "if" conditions of jobs and steps. called in job strategy [expression]
+test.yaml:15:13: function "hashFiles" is not allowed here. "hashFiles" is only available in step-level expressions. called in job strategy [expression]
+test.yaml:17:13: function "hashFiles" is not allowed here. "hashFiles" is only available in step-level expressions. called in job strategy [expression]
+test.yaml:20:9: function "hashFiles" is not allowed here. "hashFiles" is only available in step-level expressions. called in job if [expression]
+test.yaml:23:14: function "success" is not allowed here. "success" is only available in "if" conditions of jobs and steps. called in step run [expression]

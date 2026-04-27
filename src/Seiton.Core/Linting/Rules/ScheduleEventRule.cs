@@ -63,9 +63,10 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 
         if (minimumIntervalMinutes < MinIntervalMinutes)
         {
+            var intervalSeconds = minimumIntervalMinutes * 60;
             AddEventError(
                 scheduleEvent,
-                $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' runs too frequently; the shortest interval is once every {MinIntervalMinutes} minutes",
+                $"scheduled job runs too frequently. it runs once per {intervalSeconds} seconds. the shortest interval is once every {MinIntervalMinutes} minutes",
                 Arena.GetStringRange(cronNode));
         }
     }

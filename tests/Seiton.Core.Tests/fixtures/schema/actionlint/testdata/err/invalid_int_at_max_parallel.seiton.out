@@ -1,0 +1,5 @@
+test.yaml:7:21: job 'error1' strategy.max-parallel must be integer [syntax-check]
+test.yaml:13:21: job 'error2' strategy.max-parallel must be integer [syntax-check]
+test.yaml:25:7: job 'error4' strategy.max-parallel must be greater than 0 [syntax-check]
+test.yaml:31:7: job 'error5' strategy.max-parallel must be greater than 0 [syntax-check]
+test.yaml:43:21: job 'ok2' strategy.max-parallel must be integer [syntax-check]

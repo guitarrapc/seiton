@@ -550,7 +550,7 @@ public static partial class WorkflowParser
         // spec §3.10 post-validation: normal jobs require `runs-on`
         if (!hasUses && !hasRunsOn)
         {
-            AddError(diagnostics, $"job '{decodedJobId}' requires runs-on (or uses)", jobIdMark);
+            AddError(diagnostics, $"\"runs-on\" section is missing in job \"{decodedJobId}\"", jobIdMark);
         }
 
         // spec §3.10 post-validation: normal jobs require `steps`
@@ -864,6 +864,7 @@ public static partial class WorkflowParser
         StringNodeId urlNode = default;
         BoolNodeId deploymentNode = default;
         ulong seen = 0;
+        var mappingMark = reader.CurrentStart;
 
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -932,7 +933,7 @@ public static partial class WorkflowParser
         // spec §3.14 / §12: environment mapping form requires `name`
         if (!nameNode.HasValue)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' environment.name is required", jobId.Length > 0 ? new TextPosition(0, 1, 1) : new TextPosition(0, 1, 1));
+            AddError(diagnostics, "name is missing in \"environment\" section", mappingMark);
             return default;
         }
 

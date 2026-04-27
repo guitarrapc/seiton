@@ -203,7 +203,7 @@ public static partial class WorkflowParser
                             if (idErr)
                             {
                                 var idMsg = idNode.HasValue
-                                    ? $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must not be empty"
+                                    ? "string should not be empty"
                                     : $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be scalar";
                                 AddError(diagnostics, idMsg, idMark);
                             }

@@ -1,0 +1,2 @@
+test.yaml:22:14: object value in ${{ }} will be converted to string "[Object]" [expression]
+test.yaml:24:14: null value in ${{ }} will be converted to empty string [expression]

@@ -63,7 +63,8 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
                 if (!double.TryParse(defaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                 {
                     var inputName = Decode(Arena.GetStringSlice(input.Name));
-                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has non-numeric default value", Arena.GetStringRange(input.Default));
+                    var defaultText = Decode(Arena.GetStringSlice(input.Default));
+                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' default value '{defaultText}' is not a valid number", Arena.GetStringRange(input.Default));
                 }
 
                 break;
@@ -71,7 +72,8 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
                 if (!defaultValue.SequenceEqual("true"u8) && !defaultValue.SequenceEqual("false"u8))
                 {
                     var inputName = Decode(Arena.GetStringSlice(input.Name));
-                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has boolean default that must be 'true' or 'false'", Arena.GetStringRange(input.Default));
+                    var defaultText = Decode(Arena.GetStringSlice(input.Default));
+                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' boolean default value '{defaultText}' must be 'true' or 'false'", Arena.GetStringRange(input.Default));
                 }
 
                 break;

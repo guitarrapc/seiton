@@ -293,7 +293,8 @@ public static partial class WorkflowParser
 
         if (type == DispatchInputType.None)
         {
-            AddError(diagnostics, "on.workflow_dispatch input type must be one of string, number, boolean, choice, environment", reader.CurrentStart);
+            var valueText = Encoding.UTF8.GetString(valueUtf8);
+            AddError(diagnostics, $"on.workflow_dispatch input type '{valueText}' is invalid; must be one of string, number, boolean, choice, environment", reader.CurrentStart);
         }
 
         reader.Read();

@@ -924,7 +924,7 @@ public static partial class WorkflowParser
         // spec §3.7 / §12: defaults.run is required in mapping form
         if (!hasRun)
         {
-            AddError(diagnostics, "defaults should have run", mappingMark);
+            AddError(diagnostics, "\"defaults\" section should have \"run\" section", mappingMark);
             return default;
         }
 
@@ -1039,7 +1039,7 @@ public static partial class WorkflowParser
         // spec §3.8 / §12: concurrency.group is required
         if (!groupNode.HasValue)
         {
-            AddError(diagnostics, "concurrency.group is required", mappingMark);
+            AddError(diagnostics, "group name is missing in \"concurrency\" section", mappingMark);
             return default;
         }
 

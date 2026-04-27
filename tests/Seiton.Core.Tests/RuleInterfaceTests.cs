@@ -24,8 +24,8 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Workflow is not null).IsTrue();
-        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
         var diagnostic = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId == "job-structure"
-            && x.Message.Contains("requires runs-on", StringComparison.Ordinal));
+            && x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal));
 
         await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
         await Assert.That(diagnostic.RuleId).IsEqualTo("job-structure");
@@ -455,7 +455,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["requires runs-on"]),
+            ["\"runs-on\" section is missing"]),
         };
 
         await AssertRuleCases(new JobStructureRule(), "job-structure", cases);
@@ -2833,7 +2833,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["not a known GitHub-hosted runner label"]),
+            ["is unknown. available labels are"]),
             new RuleCase(
             "ng-unknown-mapping-label",
             """
@@ -2846,7 +2846,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["not a known GitHub-hosted runner label"]),
+            ["is unknown. available labels are"]),
             new RuleCase(
             "ok-mapping-labels-with-self-hosted-skip",
             """
@@ -2886,7 +2886,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo test
             """,
-            ["not a known GitHub-hosted runner label"]),
+            ["is unknown. available labels are"]),
             new RuleCase(
             "ok-matrix-known-labels-only",
             """
@@ -2949,7 +2949,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo test
             """,
-            ["not a known GitHub-hosted runner label"]),
+            ["is unknown. available labels are"]),
             new RuleCase(
             "ok-matrix-expression-row-skip",
             """
@@ -3024,7 +3024,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["'windows-latest' conflicts with label 'ubuntu-latest'"]),
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\""]),
             new RuleCase(
             "ng-multiple-os-conflicts",
             """
@@ -3035,7 +3035,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["'windows-latest' conflicts with label 'ubuntu-latest'", "'macos-latest' conflicts with label 'ubuntu-latest'"]),
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\"", "\"macos-latest\" conflicts with label \"ubuntu-latest\""]),
             new RuleCase(
             "ng-bare-os-label-conflict",
             """
@@ -3046,7 +3046,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["'windows' conflicts with label 'ubuntu-latest'"]),
+            ["\"windows\" conflicts with label \"ubuntu-latest\""]),
             new RuleCase(
             "ok-single-os-label",
             """
@@ -3082,7 +3082,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["'windows-latest' conflicts with label 'ubuntu-latest'", "'macos-latest' conflicts with label 'ubuntu-latest'"]),
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\"", "\"macos-latest\" conflicts with label \"ubuntu-latest\""]),
             new RuleCase(
             "ng-matrix-os-conflict-bare-label",
             """
@@ -3096,7 +3096,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["'windows-latest' conflicts with label 'ubuntu-latest'", "'macos-latest' conflicts with label 'ubuntu-latest'", "'windows' conflicts with label 'ubuntu-latest'"]),
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\"", "\"macos-latest\" conflicts with label \"ubuntu-latest\"", "\"windows\" conflicts with label \"ubuntu-latest\""]),
             new RuleCase(
             "ok-matrix-same-os-family",
             """
@@ -3246,7 +3246,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job id", "contains invalid characters"]),
+            ["invalid job ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-with-dot",
             """
@@ -3259,7 +3259,7 @@ public sealed class RuleInterfaceTests
                         - id: setup.v1
                           run: echo ng
             """,
-            ["step id", "contains invalid characters"]),
+            ["invalid step ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-empty",
             """
@@ -3272,7 +3272,7 @@ public sealed class RuleInterfaceTests
                         - id: ''
                           run: echo ng
             """,
-            ["step id", "must not be empty"]),
+            ["string should not be empty"]),
             new RuleCase(
             "ng-job-id-starts-with-digit",
             """
@@ -3284,7 +3284,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job id", "first character must be [a-zA-Z_]"]),
+            ["invalid job ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-starts-with-dash",
             """
@@ -3297,7 +3297,7 @@ public sealed class RuleInterfaceTests
                         - id: -setup
                           run: echo ng
             """,
-            ["step id", "first character must be [a-zA-Z_]"]),
+            ["invalid step ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-duplicate-case-insensitive",
             """
@@ -3370,7 +3370,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["has duplicated option 'dev'"]),
+            ["has duplicated option"]),
             new RuleCase(
             "ng-choice-default-not-in-options",
             """
@@ -3403,7 +3403,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["options but type is 'number'"]),
+            ["has options but type is"]),
             new RuleCase(
             "ng-number-default-not-number",
             """
@@ -3419,7 +3419,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["non-numeric default value"]),
+            ["is not a valid number"]),
             new RuleCase(
             "ng-boolean-default-invalid",
             """
@@ -3721,7 +3721,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["runs too frequently", "once every 5 minutes"]),
+            ["runs too frequently", "once per", "once every 5 minutes"]),
             new RuleCase(
             "ng-invalid-timezone",
             """
@@ -3845,7 +3845,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["invalid glob pattern", "not closed"]),
+            ["invalid glob pattern", "missing ]"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
@@ -3870,7 +3870,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["reversed range"]),
+            ["start of range", "is larger than end of range"]),
             new RuleCase(
             "ng-dot-dot-path-segment",
             """
@@ -3954,7 +3954,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["invalid glob pattern", "not a valid glob escape"]),
+            ["invalid for branch and tag names", "can be escaped"]),
             new RuleCase(
             "ng-trailing-backslash-in-branches",
             """
@@ -3996,7 +3996,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["at least one character must follow '!'"]),
+            ["at least one character must follow !"]),
             new RuleCase(
             "ng-leading-space-in-paths",
             """
@@ -4066,7 +4066,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["ref name must not start with '/'"]),
+            ["ref name must not start with /"]),
             new RuleCase(
             "ng-ref-ends-with-slash",
             """
@@ -4080,7 +4080,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["ref name must not end with '/'"]),
+            ["ref name must not end with /"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
@@ -11124,7 +11124,7 @@ public sealed class RuleInterfaceTests
               - run: echo ok
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
-        var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("requires runs-on")).ToArray();
+        var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("\"runs-on\" section is missing")).ToArray();
         await Assert.That(runsOnDiags).Count().IsEqualTo(1);
     }
 

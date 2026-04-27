@@ -359,4 +359,133 @@ public sealed class ActionlintCompatTests
 
         return string.Equals(actual, expected.Pattern, StringComparison.Ordinal);
     }
+
+    // ──────────────────────────────────────────────
+    // .seiton.out generation
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Generates or updates <c>.seiton.out</c> files that capture seiton's actual output
+    /// for each actionlint err fixture. Run with <c>SEITON_UPDATE_OUT=1</c> env var to write files.
+    /// Otherwise, this test just verifies existing <c>.seiton.out</c> files are up to date.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(GetFixtures))]
+    [DisplayName("SeitonOut: $name")]
+    public async Task GenerateOrVerifySeitonOut((string Name, string YamlPath, string OutPath) fixture)
+    {
+        var utf8Yaml = File.ReadAllBytes(fixture.YamlPath);
+        var engine = new LintEngine();
+        var result = engine.Check(utf8Yaml, "test.yaml");
+
+        var seitonLines = FormatAsActionlint(result.Diagnostics);
+        var actualContent = string.Join("\n", seitonLines);
+        if (actualContent.Length > 0)
+        {
+            actualContent += "\n";
+        }
+
+        var seitonOutPath = Path.ChangeExtension(fixture.YamlPath, ".seiton.out");
+        var updateMode = Environment.GetEnvironmentVariable("SEITON_UPDATE_OUT") == "1";
+
+        if (updateMode)
+        {
+            File.WriteAllText(seitonOutPath, actualContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            await Assert.That(true).IsTrue(); // always passes when writing
+        }
+        else if (File.Exists(seitonOutPath))
+        {
+            var expected = File.ReadAllText(seitonOutPath).Replace("\r\n", "\n");
+            await Assert.That(actualContent).IsEqualTo(expected);
+        }
+        else
+        {
+            // No .seiton.out yet — just report what would be written
+            Console.Write($"[{fixture.Name}] .seiton.out not found, would write {seitonLines.Count} lines");
+            await Assert.That(true).IsTrue();
+        }
+    }
+
+    /// <summary>
+    /// Generates a mapping summary CSV showing actionlint vs seiton correspondence per fixture.
+    /// Run with <c>SEITON_UPDATE_OUT=1</c> to write the mapping file.
+    /// </summary>
+    [Test]
+    public async Task GenerateMappingSummary()
+    {
+        var errRoot = GetErrFixturesRoot();
+        if (!Directory.Exists(errRoot))
+        {
+            return;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("fixture,actionlint_line,actionlint_msg_prefix,seiton_line,seiton_msg_prefix,status");
+
+        foreach (var (name, yamlPath, outPath) in GetFixtures())
+        {
+            var utf8Yaml = File.ReadAllBytes(yamlPath);
+            var engine = new LintEngine();
+            var result = engine.Check(utf8Yaml, "test.yaml");
+
+            var seitonLines = FormatAsActionlint(result.Diagnostics);
+            var expectations = ParseOutFile(outPath);
+
+            // Track which seiton lines were matched
+            var seitonMatched = new bool[seitonLines.Count];
+            for (var i = 0; i < expectations.Count; i++)
+            {
+                var expected = expectations[i];
+                var matchedSeitonIdx = -1;
+                for (var j = 0; j < seitonLines.Count; j++)
+                {
+                    if (seitonMatched[j])
+                    {
+                        continue;
+                    }
+
+                    if (IsMatch(seitonLines[j], expected))
+                    {
+                        seitonMatched[j] = true;
+                        matchedSeitonIdx = j;
+                        break;
+                    }
+                }
+
+                var expectedPrefix = Truncate(expected.IsRegex ? "/" + expected.Pattern + "/" : expected.Pattern, 120);
+                if (matchedSeitonIdx >= 0)
+                {
+                    var seitonPrefix = Truncate(seitonLines[matchedSeitonIdx], 120);
+                    sb.AppendLine($"{name},{i + 1},\"{Escape(expectedPrefix)}\",{matchedSeitonIdx + 1},\"{Escape(seitonPrefix)}\",MATCH");
+                }
+                else
+                {
+                    sb.AppendLine($"{name},{i + 1},\"{Escape(expectedPrefix)}\",-,,MISS");
+                }
+            }
+
+            for (var j = 0; j < seitonLines.Count; j++)
+            {
+                if (!seitonMatched[j])
+                {
+                    var seitonPrefix = Truncate(seitonLines[j], 120);
+                    sb.AppendLine($"{name},-,,{j + 1},\"{Escape(seitonPrefix)}\",EXTRA");
+                }
+            }
+        }
+
+        var updateMode = Environment.GetEnvironmentVariable("SEITON_UPDATE_OUT") == "1";
+        if (updateMode)
+        {
+            var mappingPath = Path.Combine(GetErrFixturesRoot(), "..", "mapping_summary.csv");
+            File.WriteAllText(mappingPath, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        }
+
+        Console.Write(sb);
+        await Assert.That(sb.Length).IsGreaterThan(0);
+    }
+
+    private static string Truncate(string s, int maxLen) => s.Length <= maxLen ? s : s[..maxLen] + "...";
+
+    private static string Escape(string s) => s.Replace("\"", "\"\"");
 }

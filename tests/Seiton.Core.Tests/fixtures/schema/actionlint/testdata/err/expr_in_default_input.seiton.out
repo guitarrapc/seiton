@@ -1,0 +1,2 @@
+test.yaml:7:18: property 'input2' is not defined in 'inputs' object [expression]
+test.yaml:15:18: property 'input3' is not defined in 'inputs' object [expression]

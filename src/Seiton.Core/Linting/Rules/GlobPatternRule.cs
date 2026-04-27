@@ -6,6 +6,9 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates glob patterns in branch/path/tag filters for syntax errors.</summary>
 public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 {
+    private const string FilterPatternNote = ". note: filter pattern syntax is explained at https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet";
+    private const string RefFormatNote = ". see `man git-check-ref-format` for more details. note that regular expression is unavailable";
+
     public override string Name => "Glob Pattern Rule";
 
     public override void VisitEvent(Event ev)
@@ -35,7 +38,6 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             return;
         }
 
-        var filterName = Decode(Arena.GetStringSlice(filter.Name));
         for (var i = 0; i < filter.Values.Length; i++)
         {
             var valueNode = filter.Values[i];
@@ -45,60 +47,61 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 continue;
             }
 
-            if (TryGetInvalidReason(pattern, kind, out var reason))
-            {
-                var patternText = Decode(Arena.GetStringSlice(valueNode));
-                AddEventError(
-                    webhookEv,
-                    $"event filter '{filterName}' has invalid glob pattern '{patternText}': {reason}",
-                    Arena.GetStringRange(valueNode));
-            }
+            ValidatePattern(webhookEv, valueNode, pattern, kind);
         }
     }
 
-    private static bool TryGetInvalidReason(ReadOnlySpan<byte> pattern, FilterKind kind, out string reason)
+    private void ValidatePattern(WebhookEvent webhookEv, StringNodeId valueNode, ReadOnlySpan<byte> pattern, FilterKind kind)
     {
+        var range = Arena.GetStringRange(valueNode);
+
         // Empty pattern
         if (pattern.Length == 0)
         {
-            reason = "pattern must not be empty";
-            return true;
+            AddEventError(webhookEv, "string should not be empty", range);
+            return;
         }
 
         // Lone '!' — negate pattern must have at least one character following
         if (pattern.Length == 1 && pattern[0] == (byte)'!')
         {
-            reason = "at least one character must follow '!' in negate pattern";
-            return true;
+            AddEventError(webhookEv,
+                $"invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at least one character must follow !{FilterPatternNote}",
+                range);
+            return;
         }
 
-        // Leading/trailing spaces (for path filters)
-        if (kind == FilterKind.Path)
+        // Leading/trailing spaces (path filters)
+        if (kind == FilterKind.Path && (pattern[0] == (byte)' ' || pattern[^1] == (byte)' '))
         {
-            if (pattern[0] == (byte)' ' || pattern[^1] == (byte)' ')
+            AddEventError(webhookEv,
+                $"leading and trailing spaces are not allowed in glob path{FilterPatternNote}",
+                range);
+            return;
+        }
+
+        // Ref name validations
+        if (kind == FilterKind.Ref)
+        {
+            if (pattern[0] == (byte)'/')
             {
-                reason = "leading and trailing spaces are not allowed in glob path";
-                return true;
+                AddEventError(webhookEv,
+                    $"character '/' is invalid for branch and tag names. ref name must not start with /{RefFormatNote}{FilterPatternNote}",
+                    range);
             }
-        }
 
-        // Ref name: must not start with '/'
-        if (kind == FilterKind.Ref && pattern[0] == (byte)'/')
-        {
-            reason = "ref name must not start with '/'";
-            return true;
-        }
-
-        // Ref name: must not end with '/' or '..'
-        if (kind == FilterKind.Ref && pattern[^1] == (byte)'/')
-        {
-            reason = "ref name must not end with '/'";
-            return true;
+            if (pattern[^1] == (byte)'/')
+            {
+                AddEventError(webhookEv,
+                    $"character '/' is invalid for branch and tag names. ref name must not end with / and ..{RefFormatNote}{FilterPatternNote}",
+                    range);
+            }
         }
 
         var consecutiveStars = 0;
         var openBracketCount = 0;
         var insideBracket = false;
+        var bracketStart = -1;
 
         for (var i = 0; i < pattern.Length; i++)
         {
@@ -108,17 +111,20 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 consecutiveStars++;
                 if (consecutiveStars >= 3)
                 {
-                    reason = "consecutive '*' longer than '**' is not supported";
-                    return true;
+                    AddEventError(webhookEv,
+                        $"invalid glob pattern. consecutive '*' longer than '**' is not supported{FilterPatternNote}",
+                        range);
+                    return;
                 }
             }
             else
             {
-                // Check for special character followed by + (e.g. *+, **+, ?+)
                 if (b == (byte)'+' && consecutiveStars > 0)
                 {
-                    reason = "unexpected character '+' after '*'. the preceding character must not be a special character";
-                    return true;
+                    AddEventError(webhookEv,
+                        $"invalid glob pattern. unexpected character '+' after '*'. the preceding character must not be a special character{FilterPatternNote}",
+                        range);
+                    return;
                 }
 
                 consecutiveStars = 0;
@@ -128,17 +134,32 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             {
                 openBracketCount++;
                 insideBracket = true;
+                bracketStart = i;
             }
             else if (b == (byte)']')
             {
-                if (openBracketCount == 0)
+                if (insideBracket)
                 {
-                    reason = "closing ']' without opening '['";
-                    return true;
-                }
+                    // Check single-character class: [x] where x is a single non-special char
+                    var bracketLen = i - bracketStart - 1;
+                    if (bracketLen == 1)
+                    {
+                        var inner = pattern[bracketStart + 1];
+                        AddEventError(webhookEv,
+                            $"invalid glob pattern. unexpected character ']' while checking character match []. character match with single character is useless. simply use {(char)inner} instead of [{(char)inner}]{FilterPatternNote}",
+                            range);
+                    }
 
-                openBracketCount--;
-                insideBracket = false;
+                    openBracketCount--;
+                    insideBracket = false;
+                }
+                else if (openBracketCount == 0)
+                {
+                    AddEventError(webhookEv,
+                        $"invalid glob pattern. closing ']' without opening '['{FilterPatternNote}",
+                        range);
+                    return;
+                }
             }
 
             // Detect reversed ranges inside brackets: [z-a]
@@ -148,25 +169,39 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 var next = pattern[i + 1];
                 if (prev != (byte)'[' && next != (byte)']' && prev > next)
                 {
-                    reason = $"reversed range '[{(char)prev}-{(char)next}]' in character class";
-                    return true;
+                    AddEventError(webhookEv,
+                        $"invalid glob pattern. unexpected character '{(char)next}' while checking character range in []. start of range '{(char)prev}' ({(int)prev}) is larger than end of range '{(char)next}' ({(int)next}){FilterPatternNote}",
+                        range);
+                    return;
                 }
             }
 
-            // Validate backslash escapes: \X is valid only when X is a glob metacharacter
+            // Validate backslash escapes
             if (b == (byte)'\\' && !insideBracket)
             {
                 if (i + 1 >= pattern.Length)
                 {
-                    reason = "trailing backslash '\\' with no character to escape";
-                    return true;
+                    AddEventError(webhookEv,
+                        $"invalid glob pattern. trailing backslash '\\' with no character to escape{FilterPatternNote}",
+                        range);
+                    return;
                 }
 
                 var next = pattern[i + 1];
                 if (!IsGlobEscapable(next))
                 {
-                    reason = $"'\\{(char)next}' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \\, !, +, #) can be escaped";
-                    return true;
+                    if (kind == FilterKind.Ref)
+                    {
+                        AddEventError(webhookEv,
+                            $"character '\\' is invalid for branch and tag names. only special characters [, ?, +, *, \\, ! can be escaped with \\{RefFormatNote}{FilterPatternNote}",
+                            range);
+                    }
+                    else
+                    {
+                        AddEventError(webhookEv,
+                            $"invalid glob pattern. '\\{(char)next}' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \\, !, +, #) can be escaped{FilterPatternNote}",
+                            range);
+                    }
                 }
 
                 i++; // skip escaped character
@@ -174,28 +209,29 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             }
 
             // Detect git-check-ref-format violation characters (outside brackets)
-            if (!insideBracket && IsRefNameForbiddenChar(b))
+            if (kind == FilterKind.Ref && !insideBracket && IsRefNameForbiddenChar(b))
             {
-                reason = $"character '{(char)b}' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, ?, backslash";
-                return true;
+                AddEventError(webhookEv,
+                    $"character '{(char)b}' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *{RefFormatNote}{FilterPatternNote}",
+                    range);
             }
         }
 
         if (openBracketCount > 0)
         {
-            reason = "'[' is not closed";
-            return true;
+            AddEventError(webhookEv,
+                $"invalid glob pattern. unexpected EOF while checking end of character match []. missing ]{FilterPatternNote}",
+                range);
+            return;
         }
 
         // Detect '.' or '..' path segments
         if (ContainsDotSegment(pattern))
         {
-            reason = "'.' and '..' are not allowed in path";
-            return true;
+            AddEventError(webhookEv,
+                $"'.' and '..' are not allowed in glob path{FilterPatternNote}",
+                range);
         }
-
-        reason = string.Empty;
-        return false;
     }
 
     private static bool IsRefNameForbiddenChar(byte b)
@@ -220,8 +256,6 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 
     private static bool ContainsDotSegment(ReadOnlySpan<byte> pattern)
     {
-        // Check for '.' or '..' as a path segment:
-        // Bare "." or "..", or leading "./" "../", or "/./" "/../", or trailing "/." "/.."
         for (var i = 0; i < pattern.Length; i++)
         {
             if (pattern[i] != (byte)'.')
@@ -235,13 +269,11 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 continue;
             }
 
-            // Single dot segment: "." at end, or "./" or ".\"
             if (i + 1 >= pattern.Length || pattern[i + 1] == (byte)'/' || pattern[i + 1] == (byte)'\\')
             {
                 return true;
             }
 
-            // Double dot segment: ".." at end, or "../" or "..\"
             if (pattern[i + 1] == (byte)'.')
             {
                 if (i + 2 >= pattern.Length || pattern[i + 2] == (byte)'/' || pattern[i + 2] == (byte)'\\')
@@ -252,16 +284,5 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         }
 
         return false;
-    }
-
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
     }
 }

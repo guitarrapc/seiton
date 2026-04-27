@@ -220,7 +220,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 1 fixture, 9 expected lines
 
-#### 1.10 invalid event filters メッセージ統一
+#### 1.10 invalid event filters メッセージ統一 ✅ 変更なし
 
 **対象 fixture**: `invalid_event_filters`
 
@@ -232,7 +232,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 **影響 fixture 数**: 1 fixture, 13 expected lines
 
-#### 1.11 invalid_permissions: permission scope 一覧差異
+#### 1.11 invalid_permissions: permission scope 一覧差異 ✅ 変更なし
 
 **対象 fixture**: `invalid_permissions`
 

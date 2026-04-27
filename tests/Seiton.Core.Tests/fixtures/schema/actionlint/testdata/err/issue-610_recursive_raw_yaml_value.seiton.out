@@ -1,0 +1,3 @@
+test.yaml:11:9: job 'test' matrix value has unsupported shape [syntax-check]
+test.yaml:8:18: anchor "recursive_include" is defined but not used [syntax-check]
+test.yaml:11:9: recursive alias "recursive_include" is found [syntax-check]

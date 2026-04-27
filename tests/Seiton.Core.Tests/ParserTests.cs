@@ -971,7 +971,7 @@ public sealed class ParserTests
                                 required: true
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "on.workflow_call.inputs.image.type is required"
+                "\"type\" is missing at \"image\" input of workflow_call event"
             ),
             (
                 "workflow_call output missing value",
@@ -983,7 +983,7 @@ public sealed class ParserTests
                                 description: output
                 jobs: {}
                 """.Replace("\r\n", "\n"),
-                "on.workflow_call.outputs.digest.value is required"
+                "\"value\" is missing at \"digest\" output of workflow_call event"
             ),
             (
                 "schedule item empty mapping",
@@ -1076,8 +1076,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-input-null.yml");
-        // input0 has null body — should report "type is required" not "must be mapping"
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.inputs.input0.type is required", StringComparison.Ordinal))).IsTrue();
+        // input0 has null body — should report "type is missing" not "must be mapping"
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"type\" is missing at \"input0\" input of workflow_call event", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("input must be mapping", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -1113,8 +1113,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-null.yml");
-        // missing-all has null body — should report "value is required" not "must be mapping"
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.outputs.missing-all.value is required", StringComparison.Ordinal))).IsTrue();
+        // missing-all has null body — should report "value is missing" not "must be mapping"
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"value\" is missing at \"missing-all\" output of workflow_call event", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("output must be mapping", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -1186,7 +1186,7 @@ public sealed class ParserTests
         {
             var c = cases[i];
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"defaults-missing-run-{i}.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("defaults should have run", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"defaults\" section should have \"run\" section", StringComparison.Ordinal))).IsTrue();
         }
     }
 
@@ -1241,7 +1241,7 @@ public sealed class ParserTests
         {
             var c = cases[i];
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"concurrency-missing-group-{i}.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("concurrency.group is required", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("group name is missing in \"concurrency\" section", StringComparison.Ordinal))).IsTrue();
         }
     }
 
@@ -2128,10 +2128,9 @@ public sealed class ParserTests
         .Replace("\r\n", "\n");
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
-
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
-        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2167,7 +2166,6 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
-
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
     }
@@ -3080,7 +3078,6 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
-
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
     }
@@ -3101,7 +3098,6 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
-
         var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
     }
@@ -4307,10 +4303,10 @@ public sealed class ParserTests
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        id: \"\"\n"u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("id") && d.Message.Contains("must"));
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("string should not be empty"));
         await Assert.That(diag.Message).IsNotEmpty();
-        // Must say "must not be empty", NOT "must be scalar"
-        await Assert.That(diag.Message).Contains("must not be empty");
+        // Must say "string should not be empty", NOT "must be scalar"
+        await Assert.That(diag.Message).Contains("string should not be empty");
         await Assert.That(diag.Message).DoesNotContain("must be scalar");
     }
 

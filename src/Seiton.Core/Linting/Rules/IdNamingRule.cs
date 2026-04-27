@@ -21,7 +21,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 
         _currentJob = job;
         _seenStepIdSlices = [];
-        ValidateId(job.Id, "job id");
+        ValidateId(job.Id, "job ID");
         _currentJob = null;
     }
 
@@ -33,7 +33,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         }
 
         _currentStep = step;
-        ValidateId(step.Id, "step id");
+        ValidateId(step.Id, "step ID");
         ValidateStepIdUniqueness(step);
         _currentStep = null;
     }
@@ -58,8 +58,8 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 
         var idText = Decode(Arena.GetStringSlice(idNode));
         var message = value.Length == 0
-            ? $"{kind} must not be empty"
-            : $"{kind} '{idText}' contains invalid characters; first character must be [a-zA-Z_], and remaining characters must be [a-zA-Z0-9_-]";
+            ? "string should not be empty"
+            : $"invalid {kind} \"{idText}\". {kind} must start with a letter or _ and contain only alphanumeric characters, -, or _";
 
         if (_currentJob is not null)
         {

@@ -212,7 +212,7 @@ public static partial class WorkflowParser
             // Report missing type
             AddError(
                 diagnostics,
-                $"on.workflow_call.inputs.{idText}.type is required",
+                $"\"type\" is missing at \"{idText}\" input of workflow_call event",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventInput { Name = nameNode, Id = id, Description = description, Required = required, Default = defaultValue, Type = type, Range = arena.GetStringRange(nameNode) };
         }
@@ -307,7 +307,7 @@ public static partial class WorkflowParser
         {
             AddError(
                 diagnostics,
-                $"on.workflow_call.inputs.{idText}.type is required",
+                $"\"type\" is missing at \"{idText}\" input of workflow_call event",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
         }
 
@@ -352,7 +352,8 @@ public static partial class WorkflowParser
 
         if (type == WorkflowCallInputType.Invalid)
         {
-            AddError(diagnostics, "on.workflow_call input type must be one of boolean, number, string", reader.CurrentStart);
+            var valueText = Encoding.UTF8.GetString(valueUtf8);
+            AddError(diagnostics, $"on.workflow_call input type '{valueText}' is invalid; must be one of boolean, number, string", reader.CurrentStart);
         }
 
         reader.Read();
@@ -642,7 +643,7 @@ public static partial class WorkflowParser
             // Report missing value
             AddError(
                 diagnostics,
-                $"on.workflow_call.outputs.{idText}.value is required",
+                $"\"value\" is missing at \"{idText}\" output of workflow_call event",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
@@ -727,7 +728,7 @@ public static partial class WorkflowParser
         {
             AddError(
                 diagnostics,
-                $"on.workflow_call.outputs.{idText}.value is required",
+                $"\"value\" is missing at \"{idText}\" output of workflow_call event",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
         }
         else if (value.HasValue && arena.GetStringValue(value).Length == 0)
