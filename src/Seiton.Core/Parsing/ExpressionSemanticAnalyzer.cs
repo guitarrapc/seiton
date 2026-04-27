@@ -195,6 +195,39 @@ public static class ExpressionSemanticAnalyzer
     }
 
     /// <summary>
+    /// Checks that a <c>runs-on</c> expression evaluates to string or array.
+    /// Object and null types are invalid for runs-on labels.
+    /// </summary>
+    internal static Diagnostic? CheckRunsOnType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[]? contextOverrides)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = contextOverrides is not null
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+
+        return type switch
+        {
+            ObjectExprType obj => new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"type of expression at \"runs-on\" must be string or array but found type \"{FormatObjectType(obj)}\"",
+                expressionLocation),
+            NullExprType => new Diagnostic(
+                DiagnosticSeverity.Error,
+                "type of expression at \"runs-on\" must be string or array but found type \"null\"",
+                expressionLocation),
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// Checks that the expression evaluates to an object type. Used for positions like credentials, services, env
     /// where the YAML expects a mapping but the user provided <c>${{ expr }}</c> that evaluates to a non-object type.
     /// </summary>
@@ -1272,10 +1305,9 @@ public static class ExpressionSemanticAnalyzer
         if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
             var propNameText = Encoding.UTF8.GetString(propNameSpan);
-            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
-                $"property '{propNameText}' is not defined in '{rootName}' object",
+                $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
                 expressionLocation));
         }
     }
@@ -1464,10 +1496,9 @@ public static class ExpressionSemanticAnalyzer
         if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
             var propNameText = Encoding.UTF8.GetString(propNameSpan);
-            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
-                $"property '{propNameText}' is not defined in '{rootName}' object",
+                $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
                 expressionLocation));
         }
     }

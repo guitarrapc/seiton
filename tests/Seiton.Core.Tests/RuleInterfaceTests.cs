@@ -1230,10 +1230,10 @@ public sealed class RuleInterfaceTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
-            // some_value should be valid (no error)
-            await Assert.That(msgs.Any(m => m.Contains("some_value", StringComparison.Ordinal))).IsFalse();
+            // some_value should be valid (no error) — check that no diagnostic targets "some_value" as the undefined property
+            await Assert.That(msgs.Any(m => m.Contains("property \"some_value\" is not defined", StringComparison.Ordinal))).IsFalse();
             // some-value should be flagged as undefined property
-            await Assert.That(msgs.Any(m => m.Contains("some-value", StringComparison.Ordinal) && m.Contains("not defined", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(msgs.Any(m => m.Contains("\"some-value\" is not defined", StringComparison.Ordinal))).IsTrue();
         }
         finally
         {
@@ -6544,7 +6544,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ steps.nonexistent.outcome == 'success' }}
                           run: echo next
             """,
-            ["'nonexistent' is not defined in 'steps'"]),
+            ["\"nonexistent\" is not defined in object type"]),
             new RuleCase(
             "ng-step-accesses-unknown-matrix-key",
             """
@@ -6560,7 +6560,7 @@ public sealed class RuleInterfaceTests
                             VALUE: ${{ matrix.unknown_key }}
                           run: echo "$VALUE"
             """,
-            ["'unknown_key' is not defined in 'matrix'"]),
+            ["\"unknown_key\" is not defined in object type"]),
             new RuleCase(
             "ng-step-accesses-unknown-needs-job",
             """
@@ -6578,7 +6578,7 @@ public sealed class RuleInterfaceTests
                             RESULT: ${{ needs.nonexistent.outputs.foo }}
                           run: echo "$RESULT"
             """,
-            ["'nonexistent' is not defined in 'needs'"]),
+            ["\"nonexistent\" is not defined in object type"]),
             new RuleCase(
             "ng-step-accesses-unknown-workflow-call-input",
             """
@@ -6596,7 +6596,7 @@ public sealed class RuleInterfaceTests
                             VAL: ${{ inputs.unknown_param }}
                           run: echo "$VAL"
             """,
-            ["'unknown_param' is not defined in 'inputs'"]),
+            ["\"unknown_param\" is not defined in object type"]),
             // regression: matrix include-only axis keys should be accessible
             new RuleCase(
             "ok-matrix-include-only-axis-accessible",
@@ -6692,7 +6692,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ matrix.package.dev }}
             """,
-            ["'dev' is not defined"]),
+            ["\"dev\" is not defined"]),
             // A-3: matrix undefined axis (no such key at all)
             new RuleCase(
             "ng-matrix-undefined-axis",
@@ -6707,7 +6707,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ matrix.platform }}
             """,
-            ["'platform' is not defined in 'matrix'"]),
+            ["\"platform\" is not defined in object type"]),
             // A-3: empty matrix in other job — matrix should be strict empty
             new RuleCase(
             "ng-matrix-empty-in-other-job",
@@ -6726,7 +6726,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ matrix.os }}
             """,
-            ["'os' is not defined in 'matrix'"]),
+            ["\"os\" is not defined in object type"]),
             // A-19: popular action output — known output should be fine
             new RuleCase(
             "ok-popular-action-known-output",
@@ -6760,7 +6760,7 @@ public sealed class RuleInterfaceTests
                             path: ./packages
                         - run: echo ${{ steps.cache.outputs.cache_hit }}
             """,
-            ["'cache_hit' is not defined"]),
+            ["\"cache_hit\" is not defined"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -7278,7 +7278,7 @@ public sealed class RuleInterfaceTests
                             KEY: ${{ secrets.UNKNOWN_SECRET }}
                           run: echo "$KEY"
             """,
-            ["'UNKNOWN_SECRET' is not defined in 'secrets'"]),
+            ["\"UNKNOWN_SECRET\" is not defined in object type"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -7312,7 +7312,7 @@ public sealed class RuleInterfaceTests
                             TAG: ${{ needs.build.outputs.typo_output }}
                           run: echo "$TAG"
             """,
-            ["'typo_output' is not defined in 'needs'"]),
+            ["\"typo_output\" is not defined in object type"]),
             // #8: needs.build.outputs.image_tag should be valid
             new RuleCase(
             "ok-needs-known-output",
@@ -7360,7 +7360,7 @@ public sealed class RuleInterfaceTests
                           run: echo "val=1" >> $GITHUB_OUTPUT
                         - run: echo '${{ needs.prepare.outputs.prepared }}'
             """,
-            ["'prepare' is not defined in 'needs'"]),
+            ["\"prepare\" is not defined in object type"]),
             // A-4: needs.some_job undefined (job doesn't exist)
             new RuleCase(
             "ng-needs-nonexistent-job",
@@ -7379,7 +7379,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo '${{ needs.some_job }}'
             """,
-            ["'some_job' is not defined in 'needs'"]),
+            ["\"some_job\" is not defined in object type"]),
             // A-4: needs.build undefined in other job (build not in other's needs)
             new RuleCase(
             "ng-needs-job-not-declared-in-needs",
@@ -7397,7 +7397,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo '${{ needs.build.outputs.built }}'
             """,
-            ["'build' is not defined in 'needs'"]),
+            ["\"build\" is not defined in object type"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -7425,7 +7425,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo '${{ steps.get_value.outputs.name }}'
             """,
-            ["'get_value' is not defined in 'steps'"]),
+            ["\"get_value\" is not defined in object type"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -7450,7 +7450,7 @@ public sealed class RuleInterfaceTests
                         - id: later
                           run: echo "later"
             """,
-            ["'later' is not defined in 'steps'"]),
+            ["\"later\" is not defined in object type"]),
             // #9: referencing a step ID that was defined earlier is fine
             new RuleCase(
             "ok-step-reference-after-definition",
@@ -7534,7 +7534,7 @@ public sealed class RuleInterfaceTests
                         - id: b
                           run: echo "tag=v1" >> $GITHUB_OUTPUT
             """,
-            ["'imagetag' is not defined"]),
+            ["\"imagetag\" is not defined"]),
             // #25: correct output name should not error
             new RuleCase(
             "ok-workflow-output-references-known-job-output",
@@ -7594,7 +7594,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ matrix.os }}
             """,
-            ["'os' is not defined in 'matrix'"]),
+            ["\"os\" is not defined in object type"]),
             // A-5: action with input expression using unknown context
             new RuleCase(
             "ng-action-with-input-unknown-context",
@@ -8380,7 +8380,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ inputs.some_input }}
             """,
-            ["property 'some_input' is not defined in 'inputs' object"]),
+            ["property \"some_input\" is not defined in object type"]),
             // With workflow_call + defined input → OK
             new RuleCase(
             "ok-inputs-with-workflow-call",
@@ -8422,7 +8422,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo hi
             """,
-            ["property 'some_output' is not defined"]),
+            ["property \"some_output\" is not defined"]),
             // job1 has outputs but unknown_output is not among them
             new RuleCase(
             "ng-workflow-call-output-unknown-property",
@@ -8440,7 +8440,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo hello
             """,
-            ["property 'unknown_output' is not defined"]),
+            ["property \"unknown_output\" is not defined"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -8469,7 +8469,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ok
             """,
-            ["property 'input2' is not defined in 'inputs' object"]),
+            ["property \"input2\" is not defined in object type"]),
             // input3 references itself — not yet defined
             new RuleCase(
             "ng-input-default-self-ref",
@@ -8490,7 +8490,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ok
             """,
-            ["property 'input3' is not defined in 'inputs' object"]),
+            ["property \"input3\" is not defined in object type"]),
             // input2 references input1 (already defined) → OK
             new RuleCase(
             "ok-input-default-back-ref",

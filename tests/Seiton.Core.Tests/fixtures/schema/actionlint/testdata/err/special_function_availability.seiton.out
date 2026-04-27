@@ -5,4 +5,4 @@ test.yaml:14:13: function "failure" is not allowed here. "failure" is only avail
 test.yaml:15:13: function "hashFiles" is not allowed here. "hashFiles" is only available in step-level expressions. called in job strategy [expression]
 test.yaml:17:13: function "hashFiles" is not allowed here. "hashFiles" is only available in step-level expressions. called in job strategy [expression]
 test.yaml:20:9: function "hashFiles" is not allowed here. "hashFiles" is only available in step-level expressions. called in job if [expression]
-test.yaml:23:14: function "success" is not allowed here. "success" is only available in "if" conditions of jobs and steps. called in step run [expression]
+test.yaml:23:29: function "success" is not allowed here. "success" is only available in "if" conditions of jobs and steps. called in step run [expression]

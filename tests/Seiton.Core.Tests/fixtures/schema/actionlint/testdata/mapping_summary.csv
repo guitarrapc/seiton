@@ -76,11 +76,11 @@ context_availability,39,"/test\.yaml:252:22: context ""env"" is not allowed here
 context_availability,-,,1,"test.yaml:143:21: job 'test' strategy.max-parallel must be integer [syntax-check]",EXTRA
 context_availability,-,,2,"test.yaml:225:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
 context_availability,-,,3,"test.yaml:240:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
-context_availability,-,,4,"test.yaml:3:11: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflow...",EXTRA
+context_availability,-,,4,"test.yaml:3:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflow...",EXTRA
 context_availability,-,,5,"test.yaml:10:8: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""secrets"". called ...",EXTRA
-context_availability,-,,6,"test.yaml:15:10: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
+context_availability,-,,6,"test.yaml:15:28: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
 context_availability,-,,7,"test.yaml:25:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
-context_availability,-,,8,"test.yaml:48:14: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,8,"test.yaml:48:32: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
 context_availability,-,,9,"test.yaml:57:19: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
 context_availability,-,,10,"test.yaml:68:16: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
 context_availability,-,,11,"test.yaml:71:24: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
@@ -91,8 +91,8 @@ context_availability,-,,15,"test.yaml:90:13: context ""runner"" is not allowed h
 context_availability,-,,16,"test.yaml:93:12: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
 context_availability,-,,17,"test.yaml:96:9: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called in...",EXTRA
 context_availability,-,,18,"test.yaml:99:11: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,19,"test.yaml:106:14: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,20,"test.yaml:106:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,19,"test.yaml:106:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,20,"test.yaml:106:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
 context_availability,-,,21,"test.yaml:111:16: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
 context_availability,-,,22,"test.yaml:115:21: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
 context_availability,-,,23,"test.yaml:127:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
@@ -103,7 +103,7 @@ context_availability,-,,27,"test.yaml:146:22: context ""env"" is not allowed her
 context_availability,-,,28,"test.yaml:160:13: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""st...",EXTRA
 context_availability,-,,29,"test.yaml:183:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
 context_availability,-,,30,"test.yaml:189:17: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,31,"test.yaml:193:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,31,"test.yaml:193:36: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
 context_availability,-,,32,"test.yaml:200:18: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
 context_availability,-,,33,"test.yaml:208:15: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
 context_availability,-,,34,"test.yaml:210:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
@@ -182,9 +182,9 @@ evaluated_template,1,"test.yaml:22:20: object, array, and null values should not
 evaluated_template,2,"test.yaml:22:38: object, array, and null values should not be evaluated in template with ${{ }} but evaluating the value...",-,,MISS
 evaluated_template,3,"test.yaml:22:63: object, array, and null values should not be evaluated in template with ${{ }} but evaluating the value...",-,,MISS
 evaluated_template,4,"test.yaml:24:20: object, array, and null values should not be evaluated in template with ${{ }} but evaluating the value...",-,,MISS
-evaluated_template,-,,1,"test.yaml:22:14: array value in ${{ }} will be converted to string ""[Array]"" [expression]",EXTRA
-evaluated_template,-,,2,"test.yaml:22:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
-evaluated_template,-,,3,"test.yaml:24:14: null value in ${{ }} will be converted to empty string [expression]",EXTRA
+evaluated_template,-,,1,"test.yaml:22:20: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
+evaluated_template,-,,2,"test.yaml:22:63: array value in ${{ }} will be converted to string ""[Array]"" [expression]",EXTRA
+evaluated_template,-,,3,"test.yaml:24:20: null value in ${{ }} will be converted to empty string [expression]",EXTRA
 exclusive_webhook_filters,1,"test.yaml:4:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""merge_group"". note: use ...",-,,MISS
 exclusive_webhook_filters,2,"test.yaml:7:5: both ""paths"" and ""paths-ignore"" filters cannot be used for the same event ""push"". note: use '!' to negate...",-,,MISS
 exclusive_webhook_filters,3,"test.yaml:9:5: both ""branches"" and ""branches-ignore"" filters cannot be used for the same event ""push"". note: use '!' to ...",-,,MISS
@@ -217,15 +217,15 @@ expr_check_in_env_var_name,-,,1,"test.yaml:4:3: workflow.env key '${{ runner.nam
 expr_check_in_env_var_name,-,,2,"test.yaml:14:7: job.env key '${{ runner.fooooooo }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 expr_check_in_env_var_name,-,,3,"test.yaml:18:11: step.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 expr_check_in_matrix_row_assign,1,"test.yaml:12:23: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",-,,MISS
-expr_check_in_matrix_row_assign,-,,1,"test.yaml:12:14: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",EXTRA
+expr_check_in_matrix_row_assign,-,,1,"test.yaml:12:19: receiver of object dereference ""foo"" must be type of object but got ""number"" [expression]",EXTRA
 expr_check_in_services,1,"test.yaml:9:15: ""services"" section is scalar node but mapping node is expected [syntax-check]",-,,MISS
 expr_check_in_services,2,"test.yaml:14:15: type of expression at ""services"" must be object but found type string [expression]",1,"test.yaml:14:15: type of expression at ""services"" must be object but found type string [expression]",MATCH
 expr_in_default_input,1,"test.yaml:7:22: property ""input2"" is not defined in object type {} [expression]",-,,MISS
 expr_in_default_input,2,"test.yaml:15:22: property ""input3"" is not defined in object type {input1: string; input2: string} [expression]",-,,MISS
 expr_in_default_input,3,"test.yaml:19:18: type of input ""input4"" must be bool but found type string [expression]",-,,MISS
 expr_in_default_input,4,"test.yaml:23:18: type of input ""input5"" must be number but found type string [expression]",-,,MISS
-expr_in_default_input,-,,1,"test.yaml:7:18: property 'input2' is not defined in 'inputs' object [expression]",EXTRA
-expr_in_default_input,-,,2,"test.yaml:15:18: property 'input3' is not defined in 'inputs' object [expression]",EXTRA
+expr_in_default_input,-,,1,"test.yaml:7:18: property ""input2"" is not defined in object type {} [expression]",EXTRA
+expr_in_default_input,-,,2,"test.yaml:15:18: property ""input3"" is not defined in object type {input1: string; input2: string} [expression]",EXTRA
 github_script_untrusted_input,1,"test.yaml:11:162: ""github.event.head_commit.author.name"" is potentially untrusted. avoid using it directly in inline scr...",-,,MISS
 github_script_untrusted_input,-,,1,"test.yaml:16:32: ""github.event.head_commit.author.name"" is potentially untrusted. avoid using it directly in inline scri...",EXTRA
 glob_more,1,"test.yaml:6:12: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",-,,MISS
@@ -283,7 +283,7 @@ if_cond_edge_cases_trailing_leading_chars,-,,2,"test.yaml:11:14: if: condition "
 if_cond_edge_cases_trailing_leading_chars,-,,3,"test.yaml:13:14: if: condition "" ${{ false }}"" is always evaluated to true because extra characters are around ${{ }} [i...",EXTRA
 if_cond_edge_cases_trailing_leading_chars,-,,6,"test.yaml:19:14: if: condition ""!${{ true }}"" is always evaluated to true because extra characters are around ${{ }} [if...",EXTRA
 inputs_without_workflow_call_event,1,"test.yaml:7:23: property ""some_input"" is not defined in object type {} [expression]",-,,MISS
-inputs_without_workflow_call_event,-,,1,"test.yaml:7:14: property 'some_input' is not defined in 'inputs' object [expression]",EXTRA
+inputs_without_workflow_call_event,-,,1,"test.yaml:7:19: property ""some_input"" is not defined in object type {} [expression]",EXTRA
 invalid_comparisons,1,"test.yaml:16:24: ""string"" value cannot be compared to ""{}"" value with ""=="" operator [expression]",-,,MISS
 invalid_comparisons,2,"test.yaml:18:24: ""number"" value cannot be compared to ""array<bool>"" value with ""!="" operator [expression]",-,,MISS
 invalid_comparisons,3,"test.yaml:20:24: ""array<bool>"" value cannot be compared to ""array<{}>"" value with ""=="" operator [expression]",-,,MISS
@@ -291,13 +291,13 @@ invalid_comparisons,4,"test.yaml:22:24: ""number"" value cannot be compared to "
 invalid_comparisons,5,"test.yaml:24:24: ""bool"" value cannot be compared to ""bool"" value with ""<"" operator [expression]",-,,MISS
 invalid_comparisons,6,"test.yaml:26:24: ""string"" value cannot be compared to ""{}"" value with "">="" operator [expression]",-,,MISS
 invalid_comparisons,7,"test.yaml:28:24: ""bool"" value cannot be compared to ""array<bool>"" value with ""<="" operator [expression]",-,,MISS
-invalid_comparisons,-,,1,"test.yaml:22:14: number value cannot be compared to null value with '>' operator [expression]",EXTRA
-invalid_comparisons,-,,2,"test.yaml:24:14: bool value cannot be compared to bool value with '<' operator [expression]",EXTRA
+invalid_comparisons,-,,1,"test.yaml:22:20: number value cannot be compared to null value with '>' operator [expression]",EXTRA
+invalid_comparisons,-,,2,"test.yaml:24:20: bool value cannot be compared to bool value with '<' operator [expression]",EXTRA
 invalid_comparisons,-,,3,"test.yaml:28:24: bool value cannot be compared to any value with '<=' operator [syntax-check]",EXTRA
-invalid_comparisons,-,,4,"test.yaml:16:14: string value cannot be compared to object value with '==' operator [expression]",EXTRA
-invalid_comparisons,-,,5,"test.yaml:18:14: number value cannot be compared to array<any> value with '!=' operator [expression]",EXTRA
-invalid_comparisons,-,,6,"test.yaml:26:14: string value cannot be compared to object value with '>=' operator [expression]",EXTRA
-invalid_comparisons,-,,7,"test.yaml:28:14: bool value cannot be compared to array<any> value with '<=' operator [expression]",EXTRA
+invalid_comparisons,-,,4,"test.yaml:16:20: string value cannot be compared to object value with '==' operator [expression]",EXTRA
+invalid_comparisons,-,,5,"test.yaml:18:20: number value cannot be compared to array<any> value with '!=' operator [expression]",EXTRA
+invalid_comparisons,-,,6,"test.yaml:26:20: string value cannot be compared to object value with '>=' operator [expression]",EXTRA
+invalid_comparisons,-,,7,"test.yaml:28:20: bool value cannot be compared to array<any> value with '<=' operator [expression]",EXTRA
 invalid_container_syntax,1,"test.yaml:11:5: ""image"" is missing in ""container"" section [syntax-check]",2,"test.yaml:11:5: ""image"" is missing in ""container"" section [syntax-check]",MATCH
 invalid_container_syntax,2,"test.yaml:11:16: ""container"" section should not be empty. please remove this section if it's unnecessary [syntax-check]",1,"test.yaml:11:16: ""container"" section should not be empty. please remove this section if it's unnecessary [syntax-check]",MATCH
 invalid_container_syntax,3,"test.yaml:16:15: string should not be empty [syntax-check]",3,"test.yaml:16:15: string should not be empty [syntax-check]",MATCH
@@ -394,7 +394,10 @@ invalid_json_in_fromjson,-,,3,"test.yaml:14:28: fromJSON() argument is not valid
 invalid_json_in_fromjson,-,,4,"test.yaml:9:19: null value in ${{ }} will be converted to empty string [expression]",EXTRA
 invalid_json_in_fromjson,-,,5,"test.yaml:10:20: array value in ${{ }} will be converted to string ""[Array]"" [expression]",EXTRA
 invalid_json_in_fromjson,-,,6,"test.yaml:11:21: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
-invalid_json_in_fromjson,-,,7,"test.yaml:24:14: property 'null' is not defined in 'matrix' object [expression]",EXTRA
+invalid_json_in_fromjson,-,,7,"test.yaml:24:19: property ""null"" is not defined in object type {string: string; : null; array: array<any>; object: objec...",EXTRA
+invalid_json_in_fromjson,-,,8,"test.yaml:25:19: array value in ${{ }} will be converted to string ""[Array]"" [expression]",EXTRA
+invalid_json_in_fromjson,-,,9,"test.yaml:26:19: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
+invalid_json_in_fromjson,-,,10,"test.yaml:27:19: array value in ${{ }} will be converted to string ""[Array]"" [expression]",EXTRA
 invalid_permissions,1,"test.yaml:4:13: ""foo"" is invalid as permission of scope ""contents"". available values are ""read"", ""write"", ""none"" [permis...",1,"test.yaml:4:13: ""foo"" is invalid as permission of scope ""contents"". available values are ""read"", ""write"", ""none"" [permis...",MATCH
 invalid_permissions,2,"test.yaml:5:3: unknown permission scope ""unknown"". all available permission scopes are ""actions"", ""artifact-metadata"", ""...",-,,MISS
 invalid_permissions,3,"test.yaml:6:13: ""read"" is invalid as permission of scope ""id-token"". available values are ""write"", ""none"" [permissions]",3,"test.yaml:6:13: ""read"" is invalid as permission of scope ""id-token"". available values are ""write"", ""none"" [permissions]",MATCH
@@ -456,7 +459,7 @@ issue-610_recursive_raw_yaml_value,-,,3,"test.yaml:11:9: recursive alias ""recur
 issue102,1,"test.yaml:8:9: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",-,,MISS
 issue102,-,,1,"test.yaml:8:13: step must run script with ""run"" section or run action with ""uses"" section [syntax-check]",EXTRA
 issue151_child_of_child_job,1,"test.yaml:26:31: property ""first"" is not defined in object type {second: {outputs: {second: string}; result: string}} [e...",-,,MISS
-issue151_child_of_child_job,-,,1,"test.yaml:26:14: property 'first' is not defined in 'needs' object [expression]",EXTRA
+issue151_child_of_child_job,-,,1,"test.yaml:26:20: property ""first"" is not defined in object type {second: object} [expression]",EXTRA
 issue155_env_in_job_level_if,1,"test.yaml:9:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""needs"", ""vars"". see https...",-,,MISS
 issue155_env_in_job_level_if,2,"test.yaml:14:9: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""needs"", ""vars"". see https...",-,,MISS
 issue155_env_in_job_level_if,3,"test.yaml:19:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""needs"", ""vars"". see http...",-,,MISS
@@ -570,7 +573,7 @@ nested_untrusted_input,-,,3,"test.yaml:7:63: ""github.event.issue.title"" is pot
 no_job,1,"test.yaml:3:6: ""jobs"" section should not be empty. please remove this section if it's unnecessary [syntax-check]",-,,MISS
 no_job,-,,1,"test.yaml:3:6: jobs must be mapping [syntax-check]",EXTRA
 object_at_runner_label,1,"test.yaml:10:14: type of expression at ""runs-on"" must be string or array but found type ""{foo: string}"" [expression]",-,,MISS
-object_at_runner_label,-,,1,"test.yaml:10:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
+object_at_runner_label,-,,1,"test.yaml:10:14: type of expression at ""runs-on"" must be string or array but found type ""{foo: any}"" [expression]",EXTRA
 one_error,1,"test.yaml:6:41: ""github.event.head_commit.message"" is potentially untrusted. avoid using it directly in inline scripts. ...",-,,MISS
 one_error,-,,1,"test.yaml:6:41: ""github.event.head_commit.message"" is potentially untrusted. avoid using it directly in inline scripts. ...",EXTRA
 outdated_actions,1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",MATCH
@@ -578,11 +581,11 @@ outdated_actions,2,"test.yaml:10:15: the runner of ""actions/checkout@v3"" actio
 outdated_popular_action,1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",1,"test.yaml:8:15: the runner of ""actions/checkout@v2"" action is too old to run on GitHub Actions. update the action's vers...",MATCH
 outdated_popular_action,2,"test.yaml:10:15: the runner of ""actions/stale@v4"" action is too old to run on GitHub Actions. update the action's versio...",2,"test.yaml:10:15: the runner of ""actions/stale@v4"" action is too old to run on GitHub Actions. update the action's versio...",MATCH
 outputs_map_object,1,"/{string => string}/",-,,MISS
-outputs_map_object,-,,1,"test.yaml:9:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
+outputs_map_object,-,,1,"test.yaml:9:19: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
 outputs_of_action_skipping_inputs_check,1,"test.yaml:16:40: property ""this_output_does_not_exist"" is not defined in object type {data: string; headers: string; sta...",-,,MISS
 outputs_of_action_skipping_inputs_check,-,,1,"test.yaml:7:15: unknown input 'owner' for action 'octokit/request-action@v2.x' [action]",EXTRA
 outputs_of_action_skipping_inputs_check,-,,2,"test.yaml:7:15: unknown input 'repo' for action 'octokit/request-action@v2.x' [action]",EXTRA
-outputs_of_action_skipping_inputs_check,-,,3,"test.yaml:16:15: property 'this_output_does_not_exist' is not defined in 'steps' object [expression]",EXTRA
+outputs_of_action_skipping_inputs_check,-,,3,"test.yaml:16:36: property ""this_output_does_not_exist"" is not defined in object type {data: string; headers: string; sta...",EXTRA
 pyflakes_job_default_shell,1,"/test\.yaml:9:9: pyflakes reported issue in this script: .+ \[pyflakes\]/",-,,MISS
 pyflakes_step_shell,1,"/test\.yaml:7:9: pyflakes reported issue in this script: .+ \[pyflakes\]/",-,,MISS
 pyflakes_step_shell,2,"/test\.yaml:10:9: pyflakes reported issue in this script: .+ \[pyflakes\]/",-,,MISS
@@ -607,9 +610,9 @@ recursive_anchors,-,,7,"test.yaml:11:12: recursive alias ""recursive1"" is found
 recursive_anchors,-,,8,"test.yaml:13:7: recursive alias ""recursive2"" is found [syntax-check]",EXTRA
 recursive_anchors,-,,9,"test.yaml:15:7: recursive alias ""recursive1"" is found [syntax-check]",EXTRA
 reusable_workflow_empty_secrets,1,"/test\.yaml:12:23: property ""calling_workflow_secret"" is not defined in object type {.+} \[expression\]/",-,,MISS
-reusable_workflow_empty_secrets,-,,1,"test.yaml:12:14: property 'CALLING_WORKFLOW_SECRET' is not defined in 'secrets' object [expression]",EXTRA
+reusable_workflow_empty_secrets,-,,1,"test.yaml:12:19: property ""CALLING_WORKFLOW_SECRET"" is not defined in object type {} [expression]",EXTRA
 run_name_check_expr,1,"test.yaml:2:25: undefined variable ""hoge"". available variables are ""env"", ""github"", ""inputs"", ""job"", ""matrix"", ""needs"", ...",-,,MISS
-run_name_check_expr,-,,1,"test.yaml:2:11: context ""hoge"" is not allowed here. undefined context ""hoge"". called in workflow run-name [expression]",EXTRA
+run_name_check_expr,-,,1,"test.yaml:2:21: context ""hoge"" is not allowed here. undefined context ""hoge"". called in workflow run-name [expression]",EXTRA
 runner_labels_conflict_matrix,1,"test.yaml:6:14: label ""windows-latest"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your ...",1,"test.yaml:6:14: label ""windows-latest"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your ...",MATCH
 runner_labels_conflict_matrix,2,"test.yaml:6:30: label ""macos-latest"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your jo...",2,"test.yaml:6:30: label ""macos-latest"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your jo...",MATCH
 runner_labels_conflict_matrix,3,"test.yaml:6:44: label ""windows"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your job on ...",3,"test.yaml:6:44: label ""windows"" conflicts with label ""ubuntu-latest"" defined at line:7,col:15. note: to run your job on ...",MATCH
@@ -658,7 +661,7 @@ special_function_availability,-,,4,"test.yaml:14:13: function ""failure"" is not
 special_function_availability,-,,5,"test.yaml:15:13: function ""hashFiles"" is not allowed here. ""hashFiles"" is only available in step-level expressions. call...",EXTRA
 special_function_availability,-,,6,"test.yaml:17:13: function ""hashFiles"" is not allowed here. ""hashFiles"" is only available in step-level expressions. call...",EXTRA
 special_function_availability,-,,7,"test.yaml:20:9: function ""hashFiles"" is not allowed here. ""hashFiles"" is only available in step-level expressions. calle...",EXTRA
-special_function_availability,-,,8,"test.yaml:23:14: function ""success"" is not allowed here. ""success"" is only available in ""if"" conditions of jobs and step...",EXTRA
+special_function_availability,-,,8,"test.yaml:23:29: function ""success"" is not allowed here. ""success"" is only available in ""if"" conditions of jobs and step...",EXTRA
 strategy_matrix_runner_context,1,"strategy_matrix_runner_context.yaml:7:15: context ""runner"" is not available in strategy expressions",-,,MISS
 strategy_matrix_runner_context,-,,1,"test.yaml:7:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called...",EXTRA
 undefined_anchor,1,"test.yaml:0:0: could not parse as YAML: yaml: unknown anchor 'default_env' referenced [syntax-check]",-,,MISS
@@ -706,8 +709,8 @@ upper_case_duplicate_keys,-,,10,"test.yaml:44:5: reusable workflow call ""owner/
 upper_case_duplicate_keys,-,,11,"test.yaml:18:3: workflow.env key 'foo' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]",EXTRA
 variables_type_check,1,"test.yaml:8:24: receiver of object dereference ""bar"" must be type of object but got ""string"" [expression]",-,,MISS
 variables_type_check,2,"test.yaml:9:20: object, array, and null values should not be evaluated in template with ${{ }} but evaluating the value ...",-,,MISS
-variables_type_check,-,,1,"test.yaml:8:14: receiver of object dereference ""bar"" must be type of object but got ""string"" [expression]",EXTRA
-variables_type_check,-,,2,"test.yaml:9:14: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
+variables_type_check,-,,1,"test.yaml:8:20: receiver of object dereference ""bar"" must be type of object but got ""string"" [expression]",EXTRA
+variables_type_check,-,,2,"test.yaml:9:20: object value in ${{ }} will be converted to string ""[Object]"" [expression]",EXTRA
 workflow_call_event,1,"test.yaml:5:7: ""type"" is missing at ""input0"" input of workflow_call event [syntax-check]",1,"test.yaml:5:7: ""type"" is missing at ""input0"" input of workflow_call event [syntax-check]",MATCH
 workflow_call_event,2,"test.yaml:6:7: ""type"" is missing at ""input1"" input of workflow_call event [syntax-check]",2,"test.yaml:6:7: ""type"" is missing at ""input1"" input of workflow_call event [syntax-check]",MATCH
 workflow_call_event,3,"test.yaml:13:15: invalid value ""unknown"" for input type of workflow_call event. it must be one of ""boolean"", ""number"", o...",-,,MISS
@@ -725,7 +728,7 @@ workflow_call_event,14,"test.yaml:51:23: property ""unknown_input"" is not defin
 workflow_call_event,-,,3,"test.yaml:13:15: on.workflow_call input type 'unknown' is invalid; must be one of boolean, number, string [syntax-check]",EXTRA
 workflow_call_event,-,,4,"test.yaml:16:19: on.workflow_call input required must be bool [syntax-check]",EXTRA
 workflow_call_event,-,,8,"test.yaml:35:14: on.workflow_call input type must be scalar [syntax-check]",EXTRA
-workflow_call_event,-,,12,"test.yaml:51:14: property 'unknown_input' is not defined in 'inputs' object [expression]",EXTRA
+workflow_call_event,-,,12,"test.yaml:51:19: property ""unknown_input"" is not defined in object type {input0: string; input1: string; input2: string;...",EXTRA
 workflow_call_event,-,,13,"test.yaml:26:18: workflow_call input 'input6' has number type but default is not numeric [workflow-call-input-default]",EXTRA
 workflow_call_event,-,,14,"test.yaml:30:18: workflow_call input 'input7' has boolean type but default is not 'true' or 'false' [workflow-call-input...",EXTRA
 workflow_call_inputs,1,"test.yaml:9:18: input ""input_not_ok"" of workflow_call event has the default value ""a"", but it is also required. if an in...",-,,MISS
@@ -754,8 +757,8 @@ workflow_call_job,-,,11,"test.yaml:33:5: reusable workflow call ""foo/workflow.y
 workflow_call_job,-,,12,"test.yaml:36:5: reusable workflow call ""foo/bar/workflow.yml"" at ""uses"" is not following the format ""owner/repo/path/to/...",EXTRA
 workflow_call_outputs_sema,1,"test.yaml:6:20: property ""some_output"" is not defined in object type {} [expression]",-,,MISS
 workflow_call_outputs_sema,2,"test.yaml:9:20: property ""unknown_output"" is not defined in object type {foo: string} [expression]",-,,MISS
-workflow_call_outputs_sema,-,,1,"test.yaml:6:16: property 'some_output' is not defined in 'jobs' object [expression]",EXTRA
-workflow_call_outputs_sema,-,,2,"test.yaml:9:16: property 'unknown_output' is not defined in 'jobs' object [expression]",EXTRA
+workflow_call_outputs_sema,-,,1,"test.yaml:6:16: property ""some_output"" is not defined in object type {} [expression]",EXTRA
+workflow_call_outputs_sema,-,,2,"test.yaml:9:16: property ""unknown_output"" is not defined in object type {foo: string} [expression]",EXTRA
 workflow_call_outputs_syntax,1,"test.yaml:6:7: ""value"" is missing at ""missing-value"" output of workflow_call event [syntax-check]",1,"test.yaml:6:7: ""value"" is missing at ""missing-value"" output of workflow_call event [syntax-check]",MATCH
 workflow_call_outputs_syntax,2,"test.yaml:8:7: ""value"" is missing at ""missing-all"" output of workflow_call event [syntax-check]",2,"test.yaml:8:7: ""value"" is missing at ""missing-all"" output of workflow_call event [syntax-check]",MATCH
 workflow_call_outputs_syntax,3,"test.yaml:12:9: unexpected key ""unknown-section"" for outputs at workflow_call event. expected one of ""description"", ""val...",3,"test.yaml:12:9: unexpected key ""unknown-section"" for outputs at workflow_call event. expected one of ""description"", ""val...",MATCH
@@ -764,7 +767,7 @@ workflow_call_outputs_syntax,5,"test.yaml:21:15: string should not be empty [syn
 workflow_call_outputs_syntax,-,,5,"test.yaml:22:5: string should not be empty [syntax-check]",EXTRA
 workflow_call_required_default,1,"test.yaml:7:18: workflow_call input 'path' has the default value but is also required. if an input is required, its defa...",1,"test.yaml:7:18: workflow_call input 'path' has the default value but is also required. if an input is required, its defa...",MATCH
 workflow_call_secrets,1,"/test\.yaml:14:23: property ""secret1"" is not defined in object type {.*secret0: string.*}/",-,,MISS
-workflow_call_secrets,-,,1,"test.yaml:14:14: property 'secret1' is not defined in 'secrets' object [expression]",EXTRA
+workflow_call_secrets,-,,1,"test.yaml:14:19: property ""secret1"" is not defined in object type {secret0: string} [expression]",EXTRA
 workflow_dispatch_input_types,1,"test.yaml:6:7: input type of ""choice_input_no_options"" is ""choice"" but ""options"" is not set [events]",-,,MISS
 workflow_dispatch_input_types,2,"test.yaml:8:7: input type of ""choice_input_options_is_empty"" is ""choice"" but ""options"" is not set [events]",-,,MISS
 workflow_dispatch_input_types,3,"test.yaml:10:18: ""options"" section should not be empty [syntax-check]",1,"test.yaml:10:18: ""options"" section should not be empty [syntax-check]",MATCH
@@ -810,11 +813,11 @@ workflow_dispatch_type_check_inputs,-,,6,"test.yaml:33:24: ""github.event.*.*"" 
 workflow_dispatch_type_check_inputs,-,,7,"test.yaml:34:24: ""github.event.*.*"" is potentially untrusted. avoid using it directly in inline scripts. instead, pass i...",EXTRA
 workflow_dispatch_type_check_inputs,-,,8,"test.yaml:35:24: ""github.event.*.*"" is potentially untrusted. avoid using it directly in inline scripts. instead, pass i...",EXTRA
 workflow_dispatch_type_check_inputs,-,,9,"test.yaml:37:24: ""github.*"" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it throug...",EXTRA
-workflow_dispatch_type_check_inputs,-,,10,"test.yaml:23:14: property 'select' is not defined in 'inputs' object [expression]",EXTRA
-workflow_dispatch_type_check_inputs,-,,11,"test.yaml:26:14: index of object must be string, but got bool [expression]",EXTRA
-workflow_dispatch_type_check_inputs,-,,12,"test.yaml:33:14: index of array must be number, but got string [expression]",EXTRA
-workflow_dispatch_type_check_inputs,-,,13,"test.yaml:34:14: index of array must be number, but got string [expression]",EXTRA
-workflow_dispatch_type_check_inputs,-,,14,"test.yaml:35:14: index of array must be number, but got string [expression]",EXTRA
-workflow_dispatch_type_check_inputs,-,,15,"test.yaml:37:14: index of object must be string, but got number [expression]",EXTRA
+workflow_dispatch_type_check_inputs,-,,10,"test.yaml:23:20: property ""select"" is not defined in object type {string: string; choice: string; boolean: bool; number:...",EXTRA
+workflow_dispatch_type_check_inputs,-,,11,"test.yaml:26:20: index of object must be string, but got bool [expression]",EXTRA
+workflow_dispatch_type_check_inputs,-,,12,"test.yaml:33:20: index of array must be number, but got string [expression]",EXTRA
+workflow_dispatch_type_check_inputs,-,,13,"test.yaml:34:20: index of array must be number, but got string [expression]",EXTRA
+workflow_dispatch_type_check_inputs,-,,14,"test.yaml:35:20: index of array must be number, but got string [expression]",EXTRA
+workflow_dispatch_type_check_inputs,-,,15,"test.yaml:37:20: index of object must be string, but got number [expression]",EXTRA
 yaml_syntax_error,1,"test.yaml:2:7: could not parse as YAML: block sequence entries are not allowed in this context [syntax-check]",-,,MISS
 yaml_syntax_error,-,,1,"test.yaml:2:8: yaml parse failure: Block sequence entries are not allowed in this context at Line: 2, Col: 7, Idx: 16 [s...",EXTRA

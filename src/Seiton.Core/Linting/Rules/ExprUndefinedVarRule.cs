@@ -147,6 +147,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                     continue;
                 }
 
+                var nodeRange = Arena.GetStringRange(output.Value);
                 var searchStart = 0;
                 while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
                 {
@@ -165,10 +166,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                     }
 
                     // Validate property access against jobs context
+                    var exprLocation = ComputeExpressionLocation(nodeRange, value, bodyStart - 3);
                     var propertyDiagnostics = _propertyDiagnostics;
                     propertyDiagnostics.Clear();
                     ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline(
-                        parseResult, expression, Arena.GetStringRange(output.Value), overrides, propertyDiagnostics);
+                        parseResult, expression, exprLocation, overrides, propertyDiagnostics);
                     for (var d = 0; d < propertyDiagnostics.Count; d++)
                     {
                         var diag = propertyDiagnostics[d];
@@ -449,6 +451,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
+        var nodeRange = Arena.GetStringRange(node);
         var searchStart = 0;
         while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -459,12 +462,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 continue;
             }
 
-            ValidateExpression(expression, context, sinkName, Arena.GetStringRange(node), report, target);
+            var exprLocation = ComputeExpressionLocation(nodeRange, value, bodyStart - 3);
+            ValidateExpression(expression, context, sinkName, exprLocation, report, target);
 
             // Template type check: object/array/null interpolated in ${{ }} outside if conditions
             if (!parseWholeValue)
             {
-                ValidateTemplateType(expression, Arena.GetStringRange(node), context, report, target);
+                ValidateTemplateType(expression, exprLocation, context, sinkName, report, target);
             }
         }
     }
@@ -537,6 +541,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
+        var nodeRange = Arena.GetStringRange(node);
         var searchStart = 0;
         while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -553,7 +558,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 continue;
             }
 
-            var location = Arena.GetStringRange(node);
+            var location = ComputeExpressionLocation(nodeRange, value, bodyStart - 3);
 
             // Context availability check
             VisitExpressionNode(
@@ -699,6 +704,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         ReadOnlySpan<byte> expression,
         TextRange location,
         ExpressionValidationContext context,
+        string sinkName,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
@@ -709,7 +715,12 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         Diagnostic? diag;
-        if (_hasOverrides)
+        if (sinkName is "job.runs-on")
+        {
+            var overrides = _hasOverrides ? _jobScopeOverrides : null;
+            diag = ExpressionSemanticAnalyzer.CheckRunsOnType(parseResult, expression, location, overrides);
+        }
+        else if (_hasOverrides)
         {
             var overrides = Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides;
             diag = ExpressionSemanticAnalyzer.CheckTemplateTypeWithOverrides(parseResult, expression, location, overrides);
@@ -843,6 +854,38 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         bodyLength = closeOffset;
         nextSearchStart = bodyStart + closeOffset + 2;
         return true;
+    }
+
+    /// <summary>
+    /// Computes a per-expression <see cref="TextRange"/> from the YAML node range and the byte offset
+    /// of the <c>$</c> character within the string value. For single-line strings this is a simple
+    /// column addition; for multi-line strings newlines in the prefix are counted.
+    /// </summary>
+    private static TextRange ComputeExpressionLocation(TextRange nodeRange, ReadOnlySpan<byte> value, int dollarOffset)
+    {
+        var line = nodeRange.StartLine;
+        var col = nodeRange.StartColumn;
+
+        for (var i = 0; i < dollarOffset && i < value.Length; i++)
+        {
+            if (value[i] == (byte)'\n')
+            {
+                line++;
+                col = 1;
+            }
+            else
+            {
+                col++;
+            }
+        }
+
+        return new TextRange(
+            nodeRange.Start + dollarOffset,
+            0,
+            line,
+            col,
+            line,
+            col);
     }
 
     private void CheckStrategy(Strategy? strategy, Job job)

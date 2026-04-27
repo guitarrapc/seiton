@@ -802,17 +802,21 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 2.2 | matrix row assign 型チェック | ✅ マトリックス行のスカラー値が `${{ expr }}` の場合、式の型推論を実行。`ValidatePropertyAccessWithOverrides` で非オブジェクト型のプロパティアクセスエラーを検出 | `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs` |
 | 2.3 | action output プロパティ検証 | ✅ `octokit/request-action` をカタログ追加。`this_output_does_not_exist` プロパティエラーを検出。ただし seiton は `owner`/`repo` を未定義 input として報告 (actionlint は input チェックをスキップ) | `targets.json`, `popular_actions.json`, `PopularActions.g.cs` |
 | 2.7 | Docker 固有 input 検証 | ✅ `rhysd/action-setup-vim` をカタログ追加。`entrypoint`/`args` を未定義 input として検出 | `targets.json`, `popular_actions.json`, `PopularActions.g.cs` |
-| 2.1 | evaluated_template 型改善 | ✅ github.event のイベント固有型システム追加。ワイルドカードセマンティクス修正 (`arr.*` → Array 型)。`github.event.commits.*` を array として検出 (3/4)。`steps.cache.outputs` は同一位置の重複排除により1件のみ表示 | `EventPayloadTypes.g.cs`, `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs`, `ExprUndefinedVarRule.cs` |
+| 2.1 | evaluated_template 型改善 | ✅ github.event のイベント固有型システム追加。ワイルドカードセマンティクス修正 (`arr.*` → Array 型)。per-expression 位置追跡により全3式が正しい列位置で報告 (22:20, 22:63, 24:20)。`steps.cache.outputs` の検出は step output 型が loose object のため未対応 | `EventPayloadTypes.g.cs`, `DynamicContextTypeBuilder.cs`, `ExpressionSemanticAnalyzer.cs`, `ExprUndefinedVarRule.cs` |
 | 2.5 | workflow_dispatch inputs 型チェック | ✅ github.event イベント型によりインデックス型チェック改善。`github.event.inputs[...]` の配列インデックス型エラー3件追加検出 | `EventPayloadTypes.g.cs` (push/workflow_dispatch 定義) |
 
 #### 未実施 (設計上の制約)
 
-| # | 項目 | 理由 |
-|---|------|------|
-| 2.1 (残り) | evaluated_template `steps.cache.outputs` | 同一 YAML ノード内の複数 `${{ }}` が同一位置・同一メッセージで重複排除される (DiagnosticIdentity dedup)。per-expression 位置追跡が必要 |
-| 2.6 | fromJSON 型推論 | fromJSON() の戻り値型推論は既に JSON リテラル引数に対して実装済み。非リテラル引数の型推論は未対応 |
-| 2.9 | object_at_runner_label | runs-on コンテキスト固有の型チェック (message style差異)。seiton は template type check で検出、actionlint は runs-on 専用チェック |
-| 2.11 | workflow_call_outputs_sema | メッセージ差異のみ (seiton: `'name' object`, actionlint: `object type {props}`)。検出は正常に動作 |
+なし — フェーズ 2 のすべての項目が実装済み。
+
+#### 追加実装 (フェーズ 2 残り)
+
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 2.1 (残り) | evaluated_template per-expression 位置追跡 | ✅ `CheckNode`/`CheckNodeWithOverrides`/`VisitWorkflowPost` で `${{ }}` ごとに `ComputeExpressionLocation` を使い per-expression TextRange を計算。同一 YAML ノード内の複数式が正しい列位置で報告されるようになった (22:14 → 22:20, 22:63)。DiagnosticIdentity dedup は行 + メッセージのため異なるメッセージの式はすべて出力される | `ExprUndefinedVarRule.cs` |
+| 2.6 | fromJSON matrix include 型推論 | ✅ `BuildMatrixOverride` の include ループで `InferIncludeValueType` を追加。`${{ fromJSON('null') }}` → NullExprType、`${{ fromJSON('["foo", 1.2]') }}` → ArrayExprType 等の型が matrix コンテキストに伝搬。`invalid_json_in_fromjson` の lines 25-27 が新たに検出 (array/object template type check) | `DynamicContextTypeBuilder.cs` |
+| 2.9 | object_at_runner_label runs-on 型チェック | ✅ `CheckRunsOnType` を `ExpressionSemanticAnalyzer` に追加。`ValidateTemplateType` で `sinkName == "job.runs-on"` の場合に runs-on 専用メッセージ (`type of expression at "runs-on" must be string or array but found type "{foo: any}"`) を使用 | `ExpressionSemanticAnalyzer.cs`, `ExprUndefinedVarRule.cs` |
+| 2.11 | workflow_call_outputs_sema メッセージ改善 | ✅ `ValidatePropertyAccessWithOverrides` と `ValidatePropertyAccess` の property-not-defined メッセージを `property "X" is not defined in object type {props}` 形式に変更。`FormatObjectType` で型シグネチャを表示 | `ExpressionSemanticAnalyzer.cs` |
 
 ### フェーズ 3 実装記録
 

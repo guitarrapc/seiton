@@ -4,4 +4,7 @@ test.yaml:14:28: fromJSON() argument is not valid JSON: The input does not conta
 test.yaml:9:19: null value in ${{ }} will be converted to empty string [expression]
 test.yaml:10:20: array value in ${{ }} will be converted to string "[Array]" [expression]
 test.yaml:11:21: object value in ${{ }} will be converted to string "[Object]" [expression]
-test.yaml:24:14: property 'null' is not defined in 'matrix' object [expression]
+test.yaml:24:19: property "null" is not defined in object type {string: string; : null; array: array<any>; object: object; invalid-1: any; invalid-2: any; invalid-3: any} [expression]
+test.yaml:25:19: array value in ${{ }} will be converted to string "[Array]" [expression]
+test.yaml:26:19: object value in ${{ }} will be converted to string "[Object]" [expression]
+test.yaml:27:19: array value in ${{ }} will be converted to string "[Array]" [expression]

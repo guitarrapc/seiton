@@ -1,1 +1,1 @@
-test.yaml:26:14: property 'first' is not defined in 'needs' object [expression]
+test.yaml:26:20: property "first" is not defined in object type {second: object} [expression]

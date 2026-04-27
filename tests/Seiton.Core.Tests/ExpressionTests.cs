@@ -513,7 +513,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'typo_field' is not defined in 'github' object", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"typo_field\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -835,7 +835,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'steps'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -871,7 +871,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_key' is not defined in 'matrix'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_key\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -896,7 +896,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'needs'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -914,7 +914,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_param' is not defined in 'inputs'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_param\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1521,7 +1521,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'disabled' is not defined", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"disabled\" is not defined", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

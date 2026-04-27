@@ -1,1 +1,1 @@
-test.yaml:10:14: object value in ${{ }} will be converted to string "[Object]" [expression]
+test.yaml:10:14: type of expression at "runs-on" must be string or array but found type "{foo: any}" [expression]

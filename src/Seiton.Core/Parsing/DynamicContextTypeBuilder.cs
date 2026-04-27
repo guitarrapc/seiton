@@ -202,6 +202,7 @@ internal static class DynamicContextTypeBuilder
         }
 
         // Also add keys that appear only in include: entries (e.g. 'npm' added via include)
+        // Infer types from include values when possible (e.g. ${{ fromJSON('null') }} → NullExprType)
         if (include is not null)
         {
             for (var i = 0; i < include.Count; i++)
@@ -214,10 +215,10 @@ internal static class DynamicContextTypeBuilder
                     foreach (var pair in entry)
                     {
                         var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
-                        // Don't overwrite existing axes; include-only keys get Any type
+                        // Don't overwrite existing axes; include-only keys get inferred type
                         if (!props.ContainsKey(key))
                         {
-                            props[key] = ExprType.Any;
+                            props[key] = InferIncludeValueType(pair.Value, utf8Yaml, arena);
                         }
                     }
                 }
@@ -308,6 +309,31 @@ internal static class DynamicContextTypeBuilder
             RawYamlString => ExprType.Any,
             RawYamlArray => ExprType.Any,
             RawYamlObject obj => InferRawObjectType(obj, utf8Yaml),
+            _ => ExprType.Any,
+        };
+    }
+
+    /// <summary>
+    /// Infers the type of a matrix include value. For string values containing <c>${{ expr }}</c>,
+    /// parses the expression and infers the return type (e.g. <c>fromJSON('null')</c> → NullExprType).
+    /// Falls back to <see cref="ExprType.Any"/> when inference is not possible.
+    /// </summary>
+    private static ExprType InferIncludeValueType(RawYamlValue value, byte[] utf8Yaml, AstArena? arena)
+    {
+        if (value is RawYamlString str && arena is not null && str.Value.HasValue)
+        {
+            var scalar = arena.GetStringValue(str.Value);
+            var exprType = TryInferExpressionType(scalar);
+            if (exprType is not null)
+            {
+                return exprType;
+            }
+        }
+
+        return value switch
+        {
+            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml),
+            RawYamlArray arr when arr.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(arr.Items[0], utf8Yaml)),
             _ => ExprType.Any,
         };
     }
