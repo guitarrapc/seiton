@@ -308,26 +308,9 @@ public static class ExpressionSemanticAnalyzer
 
         var node = nodes[nodeId];
 
-        if (node.Kind == ExpressionNodeKind.Identifier && IsContextRootIdentifier(nodeId, parentId, nodes))
-        {
-            var rootName = node.Token.AsSpan(expressionUtf8);
-            if (!TryGetBuiltinContextType(rootName, out _))
-            {
-                var rootNameText = Encoding.UTF8.GetString(rootName);
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"undefined context '{rootNameText}'",
-                    expressionLocation));
-            }
-            else if (!Availability.IsRootContextAvailable(context, rootName))
-            {
-                var rootNameText = Encoding.UTF8.GetString(rootName);
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"context '{rootNameText}' is not available in {ToContextText(context)} expressions",
-                    expressionLocation));
-            }
-        }
+        // NOTE: Context availability and undefined-context checks are handled
+        // by the linter (ExprUndefinedVarRule). Checking here would produce
+        // duplicate diagnostics because messages differ and dedup cannot match them.
 
         if (node.Kind == ExpressionNodeKind.FunctionCall)
         {
@@ -408,23 +391,9 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
-        if (!allowStatusCheckFunctions && IsStatusCheckFunction(nameUtf8))
-        {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"status check function '{Encoding.UTF8.GetString(nameUtf8)}()' is only available in 'if' conditions",
-                expressionLocation));
-            return;
-        }
-
-        if (IsHashFilesFunction(nameUtf8) && !Availability.IsStepLevel(context))
-        {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"hashFiles() is not available in {ToContextText(context)} expressions",
-                expressionLocation));
-            return;
-        }
+        // NOTE: Status-check function and hashFiles availability checks are
+        // handled by the linter (ExprUndefinedVarRule). Checking here would
+        // produce duplicate diagnostics.
 
         var argCount = node.ArgCount;
         var countMatches = false;

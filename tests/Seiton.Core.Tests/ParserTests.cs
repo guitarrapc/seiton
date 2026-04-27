@@ -372,8 +372,8 @@ public sealed class ParserTests
               - run: echo ok
         """;
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-env-step-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in workflow expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflow-env-step-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1430,13 +1430,11 @@ public sealed class ParserTests
             return;
         }
 
-        var result = WorkflowParser.Parse(File.ReadAllBytes(path), path);
+        var result = new LintEngine().Check(File.ReadAllBytes(path), path);
         var messages = result.Diagnostics.Select(static d => d.Message).ToArray();
 
-        await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in workflow expressions", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(messages.Any(static m => m.Contains("context 'env' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(messages.Any(static m => m.Contains("context 'steps' is not available in step expressions", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(messages.Any(static m => m.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(messages.Any(static m => m.Contains("\"env\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2283,8 +2281,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-location.yml");
-        var diagnostic = result.Diagnostics.First(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal));
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-location.yml");
+        var diagnostic = result.Diagnostics.First(x => x.Message.Contains("\"env\" is not allowed here", StringComparison.Ordinal));
         var expectedLine = yaml.Split('\n')
             .Select((line, i) => (line, lineNumber: i + 1))
             .First(x => x.line.Contains("${{ env.APPLES }}", StringComparison.Ordinal))
@@ -3138,8 +3136,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3156,8 +3154,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-strategy-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'strategy' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-strategy-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"strategy\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3174,8 +3172,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-matrix-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'matrix' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-matrix-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"matrix\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3192,8 +3190,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-secrets-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job if expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-secrets-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3228,8 +3226,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in step if expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3264,8 +3262,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3286,8 +3284,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-runner-context.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'runner' is not available in strategy expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-runner-context.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runner\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3931,8 +3929,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-env-hashfiles.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflow-env-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3949,8 +3947,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-if-hashfiles.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3970,8 +3968,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-hashfiles.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "strategy-hashfiles.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4025,8 +4023,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-name-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-name-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4042,8 +4040,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-runs-on-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-runs-on-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4060,8 +4058,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-environment-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-environment-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4097,8 +4095,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-continue-on-error-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-continue-on-error-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -4115,8 +4113,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-timeout-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-timeout-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     // regression: environment.url has extended contexts (job, runner, env, steps)
@@ -4158,8 +4156,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-url-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-env-url-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     // regression: container/service env has extended contexts
@@ -4247,8 +4245,8 @@ public sealed class ParserTests
         """
         .Replace("\r\n", "\n");
 
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-run-secrets.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "defaults-run-secrets.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     // regression: fail-fast parse error must have valid position

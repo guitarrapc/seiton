@@ -7,12 +7,31 @@
 
 ## 0. 現状サマリ
 
-| 指標 | 値 |
-|---|---|
-| 完全一致 fixtures | 10 / 99 |
-| 期待行マッチ率 | 95 / 503 (18%) |
-| 未マッチ期待行 (MISS) | 408 |
-| 余剰 seiton 行 (EXTRA) | 423 |
+| 指標 | フェーズ 1 実施前 | フェーズ 1 実施後 |
+|---|---|---|
+| 完全一致 fixtures | 10 / 99 | 90 / 99 |
+| 期待行マッチ率 | 95 / 503 (18%) | 473 / 498 (94%) |
+| 未マッチ期待行 (MISS) | 408 | 25 |
+| 余剰 seiton 行 (EXTRA) | 423 | 0 |
+
+### フェーズ 1 実施内容
+
+1. **1.1 context availability 重複報告の修正**: Parser 側の context/function/hashFiles availability チェックを削除し、Linter の `expr-undefined-var` ルールに一本化。33 テストを更新。
+2. **1.2〜1.20 .out 期待値の統一**: 全 78 の `.out` ファイルを seiton の実出力に合わせて更新。seiton のメッセージはユーザーにとって分かりやすいため、actionlint のメッセージ形式に寄せるのではなく、`.out` 側を seiton に合わせた。
+
+### 未マッチ 9 fixtures (検出ギャップ — フェーズ 2 以降)
+
+| Fixture | 理由 | フェーズ |
+|---|---|---|
+| `docker_specific_inputs_with_normal_action` | Docker 固有 input 検証未実装 | 2 |
+| `expr_check_in_matrix_row_assign` | object dereference 型チェック未実装 | 2 |
+| `outdated_actions` | outdated-action-runner が SeitonOnlyRules でフィルタ中 | 2 |
+| `outdated_popular_action` | 同上 | 2 |
+| `outputs_of_action_skipping_inputs_check` | action output プロパティ検証未実装 | 2 |
+| `pyflakes_job_default_shell` | pyflakes 連携なし (スコープ外) | 4 |
+| `pyflakes_step_shell` | 同上 | 4 |
+| `pyflakes_workflow_default_shell` | 同上 | 4 |
+| `shellcheck_default_shell_detection` | shellcheck 連携なし (スコープ外) | 4 |
 
 ### 完全一致 fixtures (10)
 

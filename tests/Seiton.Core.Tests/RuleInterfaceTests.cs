@@ -11146,7 +11146,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(bothDiags).Count().IsEqualTo(1);
     }
 
-    // C-3: hashFiles function context restriction (parser-level diagnostic)
+    // C-3: hashFiles function context restriction (linter diagnostic)
 
     [Test]
     public async Task LintEngine_HashFilesInWorkflowEnv_ReportsParserDiagnostic()
@@ -11162,7 +11162,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -11178,7 +11178,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -11229,7 +11229,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -11246,6 +11246,6 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """u8;
         var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsFalse();
     }
 }

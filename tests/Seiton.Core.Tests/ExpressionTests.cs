@@ -128,7 +128,7 @@ public sealed class ExpressionTests
             ExpressionValidationContext.JobEnv);
 
         await Assert.That(result.Occurrences.Length).IsEqualTo(1);
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -498,7 +498,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1799,7 +1799,7 @@ public sealed class ExpressionTests
             ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: false);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'success()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'success()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1814,7 +1814,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'failure()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'failure()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1829,7 +1829,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'cancelled()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'cancelled()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1844,7 +1844,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'always()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'always()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -2089,7 +2089,7 @@ public sealed class ExpressionTests
             ExpressionValidationContext.JobIf,
             allowStatusCheckFunctions: true);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -2104,7 +2104,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.Env);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -2119,7 +2119,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.JobStrategy);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -2135,7 +2135,7 @@ public sealed class ExpressionTests
             ExpressionValidationContext.JobIf,
             allowStatusCheckFunctions: true);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
     }
 
     // Expression double-quote delimiter
