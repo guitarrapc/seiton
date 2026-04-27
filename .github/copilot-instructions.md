@@ -27,6 +27,7 @@ When implementing or reviewing, refer to these detailed skills documents for spe
 
 - `architecture/SKILL.md` — design principles and architecture of the parser
 - `performance-requirements/SKILL.md` — performance and memory efficiency requirements for parser implementation
+- `test-first-development/SKILL.md` — mandatory test-first workflow for all implementation, modification, and bug fix tasks
 - `sandbox-code-guidelines/SKILL.md` — guidelines for writing and running sandbox
 - `scripting/SKILL.md` — guidelines for writing and running scripts in the project
 
