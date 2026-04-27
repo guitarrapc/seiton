@@ -73,41 +73,39 @@ context_availability,36,"/test\.yaml:228:35: context ""runner"" is not allowed h
 context_availability,37,"/test\.yaml:228:59: context ""secrets"" is not allowed here\. .+ \[expression\]/",-,,MISS
 context_availability,38,"/test\.yaml:250:25: context ""env"" is not allowed here\. .+ \[expression\]/",-,,MISS
 context_availability,39,"/test\.yaml:252:22: context ""env"" is not allowed here\. .+ \[expression\]/",-,,MISS
-context_availability,-,,1,"test.yaml:225:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
-context_availability,-,,2,"test.yaml:240:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-e...",EXTRA
-context_availability,-,,3,"test.yaml:3:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflow...",EXTRA
-context_availability,-,,4,"test.yaml:10:8: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""secrets"". called ...",EXTRA
-context_availability,-,,5,"test.yaml:15:28: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
-context_availability,-,,6,"test.yaml:25:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
-context_availability,-,,7,"test.yaml:48:32: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
-context_availability,-,,8,"test.yaml:57:19: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,9,"test.yaml:68:16: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,10,"test.yaml:71:24: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
-context_availability,-,,11,"test.yaml:78:28: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,12,"test.yaml:82:14: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
-context_availability,-,,13,"test.yaml:84:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,14,"test.yaml:90:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,15,"test.yaml:93:12: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,16,"test.yaml:96:9: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called in...",EXTRA
-context_availability,-,,17,"test.yaml:99:11: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
-context_availability,-,,18,"test.yaml:106:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,19,"test.yaml:106:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,20,"test.yaml:111:16: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,21,"test.yaml:115:21: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,22,"test.yaml:127:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,23,"test.yaml:134:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,24,"test.yaml:139:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,25,"test.yaml:141:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,26,"test.yaml:143:21: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
-context_availability,-,,27,"test.yaml:146:22: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,28,"test.yaml:160:13: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""st...",EXTRA
-context_availability,-,,29,"test.yaml:183:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,30,"test.yaml:189:17: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,31,"test.yaml:193:36: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
-context_availability,-,,32,"test.yaml:200:18: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,33,"test.yaml:208:15: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,34,"test.yaml:210:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
-context_availability,-,,35,"test.yaml:221:13: context ""inputs"" is not allowed here. no context is available here. called in step id [expression]",EXTRA
+context_availability,-,,1,"test.yaml:3:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflow...",EXTRA
+context_availability,-,,2,"test.yaml:10:8: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""secrets"". called ...",EXTRA
+context_availability,-,,3,"test.yaml:15:28: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
+context_availability,-,,4,"test.yaml:25:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"". called in workflo...",EXTRA
+context_availability,-,,5,"test.yaml:48:32: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,6,"test.yaml:57:19: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,7,"test.yaml:68:16: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,8,"test.yaml:71:24: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,9,"test.yaml:78:28: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,10,"test.yaml:82:14: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strateg...",EXTRA
+context_availability,-,,11,"test.yaml:84:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,12,"test.yaml:90:13: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,13,"test.yaml:93:12: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,14,"test.yaml:96:9: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called in...",EXTRA
+context_availability,-,,15,"test.yaml:99:11: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""stra...",EXTRA
+context_availability,-,,16,"test.yaml:106:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,17,"test.yaml:106:31: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,18,"test.yaml:111:16: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,19,"test.yaml:115:21: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,20,"test.yaml:127:13: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,21,"test.yaml:134:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,22,"test.yaml:139:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,23,"test.yaml:141:18: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,24,"test.yaml:143:21: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"". called ...",EXTRA
+context_availability,-,,25,"test.yaml:146:22: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,26,"test.yaml:160:13: context ""secrets"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""st...",EXTRA
+context_availability,-,,27,"test.yaml:183:19: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,28,"test.yaml:189:17: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,29,"test.yaml:193:36: context ""env"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""strate...",EXTRA
+context_availability,-,,30,"test.yaml:200:18: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,31,"test.yaml:208:15: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,32,"test.yaml:210:14: context ""runner"" is not allowed here. available contexts are ""github"", ""inputs"", ""vars"", ""needs"", ""str...",EXTRA
+context_availability,-,,33,"test.yaml:221:13: context ""inputs"" is not allowed here. no context is available here. called in step id [expression]",EXTRA
 cron_5minutes_limit,1,"test.yaml:6:13: scheduled job runs too frequently. it runs once per 240 seconds. the shortest interval is once every 5 m...",-,,MISS
 cron_5minutes_limit,-,,1,"test.yaml:6:14: scheduled job runs too frequently. it runs once per 240 seconds. the shortest interval is once every 5 m...",EXTRA
 dedup_errors,1,"test.yaml:9:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""i...",1,"test.yaml:9:9: unexpected key ""with"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""i...",MATCH
@@ -217,50 +215,50 @@ github_script_untrusted_input,1,"test.yaml:11:162: ""github.event.head_commit.au
 github_script_untrusted_input,-,,1,"test.yaml:16:32: ""github.event.head_commit.author.name"" is potentially untrusted. avoid using it directly in inline scri...",EXTRA
 glob_more,1,"test.yaml:6:12: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",-,,MISS
 glob_more,2,"test.yaml:7:10: character ' ' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *. see...",-,,MISS
-glob_more,3,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not start with /. see `man git-check-re...",6,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not start with /. see `man git-check-re...",MATCH
+glob_more,3,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not start with /. see `man git-check-re...",5,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not start with /. see `man git-check-re...",MATCH
 glob_more,4,"test.yaml:10:11: character '\' is invalid for branch and tag names. only special characters [, ?, +, *, \, ! can be esca...",-,,MISS
 glob_more,5,"test.yaml:10:14: character '/' is invalid for branch and tag names. ref name must not end with / and .. see `man git-che...",-,,MISS
 glob_more,6,"test.yaml:11:12: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,7,"test.yaml:12:13: invalid glob pattern. unexpected character '0' while checking character range in []. start of range '9'...",-,,MISS
 glob_more,8,"test.yaml:14:8: string should not be empty [syntax-check]",-,,MISS
-glob_more,9,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",10,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
+glob_more,9,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",9,"test.yaml:15:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
 glob_more,10,"test.yaml:17:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",-,,MISS
-glob_more,11,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",13,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",MATCH
-glob_more,12,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",14,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",MATCH
+glob_more,11,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",12,"test.yaml:18:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",MATCH
+glob_more,12,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",13,"test.yaml:19:10: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at h...",MATCH
 glob_more,13,"test.yaml:20:9: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at ht...",-,,MISS
-glob_more,14,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",15,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",MATCH
-glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",16,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",MATCH
-glob_more,16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",-,,MISS
+glob_more,14,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",14,"test.yaml:22:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",MATCH
+glob_more,15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",15,"test.yaml:23:10: '.' and '..' are not allowed in glob path. note: filter pattern syntax is explained at https://docs.git...",MATCH
+glob_more,16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",16,"test.yaml:26:10: invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at...",MATCH
 glob_more,17,"test.yaml:27:13: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,18,"test.yaml:34:20: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",-,,MISS
 glob_more,-,,1,"test.yaml:14:8: on.push.paths must be scalar or sequence of scalar [syntax-check]",EXTRA
-glob_more,-,,2,"test.yaml:32:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-er...",EXTRA
-glob_more,-,,3,"test.yaml:6:10: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",EXTRA
-glob_more,-,,4,"test.yaml:7:1: character ' ' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *. see ...",EXTRA
-glob_more,-,,5,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not end with / and ... see `man git-che...",EXTRA
-glob_more,-,,7,"test.yaml:10:9: character '\' is invalid for branch and tag names. only special characters [, ?, +, *, \, ! can be escap...",EXTRA
-glob_more,-,,8,"test.yaml:11:9: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter p...",EXTRA
-glob_more,-,,9,"test.yaml:12:9: invalid glob pattern. unexpected character '0' while checking character range in []. start of range '9' ...",EXTRA
-glob_more,-,,11,"test.yaml:16:10: invalid glob pattern. '\b' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \, !, +, #...",EXTRA
-glob_more,-,,12,"test.yaml:17:1: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at ht...",EXTRA
-if_cond_constants,1,"test.yaml:8:13: constant expression ""true"" in condition. remove the if: section [if-cond]",2,"test.yaml:8:13: constant expression ""true"" in condition. remove the if: section [if-cond]",MATCH
-if_cond_constants,2,"test.yaml:10:13: constant expression ""false"" in condition. remove the if: section [if-cond]",3,"test.yaml:10:13: constant expression ""false"" in condition. remove the if: section [if-cond]",MATCH
+glob_more,-,,2,"test.yaml:6:10: invalid glob pattern. unexpected character ']' while checking character match []. character match with s...",EXTRA
+glob_more,-,,3,"test.yaml:7:1: character ' ' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *. see ...",EXTRA
+glob_more,-,,4,"test.yaml:10:9: character '/' is invalid for branch and tag names. ref name must not end with / and ... see `man git-che...",EXTRA
+glob_more,-,,6,"test.yaml:10:9: character '\' is invalid for branch and tag names. only special characters [, ?, +, *, \, ! can be escap...",EXTRA
+glob_more,-,,7,"test.yaml:11:9: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter p...",EXTRA
+glob_more,-,,8,"test.yaml:12:9: invalid glob pattern. unexpected character '0' while checking character range in []. start of range '9' ...",EXTRA
+glob_more,-,,10,"test.yaml:16:10: invalid glob pattern. '\b' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \, !, +, #...",EXTRA
+glob_more,-,,11,"test.yaml:17:1: leading and trailing spaces are not allowed in glob path. note: filter pattern syntax is explained at ht...",EXTRA
+glob_more,-,,17,"test.yaml:27:10: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",EXTRA
+glob_more,-,,18,"test.yaml:34:17: invalid glob pattern. unexpected EOF while checking end of character match []. missing ]. note: filter ...",EXTRA
+if_cond_constants,1,"test.yaml:8:13: constant expression ""true"" in condition. remove the if: section [if-cond]",1,"test.yaml:8:13: constant expression ""true"" in condition. remove the if: section [if-cond]",MATCH
+if_cond_constants,2,"test.yaml:10:13: constant expression ""false"" in condition. remove the if: section [if-cond]",2,"test.yaml:10:13: constant expression ""false"" in condition. remove the if: section [if-cond]",MATCH
 if_cond_constants,3,"test.yaml:12:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
 if_cond_constants,4,"test.yaml:14:13: constant expression ""false"" in condition. remove the if: section [if-cond]",-,,MISS
 if_cond_constants,5,"test.yaml:16:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
 if_cond_constants,6,"test.yaml:18:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
 if_cond_constants,7,"test.yaml:21:13: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
-if_cond_constants,8,"test.yaml:23:9: constant expression ""false"" in condition. remove the if: section [if-cond]",9,"test.yaml:23:9: constant expression ""false"" in condition. remove the if: section [if-cond]",MATCH
+if_cond_constants,8,"test.yaml:23:9: constant expression ""false"" in condition. remove the if: section [if-cond]",8,"test.yaml:23:9: constant expression ""false"" in condition. remove the if: section [if-cond]",MATCH
 if_cond_constants,9,"test.yaml:31:11: constant expression ""true"" in condition. remove the if: section [if-cond]",-,,MISS
-if_cond_constants,10,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",10,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",MATCH
-if_cond_constants,11,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",11,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",MATCH
-if_cond_constants,-,,1,"test.yaml:29:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-er...",EXTRA
-if_cond_constants,-,,4,"test.yaml:12:14: constant expression ""true"" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,5,"test.yaml:14:14: constant expression ""false"" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,6,"test.yaml:16:14: constant expression ""true "" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,7,"test.yaml:19:11: constant expression ""true
+if_cond_constants,10,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",9,"test.yaml:38:13: constant expression ""true && 42 || !null"" in condition. remove the if: section [if-cond]",MATCH
+if_cond_constants,11,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",10,"test.yaml:40:13: constant expression ""contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b')"" in condition. remove...",MATCH
+if_cond_constants,-,,3,"test.yaml:12:14: constant expression ""true"" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,4,"test.yaml:14:14: constant expression ""false"" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,5,"test.yaml:16:14: constant expression ""true "" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,6,"test.yaml:19:11: constant expression ""true
 "" in condition. remove the if: section [if-cond]",EXTRA
-if_cond_constants,-,,8,"test.yaml:21:14: constant expression "" true"" in condition. remove the if: section [if-cond]",EXTRA
+if_cond_constants,-,,7,"test.yaml:21:14: constant expression "" true"" in condition. remove the if: section [if-cond]",EXTRA
 if_cond_edge_cases_trailing_leading_chars,1,"test.yaml:8:13: if: condition ""${{ false }}\n"" is always evaluated to true because extra characters are around ${{ }} [i...",-,,MISS
 if_cond_edge_cases_trailing_leading_chars,2,"test.yaml:11:13: if: condition ""${{ false }} "" is always evaluated to true because extra characters are around ${{ }} [i...",-,,MISS
 if_cond_edge_cases_trailing_leading_chars,3,"test.yaml:13:13: if: condition "" ${{ false }}"" is always evaluated to true because extra characters are around ${{ }} [i...",-,,MISS
@@ -358,6 +356,7 @@ invalid_image_version_event,3,"test.yaml:8:5: unexpected key ""entrypoint"" for 
 invalid_image_version_event,-,,1,"test.yaml:4:12: on.image_version.names must be sequence of scalar [syntax-check]",EXTRA
 invalid_image_version_event,-,,2,"test.yaml:6:19: on.image_version.versions must be sequence of scalar [syntax-check]",EXTRA
 invalid_image_version_event,-,,3,"test.yaml:8:5: on.image_version does not support option: entrypoint [syntax-check]",EXTRA
+invalid_image_version_event,-,,4,"test.yaml:6:19: string should not be empty [glob]",EXTRA
 invalid_int_at_max_parallel,1,"test.yaml:7:21: expecting a single ${{...}} expression or integer literal, but found plain text node [syntax-check]",-,,MISS
 invalid_int_at_max_parallel,2,"test.yaml:13:21: expected scalar node for integer value but found scalar node with ""!!float"" tag [syntax-check]",-,,MISS
 invalid_int_at_max_parallel,3,"test.yaml:19:21: expecting a single ${{...}} expression or integer literal, but found plain text node [syntax-check]",-,,MISS
@@ -411,8 +410,10 @@ invalid_snapshot,2,"test.yaml:8:15: undefined variable ""foo"". available variab
 invalid_snapshot,3,"test.yaml:10:16: string should not be empty [syntax-check]",-,,MISS
 invalid_snapshot,4,"test.yaml:12:7: unexpected key ""image-id"" for ""snapshot"" section. expected one of ""if"", ""image-name"", ""version"" [syntax-...",-,,MISS
 invalid_snapshot,5,"test.yaml:20:7: ""snapshot"" section value must be string or mapping but found sequence node [syntax-check]",-,,MISS
-invalid_snapshot,-,,1,"test.yaml:6:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-err...",EXTRA
-invalid_snapshot,-,,2,"test.yaml:19:5: unexpected key ""snapshot"" for ""job"" section. expected one of ""concurrency"", ""container"", ""continue-on-er...",EXTRA
+invalid_snapshot,-,,1,"test.yaml:11:23: job 'test1' snapshot.version must be scalar [syntax-check]",EXTRA
+invalid_snapshot,-,,2,"test.yaml:12:7: unexpected key ""image-id"" for ""job 'test1' snapshot"". expected one of ""version"", ""image-name"", ""if"" [syn...",EXTRA
+invalid_snapshot,-,,3,"test.yaml:20:7: job 'test2' snapshot must be mapping [syntax-check]",EXTRA
+invalid_snapshot,-,,4,"test.yaml:11:23: string should not be empty [glob]",EXTRA
 invalid_steps,1,"test.yaml:8:9: unexpected key ""run"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if"", ...",1,"test.yaml:8:9: unexpected key ""run"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if"", ...",MATCH
 invalid_steps,2,"test.yaml:11:9: unexpected key ""uses"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",2,"test.yaml:11:9: unexpected key ""uses"" for step to run shell command. expected one of ""continue-on-error"", ""env"", ""id"", ""...",MATCH
 invalid_steps,3,"test.yaml:14:9: unexpected key ""shell"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",3,"test.yaml:14:9: unexpected key ""shell"" for step to execute action. expected one of ""continue-on-error"", ""env"", ""id"", ""if...",MATCH

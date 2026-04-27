@@ -1,2 +1,4 @@
-test.yaml:6:5: unexpected key "snapshot" for "job" section. expected one of "concurrency", "container", "continue-on-error", "defaults", "env", "environment", "if", "name", "needs", "outputs", "permissions", "runs-on", "secrets", "services", "snapshot", "steps", "strategy", "timeout-minutes", "uses", "with" [syntax-check]
-test.yaml:19:5: unexpected key "snapshot" for "job" section. expected one of "concurrency", "container", "continue-on-error", "defaults", "env", "environment", "if", "name", "needs", "outputs", "permissions", "runs-on", "secrets", "services", "snapshot", "steps", "strategy", "timeout-minutes", "uses", "with" [syntax-check]
+test.yaml:11:23: job 'test1' snapshot.version must be scalar [syntax-check]
+test.yaml:12:7: unexpected key "image-id" for "job 'test1' snapshot". expected one of "version", "image-name", "if" [syntax-check]
+test.yaml:20:7: job 'test2' snapshot must be mapping [syntax-check]
+test.yaml:11:23: string should not be empty [glob]

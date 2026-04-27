@@ -643,7 +643,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 21 | `expr_check_in_services` | MISSING | 2 | 1 | 1 | 0 | 1 | 0 | | C: 未検出1 |
 | 22 | `expr_in_default_input` | MISSING | 4 | 2 | 0 | 2 | 2 | 0 | | B+C: 列差異2, 未検出2 |
 | 23 | `github_script_untrusted_input` | MIXED | 1 | 1 | 0 | 0 | 1 | 1 | | A+B: 行位置差異 |
-| 24 | `glob_more` | MIXED | 18 | 9 | 2 | 6 | 10 | 1 | | C: 大幅検出不足 (10/18 未検出) |
+| 24 | `glob_more` | MIXED | 18 | 16 | 5 | 7 | 4 | 2 | ✅ | C: error recovery 実装済み (10→4 MISS) |
 | 25 | `if_cond_constants` | MIXED | 11 | 12 | 5 | 4 | 2 | 3 | ✅ | B+C+D: 一致5, 列差異4, 未検出2, 余剰3 (snapshot) |
 | 26 | `if_cond_edge_cases_trailing_leading_chars` | MIXED | 6 | 6 | 2 | 3 | 1 | 1 | ✅ | B+C: 一致2, 列差異3, 未検出1, 余剰1 |
 | 27 | `inputs_without_workflow_call_event` | COL_DIFF | 1 | 1 | 0 | 1 | 0 | 0 | | B: 列差異1 |
@@ -740,7 +740,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 
 | Fixture | Miss | Extra | 主な原因 |
 |---------|------|-------|----------|
-| `glob_more` | 10 | 1 | glob パターン検証不足 (空パターン, `.`/`..`, `!` のみ, `[` 未閉じ) |
+| `glob_more` | ~~10~~→4 | ~~1~~→2 | ✅ error recovery 実装済み。残り: image_version (2), snapshot (1), block scalar (1) |
 | `exclusive_webhook_filters` | 9 | 9 | 報告位置がイベント開始行 vs フィルターキー行 |
 | `context_availability` | 7 | 3 | 一部 context 未検出 + snapshot 余剰 |
 | `issue280_runs_on` | 6 | 8 | 空ラベル・位置差異が大きい |
@@ -764,7 +764,7 @@ actionlint は 1 行のみ出力: `context "xxx" is not allowed here. ...availab
 | 23:10 | `'.'` and `'..'` not allowed in glob path | A: 同上 |
 | 26:10 | `'!'` — must follow ! (`image_version.versions`) | B: 非標準イベント |
 | 27:13 | missing `]` (`image_version.versions`) | B: 同上 |
-| 34:20 | missing `]` (`snapshot.version`) | C: snapshot 非サポート |
+| 34:20 | missing `]` (`jobs.test.snapshot.version`) | C: snapshot 非サポート — job の `snapshot` キーは `IsKnownJobKey` に含まれず、`SkipCurrentNode()` で内部がスキップされるため glob 検証不可 |
 
 **原因 A: paths 配列内の null エントリでパース中断 (8 行)**
 
@@ -794,7 +794,9 @@ paths:
 
 **改善案:** `image_version.versions` の glob 検証を追加。ただし利用頻度が低いため低優先。
 
-**原因 C: `snapshot.version` は snapshot 非サポート (1 行)** — スコープ外として維持。
+**原因 C: `jobs.test.snapshot.version` (1 行)**
+
+`snapshot` は job レベルのキーだが、パーサーの `IsKnownJobKey()` に含まれていないため unknown key として `SkipCurrentNode()` される。内部フィールド (`version: 'v[0-'`) は一切パースされず、glob 検証も到達しない。`ExpectedKeys.JobKeys` には `"snapshot"` が含まれるが、これは expected 一覧表示用で、パース処理は未実装。snapshot 機能は GitHub の限定プレビューのためスコープ外として維持。
 
 ---
 
@@ -1129,3 +1131,16 @@ private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback
 | 3.2 | context availability 重複 | ✅ フェーズ 1.1 で解決済み + 3.3 の ParseIntOrExpression で must be integer 誤報も消滅 | - |
 | 3.3 | invalid_int_at_max_parallel 式誤報 | ✅ `ParseIntOrExpression` 追加。`${{ }}` 式を有効な max-parallel として受理 | `WorkflowParser.ExpressionIntegration.cs`, `WorkflowParser.Strategy.cs`, `AstArena.cs` |
 | 3.4 | deprecated_action_inputs 行位置 | ✅ `AddStepWarning` に `Arena.GetStringRange(pair.Value)` を渡し input 値位置で報告。uses 行 (7:15) → input 値行 (9:25, 10:27) | `PopularActionInputsRule.cs` |
+
+### フェーズ 4.A 実装記録
+
+| # | 項目 | 結果 | 変更ファイル |
+|---|------|------|-------------|
+| 4.A | glob_more error recovery | ✅ `ParseStringOrStringSequence` のシーケンスループで、不正要素検出後 `break` → `continue` に変更。最初のエラーのみ記録し、後続の有効エントリのパースを継続。MISS 10→4 (6行改善)。残り4行: image_version.versions (非標準イベント, 2行), snapshot.version (スコープ外, 1行), block scalar 改行 (1行) | `WorkflowParser.ScalarParsing.cs` |
+
+#### テスト
+
+- **Unit**: `ScalarHelpersTests.ParseStringOrStringSequence_ContinuesAfterEmptyEntry` — 空エントリ後の有効ノード収集を検証
+- **Unit**: `ScalarHelpersTests.ParseStringOrStringSequence_MultipleEmptyEntriesReportFirstError` — 複数空エントリで最初のエラーのみ報告を検証
+- **Integration**: `RuleRegression_GlobPatternRule_Syntax_TableDriven` に `ng-glob-errors-detected-after-null-entry-in-paths` ケース追加 — null エントリ後の `!`, `  foo`, `.` が全て検出されることを検証
+- **Red/Green 確認済み**: 修正 revert 時に 3 テスト失敗、修正適用で全 1017 テスト通過

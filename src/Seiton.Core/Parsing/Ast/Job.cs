@@ -1,5 +1,15 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
+/// <summary>AST node representing a snapshot configuration for a job.</summary>
+public sealed class Snapshot
+{
+    public StringNodeId Version { get; init; }
+
+    public StringNodeId ImageName { get; init; }
+
+    public StringNodeId If { get; init; }
+}
+
 /// <summary>AST node representing a single job in a workflow.</summary>
 public sealed class Job
 {
@@ -38,6 +48,8 @@ public sealed class Job
     public Services? Services { get; init; }
 
     public WorkflowCall? WorkflowCall { get; init; }
+
+    public Snapshot? Snapshot { get; init; }
 
     public TextRange Range { get; init; }
 }

@@ -4034,6 +4034,24 @@ public sealed class RuleInterfaceTests
             """,
             ["at least one character must follow !"]),
             new RuleCase(
+            "ng-glob-errors-detected-after-null-entry-in-paths",
+            """
+            on:
+                push:
+                    paths:
+                        -
+                        - '!'
+                        - '  foo'
+                        - '.'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["at least one character must follow !", "leading and trailing spaces", "'.' and '..' are not allowed"]),
+            new RuleCase(
             "ng-leading-space-in-paths",
             """
             on:
@@ -4117,6 +4135,82 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["ref name must not end with /"]),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_SnapshotVersion_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-unclosed-bracket-in-snapshot-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: my-image
+                        version: 'v[0-'
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "missing ]"]),
+            new RuleCase(
+            "ok-valid-snapshot-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: my-image
+                        version: 'v1.2.3'
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_ImageVersionVersions_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-unclosed-bracket-in-image-version-versions",
+            """
+            on:
+                image_version:
+                    versions:
+                        - 'v[0-'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "missing ]"]),
+            new RuleCase(
+            "ng-lone-bang-in-image-version-versions",
+            """
+            on:
+                image_version:
+                    versions:
+                        - '!'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["at least one character must follow !"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);

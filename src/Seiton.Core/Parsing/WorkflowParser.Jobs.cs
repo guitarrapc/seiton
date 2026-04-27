@@ -26,12 +26,13 @@ public static partial class WorkflowParser
         Services = 16,
         With = 17,
         Secrets = 18,
+        Snapshot = 19,
     }
 
     /// <summary>UTF-8 rows for <see cref="JobNodeMappingKey"/>; ordinal must match enum value and duplicate-tracking bit index.</summary>
     private readonly struct JobNodeKeyTable : IUtf8OrderedKeyTable
     {
-        public static int KeyCount => 19;
+        public static int KeyCount => 20;
 
         public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
         {
@@ -54,6 +55,7 @@ public static partial class WorkflowParser
             16 => "services"u8,
             17 => "with"u8,
             18 => "secrets"u8,
+            19 => "snapshot"u8,
             _ => ReadOnlySpan<byte>.Empty,
         };
     }
@@ -79,6 +81,7 @@ public static partial class WorkflowParser
         JobNodeMappingKey.Services => "services",
         JobNodeMappingKey.With => "with",
         JobNodeMappingKey.Secrets => "secrets",
+        JobNodeMappingKey.Snapshot => "snapshot",
         _ => "job key",
     };
 
@@ -128,6 +131,7 @@ public static partial class WorkflowParser
         Container? containerNode = null;
         Services? servicesNode = null;
         WorkflowCall? workflowCallNode = null;
+        Snapshot? snapshotNode = null;
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -492,6 +496,20 @@ public static partial class WorkflowParser
                         }
 
                         break;
+
+                    case JobNodeMappingKey.Snapshot:
+                        if (stepsOnlyKeyInReusable is null)
+                        {
+                            stepsOnlyKeyInReusable = "snapshot";
+                            stepsOnlyKeyInReusableMark = keyMark;
+                        }
+
+                        if (!reader.End)
+                        {
+                            snapshotNode = ParseSnapshotNode(ref reader, arena, diagnostics, source, jobId);
+                        }
+
+                        break;
                 }
 
                 continue;
@@ -603,6 +621,7 @@ public static partial class WorkflowParser
             Container = containerNode,
             Services = servicesNode,
             WorkflowCall = workflowCallNode,
+            Snapshot = snapshotNode,
             Range = arena.GetStringRange(jobIdNode),
         };
     }
@@ -653,6 +672,141 @@ public static partial class WorkflowParser
             || keyUtf8.SequenceEqual("working-directory"u8)
             || keyUtf8.SequenceEqual("timeout-minutes"u8)
             || keyUtf8.SequenceEqual("continue-on-error"u8);
+    }
+
+    private enum SnapshotMappingKey : byte
+    {
+        Version = 0,
+        ImageName = 1,
+        If = 2,
+    }
+
+    private readonly struct SnapshotKeyTable : IUtf8OrderedKeyTable
+    {
+        public static int KeyCount => 3;
+
+        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
+        {
+            0 => "version"u8,
+            1 => "image-name"u8,
+            2 => "if"u8,
+            _ => ReadOnlySpan<byte>.Empty,
+        };
+    }
+
+    private static string SnapshotDuplicateKeyName(SnapshotMappingKey key) => key switch
+    {
+        SnapshotMappingKey.Version => "version",
+        SnapshotMappingKey.ImageName => "image-name",
+        SnapshotMappingKey.If => "if",
+        _ => "snapshot key",
+    };
+
+    private static Snapshot ParseSnapshotNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        var section = $"job '{DecodeUtf8(source, jobId)}' snapshot";
+
+        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        {
+            AddError(diagnostics, $"{section} must be mapping", reader.CurrentStart);
+            reader.SkipCurrentNode();
+            return new Snapshot();
+        }
+
+        StringNodeId versionNode = default;
+        StringNodeId imageNameNode = default;
+        StringNodeId ifNode = default;
+        ulong seen = 0;
+
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+        {
+            if (reader.CurrentKind != YamlEventKind.Scalar)
+            {
+                AddError(diagnostics, $"{section} key must be scalar", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            var keyMark = reader.CurrentStart;
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, section))
+            {
+                reader.Read();
+                if (!reader.End) reader.SkipCurrentNode();
+                continue;
+            }
+
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<SnapshotKeyTable>(keyUtf8, out var snapOrd))
+            {
+                var snapKey = (SnapshotMappingKey)snapOrd;
+                reader.Read();
+                if (!TrySetBit(ref seen, snapOrd))
+                {
+                    AddError(diagnostics, $"{section} contains duplicate key: {SnapshotDuplicateKeyName(snapKey)}", keyMark);
+                    if (!reader.End) reader.SkipCurrentNode();
+                    continue;
+                }
+
+                switch (snapKey)
+                {
+                    case SnapshotMappingKey.Version:
+                        if (!reader.End)
+                        {
+                            versionNode = ParseString(ref reader, arena, out var vErr, out var vMark);
+                            if (vErr) AddError(diagnostics, $"{section}.version must be scalar", vMark);
+                        }
+
+                        break;
+
+                    case SnapshotMappingKey.ImageName:
+                        if (!reader.End)
+                        {
+                            imageNameNode = ParseString(ref reader, arena, out var inErr, out var inMark);
+                            if (inErr) AddError(diagnostics, $"{section}.image-name must be scalar", inMark);
+                        }
+
+                        break;
+
+                    case SnapshotMappingKey.If:
+                        if (!reader.End)
+                        {
+                            ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobIf, out var ifErr, out var ifMark);
+                            if (ifErr) AddError(diagnostics, $"{section}.if must be scalar", ifMark);
+                        }
+
+                        break;
+                }
+
+                continue;
+            }
+
+            var unknownSnapKey = Encoding.UTF8.GetString(keyUtf8);
+            reader.Read();
+            AddError(diagnostics, $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of \"version\", \"image-name\", \"if\"", keyMark);
+            if (!reader.End)
+            {
+                reader.SkipCurrentNode();
+            }
+        }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new Snapshot
+        {
+            Version = versionNode,
+            ImageName = imageNameNode,
+            If = ifNode,
+        };
     }
 
 

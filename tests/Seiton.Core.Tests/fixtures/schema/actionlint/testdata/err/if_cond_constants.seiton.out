@@ -1,4 +1,3 @@
-test.yaml:29:5: unexpected key "snapshot" for "job" section. expected one of "concurrency", "container", "continue-on-error", "defaults", "env", "environment", "if", "name", "needs", "outputs", "permissions", "runs-on", "secrets", "services", "snapshot", "steps", "strategy", "timeout-minutes", "uses", "with" [syntax-check]
 test.yaml:8:13: constant expression "true" in condition. remove the if: section [if-cond]
 test.yaml:10:13: constant expression "false" in condition. remove the if: section [if-cond]
 test.yaml:12:14: constant expression "true" in condition. remove the if: section [if-cond]

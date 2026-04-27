@@ -131,6 +131,57 @@ public sealed class ScalarHelpersTests
     }
 
     [Test]
+    public async Task ParseStringOrStringSequence_Sequence_ContinuesAfterEmptyEntry()
+    {
+        // Sequence: ["", "a", "b"] with allowElemEmpty=false
+        // The empty entry (offset=0, length=0) should produce an error,
+        // but "a" and "b" must still be parsed and returned.
+        var source = "ab"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
+        {
+            Event(YamlEventKind.SequenceStart),
+            Scalar(0, 0, ScalarTag.Str),  // empty entry → error
+            Scalar(0, 1, ScalarTag.Str),  // "a"
+            Scalar(1, 1, ScalarTag.Str),  // "b"
+            Event(YamlEventKind.SequenceEnd),
+        });
+        var diagnostics = new List<Diagnostic>();
+
+        var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, arena, diagnostics, "expected sequence");
+
+        // Error recovery: valid entries after the empty one must be collected
+        await Assert.That(nodes.Length).IsEqualTo(2);
+        await Assert.That(diagnostics.Count).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).IsEqualTo("expected sequence");
+    }
+
+    [Test]
+    public async Task ParseStringOrStringSequence_Sequence_MultipleEmptyEntriesReportFirstError()
+    {
+        // Sequence: ["", "", "a"] with allowElemEmpty=false
+        // Two empty entries should produce one error (first only), "a" is still parsed.
+        var source = "a"u8.ToArray();
+        var arena = new AstArena(source);
+        var reader = CreateReader(source, new[]
+        {
+            Event(YamlEventKind.SequenceStart),
+            Scalar(0, 0, ScalarTag.Str),  // first empty → error
+            Scalar(0, 0, ScalarTag.Str),  // second empty → skipped (already errored)
+            Scalar(0, 1, ScalarTag.Str),  // "a"
+            Event(YamlEventKind.SequenceEnd),
+        });
+        var diagnostics = new List<Diagnostic>();
+
+        var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, arena, diagnostics, "expected sequence");
+
+        // Only one error should be reported
+        await Assert.That(diagnostics.Count).IsEqualTo(1);
+        // Valid entry after errors must be collected
+        await Assert.That(nodes.Length).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task ParseBool_WrongTag_ReportsError()
     {
         var source = "not-bool"u8.ToArray();
