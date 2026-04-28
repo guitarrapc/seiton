@@ -299,7 +299,7 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Environment:
                         if (!reader.End)
                         {
-                            environmentNode = ParseEnvironmentNode(ref reader, arena, diagnostics, source, jobId);
+                            environmentNode = ParseEnvironmentNode(ref reader, arena, diagnostics, source, jobId, keyMark);
                         }
 
                         break;
@@ -887,7 +887,7 @@ public static partial class WorkflowParser
         }
 
         var fbSeqMark = reader.CurrentStart;
-        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark);
+        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true);
         if (lblFbErr)
         {
             if (labelsFallback.Length > 0)
@@ -906,7 +906,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Seiton.Core.Parsing.Ast.Environment? ParseEnvironmentNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Seiton.Core.Parsing.Ast.Environment? ParseEnvironmentNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition environmentKeyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -1002,7 +1002,7 @@ public static partial class WorkflowParser
         // spec §3.14 / §12: environment mapping form requires `name`
         if (!nameNode.HasValue)
         {
-            AddError(diagnostics, "name is missing in \"environment\" section", mappingMark);
+            AddError(diagnostics, "name is missing in \"environment\" section", environmentKeyMark);
             return default;
         }
 

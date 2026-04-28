@@ -1,3 +1,4 @@
 test.yaml:22:20: object value in ${{ }} will be converted to string "[Object]" [expression]
+test.yaml:22:38: {cache-hit: string} value in ${{ }} will be converted to string "[Object]" [expression]
 test.yaml:22:63: array value in ${{ }} will be converted to string "[Array]" [expression]
 test.yaml:24:20: null value in ${{ }} will be converted to empty string [expression]

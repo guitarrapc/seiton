@@ -148,9 +148,9 @@ public static class ExpressionSemanticAnalyzer
     {
         return type switch
         {
-            ObjectExprType => new Diagnostic(
+            ObjectExprType objType => new Diagnostic(
                 DiagnosticSeverity.Warning,
-                "object value in ${{ }} will be converted to string \"[Object]\"",
+                FormatObjectTemplateMessage(objType),
                 expressionLocation),
             ArrayExprType => new Diagnostic(
                 DiagnosticSeverity.Warning,
@@ -162,6 +162,23 @@ public static class ExpressionSemanticAnalyzer
                 expressionLocation),
             _ => null,
         };
+    }
+
+    private static string FormatObjectTemplateMessage(ObjectExprType objType)
+    {
+        // Strict object with known properties only (no dynamic fallback): show property-level type
+        if (objType.Properties is { Count: > 0 } && objType.DynamicPropertyType is null)
+        {
+            return $"{FormatObjectType(objType)} value in ${{{{ }}}} will be converted to string \"[Object]\"";
+        }
+
+        // Object with non-Any dynamic property type: show map-style type {string => <type>}
+        if (objType.DynamicPropertyType is not null and not AnyExprType)
+        {
+            return $"{{string => {objType.DynamicPropertyType.TypeName}}} value in ${{{{ }}}} will be converted to string \"[Object]\"";
+        }
+
+        return "object value in ${{ }} will be converted to string \"[Object]\"";
     }
 
     /// <summary>

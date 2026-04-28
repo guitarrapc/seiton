@@ -7451,7 +7451,7 @@ public sealed class RuleInterfaceTests
                             VAL: ${{ fromJson('{"a":1}') }}
                           run: echo "$VAL"
             """,
-            ["object value in ${{ }}"]),
+            ["{a: number} value in ${{ }}"]),
             new RuleCase(
             "ng-step-env-null-in-template",
             """
@@ -7563,7 +7563,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ matrix.obj }}
             """,
-            ["object value in ${{ }}"]),
+            ["{a: number; b: number} value in ${{ }}"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

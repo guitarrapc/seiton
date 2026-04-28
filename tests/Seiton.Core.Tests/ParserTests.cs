@@ -1776,7 +1776,7 @@ public sealed class ParserTests
                      FOO: BAR
               - run: env
         """);
-            
+
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
@@ -2701,7 +2701,7 @@ public sealed class ParserTests
               - null
 
         """);
-            
+
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-step.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("element of \"steps\" section should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
@@ -3157,7 +3157,7 @@ public sealed class ParserTests
               - run: echo
                 with
                   bad: yaml
-            
+
         """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "broken.yml");
         await Assert.That(result.HasFatalError).IsTrue();
@@ -4135,7 +4135,7 @@ public sealed class ParserTests
             steps:
               - run: foo:
         """u8;
-            
+
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         await Assert.That(result.HasFatalError).IsTrue();
         var diag = result.Diagnostics[0];
@@ -5114,7 +5114,7 @@ public sealed class ParserTests
             steps:
 
         """);
-            
+
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).Contains("scalar node");
@@ -5654,5 +5654,109 @@ public sealed class ParserTests
         await Assert.That(secretErr.Message).IsNotNull();
         // Object type should include GITHUB_TOKEN (not be empty {})
         await Assert.That(secretErr.Message).Contains("GITHUB_TOKEN");
+    }
+
+    // L1: empty label in runs-on should be reported as unknown by runner-label rule
+    [Test]
+    public async Task Lint_RunsOnEmptyLabel_ReportsUnknownLabel()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ''\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
+        await Assert.That(labelErr.Message).IsNotNull();
+    }
+
+    // L1: empty label in runs-on array should be reported as unknown by runner-label rule
+    [Test]
+    public async Task Lint_RunsOnEmptyLabelInArray_ReportsUnknownLabel()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ['x64', '']\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
+        await Assert.That(labelErr.Message).IsNotNull();
+    }
+
+    // L3: environment.name missing should report at the environment key position, not inside mapping
+    [Test]
+    public async Task Parse_EnvironmentMissingName_PositionAtEnvironmentKey()
+    {
+        // line 4: `    environment:`, line 5: `      url: https://example.com`
+        var yaml = "on: push\njobs:\n  test:\n    environment:\n      url: https://example.com\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("name is missing in \"environment\" section"));
+        await Assert.That(diag.Message).IsNotNull();
+        // Should point to line 4 (environment: key), not line 5 (url: inside the mapping)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+    }
+
+    // L2: typed step output should include property names in object template diagnostic
+    [Test]
+    public async Task Lint_StepOutputTypedObject_MessageIncludesTypeName()
+    {
+        // actions/cache@v4 has known output "cache-hit", so steps.cache.outputs should resolve
+        // to {cache-hit: string} and the diagnostic message should include this type
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/cache@v4
+                id: cache
+                with:
+                  key: foo
+                  path: bar
+              - run: echo "${{ steps.cache.outputs }}"
+        """);
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        var objDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cache-hit") && d.Message.Contains("[Object]"));
+        await Assert.That(objDiag.Message).IsNotNull().Because($"Expected typed object diagnostic with 'cache-hit', got:\n{string.Join("\n", allDiags)}");
+    }
+
+    // L2: step outputs for unknown/local actions should show {string => string} map type
+    [Test]
+    public async Task Lint_StepOutputLooseMap_MessageIncludesMapType()
+    {
+        // steps.foo.outputs for a run step (no uses) should resolve to {string => string} map type
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - id: foo
+                run: echo "test=1" >> "$GITHUB_OUTPUT"
+              - run: echo "${{ steps.foo.outputs }}"
+        """);
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        var objDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("{string => string}") && d.Message.Contains("[Object]"));
+        await Assert.That(objDiag.Message).IsNotNull().Because($"Expected map-typed object diagnostic with '{{string => string}}', got:\n{string.Join("\n", allDiags)}");
+    }
+
+    // L2: two different object types on same line should not be deduped
+    [Test]
+    public async Task Lint_TwoObjectTypesOnSameLine_BothReported()
+    {
+        // github.event is a loose object, steps.cache.outputs is typed {cache-hit: string}
+        // Both should produce distinct diagnostics even on the same line
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/cache@v4
+                id: cache
+                with:
+                  key: foo
+                  path: bar
+              - run: echo "${{ github.event }} ${{ steps.cache.outputs }}"
+        """);
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var objDiags = result.Diagnostics.Where(d => d.Message.Contains("[Object]")).ToList();
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        await Assert.That(objDiags.Count).IsGreaterThanOrEqualTo(2).Because($"Expected 2 object diagnostics on same line, got:\n{string.Join("\n", allDiags)}");
     }
 }
