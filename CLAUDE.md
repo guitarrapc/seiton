@@ -7,7 +7,7 @@ Seiton is a C# tool that parses and lints GitHub Actions documents (workflow fil
 - **Parser**: Converts UTF-8 YAML into a typed AST and returns parser diagnostics.
 - **Linter**: Runs rules against the parsed AST and aggregates lint diagnostics.
 
-Target documents: `.github/workflows/*.yml`, `action.yml` / `action.yaml`.
+Target documents: `.github/workflows/*.yml` / `.github/workflows/*.yaml`, `action.yml` / `action.yaml`.
 
 ## Project Structure
 
