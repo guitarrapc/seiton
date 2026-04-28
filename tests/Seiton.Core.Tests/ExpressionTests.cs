@@ -1043,6 +1043,39 @@ public sealed class ExpressionTests
     }
 
     [Test]
+    public async Task ParseAndValidate_CompareBoolLessThanAny_NoDiagnostic()
+    {
+        // Per §7.4: when either operand resolves to Any, no error is emitted.
+        // Bool is not-comparable type, but the other side being Any means we lack sufficient info.
+        var expression = "false <= github.event.value"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_CompareNullGreaterThanAny_NoDiagnostic()
+    {
+        // null is not-comparable type, but the other side is Any → skip per §7.4
+        var expression = "null > github.event.value"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task ParseAndValidate_EqualityBoolOperands_NoDiagnostic()
     {
         // == and != are not comparison operators — they should not produce type errors
