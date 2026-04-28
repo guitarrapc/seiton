@@ -148,6 +148,7 @@ public interface IYamlStreamReader
     string? GetScalarString();       // for diagnostics / fallback only
     ScalarTag GetScalarTag();        // !!str, !!bool, !!int, !!float, !!null
     bool IsScalarQuoted();           // single/double quoted
+    bool IsExplicitNull();           // true for `null`/`~` literal, false for implicit empty (`key:`)
 
     // --- Position information ---
     TextPosition CurrentStart { get; }   // line, column, byte offset

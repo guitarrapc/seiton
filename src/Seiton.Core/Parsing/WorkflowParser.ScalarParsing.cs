@@ -111,7 +111,7 @@ public static partial class WorkflowParser
         return nodes;
     }
 
-    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -160,7 +160,7 @@ public static partial class WorkflowParser
                     if (allowElemEmpty && arena.GetStringValue(node).Length == 0)
                     {
                         var range = arena.GetStringRange(node);
-                        AddError(diagnostics, "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                        AddError(diagnostics, emptyElementMessage ?? "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
                     }
                     list.Add(node);
                 }

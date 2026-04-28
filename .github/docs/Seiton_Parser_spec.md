@@ -661,7 +661,11 @@ ParseMatrix(node):
 
 ```
 ParseContainer(section, node):
-  if Scalar -> Image = parseString
+  if Scalar:
+    if NullTag:
+      if explicitNull (source contains "null" or "~") -> return nil (no error)
+      else (implicit empty, e.g. `container:`) -> error "image should not be empty"
+    else -> Image = parseString
   if Mapping:
     "image"       -> parseString (required)
     "credentials" -> ParseCredentials
@@ -1065,6 +1069,74 @@ Key parser-relevant contract points (see `Seiton_Update_spec.md` for full detail
 | Exclusive constraint violation | Position of the causative key |
 | Duplicate key | Position of the 2nd key |
 | Expression error | Offset within expression mapped to source position |
+
+### 10.3 Message Format Convention
+
+Diagnostic messages follow these principles so that users can immediately identify **where** and **what** went wrong.
+
+#### Principle 1: Messages include section context
+
+Every message must convey "where (section/field) + what (problem)" in one line. Generic messages that lack location context (e.g., bare `string should not be empty`) are prohibited.
+
+| Bad | Good |
+|---|---|
+| `string should not be empty` | `"runs-on" label should not be empty` |
+| `string should not be empty` | `"container" image should not be empty` |
+
+#### Principle 2: Use section.field path for nested contexts
+
+For values inside a named section, use dotted path or quoted section name + description:
+
+- `on.workflow_call input "foo" is missing "type"`
+- `"container" ports element should not be empty`
+
+#### Principle 3: Missing-key messages use subject-first word order
+
+When a required key is missing, the section/subject comes first so users immediately know where to look:
+
+| Bad | Good |
+|---|---|
+| `group name is missing in "concurrency" section` | `"concurrency" section is missing group name` |
+| `"type" is missing at "foo" input of workflow_call event` | `on.workflow_call input "foo" is missing "type"` |
+
+#### Principle 4: `on` sub-sections include `on.` path prefix
+
+Events parsed under `on:` must use `on.{eventName}` as the section path:
+
+- `on.workflow_call input "foo" is missing "type"`
+- `on.workflow_call output "bar" is missing "value"`
+- `on.workflow_dispatch input "baz" option should not be empty`
+
+#### Normative empty-value message table
+
+These replace the former generic `"string should not be empty"` message:
+
+| Context | Message |
+|---|---|
+| `runs-on` scalar / label element | `"runs-on" label should not be empty` |
+| `runs-on.group` | `"runs-on" group should not be empty` |
+| `runs-on.labels` element | `"runs-on" label should not be empty` |
+| `container` scalar image | `"container" image should not be empty` |
+| `container.image` mapping key | `"container" image should not be empty` |
+| `container.ports` element | `"container" ports element should not be empty` |
+| `container.volumes` element | `"container" volumes element should not be empty` |
+| `services.{name}` image | `"{name}" service image should not be empty` |
+| step `id` | `step id should not be empty` |
+| webhook filter element | `"{filterName}" filter value should not be empty` |
+| `workflow_call` output value | `on.workflow_call output "{name}" value should not be empty` |
+| `workflow_dispatch` option element | `on.workflow_dispatch input "{name}" option should not be empty` |
+| glob pattern (linter) | `glob pattern should not be empty` |
+| job ID (linter) | `job ID should not be empty` |
+| step ID (linter) | `step ID should not be empty` |
+| `snapshot.version` | `"snapshot" version should not be empty` |
+
+#### Normative missing-key message table
+
+| Context | Message |
+|---|---|
+| `workflow_call` input missing type | `on.workflow_call input "{name}" is missing "type"` |
+| `workflow_call` output missing value | `on.workflow_call output "{name}" is missing "value"` |
+| `concurrency` missing group | `"concurrency" section is missing group name` |
 
 ---
 

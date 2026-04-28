@@ -270,7 +270,7 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null)
+    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -299,7 +299,7 @@ public static partial class WorkflowParser
                     if (!allowElemEmpty && arena.GetStringValue(node).Length == 0)
                     {
                         var range = arena.GetStringRange(node);
-                        AddError(diagnostics, "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                        AddError(diagnostics, emptyElementMessage ?? "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
                     }
                     list.Add(node);
                 }

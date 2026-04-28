@@ -208,7 +208,7 @@ public static partial class WorkflowParser
                             if (idErr)
                             {
                                 var idMsg = idNode.HasValue
-                                    ? "string should not be empty"
+                                    ? "step id should not be empty"
                                     : $"job '{DecodeUtf8(source, jobId)}' step[{stepIndex}] id must be string";
                                 AddError(diagnostics, idMsg, idMark);
                             }

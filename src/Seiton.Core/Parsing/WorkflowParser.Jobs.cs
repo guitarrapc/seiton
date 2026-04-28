@@ -796,7 +796,7 @@ public static partial class WorkflowParser
                                         if (lblErr1)
                                         {
                                             if (labels.Length > 0)
-                                                AddError(diagnostics, "string should not be empty", lblMark1);
+                                                AddError(diagnostics, "\"runs-on\" label should not be empty", lblMark1);
                                             else
                                                 AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark1);
                                         }
@@ -805,13 +805,10 @@ public static partial class WorkflowParser
                                 else
                                 {
                                     var lblSeqMark = reader.CurrentStart;
-                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2);
+                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2, allowElemEmpty: true, emptyElementMessage: "\"runs-on\" label should not be empty");
                                     if (lblErr2)
                                     {
-                                        if (labels.Length > 0)
-                                            AddError(diagnostics, "string should not be empty", lblMark2);
-                                        else
-                                            AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark2);
+                                        AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark2);
                                     }
                                     else if (labels.Length == 0)
                                     {
@@ -832,7 +829,7 @@ public static partial class WorkflowParser
                             }
                             else if (!reader.End && reader.GetScalarUtf8().Length == 0)
                             {
-                                AddError(diagnostics, "string should not be empty", reader.CurrentStart);
+                                AddError(diagnostics, "\"runs-on\" group should not be empty", reader.CurrentStart);
                                 reader.Read();
                             }
                             else
@@ -887,11 +884,12 @@ public static partial class WorkflowParser
         }
 
         var fbSeqMark = reader.CurrentStart;
-        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true);
+        var fbWasScalar = reader.CurrentKind == YamlEventKind.Scalar;
+        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true, emptyElementMessage: "\"runs-on\" label should not be empty");
         if (lblFbErr)
         {
-            if (labelsFallback.Length > 0)
-                AddError(diagnostics, "string should not be empty", lblFbMark);
+            if (fbWasScalar)
+                AddError(diagnostics, "\"runs-on\" label should not be empty", lblFbMark);
             else
                 AddError(diagnostics, $"{section} must be string, sequence, or mapping", lblFbMark);
         }

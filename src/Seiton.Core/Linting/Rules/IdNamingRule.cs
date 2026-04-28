@@ -58,7 +58,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 
         var idText = Decode(Arena.GetStringSlice(idNode));
         var message = value.Length == 0
-            ? "string should not be empty"
+            ? $"{kind} should not be empty"
             : $"invalid {kind} \"{idText}\". {kind} must start with a letter or _ and contain only alphanumeric characters, -, or _";
 
         if (_currentJob is not null)

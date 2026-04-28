@@ -125,13 +125,14 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            // container: null (explicit) is valid YAML meaning "no container" — skip without error.
-            // container:       (implicit empty) is invalid — report error.
+            // container: null / container: ~ (explicit null) → valid, means "no container".
+            // container:                     (implicit empty)  → invalid, report error.
             if (reader.GetScalarTag() == ScalarTag.Null)
             {
-                if (reader.GetScalarUtf8().Length == 0)
+                if (!reader.IsExplicitNull())
                 {
-                    AddError(diagnostics, "string should not be empty", reader.CurrentStart);
+                    var emptyContainerName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
+                    AddError(diagnostics, $"{emptyContainerName} image should not be empty", reader.CurrentStart);
                 }
                 reader.Read();
                 return default;
@@ -141,7 +142,10 @@ public static partial class WorkflowParser
             if (ctrErr)
             {
                 if (scalarImage.HasValue)
-                    AddError(diagnostics, "string should not be empty", ctrMark);
+                {
+                    var emptyContainerName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
+                    AddError(diagnostics, $"{emptyContainerName} image should not be empty", ctrMark);
+                }
                 else
                     AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", ctrMark);
             }
@@ -233,7 +237,10 @@ public static partial class WorkflowParser
                         if (imgErr)
                         {
                             if (image.HasValue)
-                                AddError(diagnostics, "string should not be empty", imgMark);
+                            {
+                                var emptyImgName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
+                                AddError(diagnostics, $"{emptyImgName} image should not be empty", imgMark);
+                            }
                             else
                                 AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", imgMark);
                         }
@@ -263,16 +270,19 @@ public static partial class WorkflowParser
                         }
                         else
                         {
-                            var pvSeqMark = reader.CurrentStart;
-                            var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark);
+                            var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark, allowElemEmpty: true, emptyElementMessage: $"\"container\" {pvKey} element should not be empty");
                             if (pvErr)
                             {
-                                AddError(diagnostics, "string should not be empty", pvMark);
+                                AddError(diagnostics, $"\"container\" {pvKey} element must be a string", pvMark);
                             }
-                            if (ck == ContainerMappingKey.Ports)
-                                ports = pvValues;
-                            else
-                                volumes = pvValues;
+                                if (ck == ContainerMappingKey.Ports)
+                                {
+                                    ports = pvValues;
+                                }
+                                else
+                                {
+                                    volumes = pvValues;
+                                }
                         }
                         continue;
                     }
