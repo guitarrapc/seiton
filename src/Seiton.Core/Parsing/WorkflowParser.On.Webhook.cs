@@ -1,4 +1,4 @@
-// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
+﻿// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
 
 using System.Text;
 using Seiton.Core.Generated;
@@ -270,7 +270,7 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -285,15 +285,22 @@ public static partial class WorkflowParser
             return [];
         }
 
+        var seqMark = reader.CurrentStart;
         var list = new PooledBuffer<StringNodeId>(4);
         try
         {
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                var node = ParseString(ref reader, arena, diagnostics, errorMessage, allowElemEmpty);
+                // Always accept empty elements for AST collection; emit specific error below.
+                var node = ParseString(ref reader, arena, diagnostics, errorMessage, allowEmpty: true);
                 if (node.HasValue)
                 {
+                    if (!allowElemEmpty && arena.GetStringValue(node).Length == 0)
+                    {
+                        var range = arena.GetStringRange(node);
+                        AddError(diagnostics, "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                    }
                     list.Add(node);
                 }
             }
@@ -305,7 +312,7 @@ public static partial class WorkflowParser
 
             if (!allowEmpty && list.Count == 0)
             {
-                AddError(diagnostics, errorMessage, reader.CurrentStart);
+                AddError(diagnostics, emptyMessage ?? errorMessage, seqMark);
             }
 
             return list.ToArray();

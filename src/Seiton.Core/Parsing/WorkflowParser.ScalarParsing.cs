@@ -85,6 +85,7 @@ public static partial class WorkflowParser
         // YAML adapters (e.g. VYaml) may have already advanced past the scalar to the next token.
         // For empty scalars, CurrentStart uses a backward-scan heuristic that is more accurate than
         // the cursor-based Slice.Offset GetScalarSlice() returns for the empty case.
+        var isQuoted = reader.IsScalarQuoted();
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var mark = valueUtf8.Length > 0
@@ -96,7 +97,7 @@ public static partial class WorkflowParser
             errorMark = mark;
         }
 
-        var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
+        var node = arena.AddString(slice, isQuoted, BuildScalarLocation(mark, valueUtf8.Length));
 
         reader.Read();
         return node;
@@ -155,6 +156,12 @@ public static partial class WorkflowParser
                 }
                 if (node.HasValue)
                 {
+                    // Even when empty elements are allowed for AST collection, report them as errors.
+                    if (allowElemEmpty && arena.GetStringValue(node).Length == 0)
+                    {
+                        var range = arena.GetStringRange(node);
+                        AddError(diagnostics, "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                    }
                     list.Add(node);
                 }
             }

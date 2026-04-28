@@ -114,7 +114,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         }
 
         // Leading/trailing spaces (path filters)
-        if (kind == FilterKind.Path && (pattern[0] == (byte)' ' || pattern[^1] == (byte)' '))
+        if (kind == FilterKind.Path && (IsGlobWhitespace(pattern[0]) || IsGlobWhitespace(pattern[^1])))
         {
             reportError(
                 $"leading and trailing spaces are not allowed in glob path{FilterPatternNote}",
@@ -282,6 +282,14 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             || b == (byte)'~'
             || b == (byte)':'
             || b == (byte)' ';
+    }
+
+    private static bool IsGlobWhitespace(byte b)
+    {
+        return b == (byte)' '
+            || b == (byte)'\n'
+            || b == (byte)'\r'
+            || b == (byte)'\t';
     }
 
     private static bool IsGlobEscapable(byte b)

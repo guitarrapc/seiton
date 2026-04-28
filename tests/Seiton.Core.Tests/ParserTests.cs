@@ -927,8 +927,10 @@ public sealed class ParserTests
         evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options!.Count).IsEqualTo(3);
-        // no parse errors: '' is a valid choice option
-        await Assert.That(result.Diagnostics).IsEmpty();
+        // Empty string in options is collected in AST for downstream rules, but parser
+        // now emits "string should not be empty" (aligned with actionlint behavior).
+        var emptyDiag = result.Diagnostics.Where(d => d.Message == "string should not be empty").ToArray();
+        await Assert.That(emptyDiag.Length).IsEqualTo(1);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
         var emptyOptionNode = input.Options![0];
@@ -4957,5 +4959,182 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-cron.yml");
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
+    }
+
+    // H3: empty string element in workflow_dispatch choice options must be detected
+    [Test]
+    public async Task Parse_WorkflowDispatchEmptyOption_ReportsStringNotEmpty()
+    {
+        var yaml = "on:\n  workflow_dispatch:\n    inputs:\n      bar:\n        type: choice\n        options:\n          - ''\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '' is on line 7
+    }
+
+    // H3: empty string element in image_version versions must be detected
+    [Test]
+    public async Task Parse_ImageVersionEmptyVersion_ReportsStringNotEmpty()
+    {
+        var yaml = "on:\n  image_version:\n    versions:\n      - ''\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4); // '' is on line 4
+    }
+
+    // H5: quoted string at timeout-minutes must be rejected
+    [Test]
+    public async Task Parse_TimeoutMinutesQuotedString_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        timeout-minutes: '3.5'\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("timeout-minutes must be number or expression"));
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '3.5' is on line 7
+    }
+
+    // H5: quoted string at timeout-minutes must be rejected even in multi-step context
+    [Test]
+    public async Task Parse_TimeoutMinutesQuotedString_MultiStep_ReportsError()
+    {
+        // Quoted '3.5' should error, unquoted 3.5 should not
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo quoted\n        timeout-minutes: '3.5'\n      - run: echo unquoted\n        timeout-minutes: 3.5\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var errors = result.Diagnostics.Where(d => d.Message.Contains("timeout-minutes")).ToList();
+        // Only step[1] (quoted) should error; step[2] (unquoted) should not
+        await Assert.That(errors.Count).IsEqualTo(1);
+        await Assert.That(errors[0].Location.StartLine).IsEqualTo(7); // '3.5' on line 7
+    }
+
+    // H5: quoted string at max-parallel must be rejected
+    [Test]
+    public async Task Parse_MaxParallelQuotedString_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      max-parallel: '3'\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("max-parallel must be integer"));
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(6); // '3' is on line 6
+    }
+
+    // H2: YAML null key in matrix include should map to string "null", not empty
+    [Test]
+    public async Task Parse_MatrixIncludeNullKey_PropertyAccessible()
+    {
+        var yaml = "on: push\njobs:\n  foo:\n    strategy:\n      matrix:\n        include:\n          - null: ${{ fromJSON('null') }}\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.null }}\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // Should NOT report "property \"null\" is not defined" — null key should be accessible
+        var undefinedProp = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("property \"null\" is not defined"));
+        await Assert.That(undefinedProp.Message).IsNull();
+    }
+
+    // H4: array<bool> == array<{}> should be flagged as incompatible comparison
+    [Test]
+    public async Task Parse_ArrayBoolVsArrayObject_ReportsComparisonError()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        a:\n          - [true]\n        a2:\n          - [{}]\n    steps:\n      - run: echo '${{ matrix.a == matrix.a2 }}'\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var compError = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cannot be compared") && d.Message.Contains("=="));
+        await Assert.That(compError.Message).IsNotNull();
+    }
+
+    // M1: empty array names/versions should report "should not be empty" not type error
+    [Test]
+    public async Task Parse_ImageVersionEmptyArray_ReportsShouldNotBeEmpty()
+    {
+        var yaml = "on:\n  image_version:\n    names: []\n    versions: []\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var namesErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("on.image_version.names should not be empty"));
+        var versionsErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("on.image_version.versions should not be empty"));
+        await Assert.That(namesErr.Message).IsNotNull();
+        await Assert.That(versionsErr.Message).IsNotNull();
+        // Must NOT emit type error for correctly-typed empty arrays
+        var typeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("must be array of strings"));
+        await Assert.That(typeErr.Message).IsNull();
+    }
+
+    // M2: backslash escape in path glob should be detected
+    [Test]
+    public async Task Lint_GlobPath_InvalidBackslashEscape_Detected()
+    {
+        var yaml = "on:\n  push:\n    paths:\n      - 'foo\\bar'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var escapeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("not a valid glob escape"));
+        await Assert.That(escapeErr.Message).IsNotNull();
+    }
+
+    // M2: backslash escape detection after null entry in paths
+    [Test]
+    public async Task Lint_GlobPath_InvalidBackslashEscape_AfterNullEntry_Detected()
+    {
+        var yaml = "on:\n  push:\n    paths:\n      -\n      - '!'\n      - 'foo\\bar'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var escapeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("not a valid glob escape"));
+        await Assert.That(escapeErr.Message).IsNotNull();
+    }
+
+    // M2: block scalar trailing newline in path glob should be detected as trailing whitespace
+    [Test]
+    public async Task Lint_GlobPath_BlockScalarTrailingNewline_Detected()
+    {
+        var yaml = "on:\n  push:\n    paths:\n      - |\n        foo.txt\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var spaceErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("leading and trailing spaces are not allowed in glob path"));
+        await Assert.That(spaceErr.Message).IsNotNull();
+    }
+
+    // M2: block scalar trailing newline with more entries after should also be detected
+    [Test]
+    public async Task Lint_GlobPath_BlockScalarTrailingNewline_WithMoreEntries_Detected()
+    {
+        // Matches the glob_more fixture pattern: block scalar followed by more entries
+        var yaml = "on:\n  push:\n    paths:\n      - |\n        foo.txt\n      - '.'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        var spaceErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("leading and trailing spaces are not allowed in glob path"));
+        await Assert.That(spaceErr.Message).IsNotNull().Because(string.Join("\n", allDiags));
+    }
+
+    // M3: empty flow mapping `{ }` position should point to the mapping, not next line
+    [Test]
+    public async Task Parse_StepEmptyFlowMapping_Position_AfterBaredash()
+    {
+        // line 6: `      -` (null), line 7: `      - { }` (empty flow mapping), line 8: `      - run: echo`
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      -\n      - { }\n      - run: echo ok\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyErrors = result.Diagnostics.Where(d => d.Message.Contains("element of \"steps\" section should not be empty")).ToList();
+        // Both line 6 (null) and line 7 ({ }) should be reported as empty steps
+        await Assert.That(emptyErrors.Count).IsGreaterThanOrEqualTo(2);
+        // Second empty step (line 7: { }) should have correct line 7 position
+        var flowMappingErr = emptyErrors.FirstOrDefault(d => d.Location.StartLine == 7);
+        await Assert.That(flowMappingErr.Message).IsNotNull().Because($"Empty mapping errors at lines: {string.Join(", ", emptyErrors.Select(e => e.Location.StartLine))}");
+    }
+
+    // M4: recursive alias position should point to the *alias reference, not the next token
+    [Test]
+    public async Task Parse_RecursiveAlias_PositionAtAliasRef()
+    {
+        // line 4: &recursive2, line 7: &recursive1, line 9: *recursive1 (recursive), line 11: *recursive2 (recursive)
+        var yaml = "on: push\n\njobs:\n  test: &recursive2\n    runs-on: ubuntu-latest\n    steps:\n      - &recursive1\n        env: *recursive1\n        run: *recursive2\n      - *recursive1\n      - *recursive2\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var recursiveErrors = result.Diagnostics.Where(d => d.Message.Contains("recursive alias")).ToList();
+        await Assert.That(recursiveErrors.Count).IsGreaterThanOrEqualTo(1);
+        // At least one recursive alias error should be at line 8 (env: *recursive1) — the * is at col 14
+        var envAlias = recursiveErrors.FirstOrDefault(d => d.Location.StartLine == 8);
+        await Assert.That(envAlias.Message).IsNotNull().Because($"Recursive errors at lines: {string.Join(", ", recursiveErrors.Select(e => $"{e.Location.StartLine}:{e.Location.StartColumn}"))}");
+    }
+
+    // M5: empty workflow_call secrets should include GITHUB_TOKEN in type
+    [Test]
+    public async Task Lint_WorkflowCallEmptySecrets_IncludesGitHubToken()
+    {
+        var yaml = "on:\n  workflow_call:\n    secrets:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets.CALLING_WORKFLOW_SECRET }}\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // Should error about unknown secret, and the type should include GITHUB_TOKEN
+        var secretErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("CALLING_WORKFLOW_SECRET") && d.Message.Contains("not defined"));
+        await Assert.That(secretErr.Message).IsNotNull();
+        // Object type should include GITHUB_TOKEN (not be empty {})
+        await Assert.That(secretErr.Message).Contains("GITHUB_TOKEN");
     }
 }

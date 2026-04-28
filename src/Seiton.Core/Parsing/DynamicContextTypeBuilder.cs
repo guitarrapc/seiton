@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Generated;
+﻿using System.Buffers.Text;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -215,6 +216,12 @@ internal static class DynamicContextTypeBuilder
                     foreach (var pair in entry)
                     {
                         var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
+                        // YAML null keys (bare `null:`) are stored as zero-length slices.
+                        // GitHub Actions treats them as the string "null".
+                        if (key.Length == 0)
+                        {
+                            key = new Utf8String("null"u8);
+                        }
                         // Don't overwrite existing axes; include-only keys get inferred type
                         if (!props.ContainsKey(key))
                         {
@@ -256,7 +263,7 @@ internal static class DynamicContextTypeBuilder
 
         if (allArrays)
         {
-            return InferArrayRowElementType(row, utf8Yaml);
+            return InferArrayRowElementType(row, utf8Yaml, arena);
         }
 
         if (allScalars)
@@ -280,7 +287,7 @@ internal static class DynamicContextTypeBuilder
                 mergedProps = new Dictionary<Utf8String, ExprType>(obj.Properties.Count);
                 foreach (var pair in obj.Properties)
                 {
-                    mergedProps[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml);
+                    mergedProps[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml, arena);
                 }
             }
             else
@@ -291,7 +298,7 @@ internal static class DynamicContextTypeBuilder
                     var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
                     if (!mergedProps.ContainsKey(key))
                     {
-                        mergedProps[key] = InferRawValueType(pair.Value, utf8Yaml);
+                        mergedProps[key] = InferRawValueType(pair.Value, utf8Yaml, arena);
                     }
                 }
             }
@@ -302,15 +309,28 @@ internal static class DynamicContextTypeBuilder
             : ExprType.Any;
     }
 
-    private static ExprType InferRawValueType(RawYamlValue value, byte[] utf8Yaml)
+    private static ExprType InferRawValueType(RawYamlValue value, byte[] utf8Yaml, AstArena? arena = null)
     {
         return value switch
         {
-            RawYamlString => ExprType.Any,
-            RawYamlArray => ExprType.Any,
-            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml),
+            RawYamlString str when arena is not null && str.Value.HasValue => InferRawScalarType(str, arena),
+            RawYamlArray arr when arena is not null && arr.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(arr.Items[0], utf8Yaml, arena)),
+            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml, arena),
             _ => ExprType.Any,
         };
+    }
+
+    private static ExprType InferRawScalarType(RawYamlString str, AstArena arena)
+    {
+        var bytes = arena.GetStringValue(str.Value);
+        if (bytes.Length == 0) return ExprType.Any;
+        if (bytes.SequenceEqual("true"u8) || bytes.SequenceEqual("false"u8))
+            return ExprType.Bool;
+        if (Utf8Parser.TryParse(bytes, out long _, out var ci) && ci == bytes.Length)
+            return ExprType.Number;
+        if (Utf8Parser.TryParse(bytes, out double _, out var cf) && cf == bytes.Length)
+            return ExprType.Number;
+        return ExprType.Any;
     }
 
     /// <summary>
@@ -332,18 +352,18 @@ internal static class DynamicContextTypeBuilder
 
         return value switch
         {
-            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml),
-            RawYamlArray arr when arr.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(arr.Items[0], utf8Yaml)),
+            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml, arena),
+            RawYamlArray arr when arr.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(arr.Items[0], utf8Yaml, arena)),
             _ => ExprType.Any,
         };
     }
 
-    private static ObjectExprType InferRawObjectType(RawYamlObject obj, byte[] utf8Yaml)
+    private static ObjectExprType InferRawObjectType(RawYamlObject obj, byte[] utf8Yaml, AstArena? arena = null)
     {
         var props = new Dictionary<Utf8String, ExprType>(obj.Properties.Count);
         foreach (var pair in obj.Properties)
         {
-            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml);
+            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml, arena);
         }
 
         return ExprType.Object(props, strict: true);
@@ -353,7 +373,7 @@ internal static class DynamicContextTypeBuilder
     /// Infers the array element type from array values in a matrix row.
     /// If all arrays have similar structure, infers a specific element type; otherwise falls back to Any.
     /// </summary>
-    private static ArrayExprType InferArrayRowElementType(MatrixRow row, byte[] utf8Yaml)
+    private static ArrayExprType InferArrayRowElementType(MatrixRow row, byte[] utf8Yaml, AstArena? arena = null)
     {
         // Look at the first array's element types to infer the element type
         ExprType? elementType = null;
@@ -365,7 +385,7 @@ internal static class DynamicContextTypeBuilder
             }
 
             // Use the first item's type as representative
-            var firstItemType = InferRawValueType(arr.Items[0], utf8Yaml);
+            var firstItemType = InferRawValueType(arr.Items[0], utf8Yaml, arena);
             if (elementType is null)
             {
                 elementType = firstItemType;
@@ -643,13 +663,17 @@ internal static class DynamicContextTypeBuilder
                 var secrets = wce.Secrets.Value;
                 if (secrets.Count == 0)
                 {
-                    // Empty secrets: explicitly declared as empty → strict empty object
-                    return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>(), strict: true));
+                    // Empty secrets: explicitly declared as empty → strict object with only GITHUB_TOKEN
+                    return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>
+                    {
+                        { new Utf8String("GITHUB_TOKEN"u8), ExprType.String },
+                    }, strict: true));
                 }
 
                 if (utf8Yaml is not null)
                 {
-                    var props = new Dictionary<Utf8String, ExprType>(secrets.Count);
+                    var props = new Dictionary<Utf8String, ExprType>(secrets.Count + 1);
+                    props[new Utf8String("GITHUB_TOKEN"u8)] = ExprType.String;
                     foreach (var pair in secrets)
                     {
                         props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
