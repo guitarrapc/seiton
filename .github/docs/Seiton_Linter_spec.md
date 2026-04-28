@@ -1018,6 +1018,17 @@ Diagnostic processing in linter entrypoint must be deterministic.
 4. Deduplicate using deterministic diagnostic identity.
 5. Apply final filtering phase.
 
+Diagnostic identity for deduplication: `(severity, message, startLine)`. Column and byte offset are excluded so that parser diagnostics (reported at expression-internal positions) and lint diagnostics (reported at YAML key positions) on the same line with the same message are treated as duplicates.
+
+When a lint diagnostic duplicates a parser diagnostic (same identity), the lint diagnostic **replaces** the parser diagnostic so the `RuleId` is preserved for suppression and attribution.
+
+#### 6.0.1 Accepted Parser/Linter Diagnostic Overlap
+
+Some source lines may have diagnostics from both the parser (`[syntax-check]`) and a lint rule. Two categories:
+
+- **Complementary**: Parser and lint rule detect semantically different issues on the same line (e.g., parser reports structural error, lint rule reports domain violation). Both diagnostics add value and are retained.
+- **Redundant**: The same semantic check runs at both layers, but with different type resolution quality. The parser check uses static inference (dynamic contexts resolve to `any`), while the lint check uses override-aware inference (dynamic contexts resolve to concrete types). The parser must apply `any` guards (see `Seiton_Parser_spec.md` §7.4) to ensure it stays silent when type information is incomplete, deferring to the lint pass for concrete type checking.
+
 Final filtering phase:
 
 - Apply exclusion/suppression matches from config and inline directives according to §5.2 precedence.

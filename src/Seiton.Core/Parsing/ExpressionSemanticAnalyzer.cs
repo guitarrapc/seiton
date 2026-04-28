@@ -1014,8 +1014,14 @@ public static class ExpressionSemanticAnalyzer
         var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
 
         // Ordering operators (<, <=, >, >=): reject null, bool, object, array
+        // Per §7.4: when either operand resolves to Any, no error is emitted (insufficient type info).
         if (IsComparisonOperator(node.Operator))
         {
+            if (leftType is AnyExprType || rightType is AnyExprType)
+            {
+                return;
+            }
+
             if (IsNotComparableType(leftType))
             {
                 diagnostics.Add(new Diagnostic(

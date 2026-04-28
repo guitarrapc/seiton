@@ -974,6 +974,16 @@ The following operator usages are treated as errors when type information is ava
 
 When either operand resolves to `any`, no error is emitted (insufficient type information).
 
+#### 7.4.1 Two-Pass Operator Validation
+
+Operator type validation runs at two distinct stages:
+
+1. **Parser pass** (§7.4 rules above): Uses static type inference from the expression AST alone. Dynamic context roots (`matrix`, `inputs`, `steps`, `needs`) resolve to `any` at this stage. The `any` guard above applies — no errors are emitted when either operand is `any`.
+
+2. **Lint pass** (via `ExprUndefinedVarRule`): Re-runs the same operator type checks with override-aware type inference, where dynamic context roots are resolved from AST-level definitions (§7.5). This can detect type errors that the parser pass cannot (e.g., `bool <= matrix.a` where `matrix.a` is `array<bool>`). In the current implementation, the lint pass does **not** fully mirror the parser's `any` guard: it may still emit a comparison diagnostic when only one operand remains `any`, and suppresses ordering diagnostics only when both operands are `any`.
+
+The two passes validate the same operator categories, but they do not currently apply the `any` guard identically. The lint pass replaces any parser diagnostic that has an identical message and line (dedup by `severity + message + line`). When the lint pass infers more specific types, its diagnostic message will differ from the parser's (e.g., `array<bool>` vs `any`), so both survive if the parser erroneously emitted. The parser-pass `any` guard minimizes this duplication by ensuring the parser stays silent when type information is incomplete, but the lint pass may still report an error when only one operand remains `any`.
+
 ### 7.5 Dynamic Context Resolution
 
 The `steps`, `matrix`, `needs`, and `inputs` context roots are dynamic: their property keys are determined from the AST at lint time rather than from a static schema.
