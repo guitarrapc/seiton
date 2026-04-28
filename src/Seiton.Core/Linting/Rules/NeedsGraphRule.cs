@@ -119,7 +119,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 {
                     // Build cycle path from DFS stack for informative message
                     var cyclePath = BuildCyclePath(source, stack, needKey);
-                    // Report at the first job in the cycle (consistent with actionlint positioning)
+                    // Report at the first job in the cycle
                     var cycleStartJob = FindCycleStartJob(source, stack, needKey);
                     var reportJob = cycleStartJob ?? currentJob;
                     var reportRange = cycleStartJob is not null
