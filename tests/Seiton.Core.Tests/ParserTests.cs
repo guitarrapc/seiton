@@ -2,6 +2,7 @@
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
+using static Seiton.Core.Tests.TestHelper;
 
 namespace Seiton.Core.Tests;
 
@@ -10,7 +11,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MinimalWorkflow_NoDiagnostics()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         name: ci
         on: push
         jobs:
@@ -18,8 +19,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo hello
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml.Replace("\r\n", "\n").Replace("\n", "\r\n"));
         var result = WorkflowParser.Parse(bytes, "minimal.yml");
@@ -145,7 +145,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowStructuralNodes_PopulatesAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         name: ci
         on: push
         permissions:
@@ -161,8 +161,7 @@ public sealed class ParserTests
             group: ci-${{ github.ref }}
             cancel-in-progress: true
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-structural.yml");
         var arena = result.Arena!;
@@ -188,13 +187,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowPermissionsAndConcurrencyScalar_PopulatesAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         permissions: read-all
         concurrency: ci-${{ github.ref }}
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-scalar-structural.yml");
         var arena = result.Arena!;
@@ -211,10 +209,9 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MissingRequiredKeys_ReportsErrors()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         name: only-name
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "missing.yml");
 
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"on\" section is missing in workflow", StringComparison.Ordinal))).IsTrue();
@@ -224,12 +221,11 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_UnknownKey_ReportsUnexpectedKey()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs: {}
         foobar: 1
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "unknown.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" for \"workflow\" section", StringComparison.Ordinal))).IsTrue();
@@ -238,12 +234,11 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_DuplicateWorkflowKey_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         on: pull_request
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "duplicate-workflow-key.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("workflow contains duplicate key: on", StringComparison.Ordinal))).IsTrue();
@@ -252,13 +247,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MergeKey_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         <<:
           on: push
         on: push
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "merge-key.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("GitHub Actions does not support YAML merge key \"<<\"", StringComparison.Ordinal))).IsTrue();
@@ -267,13 +261,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnMappingDuplicateKey_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             push: {}
             PUSH: {}
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-duplicate.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key \"PUSH\" is duplicated in \"on\" section", StringComparison.Ordinal))).IsTrue();
@@ -282,7 +275,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobsMappingDuplicateKey_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -293,8 +286,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo two
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-duplicate.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key \"BUILD\" is duplicated in \"jobs\" section", StringComparison.Ordinal))).IsTrue();
@@ -303,7 +295,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnWorkflowDispatchInputsMergeKey_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_dispatch:
                 inputs:
@@ -315,8 +307,7 @@ public sealed class ParserTests
                         required: true
                         type: string
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-dispatch-inputs-merge.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("GitHub Actions does not support YAML merge key \"<<\"", StringComparison.Ordinal))).IsTrue();
@@ -325,20 +316,18 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnTypeInvalid_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: true
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-type.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: true", StringComparison.Ordinal))).IsTrue();
 
-        var yaml2 = """
+        var yaml2 = NormalizeEol("""
         on: &a ref
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result2 = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml2), "on-type2.yml");
         await Assert.That(result2.Diagnostics.Any(x => x.Message.Contains("unknown event in on: ref", StringComparison.Ordinal))).IsTrue();
@@ -347,13 +336,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnSequenceItemNonScalar_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
           - push
           - [nested]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """)
+         .Replace("\r\n", "\n");
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-seq.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on sequence item must be string event name", StringComparison.Ordinal))).IsTrue();
     }
@@ -361,7 +350,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowEnv_WithStepOnlyContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         env:
           BAD: ${{ steps.prep.outputs.ok }}
@@ -370,7 +359,7 @@ public sealed class ParserTests
             runs-on: ubuntu-latest
             steps:
               - run: echo ok
-        """;
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflow-env-step-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -379,7 +368,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_RunName_UnknownFunction_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         run-name: Build ${{ unknownFn(github.ref) }}
         on: push
         jobs:
@@ -387,7 +376,7 @@ public sealed class ParserTests
             runs-on: ubuntu-latest
             steps:
               - run: echo ok
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "run-name-unknown-function.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
@@ -396,14 +385,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventOptionsMutualExclusive_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             push:
                 branches: [main]
                 branches-ignore: [dev]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-exclusive.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"branches\" and \"branches-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
@@ -411,14 +399,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnPushTagsAndTagsIgnore_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             push:
                 tags: [v*]
                 tags-ignore: [v0.*]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-push-tags-exclusive.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"tags\" and \"tags-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
@@ -426,14 +413,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnPullRequestPathsAndPathsIgnore_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             pull_request:
                 paths: [src/**]
                 paths-ignore: [docs/**]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-pr-paths-exclusive.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"paths\" and \"paths-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
@@ -441,14 +427,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnMergeGroupBranchesAndIgnore_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             merge_group:
                 branches: [main]
                 branches-ignore: [release/*]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-merge-group-branches-exclusive.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("both \"branches\" and \"branches-ignore\" filters cannot be used for the same event", StringComparison.Ordinal))).IsTrue();
     }
@@ -457,7 +442,13 @@ public sealed class ParserTests
     public async Task Parse_ExclusiveFilterError_ReportsAtIgnoreKeyPosition()
     {
         // branches-ignore is at line 4, column 9
-        var yaml = "on:\n  push:\n    branches: [main]\n    branches-ignore: [dev]\njobs: {}\n";
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            branches: [main]
+            branches-ignore: [dev]
+        jobs: {}
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-position.yml");
         var diag = result.Diagnostics.First(x => x.Message.Contains("both \"branches\" and \"branches-ignore\"", StringComparison.Ordinal));
         await Assert.That(diag.Location.StartLine).IsEqualTo(4);
@@ -468,7 +459,13 @@ public sealed class ParserTests
     public async Task Parse_ExclusiveFilterError_TagsIgnore_ReportsAtIgnoreKeyPosition()
     {
         // tags-ignore is at line 4, column 5
-        var yaml = "on:\n  push:\n    tags: [v*]\n    tags-ignore: [v0.*]\njobs: {}\n";
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            tags: [v*]
+            tags-ignore: [v0.*]
+        jobs: {}
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-tags-position.yml");
         var diag = result.Diagnostics.First(x => x.Message.Contains("both \"tags\" and \"tags-ignore\"", StringComparison.Ordinal));
         await Assert.That(diag.Location.StartLine).IsEqualTo(4);
@@ -479,7 +476,13 @@ public sealed class ParserTests
     public async Task Parse_ExclusiveFilterError_PathsIgnore_ReportsAtIgnoreKeyPosition()
     {
         // paths-ignore is at line 4, column 5
-        var yaml = "on:\n  pull_request:\n    paths: [src/**]\n    paths-ignore: [docs/**]\njobs: {}\n";
+        var yaml = NormalizeEol("""
+        on:
+          pull_request:
+            paths: [src/**]
+            paths-ignore: [docs/**]
+        jobs: {}
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-paths-position.yml");
         var diag = result.Diagnostics.First(x => x.Message.Contains("both \"paths\" and \"paths-ignore\"", StringComparison.Ordinal));
         await Assert.That(diag.Location.StartLine).IsEqualTo(4);
@@ -490,7 +493,13 @@ public sealed class ParserTests
     public async Task Parse_ExclusiveFilterError_IgnoreFirst_ReportsAtLaterKey()
     {
         // branches-ignore first (line 3), branches second (line 4) → report at branches (line 4)
-        var yaml = "on:\n  merge_group:\n    branches-ignore: bar\n    branches: foo\njobs: {}\n";
+        var yaml = NormalizeEol("""
+        on:
+          merge_group:
+            branches-ignore: bar
+            branches: foo
+        jobs: {}
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "exclusive-ignore-first-position.yml");
         var diag = result.Diagnostics.First(x => x.Message.Contains("both \"branches\" and \"branches-ignore\"", StringComparison.Ordinal));
         await Assert.That(diag.Location.StartLine).IsEqualTo(4);
@@ -500,13 +509,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnMergeGroupValidTypes_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             merge_group:
                 types: [checks_requested]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-merge-group-types.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
     }
@@ -514,11 +522,10 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnUnknownEventScalar_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: unknown_event
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-scalar.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: unknown_event", StringComparison.Ordinal))).IsTrue();
     }
@@ -526,13 +533,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnUnknownEventInSequence_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
           - push
           - unknown_event
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-sequence.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: unknown_event", StringComparison.Ordinal))).IsTrue();
     }
@@ -540,13 +546,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventOptionsTypeInvalid_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
-            pull_request:
-                types: { a: b }
+          pull_request:
+            types: { a: b }
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-invalid.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.pull_request.types must be string or array of strings", StringComparison.Ordinal))).IsTrue();
     }
@@ -554,13 +559,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventUnknownOption_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
-            push:
-                unknown-filter: 1
+          push:
+            unknown-filter: 1
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push does not support option: unknown-filter", StringComparison.Ordinal))).IsTrue();
     }
@@ -568,13 +572,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventDisallowedOption_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
-            workflow_dispatch:
-                paths: [src/**]
+          workflow_dispatch:
+            paths: [src/**]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-disallowed-option.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("expected \"inputs\" key for \"workflow_dispatch\" section but got \"paths\"", StringComparison.Ordinal))).IsTrue();
     }
@@ -582,13 +585,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventTypesInvalidValue_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
-            pull_request:
-                types: [opened, unknown_type]
+          pull_request:
+            types: [opened, unknown_type]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-invalid-value.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsTrue();
     }
@@ -596,13 +598,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventTypesValidValue_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             pull_request:
                 types: [opened, reopened]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-valid-value.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
     }
@@ -610,13 +611,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnEventTypesOnUnsupportedEvent_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             push:
                 types: [created]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-types-push.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push.types is not supported", StringComparison.Ordinal))).IsTrue();
     }
@@ -624,13 +624,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnRepositoryDispatchCustomTypes_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             repository_dispatch:
                 types: [my-custom-event, another_event]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-types.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not support option", StringComparison.Ordinal))).IsFalse();
@@ -639,13 +638,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnSchedule_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             schedule:
                 - cron: '0 0 * * *'
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-schedule.yml");
 
@@ -673,10 +671,10 @@ public sealed class ParserTests
         for (var i = 0; i < cases.Length; i++)
         {
             var c = cases[i];
-            var yaml = $$"""
+            var yaml = NormalizeEol($$"""
                 on: {{c.EventName}}
                 jobs: {}
-                """.Replace("\r\n", "\n");
+                """);
 
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), $"on-scalar-{c.EventName}.yml");
 
@@ -702,11 +700,11 @@ public sealed class ParserTests
         for (var i = 0; i < cases.Length; i++)
         {
             var c = cases[i];
-            var yaml = $$"""
+            var yaml = NormalizeEol($$"""
                 on:
                     {{c.EventName}}:
                 jobs: {}
-                """.Replace("\r\n", "\n");
+                """);
 
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), $"on-empty-mapping-{c.EventName}.yml");
 
@@ -725,17 +723,17 @@ public sealed class ParserTests
         {
             (
                 "scalar form",
-                """
+                NormalizeEol("""
                 on: schedule
                 jobs: {}
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "sequence form",
-                """
+                NormalizeEol("""
                 on: [push, schedule]
                 jobs: {}
-                """.Replace("\r\n", "\n")
+                """)
             ),
         };
 
@@ -751,15 +749,14 @@ public sealed class ParserTests
     public async Task Parse_ServicesExpression_PopulatesAst()
     {
         // spec §3.17: services: ${{ ... }} is accepted as Services { Expression }
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ubuntu-latest
                 services: ${{ fromJson(inputs.services) }}
                 steps: []
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "services-expression.yml");
@@ -776,7 +773,7 @@ public sealed class ParserTests
     public async Task Parse_CredentialsExpression_PopulatesAst()
     {
         // spec §3.18: credentials: ${{ ... }} is accepted as Credentials { Expression }
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -785,8 +782,7 @@ public sealed class ParserTests
                     image: node:20
                     credentials: ${{ fromJson(secrets.creds) }}
                 steps: []
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "credentials-expression.yml");
@@ -805,7 +801,7 @@ public sealed class ParserTests
     public async Task Parse_ContainerEnvExpression_PopulatesAst()
     {
         // spec §2.8/§14: container env accepts expression form (${{ }})
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -814,8 +810,7 @@ public sealed class ParserTests
                     image: node:20
                     env: ${{ fromJson(secrets.env_vars) }}
                 steps: []
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "container-env-expression.yml");
@@ -833,7 +828,7 @@ public sealed class ParserTests
     public async Task Parse_ServiceEnvExpression_PopulatesAst()
     {
         // spec §2.8/§14: service container env accepts expression form (${{ }})
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -843,8 +838,7 @@ public sealed class ParserTests
                         image: redis:7
                         env: ${{ github.sha }}
                 steps: []
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "service-env-expression.yml");
@@ -864,7 +858,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnWorkflowDispatch_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_dispatch:
                 inputs:
@@ -874,8 +868,7 @@ public sealed class ParserTests
                         type: choice
                         options: [dev, prod]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-workflow-dispatch.yml");
         var arena = result.Arena!;
@@ -900,7 +893,7 @@ public sealed class ParserTests
     public async Task Parse_OnWorkflowDispatch_ChoiceOptionsAllowEmptyString()
     {
         // spec §3.4.3: choice-type inputs legitimately use '' as a "no selection" option
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_dispatch:
                 inputs:
@@ -914,8 +907,7 @@ public sealed class ParserTests
                             - 'disable'
                             - 'enable'
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "dispatch-choice-empty.yml");
@@ -941,7 +933,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnWorkflowCall_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_call:
                 inputs:
@@ -955,8 +947,7 @@ public sealed class ParserTests
                     digest:
                         value: digest-sha
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-workflow-call.yml");
 
@@ -978,7 +969,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnWorkflowCall_OutputValue_AllowsJobsContext()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_call:
                 outputs:
@@ -992,8 +983,7 @@ public sealed class ParserTests
                 steps:
                     - id: emit
                       run: echo "value=ok" >> "$GITHUB_OUTPUT"
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-workflow-call-output-jobs-context.yml");
         var hasJobsUnavailable = result.Diagnostics.Any(static x =>
@@ -1009,46 +999,46 @@ public sealed class ParserTests
         {
             (
                 "workflow_call input missing type",
-                """
+                NormalizeEol("""
                 on:
                     workflow_call:
                         inputs:
                             image:
                                 required: true
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "\"type\" is missing at \"image\" input of workflow_call event"
             ),
             (
                 "workflow_call output missing value",
-                """
+                NormalizeEol("""
                 on:
                     workflow_call:
                         outputs:
                             digest:
                                 description: output
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "\"value\" is missing at \"digest\" output of workflow_call event"
             ),
             (
                 "schedule item empty mapping",
-                """
+                NormalizeEol("""
                 on:
                     schedule:
                         - {}
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "on.schedule item requires cron"
             ),
             (
                 "schedule item timezone only",
-                """
+                NormalizeEol("""
                 on:
                     schedule:
                         - timezone: UTC
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "on.schedule item requires cron"
             ),
         };
@@ -1069,32 +1059,32 @@ public sealed class ParserTests
         {
             (
                 "paths not available for merge_group",
-                """
+                NormalizeEol("""
                 on:
                     merge_group:
                         paths: [src/**]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "\"paths\" filter is not available for merge_group event. it is only for pull_request, pull_request_target, push events"
             ),
             (
                 "tags not available for pull_request",
-                """
+                NormalizeEol("""
                 on:
                     pull_request:
                         tags: [v*]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "\"tags\" filter is not available for pull_request event. it is only for push events"
             ),
             (
                 "branches not available for pull_request_review",
-                """
+                NormalizeEol("""
                 on:
                     pull_request_review:
                         branches: [main]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "\"branches\" filter is not available for pull_request_review event. it is only for merge_group, pull_request, pull_request_target, push, workflow_run events"
             ),
         };
@@ -1111,7 +1101,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowCallInputNullBody_ReportsTypeRequired()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_call:
                 inputs:
@@ -1119,8 +1109,7 @@ public sealed class ParserTests
                     input1:
                         type: string
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-input-null.yml");
         // input0 has null body — should report "type is missing" not "must be object"
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"type\" is missing at \"input0\" input of workflow_call event", StringComparison.Ordinal))).IsTrue();
@@ -1130,7 +1119,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowCallSecretNullBody_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_call:
                 secrets:
@@ -1138,8 +1127,7 @@ public sealed class ParserTests
                     secret1:
                         description: test
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-secret-null.yml");
         // secret0 has null body — should NOT report error (secrets have no required fields)
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secret must be object", StringComparison.Ordinal))).IsFalse();
@@ -1148,7 +1136,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowCallOutputNullBody_ReportsValueRequired()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_call:
                 outputs:
@@ -1156,8 +1144,7 @@ public sealed class ParserTests
                     has-value:
                         value: ${{ jobs.test.outputs.x }}
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-null.yml");
         // missing-all has null body — should report "value is missing" not "must be object"
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"value\" is missing at \"missing-all\" output of workflow_call event", StringComparison.Ordinal))).IsTrue();
@@ -1167,7 +1154,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowCallOutputEmptyValue_ReportsEmptyString()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             workflow_call:
                 outputs:
@@ -1175,8 +1162,7 @@ public sealed class ParserTests
                         description: test
                         value:
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-empty-value.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("string should not be empty", StringComparison.Ordinal))).IsTrue();
     }
@@ -1188,35 +1174,35 @@ public sealed class ParserTests
         {
             (
                 "top-level defaults empty mapping",
-                """
+                NormalizeEol("""
                 on: push
                 defaults: {}
                 jobs: {}
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "top-level defaults with unexpected key only",
-                """
+                NormalizeEol("""
                 on: push
                 defaults:
                     foo: bar
                 jobs: {}
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "job-level defaults empty mapping",
-                """
+                NormalizeEol("""
                 on: push
                 jobs:
                     build:
                         runs-on: ubuntu-latest
                         defaults: {}
                         steps: []
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "job-level defaults with unexpected key only",
-                """
+                NormalizeEol("""
                 on: push
                 jobs:
                     build:
@@ -1224,7 +1210,7 @@ public sealed class ParserTests
                         defaults:
                             foo: bar
                         steps: []
-                """.Replace("\r\n", "\n")
+                """)
             ),
         };
 
@@ -1239,11 +1225,11 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_DefaultsNull_ReportsShouldHaveRunAndNotEmpty()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         defaults:
         jobs: {}
-        """.Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-null.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"defaults\" section should have \"run\" section", StringComparison.Ordinal))).IsTrue();
@@ -1255,12 +1241,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ConcurrencyMissingGroup_ReportsAtKeyLine()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         concurrency:
             cancel-in-progress: true
         jobs: {}
-        """.Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "concurrency-key-pos.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("group name is missing", StringComparison.Ordinal));
@@ -1276,24 +1262,24 @@ public sealed class ParserTests
         {
             (
                 "top-level concurrency cancel-in-progress only",
-                """
+                NormalizeEol("""
                 on: push
                 concurrency:
                     cancel-in-progress: true
                 jobs: {}
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "top-level concurrency empty mapping",
-                """
+                NormalizeEol("""
                 on: push
                 concurrency: {}
                 jobs: {}
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "job-level concurrency cancel-in-progress only",
-                """
+                NormalizeEol("""
                 on: push
                 jobs:
                     build:
@@ -1301,18 +1287,18 @@ public sealed class ParserTests
                         concurrency:
                             cancel-in-progress: false
                         steps: []
-                """.Replace("\r\n", "\n")
+                """)
             ),
             (
                 "job-level concurrency empty mapping",
-                """
+                NormalizeEol("""
                 on: push
                 jobs:
                     build:
                         runs-on: ubuntu-latest
                         concurrency: {}
                         steps: []
-                """.Replace("\r\n", "\n")
+                """)
             ),
         };
 
@@ -1327,13 +1313,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnRepositoryDispatch_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             repository_dispatch:
                 types: [sync, deploy]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-ast.yml");
 
@@ -1353,35 +1338,35 @@ public sealed class ParserTests
         {
             (
                 "names-only",
-                """
+                NormalizeEol("""
                 on:
                     image_version:
                         names: [my-image, other-image]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 2,
                 0
             ),
             (
                 "versions-only",
-                """
+                NormalizeEol("""
                 on:
                     image_version:
                         versions: [1.*, 2.*]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 0,
                 2
             ),
             (
                 "names-and-versions",
-                """
+                NormalizeEol("""
                 on:
                     image_version:
                         names: [my-image]
                         versions: [3.*]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 1,
                 1
             ),
@@ -1409,42 +1394,42 @@ public sealed class ParserTests
         {
             (
                 "non-mapping-event-config",
-                """
+                NormalizeEol("""
                 on:
                     image_version: true
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "on.image_version must be object"
             ),
             (
                 "unknown-option",
-                """
+                NormalizeEol("""
                 on:
                     image_version:
                         entrypoint: [x]
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "on.image_version does not support option: entrypoint"
             ),
             (
                 "names-must-be-sequence",
-                """
+                NormalizeEol("""
                 on:
                     image_version:
                         names: one
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "on.image_version.names must be array of strings"
             ),
             (
                 "versions-must-be-sequence",
-                """
+                NormalizeEol("""
                 on:
                     image_version:
                         versions:
                             foo: bar
                 jobs: {}
-                """.Replace("\r\n", "\n"),
+                """),
                 "on.image_version.versions must be array of strings"
             ),
         };
@@ -1465,11 +1450,10 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobsTypeInvalid_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs: []
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "jobs-type.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs must be object", StringComparison.Ordinal))).IsTrue();
@@ -1775,7 +1759,24 @@ public sealed class ParserTests
     public async Task Parse_MergeKey_ReportsCorrectPosition()
     {
         // B-8: merge key positions should point to the '<<' key, not past it
-        var yaml = "on:\n  workflow_call:\n    inputs:\n      <<: &inputs\n        foo:\n          type: string\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: env\n        env:\n          <<: &default_env\n            FOO: BAR\n      - run: env\n";
+        var yaml = NormalizeEol("""
+        on:
+          workflow_call:
+            inputs:
+              <<: &inputs
+                foo:
+                  type: string
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: env
+                env:
+                  <<: &default_env
+                     FOO: BAR
+              - run: env
+        """);
+            
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
@@ -1813,7 +1814,17 @@ public sealed class ParserTests
     public async Task Parse_MergeKey_EnvMessage_NotGarbled()
     {
         // B-8: env merge key message should not contain "must be object" prefix
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: env\n        env:\n          <<: &e\n            FOO: BAR\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: env
+                env:
+                  <<: &e
+                    FOO: BAR
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
@@ -1833,7 +1844,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnScalar_AliasedScalarResolved()
     {
         // &anchor on a scalar and *alias referencing it — basic scalar alias case.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -1842,7 +1853,7 @@ public sealed class ParserTests
               - uses: actions/checkout@v4
                 with:
                   ref: *runner
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-scalar.yml");
         var arena = result.Arena!;
@@ -1860,7 +1871,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnSequence_AliasedSequenceResolved()
     {
         // &anchor on a sequence scalar alias — used in paths/paths-ignore filter.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
           push:
             paths: &common_paths
@@ -1873,7 +1884,7 @@ public sealed class ParserTests
             runs-on: ubuntu-latest
             steps:
               - run: echo ok
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-sequence.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -1891,7 +1902,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnMapping_AliasedMappingResolved()
     {
         // &anchor on a mapping — step env mapping aliased and reused.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -1902,7 +1913,7 @@ public sealed class ParserTests
                   FOO: bar
               - run: echo ${{ env.FOO }}
                 env: *default_env
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-mapping.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -1918,7 +1929,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnStep_AliasedStepResolved()
     {
         // &anchor on a complete step mapping — aliased step is replayed correctly.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -1927,7 +1938,7 @@ public sealed class ParserTests
               - &checkout
                 uses: actions/checkout@v4
               - *checkout
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-step.yml");
         var arena = result.Arena!;
@@ -1943,7 +1954,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnJob_AliasedJobResolved()
     {
         // &anchor on an entire job mapping — aliased job is replayed correctly.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           base: &base_job
@@ -1951,7 +1962,7 @@ public sealed class ParserTests
             steps:
               - run: echo hello
           copy: *base_job
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-job.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -1968,7 +1979,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnEnv_AliasedEnvResolved()
     {
         // &anchor on a top-level env mapping — aliased in job env.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         env: &global_env
           FOO: bar
@@ -1979,7 +1990,7 @@ public sealed class ParserTests
             env: *global_env
             steps:
               - run: echo ${{ env.FOO }}
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-env.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -1993,7 +2004,7 @@ public sealed class ParserTests
     public async Task Parse_AnchorOnIf_AliasedIfExpressionResolved()
     {
         // &anchor on an `if:` expression scalar — aliased across multiple steps.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -2003,7 +2014,7 @@ public sealed class ParserTests
                 if: &cond ${{ github.ref == 'refs/heads/main' }}
               - run: echo two
                 if: *cond
-        """;
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "anchor-if.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -2016,7 +2027,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_UnusedAnchor_ReportsWarning()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -2026,8 +2037,7 @@ public sealed class ParserTests
                 env: &unused_env
                   FOO: bar
               - run: echo done
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "unused-anchor.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -2037,7 +2047,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_UsedAnchor_NoUnusedWarning()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -2048,8 +2058,7 @@ public sealed class ParserTests
                   FOO: bar
               - run: echo ${{ env.FOO }}
                 env: *shared_env
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "used-anchor.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -2060,7 +2069,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_RecursiveAlias_ReportsRecursiveDiagnostic()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -2069,8 +2078,7 @@ public sealed class ParserTests
               - &recursive
                 run: echo hello
                 env: *recursive
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-alias.yml");
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("recursive alias", StringComparison.OrdinalIgnoreCase) && d.Message.Contains("recursive", StringComparison.Ordinal))).IsTrue();
@@ -2079,7 +2087,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_RecursiveAlias_IncludesAnchorDeclarationPosition()
     {
-        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - &recursive\n        run: echo hello\n        env: *recursive\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - &recursive
+                run: echo hello
+                env: *recursive
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-alias.yml");
         var recursive = result.Diagnostics.First(d => d.Message.Contains("recursive alias", StringComparison.Ordinal));
@@ -2089,7 +2106,19 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_RecursiveAliasInMatrix_ReportsUnexpectedAlias()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        include: &recursive_include\n          - os: ubuntu-latest\n            nested: *recursive_include\n    steps:\n      - run: echo test\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                include: &recursive_include
+                  - os: ubuntu-latest
+                    nested: *recursive_include
+            steps:
+              - run: echo test
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-matrix.yml");
         // The matrix value position should report an alias-specific message, not generic "unsupported shape"
@@ -2100,7 +2129,7 @@ public sealed class ParserTests
     public async Task Parse_RecursiveAnchors_NestedAnchorResolvesCorrectly()
     {
         // Tests that *recursive1 resolves (nested anchor stored) and *recursive2 is detected as recursive
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           test: &recursive2
@@ -2111,8 +2140,7 @@ public sealed class ParserTests
                 run: *recursive2
               - *recursive1
               - *recursive2
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-nested.yml");
         // *recursive2 should be detected as recursive alias with the correct name
@@ -2126,15 +2154,14 @@ public sealed class ParserTests
     public async Task Parse_NonMappingStep_ReportsRunOrUsesRequired()
     {
         // Non-mapping, non-null step (e.g. alias that doesn't expand to mapping) should report "must run/uses"
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
             runs-on: ubuntu-latest
             steps:
               - 42
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "non-mapping-step.yml");
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("must be object", StringComparison.Ordinal))).IsTrue();
@@ -2144,8 +2171,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_EmptyUses_ReportsStringNotEmpty_NotMissingRunsOnSteps()
     {
-        var yaml = "on: push\njobs:\n  call4:\n    uses:\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          call4:
+            uses:
 
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-uses.yml");
         var messages = result.Diagnostics.Select(d => d.Message).ToArray();
         // Should report job-scoped "uses must be string and should not be empty"
@@ -2159,7 +2191,7 @@ public sealed class ParserTests
     public async Task Parse_NullScalarAnchor_DoesNotCrash()
     {
         // env: &anchor with no value (null scalar) should not cause a fatal parse error.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -2167,8 +2199,7 @@ public sealed class ParserTests
             steps:
               - run: echo hello
                 env: &empty_anchor
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-scalar-anchor.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -2180,7 +2211,7 @@ public sealed class ParserTests
     public async Task Parse_NullScalarAnchorRedefined_DoesNotCrash()
     {
         // Redefining an anchor on a null scalar (env: &credentials) after initial mapping definition.
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           test:
@@ -2196,8 +2227,7 @@ public sealed class ParserTests
                 env: *credentials
               - run: ./upload.sh
                 env: &credentials
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-scalar-anchor-redef.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -2276,14 +2306,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobMissingRunsOn_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 steps:
                     - run: echo hello
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
@@ -2294,13 +2323,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobMissingSteps_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ubuntu-latest
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" section is missing", StringComparison.Ordinal))).IsTrue();
@@ -2312,15 +2340,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobWithUsesAndSteps_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             reuse:
                 uses: owner/repo/.github/workflows/reuse.yml@main
                 steps:
                     - run: echo hello
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
@@ -2331,7 +2358,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobAst_PopulatesBasicFields()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2345,8 +2372,7 @@ public sealed class ParserTests
                     digest: sha256
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "job-ast-basic.yml");
@@ -2373,7 +2399,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ReusableWorkflowJob_PopulatesWorkflowCallAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             reuse:
@@ -2381,8 +2407,7 @@ public sealed class ParserTests
                 with:
                     target: prod
                 secrets: inherit
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "job-ast-reuse.yml");
@@ -2403,7 +2428,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ReusableWorkflowCallSecrets_AllowsSecretsContext()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             call-workflow-passing-data:
@@ -2415,8 +2440,7 @@ public sealed class ParserTests
                     is-valid: ${{ inputs.is-valid }}
                 secrets:
                     APPLES: ${{ secrets.APPLES }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsFalse();
@@ -2425,7 +2449,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ReusableWorkflowCallSecrets_InvalidContext_ReportsExpressionLine()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             call-workflow-passing-data:
@@ -2434,8 +2458,7 @@ public sealed class ParserTests
                 uses: ./.github/workflows/_reusable-workflow-called.yaml
                 secrets:
                     APPLES: ${{ env.APPLES }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.Message.Contains("\"env\" is not allowed here", StringComparison.Ordinal));
@@ -2450,7 +2473,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobAst_StrategyContainerServices_PopulatesFields()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2473,8 +2496,7 @@ public sealed class ParserTests
                         image: redis:7
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "job-ast-strategy-container-services.yml");
@@ -2501,7 +2523,7 @@ public sealed class ParserTests
     {
         // Regression: image StringNode.Range must point to the image: value line,
         // not a subsequent line (e.g. ports: or steps:).
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2515,8 +2537,7 @@ public sealed class ParserTests
                             - 6379:6379
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var lines = yaml.Split('\n');
 
@@ -2555,7 +2576,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobRunsOnMapping_PopulatesRunnerGroupAndLabels()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2564,8 +2585,7 @@ public sealed class ParserTests
                     labels: [ubuntu-latest, x64]
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "job-runs-on-mapping.yml");
@@ -2585,15 +2605,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobRunsOnExpression_PopulatesRunnerLabelsExpr()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ${{ github.ref }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "job-runs-on-expression.yml");
@@ -2612,7 +2631,15 @@ public sealed class ParserTests
     public async Task Parse_RunsOnMappingGroupNull_ReportsEmptyAtGroupLine()
     {
         // group: has null value on line 4 — diagnostic must point to line 4, not to the next line
-        var yaml = "on: push\njobs:\n  j:\n    runs-on:\n      group:\n    steps:\n      - run: echo ok\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on:
+              group:
+            steps:
+              - run: echo ok
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "group-null.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
         await Assert.That(diag.Message).IsNotNull();
@@ -2624,7 +2651,15 @@ public sealed class ParserTests
     public async Task Parse_RunsOnMappingGroupEmptyQuoted_ReportsEmptyAtQuoteLine()
     {
         // group: '' on line 5 — diagnostic must point to '', not to the next line
-        var yaml = "on: push\njobs:\n  j:\n    runs-on:\n      group: ''\n    steps:\n      - run: echo ok\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on:
+              group: ''
+            steps:
+              - run: echo ok
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "group-empty.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
         await Assert.That(diag.Message).IsNotNull();
@@ -2636,7 +2671,15 @@ public sealed class ParserTests
     public async Task Parse_RunsOnMappingLabelsEmptyQuoted_ReportsEmptyAtQuoteLine()
     {
         // labels: '' on line 5 — diagnostic must point to '', not to the next line
-        var yaml = "on: push\njobs:\n  j:\n    runs-on:\n      labels: ''\n    steps:\n      - run: echo ok\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on:
+              labels: ''
+            steps:
+              - run: echo ok
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "labels-empty.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
         await Assert.That(diag.Message).IsNotNull();
@@ -2648,7 +2691,17 @@ public sealed class ParserTests
     public async Task Parse_NullStepExplicit_ReportsEmptyAtNullText()
     {
         // `- null` on line 7 — diagnostic must point to "null" text (col 9), not past it
-        var yaml = "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n      - null\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+              - null
+
+        """);
+            
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-step.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("element of \"steps\" section should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
@@ -2660,7 +2713,17 @@ public sealed class ParserTests
     public async Task Parse_BareDashStep_ReportsEmptyAtDashPosition()
     {
         // bare `-` on line 8 — diagnostic must point to after the dash (col 8)
-        var yaml = "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - foo: aaa\n        bar: bbb\n      -\n      - run: echo done\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on: ubuntu-latest
+            steps:
+              - foo: aaa
+                bar: bbb
+              -
+              - run: echo done
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "bare-dash-step.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("element of \"steps\" section should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
@@ -2671,15 +2734,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepWithoutRunOrUses_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ubuntu-latest
                 steps:
                     - name: only-name
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-missing-run-uses.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("step must run script", StringComparison.Ordinal))).IsTrue();
@@ -2688,7 +2750,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepWithRunAndUses_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2696,8 +2758,7 @@ public sealed class ParserTests
                 steps:
                     - run: echo hi
                       uses: actions/checkout@v4
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-uses.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key", StringComparison.Ordinal))).IsTrue();
@@ -2706,7 +2767,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepRun_PopulatesExecRunAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2716,8 +2777,7 @@ public sealed class ParserTests
                       run: echo ok
                       shell: bash
                       working-directory: src
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "step-run-ast.yml");
@@ -2738,7 +2798,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepUses_PopulatesExecActionAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2747,8 +2807,7 @@ public sealed class ParserTests
                     - uses: actions/checkout@v4
                       with:
                         fetch-depth: '0'
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "step-uses-ast.yml");
@@ -2768,7 +2827,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepUses_WithFlowStyleInputs_PreservesUsesScalar()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2776,8 +2835,7 @@ public sealed class ParserTests
                 steps:
                     - uses: actions/checkout@v4
                       with: { fetch-depht: 1 }
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "step-uses-flow-with.yml");
@@ -2799,7 +2857,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepDockerAction_PopulatesEntrypointAndArgsAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2809,8 +2867,7 @@ public sealed class ParserTests
                       with:
                         entrypoint: /bin/sh
                         args: -c "echo ok"
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "step-docker-ast.yml");
@@ -2829,12 +2886,11 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobMustBeMapping_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build: []
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-mapping.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("must be object", StringComparison.Ordinal))).IsTrue();
@@ -2843,7 +2899,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobStrategyMustBeMapping_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2851,8 +2907,7 @@ public sealed class ParserTests
                 strategy: []
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-strategy-shape.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy must be object", StringComparison.Ordinal))).IsTrue();
@@ -2861,7 +2916,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobMatrixIncludeMustBeSequenceOrScalar_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2871,8 +2926,7 @@ public sealed class ParserTests
                         include: { os: ubuntu-latest }
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-matrix-include-shape.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strategy.matrix.include must be array or string", StringComparison.Ordinal))).IsTrue();
@@ -2881,7 +2935,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobTimeoutMinutes_NonPositive_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             zero:
@@ -2894,8 +2948,7 @@ public sealed class ParserTests
                 timeout-minutes: -1
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-timeout-non-positive.yml");
         var count = result.Diagnostics.Count(x => x.Message.Contains("timeout-minutes must be greater than 0", StringComparison.Ordinal));
@@ -2905,7 +2958,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepTimeoutMinutes_NonPositive_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2915,8 +2968,7 @@ public sealed class ParserTests
                       run: echo zero
                     - timeout-minutes: -1
                       run: echo neg
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-timeout-non-positive.yml");
         var count = result.Diagnostics.Count(x => x.Message.Contains("timeout-minutes must be greater than 0", StringComparison.Ordinal));
@@ -2926,7 +2978,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobTimeoutMinutes_Expression_AcceptsExpression()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2934,8 +2986,8 @@ public sealed class ParserTests
                 timeout-minutes: ${{ fromJson(matrix.timeout || 10) }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
+
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-timeout-expression.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsFalse();
@@ -2948,7 +3000,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepTimeoutMinutes_Expression_AcceptsExpression()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -2956,8 +3008,7 @@ public sealed class ParserTests
                 steps:
                     - timeout-minutes: ${{ fromJson(matrix.timeout || 10) }}
                       run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-timeout-expression.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsFalse();
@@ -2968,7 +3019,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_FailFast_Off_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             test:
@@ -2977,8 +3028,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ng
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "fail-fast-off.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("fail-fast must be bool", StringComparison.Ordinal))).IsTrue();
@@ -2987,7 +3037,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_TimeoutMinutes_String_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             test:
@@ -2995,8 +3045,7 @@ public sealed class ParserTests
                 steps:
                     - timeout-minutes: two minutes
                       run: echo ng
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "timeout-string.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("timeout-minutes must be number", StringComparison.Ordinal))).IsTrue();
@@ -3006,7 +3055,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepEnvExpressionScalar_ParsesWithoutError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             test:
@@ -3019,8 +3068,7 @@ public sealed class ParserTests
                 steps:
                     - run: echo "$FOO"
                       env: ${{ matrix.env_object }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-env-expression-scalar.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -3035,7 +3083,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepEnvPlainTextScalar_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3043,8 +3091,7 @@ public sealed class ParserTests
                 steps:
                     - run: echo ok
                       env: hello_world
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-env-plain-text.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("env", StringComparison.Ordinal) && x.Message.Contains("expression", StringComparison.OrdinalIgnoreCase))).IsTrue();
@@ -3053,7 +3100,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowEnvPlainTextScalar_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         env: some_value
         jobs:
@@ -3061,8 +3108,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-env-plain-text.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("env", StringComparison.Ordinal))).IsTrue();
@@ -3072,7 +3118,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_PermissionsWithComment_PositionPointsToValue()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         permissions:
             contents: read # this is a comment with write in it
@@ -3082,8 +3128,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "permissions-comment.yml");
         var arena = result.Arena!;
@@ -3103,7 +3148,17 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_BrokenYaml_ErrorPositionNotAtFirstLine()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        with\n          bad: yaml\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+                with
+                  bad: yaml
+            
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "broken.yml");
         await Assert.That(result.HasFatalError).IsTrue();
         var diag = result.Diagnostics[0];
@@ -3115,8 +3170,17 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WebhookUnsupportedActivityType_PositionPointsToValue()
     {
-        var yaml = "on:\n  issues:\n    types: created\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
-        var result = WorkflowParser.Parse(yaml.ToArray(), "webhook-types.yml");
+        var yaml = NormalizeEol("""
+        on:
+          issues:
+            types: created
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "webhook-types.yml");
         await Assert.That(result.HasFatalError).IsFalse();
         var typeDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("unsupported activity type", StringComparison.Ordinal));
         await Assert.That(typeDiag.Message).IsNotEmpty();
@@ -3147,7 +3211,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             test:
@@ -3160,8 +3224,7 @@ public sealed class ParserTests
                 runs-on: ${{ matrix.os }}
                 steps:
                     - run: echo ${{ matrix.npm }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "matrix-include-extra-keys.yml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -3172,7 +3235,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StrategyMaxParallel_NonPositive_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             zero:
@@ -3187,8 +3250,7 @@ public sealed class ParserTests
                     max-parallel: -1
                 steps:
                     - run: echo neg
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-max-parallel-non-positive.yml");
         var count = result.Diagnostics.Count(x => x.Message.Contains("strategy.max-parallel must be greater than 0", StringComparison.Ordinal));
@@ -3198,7 +3260,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobContainerMissingImage_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3207,8 +3269,7 @@ public sealed class ParserTests
                     options: --cpus 1
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-container-image.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"image\" is missing in \"container\" section", StringComparison.Ordinal))).IsTrue();
@@ -3217,7 +3278,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobServicesMustBeMapping_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3225,8 +3286,7 @@ public sealed class ParserTests
                 services: []
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-services-shape.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("services must be object", StringComparison.Ordinal))).IsTrue();
@@ -3237,14 +3297,14 @@ public sealed class ParserTests
     {
         static string BuildYaml(string body)
         {
-            return (
-                    "on: push\n"
-                    + "jobs:\n"
-                    + "  reuse:\n"
-                    + "    uses: owner/repo/.github/workflows/reuse.yml@main\n"
-                    + body
-                    + "\n")
-                    .Replace("\r\n", "\n");
+            return NormalizeEol(
+                    $$"""
+                    on: push
+                    jobs:
+                      reuse:
+                        uses: owner/repo/.github/workflows/reuse.yml@main
+                    {{body}}
+                    """);
         }
 
         var cases = new (string Name, string Body, string Key)[]
@@ -3277,7 +3337,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobWithWithoutUses_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3286,8 +3346,7 @@ public sealed class ParserTests
                     node-version: '20'
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
@@ -3298,7 +3357,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobSecretsWithoutUses_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3306,8 +3365,7 @@ public sealed class ParserTests
                 secrets: inherit
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
@@ -3318,14 +3376,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobSecretsScalarMustBeInherit_ReportsError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             reuse:
                 uses: owner/repo/.github/workflows/reuse.yml@main
                 secrets: not-inherit
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-secrets-scalar.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secrets scalar must be 'inherit'", StringComparison.Ordinal))).IsTrue();
@@ -3334,7 +3391,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobIf_WithStepOnlyContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3342,8 +3399,7 @@ public sealed class ParserTests
                 if: steps.prep.outputs.ok == 'true'
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3352,7 +3408,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobIf_WithStrategyContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3360,8 +3416,7 @@ public sealed class ParserTests
                 if: strategy.fail-fast == true
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-strategy-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"strategy\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3370,7 +3425,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobIf_WithMatrixContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3378,8 +3433,7 @@ public sealed class ParserTests
                 if: matrix.os == 'ubuntu-latest'
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-matrix-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"matrix\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3388,7 +3442,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobIf_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3396,8 +3450,7 @@ public sealed class ParserTests
                 if: secrets.TOKEN != ''
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-secrets-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3406,7 +3459,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepIf_UnknownFunction_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3414,8 +3467,7 @@ public sealed class ParserTests
                 steps:
                     - if: unknownFn(github.ref)
                       run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-unknown-function.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
@@ -3424,7 +3476,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepIf_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3432,8 +3484,7 @@ public sealed class ParserTests
                 steps:
                     - if: secrets.TOKEN != ''
                       run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3442,15 +3493,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepRun_WithSecretsContext_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ${{ secrets.TOKEN }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-secrets-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("secrets", StringComparison.Ordinal) && x.Message.Contains("not available", StringComparison.Ordinal))).IsFalse();
@@ -3459,7 +3509,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobEnv_WithStepOnlyContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -3468,8 +3518,7 @@ public sealed class ParserTests
               BAD: ${{ steps.prep.outputs.ok }}
             steps:
               - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3478,7 +3527,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StrategyMatrix_WithRunnerContext_ReportsContextAvailability()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           test:
@@ -3490,8 +3539,7 @@ public sealed class ParserTests
             timeout-minutes: 10
             steps:
               - run: echo done
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-runner-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runner\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -3500,7 +3548,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StrategyMatrix_WithAllowedContexts_DoesNotReportError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           test:
@@ -3512,8 +3560,7 @@ public sealed class ParserTests
             timeout-minutes: 10
             steps:
               - run: echo done
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-github-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("is not available in strategy expressions", StringComparison.Ordinal))).IsFalse();
@@ -3522,23 +3569,22 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobOutputs_WithStepsContext_DoesNotReportSemanticError()
     {
-        var yaml = """
-                on: push
-                jobs:
-                    build:
-                        runs-on: ubuntu-latest
-                        outputs:
-                            output1: ${{ steps.step1.outputs.firstword }}
-                            output2: ${{ steps.step2.outputs.secondword }}
-                        steps:
-                            - name: output step1
-                                id: step1
-                                run: echo "firstword=hello" >> "$GITHUB_OUTPUT"
-                            - name: output step2
-                                id: step2
-                                run: echo "secondword=world" >> "$GITHUB_OUTPUT"
-                """
-        .Replace("\r\n", "\n");
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            outputs:
+              output1: ${{ steps.step1.outputs.firstword }}
+              output2: ${{ steps.step2.outputs.secondword }}
+            steps:
+              - name: output step1
+                id: step1
+                run: echo "firstword=hello" >> "$GITHUB_OUTPUT"
+              - name: output step2
+                id: step2
+                run: echo "secondword=world" >> "$GITHUB_OUTPUT"
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-outputs-steps-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsFalse();
@@ -3547,15 +3593,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepRun_EmbeddedUnknownFunction_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
             runs-on: ubuntu-latest
             steps:
               - run: echo ${{ unknownFn(github.ref) }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-unknown-function.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
@@ -3564,7 +3609,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepWith_EmbeddedUnknownFunction_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -3573,8 +3618,7 @@ public sealed class ParserTests
               - uses: actions/cache@v4
                 with:
                   key: ${{ unknownFn(github.ref) }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-with-unknown-function.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
@@ -3583,7 +3627,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepIf_FunctionTypeMismatch_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
           build:
@@ -3591,8 +3635,7 @@ public sealed class ParserTests
             steps:
               - if: contains(1, 'x')
                 run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-type-mismatch.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
@@ -3601,15 +3644,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepRun_FormatPlaceholderOutOfRange_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ${{ format('value-{1}', github.ref) }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-format-placeholder.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("format placeholder '{1}' requires argument 2, but got 1 format argument(s)", StringComparison.Ordinal))).IsTrue();
@@ -3618,11 +3660,10 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnScalar_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-scalar.yml");
         var arena = result.Arena!;
 
@@ -3640,11 +3681,10 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnSequence_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: [push, pull_request]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-sequence.yml");
         var arena = result.Arena!;
 
@@ -3662,13 +3702,12 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_OnMappingWithFilters_PopulatesEventAst()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
             push:
                 branches: [main]
         jobs: {}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-mapping-filters.yml");
 
@@ -3685,7 +3724,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_AstStructure_ComprehensiveWorkflow_PopulatesDeepNodes()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         name: ci
         run-name: CI Run
         on:
@@ -3800,9 +3839,7 @@ public sealed class ParserTests
                     target: prod
                 secrets:
                     token: ghs_dummy_token
-        """
-        .Replace("\r\n", "\n");
-
+        """);
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "ast-comprehensive.yml");
         var arena = result.Arena!;
@@ -3898,7 +3935,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_AstRanges_MajorNodesAreNonDefault()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         name: ci
         on:
             push:
@@ -3928,8 +3965,7 @@ public sealed class ParserTests
                         image: redis:7
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "ast-ranges.yml");
@@ -3972,7 +4008,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_AstStructure_MatrixRawYamlKinds_PopulatesStringArrayObjectNodes()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -3992,8 +4028,7 @@ public sealed class ParserTests
                             - [one, two]
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "ast-matrix-rawyaml.yml");
@@ -4092,7 +4127,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_BrokenYaml_ReportsCorrectLineNumber()
     {
-        var yaml = "on: push\njobs:\n  linux:\n    runs-on: ubuntu-latest\n    steps:\n      - run: foo:\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          linux:
+            runs-on: ubuntu-latest
+            steps:
+              - run: foo:
+        """u8;
+            
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         await Assert.That(result.HasFatalError).IsTrue();
         var diag = result.Diagnostics[0];
@@ -4103,7 +4146,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WebhookOptionNotAllowed_MessageContainsKeyName()
     {
-        var yaml = "on:\n  release:\n    tags: v*.*.*\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on:
+          release:
+            tags: v*.*.*
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("filter is not available"));
         await Assert.That(diag.Message).Contains("tags");
@@ -4113,7 +4165,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_TimeoutMinutesInvalidValue_ReportsCorrectPosition()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        timeout-minutes: two\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+                timeout-minutes: two
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("timeout-minutes"));
         // "two" starts at line 7, column 26 (8 spaces + "timeout-minutes: " = 26)
@@ -4126,7 +4186,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowEnv_WithHashFiles_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         env:
             CACHE_KEY: ${{ hashFiles('**/package-lock.json') }}
@@ -4135,8 +4195,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflow-env-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4145,7 +4204,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobIf_WithHashFiles_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4153,8 +4212,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4163,19 +4221,18 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StrategyMatrix_WithHashFiles_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
-            build:
-                strategy:
-                    matrix:
-                        key:
-                            - ${{ hashFiles('**/package-lock.json') }}
-                runs-on: ubuntu-latest
-                steps:
-                    - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+          build:
+            strategy:
+              matrix:
+                key:
+                  - ${{ hashFiles('**/package-lock.json') }}
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "strategy-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4184,15 +4241,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepRun_WithHashFiles_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ${{ hashFiles('**/package-lock.json') }}
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-run-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
@@ -4201,7 +4257,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepIf_WithHashFiles_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4209,8 +4265,7 @@ public sealed class ParserTests
                 steps:
                     - if: hashFiles('**/package-lock.json') != ''
                       run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-if-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
@@ -4221,7 +4276,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobName_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4229,8 +4284,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-name-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4239,15 +4293,14 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobRunsOn_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
                 runs-on: ${{ secrets.RUNNER }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-runs-on-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4256,7 +4309,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobEnvironment_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4264,8 +4317,7 @@ public sealed class ParserTests
                 runs-on: ubuntu-latest
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-environment-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4274,7 +4326,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobEnv_WithSecretsContext_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4283,8 +4335,7 @@ public sealed class ParserTests
                     TOKEN: ${{ secrets.TOKEN }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'secrets' is not available", StringComparison.Ordinal))).IsFalse();
@@ -4293,7 +4344,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobContinueOnError_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4301,8 +4352,7 @@ public sealed class ParserTests
                 continue-on-error: ${{ secrets.ALLOW_FAIL != '' }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-continue-on-error-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4311,7 +4361,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobTimeoutMinutes_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4319,8 +4369,7 @@ public sealed class ParserTests
                 timeout-minutes: ${{ fromJSON(secrets.TIMEOUT) }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-timeout-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4331,7 +4380,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobEnvironmentUrl_WithStepsContext_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             deploy:
@@ -4342,8 +4391,7 @@ public sealed class ParserTests
                 steps:
                     - id: deploy
                       run: echo "url=https://example.com" >> $GITHUB_OUTPUT
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-env-url-steps.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available", StringComparison.Ordinal))).IsFalse();
@@ -4352,7 +4400,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobEnvironmentUrl_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             deploy:
@@ -4362,8 +4410,7 @@ public sealed class ParserTests
                     url: ${{ secrets.DEPLOY_URL }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-env-url-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4374,7 +4421,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobContainerEnv_WithRunnerContext_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4385,8 +4432,7 @@ public sealed class ParserTests
                         RUNNER_OS: ${{ runner.os }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-env-runner.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'runner' is not available", StringComparison.Ordinal))).IsFalse();
@@ -4397,7 +4443,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobContainerCredentials_WithEnvContext_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4409,8 +4455,7 @@ public sealed class ParserTests
                         password: ${{ secrets.REGISTRY_TOKEN }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "container-credentials-env.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal))).IsFalse();
@@ -4421,7 +4466,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobDefaultsRun_WithEnvContext_NoError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4431,8 +4476,7 @@ public sealed class ParserTests
                         working-directory: ${{ env.WORK_DIR }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-run-env.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'env' is not available", StringComparison.Ordinal))).IsFalse();
@@ -4441,7 +4485,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobDefaultsRun_WithSecretsContext_ReportsSemanticError()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on: push
         jobs:
             build:
@@ -4451,8 +4495,7 @@ public sealed class ParserTests
                         working-directory: ${{ secrets.WORK_DIR }}
                 steps:
                     - run: echo ok
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "defaults-run-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -4462,7 +4505,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_FailFastInvalidValue_ReportsCorrectPosition()
     {
-        var yaml = "on: push\njobs:\n  test:\n    strategy:\n      fail-fast: off\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            strategy:
+              fail-fast: off
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("fail-fast"));
         // "off" starts at line 5, column 18 (6 spaces + "fail-fast: " = 18)
@@ -4474,7 +4526,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MaxParallelInvalidValue_ReportsCorrectPosition()
     {
-        var yaml = "on: push\njobs:\n  test:\n    strategy:\n      max-parallel: 1.5\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            strategy:
+              max-parallel: 1.5
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("max-parallel must be integer"));
         // "1.5" starts at line 5, column 21 (6 spaces + "max-parallel: " = 21)
@@ -4490,7 +4551,15 @@ public sealed class ParserTests
     {
         // "permissions:" is on line 4, column 5 (4 spaces indent), colon at column 16.
         // The empty value position should be line 4, column 17 (right after the colon).
-        var yaml = "on: push\njobs:\n  test:\n    permissions:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            permissions:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("permissions value must not be empty"));
         // Must be on the "permissions:" line (line 4), NOT the "runs-on:" line (line 5)
@@ -4503,7 +4572,15 @@ public sealed class ParserTests
     public async Task Parse_NullScalarPermissions_WorkflowLevel_ReportsPermissionsLine()
     {
         // "permissions:" is on line 2
-        var yaml = "on: push\npermissions:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        permissions:
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("permissions value must not be empty"));
         // Must be on the "permissions:" line (line 2), NOT the "jobs:" line (line 3)
@@ -4514,7 +4591,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_EmptyStepId_ReportsEmptyNotScalar()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        id: \"\"\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+                id: ""
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("string should not be empty"));
         await Assert.That(diag.Message).IsNotEmpty();
@@ -4527,7 +4612,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_NonSequenceSteps_MessageDoesNotContainUtf8Slice()
     {
-        var yaml = "on: push\njobs:\n  myJob:\n    runs-on: ubuntu-latest\n    steps: notASequence\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          myJob:
+            runs-on: ubuntu-latest
+            steps: notASequence
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).IsNotEmpty();
@@ -4538,7 +4629,14 @@ public sealed class ParserTests
     [Test]
     public async Task Lint_StepWithoutRunOrUses_NoZeroZeroUnpinnedUses()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - name: broken\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - name: broken
+        """u8;
         var lintResult = new LintEngine([new Seiton.Core.Linting.Rules.UnpinnedUsesRule()])
             .Check(yaml.ToArray(), "test.yaml");
         // After the fix, no unpinned-uses diagnostic should be emitted for empty uses
@@ -4550,7 +4648,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ContainerNull_NoDiagnostic()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    container: null\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            container: null
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var hasContainerDiag = result.Diagnostics.Any(d => d.Message.Contains("container"));
         await Assert.That(hasContainerDiag).IsFalse();
@@ -4560,7 +4666,19 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ServiceEntrypointAndCommand_NoDiagnostic()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    services:\n      redis:\n        image: redis\n        entrypoint: redis-server\n        command: --save 60 1\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            services:
+              redis:
+                image: redis
+                entrypoint: redis-server
+                command: --save 60 1
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var hasUnexpectedDiag = result.Diagnostics.Any(d => d.Message.Contains("unexpected") && (d.Message.Contains("entrypoint") || d.Message.Contains("command")));
         await Assert.That(hasUnexpectedDiag).IsFalse();
@@ -4571,17 +4689,17 @@ public sealed class ParserTests
     public async Task Parse_NestedScalarAnchorInsideOuterRecording_Resolves()
     {
         var yaml = """
-            on: push
-            jobs:
-              test1:
-                runs-on: ubuntu-latest
-                steps:
-                  - &step
-                    run: echo hello
-                    if: &cond true
-                  - run: echo two
-                    if: *cond
-            """u8;
+        on: push
+        jobs:
+            test1:
+            runs-on: ubuntu-latest
+            steps:
+                - &step
+                run: echo hello
+                if: &cond true
+                - run: echo two
+                if: *cond
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         // *cond should resolve correctly — no "if must be string" error
         var hasIfDiag = result.Diagnostics.Any(d => d.Message.Contains("if must be string"));
@@ -4593,16 +4711,16 @@ public sealed class ParserTests
     public async Task Parse_NestedScalarAnchorInsideJobAnchor_Resolves()
     {
         var yaml = """
-            on: push
-            jobs:
-              test1: &job
-                runs-on: &runner ubuntu-latest
-                steps:
-                  - uses: actions/checkout@v4
-                    with:
-                      ref: *runner
-              test2: *job
-            """u8;
+        on: push
+        jobs:
+            test1: &job
+            runs-on: &runner ubuntu-latest
+            steps:
+                - uses: actions/checkout@v4
+                with:
+                    ref: *runner
+            test2: *job
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         // *runner should resolve — no "recursive alias" or "must be string" errors
         var hasRunnerDiag = result.Diagnostics.Any(d =>
@@ -4614,7 +4732,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_NullScalarTag_ReturnsNull()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    container: null\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            container: null
+            steps:
+              - run: echo
+        """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         // If ScalarTag.Null is returned correctly, container: null doesn't produce a parse error
         var hasParseDiag = result.Diagnostics.Any(d => d.Message.Contains("container must be"));
@@ -4626,8 +4752,18 @@ public sealed class ParserTests
     public async Task Parse_UnusedAnchor_ReportsCorrectPosition()
     {
         // &unused_env is at line 5, col 22
-        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n        env: &unused_env\n          FOO: bar\n      - run: echo done\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+                env: &unused_env
+                  FOO: bar
+              - run: echo done
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unused_env") && d.Message.Contains("not used"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(7);
         await Assert.That(diag.Location.StartColumn).IsEqualTo(14);
@@ -4637,8 +4773,15 @@ public sealed class ParserTests
     public async Task Parse_UnusedAnchor_OnScalar_ReportsAnchorPosition()
     {
         // on: &anchor push — the anchor &anchor starts at col 5
-        var yaml = "on: &anchor push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: &anchor push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("\"anchor\"") && d.Message.Contains("not used"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(1);
         await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
@@ -4648,8 +4791,17 @@ public sealed class ParserTests
     public async Task Parse_UnusedAnchor_NestedInMapping_ReportsAnchorPosition()
     {
         // env: &unused at col 10
-        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env: &unused\n      FOO: bar\n    steps:\n      - run: echo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            env: &unused
+              FOO: bar
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("\"unused\"") && d.Message.Contains("not used"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);
         await Assert.That(diag.Location.StartColumn).IsEqualTo(10);
@@ -4660,8 +4812,15 @@ public sealed class ParserTests
     public async Task Parse_StepNullElement_ReportsEmptyAndMissingRunUses()
     {
         // `- null` should produce two diagnostics
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - null\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - null
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diags = result.Diagnostics;
         await Assert.That(diags.Any(d => d.Message.Contains("element of \"steps\" section should not be empty"))).IsTrue();
         await Assert.That(diags.Any(d => d.Message.Contains("step must run script with \"run\" section or run action with \"uses\" section"))).IsTrue();
@@ -4671,8 +4830,16 @@ public sealed class ParserTests
     public async Task Parse_StepBareDash_ReportsEmptyAndMissingRunUses()
     {
         // bare `-` produces null scalar
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      -\n      - run: echo ok\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              -
+              - run: echo ok
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diags = result.Diagnostics;
         await Assert.That(diags.Any(d => d.Message.Contains("element of \"steps\" section should not be empty"))).IsTrue();
         await Assert.That(diags.Any(d => d.Message.Contains("step must run script"))).IsTrue();
@@ -4682,8 +4849,15 @@ public sealed class ParserTests
     public async Task Parse_StepEmptyMapping_ReportsEmptyAndMissingRunUses()
     {
         // `- {}` produces MappingStart then MappingEnd with no keys
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - { }\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - { }
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diags = result.Diagnostics;
         await Assert.That(diags.Any(d => d.Message.Contains("element of \"steps\" section should not be empty"))).IsTrue();
         await Assert.That(diags.Any(d => d.Message.Contains("step must run script"))).IsTrue();
@@ -4693,8 +4867,15 @@ public sealed class ParserTests
     public async Task Parse_StepNullElement_Position_PointsToElement()
     {
         // line 6: "      - null" — the null scalar starts at col 9
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - null\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - null
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("element of \"steps\" section should not be empty"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(6);
     }
@@ -4704,8 +4885,16 @@ public sealed class ParserTests
     public async Task Parse_StepRunThenUses_ReportsUnexpectedRunForAction()
     {
         // run: appears first, then uses: → run is unexpected for action step
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n        uses: actions/checkout@v4\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+                uses: actions/checkout@v4
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"run\" for step to execute action"));
         await Assert.That(diag.Message).Contains("expected one of");
         await Assert.That(diag.Message).Contains("\"uses\"");
@@ -4715,8 +4904,16 @@ public sealed class ParserTests
     public async Task Parse_StepUsesThenRun_ReportsUnexpectedUsesForRun()
     {
         // uses: appears first, then run: → uses is unexpected for run step
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        run: echo hello\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                run: echo hello
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"uses\" for step to run shell command"));
         await Assert.That(diag.Message).Contains("expected one of");
         await Assert.That(diag.Message).Contains("\"run\"");
@@ -4726,8 +4923,16 @@ public sealed class ParserTests
     public async Task Parse_StepRunThenUses_PositionPointsToRunKey()
     {
         // run: on line 6 at col 9
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n        uses: actions/checkout@v4\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+                uses: actions/checkout@v4
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"run\" for step to execute action"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(6);
         await Assert.That(diag.Location.StartColumn).IsEqualTo(9);
@@ -4737,8 +4942,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ActionStepWithShell_ReportsUnexpectedShell()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        shell: bash\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                shell: bash
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"shell\" for step to execute action"));
         await Assert.That(diag.Message).Contains("expected one of");
         await Assert.That(diag.Location.StartLine).IsEqualTo(7);
@@ -4748,16 +4961,33 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ActionStepWithWorkingDirectory_ReportsUnexpectedWD()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        working-directory: /foo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                working-directory: /foo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"working-directory\" for step to execute action"))).IsTrue();
     }
 
     [Test]
     public async Task Parse_RunStepWithWith_ReportsUnexpectedWith()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        with:\n          foo: bar\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                with:
+                  foo: bar
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"with\" for step to run shell command"));
         await Assert.That(diag.Message).Contains("expected one of");
     }
@@ -4765,8 +4995,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ActionStepWithUnknownKey_ReportsUnexpectedForAction()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        foobar: baz\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                foobar: baz
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"foobar\" for step to execute action"));
         await Assert.That(diag.Message).Contains("expected one of");
     }
@@ -4774,8 +5012,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_RunStepWithUnknownKey_ReportsUnexpectedForRun()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        foobar: baz\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                foobar: baz
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"foobar\" for step to run shell command"));
         await Assert.That(diag.Message).Contains("expected one of");
     }
@@ -4784,8 +5030,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepUppercaseRUN_ReportsUnexpectedForRunStep()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - RUN: echo\n        run: echo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - RUN: echo
+                run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"RUN\" for step to run shell command"));
         await Assert.That(diag.Message).Contains("expected one of");
         await Assert.That(diag.Location.StartLine).IsEqualTo(6);
@@ -4795,8 +5049,18 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepWithDuplicateKeysCaseInsensitive_ReportsDuplicate()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: foo/bar@main\n        with:\n          foo: a\n          FOO: b\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: foo/bar@main
+                with:
+                  foo: a
+                  FOO: b
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("key \"FOO\" is duplicated in \"with\" section"));
         await Assert.That(diag.Message).Contains("case insensitive");
         await Assert.That(diag.Location.StartLine).IsEqualTo(9);
@@ -4806,8 +5070,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepWithOnlyName_ReportsNewMissingRunUsesMessage()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - name: no-exec\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - name: no-exec
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("step must run script"));
         await Assert.That(diag.Message).IsEqualTo("step must run script with \"run\" section or run action with \"uses\" section");
     }
@@ -4816,8 +5087,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_StepWithScalar_ReportsScalarNotMapping()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with: foo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                with: foo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("\"with\" section is scalar node but mapping node is expected"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(7);
     }
@@ -4827,7 +5106,15 @@ public sealed class ParserTests
     public async Task Parse_StepsNullScalar_ReportsSequenceNodeWithNullTag()
     {
         // steps: (empty, null scalar) → "steps" section must be sequence node but got scalar node with "!!null" tag
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+
+        """);
+            
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).Contains("scalar node");
@@ -4838,8 +5125,14 @@ public sealed class ParserTests
     public async Task Parse_StepsStringScalar_ReportsSequenceNodeWithoutTag()
     {
         // steps: notASequence → scalar without !!null tag
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps: notASequence\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps: notASequence
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).Contains("scalar node");
         await Assert.That(diag.Message).DoesNotContain("\"!!null\"");
@@ -4849,8 +5142,15 @@ public sealed class ParserTests
     public async Task Parse_StepsMapping_ReportsSequenceNodeGotMapping()
     {
         // steps: {foo: bar} → mapping node
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      foo: bar\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              foo: bar
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).Contains("mapping node");
     }
@@ -4859,8 +5159,13 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_JobMissingSteps_ReportsNewMissingMessage()
     {
-        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("\"steps\" section is missing"));
         await Assert.That(diag.Message).IsEqualTo("\"steps\" section is missing in job \"build\"");
     }
@@ -4869,8 +5174,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ScheduleScalar_ReportsConfiguredWithMapping()
     {
-        var yaml = "on: schedule\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: schedule
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("schedule"));
         await Assert.That(diag.Message).IsEqualTo("schedule event must be configured with mapping");
     }
@@ -4878,8 +5190,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ScheduleInSequence_ReportsConfiguredWithMapping()
     {
-        var yaml = "on: [push, schedule]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: [push, schedule]
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("schedule"));
         await Assert.That(diag.Message).IsEqualTo("schedule event must be configured with mapping");
     }
@@ -4888,8 +5207,15 @@ public sealed class ParserTests
     public async Task Parse_ScheduleScalar_Position_PointsToEventName()
     {
         // on: schedule — "schedule" starts at col 5
-        var yaml = "on: schedule\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
-        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var yaml = """
+        on: schedule
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("schedule event must be configured"));
         await Assert.That(diag.Location.StartLine).IsEqualTo(1);
         await Assert.That(diag.Location.StartColumn).IsEqualTo(5);
@@ -4900,7 +5226,15 @@ public sealed class ParserTests
     public async Task Parse_ContainerImageScalar_PositionPointsToImageValue()
     {
         // container: ubuntu:20.04 — "ubuntu:20.04" starts at col 16
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    container: ubuntu:20.04\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            container: ubuntu:20.04
+            steps:
+              - run: echo
+        """u8;
         var bytes = yaml.ToArray();
         var result = WorkflowParser.Parse(bytes, "test.yaml");
         await Assert.That(result.HasFatalError).IsFalse();
@@ -4912,7 +5246,14 @@ public sealed class ParserTests
     public async Task Parse_RunsOnScalar_PositionPointsToLabelValue()
     {
         // runs-on: ubuntu-latest — "ubuntu-latest" starts at col 14
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
         var bytes = yaml.ToArray();
         var result = WorkflowParser.Parse(bytes, "test.yaml");
         var runner = result.Workflow!.Jobs.Get(bytes, "test"u8)!.RunsOn;
@@ -4931,7 +5272,14 @@ public sealed class ParserTests
     public async Task Parse_StepRunValue_PositionPointsToScalarContent()
     {
         // run: echo hello — "echo hello" starts at col 14
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n"u8;
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+        """u8;
         var bytes = yaml.ToArray();
         var result = WorkflowParser.Parse(bytes, "test.yaml");
         var arena = result.Arena!;
@@ -4945,7 +5293,7 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ScheduleEmptyCron_ReportsStringNotEmpty()
     {
-        var yaml = """
+        var yaml = NormalizeEol("""
         on:
           schedule:
             - cron: ''
@@ -4954,8 +5302,7 @@ public sealed class ParserTests
             runs-on: ubuntu-latest
             steps:
               - run: echo hello
-        """
-        .Replace("\r\n", "\n");
+        """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-cron.yml");
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
@@ -4965,7 +5312,21 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_WorkflowDispatchEmptyOption_ReportsStringNotEmpty()
     {
-        var yaml = "on:\n  workflow_dispatch:\n    inputs:\n      bar:\n        type: choice\n        options:\n          - ''\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on:
+          workflow_dispatch:
+            inputs:
+              bar:
+                type: choice
+                options:
+                  - ''
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo\n
+        """);
+
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
         await Assert.That(diag.Message).IsNotNull();
@@ -4976,7 +5337,18 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ImageVersionEmptyVersion_ReportsStringNotEmpty()
     {
-        var yaml = "on:\n  image_version:\n    versions:\n      - ''\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on:
+          image_version:
+            versions:
+              - ''
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
         await Assert.That(diag.Message).IsNotNull();
@@ -4987,7 +5359,15 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_TimeoutMinutesQuotedString_ReportsError()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        timeout-minutes: '3.5'\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+                timeout-minutes: '3.5'
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("timeout-minutes must be number or expression"));
         await Assert.That(diag.Message).IsNotNull();
@@ -4999,7 +5379,17 @@ public sealed class ParserTests
     public async Task Parse_TimeoutMinutesQuotedString_MultiStep_ReportsError()
     {
         // Quoted '3.5' should error, unquoted 3.5 should not
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo quoted\n        timeout-minutes: '3.5'\n      - run: echo unquoted\n        timeout-minutes: 3.5\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo quoted
+                timeout-minutes: '3.5'
+              - run: echo unquoted
+                timeout-minutes: 3.5
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var errors = result.Diagnostics.Where(d => d.Message.Contains("timeout-minutes")).ToList();
         // Only step[1] (quoted) should error; step[2] (unquoted) should not
@@ -5011,7 +5401,16 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MaxParallelQuotedString_ReportsError()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      max-parallel: '3'\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            strategy:
+              max-parallel: '3'
+            steps:
+              - run: echo
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("max-parallel must be integer"));
         await Assert.That(diag.Message).IsNotNull();
@@ -5022,7 +5421,19 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_MatrixIncludeNullKey_PropertyAccessible()
     {
-        var yaml = "on: push\njobs:\n  foo:\n    strategy:\n      matrix:\n        include:\n          - null: ${{ fromJSON('null') }}\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.null }}\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          foo:
+            strategy:
+              matrix:
+                include:
+                  - null: ${{ fromJSON('null') }}
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ matrix.null }}
+        """);
+
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         // Should NOT report "property \"null\" is not defined" — null key should be accessible
         var undefinedProp = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("property \"null\" is not defined"));
@@ -5033,7 +5444,21 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ArrayBoolVsArrayObject_ReportsComparisonError()
     {
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        a:\n          - [true]\n        a2:\n          - [{}]\n    steps:\n      - run: echo '${{ matrix.a == matrix.a2 }}'\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                a:
+                  - [true]
+                a2:
+                  - [{}]
+            steps:
+              - run: echo '${{ matrix.a == matrix.a2 }}'
+        """);
+
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var compError = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cannot be compared") && d.Message.Contains("=="));
         await Assert.That(compError.Message).IsNotNull();
@@ -5043,7 +5468,18 @@ public sealed class ParserTests
     [Test]
     public async Task Parse_ImageVersionEmptyArray_ReportsShouldNotBeEmpty()
     {
-        var yaml = "on:\n  image_version:\n    names: []\n    versions: []\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n";
+        var yaml = NormalizeEol("""
+        on:
+          image_version:
+            names: []
+            versions: []
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var namesErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("on.image_version.names should not be empty"));
         var versionsErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("on.image_version.versions should not be empty"));
@@ -5058,7 +5494,19 @@ public sealed class ParserTests
     [Test]
     public async Task Lint_GlobPath_InvalidBackslashEscape_Detected()
     {
-        var yaml = "on:\n  push:\n    paths:\n      - 'foo\\bar'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            paths:
+              - 'foo\bar'
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+
+        """);
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var escapeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("not a valid glob escape"));
         await Assert.That(escapeErr.Message).IsNotNull();
@@ -5068,7 +5516,21 @@ public sealed class ParserTests
     [Test]
     public async Task Lint_GlobPath_InvalidBackslashEscape_AfterNullEntry_Detected()
     {
-        var yaml = "on:\n  push:\n    paths:\n      -\n      - '!'\n      - 'foo\\bar'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            paths:
+              -
+              - '!'
+              - 'foo\bar'
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+
+        """);
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var escapeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("not a valid glob escape"));
         await Assert.That(escapeErr.Message).IsNotNull();
@@ -5078,7 +5540,19 @@ public sealed class ParserTests
     [Test]
     public async Task Lint_GlobPath_BlockScalarTrailingNewline_Detected()
     {
-        var yaml = "on:\n  push:\n    paths:\n      - |\n        foo.txt\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            paths:
+              - |
+                foo.txt
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """);
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var spaceErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("leading and trailing spaces are not allowed in glob path"));
         await Assert.That(spaceErr.Message).IsNotNull();
@@ -5089,7 +5563,20 @@ public sealed class ParserTests
     public async Task Lint_GlobPath_BlockScalarTrailingNewline_WithMoreEntries_Detected()
     {
         // Matches the glob_more fixture pattern: block scalar followed by more entries
-        var yaml = "on:\n  push:\n    paths:\n      - |\n        foo.txt\n      - '.'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            paths:
+              - |
+                foo.txt
+              - '.'
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """);
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
         var spaceErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("leading and trailing spaces are not allowed in glob path"));
@@ -5101,7 +5588,16 @@ public sealed class ParserTests
     public async Task Parse_StepEmptyFlowMapping_Position_AfterBaredash()
     {
         // line 6: `      -` (null), line 7: `      - { }` (empty flow mapping), line 8: `      - run: echo`
-        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      -\n      - { }\n      - run: echo ok\n";
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              -
+              - { }
+              - run: echo ok
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var emptyErrors = result.Diagnostics.Where(d => d.Message.Contains("element of \"steps\" section should not be empty")).ToList();
         // Both line 6 (null) and line 7 ({ }) should be reported as empty steps
@@ -5116,7 +5612,19 @@ public sealed class ParserTests
     public async Task Parse_RecursiveAlias_PositionAtAliasRef()
     {
         // line 4: &recursive2, line 7: &recursive1, line 9: *recursive1 (recursive), line 11: *recursive2 (recursive)
-        var yaml = "on: push\n\njobs:\n  test: &recursive2\n    runs-on: ubuntu-latest\n    steps:\n      - &recursive1\n        env: *recursive1\n        run: *recursive2\n      - *recursive1\n      - *recursive2\n";
+        var yaml = NormalizeEol("""
+        on: push
+
+        jobs:
+          test: &recursive2
+            runs-on: ubuntu-latest
+            steps:
+              - &recursive1
+                env: *recursive1
+                run: *recursive2
+              - *recursive1
+              - *recursive2
+        """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var recursiveErrors = result.Diagnostics.Where(d => d.Message.Contains("recursive alias")).ToList();
         await Assert.That(recursiveErrors.Count).IsGreaterThanOrEqualTo(1);
@@ -5129,7 +5637,17 @@ public sealed class ParserTests
     [Test]
     public async Task Lint_WorkflowCallEmptySecrets_IncludesGitHubToken()
     {
-        var yaml = "on:\n  workflow_call:\n    secrets:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets.CALLING_WORKFLOW_SECRET }}\n";
+        var yaml = NormalizeEol("""
+        on:
+          workflow_call:
+            secrets:
+
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ secrets.CALLING_WORKFLOW_SECRET }}
+        """);
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         // Should error about unknown secret, and the type should include GITHUB_TOKEN
         var secretErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("CALLING_WORKFLOW_SECRET") && d.Message.Contains("not defined"));
