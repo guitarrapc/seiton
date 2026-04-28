@@ -4760,7 +4760,7 @@ public sealed class ParserTests
         """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var containerDiag = result.Diagnostics.Where(d => d.Message.Contains("container")).ToArray();
-        await Assert.That(containerDiag).Count().IsEqualTo(1);
+        await Assert.That(containerDiag.Length).IsEqualTo(1);
         await Assert.That(containerDiag[0].Message).Contains("\"container\" image should not be empty");
     }
 
