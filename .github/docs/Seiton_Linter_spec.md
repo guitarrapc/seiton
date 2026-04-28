@@ -1018,7 +1018,7 @@ Diagnostic processing in linter entrypoint must be deterministic.
 4. Deduplicate using deterministic diagnostic identity.
 5. Apply final filtering phase.
 
-Diagnostic identity for deduplication: `(severity, message, startLine)`. Column and byte offset are excluded so that parser diagnostics (reported at expression-internal positions) and lint diagnostics (reported at YAML key positions) on the same line with the same message are treated as duplicates.
+Diagnostic identity for deduplication: `(severity, normalizedMessage, startLine)`. Column and byte offset are excluded so that parser diagnostics (reported at expression-internal positions) and lint diagnostics (reported at YAML key positions) on the same line with the same message are treated as duplicates. The message is **normalized** by stripping the leading `jobs.'<id>'.steps[<n>] ` prefix (if present), so that alias-expanded steps sharing the same source position are deduplicated even though each carries a distinct step index.
 
 When a lint diagnostic duplicates a parser diagnostic (same identity), the lint diagnostic **replaces** the parser diagnostic so the `RuleId` is preserved for suppression and attribution.
 

@@ -11854,4 +11854,33 @@ public sealed class RuleInterfaceTests
             .ToArray();
         await Assert.That(stepsNotAllowed).Count().IsEqualTo(1);
     }
+
+    // regression: alias-expanded steps that produce the same error at the same position
+    // must be deduplicated even though each step gets a unique step-index prefix.
+    [Test]
+    public async Task LintEngine_AliasExpandedSteps_DedupDiagnosticsAtSamePosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - &step
+                run: echo
+                with:
+                  foo: bar
+              - *step
+              - *step
+              - *step
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        // All alias-expanded steps point to the anchor position (same line:col).
+        // The "unexpected key" errors differ only in step index prefix and must dedup to 1.
+        var unexpectedKeyDiags = result.Diagnostics
+            .Where(d => d.Message.Contains("unexpected key \"with\"", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(unexpectedKeyDiags).Count().IsEqualTo(1);
+    }
 }

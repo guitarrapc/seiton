@@ -988,22 +988,55 @@ public sealed class LintEngine
 
     /// <summary>
     /// Identity used for diagnostic deduplication.
-    /// Matches on severity + message + line only (ignoring column / byte offset) so that
+    /// Matches on severity + normalized message + line only (ignoring column / byte offset) so that
     /// parser diagnostics (reported at expression-internal positions) and lint diagnostics
     /// (reported at YAML key positions) on the same line with the same message are treated
     /// as duplicates.
+    /// The message is normalized by stripping the leading <c>jobs.'…'.steps[N] </c> prefix
+    /// so that alias-expanded steps sharing the same source position are deduplicated even
+    /// though each carries a distinct step index.
     /// </summary>
     private readonly record struct DiagnosticIdentity(
         DiagnosticSeverity Severity,
-        string Message,
+        string NormalizedMessage,
         int StartLine)
     {
         public DiagnosticIdentity(Diagnostic diagnostic)
             : this(
                 diagnostic.Severity,
-                diagnostic.Message,
+                StripStepPrefix(diagnostic.Message),
                 diagnostic.Location.StartLine)
         {
+        }
+
+        /// <summary>
+        /// Strips the leading <c>jobs.'…'.steps[N] </c> prefix from a message so that
+        /// diagnostics differing only in step index are treated as identical for dedup.
+        /// </summary>
+        private static string StripStepPrefix(string message)
+        {
+            // Pattern: jobs.'<id>'.steps[<n>] <rest>
+            if (!message.StartsWith("jobs.'", StringComparison.Ordinal))
+            {
+                return message;
+            }
+
+            var idx = 6; // past "jobs.'"
+            // Find closing quote of job id: '.steps[
+            var dotSteps = message.IndexOf("'.steps[", idx, StringComparison.Ordinal);
+            if (dotSteps < 0)
+            {
+                return message;
+            }
+
+            // Find "] " after the step index
+            var bracketClose = message.IndexOf("] ", dotSteps + 8, StringComparison.Ordinal);
+            if (bracketClose < 0)
+            {
+                return message;
+            }
+
+            return message.Substring(bracketClose + 2);
         }
     }
 
