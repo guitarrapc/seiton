@@ -2687,6 +2687,71 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartColumn).IsEqualTo(15); // col at ''
     }
 
+    // regression: non-scalar element in labels sequence should produce type error, not "should not be empty"
+    [Test]
+    public async Task Parse_RunsOnMappingLabelsNonScalarElement_ReportsTypeError()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on:
+              labels:
+                - ubuntu-latest
+                - foo: bar
+            steps:
+              - run: echo ok
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var labelDiags = result.Diagnostics.Where(d => d.Message.Contains("label")).ToArray();
+        // Should NOT say "label should not be empty" for a mapping element
+        var hasEmpty = labelDiags.Any(d => d.Message.Contains("should not be empty"));
+        await Assert.That(hasEmpty).IsFalse();
+    }
+
+    // regression: non-scalar element in labels sequence (fallback runs-on) should produce type error
+    [Test]
+    public async Task Parse_RunsOnSequenceLabelsNonScalarElement_ReportsTypeError()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on:
+              - ubuntu-latest
+              - foo: bar
+            steps:
+              - run: echo ok
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("runs-on") || d.Message.Contains("label")).ToArray();
+        var hasEmpty = runsOnDiags.Any(d => d.Message.Contains("should not be empty"));
+        await Assert.That(hasEmpty).IsFalse();
+    }
+
+    // regression: non-scalar element in ports sequence should produce type error, not "should not be empty"
+    [Test]
+    public async Task Parse_ContainerPortsNonScalarElement_ReportsTypeError()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          j:
+            runs-on: ubuntu-latest
+            container:
+              image: node
+              ports:
+                - 8080
+                - host: 8080
+            steps:
+              - run: echo ok
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var portDiags = result.Diagnostics.Where(d => d.Message.Contains("port")).ToArray();
+        var hasEmpty = portDiags.Any(d => d.Message.Contains("should not be empty"));
+        await Assert.That(hasEmpty).IsFalse();
+    }
+
     [Test]
     public async Task Parse_NullStepExplicit_ReportsEmptyAtNullText()
     {

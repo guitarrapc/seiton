@@ -271,10 +271,10 @@ public static partial class WorkflowParser
                         else
                         {
                             var pvSeqMark = reader.CurrentStart;
-                            var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark);
+                            var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark, allowElemEmpty: true, emptyElementMessage: $"\"container\" {pvKey} element should not be empty");
                             if (pvErr)
                             {
-                                AddError(diagnostics, $"\"container\" {pvKey} element should not be empty", pvMark);
+                                AddError(diagnostics, $"\"container\" {pvKey} element must be a string", pvMark);
                             }
                             if (ck == ContainerMappingKey.Ports)
                                 ports = pvValues;
