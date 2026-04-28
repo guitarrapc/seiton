@@ -421,7 +421,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        CheckNode(Arena.GetStringExpression(env.Expression), context, sinkName, report, target);
+        CheckSectionExpression(env.Expression, context, sinkName, report, target);
 
         // When env is a single expression (${{ expr }}), check that it resolves to object type
         ValidateEnvMappingType(env.Expression, context, report, target);
@@ -509,6 +509,35 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             {
                 ValidateTemplateType(expression, exprLocation, context, sinkName, report, target);
             }
+        }
+    }
+
+    /// <summary>
+    /// Validates expressions in section-level ${{ }} forms (env, services, credentials, matrix).
+    /// Only checks context availability — skips template type checking because these sections
+    /// evaluate the expression result directly rather than interpolating into a string.
+    /// </summary>
+    private void CheckSectionExpression<TTarget>(
+        StringNodeId node,
+        ExpressionValidationContext context,
+        string sinkName,
+        Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
+        TTarget target)
+    {
+        if (!node.HasValue || Config.Utf8Yaml is null) return;
+        var value = Arena.GetStringValue(node);
+        if (value.Length == 0) return;
+
+        var nodeRange = Arena.GetStringRange(node);
+        var searchStart = 0;
+        while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
+        {
+            searchStart = nextSearchStart;
+            var expression = TrimAsciiWhiteSpace(value.Slice(bodyStart, bodyLength));
+            if (expression.Length == 0) continue;
+
+            var exprLocation = ComputeExpressionLocation(nodeRange, value, bodyStart - 3);
+            ValidateExpression(expression, context, sinkName, exprLocation, report, target);
         }
     }
 
@@ -938,7 +967,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 
         if (strategy.Matrix is { } matrix)
         {
-            CheckNode(Arena.GetStringExpression(matrix.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.matrix", static (rule, message, location, j) =>
+            CheckSectionExpression(matrix.Expression, ExpressionValidationContext.JobStrategy, "job.strategy.matrix", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
 
             if (matrix.Rows is { Count: > 0 })
@@ -946,7 +975,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 foreach (var pair in matrix.Rows)
                 {
                     CheckMatrixValues(pair.Value.Values, ExpressionValidationContext.JobStrategy, "job.strategy.matrix", job);
-                    CheckNode(Arena.GetStringExpression(pair.Value.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.matrix", static (rule, message, location, j) =>
+                    CheckSectionExpression(pair.Value.Expression, ExpressionValidationContext.JobStrategy, "job.strategy.matrix", static (rule, message, location, j) =>
                         rule.AddJobError(j, message, location), job);
                 }
             }
@@ -954,7 +983,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             {
                 foreach (var combo in matrix.Include)
                 {
-                    CheckNode(Arena.GetStringExpression(combo.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.include", static (rule, message, location, j) =>
+                    CheckSectionExpression(combo.Expression, ExpressionValidationContext.JobStrategy, "job.strategy.include", static (rule, message, location, j) =>
                         rule.AddJobError(j, message, location), job);
                     CheckMatrixCombinationEntries(combo.Entries, ExpressionValidationContext.JobStrategy, "job.strategy.include", job);
                 }
@@ -963,7 +992,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             {
                 foreach (var combo in matrix.Exclude)
                 {
-                    CheckNode(Arena.GetStringExpression(combo.Expression), ExpressionValidationContext.JobStrategy, "job.strategy.exclude", static (rule, message, location, j) =>
+                    CheckSectionExpression(combo.Expression, ExpressionValidationContext.JobStrategy, "job.strategy.exclude", static (rule, message, location, j) =>
                         rule.AddJobError(j, message, location), job);
                     CheckMatrixCombinationEntries(combo.Entries, ExpressionValidationContext.JobStrategy, "job.strategy.exclude", job);
                 }
@@ -1017,7 +1046,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 rule.AddJobError(j, message, location), job);
             CheckNode(creds.Password, credentialsCtx, "job.container.credentials.password", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
-            CheckNode(Arena.GetStringExpression(creds.Expression), credentialsCtx, "job.container.credentials", static (rule, message, location, j) =>
+            CheckSectionExpression(creds.Expression, credentialsCtx, "job.container.credentials", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
             ValidateExpectedObjectType(creds.Expression, credentialsCtx, "credentials", static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
@@ -1028,7 +1057,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     {
         if (services is null) return;
 
-        CheckNode(Arena.GetStringExpression(services.Expression), ExpressionValidationContext.JobServices, "job.services", static (rule, message, location, j) =>
+        CheckSectionExpression(services.Expression, ExpressionValidationContext.JobServices, "job.services", static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
         ValidateExpectedObjectType(services.Expression, ExpressionValidationContext.JobServices, "services", static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
@@ -1058,7 +1087,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                     rule.AddJobError(j, message, location), job);
                 CheckNode(svcCreds.Password, ExpressionValidationContext.JobServicesCredentials, "job.services.credentials.password", static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);
-                CheckNode(Arena.GetStringExpression(svcCreds.Expression), ExpressionValidationContext.JobServicesCredentials, "job.services.credentials", static (rule, message, location, j) =>
+                CheckSectionExpression(svcCreds.Expression, ExpressionValidationContext.JobServicesCredentials, "job.services.credentials", static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);
                 ValidateExpectedObjectType(svcCreds.Expression, ExpressionValidationContext.JobServicesCredentials, "credentials", static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);

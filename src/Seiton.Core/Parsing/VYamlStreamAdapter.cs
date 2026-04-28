@@ -1,4 +1,4 @@
-﻿using System.Buffers.Text;
+using System.Buffers.Text;
 using VYaml.Parser;
 
 namespace Seiton.Core.Parsing;
@@ -10,7 +10,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private int _scalarSliceCursor;
 
     // Anchor/alias resolution state (all null/false until first anchor is encountered)
-    private Dictionary<int, List<AnchorEvent>>? _anchorStore;    // anchor id → recorded events
+    private Dictionary<int, List<AnchorEvent>>? _anchorStore;    // anchor id �� recorded events
     private List<AnchorEvent>? _currentRecording;                // non-null while inside an anchor
     private int _recordingId;                                    // anchor id being recorded
     private int _recordingDepth;                                 // nesting depth inside anchor
@@ -19,7 +19,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private AnchorEvent _virtualCurrent;                         // current event when _isReplaying
 
     // Anchor usage tracking for unused-anchor detection
-    private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id → (name, position)
+    private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id �� (name, position)
     private HashSet<int>? _referencedAnchorIds;                                       // anchor ids used by aliases
     private List<(string Name, TextPosition Position, TextPosition AnchorPosition)>? _recursiveAliases;            // recursive alias occurrences
     private List<(int Id, List<AnchorEvent> Events, int Depth)>? _nestedRecordings;  // nested anchors inside outer recording
@@ -54,7 +54,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             {
                 if (_parser.IsNullScalar())
                 {
-                    // Implicit null — backward-scan from next token.
+                    // Implicit null ? backward-scan from next token.
                     var correctedOffset = ResolveEmptyScalarStart(mark.Position);
                     return ComputeTextPositionFromOffset(_source.Span, correctedOffset);
                 }
@@ -77,7 +77,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
     public bool Read()
     {
-        // Case 1: Pending replay events from alias resolution — serve the next one.
+        // Case 1: Pending replay events from alias resolution ? serve the next one.
         if (_pendingReplays is { Count: > 0 })
         {
             _virtualCurrent = _pendingReplays.Dequeue();
@@ -98,7 +98,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         var eventType = _parser.CurrentEventType;
 
-        // Case 2: Alias event — resolve and replay anchor events.
+        // Case 2: Alias event ? resolve and replay anchor events.
         if (eventType == ParseEventType.Alias)
         {
             if (_parser.TryGetCurrentAnchor(out var aliasAnchor)
@@ -127,7 +127,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             }
             // Unresolvable alias: surface as-is so the parser can emit an error.
             // When we reach this path and _currentRecording is active, the alias references an
-            // anchor that hasn't finished recording — this is a recursive self-reference.
+            // anchor that hasn't finished recording ? this is a recursive self-reference.
             // (Truly undefined anchors cause VYaml to throw before reaching here.)
             if (_currentRecording != null && _parser.TryGetCurrentAnchor(out var unresolvableAnchor))
             {
@@ -147,7 +147,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             if (_currentRecording != null)
             {
                 _currentRecording.Add(new AnchorEvent { Kind = YamlEventKind.Alias });
-                // Alias is a leaf node — _recordingDepth does not change.
+                // Alias is a leaf node ? _recordingDepth does not change.
             }
             return true;
         }
@@ -195,7 +195,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
                 if (currentKind == YamlEventKind.Scalar)
                 {
-                    // Scalar: single event — store immediately.
+                    // Scalar: single event ? store immediately.
                     _anchorStore[currentAnchor.Id] = new List<AnchorEvent> { snapshot };
                 }
                 else
@@ -238,7 +238,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             if (_pendingReplays is { Count: > 0 })
             {
                 _virtualCurrent = _pendingReplays.Dequeue();
-                // _isReplaying stays true — there is a new current virtual event.
+                // _isReplaying stays true ? there is a new current virtual event.
             }
             else
             {
@@ -255,7 +255,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         }
         // VYaml's SkipCurrentNode throws for Alias events (the event is already consumed by
         // Read() and the parser state machine cannot advance from it). An Alias is a leaf node,
-        // so we advance manually — same effective behavior as SkipCurrentNode on a scalar leaf.
+        // so we advance manually ? same effective behavior as SkipCurrentNode on a scalar leaf.
         if (_parser.CurrentEventType == ParseEventType.Alias)
         {
             if (_parser.Read() && _currentRecording != null)
@@ -614,7 +614,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         if (_isReplaying)
             return _virtualCurrent.Tag;
 
-        // Check VYaml's internal null-scalar flag before GetScalarUtf8() — null scalars
+        // Check VYaml's internal null-scalar flag before GetScalarUtf8() ? null scalars
         // return an empty span but should be tagged as Null, not Str.
         if (_parser.IsNullScalar())
             return ScalarTag.Null;
@@ -648,7 +648,33 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         return ScalarTag.Str;
     }
 
-    public bool IsScalarQuoted() => _isReplaying ? _virtualCurrent.IsQuoted : false;
+    public bool IsScalarQuoted()
+    {
+        if (_isReplaying)
+            return _virtualCurrent.IsQuoted;
+
+        // Detect quoted scalars by checking the source byte before the scalar value offset.
+        // VYaml strips quotes from the scalar content, so GetScalarSlice() returns the
+        // content inside the quotes. The byte immediately before the content is the opening
+        // quote character (' or ") for quoted scalars.
+        if (_parser.CurrentEventType != ParseEventType.Scalar || _parser.IsNullScalar())
+            return false;
+
+        var utf8 = _parser.GetScalarAsUtf8();
+        if (utf8.Length == 0)
+            return false;
+
+        if (_parser.TryGetScalarAsSpan(out var raw) && TryResolveRawStart(raw, out var rawStart))
+        {
+            if (rawStart > 0)
+            {
+                var c = _source.Span[rawStart - 1];
+                return c == (byte)'\'' || c == (byte)'"';
+            }
+        }
+
+        return false;
+    }
 
     // Anchor / alias resolution helpers
 
@@ -881,7 +907,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     /// VYaml advances its scanner past an empty scalar to the next meaningful token, so
     /// <see cref="YamlParser.CurrentMark"/> for an empty-scalar event points at that next token.
     /// This helper walks backward through <see cref="_source"/> from <paramref name="nextTokenPosition"/>,
-    /// skips whitespace/newlines, and – if it finds an adjacent pair of matching quotes ('''' or &quot;&quot;) –
+    /// skips whitespace/newlines, and ? if it finds an adjacent pair of matching quotes ('''' or &quot;&quot;) ?
     /// returns the offset of the opening quote.  Otherwise it returns the backward-walked position.
     /// <para>
     /// When VYaml's mark has advanced past the next key's <c>key:</c> separator (common for null
@@ -981,7 +1007,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         // If we stopped at a '-' (YAML block sequence indicator), speculatively skip over it
         // to look for quotes (e.g. - '' or - ""). If no quotes are found, the '-' is the
-        // sequence indicator for this null entry — return the position right after it.
+        // sequence indicator for this null entry ? return the position right after it.
         if (pos > 0 && source[pos - 1] == (byte)'-')
         {
             var afterDash = pos;

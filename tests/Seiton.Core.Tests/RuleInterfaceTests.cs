@@ -2474,14 +2474,11 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diags.Length).IsGreaterThanOrEqualTo(1);
 
-        // The cycle should be reported at the needs VALUE position (where the user wrote the dependency),
-        // NOT at the job key position. This is intentionally different from actionlint which reports
-        // at the job key — seiton prefers actionable positions pointing at the fixable location.
+        // The cycle is reported at the first job in the cycle path (consistent with actionlint positioning).
+        // DFS visits "from" first, detects cycle "from" -> "to" -> "from".
+        // Report is at the first job in the cycle ("from" at line 3).
         var cycleD = diags[0];
-        // After NormalizeYaml: "needs: [to]" is at line 4, "needs: [from]" is at line 9.
-        // DFS visits "from" first, hits back-edge when "to"'s needs references "from".
-        // Report is at "to"'s needs value position (line 9 for "from" inside "to"'s needs).
-        await Assert.That(cycleD.Location.StartLine).IsEqualTo(9);
+        await Assert.That(cycleD.Location.StartLine).IsEqualTo(3);
         // Message should include cycle path
         await Assert.That(cycleD.Message).Contains("\"from\" -> \"to\" -> \"from\"");
     }
@@ -6936,6 +6933,24 @@ public sealed class RuleInterfaceTests
                   - run: echo ok
             """,
             []),
+
+            // Services expression form: env context should not be allowed
+            new RuleCase(
+            "ng-services-expression-env-not-allowed",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  bool:
+                    type: boolean
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services: ${{ inputs.bool || env.FOO }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -7251,6 +7266,22 @@ public sealed class RuleInterfaceTests
                         - run: echo ${{ steps.cache.outputs.cache_hit }}
             """,
             ["\"cache_hit\" is not defined"]),
+            // regression: github.event.inputs.unknown should be flagged for workflow_dispatch
+            new RuleCase(
+            "ng-github-event-inputs-unknown-property",
+            """
+            on:
+              workflow_dispatch:
+                inputs:
+                  myinput:
+                    type: string
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo "${{ github.event.inputs.select }}"
+            """,
+            ["\"select\" is not defined"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);

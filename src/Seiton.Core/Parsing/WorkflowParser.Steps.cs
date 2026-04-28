@@ -103,6 +103,10 @@ public static partial class WorkflowParser
         TextPosition shellKeyMark = default;
         TextPosition wdKeyMark = default;
         TextPosition withKeyMark = default;
+        // Deferred unknown keys: when stepForm==0 we don't know the step type yet,
+        // so we defer reporting until after the mapping loop when stepForm is determined.
+        string? deferredUnknownKey = null;
+        TextPosition deferredUnknownMark = default;
         var hasAnyKey = false;
         StringNodeId idNode = default;
         StringNodeId ifNode = default;
@@ -329,7 +333,12 @@ public static partial class WorkflowParser
             {
                 AddError(diagnostics, $"unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", keyMark);
             }
-            // stepForm == 0: no unexpected key error; caught by "step must run..." below
+            else if (deferredUnknownKey is null)
+            {
+                // stepForm == 0: defer until post-mapping when step type is known
+                deferredUnknownKey = unknownKey;
+                deferredUnknownMark = keyMark;
+            }
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -339,6 +348,15 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             reader.Read();
+        }
+
+        // Post-mapping: report deferred unknown keys now that step type is known
+        if (deferredUnknownKey is not null && stepForm != 0)
+        {
+            if (stepForm == 2)
+                AddError(diagnostics, $"unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", deferredUnknownMark);
+            else
+                AddError(diagnostics, $"unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", deferredUnknownMark);
         }
 
         // Post-mapping: report secondary key conflicts based on step form
@@ -422,6 +440,8 @@ public static partial class WorkflowParser
         var map = new PooledBuffer<SliceMap<StringNodeId>.Entry>(8);
         try
         {
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
@@ -441,6 +461,26 @@ public static partial class WorkflowParser
                 var keyUtf8 = reader.GetScalarUtf8();
                 var isEntrypoint = keyUtf8.SequenceEqual("entrypoint"u8);
                 var isArgs = keyUtf8.SequenceEqual("args"u8);
+
+                if (!TryRegisterDynamicKey(
+                    source,
+                    keyUtf8,
+                    keySlice.Offset,
+                    keySlice.Length,
+                    keyMark,
+                    diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "with"))
+                {
+                    reader.Read();
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    continue;
+                }
 
                 reader.Read();
                 if (reader.End)

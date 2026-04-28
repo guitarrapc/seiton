@@ -117,10 +117,15 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 if (neighborColor == 1) // gray: back-edge = cycle
                 {
-                    // Report at the needs value position (actionable: user sees which `needs` entry creates the cycle)
                     // Build cycle path from DFS stack for informative message
                     var cyclePath = BuildCyclePath(source, stack, needKey);
-                    AddJobError(currentJob, $"cyclic dependencies in \"needs\" job configurations are detected. detected cycle is {cyclePath}", Arena.GetStringRange(need));
+                    // Report at the first job in the cycle (consistent with actionlint positioning)
+                    var cycleStartJob = FindCycleStartJob(source, stack, needKey);
+                    var reportJob = cycleStartJob ?? currentJob;
+                    var reportRange = cycleStartJob is not null
+                        ? Arena.GetStringRange(cycleStartJob.Id)
+                        : Arena.GetStringRange(need);
+                    AddJobError(reportJob, $"cyclic dependencies in \"needs\" job configurations are detected. detected cycle is {cyclePath}", reportRange);
                 }
                 else if (neighborColor == 0)
                 {
@@ -180,6 +185,15 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Finds the first job in the cycle (the cycle target) from the DFS stack.
+    /// Returns null if not found.
+    /// </summary>
+    private Job? FindCycleStartJob(byte[] source, Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
+    {
+        return _knownJobs.TryGetValue(source, cycleTarget.Span, out var job) ? job : null;
     }
 
     private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

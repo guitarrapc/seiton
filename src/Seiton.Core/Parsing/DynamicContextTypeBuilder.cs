@@ -708,6 +708,7 @@ internal static class DynamicContextTypeBuilder
         }
 
         ObjectExprType? eventPayloadType = null;
+        WorkflowDispatchEvent? dispatchEvent = null;
 
         // Resolve event payload type: use concrete type only when exactly one webhook event is declared
         var webhookCount = 0;
@@ -722,12 +723,27 @@ internal static class DynamicContextTypeBuilder
                     eventPayloadType = payloadType;
                 }
             }
+            else if (onEvents[i] is WorkflowDispatchEvent wde)
+            {
+                dispatchEvent = wde;
+            }
         }
 
         // Multiple webhook events: can't narrow to a single event type
         if (webhookCount != 1)
         {
             eventPayloadType = null;
+        }
+
+        // workflow_dispatch: narrow github.event.inputs to declared input names (all string type in event payload)
+        if (dispatchEvent is not null && webhookCount == 0)
+        {
+            if (!EventPayloadTypes.TryGetEventPayloadType("workflow_dispatch"u8, out var basePayloadType))
+            {
+                return (GithubKeyUtf8, ContextTypes.BuiltinContextTypes[0].Type);
+            }
+
+            eventPayloadType = NarrowDispatchInputs(basePayloadType, dispatchEvent, arena, utf8Yaml);
         }
 
         if (eventPayloadType is null)
@@ -746,5 +762,38 @@ internal static class DynamicContextTypeBuilder
         // Replace the event property with the narrowed type
         newProps[new Utf8String("event"u8)] = eventPayloadType;
         return (GithubKeyUtf8, ExprType.Object(newProps, strict: true));
+    }
+
+    /// <summary>
+    /// Narrows workflow_dispatch event payload's <c>inputs</c> property to a strict object
+    /// with declared input names, all typed as string (since event payloads deliver inputs as strings).
+    /// </summary>
+    private static ObjectExprType NarrowDispatchInputs(ObjectExprType basePayloadType, WorkflowDispatchEvent dispatch, AstArena arena, byte[] utf8Yaml)
+    {
+        if (dispatch.Inputs is not { Count: > 0 })
+        {
+            return basePayloadType;
+        }
+
+        // Build strict inputs object: all input values are string in the event payload
+        var inputProps = new Dictionary<Utf8String, ExprType>(dispatch.Inputs.Value.Count);
+        foreach (var pair in dispatch.Inputs.Value)
+        {
+            var inputName = arena.GetStringSlice(pair.Value.Name);
+            var nameBytes = utf8Yaml.AsSpan(inputName.Offset, inputName.Length);
+            inputProps[new Utf8String(nameBytes)] = ExprType.String;
+        }
+
+        var inputsType = ExprType.Object(inputProps, strict: true);
+
+        // Clone the base payload type and replace inputs
+        var newPayloadProps = new Dictionary<Utf8String, ExprType>(basePayloadType.Properties!.Count);
+        foreach (var kvp in basePayloadType.Properties!)
+        {
+            newPayloadProps[kvp.Key] = kvp.Value;
+        }
+        newPayloadProps[new Utf8String("inputs"u8)] = inputsType;
+
+        return ExprType.Object(newPayloadProps, dynamicPropertyType: ExprType.Any);
     }
 }

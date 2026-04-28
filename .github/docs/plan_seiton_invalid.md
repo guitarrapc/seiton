@@ -1282,7 +1282,7 @@ recursive alias メッセージにアンカー宣言位置を追加: `recursive 
 | `workflow_call_job` | 4 | 7 | 空 uses 検出 + msg形式 + 構造検証余剰 | 空 uses → "string should not be empty" 統一、重複 extra の dedup |
 | `recursive_anchors` | 4 | 6 | alias 処理の根本差異 | VYaml alias replay の改善 (高コスト) |
 | `issue280_runs_on` | 3 | 5 | 空 label "unknown" regex + requires-labels | 空文字 label への "unknown label" 追加は設計判断。EXTRA は有用 |
-| `invalid_json_in_fromjson` | 2 | 3 | fromJSON 型推論 (contains 型チェック) | fromJSON 戻り値型推論の拡充 (§2.6 延期済み) |
+| `invalid_json_in_fromjson` | 2 | 3 | fromJSON 型推論 (contains 型チェック) | §2.6 延期済み — 設計上の制約 (5.9) |
 
 #### 中優先度 — 個別の小改善
 
@@ -1294,10 +1294,10 @@ recursive alias メッセージにアンカー宣言位置を追加: `recursive 
 | `workflow_dispatch_input_types` | 1 | 0 | empty option string メッセージ形式 | メッセージ形式の微調整 |
 | `invalid_float_at_timeout_minutes` | 1 | 0 | quoted string float検出 | quoted string の float パース |
 | `invalid_int_at_max_parallel` | 1 | 0 | quoted string integer検出 | quoted string の integer パース |
-| `case_sensitive_keys` | 1 | 0 | step "RUN" キー未検出 | step unexpected key の case-insensitive 検出改善 |
+| ~~`case_sensitive_keys`~~ | ~~1~~ | ~~0~~ | ~~step "RUN" キー未検出~~ | ✅ 実装済み (5.1, 5.2) — deferred unknown key + case-insensitive dup |
 | `evaluated_template` | 1 | 0 | steps.cache.outputs 型推論 | step output の具体型推論 (高コスト) |
-| `context_availability` | 1 | 1 | services 式形式の env 検出 | services expression form での context availability 改善 |
-| `expr_check_in_services` | 1 | 0 | services 式形式 property チェック | 上記と同根 |
+| ~~`context_availability`~~ | ~~1~~ | ~~1~~ | ~~services 式形式の env 検出~~ | ✅ 実装済み (5.3) — `CheckSectionExpression` 追加 |
+| ~~`expr_check_in_services`~~ | ~~1~~ | ~~0~~ | ~~services 式形式 property チェック~~ | ✅ 実装済み (5.3) — 上記と同根 |
 
 #### 低優先度 — 設計差異・1行差異
 
@@ -1310,15 +1310,15 @@ recursive alias メッセージにアンカー宣言位置を追加: `recursive 
 | `glob_more` | 1 | 1 | block scalar 改行 (VYaml制限) |
 | `if_cond_constants` | 1 | 1 | multi-line if 行位置差異 |
 | `if_cond_edge_cases_trailing_leading_chars` | 1 | 1 | 行位置差異 |
-| `invalid_comparisons` | 1 | 1 | array<bool> vs array<{}> 型チェック |
+| `invalid_comparisons` | 1 | 1 | array<bool> vs array<{}> 型チェック — 設計上の制約 (5.8) |
 | `upper_case_duplicate_keys` | 1 | 1 | case-insensitive note 差異 |
 | `missing_required_keys` | 1 | 1 | environment name 位置差 |
 | `github_script_untrusted_input` | 1 | 1 | 行位置差異 |
 | `invalid_image_version_event` | 1 | 2 | メッセージ差異 + 余剰 |
 | `outputs_map_object` | 1 | 1 | メッセージ差異 |
 | `undefined_anchor` | 1 | 1 | メッセージ差異 |
-| `minimal_cycle_in_needs` | 1 | 1 | 値位置報告 (行番号ずれ) |
-| `random_order_cycle_in_needs` | 1 | 1 | 値位置報告 (行番号ずれ) |
+| ~~`minimal_cycle_in_needs`~~ | ~~1~~ | ~~1~~ | ✅ 実装済み (5.5) — cycle 位置を最初のジョブに変更 |
+| ~~`random_order_cycle_in_needs`~~ | ~~1~~ | ~~1~~ | ✅ 実装済み (5.5) — cycle 位置を最初のジョブに変更 |
 | `strategy_matrix_runner_context` | 1 | 1 | メッセージ差異 (regex形式) |
 
 #### EXTRA のみ — seiton 独自の有用な検出 (修正しない)
@@ -1466,3 +1466,67 @@ recursive alias メッセージにアンカー宣言位置を追加: `recursive 
   - `ok-service-entrypoint-github-context` — entrypoint で github は許可
 - **Red/Green 確認済み**: 実装前に `ng-workflow-call-output-value-env-not-allowed` で失敗 (no diagnostics)、実装後に全 1024 テスト通過
 - **Benchmark**: CoreParsingBenchmark + CoreLintBenchmark 完了。allocation スパイクなし
+
+### セクション 5 改善候補 実装記録
+
+> セクション 5「今後の改善優先度サマリ (フェーズ 4 実施後)」の改善候補を対応した記録。
+
+#### 実施済み
+
+| # | 項目 | Fixture | 結果 | 変更ファイル |
+|---|------|---------|------|-------------|
+| 5.1 | step uppercase "RUN" 検出 | `case_sensitive_keys` | ✅ `ParseStepMapping` で deferred unknown key tracking を追加。`stepForm==0` (run/uses 未確定) 時に unknown key を即座に報告せず保留し、ループ終了後に最終 stepForm に基づいて報告。"RUN" が run ステップの unexpected key として正しく検出される | `WorkflowParser.Steps.cs`, `ParserTests.cs` |
+| 5.2 | step case-insensitive 重複キー検出 | `case_sensitive_keys` (関連) | ✅ `ParseStepWithInputsNode` で `TryRegisterDynamicKey` を `caseSensitive: false` + `stackalloc long[64]` で呼び出し。step セクション内の case-insensitive 重複キーを検出 | `WorkflowParser.Steps.cs`, `ParserTests.cs` |
+| 5.3 | services 式形式の context availability | `context_availability`, `expr_check_in_services` | ✅ `ExprUndefinedVarRule` に `CheckSectionExpression<TTarget>` メソッド追加。env/services/credentials/matrix の section-level `${{ }}` 式を context availability 検証。`GetStringExpression` (inner body のみ、`${{ }}` マーカーなし) ではなく full value node を使用し `${{ }}` マーカーをスキャンする方式に変更。template type チェックはスキップ (section-level 式では false positive になるため) | `ExprUndefinedVarRule.cs`, `RuleInterfaceTests.cs` |
+| 5.4 | github.event.inputs プロパティチェック | `workflow_dispatch_type_check_inputs` (関連) | ✅ `DynamicContextTypeBuilder.BuildGithubOverride` に `NarrowDispatchInputs` を追加。`workflow_dispatch` 単独トリガーの場合、`github.event.inputs` を declared input 名のみの strict object (全値 `ExprType.String`) に narrow。未定義プロパティアクセスが `property "X" is not defined in object type {…}` として検出される | `DynamicContextTypeBuilder.cs`, `RuleInterfaceTests.cs` |
+| 5.5 | needs cycle 位置改善 | `minimal_cycle_in_needs`, `random_order_cycle_in_needs` | ✅ サイクル報告位置を needs 値位置からサイクルパスの最初のジョブ位置に変更 | `NeedsGraphRule.cs`, `RuleInterfaceTests.cs` |
+
+#### 設計方針として維持 (修正しない)
+
+| # | 項目 | Fixture | 理由 |
+|---|------|---------|------|
+| 5.6 | 空文字 label の "unknown label" 追加 | `issue280_runs_on` | パーサーが空ラベルに対して "string should not be empty" を報告し Labels 配列から除外する。RunnerLabelRule は空ラベルを受け取らない。seiton は根本原因 (空文字) を報告する設計。actionlint の冗長な "unknown label" は追加しない |
+| 5.7 | choice 空文字列許容 | `empty_sequence_or_string` | `spec §3.4.3` に基づき、choice-type inputs の空文字列 `''` を "no selection" プレースホルダーとして正当と見なす。`Parse_OnWorkflowDispatch_ChoiceOptionsAllowEmptyString` テストで意図的にバリデーション済み |
+
+#### 設計上の制約 (現時点では対応不可)
+
+| # | 項目 | Fixture | 理由 |
+|---|------|---------|------|
+| 5.8 | array<bool> vs array<{}> 型チェック | `invalid_comparisons` | matrix 値 `[true]` は `any` 型 (1-level-deep inference)。深い配列要素型推論が必要で高コスト。1行の差異のみ |
+| 5.9 | contains() object 型チェック | `invalid_json_in_fromjson` | `fromJSON()` 戻り値の型推論が必要。§2.6 で明示的に延期済み。2行の差異 |
+| 5.10 | steps.cache.outputs 型推論 | `evaluated_template` | step output の具体型推論が必要。popular action catalog に output 型情報を追加する大規模改修。1行の差異 |
+
+#### テスト結果
+
+- **全 1045 テスト通過** (`dotnet test` 全プロジェクト)
+- 追加テスト:
+  - `Parse_StepUppercaseRUN_ReportsUnexpectedForRunStep` — "RUN" が run ステップの unexpected key として検出
+  - `Parse_StepWithDuplicateKeysCaseInsensitive_ReportsDuplicate` — step 内 case-insensitive 重複キー検出
+  - `RuleRegression_ExprUndefinedVarRule_ContextAvailability4C_TableDriven` に `ng-services-expression-env-not-allowed` ケース追加
+  - `RuleRegression_ExprUndefinedVarRule_DynamicContext_TableDriven` に `ng-github-event-inputs-unknown-property` ケース追加
+  - `RuleRegression_NeedsGraphRule_CyclePosition` — expected line 9→3 (first job in cycle)
+
+#### ベンチマーク結果
+
+ベースラインとの比較は不可能 — 保存済みベースラインは旧 `ParsingBenchmark` クラス (4メソッド) から取得されたもので、現在の `CoreParsingBenchmark` (2メソッド) とは異なるベンチマーク構成・ワークロード。また、ベースライン以降に 80+ のフィーチャーコミットが `src/Seiton.Core/` に加わっており、本セッションの変更のみの影響を分離できない。
+
+**CoreParsingBenchmark (現在値):**
+
+| Size | Mean | Allocated |
+|------|------|-----------|
+| Small | 38.991 μs | 6.84 KB |
+| Medium | 962.020 μs | 47.76 KB |
+| Large | 15,549.473 μs | 214.3 KB |
+
+**CoreLintBenchmark (現在値):**
+
+| Size | FixEnabled | Mean | Allocated |
+|------|------------|------|-----------|
+| Small | False | 56.81 μs | 19.59 KB |
+| Small | True | 60.29 μs | 20 KB |
+| Medium | False | 1,161.79 μs | 124.16 KB |
+| Medium | True | 1,707.51 μs | 130.59 KB |
+| Large | False | 18,813.06 μs | 576.85 KB |
+| Large | True | 28,863.57 μs | 607.01 KB |
+
+次回のベースラインとして `CoreParsingBenchmark` / `CoreLintBenchmark` の上記値を使用すること。

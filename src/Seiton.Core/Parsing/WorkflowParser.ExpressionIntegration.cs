@@ -159,6 +159,7 @@ public static partial class WorkflowParser
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var isQuoted = reader.IsScalarQuoted();
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
@@ -166,6 +167,15 @@ public static partial class WorkflowParser
 
         if (TryParseDouble(valueUtf8, tag, out var value))
         {
+            // Quoted strings that happen to parse as numbers are not valid float literals
+            if (isQuoted)
+            {
+                needsError = true;
+                errorMark = mark;
+                reader.Read();
+                return default;
+            }
+
             var floatNode = arena.AddFloat(value, range);
             reader.Read();
             return floatNode;
@@ -210,6 +220,7 @@ public static partial class WorkflowParser
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var isQuoted = reader.IsScalarQuoted();
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
@@ -217,6 +228,15 @@ public static partial class WorkflowParser
 
         if (TryParseInt64(valueUtf8, tag, out var value))
         {
+            // Quoted strings that happen to parse as numbers are not valid integer literals
+            if (isQuoted)
+            {
+                needsError = true;
+                errorMark = mark;
+                reader.Read();
+                return default;
+            }
+
             var intNode = arena.AddInt(value, range);
             reader.Read();
             return intNode;

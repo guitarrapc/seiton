@@ -11,13 +11,23 @@ public static partial class WorkflowParser
         // spec §3.17: expression form is accepted as Services { Expression }
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
+            var scalarMark = reader.CurrentStart;
             var expression = ParseStringAndValidateExpression(
                 ref reader, arena, diagnostics,
                 ExpressionValidationContext.JobServices,
                 out var svcErr,
                 out var svcMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (svcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be object or expression", svcMark);
+            if (svcErr)
+            {
+                AddError(diagnostics, "\"services\" section is scalar node but mapping node is expected", svcMark);
+            }
+            else if (expression.HasValue && !ExpressionScanHelpers.ContainsExpressionMarker(expression, arena))
+            {
+                // Plain scalar without expression → not a valid services value
+                AddError(diagnostics, "\"services\" section is scalar node but mapping node is expected", scalarMark);
+                return null;
+            }
             return !expression.HasValue
                 ? null
                 : new Services { Expression = expression, Range = arena.GetStringRange(expression) };

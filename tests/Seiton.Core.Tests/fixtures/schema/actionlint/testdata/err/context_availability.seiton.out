@@ -31,6 +31,7 @@ test.yaml:193:36: context "env" is not allowed here. available contexts are "git
 test.yaml:200:18: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in job environment [expression]
 test.yaml:208:15: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in job runs-on [expression]
 test.yaml:210:14: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in job runs-on [expression]
+test.yaml:217:15: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in job services [expression]
 test.yaml:221:13: context "inputs" is not allowed here. no context is available here. called in step id [expression]
 test.yaml:228:11: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in snapshot if [expression]
 test.yaml:228:11: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix". called in snapshot if [expression]

@@ -622,6 +622,7 @@ public static partial class WorkflowParser
             return new Snapshot();
         }
 
+        var snapshotMark = reader.CurrentStart;
         StringNodeId versionNode = default;
         StringNodeId imageNameNode = default;
         StringNodeId ifNode = default;
@@ -707,6 +708,12 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             reader.Read();
+        }
+
+        // image-name is required
+        if (!imageNameNode.HasValue)
+        {
+            AddError(diagnostics, "\"snapshot\" section must have \"image-name\" configuration", snapshotMark);
         }
 
         return new Snapshot

@@ -1,1 +1,1 @@
-test.yaml:10:13: cyclic dependencies in "needs" job configurations are detected. detected cycle is "from" -> "to" -> "from" [job-needs]
+test.yaml:4:3: cyclic dependencies in "needs" job configurations are detected. detected cycle is "from" -> "to" -> "from" [job-needs]

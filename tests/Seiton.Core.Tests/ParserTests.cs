@@ -4778,6 +4778,28 @@ public sealed class ParserTests
         await Assert.That(diag.Message).Contains("expected one of");
     }
 
+    // regression: Uppercase "RUN" should be reported as unexpected even when it appears before lowercase "run"
+    [Test]
+    public async Task Parse_StepUppercaseRUN_ReportsUnexpectedForRunStep()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - RUN: echo\n        run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("unexpected key \"RUN\" for step to run shell command"));
+        await Assert.That(diag.Message).Contains("expected one of");
+        await Assert.That(diag.Location.StartLine).IsEqualTo(6);
+    }
+
+    // regression: Step "with" case-insensitive duplicate keys
+    [Test]
+    public async Task Parse_StepWithDuplicateKeysCaseInsensitive_ReportsDuplicate()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: foo/bar@main\n        with:\n          foo: a\n          FOO: b\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("key \"FOO\" is duplicated in \"with\" section"));
+        await Assert.That(diag.Message).Contains("case insensitive");
+        await Assert.That(diag.Location.StartLine).IsEqualTo(9);
+    }
+
     // regression: Step missing run/uses message
     [Test]
     public async Task Parse_StepWithOnlyName_ReportsNewMissingRunUsesMessage()
