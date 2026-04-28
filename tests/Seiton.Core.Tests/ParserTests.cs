@@ -2703,10 +2703,12 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var labelDiags = result.Diagnostics.Where(d => d.Message.Contains("label")).ToArray();
         // Should NOT say "label should not be empty" for a mapping element
-        var hasEmpty = labelDiags.Any(d => d.Message.Contains("should not be empty"));
+        var hasEmpty = result.Diagnostics.Any(d => d.Message.Contains("should not be empty"));
         await Assert.That(hasEmpty).IsFalse();
+        // Must emit the type-error diagnostic for the non-scalar element
+        var hasTypeError = result.Diagnostics.Any(d => d.Message.Contains("must be string, array, or expression"));
+        await Assert.That(hasTypeError).IsTrue();
     }
 
     // regression: non-scalar element in labels sequence (fallback runs-on) should produce type error
@@ -2724,9 +2726,12 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("runs-on") || d.Message.Contains("label")).ToArray();
-        var hasEmpty = runsOnDiags.Any(d => d.Message.Contains("should not be empty"));
+        // Should NOT say "should not be empty" for a non-scalar element
+        var hasEmpty = result.Diagnostics.Any(d => d.Message.Contains("should not be empty"));
         await Assert.That(hasEmpty).IsFalse();
+        // Must emit the type-error diagnostic for the non-scalar element
+        var hasTypeError = result.Diagnostics.Any(d => d.Message.Contains("must be string, sequence, or mapping"));
+        await Assert.That(hasTypeError).IsTrue();
     }
 
     // regression: non-scalar element in ports sequence should produce type error, not "should not be empty"
@@ -2747,9 +2752,12 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var portDiags = result.Diagnostics.Where(d => d.Message.Contains("port")).ToArray();
-        var hasEmpty = portDiags.Any(d => d.Message.Contains("should not be empty"));
+        // Should NOT say "should not be empty" for a non-scalar element
+        var hasEmpty = result.Diagnostics.Any(d => d.Message.Contains("should not be empty"));
         await Assert.That(hasEmpty).IsFalse();
+        // Must emit the type-error diagnostic for the non-scalar element
+        var hasTypeError = result.Diagnostics.Any(d => d.Message.Contains("\"container\" ports element must be a string"));
+        await Assert.That(hasTypeError).IsTrue();
     }
 
     [Test]
