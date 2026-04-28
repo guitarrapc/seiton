@@ -80,7 +80,6 @@ dotnet_diagnostic.CS0618.severity = error
 # =================
 csharp_using_directive_placement = outside_namespace:error
 dotnet_style_require_accessibility_modifiers = always:warning
-csharp_prefer_braces = true:warning
 
 # Exclude extension method 'this' parameter
 dotnet_code_quality.CA1062.exclude_extension_method_this_parameter = true
