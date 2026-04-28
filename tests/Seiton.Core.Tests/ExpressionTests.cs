@@ -1043,7 +1043,7 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task ParseAndValidate_CompareBoolLessThanAny_NoDiagnostic()
+    public async Task ParseAndValidate_CompareBoolLessOrEqualAny_NoDiagnostic()
     {
         // Per §7.4: when either operand resolves to Any, no error is emitted.
         // Bool is not-comparable type, but the other side being Any means we lack sufficient info.
