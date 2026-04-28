@@ -66,6 +66,34 @@ dotnet_diagnostic.CS8614.severity = error # Nullability of reference types in ty
 dotnet_diagnostic.CS8765.severity = error # Nullability of type of parameter 'obj' doesn't match overridden member (possibly because of nullability attributes).
 dotnet_diagnostic.CS8619.severity = error # Nullability of reference types in value of type 'GenericType<T?>' doesn't match target type 'GenericType<T>'.
 
+# CA2016: Forward the 'CancellationToken' parameter to methods that take one
+dotnet_diagnostic.CA2016.severity = warning
+# CA1805: Do not initialize unnecessarily
+dotnet_diagnostic.CA1805.severity = warning
+# CA1834: Consider using 'StringBuilder.Append(char)' when applicable
+dotnet_diagnostic.CA1834.severity = warning
+# CS0618: 'member' is obsolete: 'text'
+dotnet_diagnostic.CS0618.severity = error
+
+# =================
+# Style
+# =================
+csharp_using_directive_placement = outside_namespace:error
+dotnet_style_require_accessibility_modifiers = always:warning
+csharp_prefer_braces = true:warning
+
+# Exclude extension method 'this' parameter
+dotnet_code_quality.CA1062.exclude_extension_method_this_parameter = true
+
+# Async methods should have "Async" suffix
+dotnet_naming_rule.async_methods_end_in_async.symbols = any_async_methods
+dotnet_naming_rule.async_methods_end_in_async.style = end_in_async
+dotnet_naming_rule.async_methods_end_in_async.severity = suggestion
+dotnet_naming_symbols.any_async_methods.applicable_kinds = method
+dotnet_naming_symbols.any_async_methods.applicable_accessibilities = *
+dotnet_naming_symbols.any_async_methods.required_modifiers = async
+dotnet_naming_style.end_in_async.required_suffix = Async
+
 # =================
 # Analyzer Rulesets
 # =================
@@ -101,3 +129,5 @@ dotnet_diagnostic.IDE0079.severity = none # Remove unnecessary suppression
 dotnet_diagnostic.IDE0090.severity = none # Simplify new expression
 
 dotnet_diagnostic.xUnit3003.severity = none # It should include a public constructor for source information.
+dotnet_diagnostic.TUnit0301.severity = error # Consider using concrete types instead of tuples.
+dotnet_diagnostic.TUnitAssertions0005.severity = error # should not be used with a constant value

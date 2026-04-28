@@ -79,7 +79,7 @@ internal sealed partial class PopularActionsVersionValidator
         // GitHub tags API returns in reverse-alphabetical order when using the refs endpoint.
         var url = $"https://api.github.com/repos/{ownerRepo}/tags?per_page=100";
 
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
 
         HttpResponseMessage response;

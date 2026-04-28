@@ -6430,7 +6430,7 @@ public sealed class RuleInterfaceTests
             System.Text.Encoding.UTF8.GetBytes(yaml), "position-test.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "template-injection").ToArray();
 
-        await Assert.That(diagnostics).HasCount().EqualTo(1);
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
         await Assert.That(diagnostics[0].Message).Contains("github.event.head_commit.message");
 
         // The untrusted reference starts at the "g" of "github" inside the expression
@@ -6460,7 +6460,7 @@ public sealed class RuleInterfaceTests
             .OrderBy(x => x.Location.StartColumn)
             .ToArray();
 
-        await Assert.That(diagnostics).HasCount().EqualTo(3);
+        await Assert.That(diagnostics).Count().IsEqualTo(3);
 
         // All on line 7
         await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(7);
@@ -9063,7 +9063,7 @@ public sealed class RuleInterfaceTests
             .ToArray();
 
         // 3 broken JSON errors, none for valid JSON
-        await Assert.That(fromJsonErrors).HasCount().EqualTo(3);
+        await Assert.That(fromJsonErrors).Count().IsEqualTo(3);
         await Assert.That(fromJsonErrors[0].Message).Contains("not valid JSON");
         await Assert.That(fromJsonErrors[1].Message).Contains("not valid JSON");
         await Assert.That(fromJsonErrors[2].Message).Contains("not valid JSON");
@@ -11839,6 +11839,6 @@ public sealed class RuleInterfaceTests
         var stepsNotAllowed = result.Diagnostics
             .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
             .ToArray();
-        await Assert.That(stepsNotAllowed).HasCount().EqualTo(1);
+        await Assert.That(stepsNotAllowed).Count().IsEqualTo(1);
     }
 }

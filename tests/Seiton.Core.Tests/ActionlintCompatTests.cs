@@ -109,8 +109,11 @@ public sealed class ActionlintCompatTests
         return Path.Combine(FindRepoRoot(), "tests", "Seiton.Core.Tests", "fixtures", "schema", "actionlint", "testdata", "err");
     }
 
+    /// <summary>Fixture data for a single actionlint err test case.</summary>
+    public sealed record CompatFixture(string Name, string YamlPath, string OutPath);
+
     /// <summary>Enumerates all .yaml/.out pairs in the err fixtures directory.</summary>
-    public static IEnumerable<(string Name, string YamlPath, string OutPath)> GetFixtures()
+    public static IEnumerable<Func<CompatFixture>> GetFixtures()
     {
         var dir = GetErrFixturesRoot();
         if (!Directory.Exists(dir))
@@ -124,7 +127,7 @@ public sealed class ActionlintCompatTests
             if (File.Exists(outPath))
             {
                 var name = Path.GetFileNameWithoutExtension(yamlPath);
-                yield return (name, yamlPath, outPath);
+                yield return () => new CompatFixture(name, yamlPath, outPath);
             }
         }
     }
@@ -132,12 +135,11 @@ public sealed class ActionlintCompatTests
     [Test]
     [MethodDataSource(nameof(GetFixtures))]
     [DisplayName("Compat: $name")]
-    public async Task CompareWithActionlintExpectation((string Name, string YamlPath, string OutPath) fixture)
+    public async Task CompareWithActionlintExpectation(CompatFixture fixture)
     {
         // Skip fixtures that require external tools seiton intentionally does not support
         if (ScopeOutFixtures.Contains(fixture.Name))
         {
-            await Assert.That(true).IsTrue();
             return;
         }
 
@@ -198,7 +200,7 @@ public sealed class ActionlintCompatTests
         var totalMiss = 0;
         var totalExtra = 0;
 
-        foreach (var (name, yamlPath, outPath) in GetFixtures())
+        foreach (var (name, yamlPath, outPath) in GetFixtures().Select(static f => f()))
         {
             if (ScopeOutFixtures.Contains(name))
             {
@@ -469,7 +471,7 @@ public sealed class ActionlintCompatTests
     [Test]
     [MethodDataSource(nameof(GetFixtures))]
     [DisplayName("SeitonOut: $name")]
-    public async Task GenerateOrVerifySeitonOut((string Name, string YamlPath, string OutPath) fixture)
+    public async Task GenerateOrVerifySeitonOut(CompatFixture fixture)
     {
         var utf8Yaml = File.ReadAllBytes(fixture.YamlPath);
         var engine = new LintEngine();
@@ -488,7 +490,6 @@ public sealed class ActionlintCompatTests
         if (updateMode)
         {
             File.WriteAllText(seitonOutPath, actualContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            await Assert.That(true).IsTrue(); // always passes when writing
         }
         else if (File.Exists(seitonOutPath))
         {
@@ -499,7 +500,6 @@ public sealed class ActionlintCompatTests
         {
             // No .seiton.out yet — just report what would be written
             Console.Write($"[{fixture.Name}] .seiton.out not found, would write {seitonLines.Count} lines");
-            await Assert.That(true).IsTrue();
         }
     }
 
@@ -519,7 +519,7 @@ public sealed class ActionlintCompatTests
         var sb = new StringBuilder();
         sb.AppendLine("fixture,actionlint_line,actionlint_msg_prefix,seiton_line,seiton_msg_prefix,status");
 
-        foreach (var (name, yamlPath, outPath) in GetFixtures())
+        foreach (var (name, yamlPath, outPath) in GetFixtures().Select(static f => f()))
         {
             if (ScopeOutFixtures.Contains(name))
             {

@@ -156,7 +156,7 @@ public sealed record FixConfig
     /// When true, rules will build DiagnosticFix objects during Check().
     /// Defaults to false so lint-only runs skip fix construction overhead.
     /// </summary>
-    public bool Enabled { get; init; } = false;
+    public bool Enabled { get; init; }
 
     /// <summary>Gets the defaults sub-section of the fix configuration.</summary>
     public FixDefaultsConfig Defaults { get; init; } = new();
@@ -177,7 +177,7 @@ public sealed record FixDefaultsConfig
 public sealed record FixPinningConfig
 {
     /// <summary>Gets whether network access is enabled for SHA resolution.</summary>
-    public bool EnableNetwork { get; init; } = false;
+    public bool EnableNetwork { get; init; }
     /// <summary>Gets the minimum age in days for an action reference to be eligible for pinning.</summary>
     public int MinAgeDays { get; init; } = 14;
     /// <summary>Gets the branches excluded from pinning fix application.</summary>
@@ -193,7 +193,7 @@ public sealed record FixImagesConfig
     private static readonly IReadOnlyList<string> DefaultExcludeTags = ["latest"];
 
     /// <summary>Gets whether network access is enabled for OCI image digest resolution.</summary>
-    public bool EnableNetwork { get; init; } = false;
+    public bool EnableNetwork { get; init; }
 
     private IReadOnlyList<string> _excludeImages = DefaultExcludeImages;
 
@@ -237,7 +237,7 @@ public enum NetworkErrorMode { Skip, Fail }
 public sealed record GitHubNetworkConfig
 {
     /// <summary>Gets the GitHub Enterprise Server API URL, if using GHES.</summary>
-    public string? GhesApiUrl { get; init; } = null;
+    public string? GhesApiUrl { get; init; }
     /// <summary>Gets whether to fall back to the public GitHub API when GHES fails.</summary>
-    public bool GhesFallback { get; init; } = false;
+    public bool GhesFallback { get; init; }
 }
