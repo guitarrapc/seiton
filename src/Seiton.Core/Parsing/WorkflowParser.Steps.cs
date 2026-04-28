@@ -374,15 +374,30 @@ public static partial class WorkflowParser
         }
 
         // Empty mapping (e.g. `- {}`)
+        // VYaml may report MappingStart mark past the closing '}' for flow mappings.
+        // Correct by scanning backward in source bytes for '{'.
+        var emptyMark = stepMark;
+        if (!hasAnyKey && stepMark.Offset > 0 && stepMark.Offset <= source.Length)
+        {
+            for (var i = stepMark.Offset - 1; i >= 0 && i > stepMark.Offset - 80; i--)
+            {
+                if (source[i] == (byte)'{')
+                {
+                    emptyMark = reader.ComputePositionFromOffset(i);
+                    break;
+                }
+            }
+        }
+
         if (!hasAnyKey)
         {
-            AddError(diagnostics, "element of \"steps\" section should not be empty. please remove this section if it's unnecessary", stepMark);
+            AddError(diagnostics, "element of \"steps\" section should not be empty. please remove this section if it's unnecessary", emptyMark);
         }
 
         // spec §3.12: a step must choose one execution form: `run` or `uses`
         if (!hasRun && !hasUses)
         {
-            AddError(diagnostics, "step must run script with \"run\" section or run action with \"uses\" section", stepMark);
+            AddError(diagnostics, "step must run script with \"run\" section or run action with \"uses\" section", hasAnyKey ? stepMark : emptyMark);
         }
 
         StepExec exec;

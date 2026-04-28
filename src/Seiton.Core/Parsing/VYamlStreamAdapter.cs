@@ -1,4 +1,4 @@
-using System.Buffers.Text;
+Ôªøusing System.Buffers.Text;
 using VYaml.Parser;
 
 namespace Seiton.Core.Parsing;
@@ -10,7 +10,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private int _scalarSliceCursor;
 
     // Anchor/alias resolution state (all null/false until first anchor is encountered)
-    private Dictionary<int, List<AnchorEvent>>? _anchorStore;    // anchor id Å® recorded events
+    private Dictionary<int, List<AnchorEvent>>? _anchorStore;    // anchor id ÔøΩÔøΩ recorded events
     private List<AnchorEvent>? _currentRecording;                // non-null while inside an anchor
     private int _recordingId;                                    // anchor id being recorded
     private int _recordingDepth;                                 // nesting depth inside anchor
@@ -19,7 +19,7 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private AnchorEvent _virtualCurrent;                         // current event when _isReplaying
 
     // Anchor usage tracking for unused-anchor detection
-    private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id Å® (name, position)
+    private Dictionary<int, (string Name, TextPosition Position)>? _definedAnchors;  // anchor id ÔøΩÔøΩ (name, position)
     private HashSet<int>? _referencedAnchorIds;                                       // anchor ids used by aliases
     private List<(string Name, TextPosition Position, TextPosition AnchorPosition)>? _recursiveAliases;            // recursive alias occurrences
     private List<(int Id, List<AnchorEvent> Events, int Depth)>? _nestedRecordings;  // nested anchors inside outer recording
@@ -136,7 +136,10 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 var anchorPos = _definedAnchors != null && _definedAnchors.TryGetValue(unresolvableAnchor.Id, out var anchorEntry)
                     ? anchorEntry.Position
                     : default;
-                _recursiveAliases.Add((unresolvableAnchor.Name.ToString(), new TextPosition(mark.Position, mark.Line, mark.Col), anchorPos));
+                // VYaml's CurrentMark for aliases may advance past the *alias token.
+                // Scan backward in source bytes for the '*' alias indicator to get the correct position.
+                var aliasPos = ResolveAliasStart(mark.Position);
+                _recursiveAliases.Add((unresolvableAnchor.Name.ToString(), aliasPos, anchorPos));
 
                 // Mark the anchor as referenced so it's not reported as unused
                 _referencedAnchorIds ??= new HashSet<int>();
@@ -901,6 +904,32 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         }
 
         return ComputeTextPositionFromOffset(source, bestStart);
+    }
+
+    /// <summary>
+    /// VYaml may advance its scanner past a <c>*alias</c> token, so <see cref="YamlParser.CurrentMark"/>
+    /// points at the next token instead of the alias indicator. This helper scans backward for the
+    /// <c>*</c> character that starts the alias reference and returns the corrected position.
+    /// </summary>
+    private TextPosition ResolveAliasStart(int markPosition)
+    {
+        var source = _source.Span;
+        if (markPosition <= 0 || markPosition > source.Length)
+            return ComputeTextPositionFromOffset(source, Math.Max(0, Math.Min(markPosition, source.Length - 1)));
+
+        // If already at '*', position is correct.
+        if (markPosition < source.Length && source[markPosition] == (byte)'*')
+            return ComputeTextPositionFromOffset(source, markPosition);
+
+        // Scan backward for '*' (alias indicator), limiting to 120 bytes.
+        for (var i = markPosition - 1; i >= 0 && i > markPosition - 120; i--)
+        {
+            if (source[i] == (byte)'*')
+                return ComputeTextPositionFromOffset(source, i);
+        }
+
+        // Fallback: use the original mark position.
+        return ComputeTextPositionFromOffset(source, markPosition);
     }
 
     /// <summary>

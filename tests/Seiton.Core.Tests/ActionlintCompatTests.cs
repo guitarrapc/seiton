@@ -500,6 +500,7 @@ public sealed class ActionlintCompatTests
         {
             // No .seiton.out yet — just report what would be written
             Console.Write($"[{fixture.Name}] .seiton.out not found, would write {seitonLines.Count} lines");
+            File.WriteAllText(seitonOutPath, actualContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
     }
 

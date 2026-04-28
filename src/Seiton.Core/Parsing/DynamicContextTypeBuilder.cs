@@ -663,13 +663,17 @@ internal static class DynamicContextTypeBuilder
                 var secrets = wce.Secrets.Value;
                 if (secrets.Count == 0)
                 {
-                    // Empty secrets: explicitly declared as empty → strict empty object
-                    return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>(), strict: true));
+                    // Empty secrets: explicitly declared as empty → strict object with only GITHUB_TOKEN
+                    return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>
+                    {
+                        { new Utf8String("GITHUB_TOKEN"u8), ExprType.String },
+                    }, strict: true));
                 }
 
                 if (utf8Yaml is not null)
                 {
-                    var props = new Dictionary<Utf8String, ExprType>(secrets.Count);
+                    var props = new Dictionary<Utf8String, ExprType>(secrets.Count + 1);
+                    props[new Utf8String("GITHUB_TOKEN"u8)] = ExprType.String;
                     foreach (var pair in secrets)
                     {
                         props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;

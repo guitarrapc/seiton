@@ -270,7 +270,7 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -285,6 +285,7 @@ public static partial class WorkflowParser
             return [];
         }
 
+        var seqMark = reader.CurrentStart;
         var list = new PooledBuffer<StringNodeId>(4);
         try
         {
@@ -311,7 +312,7 @@ public static partial class WorkflowParser
 
             if (!allowEmpty && list.Count == 0)
             {
-                AddError(diagnostics, errorMessage, reader.CurrentStart);
+                AddError(diagnostics, emptyMessage ?? errorMessage, seqMark);
             }
 
             return list.ToArray();
