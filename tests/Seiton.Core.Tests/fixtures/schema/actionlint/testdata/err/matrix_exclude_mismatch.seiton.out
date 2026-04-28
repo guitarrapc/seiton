@@ -1,4 +1,4 @@
-test.yaml:14:13: job 'object' strategy.matrix.exclude references unknown axis 'operating-system' [matrix]
+test.yaml:14:13: jobs.'object'.strategy.matrix.exclude references unknown axis 'operating-system' [matrix]
 test.yaml:16:18: value "ubuntu-latest" in "exclude" does not match in matrix "os" combinations. possible values are {"runner": "ubuntu-latest"} [matrix]
 test.yaml:18:17: value ["ubuntu-latest"] in "exclude" does not match in matrix "os" combinations. possible values are {"runner": "ubuntu-latest"} [matrix]
 test.yaml:20:17: value {"runner": {"name": "ubuntu-latest"}} in "exclude" does not match in matrix "os" combinations. possible values are {"runner": "ubuntu-latest"} [matrix]

@@ -1117,15 +1117,22 @@ Events parsed under `on:` must use `on.{eventName}` as the section path:
 - `on.workflow_call output "bar" is missing "value"`
 - `on.workflow_dispatch input "baz" option should not be empty`
 
-#### Principle 5: Step-level messages include job and step context
+#### Principle 5: Diagnostic messages use dotted-path format for job and step context
 
-Step diagnostics prefix the message with `jobs.'{jobId}'.steps[{stepIndex}]` (dotted-path format aligned with GitHub Actions workflow syntax documentation) so the user immediately knows which job and step is affected. When the job ID is unavailable (e.g., action metadata parsing), the prefix falls back to `steps[{stepIndex}]`.
+Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions workflow syntax documentation (e.g., `jobs.<job_id>.steps[*]`, `jobs.<job_id>.<key>`), so the user immediately knows which job/step/property is affected.
 
+**Job-level examples:**
+- `jobs.'build'.name must be string` (property validation)
+- `jobs.'deploy'.strategy.max-parallel must be integer` (nested property)
+- `jobs.'test' cannot have both uses and steps` (structural error — space after prefix)
+- `"runs-on" section is missing in jobs.'build'` (missing-section messages)
+
+**Step-level examples:**
 - `jobs.'build'.steps[1] unexpected key "shell" for step to execute action. expected one of ...`
 - `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
 - `jobs.'test'.steps[2] element of "steps" section should not be empty. please remove this section if it's unnecessary`
 
-**Note**: Existing job-level messages (e.g. `job 'test1' name must be string`) still use the older `job '<id>'` prefix. Aligning those to `jobs.'<id>'` dotted-path format is a separate task.
+When the job ID is unavailable (e.g., action metadata parsing), the step prefix falls back to `steps[{stepIndex}]`.
 
 #### Normative empty-value message table
 

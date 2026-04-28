@@ -33,12 +33,12 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         {
             if (workflowCall.Inputs is not null && workflowCall.Inputs.Value.Count > 0)
             {
-                AddJobError(job, $"job '{jobId}' key 'with' requires uses");
+                AddJobError(job, $"jobs.'{jobId}' key 'with' requires uses");
             }
 
             if ((workflowCall.Secrets is not null && workflowCall.Secrets.Value.Count > 0) || workflowCall.InheritSecrets)
             {
-                AddJobError(job, $"job '{jobId}' key 'secrets' requires uses");
+                AddJobError(job, $"jobs.'{jobId}' key 'secrets' requires uses");
             }
 
             return;
@@ -148,7 +148,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             {
                 AddJobError(
                     job,
-                    $"job '{jobId}' local reusable workflow uses must not contain '@ref'",
+                    $"jobs.'{jobId}' local reusable workflow uses must not contain '@ref'",
                     BuildUsesLocation(workflowCall));
             }
 
@@ -174,7 +174,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         if (!File.Exists(resolvedPath))
         {
-            AddJobError(job, $"job '{jobId}' references local reusable workflow '{relativePath}' but the file does not exist", BuildJobLocation(job));
+            AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but the file does not exist", BuildJobLocation(job));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
@@ -193,7 +193,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         var parseResult = WorkflowParser.Parse(bytes, resolvedPath);
         if (parseResult.HasFatalError || parseResult.Workflow is null)
         {
-            AddJobError(job, $"job '{jobId}' references local reusable workflow '{relativePath}' but it could not be parsed", BuildJobLocation(job));
+            AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but it could not be parsed", BuildJobLocation(job));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
@@ -210,7 +210,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         if (workflowCallEvent is null)
         {
-            AddJobError(job, $"job '{jobId}' references local workflow '{relativePath}' that does not declare on.workflow_call", BuildJobLocation(job));
+            AddJobError(job, $"jobs.'{jobId}' references local workflow '{relativePath}' that does not declare on.workflow_call", BuildJobLocation(job));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
@@ -231,7 +231,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
                 {
                     AddJobError(
                         job,
-                        $"job '{jobId}' passes unknown reusable workflow input '{inputName}'",
+                        $"jobs.'{jobId}' passes unknown reusable workflow input '{inputName}'",
                         Arena.GetStringRange(pair.Value.Name));
                     continue;
                 }
@@ -249,7 +249,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
             AddJobError(
                 job,
-                $"job '{jobId}' is missing required reusable workflow input '{requiredInput}'",
+                $"jobs.'{jobId}' is missing required reusable workflow input '{requiredInput}'",
                 BuildUsesLocation(workflowCall));
         }
     }
@@ -278,7 +278,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
             AddJobError(
                 job,
-                $"job '{jobId}' input '{expected.Name}' expects boolean but got '{valueText}'",
+                $"jobs.'{jobId}'.input '{expected.Name}' expects boolean but got '{valueText}'",
                 Arena.GetStringRange(value));
             return;
         }
@@ -292,7 +292,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
             AddJobError(
                 job,
-                $"job '{jobId}' input '{expected.Name}' expects number but got '{valueText}'",
+                $"jobs.'{jobId}'.input '{expected.Name}' expects number but got '{valueText}'",
                 Arena.GetStringRange(value));
         }
     }
@@ -311,7 +311,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
                 AddJobError(
                     job,
-                    $"job '{jobId}' passes unknown reusable workflow secret '{secretName}'",
+                    $"jobs.'{jobId}' passes unknown reusable workflow secret '{secretName}'",
                     Arena.GetStringRange(pair.Value.Name));
             }
         }
@@ -330,7 +330,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
             AddJobError(
                 job,
-                $"job '{jobId}' is missing required reusable workflow secret '{requiredSecret}'",
+                $"jobs.'{jobId}' is missing required reusable workflow secret '{requiredSecret}'",
                 BuildUsesLocation(workflowCall));
         }
     }
@@ -470,7 +470,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return;
         }
 
-        AddJobError(job, $"when job '{jobId}' calls reusable workflow with uses, key '{keyName}' is not allowed");
+        AddJobError(job, $"when jobs.'{jobId}' calls reusable workflow with uses, key '{keyName}' is not allowed");
     }
 
     private sealed record InputContract(string Name, WorkflowCallInputType Type);

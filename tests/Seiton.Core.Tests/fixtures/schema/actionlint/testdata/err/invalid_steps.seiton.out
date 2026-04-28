@@ -4,7 +4,7 @@ test.yaml:14:9: jobs.'test1'.steps[3] unexpected key "shell" for step to execute
 test.yaml:17:9: jobs.'test1'.steps[4] element of "steps" section should not be empty. please remove this section if it's unnecessary [syntax-check]
 test.yaml:17:9: jobs.'test1'.steps[4] must run script with "run" section or run action with "uses" section [syntax-check]
 test.yaml:21:11: "steps" section must be sequence node but got scalar node with "!!null" tag [syntax-check]
-test.yaml:18:3: "steps" section is missing in job "test2" [syntax-check]
+test.yaml:18:3: "steps" section is missing in jobs.'test2' [syntax-check]
 test.yaml:25:12: jobs.'test3'.steps[1] must run script with "run" section or run action with "uses" section [syntax-check]
 test.yaml:27:8: jobs.'test3'.steps[2] element of "steps" section should not be empty. please remove this section if it's unnecessary [syntax-check]
 test.yaml:27:8: jobs.'test3'.steps[2] must run script with "run" section or run action with "uses" section [syntax-check]

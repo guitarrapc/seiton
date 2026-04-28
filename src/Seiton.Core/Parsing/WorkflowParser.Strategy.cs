@@ -74,7 +74,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy key must be string", reader.CurrentStart);
+                AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -122,7 +122,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobStrategy, out var ffErr, out var ffMark);
-                            if (ffErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.fail-fast must be bool or expression", ffMark);
+                            if (ffErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.fail-fast must be bool or expression", ffMark);
                         }
 
                         continue;
@@ -130,10 +130,10 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             maxParallel = ParseIntOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobStrategy, out var mpErr, out var mpMark);
-                            if (mpErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be integer", mpMark);
+                            if (mpErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.max-parallel must be integer", mpMark);
                             if (maxParallel.HasValue && arena.GetIntExpression(maxParallel) == default && arena.GetIntValue(maxParallel) <= 0)
                             {
-                                AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.max-parallel must be greater than 0", keyMark);
+                                AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.max-parallel must be greater than 0", keyMark);
                             }
                         }
 
@@ -184,13 +184,13 @@ public static partial class WorkflowParser
                 out var mxExprErr,
                 out var mxExprMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (mxExprErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be string or object", mxExprMark);
+            if (mxExprErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", mxExprMark);
             return new Matrix { Expression = expression, Range = expression.HasValue ? arena.GetStringRange(expression) : default };
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix must be string or object", reader.CurrentStart);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -210,7 +210,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix key must be string", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -262,7 +262,7 @@ public static partial class WorkflowParser
                     var incExcKeyText = isInclude ? "include" : "exclude";
                     if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{incExcKeyText} must be array or string", reader.CurrentStart);
+                        AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{incExcKeyText} must be array or string", reader.CurrentStart);
                     }
                     var incExcSeqMark = reader.CurrentStart;
                     var combos = ParseMatrixCombinations(ref reader, arena, diagnostics, source, jobId, incExcKeyText);
@@ -284,7 +284,7 @@ public static partial class WorkflowParser
                 if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
                 {
                     var keyTextForDiagnostic = DecodeUtf8(source, keySlice);
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{keyTextForDiagnostic} must be array or string", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{keyTextForDiagnostic} must be array or string", reader.CurrentStart);
                 }
 
                 var rowName = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, keyUtf8.Length));
@@ -298,7 +298,7 @@ public static partial class WorkflowParser
                         out var rowErr,
                         out var rowMark,
                         parseWholeValueIfNoEmbedded: false);
-                    if (rowErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{DecodeUtf8(source, keySlice)} must be array or string", rowMark);
+                    if (rowErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{DecodeUtf8(source, keySlice)} must be array or string", rowMark);
                     rowExpr = valueNode;
                     rowValues = !valueNode.HasValue ? [] : [new RawYamlString { Value = valueNode }];
                 }
@@ -352,7 +352,7 @@ public static partial class WorkflowParser
                 out var mcErr,
                 out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (mcErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} must be array or string", mcMark);
+            if (mcErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", mcMark);
             return
             [
                 new MatrixCombinations
@@ -365,7 +365,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} must be array or string", reader.CurrentStart);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -378,7 +378,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{section} item must be object", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} item must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
@@ -407,7 +407,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' strategy.matrix.{Encoding.UTF8.GetString(rowNameUtf8)} must be array or string", reader.CurrentStart);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{Encoding.UTF8.GetString(rowNameUtf8)} must be array or string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -437,7 +437,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var node = ParseStringAndValidateExpression(ref reader, arena, diagnostics, exprContext, out var mvErr, out var mvMark, parseWholeValueIfNoEmbedded: false);
-            if (mvErr) AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value must be string, object, or array", mvMark);
+            if (mvErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.matrix value must be string, object, or array", mvMark);
             if (!node.HasValue) node = arena.AddString(default, false, default);
             return new RawYamlString { Value = node };
         }
@@ -464,12 +464,12 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.Alias)
         {
-            AddError(diagnostics, $"unexpected alias node on parsing value in matrix row of job '{DecodeUtf8(source, jobId)}'", reader.CurrentStart);
+            AddError(diagnostics, $"unexpected alias node on parsing value in matrix row of jobs.'{DecodeUtf8(source, jobId)}'", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new RawYamlString { Value = arena.AddString(default, false, default) };
         }
 
-        AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix value has unsupported shape", reader.CurrentStart);
+        AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.matrix value has unsupported shape", reader.CurrentStart);
         reader.SkipCurrentNode();
         return new RawYamlString { Value = arena.AddString(default, false, default) };
     }
@@ -487,7 +487,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' matrix object key must be string", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.matrix object key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {

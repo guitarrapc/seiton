@@ -18,7 +18,7 @@ public sealed class DenyInheritSecretsRule() : RuleBase(RuleId.DenyInheritSecret
         var jobId = Decode(Arena.GetStringSlice(job.Id));
         AddJobError(
             job,
-            $"job '{jobId}' uses 'secrets: inherit' when calling reusable workflow; explicitly map only required secrets via 'secrets:'",
+            $"jobs.'{jobId}' uses 'secrets: inherit' when calling reusable workflow; explicitly map only required secrets via 'secrets:'",
             BuildJobLocation(job));
     }
 }

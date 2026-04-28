@@ -20,22 +20,22 @@ public sealed class JobStructureRule() : RuleBase(RuleId.JobStructure)
 
         if (hasUsesValue && hasSteps)
         {
-            AddJobError(job, $"job '{jobId}' cannot have both uses and steps");
+            AddJobError(job, $"jobs.'{jobId}' cannot have both uses and steps");
         }
 
         if (hasUsesValue && hasRunsOn)
         {
-            AddJobError(job, $"job '{jobId}' cannot have both uses and runs-on");
+            AddJobError(job, $"jobs.'{jobId}' cannot have both uses and runs-on");
         }
 
         if (!hasUsesKey && !hasRunsOn)
         {
-            AddJobError(job, $"\"runs-on\" section is missing in job \"{jobId}\"");
+            AddJobError(job, $"\"runs-on\" section is missing in jobs.'{jobId}'");
         }
 
         if (!hasUsesKey && !hasSteps)
         {
-            AddJobError(job, $"\"steps\" section is missing in job \"{jobId}\"");
+            AddJobError(job, $"\"steps\" section is missing in jobs.'{jobId}'");
         }
     }
 }

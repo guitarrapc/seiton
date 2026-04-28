@@ -38,7 +38,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             }
 
             var labelText = Decode(Arena.GetStringSlice(label));
-            AddJobWarning(job, $"job '{jobId}' runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", Arena.GetStringRange(label));
+            AddJobWarning(job, $"jobs.'{jobId}'.runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", Arena.GetStringRange(label));
         }
     }
 

@@ -35,7 +35,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be object or expression", reader.CurrentStart);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services must be object or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -53,7 +53,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be string", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {

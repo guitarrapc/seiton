@@ -483,10 +483,10 @@ public static partial class WorkflowParser
         var jobIdText = DecodeUtf8(source, jobId);
         if (!isService)
         {
-            return $"job '{jobIdText}' container";
+            return $"jobs.'{jobIdText}'.container";
         }
 
-        return $"job '{jobIdText}' service '{DecodeUtf8(source, serviceName)}'";
+        return $"jobs.'{jobIdText}'.services.'{DecodeUtf8(source, serviceName)}'";
     }
 
     private static void AddError(List<Diagnostic> diagnostics, string message, TextPosition mark)

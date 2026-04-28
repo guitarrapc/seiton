@@ -17,7 +17,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         }
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
-        var message = $"job '{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
+        var message = $"jobs.'{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
         if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(Config, job, Config.Utf8Yaml, out var fix))
         {
             AddJobWarning(job, message, BuildJobLocation(job), fix);

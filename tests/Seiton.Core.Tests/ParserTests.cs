@@ -2181,7 +2181,7 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-uses.yml");
         var messages = result.Diagnostics.Select(d => d.Message).ToArray();
         // Should report job-scoped "uses must be string and should not be empty"
-        await Assert.That(messages.Any(m => m.Contains("job 'call4' uses must be string and should not be empty", StringComparison.Ordinal))).IsEqualTo(true);
+        await Assert.That(messages.Any(m => m.Contains("jobs.'call4'.uses must be string and should not be empty", StringComparison.Ordinal))).IsEqualTo(true);
         // Should NOT report missing runs-on/steps when uses key was present
         await Assert.That(messages.Any(m => m.Contains("runs-on\" section is missing", StringComparison.Ordinal))).IsEqualTo(false);
         await Assert.That(messages.Any(m => m.Contains("steps\" section is missing", StringComparison.Ordinal))).IsEqualTo(false);
@@ -5194,6 +5194,43 @@ public sealed class ParserTests
         await Assert.That(diag.Message).Contains("jobs.'build'.steps[1]");
     }
 
+    // regression: job-level diagnostics should use dotted-path format
+    [Test]
+    public async Task Parse_JobEnvInvalidType_UsesDottedPathFormat()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          myJob:
+            runs-on: ubuntu-latest
+            env:
+              - item1
+            steps:
+              - run: echo hi
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("env"));
+        await Assert.That(diag.Message).Contains("jobs.'myJob'.");
+    }
+
+    [Test]
+    public async Task Parse_JobStrategyMaxParallelInvalid_UsesDottedPathFormat()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            strategy:
+              max-parallel: foo
+            steps:
+              - run: echo hi
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var diag = result.Diagnostics.First(d => d.Message.Contains("max-parallel"));
+        await Assert.That(diag.Message).Contains("jobs.'build'.strategy.max-parallel");
+    }
+
     [Test]
     public async Task Parse_StepMissingRunOrUses_IncludesJobContext()
     {
@@ -5328,7 +5365,7 @@ public sealed class ParserTests
         """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("\"steps\" section is missing"));
-        await Assert.That(diag.Message).IsEqualTo("\"steps\" section is missing in job \"build\"");
+        await Assert.That(diag.Message).IsEqualTo("\"steps\" section is missing in jobs.'build'");
     }
 
     // regression:Schedule message wording
