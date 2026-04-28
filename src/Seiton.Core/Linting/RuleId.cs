@@ -54,6 +54,8 @@ public enum RuleId
     RefVersionMismatch,
     UseTrustedPublishing,
     LocalActionInputs,
+    WorkflowCallInputDefault,
+    OutdatedActionRunner,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

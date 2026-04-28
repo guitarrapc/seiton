@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 /// <summary>Additional UTF-8 key tables for strategy, containers, action metadata, and on.* mapping dispatch.</summary>
 public static partial class WorkflowParser
@@ -43,11 +43,13 @@ public static partial class WorkflowParser
         Ports = 3,
         Volumes = 4,
         Options = 5,
+        Entrypoint = 6,
+        Command = 7,
     }
 
     private readonly struct ContainerKeyTable : IUtf8OrderedKeyTable
     {
-        public static int KeyCount => 6;
+        public static int KeyCount => 8;
 
         public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
         {
@@ -57,6 +59,8 @@ public static partial class WorkflowParser
             3 => "ports"u8,
             4 => "volumes"u8,
             5 => "options"u8,
+            6 => "entrypoint"u8,
+            7 => "command"u8,
             _ => ReadOnlySpan<byte>.Empty,
         };
     }
@@ -69,6 +73,8 @@ public static partial class WorkflowParser
         ContainerMappingKey.Ports => "ports",
         ContainerMappingKey.Volumes => "volumes",
         ContainerMappingKey.Options => "options",
+        ContainerMappingKey.Entrypoint => "entrypoint",
+        ContainerMappingKey.Command => "command",
         _ => "key",
     };
 

@@ -87,7 +87,14 @@ public sealed class LintEngine
         }
 
         _diagnostics.Clear();
-        _diagnostics.AddRange(parseResult.Diagnostics);
+        _seen.Clear();
+        for (var i = 0; i < parseResult.Diagnostics.Length; i++)
+        {
+            if (_seen.Add(new DiagnosticIdentity(parseResult.Diagnostics[i])))
+            {
+                _diagnostics.Add(parseResult.Diagnostics[i]);
+            }
+        }
 
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
@@ -193,6 +200,17 @@ public sealed class LintEngine
         _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
 
         _seen.Clear();
+
+        // Seed _seen with parser diagnostic identities so lint rules that duplicate
+        // the same check (e.g. JobStructureRule, ReusableWorkflowRule) are suppressed.
+        // Track indices for replacement: when a lint rule produces the same diagnostic,
+        // we replace the parser version (RuleId = null) with the lint version (has RuleId)
+        // so that rule-based suppression and filtering still work.
+        for (var i = 0; i < _diagnostics.Count; i++)
+        {
+            _seen.Add(new DiagnosticIdentity(_diagnostics[i]));
+        }
+
         _suppressedByRule.Clear();
         _suppressionRecords.Clear();
         for (var i = 0; i < _ruleDiagnostics.Count; i++)
@@ -201,6 +219,17 @@ public sealed class LintEngine
             var identity = new DiagnosticIdentity(current);
             if (!_seen.Add(identity))
             {
+                // Lint diagnostic duplicates a parser diagnostic — replace the parser entry
+                // so the RuleId is preserved for suppression and diagnostic attribution.
+                for (var j = 0; j < _diagnostics.Count; j++)
+                {
+                    if (_diagnostics[j].RuleId is null && new DiagnosticIdentity(_diagnostics[j]).Equals(identity))
+                    {
+                        _diagnostics[j] = current;
+                        break;
+                    }
+                }
+
                 continue;
             }
 
@@ -957,26 +986,23 @@ public sealed class LintEngine
         return string.CompareOrdinal(x.Message, y.Message);
     }
 
+    /// <summary>
+    /// Identity used for diagnostic deduplication.
+    /// Matches on severity + message + line only (ignoring column / byte offset) so that
+    /// parser diagnostics (reported at expression-internal positions) and lint diagnostics
+    /// (reported at YAML key positions) on the same line with the same message are treated
+    /// as duplicates.
+    /// </summary>
     private readonly record struct DiagnosticIdentity(
         DiagnosticSeverity Severity,
         string Message,
-        int Start,
-        int Length,
-        int StartLine,
-        int StartColumn,
-        int EndLine,
-        int EndColumn)
+        int StartLine)
     {
         public DiagnosticIdentity(Diagnostic diagnostic)
             : this(
                 diagnostic.Severity,
                 diagnostic.Message,
-                diagnostic.Location.Start,
-                diagnostic.Location.Length,
-                diagnostic.Location.StartLine,
-                diagnostic.Location.StartColumn,
-                diagnostic.Location.EndLine,
-                diagnostic.Location.EndColumn)
+                diagnostic.Location.StartLine)
         {
         }
     }

@@ -13,9 +13,15 @@ internal static class PopularActions
         ActionsCheckout,
         ActionsDownloadArtifact,
         ActionsSetupDotnet,
+        ActionsSetupGo,
         ActionsSetupNode,
+        ActionsStale,
         ActionsUploadArtifact,
         DockerLoginAction,
+        OctokitRequestAction,
+        PypaGhActionPypiPublish,
+        ReviewdogActionActionlint,
+        RhysdActionSetupVim,
     }
 
     internal readonly struct ActionSpec
@@ -63,25 +69,37 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8),
                 ActionId.ActionsDownloadArtifact =>
                     EqualsAsciiIgnoreCase(inputNameUtf8, "artifact-ids"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "digest-mismatch"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "github-token"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "merge-multiple"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "name"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "pattern"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "repository"u8)
-                    || EqualsAsciiIgnoreCase(inputNameUtf8, "run-id"u8),
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "run-id"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "skip-decompress"u8),
                 ActionId.ActionsSetupDotnet =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "cache-dependency-path"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "config-file"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "dotnet-quality"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "dotnet-version"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "global-json-file"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "owner"u8)
-                    || EqualsAsciiIgnoreCase(inputNameUtf8, "source-url"u8),
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "source-url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "workloads"u8),
+                ActionId.ActionsSetupGo =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "cache-dependency-path"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "check-latest"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "go-download-base-url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "go-version"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "go-version-file"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8),
                 ActionId.ActionsSetupNode =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "always-auth"u8)
-                    || EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "architecture"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "cache"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "cache-dependency-path"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "check-latest"u8)
@@ -89,11 +107,69 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "mirror-token"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "node-version"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "node-version-file"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "package-manager-cache"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "registry-url"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "scope"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8),
+                ActionId.ActionsStale =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "any-of-issue-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "any-of-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "any-of-pr-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "ascending"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "close-issue-label"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "close-issue-message"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "close-issue-reason"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "close-pr-label"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "close-pr-message"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "days-before-close"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "days-before-issue-close"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "days-before-issue-stale"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "days-before-pr-close"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "days-before-pr-stale"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "days-before-stale"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "debug-only"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "delete-branch"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "enable-statistics"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-all-assignees"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-all-issue-assignees"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-all-issue-milestones"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-all-milestones"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-all-pr-assignees"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-all-pr-milestones"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-assignees"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-draft-pr"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-issue-assignees"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-issue-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-issue-milestones"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-milestones"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-pr-assignees"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-pr-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "exempt-pr-milestones"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "ignore-issue-updates"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "ignore-pr-updates"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "ignore-updates"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "include-only-assigned"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "labels-to-add-when-unstale"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "labels-to-remove-when-stale"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "labels-to-remove-when-unstale"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "only-issue-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "only-issue-types"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "only-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "only-pr-labels"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "operations-per-run"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "remove-issue-stale-when-updated"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "remove-pr-stale-when-updated"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "remove-stale-when-updated"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "repo-token"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "sort-by"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "stale-issue-label"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "stale-issue-message"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "stale-pr-label"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "stale-pr-message"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "start-date"u8),
                 ActionId.ActionsUploadArtifact =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "compression-level"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "archive"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "compression-level"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "if-no-files-found"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "include-hidden-files"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "name"u8)
@@ -108,7 +184,180 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "registry-auth"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "scope"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "username"u8),
+                ActionId.OctokitRequestAction =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "mediaType"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "route"u8),
+                ActionId.PypaGhActionPypiPublish =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "attestations"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "packages-dir"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "packages_dir"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "password"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "print-hash"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "print_hash"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "repository-url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "repository_url"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "skip-existing"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "skip_existing"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "user"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "verbose"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "verify-metadata"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "verify_metadata"u8),
+                ActionId.ReviewdogActionActionlint =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "actionlint_flags"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "fail_level"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "fail_on_error"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "filter_mode"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "github_token"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "level"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "reporter"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "reviewdog_flags"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "tool_name"u8),
+                ActionId.RhysdActionSetupVim =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "configure-args"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "neovim"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "token"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "version"u8),
                 _ => false,
+            };
+        }
+
+        internal bool IsInputRequired(ReadOnlySpan<byte> inputNameUtf8)
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "key"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8),
+                ActionId.ActionsCheckout => false,
+                ActionId.ActionsDownloadArtifact => false,
+                ActionId.ActionsSetupDotnet => false,
+                ActionId.ActionsSetupGo => false,
+                ActionId.ActionsSetupNode => false,
+                ActionId.ActionsStale => false,
+                ActionId.ActionsUploadArtifact =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "path"u8),
+                ActionId.DockerLoginAction => false,
+                ActionId.OctokitRequestAction =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "route"u8),
+                ActionId.PypaGhActionPypiPublish => false,
+                ActionId.ReviewdogActionActionlint => false,
+                ActionId.RhysdActionSetupVim => false,
+                _ => false,
+            };
+        }
+
+        internal byte[][] GetRequiredInputs()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => ["key"u8.ToArray(), "path"u8.ToArray()],
+                ActionId.ActionsCheckout => [],
+                ActionId.ActionsDownloadArtifact => [],
+                ActionId.ActionsSetupDotnet => [],
+                ActionId.ActionsSetupGo => [],
+                ActionId.ActionsSetupNode => [],
+                ActionId.ActionsStale => [],
+                ActionId.ActionsUploadArtifact => ["path"u8.ToArray()],
+                ActionId.DockerLoginAction => [],
+                ActionId.OctokitRequestAction => ["route"u8.ToArray()],
+                ActionId.PypaGhActionPypiPublish => [],
+                ActionId.ReviewdogActionActionlint => [],
+                ActionId.RhysdActionSetupVim => [],
+                _ => [],
+            };
+        }
+
+        internal byte[][] GetOutputNames()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => ["cache-hit"u8.ToArray()],
+                ActionId.ActionsCheckout => ["commit"u8.ToArray(), "ref"u8.ToArray()],
+                ActionId.ActionsDownloadArtifact => ["download-path"u8.ToArray()],
+                ActionId.ActionsSetupDotnet => ["cache-hit"u8.ToArray(), "dotnet-version"u8.ToArray()],
+                ActionId.ActionsSetupGo => ["cache-hit"u8.ToArray(), "go-version"u8.ToArray()],
+                ActionId.ActionsSetupNode => ["cache-hit"u8.ToArray(), "node-version"u8.ToArray()],
+                ActionId.ActionsStale => ["closed-issues-prs"u8.ToArray(), "staled-issues-prs"u8.ToArray()],
+                ActionId.ActionsUploadArtifact => ["artifact-digest"u8.ToArray(), "artifact-id"u8.ToArray(), "artifact-url"u8.ToArray()],
+                ActionId.DockerLoginAction => [],
+                ActionId.OctokitRequestAction => ["data"u8.ToArray(), "headers"u8.ToArray(), "status"u8.ToArray()],
+                ActionId.PypaGhActionPypiPublish => [],
+                ActionId.ReviewdogActionActionlint => [],
+                ActionId.RhysdActionSetupVim => ["executable"u8.ToArray(), "vim-dir"u8.ToArray()],
+                _ => [],
+            };
+        }
+
+        internal ReadOnlySpan<byte> GetDeprecatedInputMessage(ReadOnlySpan<byte> inputNameUtf8)
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "save-always"u8) ? "save-always does not work as intended and will be removed in a future release. A separate `actions/cache/restore` step should be used instead. See https://github.com/actions/cache/tree/main/save#always-save-cache for more details"u8
+                    : default,
+                ActionId.ActionsCheckout => default,
+                ActionId.ActionsDownloadArtifact => default,
+                ActionId.ActionsSetupDotnet => default,
+                ActionId.ActionsSetupGo => default,
+                ActionId.ActionsSetupNode => default,
+                ActionId.ActionsStale => default,
+                ActionId.ActionsUploadArtifact => default,
+                ActionId.DockerLoginAction => default,
+                ActionId.OctokitRequestAction => default,
+                ActionId.PypaGhActionPypiPublish =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "packages_dir"u8) ? "The inputs have been normalized to use kebab-case. Use `packages-dir` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "print_hash"u8) ? "The inputs have been normalized to use kebab-case. Use `print-hash` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "repository_url"u8) ? "The inputs have been normalized to use kebab-case. Use `repository-url` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "skip_existing"u8) ? "The inputs have been normalized to use kebab-case. Use `skip-existing` instead"u8
+                    : EqualsAsciiIgnoreCase(inputNameUtf8, "verify_metadata"u8) ? "The inputs have been normalized to use kebab-case. Use `verify-metadata` instead"u8
+                    : default,
+                ActionId.ReviewdogActionActionlint =>
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "fail_on_error"u8) ? "Deprecated, use `fail_level` instead"u8
+                    : default,
+                ActionId.RhysdActionSetupVim => default,
+                _ => default,
+            };
+        }
+
+        internal ReadOnlySpan<byte> GetRunsUsing()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => "node24"u8,
+                ActionId.ActionsCheckout => "node24"u8,
+                ActionId.ActionsDownloadArtifact => "node24"u8,
+                ActionId.ActionsSetupDotnet => "node24"u8,
+                ActionId.ActionsSetupGo => "node24"u8,
+                ActionId.ActionsSetupNode => "node24"u8,
+                ActionId.ActionsStale => "node24"u8,
+                ActionId.ActionsUploadArtifact => "node24"u8,
+                ActionId.DockerLoginAction => "node24"u8,
+                ActionId.OctokitRequestAction => "node24"u8,
+                ActionId.PypaGhActionPypiPublish => "composite"u8,
+                ActionId.ReviewdogActionActionlint => "docker"u8,
+                ActionId.RhysdActionSetupVim => "node24"u8,
+                _ => default,
+            };
+        }
+
+        internal int GetMaxDeprecatedMajorVersion()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => 3,
+                ActionId.ActionsCheckout => 3,
+                ActionId.ActionsDownloadArtifact => 3,
+                ActionId.ActionsSetupDotnet => 3,
+                ActionId.ActionsSetupGo => 3,
+                ActionId.ActionsSetupNode => 3,
+                ActionId.ActionsStale => 8,
+                ActionId.ActionsUploadArtifact => 3,
+                ActionId.DockerLoginAction => 2,
+                ActionId.OctokitRequestAction => 0,
+                ActionId.PypaGhActionPypiPublish => 0,
+                ActionId.ReviewdogActionActionlint => 0,
+                ActionId.RhysdActionSetupVim => 0,
+                _ => 0,
             };
         }
     }
@@ -139,9 +388,21 @@ internal static class PopularActions
             return true;
         }
 
+        if (MatchesActionReference(usesUtf8, "actions/setup-go"u8))
+        {
+            spec = new ActionSpec(ActionId.ActionsSetupGo);
+            return true;
+        }
+
         if (MatchesActionReference(usesUtf8, "actions/setup-node"u8))
         {
             spec = new ActionSpec(ActionId.ActionsSetupNode);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "actions/stale"u8))
+        {
+            spec = new ActionSpec(ActionId.ActionsStale);
             return true;
         }
 
@@ -154,6 +415,30 @@ internal static class PopularActions
         if (MatchesActionReference(usesUtf8, "docker/login-action"u8))
         {
             spec = new ActionSpec(ActionId.DockerLoginAction);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "octokit/request-action"u8))
+        {
+            spec = new ActionSpec(ActionId.OctokitRequestAction);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "pypa/gh-action-pypi-publish"u8))
+        {
+            spec = new ActionSpec(ActionId.PypaGhActionPypiPublish);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "reviewdog/action-actionlint"u8))
+        {
+            spec = new ActionSpec(ActionId.ReviewdogActionActionlint);
+            return true;
+        }
+
+        if (MatchesActionReference(usesUtf8, "rhysd/action-setup-vim"u8))
+        {
+            spec = new ActionSpec(ActionId.RhysdActionSetupVim);
             return true;
         }
 

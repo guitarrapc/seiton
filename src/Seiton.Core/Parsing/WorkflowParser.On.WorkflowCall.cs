@@ -1,4 +1,4 @@
-﻿// on.workflow_call — inputs, secrets, outputs for reusable workflow triggers.
+// on.workflow_call — inputs, secrets, outputs for reusable workflow triggers.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -12,7 +12,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_call must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new WorkflowCallEvent { EventName = nameNode, Inputs = null, Secrets = null, Outputs = null, Range = arena.GetStringRange(nameNode) };
         }
@@ -27,7 +27,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_call option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.workflow_call option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -84,7 +84,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"on.workflow_call does not support option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -111,7 +111,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call.inputs must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_call.inputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -126,7 +126,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "on.workflow_call.inputs key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "on.workflow_call.inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -189,8 +189,31 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call input must be mapping", reader.CurrentStart);
-            reader.SkipCurrentNode();
+            // Null/empty body (e.g. `input0:` followed by next key) — treat as empty input.
+            // Still require type field; report "type is required" instead of "must be object".
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var bodyUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(bodyUtf8) || bodyUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                }
+                else
+                {
+                    AddError(diagnostics, "on.workflow_call input must be object", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                }
+            }
+            else
+            {
+                AddError(diagnostics, "on.workflow_call input must be object", reader.CurrentStart);
+                reader.SkipCurrentNode();
+            }
+            // Report missing type
+            AddError(
+                diagnostics,
+                $"\"type\" is missing at \"{idText}\" input of workflow_call event",
+                new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventInput { Name = nameNode, Id = id, Description = description, Required = required, Default = defaultValue, Type = type, Range = arena.GetStringRange(nameNode) };
         }
 
@@ -199,7 +222,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_call input option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.workflow_call input option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -243,13 +266,13 @@ public static partial class WorkflowParser
                 switch (ifk)
                 {
                     case WorkflowCallInputFieldKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call input description must be scalar");
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call input description must be string");
                         continue;
                     case WorkflowCallInputFieldKey.Required:
                         required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_call input required must be bool");
                         continue;
                     case WorkflowCallInputFieldKey.Default:
-                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_call input default must be scalar", allowEmpty: true);
+                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_call input default must be string", allowEmpty: true);
                         continue;
                     case WorkflowCallInputFieldKey.Type:
                         type = ParseWorkflowCallInputType(ref reader, arena, diagnostics);
@@ -267,7 +290,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_call input option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for inputs at workflow_call event. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -284,7 +307,7 @@ public static partial class WorkflowParser
         {
             AddError(
                 diagnostics,
-                $"on.workflow_call.inputs.{idText}.type is required",
+                $"\"type\" is missing at \"{idText}\" input of workflow_call event",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
         }
 
@@ -305,7 +328,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
-            AddError(diagnostics, "on.workflow_call input type must be scalar", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_call input type must be string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return WorkflowCallInputType.Invalid;
         }
@@ -329,7 +352,8 @@ public static partial class WorkflowParser
 
         if (type == WorkflowCallInputType.Invalid)
         {
-            AddError(diagnostics, "on.workflow_call input type must be one of boolean, number, string", reader.CurrentStart);
+            var valueText = Encoding.UTF8.GetString(valueUtf8);
+            AddError(diagnostics, $"on.workflow_call input type '{valueText}' is invalid; must be one of boolean, number, string", reader.CurrentStart);
         }
 
         reader.Read();
@@ -341,7 +365,18 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call.secrets must be mapping", reader.CurrentStart);
+            // Empty/null secrets: treat as "no secrets declared" (strict empty object)
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var scalarUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(scalarUtf8) || scalarUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                    return new SliceMap<WorkflowCallEventSecret>();
+                }
+            }
+
+            AddError(diagnostics, "on.workflow_call.secrets must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -356,7 +391,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "on.workflow_call.secrets key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "on.workflow_call.secrets key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -414,8 +449,26 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call secret must be mapping", reader.CurrentStart);
-            reader.SkipCurrentNode();
+            // Null/empty body (e.g. `secret0:` followed by next key) — accept silently.
+            // Secrets have no required fields (description and required are both optional).
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var bodyUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(bodyUtf8) || bodyUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                }
+                else
+                {
+                    AddError(diagnostics, "on.workflow_call secret must be object", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                }
+            }
+            else
+            {
+                AddError(diagnostics, "on.workflow_call secret must be object", reader.CurrentStart);
+                reader.SkipCurrentNode();
+            }
             return new WorkflowCallEventSecret { Name = nameNode, Description = description, Required = required, Range = arena.GetStringRange(nameNode) };
         }
 
@@ -424,7 +477,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_call secret option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.workflow_call secret option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -461,7 +514,7 @@ public static partial class WorkflowParser
                 switch (sfk)
                 {
                     case WorkflowCallSecretFieldKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call secret description must be scalar");
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call secret description must be string");
                         continue;
                     case WorkflowCallSecretFieldKey.Required:
                         required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_call secret required must be bool");
@@ -478,7 +531,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_call secret option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -504,7 +557,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call.outputs must be mapping", reader.CurrentStart);
+            AddError(diagnostics, "on.workflow_call.outputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -519,7 +572,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "on.workflow_call.outputs key must be scalar", reader.CurrentStart);
+                    AddError(diagnostics, "on.workflow_call.outputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -578,8 +631,31 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_call output must be mapping", reader.CurrentStart);
-            reader.SkipCurrentNode();
+            // Null/empty body (e.g. `missing-all:` followed by next key) — treat as empty output.
+            // Still require value field.
+            if (reader.CurrentKind == YamlEventKind.Scalar)
+            {
+                var bodyUtf8 = reader.GetScalarUtf8();
+                if (IsNullLikeOnEventOptionsScalar(bodyUtf8) || bodyUtf8.Length == 0)
+                {
+                    reader.Read(); // consume null scalar
+                }
+                else
+                {
+                    AddError(diagnostics, "on.workflow_call output must be object", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                }
+            }
+            else
+            {
+                AddError(diagnostics, "on.workflow_call output must be object", reader.CurrentStart);
+                reader.SkipCurrentNode();
+            }
+            // Report missing value
+            AddError(
+                diagnostics,
+                $"\"value\" is missing at \"{idText}\" output of workflow_call event",
+                new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
 
@@ -588,7 +664,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_call output option key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.workflow_call output option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -625,13 +701,13 @@ public static partial class WorkflowParser
                 switch (ofk)
                 {
                     case WorkflowCallOutputFieldKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call output description must be scalar");
+                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_call output description must be string");
                         continue;
                     case WorkflowCallOutputFieldKey.Value:
                         value = ParseStringAndValidateExpression(
                             ref reader, arena, diagnostics,
-                            ExpressionValidationContext.WorkflowCallOutput,
-                            "on.workflow_call output value must be scalar",
+                            ExpressionValidationContext.WorkflowCallOutputsValue,
+                            "on.workflow_call output value must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     default:
@@ -646,7 +722,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.workflow_call output option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for outputs at workflow_call event. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -658,13 +734,18 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        // spec ・ゑｽｧ11.17 / ・ゑｽｧ12: workflow_call output requires `value`
+        // spec §11.17 / §12: workflow_call output requires `value`
         if (!value.HasValue)
         {
             AddError(
                 diagnostics,
-                $"on.workflow_call.outputs.{idText}.value is required",
+                $"\"value\" is missing at \"{idText}\" output of workflow_call event",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
+        }
+        else if (value.HasValue && arena.GetStringValue(value).Length == 0)
+        {
+            var valueRange = arena.GetStringRange(value);
+            AddError(diagnostics, "string should not be empty", new TextPosition(valueRange.Start, valueRange.StartLine, valueRange.StartColumn));
         }
 
         return new WorkflowCallEventOutput

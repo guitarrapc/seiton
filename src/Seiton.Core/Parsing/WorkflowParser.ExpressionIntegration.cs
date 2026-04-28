@@ -1,4 +1,4 @@
-using static Seiton.Core.Parsing.SpanHelpers;
+﻿using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Parsing;
 
@@ -20,7 +20,7 @@ public static partial class WorkflowParser
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
-        var hasExpression = valueUtf8.IndexOf("${{"u8) >= 0;
+        var hasExpression = ExpressionScanHelpers.ContainsExpressionMarker(valueUtf8);
         var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
 
         if (hasExpression)
@@ -156,13 +156,26 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var isQuoted = reader.IsScalarQuoted();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         var range = BuildScalarLocation(mark, valueUtf8.Length);
 
         if (TryParseDouble(valueUtf8, tag, out var value))
         {
+            // Quoted strings that happen to parse as numbers are not valid float literals
+            if (isQuoted)
+            {
+                needsError = true;
+                errorMark = mark;
+                reader.Read();
+                return default;
+            }
+
             var floatNode = arena.AddFloat(value, range);
             reader.Read();
             return floatNode;
@@ -174,7 +187,76 @@ public static partial class WorkflowParser
             return default;
         }
 
+        // If the string doesn't contain an expression, it's not a valid number
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(expressionNode, arena))
+        {
+            needsError = true;
+            errorMark = mark;
+            return default;
+        }
+
         return arena.AddFloat(0, expressionNode, range);
+    }
+
+    private static IntNodeId ParseIntOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        needsError = false;
+        errorMark = default;
+
+        if (reader.End)
+        {
+            return default;
+        }
+
+        if (reader.CurrentKind != YamlEventKind.Scalar)
+        {
+            needsError = true;
+            errorMark = reader.CurrentStart;
+            reader.SkipCurrentNode();
+            return default;
+        }
+
+        var slice = reader.GetScalarSlice();
+        var valueUtf8 = reader.GetScalarUtf8();
+        var tag = reader.GetScalarTag();
+        var isQuoted = reader.IsScalarQuoted();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
+        var range = BuildScalarLocation(mark, valueUtf8.Length);
+
+        if (TryParseInt64(valueUtf8, tag, out var value))
+        {
+            // Quoted strings that happen to parse as numbers are not valid integer literals
+            if (isQuoted)
+            {
+                needsError = true;
+                errorMark = mark;
+                reader.Read();
+                return default;
+            }
+
+            var intNode = arena.AddInt(value, range);
+            reader.Read();
+            return intNode;
+        }
+
+        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
+        if (!expressionNode.HasValue)
+        {
+            return default;
+        }
+
+        // If the string doesn't contain an expression, it's not a valid integer
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(expressionNode, arena))
+        {
+            needsError = true;
+            errorMark = mark;
+            return default;
+        }
+
+        return arena.AddInt(0, expressionNode, range);
     }
 
     private static void ParseConditionalExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)

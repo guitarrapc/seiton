@@ -50,7 +50,7 @@ public class CoreParsingBenchmark
     [Benchmark(Description = "ExpressionExtractor.ExtractParseAndValidate")]
     public int ParseExpressionPipeline()
     {
-        var result = ExpressionExtractor.ExtractParseAndValidate(_yamlBytes, ExpressionValidationContext.Step);
+        var result = ExpressionExtractor.ExtractParseAndValidate(_yamlBytes, ExpressionValidationContext.StepRun);
         return result.Occurrences.Length + result.Diagnostics.Length;
     }
 

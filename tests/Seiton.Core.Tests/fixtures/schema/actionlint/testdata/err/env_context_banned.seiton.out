@@ -1,0 +1,2 @@
+test.yaml:6:11: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "secrets". called in workflow env [expression]
+test.yaml:14:15: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix", "secrets". called in job env [expression]

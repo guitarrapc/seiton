@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -29,7 +30,7 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
             return;
         }
 
-        ValidateContainer(job, "job.container", job.Container);
+        ValidateContainer(job, "job.container", "\"container\" section", job.Container);
 
         var serviceMap = job.Services?.ServiceMap;
         if (serviceMap is null || serviceMap.Value.Count == 0)
@@ -41,25 +42,31 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
         {
             var service = pair.Value;
             var serviceName = Decode(Arena.GetStringSlice(service.Name));
-            ValidateContainer(job, $"job.services.{serviceName}", service.Container);
+            ValidateContainer(job, $"job.services.{serviceName}", $"\"{serviceName}\" service", service.Container);
         }
     }
 
-    private void ValidateContainer(Job job, string locationName, Container? container)
+    private void ValidateContainer(Job job, string locationName, string credentialLocationName, Container? container)
     {
         if (container is null)
         {
             return;
         }
 
+        if (container.Credentials is not null)
+        {
+            ValidateHardcodedPassword(job, credentialLocationName, container.Credentials);
+            return;
+        }
+
         var imageNode = container.Image;
-        if (Arena.GetStringExpression(imageNode).HasValue || container.Credentials is not null || Config.Utf8Yaml is null)
+        if (Arena.GetStringExpression(imageNode).HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
         var image = Arena.GetStringValue(imageNode);
-        if (image.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(image))
         {
             return;
         }
@@ -72,6 +79,35 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
         var imageText = Decode(Arena.GetStringSlice(imageNode));
         var hostText = Encoding.UTF8.GetString(host);
         AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", Arena.GetStringRange(imageNode));
+    }
+
+    private void ValidateHardcodedPassword(Job job, string locationName, Credentials credentials)
+    {
+        var passwordNode = credentials.Password;
+        if (!passwordNode.HasValue || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        // If the entire credentials block is an expression, skip
+        if (Arena.GetStringExpression(credentials.Expression).HasValue)
+        {
+            return;
+        }
+
+        // If password is an expression (${{ ... }}), it's likely secrets reference — OK
+        if (Arena.GetStringExpression(passwordNode).HasValue)
+        {
+            return;
+        }
+
+        var password = Arena.GetStringValue(passwordNode);
+        if (ExpressionScanHelpers.ContainsExpressionMarker(password))
+        {
+            return;
+        }
+
+        AddJobError(job, $"\"password\" section in {locationName} should be specified via secrets. do not put password value directly", Arena.GetStringRange(passwordNode));
     }
 
     private static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)

@@ -132,6 +132,56 @@ app.Add("verify-context-types", () =>
     }
 });
 
+app.Add("fetch-event-payload-types", async () =>
+{
+    var code = await EventPayloadTypesCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-event-payload-types failed with code {code}");
+    }
+});
+
+app.Add("fetch-event-payload-types-sources", async () =>
+{
+    var code = await EventPayloadTypesCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-event-payload-types-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-event-payload-types-sources", () =>
+{
+    var code = EventPayloadTypesCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-event-payload-types-sources failed with code {code}");
+    }
+});
+
+app.Add("sync-event-payload-types", () =>
+{
+    var code = EventPayloadTypesCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-event-payload-types failed with code {code}");
+    }
+});
+
+app.Add("verify-event-payload-types", () =>
+{
+    var code = EventPayloadTypesCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-event-payload-types failed with code {code}");
+    }
+});
+
 app.Add("sync-function-specs", () =>
 {
     var code = FunctionSpecsCommands.Sync(repoRoot);
@@ -149,6 +199,66 @@ app.Add("verify-function-specs", () =>
     {
         Environment.ExitCode = code;
         throw new InvalidOperationException($"verify-function-specs failed with code {code}");
+    }
+});
+
+app.Add("sync-permissions", () =>
+{
+    var code = PermissionsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-permissions failed with code {code}");
+    }
+});
+
+app.Add("verify-permissions", () =>
+{
+    var code = PermissionsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-permissions failed with code {code}");
+    }
+});
+
+app.Add("fetch-permissions", async () =>
+{
+    var code = await PermissionsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-permissions failed with code {code}");
+    }
+});
+
+app.Add("fetch-permissions-sources", async () =>
+{
+    var code = await PermissionsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-permissions-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-permissions-sources", () =>
+{
+    var code = PermissionsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-permissions-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-permissions-sources", () =>
+{
+    var code = PermissionsCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-permissions-sources failed with code {code}");
     }
 });
 
@@ -346,6 +456,16 @@ app.Add("validate-popular-actions-targets", () =>
     }
 });
 
+app.Add("validate-popular-actions-versions", async () =>
+{
+    var code = await PopularActionsCommands.ValidateVersions(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"validate-popular-actions-versions failed with code {code}");
+    }
+});
+
 app.Add("fetch-popular-actions-sources", async () =>
 {
     var code = await PopularActionsCommands.FetchSources(repoRoot);
@@ -373,6 +493,136 @@ app.Add("merge-popular-actions-sources", () =>
     {
         Environment.ExitCode = code;
         throw new InvalidOperationException($"merge-popular-actions-sources failed with code {code}");
+    }
+});
+
+app.Add("sync-iana-timezones", () =>
+{
+    var code = IanaTimeZonesCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-iana-timezones failed with code {code}");
+    }
+});
+
+app.Add("verify-iana-timezones", () =>
+{
+    var code = IanaTimeZonesCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-iana-timezones failed with code {code}");
+    }
+});
+
+app.Add("sync-shells", () =>
+{
+    var code = ShellsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-shells failed with code {code}");
+    }
+});
+
+app.Add("verify-shells", () =>
+{
+    var code = ShellsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-shells failed with code {code}");
+    }
+});
+
+app.Add("fetch-expected-keys", async () =>
+{
+    var code = await ExpectedKeysCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-expected-keys failed with code {code}");
+    }
+});
+
+app.Add("fetch-expected-keys-sources", async () =>
+{
+    var code = await ExpectedKeysCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-expected-keys-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-expected-keys-sources", () =>
+{
+    var code = ExpectedKeysCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-expected-keys-sources failed with code {code}");
+    }
+});
+
+app.Add("sync-expected-keys", () =>
+{
+    var code = ExpectedKeysCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-expected-keys failed with code {code}");
+    }
+});
+
+app.Add("verify-expected-keys", () =>
+{
+    var code = ExpectedKeysCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-expected-keys failed with code {code}");
+    }
+});
+
+app.Add("fetch-iana-timezones", async () =>
+{
+    var code = await IanaTimeZonesCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-iana-timezones failed with code {code}");
+    }
+});
+
+app.Add("fetch-iana-timezones-sources", async () =>
+{
+    var code = await IanaTimeZonesCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-iana-timezones-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-iana-timezones-sources", () =>
+{
+    var code = IanaTimeZonesCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-iana-timezones-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-iana-timezones-sources", () =>
+{
+    var code = IanaTimeZonesCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-iana-timezones-sources failed with code {code}");
     }
 });
 
@@ -413,17 +663,6 @@ app.Add("merge-runner-labels-sources", () =>
     {
         Environment.ExitCode = code;
         throw new InvalidOperationException($"merge-runner-labels-sources failed with code {code}");
-    }
-});
-
-// Compare local snapshot against actionlint reference (parity check only, no staleness check).
-app.Add("parity-webhooks", () =>
-{
-    var code = WebhookCommands.ParityCheck(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"parity-webhooks failed with code {code}");
     }
 });
 
@@ -469,6 +708,26 @@ static int RunSync(string repoRoot, string dataset)
         return FunctionSpecsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "permissions")
+    {
+        return PermissionsCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "iana-timezones")
+    {
+        return IanaTimeZonesCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "shells")
+    {
+        return ShellsCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "expected-keys")
+    {
+        return ExpectedKeysCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -501,7 +760,42 @@ static int RunSync(string repoRoot, string dataset)
             return code;
         }
 
-        return FunctionSpecsCommands.Sync(repoRoot);
+        code = FunctionSpecsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = PermissionsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = IanaTimeZonesCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = ShellsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = ExpectedKeysCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return EventPayloadTypesCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "event-payload-types")
+    {
+        return EventPayloadTypesCommands.Sync(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported sync dataset: {dataset}");
@@ -540,6 +834,26 @@ static int RunVerify(string repoRoot, string dataset)
         return FunctionSpecsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "permissions")
+    {
+        return PermissionsCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "iana-timezones")
+    {
+        return IanaTimeZonesCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "shells")
+    {
+        return ShellsCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "expected-keys")
+    {
+        return ExpectedKeysCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -572,7 +886,42 @@ static int RunVerify(string repoRoot, string dataset)
             return code;
         }
 
-        return FunctionSpecsCommands.Verify(repoRoot);
+        code = FunctionSpecsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = PermissionsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = IanaTimeZonesCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = ShellsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = ExpectedKeysCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return EventPayloadTypesCommands.Verify(repoRoot);
+    }
+
+    if (dataset is "event-payload-types")
+    {
+        return EventPayloadTypesCommands.Verify(repoRoot);
     }
 
     UpdateLogger.Error($"Unsupported verify dataset: {dataset}");

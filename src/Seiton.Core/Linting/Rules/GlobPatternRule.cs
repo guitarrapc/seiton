@@ -1,5 +1,4 @@
-﻿using Seiton.Core.Generated;
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -7,162 +6,144 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates glob patterns in branch/path/tag filters for syntax errors.</summary>
 public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 {
+    private const string FilterPatternNote = ". note: filter pattern syntax is explained at https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet";
+    private const string RefFormatNote = ". see `man git-check-ref-format` for more details. note that regular expression is unavailable";
+
     public override string Name => "Glob Pattern Rule";
 
     public override void VisitEvent(Event ev)
     {
-        if (ev is not WebhookEvent webhookEv || Config.Utf8Yaml is null)
+        if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var eventName = Arena.GetStringValue(webhookEv.EventName);
-        if (!WebhookTypes.TryGet(eventName, out var normalizedEventName, out var spec))
+        if (ev is WebhookEvent webhookEv)
         {
-            return;
+            // Note: Option allow-list, activity type, and mutual exclusion checks are handled
+            // at parser level (WorkflowParser.On.Webhook.cs). This rule only validates glob syntax.
+            Action<string, TextRange> reportError = (msg, range) => AddEventError(webhookEv, msg, range);
+
+            ValidateFilter(reportError, webhookEv.Branches, FilterKind.Ref);
+            ValidateFilter(reportError, webhookEv.BranchesIgnore, FilterKind.Ref);
+            ValidateFilter(reportError, webhookEv.Tags, FilterKind.Ref);
+            ValidateFilter(reportError, webhookEv.TagsIgnore, FilterKind.Ref);
+            ValidateFilter(reportError, webhookEv.Paths, FilterKind.Path);
+            ValidateFilter(reportError, webhookEv.PathsIgnore, FilterKind.Path);
         }
-
-        ValidateOptionAllowList(webhookEv, normalizedEventName, spec);
-        ValidateTypeValues(webhookEv, normalizedEventName, spec);
-        ValidateMutualExclusionFilters(webhookEv);
-
-        ValidateFilter(webhookEv, webhookEv.Branches);
-        ValidateFilter(webhookEv, webhookEv.BranchesIgnore);
-        ValidateFilter(webhookEv, webhookEv.Tags);
-        ValidateFilter(webhookEv, webhookEv.TagsIgnore);
-        ValidateFilter(webhookEv, webhookEv.Paths);
-        ValidateFilter(webhookEv, webhookEv.PathsIgnore);
+        else if (ev is ImageVersionEvent imageVersionEv)
+        {
+            Action<string, TextRange> reportError = (msg, range) => AddEventError(imageVersionEv, msg, range);
+            ValidateValues(reportError, imageVersionEv.Versions, FilterKind.Version);
+        }
     }
 
-    private void ValidateOptionAllowList(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
+    public override void VisitJobPre(Job job)
     {
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Types is not null && webhookEv.Types.Length > 0, "types"u8, webhookEv.Types is not null && webhookEv.Types.Length > 0 ? Arena.GetStringRange(webhookEv.Types[0]) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Branches is not null, "branches"u8, webhookEv.Branches is not null ? Arena.GetStringRange(webhookEv.Branches.Name) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.BranchesIgnore is not null, "branches-ignore"u8, webhookEv.BranchesIgnore is not null ? Arena.GetStringRange(webhookEv.BranchesIgnore.Name) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Tags is not null, "tags"u8, webhookEv.Tags is not null ? Arena.GetStringRange(webhookEv.Tags.Name) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.TagsIgnore is not null, "tags-ignore"u8, webhookEv.TagsIgnore is not null ? Arena.GetStringRange(webhookEv.TagsIgnore.Name) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Paths is not null, "paths"u8, webhookEv.Paths is not null ? Arena.GetStringRange(webhookEv.Paths.Name) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.PathsIgnore is not null, "paths-ignore"u8, webhookEv.PathsIgnore is not null ? Arena.GetStringRange(webhookEv.PathsIgnore.Name) : null);
-        ValidateOptionAllowList(webhookEv, eventName, spec, webhookEv.Workflows is not null && webhookEv.Workflows.Length > 0, "workflows"u8, webhookEv.Workflows is not null && webhookEv.Workflows.Length > 0 ? Arena.GetStringRange(webhookEv.Workflows[0]) : null);
-    }
-
-    private void ValidateOptionAllowList(
-        WebhookEvent webhookEv,
-        string eventName,
-        WebhookTypes.EventSpec spec,
-        bool present,
-        ReadOnlySpan<byte> optionName,
-        TextRange? optionRange)
-    {
-        if (!present || spec.IsOptionAllowed(optionName))
+        if (Config.Utf8Yaml is null || job.Snapshot is null)
         {
             return;
         }
 
-        var optionText = DecodeAscii(optionName);
-        AddEventError(
-            webhookEv,
-            $"event '{eventName}' does not support option '{optionText}'",
-            optionRange ?? BuildEventLocation(webhookEv));
-    }
-
-    private void ValidateTypeValues(WebhookEvent webhookEv, string eventName, WebhookTypes.EventSpec spec)
-    {
-        if (webhookEv.Types is null || webhookEv.Types.Length == 0)
+        var version = job.Snapshot.Version;
+        if (!version.HasValue)
         {
             return;
         }
 
-        if (!spec.IsTypeOptionSupported())
+        var pattern = Arena.GetStringValue(version);
+        if (ExpressionScanHelpers.ContainsExpressionMarker(version, Arena))
         {
-            AddEventError(
-                webhookEv,
-                $"event '{eventName}' does not support 'types'",
-                Arena.GetStringRange(webhookEv.Types[0]));
             return;
         }
 
-        for (var i = 0; i < webhookEv.Types.Length; i++)
-        {
-            var typeNode = webhookEv.Types[i];
-            var typeValue = Arena.GetStringValue(typeNode);
-            if (Arena.GetStringExpression(typeNode).HasValue || typeValue.IndexOf("${{"u8) >= 0)
-            {
-                continue;
-            }
-
-            if (spec.IsTypeAllowed(typeValue))
-            {
-                continue;
-            }
-
-            var typeText = Decode(Arena.GetStringSlice(typeNode));
-            AddEventError(
-                webhookEv,
-                $"event '{eventName}' has unsupported activity type '{typeText}'",
-                Arena.GetStringRange(typeNode));
-        }
+        Action<string, TextRange> reportError = (msg, range) => AddJobError(job, msg, range);
+        ValidatePattern(reportError, version, pattern, FilterKind.Version);
     }
 
-    private void ValidateMutualExclusionFilters(WebhookEvent webhookEv)
-    {
-        if (webhookEv.Branches is not null && webhookEv.BranchesIgnore is not null)
-        {
-            AddEventError(
-                webhookEv,
-                "event filter 'branches' and 'branches-ignore' cannot be used together",
-                Arena.GetStringRange(webhookEv.BranchesIgnore.Name));
-        }
+    private enum FilterKind { Ref, Path, Version }
 
-        if (webhookEv.Tags is not null && webhookEv.TagsIgnore is not null)
-        {
-            AddEventError(
-                webhookEv,
-                "event filter 'tags' and 'tags-ignore' cannot be used together",
-                Arena.GetStringRange(webhookEv.TagsIgnore.Name));
-        }
-
-        if (webhookEv.Paths is not null && webhookEv.PathsIgnore is not null)
-        {
-            AddEventError(
-                webhookEv,
-                "event filter 'paths' and 'paths-ignore' cannot be used together",
-                Arena.GetStringRange(webhookEv.PathsIgnore.Name));
-        }
-    }
-
-    private void ValidateFilter(WebhookEvent webhookEv, WebhookEventFilter? filter)
+    private void ValidateFilter(Action<string, TextRange> reportError, WebhookEventFilter? filter, FilterKind kind)
     {
         if (filter is null)
         {
             return;
         }
 
-        var filterName = Decode(Arena.GetStringSlice(filter.Name));
-        for (var i = 0; i < filter.Values.Length; i++)
+        ValidateValues(reportError, filter.Values, kind);
+    }
+
+    private void ValidateValues(Action<string, TextRange> reportError, StringNodeId[]? values, FilterKind kind)
+    {
+        if (values is null)
         {
-            var valueNode = filter.Values[i];
+            return;
+        }
+
+        for (var i = 0; i < values.Length; i++)
+        {
+            var valueNode = values[i];
             var pattern = Arena.GetStringValue(valueNode);
-            if (Arena.GetStringExpression(valueNode).HasValue || pattern.IndexOf("${{"u8) >= 0)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(valueNode, Arena))
             {
                 continue;
             }
 
-            if (TryGetInvalidReason(pattern, out var reason))
-            {
-                var patternText = Decode(Arena.GetStringSlice(valueNode));
-                AddEventError(
-                    webhookEv,
-                    $"event filter '{filterName}' has invalid glob pattern '{patternText}': {reason}",
-                    Arena.GetStringRange(valueNode));
-            }
+            ValidatePattern(reportError, valueNode, pattern, kind);
         }
     }
 
-    private static bool TryGetInvalidReason(ReadOnlySpan<byte> pattern, out string reason)
+    private void ValidatePattern(Action<string, TextRange> reportError, StringNodeId valueNode, ReadOnlySpan<byte> pattern, FilterKind kind)
     {
+        var range = Arena.GetStringRange(valueNode);
+
+        // Empty pattern
+        if (pattern.Length == 0)
+        {
+            reportError("string should not be empty", range);
+            return;
+        }
+
+        // Lone '!' — negate pattern must have at least one character following
+        if (pattern.Length == 1 && pattern[0] == (byte)'!')
+        {
+            reportError(
+                $"invalid glob pattern. unexpected character '!' while checking ! at first character (negate pattern). at least one character must follow !{FilterPatternNote}",
+                range);
+            return;
+        }
+
+        // Leading/trailing spaces (path filters)
+        if (kind == FilterKind.Path && (pattern[0] == (byte)' ' || pattern[^1] == (byte)' '))
+        {
+            reportError(
+                $"leading and trailing spaces are not allowed in glob path{FilterPatternNote}",
+                range);
+            return;
+        }
+
+        // Ref name validations
+        if (kind == FilterKind.Ref)
+        {
+            if (pattern[0] == (byte)'/')
+            {
+                reportError(
+                    $"character '/' is invalid for branch and tag names. ref name must not start with /{RefFormatNote}{FilterPatternNote}",
+                    range);
+            }
+
+            if (pattern[^1] == (byte)'/')
+            {
+                reportError(
+                    $"character '/' is invalid for branch and tag names. ref name must not end with / and ..{RefFormatNote}{FilterPatternNote}",
+                    range);
+            }
+        }
+
         var consecutiveStars = 0;
         var openBracketCount = 0;
+        var insideBracket = false;
+        var bracketStart = -1;
 
         for (var i = 0; i < pattern.Length; i++)
         {
@@ -172,49 +153,178 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 consecutiveStars++;
                 if (consecutiveStars >= 3)
                 {
-                    reason = "consecutive '*' longer than '**' is not supported";
-                    return true;
+                    reportError(
+                        $"invalid glob pattern. consecutive '*' longer than '**' is not supported{FilterPatternNote}",
+                        range);
+                    return;
                 }
             }
             else
             {
+                if (b == (byte)'+' && consecutiveStars > 0)
+                {
+                    reportError(
+                        $"invalid glob pattern. unexpected character '+' after '*'. the preceding character must not be a special character{FilterPatternNote}",
+                        range);
+                    return;
+                }
+
                 consecutiveStars = 0;
             }
 
             if (b == (byte)'[')
             {
                 openBracketCount++;
+                insideBracket = true;
+                bracketStart = i;
             }
             else if (b == (byte)']')
             {
-                if (openBracketCount == 0)
+                if (insideBracket)
                 {
-                    reason = "closing ']' without opening '['";
-                    return true;
+                    // Check single-character class: [x] where x is a single non-special char
+                    var bracketLen = i - bracketStart - 1;
+                    if (bracketLen == 1)
+                    {
+                        var inner = pattern[bracketStart + 1];
+                        reportError(
+                            $"invalid glob pattern. unexpected character ']' while checking character match []. character match with single character is useless. simply use {(char)inner} instead of [{(char)inner}]{FilterPatternNote}",
+                            range);
+                    }
+
+                    openBracketCount--;
+                    insideBracket = false;
+                }
+                else if (openBracketCount == 0)
+                {
+                    reportError(
+                        $"invalid glob pattern. closing ']' without opening '['{FilterPatternNote}",
+                        range);
+                    return;
+                }
+            }
+
+            // Detect reversed ranges inside brackets: [z-a]
+            if (insideBracket && b == (byte)'-' && i >= 2 && i + 1 < pattern.Length)
+            {
+                var prev = pattern[i - 1];
+                var next = pattern[i + 1];
+                if (prev != (byte)'[' && next != (byte)']' && prev > next)
+                {
+                    reportError(
+                        $"invalid glob pattern. unexpected character '{(char)next}' while checking character range in []. start of range '{(char)prev}' ({(int)prev}) is larger than end of range '{(char)next}' ({(int)next}){FilterPatternNote}",
+                        range);
+                    return;
+                }
+            }
+
+            // Validate backslash escapes
+            if (b == (byte)'\\' && !insideBracket)
+            {
+                if (i + 1 >= pattern.Length)
+                {
+                    reportError(
+                        $"invalid glob pattern. trailing backslash '\\' with no character to escape{FilterPatternNote}",
+                        range);
+                    return;
                 }
 
-                openBracketCount--;
+                var next = pattern[i + 1];
+                if (!IsGlobEscapable(next))
+                {
+                    if (kind == FilterKind.Ref)
+                    {
+                        reportError(
+                            $"character '\\' is invalid for branch and tag names. only special characters [, ?, +, *, \\, ! can be escaped with \\{RefFormatNote}{FilterPatternNote}",
+                            range);
+                    }
+                    else
+                    {
+                        reportError(
+                            $"invalid glob pattern. '\\{(char)next}' is not a valid glob escape; only glob metacharacters (*, ?, [, ], \\, !, +, #) can be escaped{FilterPatternNote}",
+                            range);
+                    }
+                }
+
+                i++; // skip escaped character
+                continue;
+            }
+
+            // Detect git-check-ref-format violation characters (outside brackets)
+            if (kind == FilterKind.Ref && !insideBracket && IsRefNameForbiddenChar(b))
+            {
+                reportError(
+                    $"character '{(char)b}' is invalid for branch and tag names. ref name cannot contain spaces, ~, ^, :, [, ?, *{RefFormatNote}{FilterPatternNote}",
+                    range);
             }
         }
 
         if (openBracketCount > 0)
         {
-            reason = "'[' is not closed";
-            return true;
+            reportError(
+                $"invalid glob pattern. unexpected EOF while checking end of character match []. missing ]{FilterPatternNote}",
+                range);
+            return;
         }
 
-        reason = string.Empty;
-        return false;
+        // Detect '.' or '..' path segments
+        if (ContainsDotSegment(pattern))
+        {
+            reportError(
+                $"'.' and '..' are not allowed in glob path{FilterPatternNote}",
+                range);
+        }
     }
 
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static bool IsRefNameForbiddenChar(byte b)
     {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
+        return b == (byte)'^'
+            || b == (byte)'~'
+            || b == (byte)':'
+            || b == (byte)' ';
+    }
+
+    private static bool IsGlobEscapable(byte b)
+    {
+        return b == (byte)'*'
+            || b == (byte)'?'
+            || b == (byte)'['
+            || b == (byte)']'
+            || b == (byte)'\\'
+            || b == (byte)'!'
+            || b == (byte)'+'
+            || b == (byte)'#';
+    }
+
+    private static bool ContainsDotSegment(ReadOnlySpan<byte> pattern)
+    {
+        for (var i = 0; i < pattern.Length; i++)
         {
-            chars[i] = (char)utf8[i];
+            if (pattern[i] != (byte)'.')
+            {
+                continue;
+            }
+
+            var atStart = i == 0 || pattern[i - 1] == (byte)'/' || pattern[i - 1] == (byte)'\\';
+            if (!atStart)
+            {
+                continue;
+            }
+
+            if (i + 1 >= pattern.Length || pattern[i + 1] == (byte)'/' || pattern[i + 1] == (byte)'\\')
+            {
+                return true;
+            }
+
+            if (pattern[i + 1] == (byte)'.')
+            {
+                if (i + 2 >= pattern.Length || pattern[i + 2] == (byte)'/' || pattern[i + 2] == (byte)'\\')
+                {
+                    return true;
+                }
+            }
         }
 
-        return new string(chars);
+        return false;
     }
 }

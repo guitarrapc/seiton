@@ -16,7 +16,7 @@ public static partial class WorkflowParser
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, "on.schedule must be sequence", reader.CurrentStart);
+            AddError(diagnostics, "on.schedule must be array", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ScheduledEvent { EventName = nameNode, Schedules = [], Range = arena.GetStringRange(nameNode) };
         }
@@ -24,13 +24,14 @@ public static partial class WorkflowParser
         var schedules = new PooledBuffer<ScheduleEntry>(2);
         try
         {
+            var seqMark = reader.CurrentStart;
             reader.Read(); // consume SequenceStart
 
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
-                    AddError(diagnostics, "on.schedule item must be mapping", reader.CurrentStart);
+                    AddError(diagnostics, "on.schedule item must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
@@ -41,6 +42,11 @@ public static partial class WorkflowParser
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
             {
                 reader.Read();
+            }
+
+            if (schedules.Count == 0)
+            {
+                AddError(diagnostics, "\"schedule\" section should not be empty", seqMark);
             }
 
             return new ScheduledEvent { EventName = nameNode, Schedules = schedules.ToArray(), Range = arena.GetStringRange(nameNode) };
@@ -61,7 +67,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.schedule item key must be scalar", reader.CurrentStart);
+                AddError(diagnostics, "on.schedule item key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -98,15 +104,19 @@ public static partial class WorkflowParser
                 switch (sk)
                 {
                     case OnScheduleEntryMappingKey.Cron:
-                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be scalar");
+                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be string", allowEmpty: true);
                         if (cron.HasValue)
                         {
                             range = arena.GetStringRange(cron);
+                            if (arena.GetStringValue(cron).Length == 0)
+                            {
+                                AddError(diagnostics, "\"schedule\" section should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                            }
                         }
 
                         continue;
                     case OnScheduleEntryMappingKey.Timezone:
-                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be scalar");
+                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be string", allowEmpty: true);
                         continue;
                     default:
                         if (!reader.End)
@@ -120,7 +130,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected on.schedule option: {unknown}", keyMark);
+            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

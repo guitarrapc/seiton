@@ -12,10 +12,17 @@ internal sealed class PopularActionsCSharpGenerator
             .Select(static x => new PopularActionModel(
                 x.Uses,
                 x.Inputs
-                    .Where(static n => !string.IsNullOrWhiteSpace(n))
-                    .Distinct(StringComparer.Ordinal)
-                    .OrderBy(static n => n, StringComparer.Ordinal)
-                    .ToArray()))
+                    .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                    .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                    .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                    .ToArray(),
+                x.Outputs
+                    .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                    .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                    .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                    .ToArray(),
+                x.RunsUsing,
+                x.MaxDeprecatedMajorVersion))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
 
@@ -71,13 +78,184 @@ internal sealed class PopularActionsCSharpGenerator
                 var input = action.Inputs[i];
                 var suffix = i == action.Inputs.Count - 1 ? "," : "";
                 var op = i == 0 ? "" : "|| ";
-                sb.AppendLine($"                    {op}EqualsAsciiIgnoreCase(inputNameUtf8, \"{input}\"u8){suffix}");
+                sb.AppendLine($"                    {op}EqualsAsciiIgnoreCase(inputNameUtf8, \"{input.Name}\"u8){suffix}");
             }
         }
 
         sb.Append(
             """
                             _ => false,
+                        };
+                    }
+
+                    internal bool IsInputRequired(ReadOnlySpan<byte> inputNameUtf8)
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            var requiredInputs = action.Inputs.Where(static i => i.Required).ToArray();
+            if (requiredInputs.Length == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => false,");
+                continue;
+            }
+
+            sb.AppendLine($"                ActionId.{actionId} =>");
+            for (var i = 0; i < requiredInputs.Length; i++)
+            {
+                var input = requiredInputs[i];
+                var suffix = i == requiredInputs.Length - 1 ? "," : "";
+                var op = i == 0 ? "" : "|| ";
+                sb.AppendLine($"                    {op}EqualsAsciiIgnoreCase(inputNameUtf8, \"{input.Name}\"u8){suffix}");
+            }
+        }
+
+        sb.AppendLine(
+            """
+                            _ => false,
+                        };
+                    }
+
+                    internal byte[][] GetRequiredInputs()
+                    {
+                        return Id switch
+                        {
+            """);
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            var requiredInputs = action.Inputs.Where(static i => i.Required).ToArray();
+            if (requiredInputs.Length == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => [],");
+                continue;
+            }
+
+            var items = string.Join(", ", requiredInputs.Select(static i => $"\"{i.Name}\"u8.ToArray()"));
+            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+        }
+
+        sb.Append(
+            """
+                            _ => [],
+                        };
+                    }
+
+                    internal byte[][] GetOutputNames()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (action.Outputs.Count == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => [],");
+                continue;
+            }
+
+            var items = string.Join(", ", action.Outputs.Select(static o => $"\"{o.Name}\"u8.ToArray()"));
+            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+        }
+
+        sb.Append(
+            """
+                            _ => [],
+                        };
+                    }
+
+                    internal ReadOnlySpan<byte> GetDeprecatedInputMessage(ReadOnlySpan<byte> inputNameUtf8)
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            var deprecatedInputs = action.Inputs.Where(static i => !string.IsNullOrWhiteSpace(i.DeprecationMessage)).ToArray();
+            if (deprecatedInputs.Length == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => default,");
+                continue;
+            }
+
+            sb.AppendLine($"                ActionId.{actionId} =>");
+            for (var i = 0; i < deprecatedInputs.Length; i++)
+            {
+                var input = deprecatedInputs[i];
+                var message = EscapeCSharpString(input.DeprecationMessage!);
+                var prefix = i == 0 ? "" : ": ";
+                if (i == 0)
+                {
+                    sb.AppendLine($"                    EqualsAsciiIgnoreCase(inputNameUtf8, \"{input.Name}\"u8) ? \"{message}\"u8");
+                }
+                else
+                {
+                    sb.AppendLine($"                    : EqualsAsciiIgnoreCase(inputNameUtf8, \"{input.Name}\"u8) ? \"{message}\"u8");
+                }
+            }
+            sb.AppendLine("                    : default,");
+        }
+
+        sb.Append(
+            """
+                            _ => default,
+                        };
+                    }
+
+                    internal ReadOnlySpan<byte> GetRunsUsing()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (string.IsNullOrWhiteSpace(action.RunsUsing))
+            {
+                sb.AppendLine($"                ActionId.{actionId} => default,");
+            }
+            else
+            {
+                sb.AppendLine($"                ActionId.{actionId} => \"{action.RunsUsing}\"u8,");
+            }
+        }
+
+        sb.Append(
+            """
+                            _ => default,
+                        };
+                    }
+
+                    internal int GetMaxDeprecatedMajorVersion()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            sb.AppendLine($"                ActionId.{actionId} => {action.MaxDeprecatedMajorVersion},");
+        }
+
+        sb.Append(
+            """
+                            _ => 0,
                         };
                     }
                 }
@@ -188,5 +366,10 @@ internal sealed class PopularActionsCSharpGenerator
         }
 
         return sb.ToString();
+    }
+
+    private static string EscapeCSharpString(string value)
+    {
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 }

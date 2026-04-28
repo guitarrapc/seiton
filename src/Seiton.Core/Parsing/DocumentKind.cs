@@ -69,7 +69,8 @@ public static class DocumentKindClassifier
         }
         else
         {
-            finalKind = DocumentKind.Unknown;
+            // No structural hints — fall back to path-based hint.
+            finalKind = pathHintKind;
         }
 
         hasHintMismatch =

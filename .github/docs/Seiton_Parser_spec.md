@@ -54,7 +54,7 @@ Normative structural hints (finalization stage):
 - Workflow candidate is confirmed when root mapping has `jobs`.
 - Action-metadata candidate is confirmed when root mapping has `runs`.
 - If both `jobs` and `runs` exist, classify as `unknown` and emit ambiguity diagnostic.
-- If neither `jobs` nor `runs` is present, keep classification unresolved and continue with existing parser diagnostics.
+- If neither `jobs` nor `runs` is present, fall back to the path-hint candidate kind. This allows action metadata files that lack `runs:` (e.g., malformed `action.yml`) to still be parsed as action metadata when the file path indicates it, enabling proper required-key diagnostics.
 
 Normative path hints (fast candidate stage):
 
@@ -306,6 +306,20 @@ Credentials: `username` + `password` (both required), or expression.
 
 `uses` (required), `inputs?` (`with:`), `secrets?` (mapping or `"inherit"`)
 
+### 2.16 ActionMetadata (action.yml / action.yaml)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Name | StringNode? | - | `name:` |
+| Description | StringNode? | ✓ | `description:` — must be present; parser emits error if missing |
+| Inputs | map[string, ActionMetadataInput]? | - | `inputs:` mapping |
+| Outputs | map[string, ActionMetadataOutput]? | - | `outputs:` mapping |
+| Runs | ActionMetadataRuns? | ✓ | `runs:` — must be present; parser emits error if missing |
+| Branding | ActionMetadataBranding? | ✓ | `branding:` (icon, color) |
+| Range | TextRange | ✓ | Source range |
+
+Required-key validation: When parsing in action-metadata mode, the parser checks that `description` and `runs` are present at the root level. Missing keys emit error diagnostics with position `1:1`.
+
 ---
 
 ## 3. Parse Algorithms
@@ -342,6 +356,7 @@ Supported anchor targets:
 - **YAML merge key `<<`** is not supported. Any `<<:` key produces a `does not support merge key '<<'` error.
 - **Recursive anchors** (an alias that directly or indirectly references itself) produce parser diagnostics rather than a hang or fatal error.
 - **Undefined aliases** (aliases for which no anchor was defined) produce a `yaml parse failure` fatal error.
+- **Null scalar anchors** (e.g. `env: &name` with no value) are handled gracefully — the adapter returns empty bytes instead of throwing.
 - Parser core does not directly access anchor/alias graph structures; all resolution is owned by the adapter layer.
 
 #### Error recovery
@@ -352,6 +367,7 @@ Supported anchor targets:
 | Unresolvable alias in adapter | Surface as `Alias` event; parser core reports type-mismatch diagnostic and skips |
 | YAML merge key `<<` | `does not support merge key '<<'` diagnostic; value is skipped |
 | Recursive anchor | Deterministic parse diagnostics (no hang) |
+| Null scalar with anchor (`key: &name`) | Adapter returns empty span; parser reports structural error (e.g. "env must be mapping") |
 
 ### 3.2 Workflow Top-Level Parse
 
@@ -803,7 +819,7 @@ Index         := Expression
 | Token | Symbol |
 |---|---|
 | `Ident` | alphanumeric + `_` + `-` |
-| `String` | `'...'` (single-quoted, `''` for escape) |
+| `String` | `'...'` (single-quoted, `''` for escape). Double quotes (`"`) are rejected with a diagnostic: "only single quotes are available for string delimiter in expressions". |
 | `Int` | integer literal (decimal / `0x` hex) |
 | `Float` | floating-point literal |
 | `(` `)` `[` `]` `.` `!` | symbols |
@@ -858,25 +874,81 @@ The expression AST is traversed using the `VisitExprNode(node, parent, entering)
 
 ### 7.2 Context Availability Validation
 
-The root identifiers of expressions (`github`, `env`, `steps`, `job`, `runner`, `secrets`, `strategy`, `matrix`, `needs`, `inputs`, `vars`) have different availability depending on usage location (workflow, job, step).
+The root identifiers of expressions (`github`, `env`, `vars`, `job`, `steps`, `runner`, `secrets`, `strategy`, `matrix`, `needs`, `inputs`) have different availability depending on the workflow key where the expression appears.
 
-| Context | workflow level | job level | step level |
-|---|---|---|---|
-| `github` | ✓ | ✓ | ✓ |
-| `env` | ✓ | ✓ | ✓ |
-| `vars` | ✓ | ✓ | ✓ |
-| `job` | - | ✓ | ✓ |
-| `steps` | - | - | ✓ |
-| `runner` | - | ✓ | ✓ |
-| `secrets` | - | ✓ | ✓ |
-| `strategy` | - | ✓ | ✓ |
-| `matrix` | - | ✓ | ✓ |
-| `needs` | - | ✓ | ✓ |
-| `inputs` | ✓ | ✓ | ✓ |
-| `hashFiles` | - | ✓ | ✓ |
-| `success`/`failure`/`always`/`cancelled` | - | ✓ (`if:` only) | ✓ (`if:` only) |
+#### 7.2.1 Per-Key Context Availability Table
 
-**Note**: This is a simplified table. Strictly, availability differs by key position (`if:` / `env:` / `with:`, etc.). The complete availability table is managed as generated data.
+The following table shows the complete per-key availability. Each row is a workflow key position, each column is a context root. ✓ = available, - = not available.
+
+**Workflow Level:**
+
+| Workflow Key | `github` | `env` | `vars` | `job` | `steps` | `runner` | `secrets` | `strategy` | `matrix` | `needs` | `inputs` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `run-name` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+| `env` | ✓ | - | ✓ | - | - | - | ✓ | - | - | - | ✓ |
+| `concurrency` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+| `on.workflow_call.inputs.*.default` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+| `on.workflow_call.outputs.*.value` | ✓ | - | ✓ | - | - | - | - | - | - | - | ✓ |
+
+> Note: `on.workflow_call.outputs.*.value` additionally has access to `jobs` context (for referencing job outputs).
+
+**Job Level:**
+
+| Workflow Key | `github` | `env` | `vars` | `job` | `steps` | `runner` | `secrets` | `strategy` | `matrix` | `needs` | `inputs` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `jobs.<id>.if` | ✓ | - | ✓ | - | - | - | - | - | - | ✓ | ✓ |
+| `jobs.<id>.name` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.runs-on` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.env` | ✓ | - | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.concurrency` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.strategy` | ✓ | - | ✓ | - | - | - | - | - | - | ✓ | ✓ |
+| `jobs.<id>.continue-on-error` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.timeout-minutes` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.environment` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.environment.url` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.outputs.<out_id>` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.with.<with_id>` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.secrets.<secret_id>` | ✓ | - | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.defaults.run` | ✓ | ✓ | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container.image` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container.credentials` | ✓ | ✓ | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.container.env.<env_id>` | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.services` | ✓ | - | ✓ | - | - | - | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.services.<sid>.credentials` | ✓ | ✓ | ✓ | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.services.<sid>.env.<eid>` | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+**Step Level:**
+
+| Workflow Key | `github` | `env` | `vars` | `job` | `steps` | `runner` | `secrets` | `strategy` | `matrix` | `needs` | `inputs` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `jobs.<id>.steps.if` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | - | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.name` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.run` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.with` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.env` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.continue-on-error` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.timeout-minutes` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `jobs.<id>.steps.working-directory` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+#### 7.2.2 Function Availability by Context
+
+| Function | Availability |
+|---|---|
+| `hashFiles()` | Step-level keys only (all `jobs.<id>.steps.*` positions) |
+| `success()` / `failure()` / `cancelled()` / `always()` | `if:` conditions only (`jobs.<id>.if` and `jobs.<id>.steps.if`) |
+
+#### 7.2.3 Key Observations
+
+- **`jobs.<id>.if`** uses the most restricted set (4 roots: github, vars, needs, inputs) because it is evaluated before strategy/matrix expansion.
+- **`jobs.<id>.strategy`** shares the same restricted set as `jobs.<id>.if` (4 roots).
+- **`jobs.<id>.env`** is the only job-level mapping key that permits `secrets`.
+- **`jobs.<id>.steps.if`** is the only step-level key that excludes `secrets` (10 roots vs 11 for other step keys).
+- **`jobs.<id>.environment.url`** and **`jobs.<id>.outputs.<out_id>`** have broader access than most job-level keys because they are evaluated after step execution.
+- **Container/service env** keys gain `job`, `runner`, `env` contexts compared to regular job-level keys.
+- **Container/service credentials** keys gain `env` and `secrets` compared to regular job-level keys.
+
+The complete availability data is generated from `data/sources/availability/` and materialized in `Availability.g.cs`. Each workflow key position maps to a dedicated `ExpressionValidationContext` enum value with its own root array.
 
 ### 7.3 Type Validation
 
@@ -957,128 +1029,15 @@ Detailed linter runtime behavior is defined in `Seiton_Linter_spec.md`.
 
 ## 9. Generated Data Specification
 
-### 9.1 Targets
+Generated data pipeline specification has been moved to `Seiton_Update_spec.md`.
 
-| Data | Source |
-|---|---|
-| Webhook event + activity types | GitHub Docs |
-| Context availability table | GitHub Docs |
-| Special function names | GitHub Docs |
-| Popular actions metadata | Fetched from action.yml |
-| Context type definitions | Hand-written JSON (`data/sources/context-types/github/context-types.json`) |
-| Function signatures | Hand-written JSON (`data/sources/function-specs/github/function-specs.json`) |
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
 
-### 9.1.1 Source of Truth and Reference Role (Normative)
+Key parser-relevant contract points (see `Seiton_Update_spec.md` for full details):
 
-- Official GitHub sources are normative for generated data. Specifically, GitHub Docs and official GitHub metadata endpoints/files define Seiton's intended contract.
-- `actionlint` data and `.references/actionlint/**` are non-normative reference inputs used for differential validation only.
-- If official GitHub sources and actionlint differ, Seiton-generated outputs must follow official GitHub sources, and the actionlint difference should be reported as parity information.
-- Reference parity must never silently override the contract defined by official GitHub sources.
-
-### 9.2 Update Policy
-
-- Fetch external data via update command or script
-- Resolve and normalize official GitHub sources first, then run optional/secondary differential validation against actionlint
-- Commit generated results; CI detects diffs -> auto PR
-- Parser and rules do not make network requests at runtime
-
-### 9.2.1 Webhook Activity Type Conflict Resolution (Normative)
-
-For webhook event activity types, official GitHub sources may disagree (for example, GitHub Docs vs SchemaStore metadata).
-
-- Normalized generated data must treat GitHub Docs as the primary value source when the Docs event table is parseable.
-- SchemaStore metadata is still ingested as an official source and used as fallback when Docs values are unavailable/unparseable for a given event.
-- Conflicts between official sources must be recorded in a dedicated official-source diff report; they must not be silently discarded.
-- actionlint parity checks remain secondary and must not override the official-source resolution above.
-
-Example: if GitHub Docs lists `check_suite` activity types as `completed` while SchemaStore includes additional values, normalized output follows the Docs value and the mismatch is reported.
-
-### 9.3 Source Pipeline Architecture (Normative)
-
-Generated data is produced by a deterministic 3-stage pipeline. Each stage produces Git-tracked artifacts that are independently reviewable and reproducible.
-
-#### 9.3.1 Stage 1 — Fetch Raw Sources
-
-Download official source files verbatim and persist them locally.
-
-- Input: Remote URLs for each official source
-- Output: Raw files in `data/sources/{dataset}/{provider}/raw/`
-- Network access: **yes** (only stage that accesses the network)
-- All downloaded files must be committed to the repository so each fetch is auditable.
-
-#### 9.3.2 Stage 2 — Parse Local Source Files
-
-Parse each raw file independently and emit normalized intermediate JSON artifacts.
-
-- Input: Raw files from Stage 1
-- Output: Parsed JSON files in `data/sources/{dataset}/{provider}/parsed/`
-- Network access: **no**
-- Parsing must be deterministic given the same raw inputs.
-
-#### 9.3.3 Stage 3 — Merge Parsed Artifacts
-
-Apply conflict resolution policy (§9.2.1) across all parsed artifacts to produce one canonical snapshot.
-
-- Input: Parsed JSON files from Stage 2
-- Output:
-  - Canonical snapshot: `data/sources/{dataset}/{provider}/{snapshot}.json`
-  - Official-source diff report: `data/sources/reports/official-{dataset}-source-diff.md`
-- Network access: **no**
-
-#### 9.3.4 Storage Path Convention
-
-```
-data/sources/{dataset}/{provider}/raw/        ← stage 1: raw downloaded source files
-data/sources/{dataset}/{provider}/parsed/     ← stage 2: per-source parsed JSON
-data/sources/{dataset}/{provider}/{name}.json ← stage 3: merged canonical snapshot
-data/sources/reports/                         ← diff and parity reports
-data/sources/manifest.json                    ← provenance metadata (dataset, sourceUrls, fetchedAtUtc, rawFileHashes)
-```
-
-All artifacts from every stage are committed to the repository.
-
-#### 9.3.5 Stage Independence
-
-Each stage may be invoked independently:
-
-- Stage 1 may be re-run to refresh raw source files.
-- Stage 2 re-parses existing raw files without network access.
-- Stage 3 re-merges using existing parsed artifacts without network access.
-- An orchestrator command runs all 3 stages in sequence.
-
-### 9.4 Popular Actions Target Configuration (Normative)
-
-The set of popular actions to ingest is a repository-managed configuration, not a hard-coded list in updater source code.
-
-#### 9.4.1 Purpose
-
-- Make popular-actions ingestion extensible without code changes.
-- Keep target-set changes reviewable as data-only diffs.
-- Ensure deterministic regeneration when the target set changes.
-
-#### 9.4.2 Configuration Contract
-
-- Target-set configuration file path: `data/sources/popular-actions/targets.json`.
-- The file is committed to the repository and versioned with code.
-- Each entry identifies:
-  - canonical `uses` name (for generated lookup keys)
-  - immutable metadata source locator (owner/repo + ref, or equivalent fixed URL)
-  - local raw artifact file name used in stage-1 output
-
-The exact schema may evolve, but those three identity fields are required for contract compatibility.
-
-#### 9.4.3 Determinism and Validation Rules
-
-- Duplicate `uses` entries are invalid and must fail update execution.
-- Duplicate raw artifact file names are invalid and must fail update execution.
-- Entries with missing required identity fields are invalid and must fail update execution.
-- Merged canonical output must be stable under ASCII ordering of target entries and input names.
-
-#### 9.4.4 Operational Policy
-
-- Adding/removing a target action is performed by editing `targets.json` and re-running updater sync.
-- Target-set modifications and resulting generated diffs must be reviewed together in one change set.
-- CI `verify --dataset all` remains the contract gate for stale generated artifacts after target-set updates.
+- Generated data is produced by `Seiton.Update`, a maintainer-only CLI tool.
+- Parser and rules do not make network requests at runtime; all generated data is compile-time constant.
+- Official GitHub sources are normative; actionlint data is used for differential validation only.
 
 ---
 

@@ -55,6 +55,11 @@
           "minLength": 1,
           "pattern": "^[^/\\\\]+$",
           "description": "Local raw artifact file name only"
+        },
+        "maxDeprecatedMajorVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum major version that uses a deprecated runner (e.g. 3 means v3 and below use node16). 0 or omitted means no known deprecated versions."
         }
       }
     }

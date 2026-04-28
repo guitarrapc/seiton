@@ -89,7 +89,7 @@ public sealed class AvailabilityPipelineStageTests
     }
 
     [Test]
-    public async Task MergeParsedSources_CanonicalRoots_MatchExpectedSets()
+    public async Task MergeParsedSources_CanonicalEntries_MatchExpectedContexts()
     {
         var repoRoot = FindRepoRoot();
         var tempRepo = CreateTempRepoWithParsed(repoRoot);
@@ -102,22 +102,54 @@ public sealed class AvailabilityPipelineStageTests
             var path = Path.Combine(tempRepo, "data", "sources", "availability", "github", "availability.json");
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
 
-            var workflowRoots = doc.RootElement.GetProperty("workflowRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
-            var jobRoots = doc.RootElement.GetProperty("jobRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
-            var stepRoots = doc.RootElement.GetProperty("stepRoots").EnumerateArray().Select(x => x.GetString()).ToHashSet(StringComparer.Ordinal);
+            var entries = doc.RootElement.GetProperty("entries").EnumerateArray()
+                .ToDictionary(
+                    e => e.GetProperty("workflowKey").GetString()!,
+                    e => e.GetProperty("contexts").EnumerateArray().Select(c => c.GetString()!).ToHashSet(StringComparer.Ordinal),
+                    StringComparer.Ordinal);
 
-            await Assert.That(workflowRoots).Contains("github");
-            await Assert.That(workflowRoots).Contains("inputs");
-            await Assert.That(workflowRoots).Contains("vars");
+            // Workflow-level: concurrency has github, inputs, vars
+            await Assert.That(entries).ContainsKey("concurrency");
+            await Assert.That(entries["concurrency"]).Contains("github");
+            await Assert.That(entries["concurrency"]).Contains("inputs");
+            await Assert.That(entries["concurrency"]).Contains("vars");
 
-            await Assert.That(jobRoots).Contains("needs");
-            await Assert.That(jobRoots).Contains("strategy");
-            await Assert.That(jobRoots).Contains("matrix");
+            // WorkflowCall output: has jobs context
+            await Assert.That(entries).ContainsKey("on.workflow_call.outputs.<output_id>.value");
+            await Assert.That(entries["on.workflow_call.outputs.<output_id>.value"]).Contains("jobs");
 
-            await Assert.That(stepRoots).Contains("job");
-            await Assert.That(stepRoots).Contains("runner");
-            await Assert.That(stepRoots).Contains("secrets");
-            await Assert.That(stepRoots).Contains("steps");
+            // Job-level: env has needs, strategy, matrix, secrets
+            await Assert.That(entries).ContainsKey("jobs.<job_id>.env");
+            await Assert.That(entries["jobs.<job_id>.env"]).Contains("needs");
+            await Assert.That(entries["jobs.<job_id>.env"]).Contains("strategy");
+            await Assert.That(entries["jobs.<job_id>.env"]).Contains("matrix");
+            await Assert.That(entries["jobs.<job_id>.env"]).Contains("secrets");
+
+            // Job outputs: has steps, runner, job
+            await Assert.That(entries).ContainsKey("jobs.<job_id>.outputs.<output_id>");
+            await Assert.That(entries["jobs.<job_id>.outputs.<output_id>"]).Contains("steps");
+            await Assert.That(entries["jobs.<job_id>.outputs.<output_id>"]).Contains("runner");
+            await Assert.That(entries["jobs.<job_id>.outputs.<output_id>"]).Contains("job");
+
+            // Strategy: has github, needs, vars, inputs but NOT runner/strategy/matrix
+            await Assert.That(entries).ContainsKey("jobs.<job_id>.strategy");
+            await Assert.That(entries["jobs.<job_id>.strategy"]).Contains("github");
+            await Assert.That(entries["jobs.<job_id>.strategy"]).Contains("needs");
+            await Assert.That(entries["jobs.<job_id>.strategy"]).DoesNotContain("runner");
+            await Assert.That(entries["jobs.<job_id>.strategy"]).DoesNotContain("strategy");
+            await Assert.That(entries["jobs.<job_id>.strategy"]).DoesNotContain("matrix");
+
+            // Step-level: run has job, runner, secrets, steps
+            await Assert.That(entries).ContainsKey("jobs.<job_id>.steps.run");
+            await Assert.That(entries["jobs.<job_id>.steps.run"]).Contains("job");
+            await Assert.That(entries["jobs.<job_id>.steps.run"]).Contains("runner");
+            await Assert.That(entries["jobs.<job_id>.steps.run"]).Contains("secrets");
+            await Assert.That(entries["jobs.<job_id>.steps.run"]).Contains("steps");
+
+            // Reusable workflow call secrets: has secrets
+            await Assert.That(entries).ContainsKey("jobs.<job_id>.secrets.<secrets_id>");
+            await Assert.That(entries["jobs.<job_id>.secrets.<secrets_id>"]).Contains("secrets");
+            await Assert.That(entries["jobs.<job_id>.secrets.<secrets_id>"]).Contains("needs");
         }
         finally
         {

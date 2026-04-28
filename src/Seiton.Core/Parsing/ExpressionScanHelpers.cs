@@ -7,6 +7,65 @@ namespace Seiton.Core.Parsing;
 /// <summary>Byte-level scanning utilities for locating <c>${{ ... }}</c> expression boundaries in UTF-8 YAML.</summary>
 internal static class ExpressionScanHelpers
 {
+    /// <summary>Returns <c>true</c> when the UTF-8 span contains the <c>${{</c> expression marker.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool ContainsExpressionMarker(ReadOnlySpan<byte> value)
+        => value.IndexOf("${{"u8) >= 0;
+
+    /// <summary>
+    /// Returns <c>true</c> when the string node has a parsed expression or its raw text contains the <c>${{</c> marker.
+    /// Use this to skip lint validation for values that may be dynamically computed at runtime.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool ContainsExpressionMarker(StringNodeId node, AstArena arena)
+        => arena.GetStringExpression(node).HasValue || ContainsExpressionMarker(arena.GetStringValue(node));
+
+    /// <summary>
+    /// Attempts to extract the expression body from a string value that consists solely of a single expression block with optional surrounding whitespace.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <param name="body"></param>
+    /// <returns></returns>
+    internal static bool TryExtractExpressionBody(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> body)
+    {
+        body = value;
+
+        var open = value.IndexOf("${{"u8);
+        if (open < 0)
+        {
+            return false;
+        }
+
+        var close = value.LastIndexOf("}}"u8);
+        if (close < 0)
+        {
+            return false;
+        }
+
+        if (open + 3 > close)
+        {
+            return false;
+        }
+
+        if (open != 0)
+        {
+            return false;
+        }
+
+        var tail = close + 2;
+        for (var i = tail; i < value.Length; i++)
+        {
+            var b = value[i];
+            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+            {
+                return false;
+            }
+        }
+
+        body = TrimAsciiWhiteSpace(value.Slice(open + 3, close - (open + 3)));
+        return true;
+    }
+
     internal static bool TryFindExpression(
         ReadOnlySpan<byte> value,
         int searchStart,

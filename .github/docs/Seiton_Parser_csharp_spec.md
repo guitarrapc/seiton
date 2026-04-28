@@ -46,9 +46,9 @@ Differences between `.references/actionlint` implementation and `src/Seiton.Core
 | **Duplicate Key Detection** | Case-insensitive duplicate key detection during mapping traversal | Implemented (`TryRegisterMappingKey`) |
 | **Visitor / Pass** | Linter-side traversal infrastructure | Defined in `Seiton_Linter_csharp_spec.md` |
 | **Rule Engine** | Linter-side rule orchestration | Defined in `Seiton_Linter_csharp_spec.md` |
-| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented. `ExprType` hierarchy with `ObjectExprType` (strict/loose/mapped), `ArrayExprType`, bottom-up `InferType`, typed built-in function signatures, and key-granularity context availability checks. `BuiltinContextTypes` is auto-generated in `ContextTypes.g.cs` (source: `data/sources/context-types/github/context-types.json`) and defines type schemas for all 11 context roots (`github`, `env`, `job`, `runner`, `secrets`, `strategy`, `steps`, `matrix`, `needs`, `inputs`, `vars`). Built-in function signatures (`FunctionSpec[] Specs`) are auto-generated in `FunctionSpecs.g.cs` (source: `data/sources/function-specs/github/function-specs.json`). Dynamic context resolution for `steps`/`matrix`/`needs`/`inputs` (Phase 2), operator type validation for `<`/`>`/`!`/`.*`/`[]` (Phase 3), status check function restriction (`success`/`failure`/`cancelled`/`always`), `case()` function, and `vars` naming convention checks (Phase 4) are all implemented. |
+| **Expression Type System** | `ExprType` hierarchy + `ExprSemanticsChecker` with type inference and availability checking | Implemented. `ExprType` hierarchy with `ObjectExprType` (strict/loose/mapped), `ArrayExprType`, bottom-up `InferType`, typed built-in function signatures, and key-granularity context availability checks. `BuiltinContextTypes` is auto-generated in `ContextTypes.g.cs` (source: `data/sources/context-types/github/context-types.json`) and defines type schemas for all 11 context roots (`github`, `env`, `job`, `runner`, `secrets`, `strategy`, `steps`, `matrix`, `needs`, `inputs`, `vars`). Built-in function signatures (`FunctionSpec[] Specs`) are auto-generated in `FunctionSpecs.g.cs` (source: `data/sources/function-specs/github/function-specs.json`). Dynamic context resolution for `steps`/`matrix`/`needs`/`inputs` (Phase 2), operator type validation for `<`/`>`/`!`/`.*`/`[]` (Phase 3), status check function restriction (`success`/`failure`/`cancelled`/`always`), `case()` function, and `vars` naming convention checks (Phase 4) are all implemented. `DynamicContextTypeBuilder` provides per-job type overrides: strict matrix types with nested object property inference from matrix row values (plus array row and scalar row type detection), strict needs types scoped to declared `needs:` dependencies, strict step types with forward-reference detection, and per-popular-action strict output types derived from `PopularActions.GetOutputNames()`. Template type checks (`CheckTemplateType` / `CheckTemplateTypeWithOverrides`) warn when `${{ }}` interpolation yields object/array/null; the override-aware variant uses dynamic context types. Env mapping type checks (`CheckEnvMappingType`) warn when `env: ${{ expr }}` yields non-object. Index access type checks (`ValidateIndexAccess` / `ValidateIndexAccessWithOverrides`) error on incompatible index types (e.g. bool index on object); the override-aware variant resolves dynamic context types. |
 | **Expression AST Nodes** | `VariableNode`, `ObjectDerefNode`, `ArrayDerefNode`, `IndexAccessNode`, `NotOpNode`, `CompareOpNode`, `LogicalOpNode`, `FuncCallNode` | Equivalent nodes exist. `ObjectDerefNode` (`.` access) and `ArrayDerefNode` (`.*` access) are covered by `MemberAccess` / `WildcardAccess` |
-| **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`, `ContextTypes.g.cs`, `FunctionSpecs.g.cs`) |
+| **Generated Data** | `all_webhooks.go`, `availability.go`, `popular_actions.go` | Implemented (`WebhookTypes.g.cs`, `Availability.g.cs`, `PopularActions.g.cs`, `ContextTypes.g.cs`, `FunctionSpecs.g.cs`). `PopularActions.g.cs` includes `IsInputAllowed()`, `GetOutputNames()`, and `GetRunsUsing()` per action. |
 
 #### 0.1.3 Perspectives to Supplement from ghalint
 
@@ -371,8 +371,20 @@ Normative structural hints for finalization:
 - Root `jobs` => workflow
 - Root `runs` => action-metadata
 - Root has both `jobs` and `runs` => `unknown` + ambiguity diagnostic
+- Neither `jobs` nor `runs` => fall back to the path-hint candidate kind (e.g., `action.yml` path resolves to action-metadata even without structural confirmation). This enables required-key diagnostics for malformed action metadata files.
 
 Final kind is confirmed from top-level structure; structure has priority over path hint on conflict.
+
+### 1.0.2 Action Metadata Parsing (Spec §2.16)
+
+When `ParseClassified` resolves the document kind to action-metadata, the parser enters action-metadata mode and parses:
+
+- `name`, `description`, `inputs`, `outputs`, `runs`, `branding` sections
+- Required-key checks: `description` and `runs` must be present at root level. Missing keys produce error diagnostics at position `1:1`.
+- Input/output duplicate key detection
+- `runs.using` value parsing and `runs.steps` for composite actions
+
+Implemented in `WorkflowParser.ActionMetadata.cs` (partial class).
 
 ### 1.1 Entry Point (Spec §1.1)
 
@@ -1049,6 +1061,8 @@ The parser never aborts on a single error. Each parse function:
 
 Inline lexing within `ExpressionParser`. Tokenizes the expression string during recursive descent.
 
+**Double-quote rejection:** When the lexer encounters a `"` character, it emits a diagnostic ("only single quotes are available for string delimiter in expressions") and skips to the closing `"` for error recovery. GitHub Actions expressions only support single-quoted string literals.
+
 ### 6.2 Parser (Spec §6.2)
 
 ```csharp
@@ -1117,6 +1131,13 @@ The current C# implementation validates built-in functions through typed overloa
 
 This list defines the current C# contract. Additional actionlint built-ins that are not listed here should be treated as reference parity gaps until they are added to `Seiton_Parser_spec.md` and implemented here.
 
+#### 7.1.1 Function Context Restrictions
+
+Two categories of built-in functions have position-dependent availability:
+
+1. **Status check functions** (`success`, `failure`, `cancelled`, `always`): Only available in `if` conditions. Controlled by the `allowStatusCheckFunctions` flag passed from parser call sites.
+2. **`hashFiles` function**: Only available in step-level keys (`jobs.<job_id>.steps.*`). Controlled by `Availability.IsStepLevel(context)` check in `ValidateFunctionCall`. Using `hashFiles()` in workflow-level env, job.if, strategy, or other non-step contexts emits an error diagnostic.
+
 ### 7.2 Context Availability (Spec §7.2)
 
 ```csharp
@@ -1128,13 +1149,20 @@ public class ExpressionSemanticAnalyzer
 }
 ```
 
-The current C# implementation uses `Availability.g.cs` together with the parser call site to enforce position-dependent root availability:
-- workflow-level expression sites use `ExpressionValidationContext.Workflow`
-- job-level expression sites use `ExpressionValidationContext.Job`
-- step-level expression sites use `ExpressionValidationContext.Step`
-- fixture coverage fixes the same root identifier producing different results depending on key position (`run-name`, workflow `env`, job `if`, job `env`, step `if`)
+The current C# implementation uses `Availability.g.cs` together with the parser call site to enforce position-dependent root availability. The `ExpressionValidationContext` enum is **auto-generated** from `availability.json` with one value per workflow key (34 entries), providing per-key context availability:
 
-This implements the current C# contract for position-based root-context availability with key-level granularity for the parser expression sites Seiton models today.
+- Each workflow key (e.g., `run-name`, `jobs.<job_id>.env`, `jobs.<job_id>.steps.run`) maps to a distinct `ExpressionValidationContext` enum value (e.g., `RunName`, `JobEnv`, `StepRun`).
+- The generated `Availability.g.cs` contains:
+  - Per-key `byte[][]` root arrays with the exact context roots allowed at that position.
+  - `IsRootContextAvailable(context, rootName)` — switch dispatching to the per-key array.
+  - `IsStepLevel(context)` — returns true for all `Step*` enum values.
+  - `GetContextText(context)` — parser-level category text (e.g., "workflow", "job", "strategy", "step", "step if", "job if").
+  - `GetLintCategoryText(context)` — lint-level collapsed text (e.g., "workflow", "job", "step").
+- The hand-written enum was removed; it is now generated by `AvailabilityCSharpGenerator` from `availability.json`.
+- Parser call sites pass the exact per-key enum value (e.g., `ExpressionValidationContext.StepRun` for `steps.run`, `ExpressionValidationContext.JobIf` for `jobs.<job_id>.if`).
+- This design means context check changes require only parser-side call site updates — no pipeline changes needed.
+
+This implements the current C# contract for position-based root-context availability with key-level granularity for all 34 workflow keys Seiton models.
 
 ### 7.3 Type System (Spec §7.3)
 
@@ -1168,7 +1196,11 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 
 ## 9. Generated Data (Spec §9)
 
-### 9.1 Data Files
+The generated-data pipeline specification has been moved to `Seiton_Update_spec.md`.
+
+This section remains as a boundary marker so the §0–§11 outline stays consistent across language companion documents.
+
+### 9.1 C# Generated Files
 
 | Data | File | Description |
 |---|---|---|
@@ -1178,100 +1210,13 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 | Context type definitions | `ContextTypes.g.cs` | Built-in context type schemas for all 11 context roots (source: `data/sources/context-types/github/context-types.json`) |
 | Function signatures | `FunctionSpecs.g.cs` | Built-in function specs with parameter types and overloads (source: `data/sources/function-specs/github/function-specs.json`) |
 
-### 9.2 Update Policy
+For pipeline architecture, CLI commands, data paths, update policy, and conflict resolution, see `Seiton_Update_spec.md`.
 
-- Fetch and normalize official GitHub sources first via update command (`Seiton.Update` or script)
-- Treat actionlint-derived inputs as differential validation only (non-normative)
-- If official GitHub sources and actionlint differ, generated C# data follows official GitHub sources and records parity diffs
-- Commit generated results as `.g.cs`
-- CI periodic runs detect diffs and create auto PRs
-- Parser and rules do not make network requests at runtime
+### 9.2 C#-Specific Notes
 
-#### 9.2.1 Webhook Activity Type Conflict Resolution
-
-When official GitHub sources disagree for webhook activity types:
-
-- `Seiton.Update` resolves to GitHub Docs values when the Docs table is parseable for the event.
-- SchemaStore metadata remains an official source and is used as fallback for events where Docs values are unavailable or unparseable.
-- Official-source mismatches are emitted to a dedicated official-source diff report and are treated as reviewable signals.
-- actionlint parity is a separate differential check and never overrides the official-source resolution.
-
-Concrete case: if Docs indicates `check_suite = [completed]` while SchemaStore includes additional values, `WebhookTypes.g.cs` is generated from the Docs value and the mismatch is reported.
-
-#### 9.2.2 Relationship with Current `OnEventSpecs`
+#### 9.2.1 Relationship with Current `OnEventSpecs`
 
 `OnEventSpecs` is a hand-implemented event name + activity types table. It is an implementation detail that may later be replaced by `WebhookTypes.g.cs`; this migration does not change Seiton's current support contract by itself.
-
-### 9.3 Source Pipeline Architecture (Spec §9.3)
-
-Implements the 3-stage pipeline defined in Spec §9.3 for all currently supported datasets (`webhooks`, `availability`, `popular-actions`, `context-types`, `function-specs`).
-
-> **Note**: `context-types` uses a hand-written JSON data file as its authoritative source. `function-specs` uses a hand-written JSON for codegen but additionally supports fetching function names from GitHub Docs `expressions.md` for gap detection.
-
-#### 9.3.1 CLI Commands
-
-| Dataset | Stage 1 (fetch raw) | Stage 2 (parse local) | Stage 3 (merge) | Orchestrator |
-|---|---|---|---|---|
-| webhooks | `fetch-webhooks-sources` | `parse-webhooks-sources` | `merge-webhooks-sources [--exclude-schema-only]` | `fetch-webhooks [--exclude-schema-only]` |
-| availability | `fetch-availability-sources` | `parse-availability-sources` | `merge-availability-sources` | `fetch-availability` |
-| popular-actions | `fetch-popular-actions-sources` | `parse-popular-actions-sources` | `merge-popular-actions-sources` | `fetch-popular-actions` |
-| function-specs | `fetch-function-specs-sources` | `parse-function-specs-sources` | — | `fetch-function-specs` |
-
-Additional function-specs commands:
-
-- `validate-function-specs` — compare parsed docs function names against `function-specs.json` and warn on unregistered functions
-- `sync-function-specs` automatically runs validation when parsed data is available
-
-Sync/verify entrypoints:
-
-- `sync --dataset {webhooks|availability|popular-actions|context-types|function-specs|all}`
-- `verify --dataset {webhooks|availability|popular-actions|context-types|function-specs|all}`
-
-#### 9.3.2 Data Paths
-
-```
-data/sources/webhooks/github/raw/*
-data/sources/webhooks/github/parsed/*
-data/sources/webhooks/github/webhook_types.json
-
-data/sources/availability/github/raw/*
-data/sources/availability/github/parsed/*
-data/sources/availability/github/availability.json
-
-data/sources/popular-actions/github/raw/*.action.yml
-data/sources/popular-actions/github/parsed/*
-data/sources/popular-actions/github/popular_actions.json
-
-data/sources/reports/*
-data/sources/manifest.json
-
-data/sources/context-types/github/raw/          ← future: fetched contexts.md
-data/sources/context-types/github/parsed/       ← future: parsed context property tables
-data/sources/context-types/github/context-types.json
-
-data/sources/function-specs/github/raw/         ← fetched expressions.md from GitHub Docs
-data/sources/function-specs/github/parsed/      ← parsed function name list (docs-function-names.json)
-data/sources/function-specs/github/function-specs.json
-```
-
-#### 9.3.3 Stage Isolation Guarantee
-
-- `*FetchSourceFilesAsync` methods are the only networked paths.
-- `*ParseLocalSourceFiles` and `*MergeParsedSources` are network-free and reproducible from cached raw artifacts.
-- Each stage writes Git-tracked artifacts enabling independent review of downloads, parse results, and merge decisions.
-
-### 9.4 Popular Actions Target Configuration (Spec §9.4)
-
-Popular-actions ingestion uses a repository-managed target-set configuration file:
-
-- `data/sources/popular-actions/targets.json`
-
-Contract highlights:
-
-- Target entries are data, not hard-coded source constants.
-- Each entry must provide canonical `uses`, immutable source locator, and raw artifact file name.
-- Duplicate `uses` or duplicate raw artifact file names are invalid and fail updater execution.
-- Target-set edits are applied by updating `targets.json` and running `sync --dataset popular-actions` (or `sync --dataset all`).
 
 ---
 

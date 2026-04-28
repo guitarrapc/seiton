@@ -55,10 +55,84 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         ReportIfPresent(job, job.Container is not null, "container", jobId);
         ReportIfPresent(job, job.Services is not null, "services", jobId);
 
-        ValidateLocalReusableWorkflowContract(job, workflowCall, jobId);
+        ValidateReusableWorkflowUses(job, workflowCall, jobId);
     }
 
-    private void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId)
+    private void ValidateReusableWorkflowUses(Job job, WorkflowCall workflowCall, string jobId)
+    {
+        var uses = Arena.GetStringValue(workflowCall.Uses);
+
+        // Local workflow (starts with ./ or ../)
+        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        {
+            // Local paths must not contain @ref — validate format before contract
+            if (uses.IndexOf((byte)'@') >= 0)
+            {
+                var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
+                AddJobError(
+                    job,
+                    $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+                    BuildUsesLocation(workflowCall));
+                return;
+            }
+
+            ValidateLocalReusableWorkflowContract(job, workflowCall, jobId, uses);
+            return;
+        }
+
+        // Remote workflow — validate format: owner/repo/path/to/workflow.yml@ref
+        ValidateRemoteReusableWorkflowFormat(job, workflowCall, jobId, uses);
+    }
+
+    private void ValidateRemoteReusableWorkflowFormat(Job job, WorkflowCall workflowCall, string jobId, ReadOnlySpan<byte> uses)
+    {
+        // Must contain @ref
+        var atIndex = uses.IndexOf((byte)'@');
+        if (atIndex < 0 || atIndex == uses.Length - 1)
+        {
+            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
+            AddJobError(
+                job,
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+                BuildUsesLocation(workflowCall));
+            return;
+        }
+
+        // Count path segments before @ref — need at least 3 (owner/repo/path)
+        var pathPart = uses[..atIndex];
+
+        // Must not start with /
+        if (pathPart.Length > 0 && pathPart[0] == (byte)'/')
+        {
+            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
+            AddJobError(
+                job,
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+                BuildUsesLocation(workflowCall));
+            return;
+        }
+
+        var slashCount = 0;
+        foreach (var b in pathPart)
+        {
+            if (b == (byte)'/')
+            {
+                slashCount++;
+            }
+        }
+
+        // Need at least 2 slashes: owner/repo/path (3 segments)
+        if (slashCount < 2)
+        {
+            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
+            AddJobError(
+                job,
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+                BuildUsesLocation(workflowCall));
+        }
+    }
+
+    private void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId, ReadOnlySpan<byte> uses)
     {
         if (Config.Utf8Yaml is null
             || string.IsNullOrEmpty(Config.FilePath)
@@ -68,7 +142,6 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return;
         }
 
-        var uses = Arena.GetStringValue(workflowCall.Uses);
         if (!TryResolveLocalWorkflowPath(uses, out var resolvedPath, out var relativePath, out var invalidRefFormat))
         {
             if (invalidRefFormat)
@@ -190,7 +263,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         var value = providedInput.Value;
         var valueSpan = Arena.GetStringValue(value);
-        if (Arena.GetStringExpression(value).HasValue || valueSpan.IndexOf("${{"u8) >= 0)
+        if (ExpressionScanHelpers.ContainsExpressionMarker(value, Arena))
         {
             return;
         }

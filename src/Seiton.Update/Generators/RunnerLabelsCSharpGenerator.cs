@@ -22,6 +22,7 @@ internal sealed class RunnerLabelsCSharpGenerator
             .ToArray();
 
         var sb = new StringBuilder();
+        GeneratorHelper.AppendGeneratedHeader(sb, "sync-runner-labels");
         sb.AppendLine(
             """
             namespace Seiton.Core.Generated;
@@ -82,6 +83,22 @@ internal sealed class RunnerLabelsCSharpGenerator
                 internal static bool IsSelfHostedLabel(ReadOnlySpan<byte> labelUtf8)
                 {
                     return EqualsAsciiIgnoreCase(labelUtf8, "self-hosted"u8);
+                }
+
+                /// <summary>
+                /// Returns <c>true</c> when the label matches a GitHub self-hosted runner preset label.
+                /// Preset labels: self-hosted, linux, macos, windows, x64, arm, arm64.
+                /// See: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/using-self-hosted-runners-in-a-workflow
+                /// </summary>
+                internal static bool IsSelfHostedPresetLabel(ReadOnlySpan<byte> labelUtf8)
+                {
+                    return EqualsAsciiIgnoreCase(labelUtf8, "self-hosted"u8)
+                        || EqualsAsciiIgnoreCase(labelUtf8, "linux"u8)
+                        || EqualsAsciiIgnoreCase(labelUtf8, "macos"u8)
+                        || EqualsAsciiIgnoreCase(labelUtf8, "windows"u8)
+                        || EqualsAsciiIgnoreCase(labelUtf8, "x64"u8)
+                        || EqualsAsciiIgnoreCase(labelUtf8, "arm"u8)
+                        || EqualsAsciiIgnoreCase(labelUtf8, "arm64"u8);
                 }
 
                 static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

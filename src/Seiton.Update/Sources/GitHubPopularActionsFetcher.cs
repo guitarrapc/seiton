@@ -12,6 +12,7 @@ internal sealed class GitHubPopularActionsFetcher
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
@@ -49,6 +50,21 @@ internal sealed class GitHubPopularActionsFetcher
 
         var paths = Paths(repoRoot);
         Directory.CreateDirectory(paths.RawDir);
+
+        // Clean up stale raw files that are no longer referenced by targets.json
+        var expectedFileNames = new HashSet<string>(
+            sources.Select(static x => x.RawFileName),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var existing in Directory.EnumerateFiles(paths.RawDir))
+        {
+            var fileName = Path.GetFileName(existing);
+            if (!expectedFileNames.Contains(fileName))
+            {
+                File.Delete(existing);
+                UpdateLogger.Info($"[fetch:popular-actions:sources] removed stale raw file {fileName}");
+            }
+        }
 
         foreach (var source in sources)
         {
@@ -90,13 +106,17 @@ internal sealed class GitHubPopularActionsFetcher
         {
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
             var text = File.ReadAllText(rawPath);
-            var inputs = yamlParser.ParseInputNames(text);
+            var inputs = yamlParser.ParseInputs(text);
+            var outputs = yamlParser.ParseOutputs(text);
+            var runsUsing = yamlParser.ParseRunsUsing(text);
 
             parsed.Actions.Add(new ParsedPopularAction
             {
                 ActionRef = source.ActionRef,
                 Uses = source.Uses,
-                Inputs = inputs.ToList(),
+                Inputs = inputs.Select(static x => new ParsedPopularActionInput { Name = x.Name, Required = x.Required, DeprecationMessage = x.DeprecationMessage }).ToList(),
+                Outputs = outputs.Select(static x => new ParsedPopularActionOutput { Name = x.Name }).ToList(),
+                RunsUsing = runsUsing,
             });
         }
 
@@ -117,7 +137,7 @@ internal sealed class GitHubPopularActionsFetcher
 
     public void MergeParsedSources(string repoRoot)
     {
-        _ = LoadSources(repoRoot);
+        var sources = LoadSources(repoRoot);
 
         var paths = Paths(repoRoot);
         if (!File.Exists(paths.ParsedPath))
@@ -135,20 +155,39 @@ internal sealed class GitHubPopularActionsFetcher
             PropertyNameCaseInsensitive = true,
         }) ?? throw new InvalidDataException($"Invalid parsed popular-actions snapshot: {paths.ParsedPath}");
 
+        // Build lookup from targets.json for maxDeprecatedMajorVersion
+        var deprecatedVersionLookup = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        {
+            if (source.MaxDeprecatedMajorVersion > 0)
+            {
+                deprecatedVersionLookup[source.Uses] = source.MaxDeprecatedMajorVersion;
+            }
+        }
+
         var snapshot = new
         {
             schemaVersion = 1,
             source = "github-official-merged-snapshot",
             actions = parsed.Actions
                 .OrderBy(static x => x.Uses, StringComparer.Ordinal)
-                .Select(static x => new
+                .Select(x => new
                 {
                     uses = x.Uses,
                     inputs = x.Inputs
-                        .Where(static n => !string.IsNullOrWhiteSpace(n))
-                        .Distinct(StringComparer.Ordinal)
-                        .OrderBy(static n => n, StringComparer.Ordinal)
+                        .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                        .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                        .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                        .Select(static n => new { name = n.Name, required = n.Required, deprecationMessage = n.DeprecationMessage })
                         .ToArray(),
+                    outputs = (x.Outputs ?? [])
+                        .Where(static n => !string.IsNullOrWhiteSpace(n.Name))
+                        .DistinctBy(static n => n.Name, StringComparer.Ordinal)
+                        .OrderBy(static n => n.Name, StringComparer.Ordinal)
+                        .Select(static n => new { name = n.Name })
+                        .ToArray(),
+                    runsUsing = x.RunsUsing ?? string.Empty,
+                    maxDeprecatedMajorVersion = deprecatedVersionLookup.GetValueOrDefault(x.Uses, 0),
                 })
                 .ToArray(),
         };
@@ -204,6 +243,7 @@ internal sealed class GitHubPopularActionsFetcher
                 Uses = (x.Uses ?? string.Empty).Trim(),
                 Url = (x.Url ?? string.Empty).Trim(),
                 RawFileName = (x.RawFileName ?? string.Empty).Trim(),
+                MaxDeprecatedMajorVersion = x.MaxDeprecatedMajorVersion,
             })
             .ToList();
 
@@ -274,6 +314,7 @@ internal sealed class GitHubPopularActionsFetcher
         public string Uses { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
         public string RawFileName { get; set; } = string.Empty;
+        public int MaxDeprecatedMajorVersion { get; set; }
     }
 
     private sealed class PopularActionsTargetConfig
@@ -300,6 +341,20 @@ internal sealed class GitHubPopularActionsFetcher
     {
         public string ActionRef { get; set; } = string.Empty;
         public string Uses { get; set; } = string.Empty;
-        public List<string> Inputs { get; set; } = [];
+        public List<ParsedPopularActionInput> Inputs { get; set; } = [];
+        public List<ParsedPopularActionOutput>? Outputs { get; set; }
+        public string? RunsUsing { get; set; }
+    }
+
+    private sealed class ParsedPopularActionInput
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool Required { get; set; }
+        public string? DeprecationMessage { get; set; }
+    }
+
+    private sealed class ParsedPopularActionOutput
+    {
+        public string Name { get; set; } = string.Empty;
     }
 }

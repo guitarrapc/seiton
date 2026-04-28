@@ -18,7 +18,7 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 
         if (dispatch.Inputs.Value.Count > 25)
         {
-            AddEventError(dispatch, "workflow_dispatch event cannot define more than 25 inputs", BuildEventLocation(dispatch));
+            AddEventError(dispatch, $"maximum number of inputs for \"workflow_dispatch\" event is 25 but {dispatch.Inputs.Value.Count} inputs are provided", BuildEventLocation(dispatch));
         }
 
         foreach (var (_, input) in dispatch.Inputs.Value)
@@ -63,7 +63,8 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
                 if (!double.TryParse(defaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                 {
                     var inputName = Decode(Arena.GetStringSlice(input.Name));
-                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has non-numeric default value", Arena.GetStringRange(input.Default));
+                    var defaultText = Decode(Arena.GetStringSlice(input.Default));
+                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' default value '{defaultText}' is not a valid number", Arena.GetStringRange(input.Default));
                 }
 
                 break;
@@ -71,7 +72,8 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
                 if (!defaultValue.SequenceEqual("true"u8) && !defaultValue.SequenceEqual("false"u8))
                 {
                     var inputName = Decode(Arena.GetStringSlice(input.Name));
-                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' has boolean default that must be 'true' or 'false'", Arena.GetStringRange(input.Default));
+                    var defaultText = Decode(Arena.GetStringSlice(input.Default));
+                    AddEventError(dispatch, $"workflow_dispatch input '{inputName}' boolean default value '{defaultText}' must be 'true' or 'false'", Arena.GetStringRange(input.Default));
                 }
 
                 break;
@@ -157,6 +159,6 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 
     private bool IsExpressionOrInterpolation(StringNodeId node)
     {
-        return Arena.GetStringExpression(node).HasValue || Arena.GetStringValue(node).IndexOf("${{"u8) >= 0;
+        return ExpressionScanHelpers.ContainsExpressionMarker(node, Arena);
     }
 }

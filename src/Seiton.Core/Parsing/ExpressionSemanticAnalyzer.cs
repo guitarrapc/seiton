@@ -7,17 +7,6 @@ using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Parsing;
 
-/// <summary>Identifies which part of the workflow an expression appears in, for context-sensitive validation.</summary>
-public enum ExpressionValidationContext
-{
-    Workflow,
-    WorkflowCallOutput,
-    Job,
-    JobOutput,
-    ReusableWorkflowCallSecrets,
-    Step,
-}
-
 /// <summary>
 /// Performs semantic analysis on parsed expression ASTs: context availability, function validation,
 /// type inference, and property access checks.
@@ -117,6 +106,158 @@ public static class ExpressionSemanticAnalyzer
         return InferTypeSpan(nodeId, nodes, arguments, expressionUtf8);
     }
 
+    /// <summary>
+    /// Checks whether the inferred type of the expression is suitable for template interpolation (${{ }}).
+    /// Object/array/null types do not produce meaningful string output when interpolated.
+    /// Returns the diagnostic if a problem is detected, or null otherwise.
+    /// </summary>
+    public static Diagnostic? CheckTemplateType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+        return CheckTypeForTemplate(type, expressionLocation);
+    }
+
+    /// <summary>
+    /// Variant of <see cref="CheckTemplateType"/> that uses dynamic context overrides for type inference.
+    /// This enables detection of non-scalar types in matrix/inputs/needs contexts.
+    /// </summary>
+    internal static Diagnostic? CheckTemplateTypeWithOverrides(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] contextOverrides)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides);
+        return CheckTypeForTemplate(type, expressionLocation);
+    }
+
+    private static Diagnostic? CheckTypeForTemplate(ExprType type, TextRange expressionLocation)
+    {
+        return type switch
+        {
+            ObjectExprType => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "object value in ${{ }} will be converted to string \"[Object]\"",
+                expressionLocation),
+            ArrayExprType => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "array value in ${{ }} will be converted to string \"[Array]\"",
+                expressionLocation),
+            NullExprType => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "null value in ${{ }} will be converted to empty string",
+                expressionLocation),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Checks that an expression used as an env mapping value resolves to object type.
+    /// Returns a diagnostic if the type is a non-object concrete type (string, number, bool, array, null).
+    /// </summary>
+    internal static Diagnostic? CheckEnvMappingType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[]? contextOverrides)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = contextOverrides is not null
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+
+        // object and any are acceptable; concrete non-object types are errors
+        return type switch
+        {
+            ObjectExprType or AnyExprType => null,
+            _ => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                $"{type.TypeName} value cannot be expanded as mapping for \"env:\" section. expected object value",
+                expressionLocation),
+        };
+    }
+
+    /// <summary>
+    /// Checks that a <c>runs-on</c> expression evaluates to string or array.
+    /// Object and null types are invalid for runs-on labels.
+    /// </summary>
+    internal static Diagnostic? CheckRunsOnType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[]? contextOverrides)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = contextOverrides is not null
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+
+        return type switch
+        {
+            ObjectExprType obj => new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"type of expression at \"runs-on\" must be string or array but found type \"{FormatObjectType(obj)}\"",
+                expressionLocation),
+            NullExprType => new Diagnostic(
+                DiagnosticSeverity.Error,
+                "type of expression at \"runs-on\" must be string or array but found type \"null\"",
+                expressionLocation),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Checks that the expression evaluates to an object type. Used for positions like credentials, services, env
+    /// where the YAML expects a mapping but the user provided <c>${{ expr }}</c> that evaluates to a non-object type.
+    /// </summary>
+    internal static Diagnostic? CheckExpectedObjectType(
+        ExpressionParseResult parseResult,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[]? contextOverrides,
+        string sectionName)
+    {
+        if (!parseResult.HasRoot)
+        {
+            return null;
+        }
+
+        var type = contextOverrides is not null
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
+
+        // object and any are acceptable; concrete non-object types are errors
+        return type switch
+        {
+            ObjectExprType or AnyExprType => null,
+            _ => new Diagnostic(
+                DiagnosticSeverity.Warning,
+                $"type of expression at \"{sectionName}\" must be object but found type {type.TypeName}",
+                expressionLocation),
+        };
+    }
+
     private static ExprType InferTypeSpan(
         int nodeId,
         ReadOnlySpan<ExpressionNode> nodes,
@@ -200,30 +341,13 @@ public static class ExpressionSemanticAnalyzer
 
         var node = nodes[nodeId];
 
-        if (node.Kind == ExpressionNodeKind.Identifier && IsContextRootIdentifier(nodeId, parentId, nodes))
-        {
-            var rootName = node.Token.AsSpan(expressionUtf8);
-            if (!TryGetBuiltinContextType(rootName, out _))
-            {
-                var rootNameText = Encoding.UTF8.GetString(rootName);
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"undefined context '{rootNameText}'",
-                    expressionLocation));
-            }
-            else if (!Availability.IsRootContextAvailable(context, rootName))
-            {
-                var rootNameText = Encoding.UTF8.GetString(rootName);
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"context '{rootNameText}' is not available in {ToContextText(context)} expressions",
-                    expressionLocation));
-            }
-        }
+        // NOTE: Context availability and undefined-context checks are handled
+        // by the linter (ExprUndefinedVarRule). Checking here would produce
+        // duplicate diagnostics because messages differ and dedup cannot match them.
 
         if (node.Kind == ExpressionNodeKind.FunctionCall)
         {
-            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, allowStatusCheckFunctions, diagnostics);
+            ValidateFunctionCall(node, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
         }
 
         if (node.Kind == ExpressionNodeKind.MemberAccess)
@@ -275,6 +399,7 @@ public static class ExpressionSemanticAnalyzer
         ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation,
+        ExpressionValidationContext context,
         bool allowStatusCheckFunctions,
         List<Diagnostic> diagnostics)
     {
@@ -299,14 +424,9 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
-        if (!allowStatusCheckFunctions && IsStatusCheckFunction(nameUtf8))
-        {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"status check function '{Encoding.UTF8.GetString(nameUtf8)}()' is only available in 'if' conditions",
-                expressionLocation));
-            return;
-        }
+        // NOTE: Status-check function and hashFiles availability checks are
+        // handled by the linter (ExprUndefinedVarRule). Checking here would
+        // produce duplicate diagnostics.
 
         var argCount = node.ArgCount;
         var countMatches = false;
@@ -362,6 +482,7 @@ public static class ExpressionSemanticAnalyzer
         if (typeMatched)
         {
             ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+            ValidateFromJsonLiteral(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
             return;
         }
 
@@ -386,6 +507,7 @@ public static class ExpressionSemanticAnalyzer
         }
 
         ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+        ValidateFromJsonLiteral(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
     }
 
     private static void ValidateFormatPlaceholders(
@@ -421,6 +543,9 @@ public static class ExpressionSemanticAnalyzer
 
         var template = templateNode.Token.AsSpan(expressionUtf8);
         var formatArgCount = functionCallNode.ArgCount - 1;
+
+        // Track which placeholder indices are actually used
+        var usedPlaceholders = 0uL; // Bit set for indices 0-63 (more than enough for practical use)
 
         for (var i = 0; i < template.Length; i++)
         {
@@ -474,7 +599,70 @@ public static class ExpressionSemanticAnalyzer
                 return;
             }
 
+            if (indexValue < 64)
+            {
+                usedPlaceholders |= 1uL << indexValue;
+            }
+
             i = j;
+        }
+
+        // Check for excess arguments (supplied but no placeholder references them)
+        for (var argIdx = 0; argIdx < formatArgCount; argIdx++)
+        {
+            if (argIdx < 64 && (usedPlaceholders & (1uL << argIdx)) == 0)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Warning,
+                    $"format string does not contain placeholder {{{argIdx}}}; remove argument which is unused",
+                    expressionLocation));
+                return;
+            }
+        }
+    }
+
+    private static void ValidateFromJsonLiteral(
+        ExpressionNode functionCallNode,
+        ReadOnlySpan<byte> functionNameUtf8,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        List<Diagnostic> diagnostics)
+    {
+        if (!EqualsAsciiIgnoreCase(functionNameUtf8, "fromJSON"u8))
+        {
+            return;
+        }
+
+        if (functionCallNode.ArgCount == 0 || functionCallNode.ArgStart < 0 || functionCallNode.ArgStart >= arguments.Length)
+        {
+            return;
+        }
+
+        var argNodeId = arguments[functionCallNode.ArgStart];
+        if (argNodeId < 0 || argNodeId >= nodes.Length)
+        {
+            return;
+        }
+
+        var argNode = nodes[argNodeId];
+        if (argNode.Kind != ExpressionNodeKind.StringLiteral)
+        {
+            return;
+        }
+
+        var jsonText = Encoding.UTF8.GetString(argNode.Token.AsSpan(expressionUtf8));
+        try
+        {
+            using var document = JsonDocument.Parse(jsonText);
+        }
+        catch (JsonException ex)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"fromJSON() argument is not valid JSON: {ex.Message}",
+                expressionLocation));
         }
     }
 
@@ -564,10 +752,15 @@ public static class ExpressionSemanticAnalyzer
 
         if (leftType is ArrayExprType arrayType)
         {
-            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            if (arrayType.ElementType is ObjectExprType elemObj)
             {
-                return arrayType.ElementType;
+                if (elemObj.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propType))
+                {
+                    return ExprType.ArrayOf(propType);
+                }
             }
+
+            return ExprType.ArrayOf(ExprType.Any);
         }
 
         return ExprType.Any;
@@ -621,17 +814,17 @@ public static class ExpressionSemanticAnalyzer
         ReadOnlySpan<byte> expressionUtf8)
     {
         var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
-        if (leftType is ArrayExprType arrayType)
+        if (leftType is ArrayExprType)
         {
-            return arrayType.ElementType;
+            return leftType;
         }
 
         if (leftType is ObjectExprType objectType)
         {
-            return objectType.DynamicPropertyType ?? ExprType.Any;
+            return ExprType.ArrayOf(objectType.DynamicPropertyType ?? ExprType.Any);
         }
 
-        return ExprType.Any;
+        return ExprType.ArrayOf(ExprType.Any);
     }
 
     private static ExprType InferFunctionCallType(
@@ -718,7 +911,7 @@ public static class ExpressionSemanticAnalyzer
                         properties[new Utf8String(Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
                     }
 
-                    return ExprType.Object(properties, dynamicPropertyType: ExprType.Any, strict: false);
+                    return ExprType.Object(properties, strict: true);
                 }
             case JsonValueKind.Array:
                 {
@@ -800,28 +993,93 @@ public static class ExpressionSemanticAnalyzer
         TextRange expressionLocation,
         List<Diagnostic> diagnostics)
     {
-        if (!IsComparisonOperator(node.Operator))
-        {
-            return;
-        }
-
         var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
         var rightType = InferTypeSpan(node.Right, nodes, arguments, expressionUtf8);
 
-        if (IsNotComparableType(leftType))
+        // Ordering operators (<, <=, >, >=): reject null, bool, object, array
+        if (IsComparisonOperator(node.Operator))
         {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"operator '{OperatorSymbol(node.Operator)}' does not support {leftType.TypeName} type",
-                expressionLocation));
+            if (IsNotComparableType(leftType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
+            else if (IsNotComparableType(rightType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
+
+            return;
         }
-        else if (IsNotComparableType(rightType))
+
+        // Equality operators (==, !=): warn about cross-type comparisons
+        if (node.Operator is ExpressionOperator.Equal or ExpressionOperator.NotEqual)
         {
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"operator '{OperatorSymbol(node.Operator)}' does not support {rightType.TypeName} type",
-                expressionLocation));
+            if (leftType is AnyExprType || rightType is AnyExprType)
+            {
+                return;
+            }
+
+            if (!AreEqualityCompatible(leftType, rightType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
         }
+    }
+
+    /// <summary>
+    /// Returns true when two concrete types can be meaningfully compared with == or !=.
+    /// GitHub Actions coerces types for equality, but object vs string, bool vs number etc. are suspicious.
+    /// </summary>
+    private static bool AreEqualityCompatible(ExprType left, ExprType right)
+    {
+        // Same base type — check deeper for arrays and objects
+        if (left.GetType() == right.GetType())
+        {
+            // For arrays, check element type compatibility
+            if (left is ArrayExprType leftArr && right is ArrayExprType rightArr)
+            {
+                // Any element type is always compatible
+                if (leftArr.ElementType is AnyExprType || rightArr.ElementType is AnyExprType)
+                {
+                    return true;
+                }
+
+                return AreEqualityCompatible(leftArr.ElementType, rightArr.ElementType);
+            }
+
+            return true;
+        }
+
+        // null can be compared with anything
+        if (left is NullExprType || right is NullExprType)
+        {
+            return true;
+        }
+
+        // string and number: GitHub Actions coerces for comparison — allow
+        if ((left is StringExprType && right is NumberExprType)
+            || (left is NumberExprType && right is StringExprType))
+        {
+            return true;
+        }
+
+        // string and bool: GitHub Actions coerces 'true'/'false' strings — allow
+        if ((left is StringExprType && right is BoolExprType)
+            || (left is BoolExprType && right is StringExprType))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static void ValidateUnaryOp(
@@ -885,12 +1143,27 @@ public static class ExpressionSemanticAnalyzer
                 $"index of array must be number, but got {rightType.TypeName}",
                 expressionLocation));
         }
-        else if (leftType is ObjectExprType && rightType is not (AnyExprType or StringExprType))
+        else if (leftType is ObjectExprType objType && rightType is not (AnyExprType or StringExprType))
         {
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"index of object must be string, but got {rightType.TypeName}",
                 expressionLocation));
+        }
+        else if (leftType is ObjectExprType { Strict: true } strictObj
+            && node.Right >= 0
+            && node.Right < nodes.Length
+            && nodes[node.Right].Kind == ExpressionNodeKind.StringLiteral)
+        {
+            var propertyName = nodes[node.Right].Token.AsSpan(expressionUtf8);
+            if (!strictObj.TryGetProperty(propertyName, out _))
+            {
+                var propNameText = Encoding.UTF8.GetString(propertyName);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
+                    expressionLocation));
+            }
         }
     }
 
@@ -898,6 +1171,8 @@ public static class ExpressionSemanticAnalyzer
     {
         return op switch
         {
+            ExpressionOperator.Equal => "==",
+            ExpressionOperator.NotEqual => "!=",
             ExpressionOperator.Less => "<",
             ExpressionOperator.LessOrEqual => "<=",
             ExpressionOperator.Greater => ">",
@@ -912,6 +1187,11 @@ public static class ExpressionSemanticAnalyzer
             || EqualsAsciiIgnoreCase(nameUtf8, "failure"u8)
             || EqualsAsciiIgnoreCase(nameUtf8, "cancelled"u8)
             || EqualsAsciiIgnoreCase(nameUtf8, "always"u8);
+    }
+
+    private static bool IsHashFilesFunction(ReadOnlySpan<byte> nameUtf8)
+    {
+        return EqualsAsciiIgnoreCase(nameUtf8, "hashfiles"u8);
     }
 
     private static void ValidateVarsNamingConvention(
@@ -1004,19 +1284,30 @@ public static class ExpressionSemanticAnalyzer
         List<Diagnostic> diagnostics)
     {
         var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
+
+        // String dereference: accessing .property on a string value is an error
+        if (leftType is StringExprType)
+        {
+            var propName = Encoding.UTF8.GetString(node.Token.AsSpan(expressionUtf8));
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"receiver of object dereference \"{propName}\" must be type of object but got \"string\"",
+                expressionLocation));
+            return;
+        }
+
         if (leftType is not ObjectExprType { Strict: true } strictObj)
         {
             return;
         }
 
-        var propName = node.Token.AsSpan(expressionUtf8);
-        if (!strictObj.TryGetProperty(propName, out _))
+        var propNameSpan = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
-            var propNameText = Encoding.UTF8.GetString(propName);
-            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+            var propNameText = Encoding.UTF8.GetString(propNameSpan);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
-                $"property '{propNameText}' is not defined in '{rootName}' object",
+                $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
                 expressionLocation));
         }
     }
@@ -1038,21 +1329,35 @@ public static class ExpressionSemanticAnalyzer
         return "object";
     }
 
-    private static string ToContextText(ExpressionValidationContext context)
+    private static string FormatObjectType(ObjectExprType objectType)
     {
-        return context switch
+        if (objectType.Properties is null || objectType.Properties.Count == 0)
         {
-            ExpressionValidationContext.Workflow => "workflow",
-            ExpressionValidationContext.WorkflowCallOutput => "workflow_call output",
-            ExpressionValidationContext.Job => "job",
-            ExpressionValidationContext.JobOutput => "job output",
-            ExpressionValidationContext.ReusableWorkflowCallSecrets => "reusable workflow call secrets",
-            ExpressionValidationContext.Step => "step",
-            _ => "unknown",
-        };
+            return "{}";
+        }
+
+        var sb = new System.Text.StringBuilder("{");
+        var first = true;
+        foreach (var pair in objectType.Properties)
+        {
+            if (!first)
+            {
+                sb.Append("; ");
+            }
+
+            sb.Append(Encoding.UTF8.GetString(pair.Key.Span));
+            sb.Append(": ");
+            sb.Append(pair.Value.TypeName);
+            first = false;
+        }
+
+        sb.Append('}');
+        return sb.ToString();
     }
 
-    // ── Dynamic context property access validation ─────────────────────────────
+    private static string ToContextText(ExpressionValidationContext context) => Availability.GetContextText(context);
+
+    // Dynamic context property access validation
 
     /// <summary>
     /// Validates property accesses in the expression using per-job context type overrides.
@@ -1131,6 +1436,7 @@ public static class ExpressionSemanticAnalyzer
             case ExpressionNodeKind.Binary:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateCompareOpWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 break;
             case ExpressionNodeKind.MemberAccess:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
@@ -1142,6 +1448,7 @@ public static class ExpressionSemanticAnalyzer
             case ExpressionNodeKind.IndexAccess:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 ValidateNodePropertyAccess(node.Right, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
+                ValidateIndexAccessWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 break;
             case ExpressionNodeKind.FunctionCall:
                 ValidateNodePropertyAccess(node.Left, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
@@ -1168,24 +1475,126 @@ public static class ExpressionSemanticAnalyzer
         List<Diagnostic> diagnostics)
     {
         var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+
+        // Non-object concrete types: accessing .property on a non-object value is an error
+        if (leftType is StringExprType or NumberExprType or BoolExprType or NullExprType)
+        {
+            var propName = Encoding.UTF8.GetString(node.Token.AsSpan(expressionUtf8));
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"receiver of object dereference \"{propName}\" must be type of object but got \"{leftType.TypeName}\"",
+                expressionLocation));
+            return;
+        }
+
         if (leftType is not ObjectExprType { Strict: true } strictObj)
         {
             return;
         }
 
-        var propName = node.Token.AsSpan(expressionUtf8);
-        if (!strictObj.TryGetProperty(propName, out _))
+        var propNameSpan = node.Token.AsSpan(expressionUtf8);
+        if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
-            var propNameText = Encoding.UTF8.GetString(propName);
-            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+            var propNameText = Encoding.UTF8.GetString(propNameSpan);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
-                $"property '{propNameText}' is not defined in '{rootName}' object",
+                $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
                 expressionLocation));
         }
     }
 
-    private static ExprType InferTypeWithOverrides(
+    private static void ValidateIndexAccessWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        var rightType = InferTypeWithOverrides(node.Right, nodes, arguments, expressionUtf8, overrides);
+
+        if (leftType is ArrayExprType && rightType is not (AnyExprType or NumberExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of array must be number, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+        else if (leftType is ObjectExprType && rightType is not (AnyExprType or StringExprType))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"index of object must be string, but got {rightType.TypeName}",
+                expressionLocation));
+        }
+    }
+
+    /// <summary>
+    /// Validates comparison and equality operators using context-override–aware type inference.
+    /// This catches type mismatches (e.g. <c>bool &gt; number</c>) that the parser-level
+    /// <see cref="ValidateCompareOp"/> cannot detect because dynamic context types (inputs, matrix, etc.)
+    /// resolve to <see cref="AnyExprType"/> without overrides.
+    /// </summary>
+    private static void ValidateCompareOpWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
+        var rightType = InferTypeWithOverrides(node.Right, nodes, arguments, expressionUtf8, overrides);
+
+        // Ordering operators (<, <=, >, >=): reject null, bool, object, array
+        if (IsComparisonOperator(node.Operator))
+        {
+            // Skip if both sides are still Any (overrides didn't help resolve types)
+            if (leftType is AnyExprType && rightType is AnyExprType)
+            {
+                return;
+            }
+
+            if (IsNotComparableType(leftType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
+            else if (IsNotComparableType(rightType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
+
+            return;
+        }
+
+        // Equality operators (==, !=): warn about cross-type comparisons
+        if (node.Operator is ExpressionOperator.Equal or ExpressionOperator.NotEqual)
+        {
+            if (leftType is AnyExprType || rightType is AnyExprType)
+            {
+                return;
+            }
+
+            if (!AreEqualityCompatible(leftType, rightType))
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{leftType.TypeName} value cannot be compared to {rightType.TypeName} value with '{OperatorSymbol(node.Operator)}' operator",
+                    expressionLocation));
+            }
+        }
+    }
+
+    internal static ExprType InferTypeWithOverrides(
         int nodeId,
         ReadOnlySpan<ExpressionNode> nodes,
         ReadOnlySpan<int> arguments,
@@ -1259,10 +1668,15 @@ public static class ExpressionSemanticAnalyzer
 
         if (leftType is ArrayExprType arrayType)
         {
-            if (node.Token.AsSpan(expressionUtf8).SequenceEqual("*"u8))
+            if (arrayType.ElementType is ObjectExprType elemObj)
             {
-                return arrayType.ElementType;
+                if (elemObj.TryGetProperty(node.Token.AsSpan(expressionUtf8), out var propType))
+                {
+                    return ExprType.ArrayOf(propType);
+                }
             }
+
+            return ExprType.ArrayOf(ExprType.Any);
         }
 
         return ExprType.Any;
@@ -1318,16 +1732,16 @@ public static class ExpressionSemanticAnalyzer
         (byte[] NameUtf8, ExprType Type)[] overrides)
     {
         var leftType = InferTypeWithOverrides(node.Left, nodes, arguments, expressionUtf8, overrides);
-        if (leftType is ArrayExprType arrayType)
+        if (leftType is ArrayExprType)
         {
-            return arrayType.ElementType;
+            return leftType;
         }
 
         if (leftType is ObjectExprType objectType)
         {
-            return objectType.DynamicPropertyType ?? ExprType.Any;
+            return ExprType.ArrayOf(objectType.DynamicPropertyType ?? ExprType.Any);
         }
 
-        return ExprType.Any;
+        return ExprType.ArrayOf(ExprType.Any);
     }
 }

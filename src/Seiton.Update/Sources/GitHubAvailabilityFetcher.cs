@@ -93,6 +93,20 @@ internal sealed class GitHubAvailabilityFetcher
         UpdateLogger.Info($"[parse:availability:sources] wrote {paths.ParsedDocsPath}");
     }
 
+    /// <summary>
+    /// Workflow keys whose context availability is not listed in the upstream docs table
+    /// but must be tracked (typically with empty contexts = "expressions not allowed here").
+    /// </summary>
+    private static readonly Dictionary<string, List<string>> SupplementedEntries = new(StringComparer.Ordinal)
+    {
+        ["defaults.run.shell"] = [],
+        ["jobs.<job_id>.services.<service_id>.command"] = ["github", "needs", "strategy", "matrix", "vars", "inputs"],
+        ["jobs.<job_id>.services.<service_id>.entrypoint"] = ["github", "needs", "strategy", "matrix", "vars", "inputs"],
+        ["jobs.<job_id>.snapshot.if"] = ["github", "needs", "strategy", "matrix", "vars", "inputs"],
+        ["jobs.<job_id>.steps.id"] = [],
+        ["jobs.<job_id>.steps.shell"] = [],
+    };
+
     public void MergeParsedSources(string repoRoot)
     {
         var paths = Paths(repoRoot);
@@ -111,22 +125,28 @@ internal sealed class GitHubAvailabilityFetcher
             PropertyNameCaseInsensitive = true,
         }) ?? throw new InvalidDataException($"Invalid parsed availability snapshot: {paths.ParsedDocsPath}");
 
-        var map = parsed.Entries.ToDictionary(
-            static x => x.WorkflowKey,
-            static x => (IReadOnlyList<string>)x.Contexts,
-            StringComparer.Ordinal);
+        // Passthrough: emit all per-key entries as-is from parsed source.
+        // Empty contexts lists are valid (they mean "no expression contexts allowed").
+        var entryMap = parsed.Entries
+            .Where(static x => !string.IsNullOrEmpty(x.WorkflowKey))
+            .ToDictionary(static x => x.WorkflowKey!, static x => x.Contexts, StringComparer.Ordinal);
 
-        var workflowRoots = ResolveContextSet(map, "run-name", "concurrency", "env");
-        var jobRoots = ResolveContextSet(map, "jobs.<job_id>.concurrency", "jobs.<job_id>.env");
-        var stepRoots = ResolveContextSet(map, "jobs.<job_id>.steps.run", "jobs.<job_id>.steps.if");
+        // Add supplemented entries that are not in the upstream docs table
+        foreach (var (key, contexts) in SupplementedEntries)
+        {
+            entryMap.TryAdd(key, contexts);
+        }
+
+        var entries = entryMap
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .Select(static x => new { workflowKey = x.Key, contexts = x.Value })
+            .ToArray();
 
         var snapshot = new
         {
-            schemaVersion = 1,
+            schemaVersion = 2,
             source = "github-official-merged-snapshot",
-            workflowRoots,
-            jobRoots,
-            stepRoots,
+            entries,
         };
 
         var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions)) + "\n";
@@ -144,27 +164,6 @@ internal sealed class GitHubAvailabilityFetcher
         {
             UpdateLogger.Info("[merge:availability:sources] snapshot already up to date.");
         }
-    }
-
-    private static string[] ResolveContextSet(IReadOnlyDictionary<string, IReadOnlyList<string>> map, params string[] keys)
-    {
-        var union = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var key in keys)
-        {
-            if (map.TryGetValue(key, out var values))
-            {
-                foreach (var v in values)
-                {
-                    if (!string.IsNullOrWhiteSpace(v))
-                        union.Add(v);
-                }
-            }
-        }
-
-        if (union.Count == 0)
-            throw new InvalidDataException($"Required availability key not found in parsed snapshot. keys=[{string.Join(", ", keys)}]");
-
-        return union.ToArray();
     }
 
     private static AvailabilityPaths Paths(string repoRoot)

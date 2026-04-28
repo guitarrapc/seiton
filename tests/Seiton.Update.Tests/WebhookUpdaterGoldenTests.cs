@@ -1,4 +1,5 @@
 ﻿using Seiton.Update.Generators;
+using Seiton.Update.Parsers;
 using Seiton.Update.Services;
 
 namespace Seiton.Update.Tests;
@@ -12,11 +13,12 @@ public sealed class WebhookUpdaterGoldenTests
         var sourcePath = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "webhook_types.json");
         var goldenPath = Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs");
 
-        var parser = new Parsers.GitHubWebhookSourceParser();
+        var webhookParser = new GitHubWebhookSourceParser();
         var generator = new WebhookTypesCSharpGenerator();
+        var eventFilterKeys = LoadEventFilterKeys(repoRoot);
 
-        var events = parser.Parse(sourcePath);
-        var actual = generator.Generate(events);
+        var events = webhookParser.Parse(sourcePath);
+        var actual = generator.Generate(events, eventFilterKeys);
         var expected = File.ReadAllText(goldenPath).Replace("\r\n", "\n");
 
         await Assert.That(actual).IsEqualTo(expected);
@@ -76,6 +78,7 @@ public sealed class WebhookUpdaterGoldenTests
 
         Directory.CreateDirectory(tempRepo);
         Directory.CreateDirectory(Path.Combine(tempRepo, "data", "sources", "webhooks", "github"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, "data", "sources", "expected-keys", "github"));
         Directory.CreateDirectory(Path.Combine(tempRepo, "src", "Seiton.Core", "Generated"));
 
         File.Copy(
@@ -84,11 +87,37 @@ public sealed class WebhookUpdaterGoldenTests
             overwrite: true);
 
         File.Copy(
+            Path.Combine(repoRoot, "data", "sources", "expected-keys", "github", "expected-keys.json"),
+            Path.Combine(tempRepo, "data", "sources", "expected-keys", "github", "expected-keys.json"),
+            overwrite: true);
+
+        File.Copy(
             Path.Combine(repoRoot, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs"),
             Path.Combine(tempRepo, "src", "Seiton.Core", "Generated", "WebhookTypes.g.cs"),
             overwrite: true);
 
         return tempRepo;
+    }
+
+    private static Dictionary<string, string[]> LoadEventFilterKeys(string repoRoot)
+    {
+        var primaryPath = ExpectedKeysSourcePathResolver.ResolvePrimary(repoRoot);
+        var parser = new ExpectedKeysSourceParser();
+        var model = parser.Parse(primaryPath);
+        var result = new Dictionary<string, string[]>(StringComparer.Ordinal);
+
+        foreach (var section in model.Sections)
+        {
+            if (!section.Name.StartsWith("on-", StringComparison.Ordinal))
+                continue;
+            if (section.Name == "on-event")
+                continue;
+
+            var eventName = section.Name["on-".Length..].Replace('-', '_');
+            result[eventName] = section.Keys.ToArray();
+        }
+
+        return result;
     }
 
     private static string FindRepoRoot()

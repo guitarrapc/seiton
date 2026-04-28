@@ -44,6 +44,12 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
     {
         var yaml = Config.Utf8Yaml!;
         var cronUtf8 = Arena.GetStringSlice(cronNode).AsSpan(yaml);
+        if (cronUtf8.IsEmpty)
+        {
+            AddEventError(scheduleEvent, "on.schedule cron must not be empty", Arena.GetStringRange(cronNode));
+            return;
+        }
+
         if (!TryParseCronUtf8(cronUtf8, out var cron, out var reason))
         {
             AddEventError(scheduleEvent, $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' is invalid: {reason}", Arena.GetStringRange(cronNode));
@@ -57,9 +63,10 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 
         if (minimumIntervalMinutes < MinIntervalMinutes)
         {
+            var intervalSeconds = minimumIntervalMinutes * 60;
             AddEventError(
                 scheduleEvent,
-                $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' runs too frequently; the shortest interval is once every {MinIntervalMinutes} minutes",
+                $"scheduled job runs too frequently. it runs once per {intervalSeconds} seconds. the shortest interval is once every {MinIntervalMinutes} minutes",
                 Arena.GetStringRange(cronNode));
         }
     }
@@ -70,6 +77,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
         var span = TrimAscii(Arena.GetStringSlice(timezoneNode).AsSpan(yaml));
         if (span.IsEmpty)
         {
+            AddEventError(scheduleEvent, "on.schedule timezone must not be empty", Arena.GetStringRange(timezoneNode));
             return;
         }
 
@@ -79,22 +87,15 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             return;
         }
 
-        try
+        if (!Generated.IanaTimeZones.IsKnown(Encoding.UTF8.GetString(span)))
         {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(Encoding.UTF8.GetString(span));
-        }
-        catch
-        {
-            if (!LooksLikeIanaTimezoneUtf8(span))
-            {
-                AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
-            }
+            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
         }
     }
 
     private bool IsExpressionOrInterpolation(StringNodeId node)
     {
-        return Arena.GetStringExpression(node).HasValue || Arena.GetStringSlice(node).AsSpan(Config.Utf8Yaml!).IndexOf("${{"u8) >= 0;
+        return ExpressionScanHelpers.ContainsExpressionMarker(node, Arena);
     }
 
     private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> span)
@@ -120,54 +121,6 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
     {
         return Utf8EqualsAsciiIgnoreCase(span, "UTC"u8)
             || Utf8EqualsAsciiIgnoreCase(span, "Local"u8);
-    }
-
-    private static bool LooksLikeIanaTimezoneUtf8(ReadOnlySpan<byte> timezone)
-    {
-        if (timezone.Length < 3)
-        {
-            return false;
-        }
-
-        var slash = timezone.IndexOf((byte)'/');
-        if (slash <= 0)
-        {
-            return false;
-        }
-
-        if (!TryMatchIanaArea(timezone[..slash]))
-        {
-            return false;
-        }
-
-        for (var i = 0; i < timezone.Length; i++)
-        {
-            var b = timezone[i];
-            var isLetter = b is >= (byte)'A' and <= (byte)'Z' or >= (byte)'a' and <= (byte)'z';
-            var isDigit = b is >= (byte)'0' and <= (byte)'9';
-            var isSym = b is (byte)'/' or (byte)'_' or (byte)'-' or (byte)'+';
-            if (!isLetter && !isDigit && !isSym)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool TryMatchIanaArea(ReadOnlySpan<byte> area)
-    {
-        return Utf8EqualsAsciiIgnoreCase(area, "Africa"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "America"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Antarctica"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Arctic"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Asia"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Atlantic"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Australia"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Etc"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Europe"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Indian"u8)
-            || Utf8EqualsAsciiIgnoreCase(area, "Pacific"u8);
     }
 
     private static bool Utf8EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

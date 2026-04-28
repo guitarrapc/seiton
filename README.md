@@ -101,12 +101,17 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 | [runner-label](docs/checks.md#runner-label) | ✓ | ✗ | Unknown GitHub-hosted runner labels |
 | [runner-no-latest](docs/checks.md#runner-no-latest) | ✓ | ✗ | Moving `*-latest` runner labels |
 | [popular-action-inputs](docs/checks.md#popular-action-inputs) | ✓ | ✗ | Typos in popular action input names |
+| [outdated-action-runner](docs/checks.md#outdated-action-runner) | ✓ | ✗ | Deprecated action `runs.using` runtimes |
+| [local-action-inputs](docs/checks.md#local-action-inputs) | ✓ | ✗ | Local action metadata contract validation |
 | [action-shell-is-required](docs/checks.md#action-shell-is-required) | ✓ | ✗ | Missing `shell` in composite action `run` steps |
 | [matrix](docs/checks.md#matrix) | ✓ | ✗ | Invalid matrix definitions |
 | [env-var](docs/checks.md#env-var) | ✓ | ✗ | Risky environment variable patterns |
 | [if-cond](docs/checks.md#if-cond) | ✓ | ✗ | Constant or unsound `if` conditions |
 | [fake-ternary](docs/checks.md#fake-ternary) | ✓ | ✗ | `cond && a \|\| b` fake ternary idioms |
 | [deprecated-commands](docs/checks.md#deprecated-commands) | ✓ | ✗ | Deprecated workflow commands |
+| [dispatch-inputs](docs/checks.md#dispatch-inputs) | ✓ | ✗ | Invalid `workflow_dispatch` input definitions |
+| [schedule-event](docs/checks.md#schedule-event) | ✓ | ✗ | Invalid schedule cron/timezone |
+| [workflow-call-input-default](docs/checks.md#workflow-call-input-default) | ✓ | ✗ | Invalid `workflow_call` input defaults |
 
 ### Security
 

@@ -125,10 +125,10 @@ public sealed class ExpressionTests
 
         var result = ExpressionExtractor.ExtractParseAndValidate(
             Encoding.UTF8.GetBytes(yaml),
-            ExpressionValidationContext.Job);
+            ExpressionValidationContext.JobEnv);
 
         await Assert.That(result.Occurrences.Length).IsEqualTo(1);
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -141,7 +141,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("unknown expression function: unknownFn", StringComparison.Ordinal))).IsTrue();
     }
@@ -156,7 +156,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects 2 argument(s), but got 1", StringComparison.Ordinal))).IsTrue();
     }
@@ -171,7 +171,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got number", StringComparison.Ordinal))).IsTrue();
     }
@@ -186,7 +186,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         // Regression: previously reported "expects 2 argument(s), but got 3" because
         // the inner fromJson call's argument was counted toward contains's ArgCount.
@@ -204,7 +204,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("format placeholder '{1}' requires argument 2, but got 1 format argument(s)", StringComparison.Ordinal))).IsTrue();
     }
@@ -219,7 +219,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("format placeholder", StringComparison.Ordinal))).IsFalse();
     }
@@ -234,7 +234,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("context 'steps' is not available", StringComparison.Ordinal))).IsFalse();
     }
@@ -255,7 +255,7 @@ public sealed class ExpressionTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token '-'", StringComparison.Ordinal))).IsTrue();
     }
 
-    // ── InferType: literal nodes ──────────────────────────────────────────────
+    // InferType: literal nodes
 
     [Test]
     public async Task InferType_StringLiteral_ReturnsString()
@@ -301,7 +301,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsEqualTo(ExprType.Null);
     }
 
-    // ── InferType: unary and binary operators ─────────────────────────────────
+    // InferType: unary and binary operators
 
     [Test]
     public async Task InferType_UnaryNot_ReturnsBool()
@@ -337,7 +337,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsEqualTo(ExprType.Any);
     }
 
-    // ── InferType: function return types ──────────────────────────────────────
+    // InferType: function return types
 
     [Test]
     public async Task InferType_BoolReturningFunction_ReturnsBool()
@@ -394,7 +394,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsEqualTo(ExprType.Number);
     }
 
-    // ── InferType: context access ─────────────────────────────────────────────
+    // InferType: context access
 
     [Test]
     public async Task InferType_GitHubRef_ReturnsString()
@@ -484,7 +484,7 @@ public sealed class ExpressionTests
         await Assert.That(type is ObjectExprType).IsTrue();
     }
 
-    // ── Validate: context root and property checks ────────────────────────────
+    // Validate: context root and property checks
 
     [Test]
     public async Task ParseAndValidate_UndefinedRootContext_ReportsDiagnostic()
@@ -496,9 +496,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("undefined context 'goggle'", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -511,9 +511,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property 'typo_field' is not defined in 'github' object", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"typo_field\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -526,7 +526,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
@@ -541,12 +541,12 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── ValidateStringArg: improved bottom-up type check ─────────────────────
+    // ValidateStringArg: improved bottom-up type check
 
     [Test]
     public async Task ParseAndValidate_BinaryExprPassedAsStringArg_ReportsDiagnostic()
@@ -558,7 +558,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string, but got bool", StringComparison.Ordinal))).IsTrue();
     }
@@ -574,12 +574,12 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument 1 should be string", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── ExpressionVisitor.VisitExprNode ───────────────────────────────────────
+    // ExpressionVisitor.VisitExprNode
 
     [Test]
     public async Task VisitExprNode_SingleLiteral_FiresEnterAndLeave()
@@ -721,7 +721,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Job);
+            ExpressionValidationContext.JobEnv);
 
         await Assert.That(parseResult.Diagnostics).IsEmpty();
         await Assert.That(diagnostics.Any(x => x.Message.Contains("argument", StringComparison.Ordinal))).IsFalse();
@@ -738,7 +738,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(parseResult.Diagnostics).IsEmpty();
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
@@ -771,7 +771,7 @@ public sealed class ExpressionTests
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── ValidateDynamicPropertyAccess ─────────────────────────────────────────
+    // ValidateDynamicPropertyAccess
 
     [Test]
     public async Task ValidateDynamicPropertyAccess_NoOverrides_NoDiagnostics()
@@ -835,7 +835,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'steps'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -871,7 +871,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_key' is not defined in 'matrix'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_key\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -896,7 +896,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'nonexistent' is not defined in 'needs'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -914,7 +914,7 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("'unknown_param' is not defined in 'inputs'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_param\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -934,7 +934,7 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
-    // ── Operator type validation (Phase 3) ────────────────────────────────────
+    // Operator type validation
 
     [Test]
     public async Task ParseAndValidate_CompareNullLessThanNumber_ReportsDiagnostic()
@@ -946,9 +946,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<' does not support null type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("null value cannot be compared to number value with '<' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -961,9 +961,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '>' does not support bool type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to bool value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -976,7 +976,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -991,7 +991,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -1006,9 +1006,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '<' does not support object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to number value with '<' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1021,9 +1021,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support array", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("value cannot be compared to number value with '>' operator", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1037,7 +1037,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
     }
@@ -1053,9 +1053,552 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // Cross-type equality comparison
+
+    [Test]
+    public async Task ParseAndValidate_EqualityObjectVsNumber_ReportsError()
+    {
+        var expression = "fromJson('{\"a\":1}') == 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to number value", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityArrayVsString_ReportsError()
+    {
+        var expression = "fromJson('[1,2]') != 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared to string value", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityStringVsNumber_NoDiagnostic()
+    {
+        // GitHub Actions coerces string to number for equality comparison
+        var expression = "'42' == 42"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityNullVsString_NoDiagnostic()
+    {
+        // null can be compared with any type
+        var expression = "null == 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_EqualityAnyVsString_NoDiagnostic()
+    {
+        // Any type should not produce warnings
+        var expression = "github.event.number == 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // Dynamic-override comparison type validation
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputGreaterThanNumber_ReportsDiagnostic()
+    {
+        // inputs.timeout is bool via override — using > should report error
+        var expression = "inputs.timeout > 60"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("timeout"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to number value with '>' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_NumberInputLessThanNumber_NoDiagnostic()
+    {
+        // inputs.count is number via override — using < is fine
+        var expression = "inputs.count < 100"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("count"u8)] = ExprType.Number,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputEqualsBool_NoDiagnostic()
+    {
+        // inputs.verbose is bool via override — using == with bool is fine
+        var expression = "inputs.verbose == true"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("verbose"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_ObjectInputEqualsString_ReportsWarning()
+    {
+        // inputs.data is object via override — comparing with string should warn
+        var expression = "inputs.data == 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("data"u8)] = ExprType.Object(),
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to string value with '==' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputGreaterOrEqualNumber_ReportsDiagnostic()
+    {
+        // inputs.flag is bool via override — using >= should report error
+        var expression = "inputs.flag >= 1"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("flag"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to number value with '>=' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_BoolInputLessOrEqualNumber_ReportsDiagnostic()
+    {
+        // inputs.flag is bool via override — using <= should report error
+        var expression = "inputs.flag <= 5"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("flag"u8)] = ExprType.Bool,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("bool value cannot be compared to number value with '<=' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_ObjectInputNotEqualsString_ReportsWarning()
+    {
+        // inputs.data is object via override — != with string should warn
+        var expression = "inputs.data != 'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("data"u8)] = ExprType.Object(),
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("object value cannot be compared to string value with '!=' operator", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StringInputNotEqualsString_NoDiagnostic()
+    {
+        // inputs.name is string via override — != with string is fine
+        var expression = "inputs.name != 'admin'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("name"u8)] = ExprType.String,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_AnyInputGreaterThanNumber_NoDiagnostic()
+    {
+        // When both sides are Any — no error should fire
+        var expression = "inputs.unknown > 60"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        // Non-strict object means properties resolve to Any
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(dynamicPropertyType: ExprType.Any)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_StringInputGreaterOrEqualString_NoDiagnostic()
+    {
+        // inputs.version is string via override — >= with string is fine
+        var expression = "inputs.version >= 'v2'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var overrides = new (byte[], ExprType)[]
+        {
+            ("inputs"u8.ToArray(), (ExprType)ExprType.Object(
+                properties: new Dictionary<Utf8String, ExprType>
+                {
+                    [new Utf8String("version"u8)] = ExprType.String,
+                },
+                strict: true)),
+        };
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot be compared", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // String dereference as object
+
+    [Test]
+    public async Task ParseAndValidate_StringPropertyAccess_ReportsDiagnostic()
+    {
+        // github.ref is string — accessing .owner on it is an error
+        var expression = "github.ref.owner"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object but got \"string\"", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_ObjectPropertyAccess_NoDiagnostic()
+    {
+        // github is an object — accessing .ref on it is fine
+        var expression = "github.ref"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("must be type of object", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // format() excess argument checking
+
+    [Test]
+    public async Task ParseAndValidate_FormatExcessArgument_ReportsWarning()
+    {
+        var expression = "format('{0}', github.ref, github.sha)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder {1}", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FormatAllArgsUsed_NoDiagnostic()
+    {
+        var expression = "format('{0}-{1}', github.ref, github.sha)"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("does not contain placeholder", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // fromJSON() broken JSON validation
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonBrokenJson_ReportsDiagnostic()
+    {
+        var expression = "fromJson('{invalid}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON() argument is not valid JSON", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonValidJson_NoDiagnostic()
+    {
+        var expression = "fromJson('{\"a\":1}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // fromJSON() strict object property validation
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectIndexUndefinedProperty_ReportsDiagnostic()
+    {
+        // fromJSON('{"win":"...", "linux":"..."}')['mac'] — 'mac' is not defined
+        var expression = "fromJson('{\"win\":\"windows-latest\",\"linux\":\"ubuntu-latest\"}')['mac']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"mac\" is not defined in object type {", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectIndexDefinedProperty_NoDiagnostic()
+    {
+        // fromJSON('{"win":"...", "linux":"..."}')['win'] — 'win' exists
+        var expression = "fromJson('{\"win\":\"windows-latest\",\"linux\":\"ubuntu-latest\"}')['win']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectMemberUndefinedProperty_ReportsDiagnostic()
+    {
+        // fromJSON('{"enabled":true}').disabled — 'disabled' is not defined
+        var expression = "fromJson('{\"enabled\":true}').disabled"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"disabled\" is not defined", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_FromJsonObjectMemberDefinedProperty_NoDiagnostic()
+    {
+        // fromJSON('{"enabled":true}').enabled — 'enabled' exists
+        var expression = "fromJson('{\"enabled\":true}').enabled"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // Template type checking
+
+    [Test]
+    public async Task CheckTemplateType_ObjectType_ReportsWarning()
+    {
+        var expression = "fromJson('{\"a\":1}')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNotNull();
+        await Assert.That(diag!.Value.Message).Contains("object value in ${{ }}");
+    }
+
+    [Test]
+    public async Task CheckTemplateType_ArrayType_ReportsWarning()
+    {
+        var expression = "fromJson('[1,2]')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNotNull();
+        await Assert.That(diag!.Value.Message).Contains("array value in ${{ }}");
+    }
+
+    [Test]
+    public async Task CheckTemplateType_NullType_ReportsWarning()
+    {
+        var expression = "null"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNotNull();
+        await Assert.That(diag!.Value.Message).Contains("null value in ${{ }}");
+    }
+
+    [Test]
+    public async Task CheckTemplateType_StringType_NoDiagnostic()
+    {
+        var expression = "github.ref"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diag = ExpressionSemanticAnalyzer.CheckTemplateType(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
+
+        await Assert.That(diag).IsNull();
     }
 
     [Test]
@@ -1068,7 +1611,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!' does not support object type", StringComparison.Ordinal))).IsTrue();
     }
@@ -1083,7 +1626,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("does not support array", StringComparison.Ordinal))).IsTrue();
     }
@@ -1098,7 +1641,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!'", StringComparison.Ordinal))).IsFalse();
     }
@@ -1114,7 +1657,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("operator '!'", StringComparison.Ordinal))).IsFalse();
     }
@@ -1129,7 +1672,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*' must be an object or array, but got string", StringComparison.Ordinal))).IsTrue();
     }
@@ -1145,7 +1688,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*'", StringComparison.Ordinal))).IsFalse();
     }
@@ -1160,7 +1703,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("receiver of '.*' must be an object or array, but got bool", StringComparison.Ordinal))).IsTrue();
     }
@@ -1175,7 +1718,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of array", StringComparison.Ordinal))).IsFalse();
     }
@@ -1190,7 +1733,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of array must be number, but got string", StringComparison.Ordinal))).IsTrue();
     }
@@ -1205,7 +1748,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object", StringComparison.Ordinal))).IsFalse();
     }
@@ -1220,12 +1763,12 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("index of object must be string, but got number", StringComparison.Ordinal))).IsTrue();
     }
 
-    // ── Status check function restriction (Phase 4 - Gap #5) ─────────────────
+    // Status check function restriction
 
     [Test]
     public async Task ParseAndValidate_SuccessInIfContext_NoDiagnostic()
@@ -1237,7 +1780,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
@@ -1253,10 +1796,10 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: false);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'success()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'success()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1269,9 +1812,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'failure()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'failure()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1284,9 +1827,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'cancelled()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'cancelled()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1299,9 +1842,9 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'always()' is only available in 'if' conditions", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function 'always()' is only available in 'if' conditions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1314,7 +1857,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Job,
+            ExpressionValidationContext.JobEnv,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
@@ -1331,12 +1874,12 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step);
+            ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("status check function", StringComparison.Ordinal))).IsFalse();
     }
 
-    // ── case() function (Phase 4 - Gap #6) ───────────────────────────────────
+    // case() function
 
     [Test]
     public async Task ParseAndValidate_CaseFunction_ValidUsage_NoDiagnostic()
@@ -1348,7 +1891,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("unknown expression function", StringComparison.Ordinal))).IsFalse();
@@ -1366,7 +1909,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsFalse();
@@ -1382,7 +1925,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("expects", StringComparison.Ordinal))).IsTrue();
@@ -1403,7 +1946,7 @@ public sealed class ExpressionTests
         await Assert.That(type).IsTypeOf<AnyExprType>();
     }
 
-    // ── vars naming convention (Phase 4 - Gap #7) ────────────────────────────
+    // Vars naming convention
 
     [Test]
     public async Task ParseAndValidate_VarsGithubPrefix_ReportsDiagnostic()
@@ -1415,7 +1958,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsTrue();
@@ -1431,7 +1974,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsTrue();
@@ -1461,7 +2004,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("configuration variable name", StringComparison.Ordinal))).IsFalse();
@@ -1477,7 +2020,7 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("configuration variable name", StringComparison.Ordinal))).IsFalse();
@@ -1494,9 +2037,122 @@ public sealed class ExpressionTests
             parseResult,
             expression,
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
-            ExpressionValidationContext.Step,
+            ExpressionValidationContext.StepRun,
             allowStatusCheckFunctions: true);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("must not start with 'GITHUB_' prefix", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // hashFiles function context restriction
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInStepContext_NoDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepRun);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInStepIfContext_NoDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json') != ''"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.StepIf,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInJobIfContext_ReportsDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json') != ''"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.JobIf,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInWorkflowEnvContext_ReportsDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.Env);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesInStrategyContext_ReportsDiagnostic()
+    {
+        var expression = "hashFiles('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.JobStrategy);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ParseAndValidate_HashFilesCaseInsensitive_ReportsDiagnostic()
+    {
+        var expression = "HASHFILES('**/package-lock.json')"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+
+        var diagnostics = ExpressionSemanticAnalyzer.Validate(
+            parseResult,
+            expression,
+            new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
+            ExpressionValidationContext.JobIf,
+            allowStatusCheckFunctions: true);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("hashFiles() is not available", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // Expression double-quote delimiter
+
+    [Test]
+    public async Task Parse_DoubleQuoteStringLiteral_ReportsError()
+    {
+        var expression = "\"hello\""u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        await Assert.That(parseResult.Diagnostics.Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_SingleQuoteStringLiteral_NoDiagnostic()
+    {
+        var expression = "'hello'"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        await Assert.That(parseResult.Diagnostics.Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsFalse();
     }
 }

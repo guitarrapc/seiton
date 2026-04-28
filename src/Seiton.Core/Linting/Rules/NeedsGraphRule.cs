@@ -33,6 +33,19 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 var needText = Decode(Arena.GetStringSlice(need));
                 AddJobError(job, $"job '{jobId}' references unknown job '{needText}' in needs", Arena.GetStringRange(need));
             }
+
+            // Check for duplicates among earlier entries (case-insensitive, GitHub Actions job IDs are case-insensitive)
+            for (var j = 0; j < i; j++)
+            {
+                var earlier = job.Needs[j];
+                if (EqualsAsciiIgnoreCase(needSpan, Arena.GetStringValue(earlier)))
+                {
+                    var jobId = Decode(Arena.GetStringSlice(job.Id));
+                    var needText = Decode(Arena.GetStringSlice(need));
+                    AddJobError(job, $"job '{jobId}' has duplicates '{needText}' in needs", Arena.GetStringRange(need));
+                    break;
+                }
+            }
         }
     }
 
@@ -104,9 +117,15 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 if (neighborColor == 1) // gray: back-edge = cycle
                 {
-                    var jobId = Decode(Arena.GetStringSlice(currentJob.Id));
-                    var needText = Decode(Arena.GetStringSlice(need));
-                    AddJobError(currentJob, $"job '{jobId}' has a circular 'needs' dependency via '{needText}'", Arena.GetStringRange(need));
+                    // Build cycle path from DFS stack for informative message
+                    var cyclePath = BuildCyclePath(source, stack, needKey);
+                    // Report at the first job in the cycle (consistent with actionlint positioning)
+                    var cycleStartJob = FindCycleStartJob(source, stack, needKey);
+                    var reportJob = cycleStartJob ?? currentJob;
+                    var reportRange = cycleStartJob is not null
+                        ? Arena.GetStringRange(cycleStartJob.Id)
+                        : Arena.GetStringRange(need);
+                    AddJobError(reportJob, $"cyclic dependencies in \"needs\" job configurations are detected. detected cycle is {cyclePath}", reportRange);
                 }
                 else if (neighborColor == 0)
                 {
@@ -115,5 +134,100 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Builds a human-readable cycle path string from the DFS stack.
+    /// Example: "a -> b -> c -> a"
+    /// </summary>
+    private string BuildCyclePath(byte[] source, Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
+    {
+        // Stack contains the gray path from root to current node.
+        // Find cycleTarget in the stack to extract only the cycle portion.
+        var stackArray = stack.ToArray(); // top-of-stack first
+        Array.Reverse(stackArray); // now root-first order
+
+        var sb = new System.Text.StringBuilder();
+        var inCycle = false;
+        foreach (var (key, _) in stackArray)
+        {
+            if (!inCycle && key.Equals(cycleTarget))
+            {
+                inCycle = true;
+            }
+
+            if (inCycle)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(" -> ");
+                }
+
+                if (_knownJobs.TryGetValue(source, key.Span, out var job))
+                {
+                    sb.Append('"');
+                    sb.Append(Decode(Arena.GetStringSlice(job.Id)));
+                    sb.Append('"');
+                }
+            }
+        }
+
+        // Close the cycle by appending the target again
+        if (sb.Length > 0)
+        {
+            sb.Append(" -> ");
+            if (_knownJobs.TryGetValue(source, cycleTarget.Span, out var targetJob))
+            {
+                sb.Append('"');
+                sb.Append(Decode(Arena.GetStringSlice(targetJob.Id)));
+                sb.Append('"');
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Finds the first job in the cycle (the cycle target) from the DFS stack.
+    /// Returns null if not found.
+    /// </summary>
+    private Job? FindCycleStartJob(byte[] source, Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
+    {
+        return _knownJobs.TryGetValue(source, cycleTarget.Span, out var job) ? job : null;
+    }
+
+    private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var a = left[i];
+            var b = right[i];
+            if (a == b)
+            {
+                continue;
+            }
+
+            if (a is >= (byte)'A' and <= (byte)'Z')
+            {
+                a = (byte)(a + 32);
+            }
+
+            if (b is >= (byte)'A' and <= (byte)'Z')
+            {
+                b = (byte)(b + 32);
+            }
+
+            if (a != b)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

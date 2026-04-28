@@ -1,4 +1,4 @@
-using System.Buffers.Text;
+﻿using System.Buffers.Text;
 using System.Text;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -34,9 +34,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseBool(valueUtf8, tag, out var value))
         {
             needsError = true;
@@ -138,23 +141,22 @@ public static partial class WorkflowParser
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                var node = ParseString(ref reader, arena, out needsError, out errorMark, allowElemEmpty);
-                if (needsError)
+                var node = ParseString(ref reader, arena, out var elemError, out var elemMark, allowElemEmpty);
+                if (elemError)
                 {
-                    // Element-level error: use the same errorMessage pattern
-                    // The caller will provide the error message, so just propagate the first error
-                    break;
+                    // Record first element error for caller, but continue parsing remaining
+                    // elements so that downstream lint rules (e.g. GlobPatternRule) can validate them.
+                    if (!needsError)
+                    {
+                        needsError = true;
+                        errorMark = elemMark;
+                    }
+                    continue;
                 }
                 if (node.HasValue)
                 {
                     list.Add(node);
                 }
-            }
-
-            // Continue reading remaining elements even after error
-            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
-            {
-                reader.SkipCurrentNode();
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
@@ -194,9 +196,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseDouble(valueUtf8, tag, out var value))
         {
             needsError = true;
@@ -237,9 +242,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseInt64(valueUtf8, tag, out var value))
         {
             needsError = true;
@@ -387,11 +395,13 @@ public static partial class WorkflowParser
     /// <summary>
     /// Checks if the key is the YAML merge key '&lt;&lt;' and rejects it.
     /// Returns true if the key IS a merge key (caller should skip key+value).
+    /// VYaml's CurrentMark for the '&lt;&lt;' key points past the key text (at the ':'),
+    /// so we adjust the position back by the key length to report the correct column.
     /// </summary>
     private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, string mappingName)
     {
         if (!keyUtf8.SequenceEqual("<<"u8)) return false;
-        AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+        AddError(diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
         return true;
     }
 
@@ -414,7 +424,7 @@ public static partial class WorkflowParser
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
-            AddError(diagnostics, $"{mappingName} does not support merge key '<<'", keyMark);
+            AddError(diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
             return false;
         }
 
@@ -428,7 +438,11 @@ public static partial class WorkflowParser
                 : EqualsAsciiIgnoreCase(prev, keyUtf8);
             if (isMatch)
             {
-                AddError(diagnostics, $"{mappingName} contains duplicate key: {Encoding.UTF8.GetString(keyUtf8)}", keyMark);
+                var keyText = Encoding.UTF8.GetString(keyUtf8);
+                var sectionName = ExtractSectionDisplayName(mappingName);
+                var (prevLine, prevCol) = ComputeLineColumn(source, prevOffset);
+                var caseNote = caseSensitive ? "" : ". note that this key is case insensitive";
+                AddError(diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}{caseNote}", keyMark);
                 return false;
             }
         }
@@ -440,6 +454,16 @@ public static partial class WorkflowParser
         }
 
         return true;
+    }
+
+    /// <summary>Extracts the last segment of a dotted or spaced mapping name for display (e.g. "on.workflow_call.inputs" → "inputs").</summary>
+    private static string ExtractSectionDisplayName(string mappingName)
+    {
+        var dotIndex = mappingName.LastIndexOf('.');
+        if (dotIndex >= 0) return mappingName.Substring(dotIndex + 1);
+        var spaceIndex = mappingName.LastIndexOf(' ');
+        if (spaceIndex >= 0) return mappingName.Substring(spaceIndex + 1);
+        return mappingName;
     }
 
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)
@@ -484,6 +508,19 @@ public static partial class WorkflowParser
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
     }
 
+    private static void AddWarning(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark)
+    {
+        var location = new TextRange(
+            Start: mark.Position,
+            Length: 0,
+            StartLine: mark.Line,
+            StartColumn: mark.Col,
+            EndLine: mark.Line,
+            EndColumn: mark.Col);
+
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, message, location));
+    }
+
     /// <summary>Parses a YAML bool scalar into <see cref="BoolNodeId"/> (used by <c>on.*</c> metadata and action metadata).</summary>
     private static BoolNodeId ParseBoolNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
@@ -500,9 +537,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var mark = reader.CurrentStart;
+        var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
+        var mark = valueUtf8.Length > 0
+            ? reader.ComputePositionFromOffset(slice.Offset)
+            : reader.CurrentStart;
         if (!TryParseBool(valueUtf8, tag, out var value))
         {
             AddError(diagnostics, errorMessage, mark);

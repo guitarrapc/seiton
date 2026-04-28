@@ -24,8 +24,8 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Workflow is not null).IsTrue();
-        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("requires runs-on", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -38,7 +38,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.HasFatalError).IsTrue();
         await Assert.That(result.Workflow).IsNull();
         await Assert.That(result.Diagnostics).HasSingleItem();
-        await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be mapping");
+        await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be object");
         await Assert.That(result.Diagnostics[0].FilePath).IsEqualTo("fatal.yml");
     }
 
@@ -56,7 +56,7 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
         var diagnostic = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId == "job-structure"
-            && x.Message.Contains("requires runs-on", StringComparison.Ordinal));
+            && x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal));
 
         await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
         await Assert.That(diagnostic.RuleId).IsEqualTo("job-structure");
@@ -270,7 +270,7 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
 
         await Assert.That(result.ParseDiagnostics).IsEmpty();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions.contents must be one of 'read', 'write', or 'none'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"admin\" is invalid as permission of scope \"contents\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -286,7 +286,8 @@ public sealed class RuleInterfaceTests
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
 
-        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
+        // Parser no longer emits forbidden-key diagnostics (linter handles them)
+        await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -295,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(48);
+        await Assert.That(rules.Length).IsEqualTo(50);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -344,6 +345,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[45].Id).IsEqualTo(RuleId.RefVersionMismatch);
         await Assert.That(rules[46].Id).IsEqualTo(RuleId.UseTrustedPublishing);
         await Assert.That(rules[47].Id).IsEqualTo(RuleId.LocalActionInputs);
+        await Assert.That(rules[48].Id).IsEqualTo(RuleId.WorkflowCallInputDefault);
+        await Assert.That(rules[49].Id).IsEqualTo(RuleId.OutdatedActionRunner);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -393,6 +396,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("ref-version-mismatch")).IsEqualTo(49);
         await Assert.That(RuleCatalog.GetPriority("use-trusted-publishing")).IsEqualTo(50);
         await Assert.That(RuleCatalog.GetPriority("local-action-inputs")).IsEqualTo(51);
+        await Assert.That(RuleCatalog.GetPriority("workflow-call-input-default")).IsEqualTo(52);
+        await Assert.That(RuleCatalog.GetPriority("outdated-action-runner")).IsEqualTo(53);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -405,12 +410,14 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo(RuleId.KnownVulnerableActions);
         await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-049");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-050");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-051");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-050", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-052", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-051");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-053");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-054");
     }
 
     [Test]
@@ -449,7 +456,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["requires runs-on"]),
+            ["\"runs-on\" section is missing"]),
         };
 
         await AssertRuleCases(new JobStructureRule(), "job-structure", cases);
@@ -498,6 +505,42 @@ public sealed class RuleInterfaceTests
                     container: node:20
             """,
             ["calls reusable workflow with uses"]),
+            new RuleCase(
+            "ng-remote-missing-ref",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: "foo/bar/workflow.yml"
+            """,
+            ["is not following the format"]),
+            new RuleCase(
+            "ng-remote-absolute-path",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: "/foo/bar/workflow.yml@main"
+            """,
+            ["is not following the format"]),
+            new RuleCase(
+            "ng-remote-missing-repo-path",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: "foo/workflow.yml@main"
+            """,
+            ["is not following the format"]),
+            new RuleCase(
+            "ok-remote-valid-format",
+            """
+            on: push
+            jobs:
+                reuse:
+                    uses: owner/repo/path/to/workflow.yml@main
+            """,
+            []),
         };
 
         await AssertRuleCases(new ReusableWorkflowRule(), "reusable-workflow", cases);
@@ -802,12 +845,19 @@ public sealed class RuleInterfaceTests
         try
         {
             File.WriteAllText(actionN20, NormalizeYaml("""
+            name: N20
+            description: Node20 action
             runs:
               using: node20
               main: index.js
             """), Encoding.UTF8);
 
+            // Create the index.js file so file-existence check passes
+            File.WriteAllText(Path.Combine(actionsDir, "n20", "index.js"), "", Encoding.UTF8);
+
             File.WriteAllText(actionComp, NormalizeYaml("""
+            name: Comp
+            description: Composite action
             runs:
               using: composite
               steps:
@@ -866,6 +916,325 @@ public sealed class RuleInterfaceTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_MissingDescription_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-desc-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: No Description
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("description is required", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_EnvNotAllowedForJsAction_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-env-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: JS with env
+            description: A JS action that incorrectly uses env
+            runs:
+              using: node20
+              main: index.js
+              env:
+                SOME_VAR: value
+            """), Encoding.UTF8);
+            File.WriteAllText(Path.Combine(actionsDir, "index.js"), "", Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("\"env\" is not allowed", StringComparison.Ordinal) && x.Message.Contains("JavaScript action", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_MissingMainFile_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-nofile-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: Missing Main
+            description: A JS action with missing main file
+            runs:
+              using: node20
+              main: nonexistent.js
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("does not exist", StringComparison.Ordinal) && x.Message.Contains("nonexistent.js", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_InvalidBranding_Error()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-brand-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: Bad Brand
+            description: An action with bad branding
+            branding:
+              icon: dog
+              color: neon-pink
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+                  shell: bash
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("invalid branding icon", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("invalid branding color", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_DockerEnvAllowed_NoError()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-docker-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            File.WriteAllText(actionPath, NormalizeYaml("""
+            name: Docker Action
+            description: A Docker action with env
+            runs:
+              using: docker
+              image: Dockerfile
+              env:
+                SOME_VAR: value
+            """), Encoding.UTF8);
+
+            File.WriteAllText(callerPath, NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+            """), Encoding.UTF8);
+
+            var result = new LintEngine([new LocalActionInputsRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("env", StringComparison.Ordinal))).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionInputsRule_ActionMetadataFixture_AllChecks()
+    {
+        // Full integration test against the testdata/examples fixture
+        var root = FindRepoRoot();
+        var path = Path.Combine(root, "testdata", "examples", "action_metadata_syntax_validation.yaml");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = new LintEngine([new LocalActionInputsRule()])
+            .Check(File.ReadAllBytes(path), path);
+
+        var msgs = result.Diagnostics.Where(x => x.RuleId == "local-action-inputs").Select(x => x.Message).ToArray();
+        // 6 checks matching actionlint behavior
+        await Assert.That(msgs.Any(m => m.Contains("\"env\" is not allowed", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("description is required", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("does not exist", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("invalid branding color", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("invalid branding icon", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(msgs.Any(m => m.Contains("invalid runs.using", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_LocalActionOutputs_StrictPropertyValidation()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-outputs-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        var actionsDir = Path.Combine(rootDir, ".github", "actions", "my-action-with-output");
+        Directory.CreateDirectory(workflowsDir);
+        Directory.CreateDirectory(actionsDir);
+
+        var actionPath = Path.Combine(actionsDir, "action.yaml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var actionYaml = """
+            name: My action with output
+            description: my action with outputs
+            outputs:
+              some_value:
+                description: some value returned from this action
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: ./.github/actions/my-action-with-output
+                    id: my_action
+                  - run: echo ${{ steps.my_action.outputs.some_value }}
+                  - run: echo ${{ steps.my_action.outputs.some-value }}
+            """;
+
+            File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
+            // some_value should be valid (no error) — check that no diagnostic targets "some_value" as the undefined property
+            await Assert.That(msgs.Any(m => m.Contains("property \"some_value\" is not defined", StringComparison.Ordinal))).IsFalse();
+            // some-value should be flagged as undefined property
+            await Assert.That(msgs.Any(m => m.Contains("\"some-value\" is not defined", StringComparison.Ordinal))).IsTrue();
         }
         finally
         {
@@ -960,7 +1329,108 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["permissions.contents must be one of 'read', 'write', or 'none'"]),
+            ["\"admin\" is invalid as permission of scope \"contents\". available values are \"read\", \"write\", \"none\""]),
+            // regression: unknown scope name should be detected
+            new RuleCase(
+            "ng-unknown-scope-check",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        check: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["unknown permission scope \"check\". all available permission scopes are"]),
+            // regression: models scope only allows read/none
+            new RuleCase(
+            "ng-models-write-restricted",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        models: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"write\" is invalid as permission of scope \"models\". available values are \"read\", \"none\""]),
+            // regression: id-token scope only allows write/none
+            new RuleCase(
+            "ng-id-token-read-restricted",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        id-token: read
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"read\" is invalid as permission of scope \"id-token\". available values are \"write\", \"none\""]),
+            // regression: vulnerability-alerts only allows read/none
+            new RuleCase(
+            "ng-vulnerability-alerts-write-restricted",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        vulnerability-alerts: write
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"write\" is invalid as permission of scope \"vulnerability-alerts\". available values are \"read\", \"none\""]),
+            // regression: valid scopes should not produce errors
+            new RuleCase(
+            "ok-all-standard-scopes-valid",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                        actions: read
+                        contents: write
+                        issues: none
+                        packages: read
+                        id-token: write
+                        models: read
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            // regression: empty permissions scalar at job level (issue170)
+            new RuleCase(
+            "ng-job-empty-permissions-scalar",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}"]),
+            // regression: empty permissions scalar at workflow level (issue170)
+            new RuleCase(
+            "ng-workflow-empty-permissions-scalar",
+            """
+            on: push
+            permissions:
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}"]),
         };
 
         await AssertRuleCases(new PermissionsRule(), "permissions", cases);
@@ -1007,6 +1477,115 @@ public sealed class RuleInterfaceTests
                           with: { totally-unknown-input: true }
             """,
             ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'"]),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_PopularActionInputsRule_RequiredInputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #10: actions/cache requires 'path' and 'key' — missing both should warn
+            new RuleCase(
+            "ng-cache-missing-required-inputs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                            restore-keys: |
+                                some-key-
+            """,
+            ["missing required input 'key' for action 'actions/cache@v4'", "missing required input 'path' for action 'actions/cache@v4'"]),
+            // #10: actions/cache with required inputs present — no error
+            new RuleCase(
+            "ok-cache-all-required-inputs-present",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                            path: ~/.npm
+                            key: npm-${{ runner.os }}
+            """,
+            []),
+            // #10: actions/checkout has no required inputs without defaults — no error even with empty with
+            new RuleCase(
+            "ok-checkout-no-required-inputs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_PopularActionInputsRule_DeprecatedInputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Deprecated input for reviewdog/action-actionlint
+            new RuleCase(
+            "ng-deprecated-fail-on-error",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: reviewdog/action-actionlint@v1
+                          with:
+                            fail_on_error: true
+            """,
+            ["avoid using deprecated input \"fail_on_error\" in action \"reviewdog/action-actionlint@v1\": Deprecated, use `fail_level` instead"]),
+            // Deprecated inputs for pypa/gh-action-pypi-publish
+            new RuleCase(
+            "ng-deprecated-pypa-packages-dir",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: pypa/gh-action-pypi-publish@release/v1
+                          with:
+                            packages_dir: /path/to/dir
+                            repository_url: https://github.com/foo/bar
+            """,
+            [
+                "avoid using deprecated input \"packages_dir\" in action \"pypa/gh-action-pypi-publish@release/v1\": The inputs have been normalized to use kebab-case. Use `packages-dir` instead",
+                "avoid using deprecated input \"repository_url\" in action \"pypa/gh-action-pypi-publish@release/v1\": The inputs have been normalized to use kebab-case. Use `repository-url` instead",
+            ]),
+            // Non-deprecated input should not trigger warning
+            new RuleCase(
+            "ok-non-deprecated-input",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                            path: ~/.npm
+                            key: npm-${{ runner.os }}
+            """,
+            []),
         };
 
         await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
@@ -1297,6 +1876,18 @@ public sealed class RuleInterfaceTests
                     uses: owner/repo/.github/workflows/reusable.yml@main
             """,
             ["not pinned to a full-length commit SHA"]),
+            // regression: step without run/uses produces empty uses — should not trigger unpinned-uses rule
+            new RuleCase(
+            "ok-empty-uses-from-parser-error",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - name: broken step with no run or uses
+            """,
+            []),
         };
 
         await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases);
@@ -1745,7 +2336,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["circular 'needs' dependency"]),
+            ["cyclic dependencies in \"needs\" job configurations are detected"]),
             new RuleCase(
             "ng-two-job-cycle",
             """
@@ -1764,7 +2355,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo b
             """,
-            ["circular 'needs' dependency"]),
+            ["cyclic dependencies in \"needs\" job configurations are detected"]),
             new RuleCase(
             "ng-three-job-cycle",
             """
@@ -1789,10 +2380,107 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo c
             """,
-            ["circular 'needs' dependency"]),
+            ["cyclic dependencies in \"needs\" job configurations are detected"]),
         };
 
         await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
+    }
+
+    // Duplicate job ID in needs array
+    [Test]
+    public async Task RuleRegression_NeedsGraphRule_DuplicateNeeds_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-duplicate-needs-id",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build, build]
+                    steps:
+                        - run: echo test
+            """,
+            ["duplicates"]),
+            new RuleCase(
+            "ok-unique-needs-ids",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo build
+                lint:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo lint
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build, lint]
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "ng-duplicate-needs-case-insensitive",
+            """
+            on: push
+            jobs:
+                bar:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo bar
+                foo:
+                    needs: [bar, BAR]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo foo
+            """,
+            ["duplicates"]),
+        };
+
+        await AssertRuleCases(new NeedsGraphRule(), "needs-graph", cases);
+    }
+
+    // regression: cycle diagnostics should report at the needs value position (actionable)
+    // with a cycle path in the message for clarity
+    [Test]
+    public async Task RuleRegression_NeedsGraphRule_CyclePosition()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                from:
+                    needs: [to]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo from
+                to:
+                    needs: [from]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo to
+            """);
+
+        var result = new LintEngine([new NeedsGraphRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var diags = result.Diagnostics.Where(x => x.RuleId == "needs-graph" && x.Message.Contains("cyclic")).ToArray();
+
+        await Assert.That(diags.Length).IsGreaterThanOrEqualTo(1);
+
+        // The cycle is reported at the first job in the cycle path (consistent with actionlint positioning).
+        // DFS visits "from" first, detects cycle "from" -> "to" -> "from".
+        // Report is at the first job in the cycle ("from" at line 3).
+        var cycleD = diags[0];
+        await Assert.That(cycleD.Location.StartLine).IsEqualTo(3);
+        // Message should include cycle path
+        await Assert.That(cycleD.Message).Contains("\"from\" -> \"to\" -> \"from\"");
     }
 
     [Test]
@@ -1989,6 +2677,115 @@ public sealed class RuleInterfaceTests
                         - run: echo ok
             """,
             ["shell name", "invalid"]),
+            new RuleCase(
+            "ok-custom-shell-template-perl",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: print "ok"
+                          shell: perl {0}
+            """,
+            []),
+            new RuleCase(
+            "ok-custom-shell-template-ruby",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: puts 'ok'
+                          shell: ruby {0}
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
+    }
+
+    // OS-specific shell validation
+    [Test]
+    public async Task RuleRegression_ShellNameRule_OsSpecific_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-cmd-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: cmd
+            """,
+            ["cmd", "not available on"]),
+            new RuleCase(
+            "ng-powershell-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: powershell
+            """,
+            ["powershell", "not available on"]),
+            new RuleCase(
+            "ok-pwsh-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: pwsh
+            """,
+            []),
+            new RuleCase(
+            "ok-cmd-on-windows",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    steps:
+                        - run: echo ok
+                          shell: cmd
+            """,
+            []),
+            new RuleCase(
+            "ng-sh-on-windows",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    steps:
+                        - run: echo ng
+                          shell: sh
+            """,
+            ["sh", "not available on"]),
+            new RuleCase(
+            "ok-sh-on-ubuntu",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                          shell: sh
+            """,
+            []),
         };
 
         await AssertRuleCases(new ShellNameRule(), "shell-name", cases);
@@ -2070,7 +2867,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["not a known GitHub-hosted runner label"]),
+            ["is unknown. available labels are"]),
             new RuleCase(
             "ng-unknown-mapping-label",
             """
@@ -2083,7 +2880,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["not a known GitHub-hosted runner label"]),
+            ["is unknown. available labels are"]),
             new RuleCase(
             "ok-mapping-labels-with-self-hosted-skip",
             """
@@ -2093,6 +2890,257 @@ public sealed class RuleInterfaceTests
                     runs-on:
                         labels: [self-hosted, custom-hosted]
                     permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
+    // Runner label — matrix-expanded runs-on
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_MatrixExpanded_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-matrix-unknown-scalar",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - macos-latest
+                                - linux-latest
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo test
+            """,
+            ["is unknown. available labels are"]),
+            new RuleCase(
+            "ok-matrix-known-labels-only",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - ubuntu-latest
+                                - macos-latest
+                                - windows-latest
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-self-hosted-array",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - [self-hosted, linux, x64]
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-self-hosted-preset-label",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - arm64
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-matrix-gpu-unknown",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - macos-latest
+                                - gpu
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo test
+            """,
+            ["is unknown. available labels are"]),
+            new RuleCase(
+            "ok-matrix-expression-row-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner: ${{ fromJson(needs.setup.outputs.runners) }}
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-no-strategy-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-mixed-known-and-self-hosted",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - ubuntu-latest
+                                - [self-hosted, linux, x64]
+                                - arm64
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-non-matrix-expression-skip",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ github.event.inputs.runner }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
+    // Runner label conflict
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_OsConflict_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-mixed-os-labels",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest, windows-latest]
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\""]),
+            new RuleCase(
+            "ng-multiple-os-conflicts",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest, windows-latest, macos-latest]
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\"", "\"macos-latest\" conflicts with label \"ubuntu-latest\""]),
+            new RuleCase(
+            "ng-bare-os-label-conflict",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest, windows]
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"windows\" conflicts with label \"ubuntu-latest\""]),
+            new RuleCase(
+            "ok-single-os-label",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: [ubuntu-latest]
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new RunnerLabelRule(), "runner-label", cases);
+    }
+
+    // Runner label — matrix conflict with static labels
+    [Test]
+    public async Task RuleRegression_RunnerLabelRule_MatrixOsConflict_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-matrix-os-conflict-with-static",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [windows-latest, macos-latest]
+                    runs-on: [ubuntu-latest, '${{matrix.os}}']
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\"", "\"macos-latest\" conflicts with label \"ubuntu-latest\""]),
+            new RuleCase(
+            "ng-matrix-os-conflict-bare-label",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [windows-latest, macos-latest, windows]
+                    runs-on: [ubuntu-latest, '${{matrix.os}}']
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"windows-latest\" conflicts with label \"ubuntu-latest\"", "\"macos-latest\" conflicts with label \"ubuntu-latest\"", "\"windows\" conflicts with label \"ubuntu-latest\""]),
+            new RuleCase(
+            "ok-matrix-same-os-family",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-22.04, ubuntu-24.04]
+                    runs-on: [ubuntu-latest, '${{matrix.os}}']
                     steps:
                         - run: echo ok
             """,
@@ -2232,7 +3280,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job id", "contains invalid characters"]),
+            ["invalid job ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-with-dot",
             """
@@ -2245,7 +3293,7 @@ public sealed class RuleInterfaceTests
                         - id: setup.v1
                           run: echo ng
             """,
-            ["step id", "contains invalid characters"]),
+            ["invalid step ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-empty",
             """
@@ -2258,7 +3306,7 @@ public sealed class RuleInterfaceTests
                         - id: ''
                           run: echo ng
             """,
-            ["step id", "contains invalid characters"]),
+            ["string should not be empty"]),
             new RuleCase(
             "ng-job-id-starts-with-digit",
             """
@@ -2270,7 +3318,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job id", "first character must be [a-zA-Z_]"]),
+            ["invalid job ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-starts-with-dash",
             """
@@ -2283,7 +3331,7 @@ public sealed class RuleInterfaceTests
                         - id: -setup
                           run: echo ng
             """,
-            ["step id", "first character must be [a-zA-Z_]"]),
+            ["invalid step ID", "must start with a letter"]),
             new RuleCase(
             "ng-step-id-duplicate-case-insensitive",
             """
@@ -2356,7 +3404,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["has duplicated option 'dev'"]),
+            ["has duplicated option"]),
             new RuleCase(
             "ng-choice-default-not-in-options",
             """
@@ -2389,7 +3437,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["options but type is 'number'"]),
+            ["has options but type is"]),
             new RuleCase(
             "ng-number-default-not-number",
             """
@@ -2405,7 +3453,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["non-numeric default value"]),
+            ["is not a valid number"]),
             new RuleCase(
             "ng-boolean-default-invalid",
             """
@@ -2460,10 +3508,208 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["cannot define more than 25 inputs"]),
+            ["maximum number of inputs", "25 but 26"]),
         };
 
         await AssertRuleCases(new DispatchInputsRule(), "dispatch-inputs", cases);
+    }
+
+    // Workflow call input default validation
+    [Test]
+    public async Task RuleRegression_WorkflowCallInputDefaultRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-boolean-input-non-bool-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        debug:
+                            type: boolean
+                            default: "yes"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["boolean", "default"]),
+            new RuleCase(
+            "ng-number-input-non-number-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        retries:
+                            type: number
+                            default: "three"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["number", "default"]),
+            new RuleCase(
+            "ok-boolean-input-true-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        debug:
+                            type: boolean
+                            default: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-string-input-any-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        name:
+                            type: string
+                            default: "hello"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-required-input-with-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        path:
+                            type: string
+                            required: true
+                            default: ""
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["default", "required"]),
+            new RuleCase(
+            "ok-required-input-without-default",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        path:
+                            type: string
+                            required: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new WorkflowCallInputDefaultRule(), "workflow-call-input-default", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_OutdatedActionRunnerRule_TableDriven()
+    {
+        // This rule is catalog-driven and version-aware: it checks the popular actions catalog
+        // for deprecated runner versions. Actions with maxDeprecatedMajorVersion in the catalog
+        // are flagged when the referenced version is at or below that threshold.
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-latest-version-node20",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ng-outdated-checkout-v3",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v3
+            """,
+            ["too old to run"]),
+            new RuleCase(
+            "ng-outdated-checkout-v2",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v2
+            """,
+            ["too old to run"]),
+            new RuleCase(
+            "ok-unknown-action-not-in-catalog",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: some/action@v1
+            """,
+            []),
+            new RuleCase(
+            "ok-sha-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29
+            """,
+            []),
+            new RuleCase(
+            "ok-docker-login-current",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker/login-action@v3
+            """,
+            []),
+            new RuleCase(
+            "ng-docker-login-v2",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: docker/login-action@v2
+            """,
+            ["too old to run"]),
+        };
+
+        await AssertRuleCases(new OutdatedActionRunnerRule(), "outdated-action-runner", cases);
     }
 
     [Test]
@@ -2509,7 +3755,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["runs too frequently", "once every 5 minutes"]),
+            ["runs too frequently", "once per", "once every 5 minutes"]),
             new RuleCase(
             "ng-invalid-timezone",
             """
@@ -2524,6 +3770,47 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["timezone", "invalid"]),
+            new RuleCase(
+            "ng-iana-like-invalid-timezone",
+            """
+            on:
+                schedule:
+                    - cron: "0 0 * * *"
+                      timezone: "Asia/Somewhere"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["timezone", "invalid"]),
+            new RuleCase(
+            "ng-empty-timezone",
+            """
+            on:
+                schedule:
+                    - cron: "0 0 * * *"
+                      timezone: ""
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["timezone", "must not be empty"]),
+            new RuleCase(
+            "ng-empty-cron",
+            """
+            on:
+                schedule:
+                    - cron: ""
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["cron", "must not be empty"]),
         };
 
         await AssertRuleCases(new ScheduleEventRule(), "schedule-event", cases);
@@ -2592,13 +3879,24 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["invalid glob pattern", "not closed"]),
+            ["invalid glob pattern", "missing ]"]),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    // Glob pattern syntax validation
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_Syntax_TableDriven()
+    {
+        var cases = new[]
+        {
             new RuleCase(
-            "ng-invalid-activity-type",
+            "ng-reversed-bracket-range",
             """
             on:
-                pull_request:
-                    types: [bogus]
+                push:
+                    branches: ['feature/[z-a]']
             jobs:
                 build:
                     runs-on: ubuntu-latest
@@ -2606,14 +3904,13 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["unsupported activity type 'bogus'"]),
+            ["start of range", "is larger than end of range"]),
             new RuleCase(
-            "ng-filter-mutual-exclusion",
+            "ng-dot-dot-path-segment",
             """
             on:
-                pull_request:
-                    branches: [main]
-                    branches-ignore: ['release/**']
+                push:
+                    paths: ['src/../etc/passwd']
             jobs:
                 build:
                     runs-on: ubuntu-latest
@@ -2621,7 +3918,297 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["cannot be used together"]),
+            ["'.' and '..' are not allowed"]),
+            new RuleCase(
+            "ng-caret-char-in-branch-pattern",
+            """
+            on:
+                push:
+                    branches: ['^foo-']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["character '^' is invalid"]),
+            new RuleCase(
+            "ng-star-plus-in-tag-pattern",
+            """
+            on:
+                push:
+                    tags: ['v*+']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["unexpected character '+' after '*'"]),
+            new RuleCase(
+            "ng-dot-path-segment",
+            """
+            on:
+                push:
+                    paths: ['./foo/bar.txt']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["'.' and '..' are not allowed"]),
+            new RuleCase(
+            "ok-valid-bracket-range",
+            """
+            on:
+                push:
+                    branches: ['release/v[0-9].*']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-backslash-regex-escape-in-tags",
+            """
+            on:
+                push:
+                    tags: ['v\d+']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid for branch and tag names", "can be escaped"]),
+            new RuleCase(
+            "ng-trailing-backslash-in-branches",
+            """
+            on:
+                push:
+                    branches: ["feature\\"]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "trailing backslash"]),
+            new RuleCase(
+            "ok-valid-backslash-escape-star",
+            """
+            on:
+                push:
+                    branches: ['feature/\*']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-lone-bang-in-tags",
+            """
+            on:
+                push:
+                    tags: ['!']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["at least one character must follow !"]),
+            new RuleCase(
+            "ng-glob-errors-detected-after-null-entry-in-paths",
+            """
+            on:
+                push:
+                    paths:
+                        -
+                        - '!'
+                        - '  foo'
+                        - '.'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["at least one character must follow !", "leading and trailing spaces", "'.' and '..' are not allowed"]),
+            new RuleCase(
+            "ng-leading-space-in-paths",
+            """
+            on:
+                push:
+                    paths: ['  foo']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["leading and trailing spaces"]),
+            new RuleCase(
+            "ng-trailing-space-in-paths",
+            """
+            on:
+                push:
+                    paths: ['foo  ']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["leading and trailing spaces"]),
+            new RuleCase(
+            "ng-space-only-in-paths",
+            """
+            on:
+                push:
+                    paths: [' ']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["leading and trailing spaces"]),
+            new RuleCase(
+            "ok-space-in-branches-is-ref-error",
+            """
+            on:
+                push:
+                    branches: [' ']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid for branch and tag names"]),
+            new RuleCase(
+            "ng-ref-starts-with-slash",
+            """
+            on:
+                push:
+                    tags: ['/v1.0']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["ref name must not start with /"]),
+            new RuleCase(
+            "ng-ref-ends-with-slash",
+            """
+            on:
+                push:
+                    branches: ['feature/']
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    permissions: {}
+                    steps:
+                        - run: echo ng
+            """,
+            ["ref name must not end with /"]),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_SnapshotVersion_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-unclosed-bracket-in-snapshot-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: my-image
+                        version: 'v[0-'
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "missing ]"]),
+            new RuleCase(
+            "ok-valid-snapshot-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: my-image
+                        version: 'v1.2.3'
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_GlobPatternRule_ImageVersionVersions_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-unclosed-bracket-in-image-version-versions",
+            """
+            on:
+                image_version:
+                    versions:
+                        - 'v[0-'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["invalid glob pattern", "missing ]"]),
+            new RuleCase(
+            "ng-lone-bang-in-image-version-versions",
+            """
+            on:
+                image_version:
+                    versions:
+                        - '!'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["at least one character must follow !"]),
         };
 
         await AssertRuleCases(new GlobPatternRule(), "glob-pattern", cases);
@@ -3520,6 +5107,216 @@ public sealed class RuleInterfaceTests
         await AssertRuleCases(new MatrixRule(), "matrix", cases);
     }
 
+    // Matrix duplicate value + exclude mismatch
+    [Test]
+    public async Task RuleRegression_MatrixRule_DuplicateValues_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-duplicate-axis-value",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-20.04, ubuntu-22.04, ubuntu-20.04]
+                    steps:
+                        - run: echo ng
+            """,
+            ["duplicate"]),
+            new RuleCase(
+            "ok-unique-axis-values",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-20.04, ubuntu-22.04, ubuntu-24.04]
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new MatrixRule(), "matrix", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_MatrixRule_ExcludeValueMismatch_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-scalar-value-mismatch",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            node: [10, 12, 14]
+                            os: [ubuntu-latest, macos-latest]
+                            exclude:
+                                - node: 13
+                                  os: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not match in matrix \"node\" combinations"]),
+            new RuleCase(
+            "ok-scalar-value-matches",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            node: [10, 12, 14]
+                            os: [ubuntu-latest, macos-latest]
+                            exclude:
+                                - node: 10
+                                  os: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-exclude-value-is-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            foo: [aaa]
+                            exclude:
+                                - foo: ${{ fromJSON('"x"') }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-row-value-is-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            foo:
+                                - ${{ fromJSON('{"bar":"x"}') }}
+                            exclude:
+                                - foo: bar
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-include-only-axis-value-mismatch",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                            include:
+                                - os: ubuntu-latest
+                                  gui: gnome
+                            exclude:
+                                - os: ubuntu-latest
+                                  gui: kde
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not match in matrix \"gui\" combinations"]),
+            new RuleCase(
+            "ok-include-only-axis-value-matches",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                            include:
+                                - os: ubuntu-latest
+                                  gui: gnome
+                            exclude:
+                                - os: ubuntu-latest
+                                  gui: gnome
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new MatrixRule(), "matrix", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_MatrixRule_ExcludeObjectValueReportsAtValueLine()
+    {
+        // Object value in exclude: diagnostic must point to the exclude entry line, not the matrix range
+        var yaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.os.runner }}
+                    strategy:
+                        matrix:
+                            os:
+                                - {'runner': 'ubuntu-latest'}
+                            exclude:
+                                - os: {'runner': 'windows-latest'}
+                    steps:
+                        - run: echo ng
+            """
+            .Replace("\r\n", "\n");
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-obj.yml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("does not match"));
+        await Assert.That(diag.Message).IsNotNull();
+        // The exclude entry is on line 10-11 area — diagnostic must not be on line 7 (matrix range)
+        await Assert.That(diag.Location.StartLine).IsGreaterThanOrEqualTo(10);
+    }
+
+    [Test]
+    public async Task RuleRegression_MatrixRule_ExcludeArrayValueReportsAtValueLine()
+    {
+        // Array value in exclude: diagnostic must point to the exclude entry line, not the matrix range
+        var yaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ matrix.os[0] }}
+                    strategy:
+                        matrix:
+                            os:
+                                - ['ubuntu', 'latest']
+                            exclude:
+                                - os: ['macos', 'latest']
+                    steps:
+                        - run: echo ng
+            """
+            .Replace("\r\n", "\n");
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-arr.yml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("does not match"));
+        await Assert.That(diag.Message).IsNotNull();
+        // The exclude entry is on line 10-11 area — diagnostic must not be on line 7 (matrix range)
+        await Assert.That(diag.Location.StartLine).IsGreaterThanOrEqualTo(10);
+    }
+
     [Test]
     public async Task RuleRegression_EnvVarRule_TableDriven()
     {
@@ -3599,7 +5396,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "::set-output name=result::ok"
             """,
-            ["deprecated command '::set-output'", "$GITHUB_OUTPUT"]),
+            ["workflow command \"set-output\" was deprecated", "$GITHUB_OUTPUT"]),
             new RuleCase(
             "ng-set-env-command",
             """
@@ -3610,7 +5407,21 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "::set-env name=TOKEN::x"
             """,
-            ["deprecated command '::set-env'", "$GITHUB_ENV"]),
+            ["workflow command \"set-env\" was deprecated", "$GITHUB_ENV"]),
+            // regression: multi-line run script should report all deprecated commands
+            new RuleCase(
+            "ng-multiline-multiple-deprecated",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: |
+                            echo "::set-output name=foo::bar"
+                            echo "::set-env name=TOKEN::x"
+            """,
+            ["workflow command \"set-output\" was deprecated", "workflow command \"set-env\" was deprecated"]),
         };
 
         await AssertRuleCases(new DeprecatedCommandsRule(), "deprecated-commands", cases);
@@ -3645,7 +5456,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job if condition is always false"]),
+            ["constant expression \"false\" in condition. remove the if: section"]),
             new RuleCase(
             "ng-step-if-constant-true",
             """
@@ -3657,7 +5468,193 @@ public sealed class RuleInterfaceTests
                         - if: ${{ !false }}
                           run: echo ng
             """,
-            ["step if condition is always true"]),
+            ["constant expression \"!false\" in condition. remove the if: section"]),
+            new RuleCase(
+            "ng-step-if-always-true-multi-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ github.event_name == 'push' }} && ${{ github.ref_name == 'main' }}
+                          run: echo ng
+            """,
+            ["always evaluated to true because extra characters are around"]),
+            new RuleCase(
+            "ng-step-if-always-true-trailing-space",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: "${{ github.event_name == 'push' }} "
+                          run: echo ng
+            """,
+            ["always evaluated to true because extra characters are around"]),
+            new RuleCase(
+            "ok-step-if-bare-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: github.event_name == 'push'
+                          run: echo ok
+            """,
+            []),
+            // regression: null literal should be detected as constant (falsy)
+            new RuleCase(
+            "ng-step-if-null-literal",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ null }}
+                          run: echo ng
+            """,
+            ["constant expression \"null\" in condition. remove the if: section"]),
+            // regression: number literal should be detected as constant (0 = falsy)
+            new RuleCase(
+            "ng-step-if-number-zero",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ 0 }}
+                          run: echo ng
+            """,
+            ["constant expression \"0\" in condition. remove the if: section"]),
+            // regression: non-zero number is truthy
+            new RuleCase(
+            "ng-step-if-number-truthy",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ 42 }}
+                          run: echo ng
+            """,
+            ["constant expression \"42\" in condition. remove the if: section"]),
+            // regression: empty string literal is falsy
+            new RuleCase(
+            "ng-step-if-empty-string",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ '' }}
+                          run: echo ng
+            """,
+            ["constant expression \"''\" in condition. remove the if: section"]),
+            // regression: non-empty string literal is truthy
+            new RuleCase(
+            "ng-step-if-nonempty-string",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ 'hello' }}
+                          run: echo ng
+            """,
+            ["constant expression \"'hello'\" in condition. remove the if: section"]),
+            // regression: mixed type constant expression (true && 42 || !null)
+            new RuleCase(
+            "ng-step-if-mixed-constant",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: true && 42 || !null
+                          run: echo ng
+            """,
+            ["constant expression \"true && 42 || !null\" in condition. remove the if: section"]),
+            // regression: pure function with constant args (contains + format)
+            new RuleCase(
+            "ng-step-if-constant-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ contains(format('{0} {1} {2}', 'foo', 'bar', 'piyo'), 'o b') }}
+                          run: echo ng
+            """,
+            ["constant expression"]),
+            // ok case — impure function (success) should not be flagged
+            new RuleCase(
+            "ok-step-if-impure-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ contains(github.event.head_commit.message, 'skip') }}
+                          run: echo ok
+            """,
+            []),
+            // regression: trailing whitespace in bare constant should be trimmed in message text
+            new RuleCase(
+            "ng-step-if-constant-trailing-space",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: 'true '
+                          run: echo ng
+            """,
+            ["constant expression \"true\" in condition. remove the if: section"]),
+            // regression: leading whitespace in bare constant should be trimmed in message text
+            new RuleCase(
+            "ng-step-if-constant-leading-space",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ' false'
+                          run: echo ng
+            """,
+            ["constant expression \"false\" in condition. remove the if: section"]),
+            // regression: block scalar newline in constant should be trimmed in message text
+            new RuleCase(
+            "ng-step-if-constant-block-scalar",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          true\n        run: echo ng\n",
+            ["constant expression \"true\" in condition. remove the if: section"]),
+            // regression: snapshot.if constant should be detected
+            new RuleCase(
+            "ng-snapshot-if-constant",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: test
+                        if: true
+                    steps:
+                        - run: echo ng
+            """,
+            ["constant expression \"true\" in condition. remove the if: section"]),
         };
 
         await AssertRuleCases(new IfCondRule(), "if-cond", cases);
@@ -4125,6 +6122,55 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["credentials are not configured", "private.example.org"]),
+            new RuleCase(
+            "ng-hardcoded-password-in-container",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: 'example.com/owner/image'
+                        credentials:
+                            username: user
+                            password: pass
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"password\" section in \"container\" section should be specified via secrets"]),
+            new RuleCase(
+            "ng-hardcoded-password-in-service",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        redis:
+                            image: redis
+                            credentials:
+                                username: user
+                                password: pass
+                    steps:
+                        - run: echo ng
+            """,
+            ["\"password\" section in \"redis\" service should be specified via secrets"]),
+            new RuleCase(
+            "ok-password-via-secrets-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: 'example.com/owner/image'
+                        credentials:
+                            username: ${{ secrets.REG_USER }}
+                            password: ${{ secrets.REG_PASS }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new CredentialsRule(), "credentials", cases);
@@ -4167,7 +6213,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github.event.pull_request.title }}"
             """,
-            ["template injection risk", "run", "github.event"]),
+            ["\"github.event.pull_request.title\" is potentially untrusted"]),
             new RuleCase(
             "ok-env-maps-github-event-comment-body",
             """
@@ -4191,7 +6237,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github['event'].pull_request.title }}"
             """,
-            ["template injection risk", "run", "github context"]),
+            ["\"github.event.pull_request.title\" is potentially untrusted"]),
             new RuleCase(
             "ok-run-uses-github-event-number-not-leaf",
             """
@@ -4213,7 +6259,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ github.head_ref }}"
             """,
-            ["template injection risk", "run", "github context"]),
+            ["\"github.head_ref\" is potentially untrusted"]),
             new RuleCase(
             "ok-safe-function-contains-untrusted-input",
             """
@@ -4246,10 +6292,194 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "${{ format('{0}', github.event.issue.title) }}"
             """,
-            ["template injection risk", "run", "github context"]),
+            ["\"github.event.issue.title\" is potentially untrusted"]),
+            new RuleCase(
+            "ng-github-script-with-untrusted-input",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                            script: console.log('${{ github.event.head_commit.author.name }}')
+            """,
+            ["\"github.event.head_commit.author.name\" is potentially untrusted"]),
+            new RuleCase(
+            "ok-github-script-with-safe-expression",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                            script: console.log('${{ github.ref }}')
+            """,
+            []),
+            new RuleCase(
+            "ok-action-input-not-github-script",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/stale@v9
+                          with:
+                            stale-pr-message: ${{ github.event.pull_request.title }} was closed
+            """,
+            []),
+            new RuleCase(
+            "ng-run-with-object-filter-untrusted",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ toJSON(github.event.*.body) }}'
+            """,
+            ["is potentially untrusted"]),
         };
 
         await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
+    }
+
+    // Template injection — position precision & per-reference reporting
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_PerReferenceReporting_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-single-untrusted-reference-names-path",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.head_commit.message }}"
+            """,
+            ["\"github.event.head_commit.message\" is potentially untrusted"]),
+            new RuleCase(
+            "ng-nested-untrusted-reports-all-three",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ github.event.pages[github.event.commits[github.event.issue.title].author.name].page_name }}
+            """,
+            [
+                "\"github.event.pages.*.page_name\" is potentially untrusted",
+                "\"github.event.commits.*.author.name\" is potentially untrusted",
+                "\"github.event.issue.title\" is potentially untrusted",
+            ]),
+            new RuleCase(
+            "ng-two-expressions-in-one-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github.event.head_commit.message }}" and "${{ github.head_ref }}"
+            """,
+            [
+                "\"github.event.head_commit.message\" is potentially untrusted",
+                "\"github.head_ref\" is potentially untrusted",
+            ]),
+            new RuleCase(
+            "ng-github-script-names-path",
+            """
+            on: issues
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/github-script@v7
+                          with:
+                            script: console.log('${{ github.event.head_commit.author.name }}')
+            """,
+            ["\"github.event.head_commit.author.name\" is potentially untrusted"]),
+        };
+
+        await AssertRuleCases(new TemplateInjectionRule(), "template-injection", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_PositionPrecision()
+    {
+        // actionlint expects 6:41 for: echo "Checking commit '${{ github.event.head_commit.message }}'"
+        // Col 41 = start of "github" inside the expression body
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "Checking commit '${{ github.event.head_commit.message }}'"
+            """);
+        var result = new LintEngine([new TemplateInjectionRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "position-test.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "template-injection").ToArray();
+
+        await Assert.That(diagnostics).HasCount().EqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("github.event.head_commit.message");
+
+        // The untrusted reference starts at the "g" of "github" inside the expression
+        var line6 = yaml.Split('\n')[5]; // 0-based index for line 6
+        var expectedCol = line6.IndexOf("github.event.head_commit.message", StringComparison.Ordinal) + 1; // 1-based
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(6);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(expectedCol);
+    }
+
+    [Test]
+    public async Task RuleRegression_TemplateInjectionRule_NestedUntrustedPositions()
+    {
+        // actionlint expects 7:23, 7:42, 7:63 for nested untrusted references
+        var yaml = NormalizeYaml("""
+            name: Test
+            on: pull_request
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ github.event.pages[github.event.commits[github.event.issue.title].author.name].page_name }}
+            """);
+        var result = new LintEngine([new TemplateInjectionRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "nested-test.yml");
+        var diagnostics = result.Diagnostics
+            .Where(x => x.RuleId == "template-injection")
+            .OrderBy(x => x.Location.StartColumn)
+            .ToArray();
+
+        await Assert.That(diagnostics).HasCount().EqualTo(3);
+
+        // All on line 7
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(7);
+        await Assert.That(diagnostics[1].Location.StartLine).IsEqualTo(7);
+        await Assert.That(diagnostics[2].Location.StartLine).IsEqualTo(7);
+
+        // Check messages name correct paths
+        await Assert.That(diagnostics[0].Message).Contains("github.event.pages.*.page_name");
+        await Assert.That(diagnostics[1].Message).Contains("github.event.commits.*.author.name");
+        await Assert.That(diagnostics[2].Message).Contains("github.event.issue.title");
+
+        // Verify column positions
+        var line7 = yaml.Split('\n')[6]; // 0-based for line 7
+        var col1 = line7.IndexOf("github.event.pages[", StringComparison.Ordinal) + 1;
+        var col2 = line7.IndexOf("github.event.commits[", StringComparison.Ordinal) + 1;
+        var col3 = line7.IndexOf("github.event.issue.title", StringComparison.Ordinal) + 1;
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(col1);
+        await Assert.That(diagnostics[1].Location.StartColumn).IsEqualTo(col2);
+        await Assert.That(diagnostics[2].Location.StartColumn).IsEqualTo(col3);
     }
 
     [Test]
@@ -4295,7 +6525,79 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ng
             """,
-            ["job.if", "undefined context 'steps'", "job scope"]),
+            ["context \"steps\" is not allowed here"]),
+            new RuleCase(
+            "ng-job-if-uses-strategy-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ strategy.fail-fast }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["context \"strategy\" is not allowed here"]),
+            new RuleCase(
+            "ng-job-if-uses-matrix-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ matrix.os == 'ubuntu-latest' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["context \"matrix\" is not allowed here"]),
+            new RuleCase(
+            "ng-job-if-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ secrets.TOKEN != '' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["context \"secrets\" is not allowed here"]),
+            new RuleCase(
+            "ng-step-if-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ secrets.TOKEN != '' }}
+                          run: echo ng
+            """,
+            ["context \"secrets\" is not allowed here"]),
+            new RuleCase(
+            "ok-step-run-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ secrets.TOKEN }}
+            """,
+            []),
+            new RuleCase(
+            "ok-step-env-uses-secrets-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            TOKEN: ${{ secrets.TOKEN }}
+                          run: echo ok
+            """,
+            []),
             new RuleCase(
             "ng-step-if-uses-unknown-context",
             """
@@ -4307,7 +6609,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ foobar.value == 'x' }}
                           run: echo ng
             """,
-            ["step.if", "undefined context 'foobar'", "step scope"]),
+            ["undefined context \"foobar\""]),
             new RuleCase(
             "ng-step-env-uses-unknown-context",
             """
@@ -4320,7 +6622,7 @@ public sealed class RuleInterfaceTests
                             DATA: ${{ unknown.payload }}
                           run: echo "$DATA"
             """,
-            ["step.env.DATA", "undefined context 'unknown'", "step scope"]),
+            ["undefined context \"unknown\""]),
             new RuleCase(
             "ng-step-with-uses-unknown-context",
             """
@@ -4333,7 +6635,322 @@ public sealed class RuleInterfaceTests
                           with:
                             repository: ${{ unknown.repository }}
             """,
-            ["step.with.repository", "undefined context 'unknown'", "step scope"]),
+            ["undefined context \"unknown\""]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_EnvKeyExpression_TableDriven()
+    {
+        var cases = new[]
+        {
+            // env key with valid runner property — should only get portability warning (from EnvVarRule, not here)
+            new RuleCase(
+            "ok-env-key-valid-runner-property",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hi
+                          env:
+                            ${{ runner.name }}: ''
+            """,
+            []),
+            // env key with invalid runner property — should report property not defined
+            new RuleCase(
+            "ng-container-env-key-invalid-property",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: node:14.16
+                        env:
+                            ${{ runner.foooooo }}: ''
+                    steps:
+                        - run: echo hi
+            """,
+            ["property \"foooooo\" is not defined in object type"]),
+            // job env key with invalid runner property
+            new RuleCase(
+            "ng-job-env-key-invalid-property",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        ${{ runner.fooooooo }}: ''
+                    steps:
+                        - run: echo hi
+            """,
+            ["property \"fooooooo\" is not defined in object type"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_InputDefaultTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            // ok: boolean default with boolean expression
+            new RuleCase(
+            "ok-bool-default-bool-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: boolean
+                  input2:
+                    type: boolean
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """,
+            []),
+            // ok: number default with number expression
+            new RuleCase(
+            "ok-number-default-number-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: number
+                  input2:
+                    type: number
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """,
+            []),
+            // ng: boolean input with string expression
+            new RuleCase(
+            "ng-bool-default-string-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: string
+                  input2:
+                    type: boolean
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ng
+            """,
+            ["type of input \"input2\" must be bool but found type string"]),
+            // ng: number input with string expression
+            new RuleCase(
+            "ng-number-default-string-expr",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  input1:
+                    type: string
+                  input2:
+                    type: number
+                    default: ${{ inputs.input1 }}
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ng
+            """,
+            ["type of input \"input2\" must be number but found type string"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability4C_TableDriven()
+    {
+        var cases = new[]
+        {
+            // 4.C-A: workflow_call output value should check root context availability
+            new RuleCase(
+            "ng-workflow-call-output-value-env-not-allowed",
+            """
+            on:
+              workflow_call:
+                outputs:
+                  result:
+                    value: ${{ env.FOO }}
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ok-workflow-call-output-value-jobs-context",
+            """
+            on:
+              workflow_call:
+                outputs:
+                  result:
+                    value: ${{ jobs.build.outputs.foo }}
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                outputs:
+                  foo: bar
+                steps:
+                  - run: echo ok
+            """,
+            []),
+
+            // 4.C-B: snapshot.if should be checked for context availability
+            new RuleCase(
+            "ng-snapshot-if-env-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                snapshot:
+                  image-name: my-image
+                  if: ${{ env.FOO == 'foo' }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ng-snapshot-if-runner-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                snapshot:
+                  image-name: my-image
+                  if: ${{ runner.name == 'foo' }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"runner\" is not allowed here"]),
+
+            new RuleCase(
+            "ng-snapshot-if-secrets-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                snapshot:
+                  image-name: my-image
+                  if: ${{ secrets.FOO == 'foo' }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"secrets\" is not allowed here"]),
+
+            new RuleCase(
+            "ok-snapshot-if-strategy-matrix-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    foo: [a, b]
+                snapshot:
+                  image-name: my-image
+                  if: ${{ matrix.foo == 'a' && strategy.fail-fast }}
+                steps:
+                  - run: echo ok
+            """,
+            []),
+
+            // 4.C-C: service entrypoint/command should be checked for context availability
+            new RuleCase(
+            "ng-service-entrypoint-env-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services:
+                  nginx:
+                    image: nginx
+                    entrypoint: ${{ env.FOO }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ng-service-command-env-not-allowed",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services:
+                  nginx:
+                    image: nginx
+                    command: ${{ env.FOO }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
+
+            new RuleCase(
+            "ok-service-entrypoint-github-context",
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services:
+                  nginx:
+                    image: nginx
+                    entrypoint: ${{ github.actor }}
+                steps:
+                  - run: echo ok
+            """,
+            []),
+
+            // Services expression form: env context should not be allowed
+            new RuleCase(
+            "ng-services-expression-env-not-allowed",
+            """
+            on:
+              workflow_call:
+                inputs:
+                  bool:
+                    type: boolean
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                services: ${{ inputs.bool || env.FOO }}
+                steps:
+                  - run: echo ok
+            """,
+            ["context \"env\" is not allowed here"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
@@ -4432,7 +7049,7 @@ public sealed class RuleInterfaceTests
                         - if: ${{ steps.nonexistent.outcome == 'success' }}
                           run: echo next
             """,
-            ["'nonexistent' is not defined in 'steps'"]),
+            ["\"nonexistent\" is not defined in object type"]),
             new RuleCase(
             "ng-step-accesses-unknown-matrix-key",
             """
@@ -4448,7 +7065,7 @@ public sealed class RuleInterfaceTests
                             VALUE: ${{ matrix.unknown_key }}
                           run: echo "$VALUE"
             """,
-            ["'unknown_key' is not defined in 'matrix'"]),
+            ["\"unknown_key\" is not defined in object type"]),
             new RuleCase(
             "ng-step-accesses-unknown-needs-job",
             """
@@ -4466,7 +7083,7 @@ public sealed class RuleInterfaceTests
                             RESULT: ${{ needs.nonexistent.outputs.foo }}
                           run: echo "$RESULT"
             """,
-            ["'nonexistent' is not defined in 'needs'"]),
+            ["\"nonexistent\" is not defined in object type"]),
             new RuleCase(
             "ng-step-accesses-unknown-workflow-call-input",
             """
@@ -4484,10 +7101,1996 @@ public sealed class RuleInterfaceTests
                             VAL: ${{ inputs.unknown_param }}
                           run: echo "$VAL"
             """,
-            ["'unknown_param' is not defined in 'inputs'"]),
+            ["\"unknown_param\" is not defined in object type"]),
+            // regression: matrix include-only axis keys should be accessible
+            new RuleCase(
+            "ok-matrix-include-only-axis-accessible",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                            node: [14, 15]
+                            include:
+                                - node: 15
+                                  npm: 7.5.4
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ${{ matrix.os }}
+                        - run: echo ${{ matrix.node }}
+                        - run: echo ${{ matrix.npm }}
+            """,
+            []),
+            // regression: include-only matrix (no row axes) should resolve keys
+            new RuleCase(
+            "ok-matrix-include-only-no-rows",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            include:
+                                - os: ubuntu-latest
+                                  version: 1
+                                - os: windows-latest
+                                  version: 2
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ${{ matrix.version }}
+            """,
+            []),
+            // regression: step env with expression scalar should not error
+            new RuleCase(
+            "ok-step-env-expression-scalar",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            env_object:
+                                - FOO: BAR
+                                - FOO: PIYO
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ matrix.env_object }}
+            """,
+            []),
+            // A-3: matrix nested object property access — known property should be fine
+            new RuleCase(
+            "ok-matrix-nested-object-property",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            package:
+                                - name: 'foo'
+                                  optional: true
+                                - name: 'bar'
+                                  optional: false
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.package.name }}
+            """,
+            []),
+            // A-3: matrix nested object — unknown property should error
+            new RuleCase(
+            "ng-matrix-nested-object-unknown-property",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            package:
+                                - name: 'foo'
+                                  optional: true
+                                - name: 'bar'
+                                  optional: false
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.package.dev }}
+            """,
+            ["\"dev\" is not defined"]),
+            // A-3: matrix undefined axis (no such key at all)
+            new RuleCase(
+            "ng-matrix-undefined-axis",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest, windows-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ${{ matrix.platform }}
+            """,
+            ["\"platform\" is not defined in object type"]),
+            // A-3: empty matrix in other job — matrix should be strict empty
+            new RuleCase(
+            "ng-matrix-empty-in-other-job",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo test
+                other:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            ["\"os\" is not defined in object type"]),
+            // A-19: popular action output — known output should be fine
+            new RuleCase(
+            "ok-popular-action-known-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          id: cache
+                          with:
+                            key: ${{ hashFiles('**/*.lock') }}
+                            path: ./packages
+                        - run: echo ${{ steps.cache.outputs.cache-hit }}
+            """,
+            []),
+            // A-19: popular action output — typo should be flagged
+            new RuleCase(
+            "ng-popular-action-unknown-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          id: cache
+                          with:
+                            key: ${{ hashFiles('**/*.lock') }}
+                            path: ./packages
+                        - run: echo ${{ steps.cache.outputs.cache_hit }}
+            """,
+            ["\"cache_hit\" is not defined"]),
+            // regression: github.event.inputs.unknown should be flagged for workflow_dispatch
+            new RuleCase(
+            "ng-github-event-inputs-unknown-property",
+            """
+            on:
+              workflow_dispatch:
+                inputs:
+                  myinput:
+                    type: string
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo "${{ github.event.inputs.select }}"
+            """,
+            ["\"select\" is not defined"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ComparisonTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-bool-input-greater-than-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        timeout:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.timeout > 60 }}
+                          run: echo timeout
+            """,
+            ["bool value cannot be compared to number value with '>' operator"]),
+            new RuleCase(
+            "ok-number-input-less-than-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        count:
+                            type: number
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.count < 100 }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-string-input-equals-string",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        env:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.env == 'production' }}
+                          run: echo deploy
+            """,
+            []),
+            new RuleCase(
+            "ng-bool-input-less-or-equal-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        verbose:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.verbose <= 5 }}
+                          run: echo ok
+            """,
+            ["bool value cannot be compared to number value with '<=' operator"]),
+            new RuleCase(
+            "ng-bool-input-greater-or-equal-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        flag:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.flag >= 1 }}
+                          run: echo ok
+            """,
+            ["bool value cannot be compared to number value with '>=' operator"]),
+            new RuleCase(
+            "ng-bool-input-not-equals-number",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        flag:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.flag != 60 }}
+                          run: echo ok
+            """,
+            ["bool value cannot be compared to number value with '!=' operator"]),
+            new RuleCase(
+            "ok-string-input-not-equals-string",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        env:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ inputs.env != 'staging' }}
+                          run: echo deploy
+            """,
+            []),
+            new RuleCase(
+            "ok-any-input-greater-than-number",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ github.event.number > 0 }}
+                          run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_TemplateTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-step-env-object-in-template",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ fromJson('{"a":1}') }}
+                          run: echo "$VAL"
+            """,
+            ["object value in ${{ }}"]),
+            new RuleCase(
+            "ng-step-env-null-in-template",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ null }}
+                          run: echo "$VAL"
+            """,
+            ["null value in ${{ }}"]),
+            new RuleCase(
+            "ok-step-if-object-no-template-warning",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ fromJson('{"a":1}') }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-step-env-string-in-template",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ github.ref }}
+                          run: echo "$VAL"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_MatrixArrayTemplateTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-matrix-array-in-template",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            bar:
+                                - [42]
+                                - [true]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.bar }}
+            """,
+            ["array value in ${{ }}"]),
+            new RuleCase(
+            "ok-matrix-array-element-access",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            bar:
+                                - [42]
+                                - [true]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.bar[0] }}
+            """,
+            []),
+            new RuleCase(
+            "ok-matrix-mixed-types-any",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            foo:
+                                - 'string value'
+                                - 42
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.foo }}
+            """,
+            []),
+            new RuleCase(
+            "ng-matrix-object-in-template",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            obj:
+                                - { a: 1, b: 2 }
+                                - { a: 3, b: 4 }
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.obj }}
+            """,
+            ["object value in ${{ }}"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_EnvMappingTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-env-string-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            env_string:
+                                - 'FOO=BAR'
+                                - 'FOO=PIYO'
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ matrix.env_string }}
+            """,
+            ["cannot be expanded as mapping"]),
+            new RuleCase(
+            "ok-env-object-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            env_object:
+                                - FOO: BAR
+                                - FOO: PIYO
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ matrix.env_object }}
+            """,
+            []),
+            new RuleCase(
+            "ok-env-any-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "$FOO"
+                          env: ${{ fromJson('{"FOO":"bar"}') }}
+            """,
+            []),
+            new RuleCase(
+            "ng-env-array-as-mapping",
+            """
+            on: push
+            jobs:
+                test:
+                    strategy:
+                        matrix:
+                            arr:
+                                - [1, 2]
+                                - [3, 4]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo test
+                          env: ${{ matrix.arr }}
+            """,
+            ["cannot be expanded as mapping"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_CredentialsObjectTypeCheck_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-credentials-fromjson-object",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ubuntu:latest
+                        credentials: ${{ fromJSON('{}') }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-credentials-string-expression",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: ubuntu:latest
+                        credentials: ${{ 'username:password' }}
+                    steps:
+                        - run: echo
+            """,
+            ["type of expression at \"credentials\" must be object but found type string"]),
+            new RuleCase(
+            "ng-services-string-expression",
+            """
+            on: push
+            jobs:
+                test:
+                    services: ${{ 'redis' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["type of expression at \"services\" must be object but found type string"]),
+            new RuleCase(
+            "ok-services-fromjson-object",
+            """
+            on: push
+            jobs:
+                test:
+                    services: ${{ fromJSON('{}') }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-service-credentials-string-expression",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    services:
+                        redis:
+                            image: redis:latest
+                            credentials: ${{ 'user:pass' }}
+                    steps:
+                        - run: echo
+            """,
+            ["type of expression at \"credentials\" must be object but found type string"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_IndexTypeCheckWithOverrides_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-bool-index-on-object",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        verbose:
+                            type: boolean
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ env[inputs.verbose] }}"
+            """,
+            ["index of object must be string, but got bool"]),
+            new RuleCase(
+            "ng-number-index-on-object",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        age:
+                            type: number
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ env[inputs.age] }}"
+            """,
+            ["index of object must be string, but got number"]),
+            new RuleCase(
+            "ok-string-index-on-object",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        name:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ env[inputs.name] }}"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_SecretsResolution_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-workflow-call-secret-known",
+            """
+            on:
+                workflow_call:
+                    secrets:
+                        DEPLOY_KEY:
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            KEY: ${{ secrets.DEPLOY_KEY }}
+                          run: echo "$KEY"
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-call-secret-unknown",
+            """
+            on:
+                workflow_call:
+                    secrets:
+                        DEPLOY_KEY:
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            KEY: ${{ secrets.UNKNOWN_SECRET }}
+                          run: echo "$KEY"
+            """,
+            ["\"UNKNOWN_SECRET\" is not defined in object type"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // Contextual Validation
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_NeedsOutputValidation_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #8: needs.build.outputs.built should be detected as undefined when build has no such output
+            new RuleCase(
+            "ng-needs-unknown-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.build.outputs.tag }}
+                    steps:
+                        - id: build
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - env:
+                            TAG: ${{ needs.build.outputs.typo_output }}
+                          run: echo "$TAG"
+            """,
+            ["\"typo_output\" is not defined in object type"]),
+            // #8: needs.build.outputs.image_tag should be valid
+            new RuleCase(
+            "ok-needs-known-output",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.build.outputs.tag }}
+                    steps:
+                        - id: build
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+                test:
+                    runs-on: ubuntu-latest
+                    needs: [build]
+                    steps:
+                        - env:
+                            TAG: ${{ needs.build.outputs.image_tag }}
+                          run: echo "$TAG"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_NeedsUndefinedJob_TableDriven()
+    {
+        var cases = new[]
+        {
+            // A-4: needs.prepare undefined when not in needs list
+            new RuleCase(
+            "ng-needs-job-not-in-needs-list",
+            """
+            on: push
+            jobs:
+                prepare:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        prepared: ${{ steps.a.outputs.val }}
+                    steps:
+                        - id: a
+                          run: echo "val=1" >> $GITHUB_OUTPUT
+                        - run: echo '${{ needs.prepare.outputs.prepared }}'
+            """,
+            ["\"prepare\" is not defined in object type"]),
+            // A-4: needs.some_job undefined (job doesn't exist)
+            new RuleCase(
+            "ng-needs-nonexistent-job",
+            """
+            on: push
+            jobs:
+                install:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        installed: ok
+                    steps:
+                        - run: echo install
+                build:
+                    needs: [install]
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ needs.some_job }}'
+            """,
+            ["\"some_job\" is not defined in object type"]),
+            // A-4: needs.build undefined in other job (build not in other's needs)
+            new RuleCase(
+            "ng-needs-job-not-declared-in-needs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        built: ok
+                    steps:
+                        - run: echo build
+                other:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ needs.build.outputs.built }}'
+            """,
+            ["\"build\" is not defined in object type"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_StepsCrossJob_TableDriven()
+    {
+        var cases = new[]
+        {
+            // A-5: steps.get_value undefined in other job (step IDs are job-local)
+            new RuleCase(
+            "ng-steps-cross-job-reference",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: get_value
+                          run: echo "name=foo" >> $GITHUB_OUTPUT
+                        - run: echo '${{ steps.get_value.outputs.name }}'
+                other:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ steps.get_value.outputs.name }}'
+            """,
+            ["\"get_value\" is not defined in object type"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_StepsOrderValidation_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #9: referencing a step ID that hasn't been defined yet should be an error
+            new RuleCase(
+            "ng-step-reference-before-definition",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ steps.later.outcome == 'success' }}
+                          run: echo "first"
+                        - id: later
+                          run: echo "later"
+            """,
+            ["\"later\" is not defined in object type"]),
+            // #9: referencing a step ID that was defined earlier is fine
+            new RuleCase(
+            "ok-step-reference-after-definition",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: earlier
+                          run: echo "earlier"
+                        - if: ${{ steps.earlier.outcome == 'success' }}
+                          run: echo "second"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_RunnerContextInMatrix_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #23: runner context should NOT be available in strategy.matrix expressions
+            // (currently Job scope doesn't include runner, so this may already pass)
+            new RuleCase(
+            "ng-matrix-uses-runner-context",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - if: ${{ runner.os == 'Linux' }}
+                          run: echo ok
+            """,
+            []),
+            // runner context IS valid in step scope — should not error
+            new RuleCase(
+            "ok-step-uses-runner-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ runner.os == 'Linux' }}
+                          run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ReusableWorkflowOutputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // #25: jobs.<id>.outputs.<name> in workflow_call output value should validate
+            new RuleCase(
+            "ng-workflow-output-references-unknown-job-output",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        image:
+                            value: ${{ jobs.build.outputs.imagetag }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.b.outputs.tag }}
+                    steps:
+                        - id: b
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+            """,
+            ["\"imagetag\" is not defined"]),
+            // #25: correct output name should not error
+            new RuleCase(
+            "ok-workflow-output-references-known-job-output",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        image:
+                            value: ${{ jobs.build.outputs.image_tag }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        image_tag: ${{ steps.b.outputs.tag }}
+                    steps:
+                        - id: b
+                          run: echo "tag=v1" >> $GITHUB_OUTPUT
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_RunAndWithExpressions_TableDriven()
+    {
+        var cases = new[]
+        {
+            // A-4: run field expression uses unknown context
+            new RuleCase(
+            "ng-run-field-unknown-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ bogus.value }}
+            """,
+            ["undefined context \"bogus\""]),
+            // A-4: run field expression uses matrix key from wrong job
+            new RuleCase(
+            "ng-run-field-matrix-key-from-wrong-job",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo build
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ matrix.os }}
+            """,
+            ["\"os\" is not defined in object type"]),
+            // A-5: action with input expression using unknown context
+            new RuleCase(
+            "ng-action-with-input-unknown-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                            ref: ${{ nosuch.branch }}
+            """,
+            ["undefined context \"nosuch\""]),
+            // A-4/A-5: run and with expressions using valid context should not error
+            new RuleCase(
+            "ok-run-and-with-valid-contexts",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                            ref: ${{ github.ref }}
+                        - run: echo ${{ github.sha }}
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // Context availability — missing field visits
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_WorkflowLevel_TableDriven()
+    {
+        var cases = new[]
+        {
+            // run-name: env context not allowed
+            new RuleCase(
+            "ng-run-name-env",
+            """
+            run-name: ${{ env.FOO }}
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // workflow env: env context not allowed (self-reference)
+            new RuleCase(
+            "ng-workflow-env-self-ref",
+            """
+            on: push
+            env:
+                BAR: ${{ env.BAR }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // workflow concurrency: env context not allowed
+            new RuleCase(
+            "ng-workflow-concurrency-env",
+            """
+            on: push
+            concurrency:
+                group: ${{ env.FOO }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // workflow_call input default: env context not allowed
+            new RuleCase(
+            "ng-workflow-call-input-default-env",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        foo:
+                            type: string
+                            default: ${{ env.FOO }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // OK: workflow env using github and secrets
+            new RuleCase(
+            "ok-workflow-env-github-secrets",
+            """
+            on: push
+            env:
+                FOO: ${{ github.sha }}
+                BAR: ${{ secrets.TOKEN }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_JobLevel_TableDriven()
+    {
+        var cases = new[]
+        {
+            // job.name: runner not allowed
+            new RuleCase(
+            "ng-job-name-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    name: ${{ runner.name }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.runs-on: env and runner not allowed
+            new RuleCase(
+            "ng-job-runs-on-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ env.SUFFIX }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            new RuleCase(
+            "ng-job-runs-on-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ${{ runner.OS }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.concurrency: env not allowed
+            new RuleCase(
+            "ng-job-concurrency-env",
+            """
+            on: push
+            jobs:
+                build:
+                    concurrency:
+                        group: ${{ env.FOO }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.container.credentials: runner not allowed
+            new RuleCase(
+            "ng-job-container-credentials-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: node:14
+                        credentials:
+                            username: ${{ runner.os }}
+                            password: ${{ env.FOO }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.continue-on-error: env not allowed
+            new RuleCase(
+            "ng-job-continue-on-error-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    continue-on-error: ${{ env.FOO == '' }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.environment: runner not allowed
+            new RuleCase(
+            "ng-job-environment-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    environment:
+                        name: ${{ runner.name }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.strategy: env not allowed
+            new RuleCase(
+            "ng-job-strategy-env",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os:
+                                - ${{ env.OS }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.timeout-minutes: env not allowed
+            new RuleCase(
+            "ng-job-timeout-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    timeout-minutes: ${{ env.TIMEOUT }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.outputs: OK (env, runner, steps all allowed)
+            new RuleCase(
+            "ok-job-outputs-env-runner-steps",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        foo: ${{ runner.name }}-${{ env.FOO }}-${{ steps.s1.outputs.x }}
+                    steps:
+                        - id: s1
+                          run: echo
+            """,
+            []),
+            // job.defaults.run: env allowed, runner not allowed
+            new RuleCase(
+            "ng-job-defaults-run-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    defaults:
+                        run:
+                            working-directory: ${{ runner.temp }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.services.image: env not allowed
+            new RuleCase(
+            "ng-job-services-image-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        nginx:
+                            image: ${{ env.IMAGE }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.services.credentials: runner not allowed
+            new RuleCase(
+            "ng-job-services-credentials-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    services:
+                        nginx:
+                            image: nginx
+                            credentials:
+                                username: ${{ runner.name }}
+                                password: ${{ env.PASSWORD }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"runner\" is not allowed here"]),
+            // job.secrets: OK (secrets allowed for reusable workflow calls)
+            new RuleCase(
+            "ok-job-secrets-secrets",
+            """
+            on: push
+            jobs:
+                caller:
+                    uses: owner/repo/workflow.yml@main
+                    secrets:
+                        password: ${{ secrets.PASSWORD }}
+            """,
+            []),
+            // job.with (reusable): env not allowed
+            new RuleCase(
+            "ng-job-with-env",
+            """
+            on: push
+            jobs:
+                caller:
+                    uses: owner/repo/workflow.yml@main
+                    with:
+                        some-input: ${{ env.HELLO }}
+            """,
+            ["context \"env\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ContextAvailability_StepLevel_TableDriven()
+    {
+        var cases = new[]
+        {
+            // step.name: OK (all step contexts available)
+            new RuleCase(
+            "ok-step-name-env-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - name: ${{ env.VERSION }} on ${{ runner.name }}
+                          run: echo
+            """,
+            []),
+            // step.continue-on-error: OK (inputs allowed)
+            new RuleCase(
+            "ok-step-continue-on-error-inputs",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        bool:
+                            type: boolean
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - continue-on-error: ${{ inputs.bool }}
+                          run: echo
+            """,
+            []),
+            // step.timeout-minutes: OK
+            new RuleCase(
+            "ok-step-timeout-minutes-inputs",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        timeout:
+                            type: number
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - timeout-minutes: ${{ inputs.timeout }}
+                          run: echo
+            """,
+            []),
+            // step.working-directory: OK (runner allowed at step level)
+            new RuleCase(
+            "ok-step-working-directory-runner",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - working-directory: ${{ runner.temp }}
+                          run: echo
+            """,
+            []),
+            // step.if: secrets not allowed
+            new RuleCase(
+            "ng-step-if-secrets",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ secrets.PASSWORD != '' }}
+                          run: echo
+            """,
+            ["context \"secrets\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // env context banned in workflow/job env
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_EnvContextBanned_TableDriven()
+    {
+        var cases = new[]
+        {
+            // workflow env cannot reference env context
+            new RuleCase(
+            "ng-workflow-env-env-context",
+            """
+            on: push
+            env:
+                ERROR1: ${{ env.PATH }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job env cannot reference env context
+            new RuleCase(
+            "ng-job-env-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        ERROR2: ${{ env.PATH }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // step env CAN reference env context (OK)
+            new RuleCase(
+            "ok-step-env-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+                          env:
+                            BAR: ${{ env.FOO }}
+            """,
+            []),
+            // container env CAN reference env context (OK)
+            new RuleCase(
+            "ok-container-env-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    container:
+                        image: node:14
+                        env:
+                            MYPATH: ${{ env.PATH }}
+                    steps:
+                        - run: echo
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // env context banned in job-level if
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_JobIfEnvBanned_TableDriven()
+    {
+        var cases = new[]
+        {
+            // job.if with env context: not allowed
+            new RuleCase(
+            "ng-job-if-env-dollar-brace",
+            """
+            on: push
+            jobs:
+                test1:
+                    runs-on: ubuntu-latest
+                    if: ${{ env.FOO == 'aaa' }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job.if without ${{ }}: env not allowed
+            new RuleCase(
+            "ng-job-if-env-bare",
+            """
+            on: push
+            jobs:
+                test2:
+                    runs-on: ubuntu-latest
+                    if: env.FOO == 'aaa'
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // reusable workflow call job if: env not allowed
+            new RuleCase(
+            "ng-reusable-job-if-env",
+            """
+            on: push
+            jobs:
+                test3:
+                    uses: org/repo/workflow.yml@v1
+                    if: ${{ env.FOO == 'aaa' }}
+            """,
+            ["context \"env\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // shell key context availability
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ShellKeyContextAvailability_TableDriven()
+    {
+        var cases = new[]
+        {
+            // workflow-level defaults.run.shell: no context available
+            new RuleCase(
+            "ng-workflow-defaults-shell-env",
+            """
+            on: push
+            defaults:
+                run:
+                    shell: ${{ env.SHELL }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here"]),
+            // job-level defaults.run.shell: env IS available (OK)
+            new RuleCase(
+            "ok-job-defaults-shell-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    defaults:
+                        run:
+                            shell: ${{ env.SHELL }}
+                    steps:
+                        - run: echo
+            """,
+            []),
+            // step-level shell: no context available
+            new RuleCase(
+            "ng-step-shell-env",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+                          shell: ${{ env.SHELL }}
+            """,
+            ["context \"env\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // special function availability
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_SpecialFunctionAvailability_TableDriven()
+    {
+        var cases = new[]
+        {
+            // status functions OK in job.if
+            new RuleCase(
+            "ok-always-in-job-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: always()
+                    steps:
+                        - run: echo
+            """,
+            []),
+            new RuleCase(
+            "ok-failure-in-step-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: failure()
+                          run: echo
+            """,
+            []),
+            // status functions NOT OK in strategy.matrix
+            new RuleCase(
+            "ng-always-in-strategy-matrix",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            errors:
+                                - ${{ always() }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["function \"always\" is not allowed here"]),
+            // hashFiles OK in step level
+            new RuleCase(
+            "ok-hashfiles-in-step-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ hashFiles('...') }}"
+            """,
+            []),
+            // hashFiles NOT OK in job.if
+            new RuleCase(
+            "ng-hashfiles-in-job-if",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: ${{ hashFiles('...') }}
+                    steps:
+                        - run: echo
+            """,
+            ["function \"hashFiles\" is not allowed here"]),
+            // success() NOT OK in step.run
+            new RuleCase(
+            "ng-success-in-step-run",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo 'success? ${{ success() }}'
+            """,
+            ["function \"success\" is not allowed here"]),
+            // hashFiles NOT OK in strategy.matrix
+            new RuleCase(
+            "ng-hashfiles-in-strategy-matrix",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            errors:
+                                - ${{ hashFiles('...') }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["function \"hashFiles\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // step.id no context allowed
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_StepIdNoContext_TableDriven()
+    {
+        var cases = new[]
+        {
+            // step.id: no context allowed
+            new RuleCase(
+            "ng-step-id-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - id: ${{ inputs.foo }}
+                          run: echo
+            """,
+            ["context \"inputs\" is not allowed here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // available context listing in message
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_MessageIncludesAvailableContexts_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Error message should list available contexts
+            new RuleCase(
+            "ng-job-if-env-lists-available-contexts",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    if: ${{ env.FOO == 'aaa' }}
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here", "available contexts are"]),
+            // "no context is available here" for shell
+            new RuleCase(
+            "ng-workflow-shell-no-context",
+            """
+            on: push
+            defaults:
+                run:
+                    shell: ${{ env.SHELL }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo
+            """,
+            ["context \"env\" is not allowed here", "no context is available here"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // expr-undefined-var scope expansion
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_InputsWithoutWorkflowCall_TableDriven()
+    {
+        var cases = new[]
+        {
+            // When no workflow_call event, inputs has no properties → inputs.some_input is undefined
+            new RuleCase(
+            "ng-inputs-without-workflow-call",
+            """
+            on: push
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ inputs.some_input }}
+            """,
+            ["property \"some_input\" is not defined in object type"]),
+            // With workflow_call + defined input → OK
+            new RuleCase(
+            "ok-inputs-with-workflow-call",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        my_input:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ${{ inputs.my_input }}
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_WorkflowCallOutputsSema_TableDriven()
+    {
+        var cases = new[]
+        {
+            // job0 has no outputs → jobs.job0.outputs.some_output is undefined
+            new RuleCase(
+            "ng-workflow-call-output-no-job-outputs",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        output1:
+                            value: ${{ jobs.job0.outputs.some_output }}
+            jobs:
+                job0:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hi
+            """,
+            ["property \"some_output\" is not defined"]),
+            // job1 has outputs but unknown_output is not among them
+            new RuleCase(
+            "ng-workflow-call-output-unknown-property",
+            """
+            on:
+                workflow_call:
+                    outputs:
+                        output2:
+                            value: ${{ jobs.job1.outputs.unknown_output }}
+            jobs:
+                job1:
+                    runs-on: ubuntu-latest
+                    outputs:
+                        foo: bar
+                    steps:
+                        - run: echo hello
+            """,
+            ["property \"unknown_output\" is not defined"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_InputDefaultForwardReference_TableDriven()
+    {
+        var cases = new[]
+        {
+            // input2 not yet defined when input1.default references it
+            new RuleCase(
+            "ng-input-default-forward-ref",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                            default: ${{ inputs.input2 }}
+                        input2:
+                            type: string
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["property \"input2\" is not defined in object type"]),
+            // input3 references itself — not yet defined
+            new RuleCase(
+            "ng-input-default-self-ref",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                        input2:
+                            type: string
+                        input3:
+                            type: boolean
+                            default: ${{ inputs.input3 }}
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["property \"input3\" is not defined in object type"]),
+            // input2 references input1 (already defined) → OK
+            new RuleCase(
+            "ok-input-default-back-ref",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                        input2:
+                            type: string
+                            default: ${{ inputs.input1 }}
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    // fromJSON broken JSON validation
+
+    [Test]
+    public async Task RuleRegression_FromJsonBrokenJson()
+    {
+        // fromJSON validation is done in the parser (not linter rule), so diagnostics have RuleId=null
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                foo:
+                    strategy:
+                        matrix:
+                            include:
+                                - invalid1: ${{ fromJSON('"foo') }}
+                                - invalid2: ${{ fromJSON('["foo"') }}
+                                - invalid3: ${{ fromJSON('') }}
+                                - valid: ${{ fromJSON('"hello"') }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """);
+        var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "fromjson-test.yml");
+        var fromJsonErrors = result.Diagnostics
+            .Where(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal) && x.Message.Contains("JSON", StringComparison.Ordinal))
+            .ToArray();
+
+        // 3 broken JSON errors, none for valid JSON
+        await Assert.That(fromJsonErrors).HasCount().EqualTo(3);
+        await Assert.That(fromJsonErrors[0].Message).Contains("not valid JSON");
+        await Assert.That(fromJsonErrors[1].Message).Contains("not valid JSON");
+        await Assert.That(fromJsonErrors[2].Message).Contains("not valid JSON");
+    }
+
+    // double-quote string literal detection
+
+    [Test]
+    public async Task RuleRegression_ExpressionParser_DoubleQuoteDetection()
+    {
+        // Double-quote in expression should produce a parse error suggesting single quotes
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                foo:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          continue-on-error: ${{ env.OS == "macos-latest" }}
+            """);
+        var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "issue193.yml");
+
+        // Parser diagnostics have RuleId=null. Check all diagnostics.
+        var hasDoubleQuoteError = result.Diagnostics.Any(x =>
+            x.Message.Contains("'\"'", StringComparison.Ordinal) &&
+            x.Message.Contains("single quote", StringComparison.OrdinalIgnoreCase));
+        await Assert.That(hasDoubleQuoteError).IsTrue();
     }
 
     [Test]
@@ -6805,6 +11408,22 @@ public sealed class RuleInterfaceTests
         }
     }
 
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "seiton.slnx")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
+    }
+
     private static string NormalizeYaml(string raw)
     {
         var normalized = raw.Replace("\r\n", "\n");
@@ -7047,5 +11666,179 @@ public sealed class RuleInterfaceTests
                 throw new InvalidOperationException("Rule is not configured.");
             }
         }
+    }
+
+    // regression: parser + lint rule duplicate diagnostics are suppressed
+    [Test]
+    public async Task LintEngine_DuplicateParserAndLintDiagnostics_AreDeduplicated()
+    {
+        // Job without runs-on triggers both parser and job-structure rule
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            steps:
+              - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("\"runs-on\" section is missing")).ToArray();
+        await Assert.That(runsOnDiags).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task LintEngine_DuplicateParserAndLintDiagnostics_BothUsesAndSteps_AreDeduplicated()
+    {
+        // Job with both uses and steps triggers both parser and lint rules
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            uses: org/repo/.github/workflows/build.yml@main
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var bothDiags = result.Diagnostics.Where(d => d.Message.Contains("cannot have both uses and steps")).ToArray();
+        await Assert.That(bothDiags).Count().IsEqualTo(1);
+    }
+
+    // C-3: hashFiles function context restriction (linter diagnostic)
+
+    [Test]
+    public async Task LintEngine_HashFilesInWorkflowEnv_ReportsParserDiagnostic()
+    {
+        var yaml = """
+        on: push
+        env:
+            CACHE_KEY: ${{ hashFiles('**/package-lock.json') }}
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_HashFilesInJobIf_ReportsParserDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                if: ${{ hashFiles('**/package-lock.json') != '' }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_HashFilesInStepRun_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ${{ hashFiles('**/package-lock.json') }}
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_HashFilesInStepWith_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/cache@v4
+                      with:
+                        key: ${{ hashFiles('**/package-lock.json') }}
+                        path: ./packages
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
+    }
+
+    // C-4: job-level secrets exclusion
+
+    [Test]
+    public async Task LintEngine_JobName_WithSecrets_ReportsDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                name: ${{ secrets.TOKEN }}
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_JobEnv_WithSecrets_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                steps:
+                    - run: echo ok
+        """u8;
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_InvalidFormat_IncludesDocUrl()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            reuse:
+                uses: "foo/bar/workflow.yml"
+        """u8;
+
+        var result = new LintEngine([new ReusableWorkflowRule()]).Check(yaml.ToArray(), "test.yaml");
+        var msgs = result.Diagnostics.Where(d => d.Message.Contains("is not following the format", StringComparison.Ordinal)).ToArray();
+        await Assert.That(msgs.Length).IsGreaterThan(0);
+        await Assert.That(msgs[0].Message.Contains("see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_ReusableWorkflowSteps_NoDuplicateForbiddenKeyDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            call1:
+                uses: owner/repo/.github/workflows/reuse.yml@main
+                steps:
+                    - run: echo hello
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        // Count messages about "steps" being not allowed — should be exactly 1, not 2 (parser + linter)
+        var stepsNotAllowed = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(stepsNotAllowed).HasCount().EqualTo(1);
     }
 }

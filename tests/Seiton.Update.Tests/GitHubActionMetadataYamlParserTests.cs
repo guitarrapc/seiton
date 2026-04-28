@@ -35,4 +35,225 @@ public sealed class GitHubActionMetadataYamlParserTests
 
         await Assert.That(names.Count).IsEqualTo(0);
     }
+
+    [Test]
+    public async Task ParseOutputs_WithOutputsSection_ReturnsOutputNames()
+    {
+        var yaml = """
+            name: test action
+            outputs:
+              cache-hit:
+                description: Whether there was a cache hit
+              artifact-path:
+                description: Path to the artifact
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var outputs = parser.ParseOutputs(yaml);
+
+        await Assert.That(outputs.Count).IsEqualTo(2);
+        await Assert.That(outputs.Select(o => o.Name)).Contains("artifact-path");
+        await Assert.That(outputs.Select(o => o.Name)).Contains("cache-hit");
+    }
+
+    [Test]
+    public async Task ParseOutputs_WithoutOutputsSection_ReturnsEmpty()
+    {
+        var parser = new GitHubActionMetadataYamlParser();
+        var outputs = parser.ParseOutputs("name: test\nruns:\n  using: composite");
+
+        await Assert.That(outputs.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ParseOutputs_CompositeAction_ParsesOutputKeys()
+    {
+        var yaml = """
+            name: composite action
+            outputs:
+              result:
+                description: The result
+                value: ${{ steps.run.outputs.result }}
+            runs:
+              using: composite
+              steps:
+                - id: run
+                  run: echo "result=ok" >> $GITHUB_OUTPUT
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var outputs = parser.ParseOutputs(yaml);
+
+        await Assert.That(outputs.Count).IsEqualTo(1);
+        await Assert.That(outputs[0].Name).IsEqualTo("result");
+    }
+
+    [Test]
+    public async Task ParseRunsUsing_NodeAction_ReturnsNodeVersion()
+    {
+        var yaml = """
+            name: test action
+            inputs:
+              token:
+                description: GitHub token
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var runsUsing = parser.ParseRunsUsing(yaml);
+
+        await Assert.That(runsUsing).IsEqualTo("node20");
+    }
+
+    [Test]
+    public async Task ParseRunsUsing_CompositeAction_ReturnsComposite()
+    {
+        var yaml = """
+            name: composite
+            runs:
+              using: composite
+              steps:
+                - run: echo hello
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var runsUsing = parser.ParseRunsUsing(yaml);
+
+        await Assert.That(runsUsing).IsEqualTo("composite");
+    }
+
+    [Test]
+    public async Task ParseRunsUsing_QuotedValue_StripsQuotes()
+    {
+        var yaml = """
+            name: test
+            runs:
+              using: 'node16'
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var runsUsing = parser.ParseRunsUsing(yaml);
+
+        await Assert.That(runsUsing).IsEqualTo("node16");
+    }
+
+    [Test]
+    public async Task ParseRunsUsing_NoRunsSection_ReturnsEmpty()
+    {
+        var parser = new GitHubActionMetadataYamlParser();
+        var runsUsing = parser.ParseRunsUsing("name: test\ninputs:\n  foo:\n    description: bar");
+
+        await Assert.That(runsUsing).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task ParseRunsUsing_RealCheckout_ReturnsNode24()
+    {
+        var repoRoot = FindRepoRoot();
+        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "actions_checkout.action.yml");
+        var yaml = File.ReadAllText(rawPath);
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var runsUsing = parser.ParseRunsUsing(yaml);
+
+        await Assert.That(runsUsing).IsEqualTo("node24");
+    }
+
+    [Test]
+    public async Task ParseOutputs_RealCache_ContainsCacheHit()
+    {
+        var repoRoot = FindRepoRoot();
+        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "actions_cache.action.yml");
+        var yaml = File.ReadAllText(rawPath);
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var outputs = parser.ParseOutputs(yaml);
+
+        await Assert.That(outputs.Select(o => o.Name)).Contains("cache-hit");
+    }
+
+    [Test]
+    public async Task ParseInputs_InlineDeprecationMessage_ParsesMessage()
+    {
+        var yaml = """
+            name: test action
+            inputs:
+              old-input:
+                description: old
+                deprecationMessage: Use new-input instead.
+              new-input:
+                description: new
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var inputs = parser.ParseInputs(yaml);
+
+        var oldInput = inputs.Single(i => i.Name == "old-input");
+        await Assert.That(oldInput.DeprecationMessage).IsEqualTo("Use new-input instead");
+
+        var newInput = inputs.Single(i => i.Name == "new-input");
+        await Assert.That(newInput.DeprecationMessage).IsNull();
+    }
+
+    [Test]
+    public async Task ParseInputs_BlockScalarDeprecationMessage_ParsesMultilineMessage()
+    {
+        var yaml = """
+            name: test action
+            inputs:
+              save-always:
+                description: save always
+                deprecationMessage: |
+                  save-always does not work as intended.
+                  Use actions/cache/restore instead.
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var inputs = parser.ParseInputs(yaml);
+
+        var saveAlways = inputs.Single(i => i.Name == "save-always");
+        await Assert.That(saveAlways.DeprecationMessage).IsEqualTo("save-always does not work as intended. Use actions/cache/restore instead");
+    }
+
+    [Test]
+    public async Task ParseInputs_RealActionlint_ParsesDeprecationMessage()
+    {
+        var repoRoot = FindRepoRoot();
+        var rawPath = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw", "reviewdog_action-actionlint.action.yml");
+        var yaml = File.ReadAllText(rawPath);
+
+        var parser = new GitHubActionMetadataYamlParser();
+        var inputs = parser.ParseInputs(yaml);
+
+        var failOnError = inputs.Single(i => i.Name == "fail_on_error");
+        await Assert.That(failOnError.DeprecationMessage).IsEqualTo("Deprecated, use `fail_level` instead");
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "seiton.slnx")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Repository root not found.");
+    }
 }

@@ -25,7 +25,7 @@ public static partial class WorkflowParser
             // spec §3.4.1: schedule requires mapping form; scalar form is an error
             if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
             {
-                AddError(diagnostics, "on.schedule must be mapping", eventMark);
+                AddError(diagnostics, "schedule event must be configured with mapping", eventMark);
                 return [];
             }
             return [BuildSimpleEvent(arena, in eventInfo, nameNode)];
@@ -41,7 +41,7 @@ public static partial class WorkflowParser
                 {
                     if (reader.CurrentKind != YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, "on sequence item must be scalar event name", reader.CurrentStart);
+                        AddError(diagnostics, "on sequence item must be string event name", reader.CurrentStart);
                         reader.SkipCurrentNode();
                         continue;
                     }
@@ -58,7 +58,7 @@ public static partial class WorkflowParser
                     // spec §3.4.1: schedule requires mapping form; scalar form is an error
                     if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
                     {
-                        AddError(diagnostics, "on.schedule must be mapping", eventMark);
+                        AddError(diagnostics, "schedule event must be configured with mapping", eventMark);
                         continue;
                     }
                     events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
@@ -82,7 +82,7 @@ public static partial class WorkflowParser
                 {
                     if (reader.CurrentKind != YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, "on mapping key must be scalar event name", reader.CurrentStart);
+                        AddError(diagnostics, "on mapping key must be string event name", reader.CurrentStart);
                         reader.SkipCurrentNode();
                         if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd) { reader.SkipCurrentNode(); }
                         continue;
@@ -147,7 +147,7 @@ public static partial class WorkflowParser
                         continue;
                     }
 
-                    AddError(diagnostics, $"on.{eventInfo.Name} must be scalar, sequence, or mapping", reader.CurrentStart);
+                    AddError(diagnostics, $"on.{eventInfo.Name} must be string, sequence, or mapping", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
                 }
@@ -158,7 +158,7 @@ public static partial class WorkflowParser
             finally { events.Dispose(); }
         }
 
-        AddError(diagnostics, "on must be scalar, sequence, or mapping", reader.CurrentStart);
+        AddError(diagnostics, "on must be string, sequence, or mapping", reader.CurrentStart);
         reader.SkipCurrentNode();
         return [];
     }
