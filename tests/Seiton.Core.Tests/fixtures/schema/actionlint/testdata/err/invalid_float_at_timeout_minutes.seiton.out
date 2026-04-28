@@ -1,4 +1,4 @@
-test.yaml:8:26: job 'test' step[1] timeout-minutes must be number or expression [syntax-check]
-test.yaml:10:27: job 'test' step[2] timeout-minutes must be number or expression [syntax-check]
-test.yaml:12:9: job 'test' step[3] timeout-minutes must be greater than 0 [syntax-check]
-test.yaml:14:9: job 'test' step[4] timeout-minutes must be greater than 0 [syntax-check]
+test.yaml:8:26: jobs.'test'.steps[1] timeout-minutes must be number or expression [syntax-check]
+test.yaml:10:27: jobs.'test'.steps[2] timeout-minutes must be number or expression [syntax-check]
+test.yaml:12:9: jobs.'test'.steps[3] timeout-minutes must be greater than 0 [syntax-check]
+test.yaml:14:9: jobs.'test'.steps[4] timeout-minutes must be greater than 0 [syntax-check]

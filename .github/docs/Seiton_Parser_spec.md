@@ -1117,6 +1117,16 @@ Events parsed under `on:` must use `on.{eventName}` as the section path:
 - `on.workflow_call output "bar" is missing "value"`
 - `on.workflow_dispatch input "baz" option should not be empty`
 
+#### Principle 5: Step-level messages include job and step context
+
+Step diagnostics prefix the message with `jobs.'{jobId}'.steps[{stepIndex}]` (dotted-path format aligned with GitHub Actions workflow syntax documentation) so the user immediately knows which job and step is affected. When the job ID is unavailable (e.g., action metadata parsing), the prefix falls back to `steps[{stepIndex}]`.
+
+- `jobs.'build'.steps[1] unexpected key "shell" for step to execute action. expected one of ...`
+- `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
+- `jobs.'test'.steps[2] element of "steps" section should not be empty. please remove this section if it's unnecessary`
+
+**Note**: Existing job-level messages (e.g. `job 'test1' name must be string`) still use the older `job '<id>'` prefix. Aligning those to `jobs.'<id>'` dotted-path format is a separate task.
+
 #### Normative empty-value message table
 
 These replace the former generic `"string should not be empty"` message:
