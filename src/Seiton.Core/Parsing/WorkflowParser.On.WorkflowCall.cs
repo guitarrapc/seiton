@@ -1,4 +1,4 @@
-// on.workflow_call — inputs, secrets, outputs for reusable workflow triggers.
+﻿// on.workflow_call — inputs, secrets, outputs for reusable workflow triggers.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -212,7 +212,7 @@ public static partial class WorkflowParser
             // Report missing type
             AddError(
                 diagnostics,
-                $"\"type\" is missing at \"{idText}\" input of workflow_call event",
+                $"on.workflow_call input \"{idText}\" is missing \"type\"",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventInput { Name = nameNode, Id = id, Description = description, Required = required, Default = defaultValue, Type = type, Range = arena.GetStringRange(nameNode) };
         }
@@ -307,7 +307,7 @@ public static partial class WorkflowParser
         {
             AddError(
                 diagnostics,
-                $"\"type\" is missing at \"{idText}\" input of workflow_call event",
+                $"on.workflow_call input \"{idText}\" is missing \"type\"",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
         }
 
@@ -654,7 +654,7 @@ public static partial class WorkflowParser
             // Report missing value
             AddError(
                 diagnostics,
-                $"\"value\" is missing at \"{idText}\" output of workflow_call event",
+                $"on.workflow_call output \"{idText}\" is missing \"value\"",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
             return new WorkflowCallEventOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
@@ -739,13 +739,13 @@ public static partial class WorkflowParser
         {
             AddError(
                 diagnostics,
-                $"\"value\" is missing at \"{idText}\" output of workflow_call event",
+                $"on.workflow_call output \"{idText}\" is missing \"value\"",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
         }
         else if (value.HasValue && arena.GetStringValue(value).Length == 0)
         {
             var valueRange = arena.GetStringRange(value);
-            AddError(diagnostics, "string should not be empty", new TextPosition(valueRange.Start, valueRange.StartLine, valueRange.StartColumn));
+            AddError(diagnostics, $"on.workflow_call output \"{idText}\" value should not be empty", new TextPosition(valueRange.Start, valueRange.StartLine, valueRange.StartColumn));
         }
 
         return new WorkflowCallEventOutput

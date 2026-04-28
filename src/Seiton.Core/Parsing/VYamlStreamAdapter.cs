@@ -651,6 +651,17 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         return ScalarTag.Str;
     }
 
+    public bool IsExplicitNull()
+    {
+        if (_isReplaying)
+            return _virtualCurrent.ExplicitNull;
+
+        // Explicit null: IsNullScalar() is true AND TryGetScalarAsSpan succeeds
+        // (meaning "null" or "~" is present in the source bytes).
+        // Implicit empty (e.g. `key:`): IsNullScalar() is true but TryGetScalarAsSpan fails.
+        return _parser.IsNullScalar() && _parser.TryGetScalarAsSpan(out _);
+    }
+
     public bool IsScalarQuoted()
     {
         if (_isReplaying)
@@ -701,13 +712,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             var slice = GetScalarSlice();
             _scalarSliceCursor = savedCursor;
 
+            var isNull = _parser.IsNullScalar();
             return new AnchorEvent
             {
                 Kind = kind,
-                ScalarBytes = _parser.IsNullScalar() ? [] : _parser.GetScalarAsUtf8().ToArray(),
+                ScalarBytes = isNull ? [] : _parser.GetScalarAsUtf8().ToArray(),
                 Slice = slice,
                 Tag = GetScalarTag(),
                 IsQuoted = false,
+                ExplicitNull = isNull && _parser.TryGetScalarAsSpan(out _),
                 Start = CurrentStart,
             };
         }
@@ -1160,6 +1173,7 @@ internal struct AnchorEvent
     public Utf8Slice Slice;
     public ScalarTag Tag;
     public bool IsQuoted;
+    public bool ExplicitNull;
     // Source position (from the anchor definition site)
     public TextPosition Start;
 }

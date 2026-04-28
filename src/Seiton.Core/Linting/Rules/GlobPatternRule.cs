@@ -100,7 +100,7 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         // Empty pattern
         if (pattern.Length == 0)
         {
-            reportError("string should not be empty", range);
+            reportError("glob pattern should not be empty", range);
             return;
         }
 

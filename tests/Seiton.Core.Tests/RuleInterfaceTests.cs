@@ -3319,7 +3319,7 @@ public sealed class RuleInterfaceTests
                         - id: ''
                           run: echo ng
             """,
-            ["string should not be empty"]),
+            ["step ID should not be empty"]),
             new RuleCase(
             "ng-job-id-starts-with-digit",
             """

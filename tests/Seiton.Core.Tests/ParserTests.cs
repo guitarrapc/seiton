@@ -920,8 +920,8 @@ public sealed class ParserTests
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options!.Count).IsEqualTo(3);
         // Empty string in options is collected in AST for downstream rules, but parser
-        // now emits "string should not be empty" (aligned with actionlint behavior).
-        var emptyDiag = result.Diagnostics.Where(d => d.Message == "string should not be empty").ToArray();
+        // now emits context-specific empty-value error.
+        var emptyDiag = result.Diagnostics.Where(d => d.Message.Contains("option should not be empty")).ToArray();
         await Assert.That(emptyDiag.Length).IsEqualTo(1);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
@@ -1007,7 +1007,7 @@ public sealed class ParserTests
                                 required: true
                 jobs: {}
                 """),
-                "\"type\" is missing at \"image\" input of workflow_call event"
+                "on.workflow_call input \"image\" is missing \"type\""
             ),
             (
                 "workflow_call output missing value",
@@ -1019,7 +1019,7 @@ public sealed class ParserTests
                                 description: output
                 jobs: {}
                 """),
-                "\"value\" is missing at \"digest\" output of workflow_call event"
+                "on.workflow_call output \"digest\" is missing \"value\""
             ),
             (
                 "schedule item empty mapping",
@@ -1112,7 +1112,7 @@ public sealed class ParserTests
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-input-null.yml");
         // input0 has null body — should report "type is missing" not "must be object"
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"type\" is missing at \"input0\" input of workflow_call event", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call input \"input0\" is missing \"type\"", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("input must be object", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -1147,7 +1147,7 @@ public sealed class ParserTests
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-null.yml");
         // missing-all has null body — should report "value is missing" not "must be object"
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"value\" is missing at \"missing-all\" output of workflow_call event", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call output \"missing-all\" is missing \"value\"", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("output must be object", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -1164,7 +1164,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wc-output-empty-value.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("string should not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call output \"empty-value\" value should not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1249,7 +1249,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "concurrency-key-pos.yml");
-        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("group name is missing", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("is missing group name", StringComparison.Ordinal));
         await Assert.That(diag.Message).IsNotEmpty();
         // Should report at the "concurrency:" key line (line 2), not the mapping body
         await Assert.That(diag.Location.StartLine).IsEqualTo(2);
@@ -1306,7 +1306,7 @@ public sealed class ParserTests
         {
             var c = cases[i];
             var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(c.Yaml), $"concurrency-missing-group-{i}.yml");
-            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("group name is missing in \"concurrency\" section", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"concurrency\" section is missing group name", StringComparison.Ordinal))).IsTrue();
         }
     }
 
@@ -2641,7 +2641,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "group-null.yml");
-        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "\"runs-on\" group should not be empty");
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "group:" is on line 5
         await Assert.That(diag.Location.StartColumn).IsEqualTo(13); // col after "group: "
@@ -2661,7 +2661,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "group-empty.yml");
-        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "\"runs-on\" group should not be empty");
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "group: ''" is on line 5
         await Assert.That(diag.Location.StartColumn).IsEqualTo(14); // col at ''
@@ -2681,7 +2681,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "labels-empty.yml");
-        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "string should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "\"runs-on\" label should not be empty");
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "labels: ''" is on line 5
         await Assert.That(diag.Location.StartColumn).IsEqualTo(15); // col at ''
@@ -4601,10 +4601,10 @@ public sealed class ParserTests
                 id: ""
         """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("string should not be empty"));
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("step id should not be empty"));
         await Assert.That(diag.Message).IsNotEmpty();
-        // Must say "string should not be empty", NOT "must be string"
-        await Assert.That(diag.Message).Contains("string should not be empty");
+        // Must say "step id should not be empty", NOT "must be string"
+        await Assert.That(diag.Message).Contains("step id should not be empty");
         await Assert.That(diag.Message).DoesNotContain("must be string");
     }
 
@@ -4644,7 +4644,9 @@ public sealed class ParserTests
         await Assert.That(hasUnpinned).IsFalse();
     }
 
-    // regression: container: null is valid (means no container)
+    // container: null (explicit) means "no container" — should produce no container diagnostics.
+    // container: ~ (tilde) also means explicit null — same behavior.
+    // container:   (implicit empty) should still produce an error.
     [Test]
     public async Task Parse_ContainerNull_NoDiagnostic()
     {
@@ -4660,6 +4662,41 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var hasContainerDiag = result.Diagnostics.Any(d => d.Message.Contains("container"));
         await Assert.That(hasContainerDiag).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ContainerTildeNull_NoDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            container: ~
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var hasContainerDiag = result.Diagnostics.Any(d => d.Message.Contains("container"));
+        await Assert.That(hasContainerDiag).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ContainerImplicitEmpty_EmitsError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            container:
+            steps:
+              - run: echo
+        """u8;
+        var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
+        var containerDiag = result.Diagnostics.Where(d => d.Message.Contains("container")).ToArray();
+        await Assert.That(containerDiag).Count().IsEqualTo(1);
+        await Assert.That(containerDiag[0].Message).Contains("\"container\" image should not be empty");
     }
 
     // regression: service entrypoint and command are valid keys
@@ -5328,7 +5365,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("option should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '' is on line 7
     }
@@ -5350,7 +5387,7 @@ public sealed class ParserTests
               - run: echo
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("version\" filter value should not be empty") || d.Message.Contains("versions\" filter value should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(4); // '' is on line 4
     }

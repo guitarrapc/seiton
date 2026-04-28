@@ -63,10 +63,10 @@ public static partial class WorkflowParser
                 switch (ivk)
                 {
                     case OnImageVersionMappingKey.Names:
-                        names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be array of strings", emptyMessage: "on.image_version.names should not be empty");
+                        names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be array of strings", emptyMessage: "on.image_version.names should not be empty", emptyElementMessage: "\"names\" filter value should not be empty");
                         continue;
                     case OnImageVersionMappingKey.Versions:
-                        versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be array of strings", emptyMessage: "on.image_version.versions should not be empty");
+                        versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be array of strings", emptyMessage: "on.image_version.versions should not be empty", emptyElementMessage: "\"versions\" filter value should not be empty");
                         continue;
                     default:
                         if (!reader.End)

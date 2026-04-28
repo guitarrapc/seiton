@@ -1049,10 +1049,10 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        // spec ﾂｧ3.8 / ﾂｧ12: concurrency.group is required
+        // spec §3.8 / §12: concurrency.group is required
         if (!groupNode.HasValue)
         {
-            AddError(diagnostics, "group name is missing in \"concurrency\" section", keyMark);
+            AddError(diagnostics, "\"concurrency\" section is missing group name", keyMark);
             return default;
         }
 

@@ -36,6 +36,14 @@ public interface IYamlStreamReader
     /// <summary>Returns whether the current scalar is quoted (single or double).</summary>
     bool IsScalarQuoted();
 
+    /// <summary>
+    /// Returns <c>true</c> when the current scalar is an explicit YAML null literal
+    /// (<c>null</c> or <c>~</c>), as opposed to an implicit empty value (e.g. <c>key:</c>).
+    /// Both cases have <see cref="GetScalarTag"/> == <see cref="ScalarTag.Null"/>,
+    /// but this method distinguishes them by checking whether source bytes are present.
+    /// </summary>
+    bool IsExplicitNull();
+
     /// <summary>Gets the start position of the current event.</summary>
     TextPosition CurrentStart { get; }
 

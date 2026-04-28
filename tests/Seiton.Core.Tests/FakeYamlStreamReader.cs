@@ -129,6 +129,8 @@ internal sealed class FakeYamlStreamReader : IYamlStreamReader
 
     public bool IsScalarQuoted() => IsValidIndex && _events[_index].Quoted;
 
+    public bool IsExplicitNull() => IsValidIndex && _events[_index].Tag == ScalarTag.Null && _events[_index].ExplicitNull;
+
     public TextPosition ComputePositionFromOffset(int offset)
     {
         // FakeYamlStreamReader events already carry correct positions, but honour the same
@@ -159,5 +161,6 @@ internal sealed class FakeYamlStreamReader : IYamlStreamReader
         TextPosition Start,
         TextPosition End,
         ScalarTag Tag = ScalarTag.Unknown,
-        bool Quoted = false);
+        bool Quoted = false,
+        bool ExplicitNull = false);
 }
