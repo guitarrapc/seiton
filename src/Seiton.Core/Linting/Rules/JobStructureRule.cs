@@ -9,27 +9,31 @@ public sealed class JobStructureRule() : RuleBase(RuleId.JobStructure)
 
     public override void VisitJobPre(Job job)
     {
-        var hasUses = HasNodeValue(job.WorkflowCall?.Uses ?? default, Arena);
+        // Use key presence (not value) to detect reusable workflow calls.
+        // An empty `uses:` key still indicates a reusable workflow call intent;
+        // the parser reports the empty-value error separately.
+        var hasUsesKey = job.WorkflowCall?.UsesKeyRange is not null;
+        var hasUsesValue = HasNodeValue(job.WorkflowCall?.Uses ?? default, Arena);
         var hasRunsOn = job.RunsOn is not null;
         var hasSteps = job.Steps is not null;
         var jobId = Decode(Arena.GetStringSlice(job.Id));
 
-        if (hasUses && hasSteps)
+        if (hasUsesValue && hasSteps)
         {
             AddJobError(job, $"job '{jobId}' cannot have both uses and steps");
         }
 
-        if (hasUses && hasRunsOn)
+        if (hasUsesValue && hasRunsOn)
         {
             AddJobError(job, $"job '{jobId}' cannot have both uses and runs-on");
         }
 
-        if (!hasUses && !hasRunsOn)
+        if (!hasUsesKey && !hasRunsOn)
         {
             AddJobError(job, $"\"runs-on\" section is missing in job \"{jobId}\"");
         }
 
-        if (!hasUses && !hasSteps)
+        if (!hasUsesKey && !hasSteps)
         {
             AddJobError(job, $"\"steps\" section is missing in job \"{jobId}\"");
         }

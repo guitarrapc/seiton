@@ -927,8 +927,10 @@ public sealed class ParserTests
         evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options!.Count).IsEqualTo(3);
-        // no parse errors: '' is a valid choice option
-        await Assert.That(result.Diagnostics).IsEmpty();
+        // Empty string in options is collected in AST for downstream rules, but parser
+        // now emits "string should not be empty" (aligned with actionlint behavior).
+        var emptyDiag = result.Diagnostics.Where(d => d.Message == "string should not be empty").ToArray();
+        await Assert.That(emptyDiag.Length).IsEqualTo(1);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
         var emptyOptionNode = input.Options![0];
@@ -4957,5 +4959,83 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "empty-cron.yml");
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
+    }
+
+    // H3: empty string element in workflow_dispatch choice options must be detected
+    [Test]
+    public async Task Parse_WorkflowDispatchEmptyOption_ReportsStringNotEmpty()
+    {
+        var yaml = "on:\n  workflow_dispatch:\n    inputs:\n      bar:\n        type: choice\n        options:\n          - ''\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '' is on line 7
+    }
+
+    // H3: empty string element in image_version versions must be detected
+    [Test]
+    public async Task Parse_ImageVersionEmptyVersion_ReportsStringNotEmpty()
+    {
+        var yaml = "on:\n  image_version:\n    versions:\n      - ''\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message == "string should not be empty");
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4); // '' is on line 4
+    }
+
+    // H5: quoted string at timeout-minutes must be rejected
+    [Test]
+    public async Task Parse_TimeoutMinutesQuotedString_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n        timeout-minutes: '3.5'\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("timeout-minutes must be number or expression"));
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '3.5' is on line 7
+    }
+
+    // H5: quoted string at timeout-minutes must be rejected even in multi-step context
+    [Test]
+    public async Task Parse_TimeoutMinutesQuotedString_MultiStep_ReportsError()
+    {
+        // Quoted '3.5' should error, unquoted 3.5 should not
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo quoted\n        timeout-minutes: '3.5'\n      - run: echo unquoted\n        timeout-minutes: 3.5\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var errors = result.Diagnostics.Where(d => d.Message.Contains("timeout-minutes")).ToList();
+        // Only step[1] (quoted) should error; step[2] (unquoted) should not
+        await Assert.That(errors.Count).IsEqualTo(1);
+        await Assert.That(errors[0].Location.StartLine).IsEqualTo(7); // '3.5' on line 7
+    }
+
+    // H5: quoted string at max-parallel must be rejected
+    [Test]
+    public async Task Parse_MaxParallelQuotedString_ReportsError()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      max-parallel: '3'\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("max-parallel must be integer"));
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Location.StartLine).IsEqualTo(6); // '3' is on line 6
+    }
+
+    // H2: YAML null key in matrix include should map to string "null", not empty
+    [Test]
+    public async Task Parse_MatrixIncludeNullKey_PropertyAccessible()
+    {
+        var yaml = "on: push\njobs:\n  foo:\n    strategy:\n      matrix:\n        include:\n          - null: ${{ fromJSON('null') }}\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.null }}\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // Should NOT report "property \"null\" is not defined" — null key should be accessible
+        var undefinedProp = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("property \"null\" is not defined"));
+        await Assert.That(undefinedProp.Message).IsNull();
+    }
+
+    // H4: array<bool> == array<{}> should be flagged as incompatible comparison
+    [Test]
+    public async Task Parse_ArrayBoolVsArrayObject_ReportsComparisonError()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        a:\n          - [true]\n        a2:\n          - [{}]\n    steps:\n      - run: echo '${{ matrix.a == matrix.a2 }}'\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var compError = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cannot be compared") && d.Message.Contains("=="));
+        await Assert.That(compError.Message).IsNotNull();
     }
 }

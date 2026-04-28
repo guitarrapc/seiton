@@ -15,13 +15,14 @@ public static partial class WorkflowParser
             return default;
         }
 
+        var isQuoted = reader.IsScalarQuoted();
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
         var hasExpression = ExpressionScanHelpers.ContainsExpressionMarker(valueUtf8);
-        var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
+        var node = arena.AddString(slice, isQuoted, BuildScalarLocation(mark, valueUtf8.Length));
 
         if (hasExpression)
         {
@@ -64,6 +65,7 @@ public static partial class WorkflowParser
             return default;
         }
 
+        var isQuoted = reader.IsScalarQuoted();
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var mark = valueUtf8.Length > 0
@@ -77,7 +79,7 @@ public static partial class WorkflowParser
             parseWholeValueIfNoEmbedded: true,
             allowStatusCheckFunctions: true);
 
-        var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
+        var node = arena.AddString(slice, isQuoted, BuildScalarLocation(mark, valueUtf8.Length));
 
         reader.Read();
         return node;
@@ -110,6 +112,7 @@ public static partial class WorkflowParser
             return default;
         }
 
+        var isQuoted = reader.IsScalarQuoted();
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var mark = valueUtf8.Length > 0
@@ -123,7 +126,7 @@ public static partial class WorkflowParser
             diagnostics,
             parseWholeValueIfNoEmbedded);
 
-        var node = arena.AddString(slice, reader.IsScalarQuoted(), range);
+        var node = arena.AddString(slice, isQuoted, range);
 
         reader.Read();
         return node;
@@ -156,10 +159,13 @@ public static partial class WorkflowParser
             return default;
         }
 
+        // IsScalarQuoted must be called BEFORE GetScalarSlice: GetScalarSlice advances
+        // _scalarSliceCursor, causing IsScalarQuoted to search from a wrong position and
+        // match the wrong occurrence when duplicate byte patterns exist.
+        var isQuoted = reader.IsScalarQuoted();
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
-        var isQuoted = reader.IsScalarQuoted();
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;
@@ -217,10 +223,11 @@ public static partial class WorkflowParser
             return default;
         }
 
+        // IsScalarQuoted must be called BEFORE GetScalarSlice (see ParseFloatOrExpression).
+        var isQuoted = reader.IsScalarQuoted();
         var slice = reader.GetScalarSlice();
         var valueUtf8 = reader.GetScalarUtf8();
         var tag = reader.GetScalarTag();
-        var isQuoted = reader.IsScalarQuoted();
         var mark = valueUtf8.Length > 0
             ? reader.ComputePositionFromOffset(slice.Offset)
             : reader.CurrentStart;

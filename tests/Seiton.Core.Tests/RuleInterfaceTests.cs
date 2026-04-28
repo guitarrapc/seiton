@@ -457,6 +457,19 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["\"runs-on\" section is missing"]),
+            new RuleCase(
+            "ok-empty-uses-key-suppresses-runs-on-and-steps",
+            """
+            on: push
+            jobs:
+                call4:
+                    uses:
+                normal:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new JobStructureRule(), "job-structure", cases);

@@ -1,4 +1,4 @@
-// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
+﻿// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
 
 using System.Text;
 using Seiton.Core.Generated;
@@ -291,9 +291,15 @@ public static partial class WorkflowParser
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                var node = ParseString(ref reader, arena, diagnostics, errorMessage, allowElemEmpty);
+                // Always accept empty elements for AST collection; emit specific error below.
+                var node = ParseString(ref reader, arena, diagnostics, errorMessage, allowEmpty: true);
                 if (node.HasValue)
                 {
+                    if (!allowElemEmpty && arena.GetStringValue(node).Length == 0)
+                    {
+                        var range = arena.GetStringRange(node);
+                        AddError(diagnostics, "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                    }
                     list.Add(node);
                 }
             }
