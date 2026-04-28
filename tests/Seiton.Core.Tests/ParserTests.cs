@@ -1776,7 +1776,7 @@ public sealed class ParserTests
                      FOO: BAR
               - run: env
         """);
-            
+
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var mergeKeyDiags = result.Diagnostics.Where(d => d.Message.Contains("merge key", StringComparison.Ordinal)).ToArray();
@@ -2701,7 +2701,7 @@ public sealed class ParserTests
               - null
 
         """);
-            
+
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "null-step.yml");
         var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("element of \"steps\" section should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
@@ -3157,7 +3157,7 @@ public sealed class ParserTests
               - run: echo
                 with
                   bad: yaml
-            
+
         """u8;
         var result = WorkflowParser.Parse(yaml.ToArray(), "broken.yml");
         await Assert.That(result.HasFatalError).IsTrue();
@@ -4135,7 +4135,7 @@ public sealed class ParserTests
             steps:
               - run: foo:
         """u8;
-            
+
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         await Assert.That(result.HasFatalError).IsTrue();
         var diag = result.Diagnostics[0];
@@ -5114,7 +5114,7 @@ public sealed class ParserTests
             steps:
 
         """);
-            
+
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("\"steps\" section must be sequence node"));
         await Assert.That(diag.Message).Contains("scalar node");
@@ -5308,7 +5308,7 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
-    // H3: empty string element in workflow_dispatch choice options must be detected
+    // empty string element in workflow_dispatch choice options must be detected
     [Test]
     public async Task Parse_WorkflowDispatchEmptyOption_ReportsStringNotEmpty()
     {
@@ -5333,7 +5333,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '' is on line 7
     }
 
-    // H3: empty string element in image_version versions must be detected
+    // empty string element in image_version versions must be detected
     [Test]
     public async Task Parse_ImageVersionEmptyVersion_ReportsStringNotEmpty()
     {
@@ -5355,7 +5355,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(4); // '' is on line 4
     }
 
-    // H5: quoted string at timeout-minutes must be rejected
+    // quoted string at timeout-minutes must be rejected
     [Test]
     public async Task Parse_TimeoutMinutesQuotedString_ReportsError()
     {
@@ -5374,7 +5374,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '3.5' is on line 7
     }
 
-    // H5: quoted string at timeout-minutes must be rejected even in multi-step context
+    // quoted string at timeout-minutes must be rejected even in multi-step context
     [Test]
     public async Task Parse_TimeoutMinutesQuotedString_MultiStep_ReportsError()
     {
@@ -5397,7 +5397,7 @@ public sealed class ParserTests
         await Assert.That(errors[0].Location.StartLine).IsEqualTo(7); // '3.5' on line 7
     }
 
-    // H5: quoted string at max-parallel must be rejected
+    // quoted string at max-parallel must be rejected
     [Test]
     public async Task Parse_MaxParallelQuotedString_ReportsError()
     {
@@ -5417,7 +5417,7 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsEqualTo(6); // '3' is on line 6
     }
 
-    // H2: YAML null key in matrix include should map to string "null", not empty
+    // YAML null key in matrix include should map to string "null", not empty
     [Test]
     public async Task Parse_MatrixIncludeNullKey_PropertyAccessible()
     {
@@ -5440,7 +5440,7 @@ public sealed class ParserTests
         await Assert.That(undefinedProp.Message).IsNull();
     }
 
-    // H4: array<bool> == array<{}> should be flagged as incompatible comparison
+    // array<bool> == array<{}> should be flagged as incompatible comparison
     [Test]
     public async Task Parse_ArrayBoolVsArrayObject_ReportsComparisonError()
     {
@@ -5464,7 +5464,7 @@ public sealed class ParserTests
         await Assert.That(compError.Message).IsNotNull();
     }
 
-    // M1: empty array names/versions should report "should not be empty" not type error
+    // empty array names/versions should report "should not be empty" not type error
     [Test]
     public async Task Parse_ImageVersionEmptyArray_ReportsShouldNotBeEmpty()
     {
@@ -5490,7 +5490,7 @@ public sealed class ParserTests
         await Assert.That(typeErr.Message).IsNull();
     }
 
-    // M2: backslash escape in path glob should be detected
+    // backslash escape in path glob should be detected
     [Test]
     public async Task Lint_GlobPath_InvalidBackslashEscape_Detected()
     {
@@ -5512,7 +5512,7 @@ public sealed class ParserTests
         await Assert.That(escapeErr.Message).IsNotNull();
     }
 
-    // M2: backslash escape detection after null entry in paths
+    // backslash escape detection after null entry in paths
     [Test]
     public async Task Lint_GlobPath_InvalidBackslashEscape_AfterNullEntry_Detected()
     {
@@ -5536,7 +5536,7 @@ public sealed class ParserTests
         await Assert.That(escapeErr.Message).IsNotNull();
     }
 
-    // M2: block scalar trailing newline in path glob should be detected as trailing whitespace
+    // block scalar trailing newline in path glob should be detected as trailing whitespace
     [Test]
     public async Task Lint_GlobPath_BlockScalarTrailingNewline_Detected()
     {
@@ -5558,7 +5558,7 @@ public sealed class ParserTests
         await Assert.That(spaceErr.Message).IsNotNull();
     }
 
-    // M2: block scalar trailing newline with more entries after should also be detected
+    // block scalar trailing newline with more entries after should also be detected
     [Test]
     public async Task Lint_GlobPath_BlockScalarTrailingNewline_WithMoreEntries_Detected()
     {
@@ -5583,7 +5583,7 @@ public sealed class ParserTests
         await Assert.That(spaceErr.Message).IsNotNull().Because(string.Join("\n", allDiags));
     }
 
-    // M3: empty flow mapping `{ }` position should point to the mapping, not next line
+    // empty flow mapping `{ }` position should point to the mapping, not next line
     [Test]
     public async Task Parse_StepEmptyFlowMapping_Position_AfterBaredash()
     {
@@ -5607,7 +5607,7 @@ public sealed class ParserTests
         await Assert.That(flowMappingErr.Message).IsNotNull().Because($"Empty mapping errors at lines: {string.Join(", ", emptyErrors.Select(e => e.Location.StartLine))}");
     }
 
-    // M4: recursive alias position should point to the *alias reference, not the next token
+    // recursive alias position should point to the *alias reference, not the next token
     [Test]
     public async Task Parse_RecursiveAlias_PositionAtAliasRef()
     {
@@ -5633,7 +5633,7 @@ public sealed class ParserTests
         await Assert.That(envAlias.Message).IsNotNull().Because($"Recursive errors at lines: {string.Join(", ", recursiveErrors.Select(e => $"{e.Location.StartLine}:{e.Location.StartColumn}"))}");
     }
 
-    // M5: empty workflow_call secrets should include GITHUB_TOKEN in type
+    // empty workflow_call secrets should include GITHUB_TOKEN in type
     [Test]
     public async Task Lint_WorkflowCallEmptySecrets_IncludesGitHubToken()
     {
@@ -5654,5 +5654,109 @@ public sealed class ParserTests
         await Assert.That(secretErr.Message).IsNotNull();
         // Object type should include GITHUB_TOKEN (not be empty {})
         await Assert.That(secretErr.Message).Contains("GITHUB_TOKEN");
+    }
+
+    // empty label in runs-on should be reported as unknown by runner-label rule
+    [Test]
+    public async Task Lint_RunsOnEmptyLabel_ReportsUnknownLabel()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ''\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
+        await Assert.That(labelErr.Message).IsNotNull();
+    }
+
+    // empty label in runs-on array should be reported as unknown by runner-label rule
+    [Test]
+    public async Task Lint_RunsOnEmptyLabelInArray_ReportsUnknownLabel()
+    {
+        var yaml = "on: push\njobs:\n  test:\n    runs-on: ['x64', '']\n    steps:\n      - run: echo\n";
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
+        await Assert.That(labelErr.Message).IsNotNull();
+    }
+
+    // environment.name missing should report at the environment key position, not inside mapping
+    [Test]
+    public async Task Parse_EnvironmentMissingName_PositionAtEnvironmentKey()
+    {
+        // line 4: `    environment:`, line 5: `      url: https://example.com`
+        var yaml = "on: push\njobs:\n  test:\n    environment:\n      url: https://example.com\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("name is missing in \"environment\" section"));
+        await Assert.That(diag.Message).IsNotNull();
+        // Should point to line 4 (environment: key), not line 5 (url: inside the mapping)
+        await Assert.That(diag.Location.StartLine).IsEqualTo(4);
+    }
+
+    // typed step output should include property names in object template diagnostic
+    [Test]
+    public async Task Lint_StepOutputTypedObject_MessageIncludesTypeName()
+    {
+        // actions/cache@v4 has known output "cache-hit", so steps.cache.outputs should resolve
+        // to {cache-hit: string} and the diagnostic message should include this type
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/cache@v4
+                id: cache
+                with:
+                  key: foo
+                  path: bar
+              - run: echo "${{ steps.cache.outputs }}"
+        """);
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        var objDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cache-hit") && d.Message.Contains("[Object]"));
+        await Assert.That(objDiag.Message).IsNotNull().Because($"Expected typed object diagnostic with 'cache-hit', got:\n{string.Join("\n", allDiags)}");
+    }
+
+    // step outputs for unknown/local actions should show {string => string} map type
+    [Test]
+    public async Task Lint_StepOutputLooseMap_MessageIncludesMapType()
+    {
+        // steps.foo.outputs for a run step (no uses) should resolve to {string => string} map type
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - id: foo
+                run: echo "test=1" >> "$GITHUB_OUTPUT"
+              - run: echo "${{ steps.foo.outputs }}"
+        """);
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        var objDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("{string => string}") && d.Message.Contains("[Object]"));
+        await Assert.That(objDiag.Message).IsNotNull().Because($"Expected map-typed object diagnostic with '{{string => string}}', got:\n{string.Join("\n", allDiags)}");
+    }
+
+    // two different object types on same line should not be deduped
+    [Test]
+    public async Task Lint_TwoObjectTypesOnSameLine_BothReported()
+    {
+        // github.event is a loose object, steps.cache.outputs is typed {cache-hit: string}
+        // Both should produce distinct diagnostics even on the same line
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/cache@v4
+                id: cache
+                with:
+                  key: foo
+                  path: bar
+              - run: echo "${{ github.event }} ${{ steps.cache.outputs }}"
+        """);
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var objDiags = result.Diagnostics.Where(d => d.Message.Contains("[Object]")).ToList();
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        await Assert.That(objDiags.Count).IsGreaterThanOrEqualTo(2).Because($"Expected 2 object diagnostics on same line, got:\n{string.Join("\n", allDiags)}");
     }
 }

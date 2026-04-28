@@ -1554,7 +1554,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length));
 
         await Assert.That(diag).IsNotNull();
-        await Assert.That(diag!.Value.Message).Contains("object value in ${{ }}");
+        await Assert.That(diag!.Value.Message).Contains("will be converted to string \"[Object]\"");
     }
 
     [Test]

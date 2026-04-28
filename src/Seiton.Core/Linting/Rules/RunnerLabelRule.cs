@@ -66,7 +66,13 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             }
 
             var labelUtf8 = Arena.GetStringValue(label);
-            if (labelUtf8.IsEmpty || RunnerLabels.IsKnownHostedLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
+            if (labelUtf8.IsEmpty)
+            {
+                AddJobWarning(job, "label \"\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(label));
+                continue;
+            }
+
+            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
             {
                 continue;
             }
