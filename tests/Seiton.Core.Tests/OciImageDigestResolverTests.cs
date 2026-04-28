@@ -180,6 +180,10 @@ public sealed class OciImageDigestResolverTests
         FixImagesConfig? config = null,
         string? dockerConfigPath = null)
     {
+        // Use a non-existent path by default to isolate tests from the host's Docker configuration.
+        // CI runners (e.g. GitHub Actions) may have Docker Hub credentials in ~/.docker/config.json,
+        // which would bypass the bearer token challenge flow and cause test failures.
+        dockerConfigPath ??= Path.Combine(Path.GetTempPath(), "__nonexistent_seiton_test_docker_config__.json");
         return new OciImageDigestResolver(new HttpClient(handler), config ?? new FixImagesConfig(), dockerConfigPath);
     }
 
