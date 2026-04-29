@@ -1,0 +1,3 @@
+data/** linguist-vendored
+sandbox/** linguist-vendored
+tests/Seiton.Core.Tests/fixtures/** linguist-vendored

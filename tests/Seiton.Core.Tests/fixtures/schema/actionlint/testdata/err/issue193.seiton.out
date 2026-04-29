@@ -1,2 +1,0 @@
-test.yaml:8:42: expression parse error: got unexpected character '"'; only single quotes are available for string delimiter in expressions [syntax-check]
-test.yaml:8:56: expression parse error: operator 'Equal' requires both operands [syntax-check]

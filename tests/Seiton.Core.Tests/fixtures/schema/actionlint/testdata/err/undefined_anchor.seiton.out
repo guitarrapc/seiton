@@ -1,1 +1,0 @@
-test.yaml:9:8: yaml parse failure: While parsing node, found unknown anchor at Line: 9, Col: 7, Idx: 112 [syntax-check]

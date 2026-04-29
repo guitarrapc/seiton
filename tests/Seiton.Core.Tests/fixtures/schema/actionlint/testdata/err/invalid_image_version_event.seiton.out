@@ -1,4 +1,0 @@
-test.yaml:4:12: on.image_version.names must be array of strings [syntax-check]
-test.yaml:5:34: "versions" filter value should not be empty [syntax-check]
-test.yaml:8:5: on.image_version does not support option: entrypoint [syntax-check]
-test.yaml:5:34: glob pattern should not be empty [glob]

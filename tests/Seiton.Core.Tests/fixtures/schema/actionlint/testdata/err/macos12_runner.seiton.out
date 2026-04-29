@@ -1,1 +1,0 @@
-test.yaml:5:14: label "macos-12" is unknown. available labels are "ubuntu-latest", "ubuntu-24.04", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file [runner-label]

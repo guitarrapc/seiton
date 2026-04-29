@@ -1,1 +1,0 @@
-test.yaml:2:8: yaml parse failure: Block sequence entries are not allowed in this context at Line: 2, Col: 7, Idx: 16 [syntax-check]
