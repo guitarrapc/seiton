@@ -83,6 +83,19 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             {
                 AddStepError(step, "action uses 'docker://' must include an image reference", usesLocation);
             }
+            else if (uses[^1] == (byte)':')
+            {
+                // Tag portion is empty: "docker://image:" → flag it
+                var imageSlice = Arena.GetStringSlice(actionExec.Uses);
+                var imageDisplay = Decode(imageSlice);
+                // Remove trailing colon for display (matches actionlint format)
+                if (imageDisplay.EndsWith(':'))
+                {
+                    imageDisplay = imageDisplay[..^1];
+                }
+
+                AddStepError(step, $"tag of Docker action should not be empty: \"{imageDisplay}\"", usesLocation);
+            }
 
             return;
         }

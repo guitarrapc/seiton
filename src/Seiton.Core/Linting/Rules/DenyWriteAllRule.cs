@@ -1,6 +1,5 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
-using Seiton.Core.Linting.Fixing;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -46,11 +45,11 @@ public sealed class DenyWriteAllRule() : RuleBase(RuleId.DenyWriteAll)
             return;
         }
 
-        var replacement = BuildReplacementText(allNode, Config.Utf8Yaml);
+        var edit = BuildEmptyMappingReplacementEdit(allNode, Config.Utf8Yaml);
         var fix = new DiagnosticFix(
-            "replace write-all with read-all",
-            [new TextEdit(Arena.GetStringSlice(allNode).Offset, Arena.GetStringSlice(allNode).Length, replacement)]);
-        var message = "permissions scalar 'write-all' is forbidden; use least-privilege scopes or 'read-all'";
+            "replace write-all with empty permissions",
+            [edit]);
+        var message = "permissions scalar 'write-all' is forbidden; use explicit least-privilege scopes";
 
         if (_currentWorkflow is not null)
         {
@@ -62,50 +61,36 @@ public sealed class DenyWriteAllRule() : RuleBase(RuleId.DenyWriteAll)
         }
     }
 
-    private string BuildReplacementText(StringNodeId allNode, byte[] utf8Yaml)
+    private TextEdit BuildEmptyMappingReplacementEdit(StringNodeId allNode, byte[] utf8Yaml)
     {
-        var valueStart = Arena.GetStringSlice(allNode).Offset;
-        var valueEnd = Arena.GetStringSlice(allNode).Offset + Arena.GetStringSlice(allNode).Length;
-        if (valueStart < 0 || valueEnd > utf8Yaml.Length || valueStart > valueEnd)
+        var start = Arena.GetStringSlice(allNode).Offset;
+        var end = Arena.GetStringSlice(allNode).Offset + Arena.GetStringSlice(allNode).Length;
+        if (start < 0 || end > utf8Yaml.Length || start > end)
         {
-            return "read-all";
+            return new TextEdit(Arena.GetStringSlice(allNode).Offset, Arena.GetStringSlice(allNode).Length, "{}");
         }
 
-        var valueSpan = Arena.GetStringValue(allNode);
-        if (Arena.GetStringQuoted(allNode))
+        if (start > 0 && end < utf8Yaml.Length)
         {
-            if (valueSpan.Length >= 2 && valueSpan[0] == (byte)'\'' && valueSpan[^1] == (byte)'\'')
+            var before = utf8Yaml[start - 1];
+            var after = utf8Yaml[end];
+            if ((before == (byte)'\'' && after == (byte)'\'') || (before == (byte)'"' && after == (byte)'"'))
             {
-                return "'read-all'";
-            }
-
-            if (valueSpan.Length >= 2 && valueSpan[0] == (byte)'"' && valueSpan[^1] == (byte)'"')
-            {
-                return "\"read-all\"";
+                start--;
+                end++;
             }
         }
 
-        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, Arena.GetStringRange(allNode), Arena.GetStringQuoted(allNode));
-        if (style == ScalarQuoteStyle.Unquoted)
+        if (start < end && end - 1 < utf8Yaml.Length)
         {
-            return "read-all";
+            var first = utf8Yaml[start];
+            var last = utf8Yaml[end - 1];
+            if ((first == (byte)'\'' && last == (byte)'\'') || (first == (byte)'"' && last == (byte)'"'))
+            {
+                // Range already includes quote chars.
+            }
         }
 
-        var quoteChar = style == ScalarQuoteStyle.SingleQuoted ? (byte)'\'' : (byte)'"';
-        var start = valueStart;
-        var end = valueEnd;
-
-        // Most parser ranges point to scalar value bytes (without quote chars).
-        if (start > 0 && end < utf8Yaml.Length && utf8Yaml[start - 1] == quoteChar && utf8Yaml[end] == quoteChar)
-        {
-            return "read-all";
-        }
-
-        if (start >= 0 && end - 1 >= start && end - 1 < utf8Yaml.Length && utf8Yaml[start] == quoteChar && utf8Yaml[end - 1] == quoteChar)
-        {
-            return style == ScalarQuoteStyle.SingleQuoted ? "'read-all'" : "\"read-all\"";
-        }
-
-        return "read-all";
+        return new TextEdit(start, end - start, "{}");
     }
 }

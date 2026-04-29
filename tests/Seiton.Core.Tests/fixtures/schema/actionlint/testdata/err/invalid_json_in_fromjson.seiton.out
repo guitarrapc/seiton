@@ -8,3 +8,5 @@ test.yaml:24:19: null value in ${{ }} will be converted to empty string [express
 test.yaml:25:19: array value in ${{ }} will be converted to string "[Array]" [expression]
 test.yaml:26:19: {bool: bool; array: array<bool>} value in ${{ }} will be converted to string "[Object]" [expression]
 test.yaml:27:19: array value in ${{ }} will be converted to string "[Array]" [expression]
+test.yaml:28:19: 1st argument of function call is not assignable. "{bool: bool; array: array<bool>}" cannot be assigned to "array<any>". called function type is "contains(array<any>, any) -> bool" [expression]
+test.yaml:28:19: 1st argument of function call is not assignable. "{bool: bool; array: array<bool>}" cannot be assigned to "string". called function type is "contains(string, any) -> bool" [expression]

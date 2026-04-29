@@ -3,3 +3,4 @@ test.yaml:20:9: jobs.'test'.steps[1] unexpected key "with" for step to run shell
 test.yaml:28:28: "with" section is scalar node but mapping node is expected [syntax-check]
 test.yaml:20:15: anchor "valid_inputs" is defined but not used [syntax-check]
 test.yaml:28:15: anchor "valid_inputs" is defined but not used [syntax-check]
+test.yaml:27:37: action uses 'rhysd/action-setup-vim@v1' is not pinned to a full-length commit SHA [action]

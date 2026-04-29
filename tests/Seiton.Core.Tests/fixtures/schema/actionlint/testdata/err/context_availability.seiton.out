@@ -1,3 +1,5 @@
+test.yaml:173:25: action uses 'owner/repo@ref' is not pinned to a full-length commit SHA [action]
+test.yaml:179:34: jobs.'caller'.uses reusable workflow uses 'owner/repo/workflow.yml@main' is not pinned to a full-length commit SHA [action]
 test.yaml:3:31: context "env" is not allowed here. available contexts are "github", "inputs", "vars". called in workflow run-name [expression]
 test.yaml:10:8: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "secrets". called in workflow env [expression]
 test.yaml:15:28: context "env" is not allowed here. available contexts are "github", "inputs", "vars". called in workflow concurrency [expression]

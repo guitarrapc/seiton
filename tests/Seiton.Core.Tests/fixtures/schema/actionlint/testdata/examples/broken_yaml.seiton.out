@@ -1,0 +1,1 @@
+test.yaml:6:17: yaml parse failure: Mapping values are not allowed in this context at Line: 6, Col: 16, Idx: 78 [syntax-check]

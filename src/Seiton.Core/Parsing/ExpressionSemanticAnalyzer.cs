@@ -1484,6 +1484,7 @@ public static class ExpressionSemanticAnalyzer
                     }
                 }
 
+                ValidateFunctionCallWithOverrides(node, nodes, arguments, expressionUtf8, expressionLocation, overrides, diagnostics);
                 break;
         }
     }
@@ -1615,6 +1616,153 @@ public static class ExpressionSemanticAnalyzer
                     expressionLocation));
             }
         }
+    }
+
+    /// <summary>
+    /// Validates function call argument types using context-override-aware type inference.
+    /// Reports all failing overloads when no overload matches, rather than just the first.
+    /// Only emits diagnostics when at least one argument has a concrete (non-Any) override type
+    /// that fails assignability, avoiding duplicate diagnostics with the parser-level check.
+    /// </summary>
+    private static void ValidateFunctionCallWithOverrides(
+        ExpressionNode node,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        (byte[] NameUtf8, ExprType Type)[] overrides,
+        List<Diagnostic> diagnostics)
+    {
+        if (node.Left < 0 || node.Left >= nodes.Length)
+        {
+            return;
+        }
+
+        var callee = nodes[node.Left];
+        if (callee.Kind != ExpressionNodeKind.Identifier)
+        {
+            return;
+        }
+
+        var nameUtf8 = callee.Token.AsSpan(expressionUtf8);
+        if (!TryGetFunctionSpec(nameUtf8, out var spec))
+        {
+            return;
+        }
+
+        var argCount = node.ArgCount;
+        var argTypes = new ExprType[argCount];
+        var hasConcreteOverride = false;
+        for (var i = 0; i < argCount; i++)
+        {
+            var argIndex = node.ArgStart + i;
+            if (argIndex >= 0 && argIndex < arguments.Length)
+            {
+                argTypes[i] = InferTypeWithOverrides(arguments[argIndex], nodes, arguments, expressionUtf8, overrides);
+                // Check whether this type differs from what the parser-level inference would produce
+                if (argTypes[i] is not AnyExprType)
+                {
+                    var baseType = InferTypeSpan(arguments[argIndex], nodes, arguments, expressionUtf8);
+                    if (baseType is AnyExprType)
+                    {
+                        hasConcreteOverride = true;
+                    }
+                }
+            }
+            else
+            {
+                argTypes[i] = ExprType.Any;
+            }
+        }
+
+        // Only run this check when overrides refined at least one arg type beyond Any.
+        // Otherwise the parser-level ValidateFunctionCall already covers it.
+        if (!hasConcreteOverride)
+        {
+            return;
+        }
+
+        // Check if any overload matches with the refined types
+        for (var i = 0; i < spec.Overloads.Length; i++)
+        {
+            var overload = spec.Overloads[i];
+            if (!overload.AcceptsArgCount(argCount))
+            {
+                continue;
+            }
+
+            if (TryValidateAgainstOverload(overload, argTypes, out _, out _, out _))
+            {
+                return; // At least one overload matches — no error
+            }
+        }
+
+        // No overload matched — report all failing overloads
+        var funcName = Encoding.UTF8.GetString(nameUtf8);
+        for (var i = 0; i < spec.Overloads.Length; i++)
+        {
+            var overload = spec.Overloads[i];
+            if (!overload.AcceptsArgCount(argCount))
+            {
+                continue;
+            }
+
+            if (!TryValidateAgainstOverload(overload, argTypes, out var errorArgIndex, out var expectedType, out var actualType))
+            {
+                var ordinal = FormatOrdinal(errorArgIndex + 1);
+                var actualTypeName = actualType is ObjectExprType obj ? FormatObjectType(obj) : actualType.TypeName;
+                var signature = FormatOverloadSignature(funcName, overload);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    $"{ordinal} argument of function call is not assignable. \"{actualTypeName}\" cannot be assigned to \"{expectedType.TypeName}\". called function type is \"{signature}\"",
+                    expressionLocation));
+            }
+        }
+    }
+
+    private static string FormatOrdinal(int n)
+    {
+        return (n % 100) switch
+        {
+            11 or 12 or 13 => $"{n}th",
+            _ => (n % 10) switch
+            {
+                1 => $"{n}st",
+                2 => $"{n}nd",
+                3 => $"{n}rd",
+                _ => $"{n}th",
+            },
+        };
+    }
+
+    private static string FormatOverloadSignature(string funcName, FuncOverload overload)
+    {
+        var sb = new System.Text.StringBuilder(funcName);
+        sb.Append('(');
+        for (var i = 0; i < overload.Parameters.Length; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append(overload.Parameters[i].TypeName);
+        }
+
+        if (overload.VariadicParameter is not null)
+        {
+            if (overload.Parameters.Length > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append(overload.VariadicParameter.TypeName);
+            sb.Append("...");
+        }
+
+        sb.Append(") -> ");
+        sb.Append(overload.ReturnType.TypeName);
+        return sb.ToString();
     }
 
     internal static ExprType InferTypeWithOverrides(

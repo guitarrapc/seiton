@@ -69,6 +69,13 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 return ResolveNonEmptyScalarStart(mark.Position);
             }
 
+            // VYaml's CurrentMark for aliases may advance past the *alias token.
+            // Scan backward for the '*' alias indicator to get the correct position.
+            if (_parser.CurrentEventType == ParseEventType.Alias)
+            {
+                return ResolveAliasStart(mark.Position);
+            }
+
             return new TextPosition(mark.Position, mark.Line, mark.Col);
         }
     }

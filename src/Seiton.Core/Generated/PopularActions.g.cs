@@ -267,6 +267,27 @@ internal static class PopularActions
             };
         }
 
+        internal string[] GetInputNames()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => ["enableCrossOsArchive", "fail-on-cache-miss", "key", "lookup-only", "path", "restore-keys", "save-always", "upload-chunk-size"],
+                ActionId.ActionsCheckout => ["clean", "fetch-depth", "fetch-tags", "filter", "github-server-url", "lfs", "path", "persist-credentials", "ref", "repository", "set-safe-directory", "show-progress", "sparse-checkout", "sparse-checkout-cone-mode", "ssh-key", "ssh-known-hosts", "ssh-strict", "ssh-user", "submodules", "token"],
+                ActionId.ActionsDownloadArtifact => ["artifact-ids", "digest-mismatch", "github-token", "merge-multiple", "name", "path", "pattern", "repository", "run-id", "skip-decompress"],
+                ActionId.ActionsSetupDotnet => ["architecture", "cache", "cache-dependency-path", "config-file", "dotnet-quality", "dotnet-version", "global-json-file", "owner", "source-url", "workloads"],
+                ActionId.ActionsSetupGo => ["architecture", "cache", "cache-dependency-path", "check-latest", "go-download-base-url", "go-version", "go-version-file", "token"],
+                ActionId.ActionsSetupNode => ["architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token"],
+                ActionId.ActionsStale => ["any-of-issue-labels", "any-of-labels", "any-of-pr-labels", "ascending", "close-issue-label", "close-issue-message", "close-issue-reason", "close-pr-label", "close-pr-message", "days-before-close", "days-before-issue-close", "days-before-issue-stale", "days-before-pr-close", "days-before-pr-stale", "days-before-stale", "debug-only", "delete-branch", "enable-statistics", "exempt-all-assignees", "exempt-all-issue-assignees", "exempt-all-issue-milestones", "exempt-all-milestones", "exempt-all-pr-assignees", "exempt-all-pr-milestones", "exempt-assignees", "exempt-draft-pr", "exempt-issue-assignees", "exempt-issue-labels", "exempt-issue-milestones", "exempt-milestones", "exempt-pr-assignees", "exempt-pr-labels", "exempt-pr-milestones", "ignore-issue-updates", "ignore-pr-updates", "ignore-updates", "include-only-assigned", "labels-to-add-when-unstale", "labels-to-remove-when-stale", "labels-to-remove-when-unstale", "only-issue-labels", "only-issue-types", "only-labels", "only-pr-labels", "operations-per-run", "remove-issue-stale-when-updated", "remove-pr-stale-when-updated", "remove-stale-when-updated", "repo-token", "sort-by", "stale-issue-label", "stale-issue-message", "stale-pr-label", "stale-pr-message", "start-date"],
+                ActionId.ActionsUploadArtifact => ["archive", "compression-level", "if-no-files-found", "include-hidden-files", "name", "overwrite", "path", "retention-days"],
+                ActionId.DockerLoginAction => ["ecr", "logout", "password", "registry", "registry-auth", "scope", "username"],
+                ActionId.OctokitRequestAction => ["mediaType", "route"],
+                ActionId.PypaGhActionPypiPublish => ["attestations", "packages-dir", "packages_dir", "password", "print-hash", "print_hash", "repository-url", "repository_url", "skip-existing", "skip_existing", "user", "verbose", "verify-metadata", "verify_metadata"],
+                ActionId.ReviewdogActionActionlint => ["actionlint_flags", "fail_level", "fail_on_error", "filter_mode", "github_token", "level", "reporter", "reviewdog_flags", "tool_name"],
+                ActionId.RhysdActionSetupVim => ["configure-args", "neovim", "token", "version"],
+                _ => [],
+            };
+        }
+
         internal byte[][] GetOutputNames()
         {
             return Id switch

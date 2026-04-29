@@ -1,2 +1,3 @@
 test.yaml:8:17: "read" is invalid as permission of scope "id-token". available values are "write", "none" [permissions]
 test.yaml:9:15: "write" is invalid as permission of scope "models". available values are "read", "none" [permissions]
+test.yaml:11:31: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA [action]

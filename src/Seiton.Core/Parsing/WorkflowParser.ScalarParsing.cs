@@ -156,11 +156,11 @@ public static partial class WorkflowParser
                 }
                 if (node.HasValue)
                 {
-                    // Even when empty elements are allowed for AST collection, report them as errors.
-                    if (allowElemEmpty && arena.GetStringValue(node).Length == 0)
+                    // Report empty elements as errors only when caller provides a message.
+                    if (emptyElementMessage is not null && allowElemEmpty && arena.GetStringValue(node).Length == 0)
                     {
                         var range = arena.GetStringRange(node);
-                        AddError(diagnostics, emptyElementMessage ?? "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                        AddError(diagnostics, emptyElementMessage, new TextPosition(range.Start, range.StartLine, range.StartColumn));
                     }
                     list.Add(node);
                 }

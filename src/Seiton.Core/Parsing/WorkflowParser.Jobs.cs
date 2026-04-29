@@ -124,6 +124,7 @@ public static partial class WorkflowParser
         Env? envNode = null;
         Defaults? defaultsNode = null;
         StringNodeId ifNode = default;
+        TextPosition ifKeyMark = default;
         Step[]? stepsNode = null;
         FloatNodeId timeoutMinutesNode = default;
         Strategy? strategyNode = null;
@@ -132,6 +133,10 @@ public static partial class WorkflowParser
         Services? servicesNode = null;
         WorkflowCall? workflowCallNode = null;
         Snapshot? snapshotNode = null;
+        TextPosition stepsKeyPos = default;
+        TextPosition runsOnKeyPos = default;
+        TextPosition withKeyPos = default;
+        TextPosition secretsKeyPos = default;
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -193,6 +198,7 @@ public static partial class WorkflowParser
                 switch (jobKey)
                 {
                     case JobNodeMappingKey.RunsOn:
+                        runsOnKeyPos = keyMark;
                         if (!reader.End)
                         {
                             runsOnNode = ParseRunsOnNode(ref reader, arena, diagnostics, source, jobId);
@@ -229,6 +235,7 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Steps:
+                        stepsKeyPos = keyMark;
                         if (!reader.End)
                         {
                             if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -272,7 +279,9 @@ public static partial class WorkflowParser
                                 Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
                                 UsesKeyRange = BuildScalarLocation(keyMark, keyLen),
                                 Inputs = workflowCallNode?.Inputs,
+                                WithKeyRange = workflowCallNode?.WithKeyRange,
                                 Secrets = workflowCallNode?.Secrets,
+                                SecretsKeyRange = workflowCallNode?.SecretsKeyRange,
                                 InheritSecrets = workflowCallNode?.InheritSecrets ?? false,
                             };
                         }
@@ -280,6 +289,7 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.If:
+                        ifKeyMark = keyMark;
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobIf, out var ifErr, out var ifMark);
@@ -385,6 +395,7 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.With:
+                        withKeyPos = keyMark;
                         if (!reader.End)
                         {
                             var inputs = ParseWorkflowCallInputsNode(ref reader, arena, diagnostics, source, jobId);
@@ -395,7 +406,9 @@ public static partial class WorkflowParser
                                     Uses = workflowCallNode.Uses,
                                     UsesKeyRange = workflowCallNode.UsesKeyRange,
                                     Inputs = inputs,
+                                    WithKeyRange = BuildScalarLocation(withKeyPos, 4),
                                     Secrets = workflowCallNode.Secrets,
+                                    SecretsKeyRange = workflowCallNode.SecretsKeyRange,
                                     InheritSecrets = workflowCallNode.InheritSecrets,
                                 };
                             }
@@ -406,7 +419,9 @@ public static partial class WorkflowParser
                                     Uses = arena.AddString(default, false, default),
                                     UsesKeyRange = null,
                                     Inputs = inputs,
+                                    WithKeyRange = BuildScalarLocation(withKeyPos, 4),
                                     Secrets = null,
+                                    SecretsKeyRange = null,
                                     InheritSecrets = false,
                                 };
                             }
@@ -415,6 +430,7 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.Secrets:
+                        secretsKeyPos = keyMark;
                         if (!reader.End)
                         {
                             var secrets = ParseWorkflowCallSecretsNode(ref reader, arena, diagnostics, source, jobId, out var inheritSecrets);
@@ -425,7 +441,9 @@ public static partial class WorkflowParser
                                     Uses = workflowCallNode.Uses,
                                     UsesKeyRange = workflowCallNode.UsesKeyRange,
                                     Inputs = workflowCallNode.Inputs,
+                                    WithKeyRange = workflowCallNode.WithKeyRange,
                                     Secrets = secrets,
+                                    SecretsKeyRange = BuildScalarLocation(secretsKeyPos, 7),
                                     InheritSecrets = inheritSecrets,
                                 };
                             }
@@ -436,7 +454,9 @@ public static partial class WorkflowParser
                                     Uses = arena.AddString(default, false, default),
                                     UsesKeyRange = null,
                                     Inputs = null,
+                                    WithKeyRange = null,
                                     Secrets = secrets,
+                                    SecretsKeyRange = BuildScalarLocation(secretsKeyPos, 7),
                                     InheritSecrets = inheritSecrets,
                                 };
                             }
@@ -491,13 +511,13 @@ public static partial class WorkflowParser
         // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `steps`
         if (hasUsesValue && hasSteps)
         {
-            AddError(diagnostics, $"jobs.'{decodedJobId}' cannot have both uses and steps", jobIdMark);
+            AddError(diagnostics, $"jobs.'{decodedJobId}' cannot have both uses and steps", stepsKeyPos);
         }
 
         // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `runs-on`
         if (hasUsesValue && hasRunsOn)
         {
-            AddError(diagnostics, $"jobs.'{decodedJobId}' cannot have both uses and runs-on", jobIdMark);
+            AddError(diagnostics, $"jobs.'{decodedJobId}' cannot have both uses and runs-on", runsOnKeyPos);
         }
 
         // spec §3.10 post-validation: normal jobs require `runs-on`
@@ -517,13 +537,13 @@ public static partial class WorkflowParser
             // spec §3.10 post-validation: `with` is only valid for reusable workflow calls via `uses`
             if (workflowCallNode.Inputs.HasValue && workflowCallNode.Inputs.Value.Count > 0)
             {
-                AddError(diagnostics, $"jobs.'{decodedJobId}' key 'with' requires uses", jobIdMark);
+                AddError(diagnostics, $"jobs.'{decodedJobId}' key 'with' requires uses", withKeyPos);
             }
 
             // spec §3.10 post-validation: `secrets` is only valid for reusable workflow calls via `uses`
             if ((workflowCallNode.Secrets.HasValue && workflowCallNode.Secrets.Value.Count > 0) || workflowCallNode.InheritSecrets)
             {
-                AddError(diagnostics, $"jobs.'{decodedJobId}' key 'secrets' requires uses", jobIdMark);
+                AddError(diagnostics, $"jobs.'{decodedJobId}' key 'secrets' requires uses", secretsKeyPos);
             }
         }
 
@@ -533,6 +553,7 @@ public static partial class WorkflowParser
             Name = nameNode,
             Needs = needsNode,
             RunsOn = runsOnNode,
+            RunsOnKeyRange = runsOnNode is not null ? BuildScalarLocation(runsOnKeyPos, 7) : null,
             Permissions = permissionsNode,
             Environment = environmentNode,
             Concurrency = concurrencyNode,
@@ -540,7 +561,9 @@ public static partial class WorkflowParser
             Env = envNode,
             Defaults = defaultsNode,
             If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
             Steps = stepsNode,
+            StepsKeyRange = stepsNode is not null ? BuildScalarLocation(stepsKeyPos, 5) : null,
             TimeoutMinutes = timeoutMinutesNode,
             Strategy = strategyNode,
             ContinueOnError = continueOnErrorNode,
@@ -628,6 +651,7 @@ public static partial class WorkflowParser
         StringNodeId versionNode = default;
         StringNodeId imageNameNode = default;
         StringNodeId ifNode = default;
+        TextPosition ifKeyMark = default;
         ulong seen = 0;
 
         reader.Read(); // consume MappingStart
@@ -686,6 +710,7 @@ public static partial class WorkflowParser
                         break;
 
                     case SnapshotMappingKey.If:
+                        ifKeyMark = keyMark;
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobSnapshotIf, out var ifErr, out var ifMark);
@@ -723,6 +748,7 @@ public static partial class WorkflowParser
             Version = versionNode,
             ImageName = imageNameNode,
             If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
         };
     }
 

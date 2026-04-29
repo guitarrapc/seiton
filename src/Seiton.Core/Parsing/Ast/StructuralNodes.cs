@@ -224,7 +224,11 @@ public sealed class WorkflowCall
 
     public SliceMap<WorkflowCallInput>? Inputs { get; init; }
 
+    public TextRange? WithKeyRange { get; init; }
+
     public SliceMap<WorkflowCallSecret>? Secrets { get; init; }
+
+    public TextRange? SecretsKeyRange { get; init; }
 
     public bool InheritSecrets { get; init; }
 }

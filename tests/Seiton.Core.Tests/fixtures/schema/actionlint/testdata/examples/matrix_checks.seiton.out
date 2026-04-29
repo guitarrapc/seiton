@@ -1,0 +1,3 @@
+test.yaml:6:28: jobs.'test'.strategy.matrix axis 'node' has duplicate value '14' [matrix]
+test.yaml:9:19: value "13" in "exclude" does not match in matrix "node" combinations. possible values are "10", "12", "14", "14" [matrix]
+test.yaml:12:13: jobs.'test'.strategy.matrix.exclude references unknown axis 'platform' [matrix]
