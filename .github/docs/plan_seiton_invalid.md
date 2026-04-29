@@ -18,13 +18,18 @@
 | 未マッチ期待行 (MISS) | 19 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
 
-### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル — 新規対象)
+### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
 
-| 指標 | 値 |
+| 指標 | 最新 (2026-04-29) |
 |---|---|
-| 対象 examples fixtures | 51 |
+| 対象 examples fixtures | 49 (2 scope-out 除外) |
+| 互換 fixtures (MISS=0) | 40 / 49 |
+| 行レベルマッチ率 (line+col or line) | 123 / 143 (86%) |
+| 完全一致マッチ率 (exact match) | 21 / 143 |
+| 列差異マッチ (same line, diff col/msg) | 102 / 143 |
+| 未マッチ期待行 (MISS) | 20 (true gaps) |
+| 余剰 seiton 行 (EXTRA) | 11 (additional detections) |
 | scope-out (shellcheck/pyflakes) | 2 (shellcheck_integration, pyflakes_integration) |
-| テスト未作成 | 全件 (ActionlintExamplesCompatTests を新設する) |
 
 ### 0.3 方針
 
@@ -124,7 +129,7 @@ scope-out fixtures:
 - `shellcheck_integration` (shellcheck 依存)
 - `pyflakes_integration` (pyflakes 依存)
 
-### 3.3 examples/ fixtures 一覧と予想カバレッジ
+### 3.3 examples/ fixtures 一覧と実測カバレッジ
 
 | Fixture | 主要ルール | seiton 対応状況 |
 |---|---|---|
@@ -219,7 +224,25 @@ scope-out fixtures:
 - `dotnet test --treenode-filter "/*/*/ActionlintExamplesCompatTests/*"` が全件パス (テスト自体は MISS があっても fail しない)
 - 実測サマリーがこのドキュメントに記録されていること
 
-**実装結果**: (未着手)
+**実装結果**: ✅ 完了 (2026-04-29)
+- `ActionlintExamplesCompatTests.cs` 新設: 103 テスト (51 fixtures × 2 + summary)
+- 全テストパス (`dotnet test` = 1201 テスト全通過)
+- `.seiton.out` ファイル全件生成済み
+- **実測結果**: 40/49 互換 (86% マッチ率)、MISS 20件
+
+**examples/ MISS 内訳 (9 fixtures, 20 MISS 行)**:
+
+| Fixture | MISS 数 | 主な原因 |
+|---|---|---|
+| `action_metadata_syntax_validation` | 6 | local-action-inputs ルールの検出メッセージ差異 (regex マッチ不成立) |
+| `invalid_action_format` | 4 | unpinned-uses ルールが actionlint の action 形式検証を担っているが SeitonOnlyRules で除外される |
+| `workflow_call_jobs` | 3 | reusable-workflow ルールの行位置差異 + not-existing workflow ファイル参照エラー |
+| `local_action_inputs` | 2 | local-action-inputs ルールの検出メッセージが regex にマッチしない |
+| `if_cond_always_true` | 1 | multiline block scalar trailing `\n` ケース (err/ Phase 2 と同じ原因) |
+| `invalid_ids_in_needs` | 1 | needs-graph ルールの未知ジョブ参照メッセージ差異 |
+| `dangling_alias` | 1 | 未定義アンカーの行位置差異 (seiton は具体行, actionlint は 0:0) |
+| `yaml_anchor_usage` | 1 | alias ノード型チェックメッセージ差異 |
+| `popular_action_inputs` | 1 | popular-action-inputs の unknown input メッセージ regex マッチ不成立 |
 
 ---
 
@@ -343,7 +366,7 @@ scope-out fixtures:
 
 | Phase | ステータス | 着手日 | 完了日 | MISS 削減数 | 備考 |
 |---|---|---|---|---|---|
-| Phase 0 | 未着手 | - | - | - | examples/ テスト基盤 |
+| Phase 0 | ✅完了 | 2026-04-29 | 103 tests | 1201 all pass | examples/ テスト基盤 |
 | Phase 1 | 未着手 | - | - | 目標: 3-4 | reusable-workflow |
 | Phase 2 | 未着手 | - | - | 目標: 2 | if-cond multiline |
 | Phase 3 | 未着手 | - | - | 目標: 1 | glob multiline |

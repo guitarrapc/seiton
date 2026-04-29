@@ -1,0 +1,2 @@
+test.yaml:7:15: missing required input 'key' for action 'actions/cache@v4' [action]
+test.yaml:10:13: unknown input 'keys' for action 'actions/cache@v4' [action]

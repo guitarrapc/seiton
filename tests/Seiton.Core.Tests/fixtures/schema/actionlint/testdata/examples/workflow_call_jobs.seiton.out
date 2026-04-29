@@ -1,0 +1,4 @@
+test.yaml:3:3: jobs.'job1' cannot have both uses and runs-on [syntax-check]
+test.yaml:10:3: jobs.'job3' key 'with' requires uses [workflow-call]
+test.yaml:3:3: when jobs.'job1' calls reusable workflow with uses, key 'runs-on' is not allowed [workflow-call]
+test.yaml:9:5: reusable workflow call "./.github/workflows/ci.yml@main" at "uses" is not following the format "owner/repo/path/to/workflow.yml@ref" nor "./path/to/workflow.yml". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details [workflow-call]
