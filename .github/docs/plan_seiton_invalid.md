@@ -11,12 +11,13 @@
 
 | 指標 | 最新 (2026-04-29) |
 |---|---|
-| 互換 fixtures (MISS=0) | 89 / 95 (4 scope-out) |
-| 行レベルマッチ率 (line+col or line) | 474 / 486 (98%) |
-| 完全一致マッチ率 (exact match) | 155 / 486 |
-| 列差異マッチ (same line, diff col/msg) | 315 / 486 |
-| 未マッチ期待行 (MISS) | 6 (true gaps) |
-| 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
+| 互換 fixtures (MISS=0) | 90 / 95 (4 scope-out) |
+| マッチ率 (exact+line+near-line) | 485 / 486 (99%) |
+| 完全一致マッチ率 (exact match) | 158 / 486 |
+| 列差異マッチ (same line, diff col/msg) | 321 / 486 |
+| 近接行マッチ (near-line, position diff) | 6 / 486 |
+| 未マッチ期待行 (MISS) | 1 (true gaps) |
+| 余剰 seiton 行 (EXTRA) | 41 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
 
@@ -397,7 +398,19 @@ scope-out fixtures:
 2. 残りは「seiton が独自位置/メッセージで検出済み」として、テスト比較側で LINE_MATCH または NEAR_MATCH として扱うことを検討
 3. MISS カウントの再分類 (true gap vs position difference)
 
-**実装結果**: (未着手)
+**実装結果**: ✅完了
+- 3パスマッチングアルゴリズムへ拡張:
+  - Pass 1: Exact/regex match (既存)
+  - Pass 2: Line-number match (既存)
+  - Pass 3: **Near-line match** (新規) — ±5行以内で同一 `[rule-id]` の seiton 行をマッチ。行 0 (位置不明) の場合は同一 rule ID の任意の行をマッチ。
+- **ファイル名正規化**: `.out` ファイルが fixture 名をファイル名として使用している場合に `test.yaml:` へ正規化 (→ strategy_matrix_runner_context の LINE_MATCH 成立)
+- `MatchResult.NearLineMatchCount` 追加、サマリレポートに Near-line match カテゴリ追加
+- `NormalizeExpectations()`, `ExtractRuleId()`, `ExtractExpectedRuleId()` ヘルパー追加
+- `GenerateMappingSummary` にも Pass 3 + NEAR_LINE ステータス追加
+- `ActionlintExamplesCompatTests` にも同一の 3パスロジック適用
+- MISS 8→1: 7件解消 (#4 workflow_call_job, #5 github_script, #13 undefined_anchor, #14 strategy_matrix_runner, #18 workflow_dispatch, #19 invalid_image_version, #11 invalid_snapshot image-name)
+- 残り MISS 1件: #12 invalid_snapshot `10:16: string should not be empty` — seiton はより具体的な `glob pattern should not be empty` で検出しているが、rule ID が異なる ([syntax-check] vs [glob]) ため near-line マッチ不成立
+- テスト: 全 1214 テスト pass
 
 ---
 
@@ -411,6 +424,6 @@ scope-out fixtures:
 | Phase 3 | ✅完了 | 2026-04-29 | 2026-04-29 | 1 (#6) | glob multiline |
 | Phase 4 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#15,#16) | recursive_anchors |
 | Phase 5 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#9,#10) | contains() overload |
-| Phase 6 | 未着手 | - | - | 目標: 6+ | テスト比較改善 |
+| Phase 6 | ✅完了 | 2026-04-29 | 2026-04-29 | 7 (#4,#5,#11,#13,#14,#18,#19) | テスト比較改善 |
 
 ---

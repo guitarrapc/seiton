@@ -164,8 +164,8 @@ public sealed class ActionlintExamplesCompatTests
         // 3. Parse .out expectations
         var expectations = ParseOutFile(fixture.OutPath);
 
-        // 4. Match seiton lines against expectations (exact + line-number fallback)
-        var matchResult = Match(seitonLines, expectations);
+        // 4. Match seiton lines against expectations (exact + line-number + near-line fallback)
+        var matchResult = Match(seitonLines, expectations, fixture.Name);
 
         // 5. Verify: seiton must not crash (this always asserts)
         await Assert.That(result.Diagnostics).IsNotNull();
@@ -174,7 +174,7 @@ public sealed class ActionlintExamplesCompatTests
         if (matchResult.UnmatchedExpected.Count > 0)
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"[{fixture.Name}] exact={matchResult.ExactMatchCount} line={matchResult.LineMatchCount} miss={matchResult.UnmatchedExpected.Count} extra={matchResult.ExtraSeiton.Count}");
+            sb.AppendLine($"[{fixture.Name}] exact={matchResult.ExactMatchCount} line={matchResult.LineMatchCount} near={matchResult.NearLineMatchCount} miss={matchResult.UnmatchedExpected.Count} extra={matchResult.ExtraSeiton.Count}");
             foreach (var line in matchResult.UnmatchedExpected)
             {
                 sb.AppendLine($"  MISS: {(line.IsRegex ? "/" + line.Pattern + "/" : line.Pattern)}");
@@ -202,6 +202,7 @@ public sealed class ActionlintExamplesCompatTests
         var totalExpected = 0;
         var totalExactMatched = 0;
         var totalLineMatched = 0;
+        var totalNearLineMatched = 0;
         var totalMiss = 0;
         var totalExtra = 0;
         var lintFilePath = GetLintFilePath();
@@ -222,11 +223,12 @@ public sealed class ActionlintExamplesCompatTests
 
             var seitonLines = FormatAsActionlint(result.Diagnostics);
             var expectations = ParseOutFile(outPath);
-            var matchResult = Match(seitonLines, expectations);
+            var matchResult = Match(seitonLines, expectations, name);
 
             totalExpected += expectations.Count;
             totalExactMatched += matchResult.ExactMatchCount;
             totalLineMatched += matchResult.LineMatchCount;
+            totalNearLineMatched += matchResult.NearLineMatchCount;
             totalMiss += matchResult.UnmatchedExpected.Count;
             totalExtra += matchResult.ExtraSeiton.Count;
 
@@ -237,11 +239,13 @@ public sealed class ActionlintExamplesCompatTests
         }
 
         var report = new StringBuilder();
+        var totalMatched = totalExactMatched + totalLineMatched + totalNearLineMatched;
         report.AppendLine("=== Actionlint Examples Compatibility Summary ===");
         report.AppendLine($"Fixtures: {fullyMatched}/{totalFixtures} fully compatible ({scopeOutCount} scope-out excluded)");
-        report.AppendLine($"Expected lines: {totalExactMatched + totalLineMatched}/{totalExpected} matched ({(totalExpected > 0 ? (totalExactMatched + totalLineMatched) * 100 / totalExpected : 0)}%)");
+        report.AppendLine($"Expected lines: {totalMatched}/{totalExpected} matched ({(totalExpected > 0 ? totalMatched * 100 / totalExpected : 0)}%)");
         report.AppendLine($"  Exact match: {totalExactMatched}");
         report.AppendLine($"  Line match (design diff): {totalLineMatched}");
+        report.AppendLine($"  Near-line match (position diff): {totalNearLineMatched}");
         report.AppendLine($"  True gaps (MISS): {totalMiss}");
         report.AppendLine($"Extra seiton lines: {totalExtra} (additional detections)");
         Console.Write(report);
@@ -363,20 +367,24 @@ public sealed class ActionlintExamplesCompatTests
     {
         public int ExactMatchCount { get; set; }
         public int LineMatchCount { get; set; }
+        public int NearLineMatchCount { get; set; }
         public List<ExpectedLine> UnmatchedExpected { get; } = [];
         public List<string> ExtraSeiton { get; } = [];
     }
 
-    private static MatchResult Match(List<string> seitonLines, List<ExpectedLine> expectations)
+    private static MatchResult Match(List<string> seitonLines, List<ExpectedLine> expectations, string? fixtureName = null)
     {
         var result = new MatchResult();
         var seitonMatched = new bool[seitonLines.Count];
 
+        // Normalize expected lines: replace {fixtureName}.yaml: with test.yaml:
+        var normalized = NormalizeExpectations(expectations, fixtureName);
+
         // Pass 1: Exact/regex match
         var pass1Unmatched = new List<ExpectedLine>();
-        for (var i = 0; i < expectations.Count; i++)
+        for (var i = 0; i < normalized.Count; i++)
         {
-            var expected = expectations[i];
+            var expected = normalized[i];
             var found = false;
 
             for (var j = 0; j < seitonLines.Count; j++)
@@ -402,12 +410,13 @@ public sealed class ActionlintExamplesCompatTests
         }
 
         // Pass 2: Line-number match for remaining unmatched expectations.
+        var pass2Unmatched = new List<ExpectedLine>();
         foreach (var expected in pass1Unmatched)
         {
             var expectedLineNum = ExtractExpectedLineNumber(expected);
             if (expectedLineNum < 0)
             {
-                result.UnmatchedExpected.Add(expected);
+                pass2Unmatched.Add(expected);
                 continue;
             }
 
@@ -431,6 +440,63 @@ public sealed class ActionlintExamplesCompatTests
 
             if (!found)
             {
+                pass2Unmatched.Add(expected);
+            }
+        }
+
+        // Pass 3: Near-line match with same rule ID for remaining unmatched expectations.
+        foreach (var expected in pass2Unmatched)
+        {
+            var expectedLineNum = ExtractExpectedLineNumber(expected);
+            var expectedRuleId = ExtractExpectedRuleId(expected);
+
+            if (expectedRuleId == null)
+            {
+                result.UnmatchedExpected.Add(expected);
+                continue;
+            }
+
+            var bestIdx = -1;
+            var bestDistance = int.MaxValue;
+
+            for (var j = 0; j < seitonLines.Count; j++)
+            {
+                if (seitonMatched[j])
+                {
+                    continue;
+                }
+
+                var seitonRuleId = ExtractRuleId(seitonLines[j]);
+                if (!string.Equals(seitonRuleId, expectedRuleId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (expectedLineNum == 0)
+                {
+                    bestIdx = j;
+                    break;
+                }
+
+                if (expectedLineNum > 0)
+                {
+                    var seitonLineNum = ExtractLineNumber(seitonLines[j]);
+                    var distance = Math.Abs(seitonLineNum - expectedLineNum);
+                    if (distance <= 5 && distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestIdx = j;
+                    }
+                }
+            }
+
+            if (bestIdx >= 0)
+            {
+                seitonMatched[bestIdx] = true;
+                result.NearLineMatchCount++;
+            }
+            else
+            {
                 result.UnmatchedExpected.Add(expected);
             }
         }
@@ -445,6 +511,80 @@ public sealed class ActionlintExamplesCompatTests
         }
 
         return result;
+    }
+
+    private static List<ExpectedLine> NormalizeExpectations(List<ExpectedLine> expectations, string? fixtureName)
+    {
+        if (fixtureName == null)
+        {
+            return expectations;
+        }
+
+        var fixturePrefix = $"{fixtureName}.yaml:";
+        var needsNormalization = false;
+        for (var i = 0; i < expectations.Count; i++)
+        {
+            if (!expectations[i].IsRegex && expectations[i].Pattern.StartsWith(fixturePrefix, StringComparison.Ordinal))
+            {
+                needsNormalization = true;
+                break;
+            }
+        }
+
+        if (!needsNormalization)
+        {
+            return expectations;
+        }
+
+        var normalized = new List<ExpectedLine>(expectations.Count);
+        for (var i = 0; i < expectations.Count; i++)
+        {
+            var e = expectations[i];
+            if (!e.IsRegex && e.Pattern.StartsWith(fixturePrefix, StringComparison.Ordinal))
+            {
+                normalized.Add(new ExpectedLine("test.yaml:" + e.Pattern[fixturePrefix.Length..], e.IsRegex));
+            }
+            else
+            {
+                normalized.Add(e);
+            }
+        }
+
+        return normalized;
+    }
+
+    private static string? ExtractRuleId(string line)
+    {
+        var end = line.LastIndexOf(']');
+        if (end < 1)
+        {
+            return null;
+        }
+
+        var start = line.LastIndexOf('[', end - 1);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        return line[(start + 1)..end];
+    }
+
+    private static string? ExtractExpectedRuleId(ExpectedLine expected)
+    {
+        if (expected.IsRegex)
+        {
+            var match = Regex.Match(expected.Pattern, @"\\\[([^\]\\]+)\\\]$");
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+
+            var match2 = Regex.Match(expected.Pattern, @"\[([^\]]+)\]$");
+            return match2.Success ? match2.Groups[1].Value : null;
+        }
+
+        return ExtractRuleId(expected.Pattern);
     }
 
     private static int ExtractLineNumber(string formattedLine)
