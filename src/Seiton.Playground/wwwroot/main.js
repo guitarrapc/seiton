@@ -104,6 +104,8 @@ const editor = CodeMirror(document.getElementById('editor'), {
     lineWrapping: true,
     autofocus: true,
     styleActiveLine: true,
+    /** Grow with document so the page scrolls instead of trapping scroll inside CodeMirror only. */
+    viewportMargin: Infinity,
     gutters: ['CodeMirror-linenumbers', 'error-marker'],
     extraKeys: {
         Tab(cm) {
@@ -115,8 +117,16 @@ const editor = CodeMirror(document.getElementById('editor'), {
 
 const DEBOUNCE_MS = 300;
 let debounceId = null;
+/** Coalesce refreshes while typing so measurements track height for layout (page scroll). */
+let sizingRaf = null;
 
 editor.on('change', (_cm, changeObj) => {
+    if (sizingRaf === null) {
+        sizingRaf = requestAnimationFrame(() => {
+            sizingRaf = null;
+            editor.refresh();
+        });
+    }
     if (debounceId !== null) {
         clearTimeout(debounceId);
     }
@@ -131,6 +141,10 @@ editor.on('change', (_cm, changeObj) => {
     } else {
         debounceId = setTimeout(run, DEBOUNCE_MS);
     }
+});
+
+window.addEventListener('resize', () => {
+    editor.refresh();
 });
 
 fileSelect.addEventListener('change', () => {
@@ -414,3 +428,6 @@ function getDefaultSource() {
 
 loading.style.display = 'none';
 runLint();
+requestAnimationFrame(() => {
+    editor.refresh();
+});

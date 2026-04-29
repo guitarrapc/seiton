@@ -18,7 +18,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
+  min-height: 100%;
   font-family: "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
@@ -223,35 +223,47 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  height: calc(100vh - 9.25rem);
-  min-height: 320px;
+  align-items: start;
 }
 
 @media (max-width: 880px) {
   #linter {
     grid-template-columns: 1fr;
-    height: auto;
   }
 }
 
 .split-pane {
   padding: 0;
-  overflow: hidden;
   min-width: 0;
+}
+
+#editor-wrap.split-pane {
+  overflow: visible;
 }
 
 #editor-wrap {
   position: relative;
   border-right: 1px solid #37474f;
   min-height: 240px;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
 }
 
 #editor {
-  flex: 1;
-  min-height: 0;
+  min-height: 200px;
+  flex-shrink: 0;
+}
+
+#editor-wrap .CodeMirror {
+  height: auto;
+}
+
+#editor-wrap .CodeMirror-scroll {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
 .apply-fixes-fab {
@@ -288,18 +300,22 @@ html, body {
   transform: translateY(1px);
 }
 
-#editor-wrap .CodeMirror {
-  height: 100%;
-}
-
+/* Sticky diagnostics: follow viewport while scrolling long editor; inner scroll only when taller than viewport. */
 .results-column {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  align-self: start;
+  max-height: 100vh;
+  max-height: 100dvh;
   border-left: 1px solid #37474f;
-  overflow-x: hidden;
-  overflow-y: auto;
   padding: 0.5rem 0;
   margin-left: -1px;
   font-size: 16px;
   min-width: 0;
+  background: var(--bg);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .result-table {
