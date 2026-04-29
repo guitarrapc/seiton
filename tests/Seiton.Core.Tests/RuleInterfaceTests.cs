@@ -12469,7 +12469,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix.yml");
+        var result = engine.Check(sourceBytes, "template-injection-fix.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -12500,7 +12501,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-pwsh.yml");
+        var result = engine.Check(sourceBytes, "template-injection-fix-pwsh.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -12528,7 +12530,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-dedup.yml");
+        var result = engine.Check(sourceBytes, "template-injection-fix-dedup.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -12556,7 +12559,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-reuse.yml");
+        var result = engine.Check(sourceBytes, "template-injection-fix-reuse.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -12584,7 +12588,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-no-fix-wildcard.yml");
+        var result = engine.Check(sourceBytes, "template-injection-no-fix-wildcard.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         // Wildcard paths can't generate a deterministic env var name
@@ -12605,7 +12610,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-head-ref.yml");
+        var result = engine.Check(sourceBytes, "template-injection-fix-head-ref.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -12633,7 +12639,8 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-block.yml");
+        var result = engine.Check(sourceBytes, "template-injection-fix-block.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -12641,14 +12648,70 @@ public sealed class RuleInterfaceTests
         var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
         var fixedText = Encoding.UTF8.GetString(fixedBytes);
 
-        // The env: block must appear BEFORE the run: key, not inside the script body
+        // The env: block must appear AFTER the run: block content (as a sibling key in the step mapping)
         var envLine = fixedText.IndexOf("GITHUB_EVENT_PULL_REQUEST_TITLE:", StringComparison.Ordinal);
         var runLine = fixedText.IndexOf("run: |", StringComparison.Ordinal);
         await Assert.That(envLine).IsGreaterThanOrEqualTo(0);
         await Assert.That(runLine).IsGreaterThan(0);
-        await Assert.That(envLine).IsLessThan(runLine);
+        await Assert.That(envLine).IsGreaterThan(runLine);
 
         // The shell variable should be inside the script body
         await Assert.That(fixedText.Contains("${GITHUB_EVENT_PULL_REQUEST_TITLE}", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_SingleKeyListItem_ProducesValidYaml()
+    {
+        // When a step is written as `- run: ...` (single-key list item),
+        // the env: block must be inserted as a sibling key inside the list item mapping,
+        // not outside the list item.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-list-item.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // The fixed output must be valid YAML that re-parses without fatal errors
+        var reparse = engine.Check(fixedBytes, "template-injection-fix-list-item.yml");
+        await Assert.That(reparse.HasFatalError).IsEqualTo(false);
+
+        // env: should be at the same indent as run: (inside the list item mapping)
+        await Assert.That(fixedText.Contains("GITHUB_EVENT_PULL_REQUEST_TITLE:", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_NotAttachedWhenFixDisabled()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        // Fix.Enabled defaults to false
+        var result = engine.Check(sourceBytes, "template-injection-no-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Diagnostic should exist but without a fix attached
+        await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 }

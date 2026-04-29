@@ -356,7 +356,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     private bool TryBuildFix(Step step, string pathString, string sinkName, int exprAbsoluteOffset, int exprLength, out DiagnosticFix fix)
     {
         fix = default;
-        if (Config.Utf8Yaml is null)
+        if (!Config.Fix.Enabled || Config.Utf8Yaml is null)
         {
             return false;
         }
@@ -509,7 +509,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
-        var keyIndent = FixFormatting.GetLineIndentation(utf8Yaml, runLine);
+        // Compute the step-key indent, accounting for list item marker (- )
+        var stepKeyIndent = GetStepKeyIndentation(utf8Yaml, runLine);
 
         if (step.Env?.Vars is not null && step.Env.Vars.Value.Count > 0)
         {
@@ -527,13 +528,18 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return true;
         }
 
-        // No existing env: insert env block before the run: line
+        // No existing env: insert env block after the run: line (or block scalar content).
+        // Inserting before `- run:` would place env: outside the list item mapping.
         var childIndentUnit = FixFormatting.InferIndentationUnit(utf8Yaml);
-        var envChildIndent = keyIndent + childIndentUnit;
-        var insertBeforeRun = FindLineStartOffset(utf8Yaml, runLine);
-        var envBlock = keyIndent + "env:" + lineEnding
+        var envChildIndent = stepKeyIndent + childIndentUnit;
+        var runEndLine = FindRunEndLine(utf8Yaml, runLine, stepKeyIndent);
+        var insertAfterRun = FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
+        // If the file doesn't end with a newline, prepend one before the env block
+        var needsLeadingNewline = insertAfterRun == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
+        var envBlock = (needsLeadingNewline ? lineEnding : "")
+            + stepKeyIndent + "env:" + lineEnding
             + envChildIndent + envVarName + ": ${{ " + pathString + " }}" + lineEnding;
-        edit = new TextEdit(insertBeforeRun, 0, envBlock);
+        edit = new TextEdit(insertAfterRun, 0, envBlock);
         return true;
     }
 
@@ -690,20 +696,134 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return line;
     }
 
+    /// <summary>
+    /// Gets the step key indentation, accounting for the YAML list item marker (<c>- </c>).
+    /// For a line like <c>    - run: echo hello</c>, returns <c>"      "</c> (6 spaces)
+    /// so that sibling keys align with <c>run:</c> inside the list item mapping.
+    /// </summary>
+    private static string GetStepKeyIndentation(byte[] utf8Yaml, int lineNumber)
+    {
+        var baseIndent = FixFormatting.GetLineIndentation(utf8Yaml, lineNumber);
+        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var offset = lineStart + baseIndent.Length;
+        return offset + 1 < utf8Yaml.Length && utf8Yaml[offset] == (byte)'-' && utf8Yaml[offset + 1] == (byte)' '
+            ? baseIndent + "  "
+            : baseIndent;
+    }
+
+    /// <summary>
+    /// Finds the last line of the run: value content.
+    /// For inline scalars, this is the run: key line itself.
+    /// For block scalars (run: |), this is the last indented content line.
+    /// </summary>
+    private static int FindRunEndLine(byte[] utf8Yaml, int runKeyLine, string stepKeyIndent)
+    {
+        var lastContentLine = runKeyLine;
+        var stepKeyIndentLen = stepKeyIndent.Length;
+        var currentLine = runKeyLine;
+        var pos = FindLineStartOffset(utf8Yaml, runKeyLine);
+
+        // Advance past the run key line
+        while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
+        {
+            pos++;
+        }
+
+        if (pos < utf8Yaml.Length)
+        {
+            pos++; // skip '\n'
+        }
+
+        currentLine++;
+
+        // Walk subsequent lines: content lines of a block scalar are indented
+        // deeper than the step key indent. Stop at the first line at or less than
+        // step key indent (next sibling key or dedent).
+        while (pos < utf8Yaml.Length)
+        {
+            var lineStart = pos;
+            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
+            {
+                pos++;
+            }
+
+            var lineLen = pos - lineStart;
+            if (pos < utf8Yaml.Length)
+            {
+                pos++; // skip '\n'
+            }
+
+            // Empty or whitespace-only lines are part of the block scalar
+            var indent = 0;
+            while (indent < lineLen && utf8Yaml[lineStart + indent] == (byte)' ')
+            {
+                indent++;
+            }
+
+            if (indent >= lineLen || (lineLen > 0 && lineStart + indent < utf8Yaml.Length && utf8Yaml[lineStart + indent] == (byte)'\r' && indent + 1 >= lineLen))
+            {
+                // Empty line — still part of block scalar
+                lastContentLine = currentLine;
+                currentLine++;
+                continue;
+            }
+
+            // Non-empty line: check if it's still indented deeper than the step key
+            if (indent > stepKeyIndentLen)
+            {
+                lastContentLine = currentLine;
+                currentLine++;
+                continue;
+            }
+
+            // Line is at same or less indent — not part of the run value
+            break;
+        }
+
+        return lastContentLine;
+    }
+
     private static int FindRunKeyOffset(byte[] utf8Yaml, int valueStart)
     {
-        // Scan backwards from the value start offset to find the "run:" key.
-        // This handles both inline scalars (run: echo hello) and block scalars (run: |).
-        for (var i = valueStart - 1; i >= 3; i--)
+        // Scan backwards line-by-line from the value start to find the "run:" key.
+        // For block scalars (run: |), the value range points into the script body,
+        // so we must locate the actual "run:" key line which is always before the value.
+        // We check each line for `run:` as a YAML key (preceded only by whitespace or `- `).
+        var pos = Math.Min(valueStart, utf8Yaml.Length);
+        while (pos > 0)
         {
-            if (utf8Yaml[i] == (byte)':' && utf8Yaml[i - 1] == (byte)'n' && utf8Yaml[i - 2] == (byte)'u' && utf8Yaml[i - 3] == (byte)'r')
+            // Find start of the current line
+            var lineStart = pos - 1;
+            while (lineStart > 0 && utf8Yaml[lineStart - 1] != (byte)'\n')
             {
-                // Verify it's not part of a larger word (e.g. "rerun:")
-                if (i - 4 < 0 || utf8Yaml[i - 4] == (byte)' ' || utf8Yaml[i - 4] == (byte)'\n' || utf8Yaml[i - 4] == (byte)'-')
-                {
-                    return i - 3;
-                }
+                lineStart--;
             }
+
+            // Skip leading whitespace
+            var i = lineStart;
+            while (i < pos && utf8Yaml[i] == (byte)' ')
+            {
+                i++;
+            }
+
+            // Skip optional list item marker `- `
+            if (i + 1 < pos && utf8Yaml[i] == (byte)'-' && utf8Yaml[i + 1] == (byte)' ')
+            {
+                i += 2;
+            }
+
+            // Check for `run:` at this position
+            if (i + 3 < utf8Yaml.Length
+                && utf8Yaml[i] == (byte)'r'
+                && utf8Yaml[i + 1] == (byte)'u'
+                && utf8Yaml[i + 2] == (byte)'n'
+                && utf8Yaml[i + 3] == (byte)':')
+            {
+                return i;
+            }
+
+            // Move to previous line
+            pos = lineStart;
         }
 
         return -1;
