@@ -437,7 +437,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var node = ParseStringAndValidateExpression(ref reader, arena, diagnostics, exprContext, out var mvErr, out var mvMark, parseWholeValueIfNoEmbedded: false);
-            if (mvErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.matrix value must be string, object, or array", mvMark);
+            if (mvErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value must be string, object, or array", mvMark);
             if (!node.HasValue) node = arena.AddString(default, false, default);
             return new RawYamlString { Value = node };
         }
@@ -464,12 +464,12 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.Alias)
         {
-            AddError(diagnostics, $"unexpected alias node on parsing value in matrix row of jobs.'{DecodeUtf8(source, jobId)}'", reader.CurrentStart);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix unexpected alias node in value", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new RawYamlString { Value = arena.AddString(default, false, default) };
         }
 
-        AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.matrix value has unsupported shape", reader.CurrentStart);
+        AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value has unsupported shape", reader.CurrentStart);
         reader.SkipCurrentNode();
         return new RawYamlString { Value = arena.AddString(default, false, default) };
     }
@@ -487,7 +487,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.matrix object key must be string", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix object key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {

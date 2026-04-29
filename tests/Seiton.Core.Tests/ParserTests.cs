@@ -2366,7 +2366,35 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "recursive-matrix.yml");
         // The matrix value position should report an alias-specific message, not generic "unsupported shape"
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected alias node", StringComparison.Ordinal) && d.Message.Contains("matrix", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected alias node", StringComparison.Ordinal) && d.Message.Contains("strategy.matrix", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_MatrixValueDiagnostic_UsesStrategyMatrixDottedPath()
+    {
+        // Alias in matrix value triggers alias diagnostic in strategy.matrix
+        // Message must start with "jobs.'<id>'.strategy.matrix" (dotted-path prefix convention)
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          ci:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                include: &ref
+                  - os: ubuntu-latest
+                    nested: *ref
+            steps:
+              - run: echo ok
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var matrixDiags = result.Diagnostics.Where(d => d.Message.Contains("strategy.matrix", StringComparison.Ordinal)).ToArray();
+        foreach (var d in matrixDiags)
+        {
+            // All matrix diagnostics must use dotted-path prefix format (path first, then description)
+            await Assert.That(d.Message).StartsWith("jobs.'ci'.strategy.matrix");
+        }
     }
 
     [Test]
