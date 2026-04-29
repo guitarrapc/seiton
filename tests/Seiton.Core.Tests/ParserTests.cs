@@ -1163,10 +1163,10 @@ public sealed class ParserTests
         evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options!.Count).IsEqualTo(3);
-        // Empty string in options is collected in AST for downstream rules, but parser
-        // now emits context-specific empty-value error.
+        // Empty string in options is legitimate for choice-type inputs (e.g. "no selection" option).
+        // Parser must NOT emit a diagnostic for empty option elements.
         var emptyDiag = result.Diagnostics.Where(d => d.Message.Contains("option should not be empty")).ToArray();
-        await Assert.That(emptyDiag.Length).IsEqualTo(1);
+        await Assert.That(emptyDiag.Length).IsEqualTo(0);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
         var emptyOptionNode = input.Options![0];
@@ -5782,9 +5782,9 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
-    // empty string element in workflow_dispatch choice options must be detected
+    // empty string element in workflow_dispatch choice options is legitimate (e.g. "no selection")
     [Test]
-    public async Task Parse_WorkflowDispatchEmptyOption_ReportsStringNotEmpty()
+    public async Task Parse_WorkflowDispatchEmptyOption_NoError()
     {
         var yaml = NormalizeEol("""
         on:
@@ -5802,9 +5802,8 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("option should not be empty"));
-        await Assert.That(diag.Message).IsNotNull();
-        await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '' is on line 7
+        var hasEmptyOptionDiag = result.Diagnostics.Any(d => d.Message.Contains("option should not be empty"));
+        await Assert.That(hasEmptyOptionDiag).IsFalse();
     }
 
     // empty string element in image_version versions must be detected

@@ -220,7 +220,7 @@ public static partial class WorkflowParser
                     {
                         var optSeqMark = reader.CurrentStart;
                         var inputName = Encoding.UTF8.GetString(arena.GetStringValue(nameNode));
-                        options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true, emptyElementMessage: $"on.workflow_dispatch input \"{inputName}\" option should not be empty");
+                        options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
                         if (optErr)
                             AddError(diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
                         else if (options is { Length: 0 })

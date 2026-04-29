@@ -1,5 +1,4 @@
 test.yaml:10:18: "options" section should not be empty [syntax-check]
-test.yaml:12:21: on.workflow_dispatch input "choice_input_empty_option" option should not be empty [syntax-check]
 test.yaml:47:15: on.workflow_dispatch input type 'unknown' is invalid; must be one of string, number, boolean, choice, environment [syntax-check]
 test.yaml:6:7: workflow_dispatch input 'choice_input_no_options' of type 'choice' must define non-empty options [events]
 test.yaml:8:7: workflow_dispatch input 'choice_input_options_is_empty' of type 'choice' must define non-empty options [events]
