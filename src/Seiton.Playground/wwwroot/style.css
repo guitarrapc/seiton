@@ -74,8 +74,8 @@ main {
 .site-title-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem 0.85rem;
+  align-items: baseline;
+  gap: 0.5rem 0.85rem;
 }
 
 #header-bar h1 {
@@ -108,14 +108,14 @@ main {
 
 .version-badge {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   flex-shrink: 0;
-  padding: 0.2em 0.65em 0.22em;
-  font-size: clamp(0.65rem, 0.55rem + 0.45vw, 0.78rem);
+  padding: 0.28em 0.78em 0.32em;
+  font-size: clamp(0.78rem, 0.68rem + 0.5vw, 0.95rem);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
-  line-height: 1.2;
+  line-height: 1.1;
   color: #b8d4ff;
   background: rgba(130, 170, 255, 0.14);
   border: 1px solid rgba(130, 170, 255, 0.45);
