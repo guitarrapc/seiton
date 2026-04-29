@@ -67,7 +67,7 @@
                 type="button"
                 class="apply-fixes-fab"
                 hidden
-                title="Apply every fix suggested in the diagnostics (runs offline). Skips deny-read-all auto-removal so read-all survives after fixing write-all.">
+                title="Apply every fix suggested in the diagnostics. Playground fixes run offline, it skips network-dependent pinning/digest remediation.">
           Apply all fixes
         </button>
         <div id="editor"></div>
@@ -83,7 +83,7 @@
     </section>
   </main>
   <footer>
-    <p><a href="https://github.com/guitarrapc/seiton">seiton</a> — Playground fixes run offline. <strong>Apply all fixes</strong> skips the <code>deny-read-all</code> automatic replacement (would clear viable <code>read-all</code> after fixing <code>write-all</code>). Paste a <strong>raw</strong> GitHub/Gist YAML URL.</p>
+    <p><a href="https://github.com/guitarrapc/seiton">seiton</a> by guitarrapc. The source code and website content are licensed <a href="https://github.com/guitarrapc/seiton/blob/main/LICENSE.md">MIT</a>.</p>
   </footer>
   <script type="importmap"></script>
   <script type="module" src="main#[.{fingerprint}].js"></script>
