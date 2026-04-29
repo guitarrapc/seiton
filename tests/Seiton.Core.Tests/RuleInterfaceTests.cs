@@ -4445,7 +4445,38 @@ public sealed class RuleInterfaceTests
         var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
-        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsTrue();
+        // Workflow-level write-all should be fixed to {} (drop permissions), not read-all
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_DenyWriteAll_Fix_JobLevel_ReplacesWithEmptyMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                permissions: write-all
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyWriteAllRule()]);
+        var result = engine.Check(sourceBytes, "deny-write-all-job-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-write-all");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-job-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        // Job-level write-all should be fixed to {} (drop permissions)
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("write-all", StringComparison.Ordinal)).IsFalse();
         await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
 
@@ -4529,6 +4560,39 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
         var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        // Workflow-level read-all should be fixed to {}
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_DenyReadAll_Fix_JobLevel_ReplacesWithEmptyMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                permissions: read-all
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyReadAllRule()]);
+        var result = engine.Check(sourceBytes, "deny-read-all-job-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-read-all");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-job-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        // Job-level read-all should be fixed to {} (drop permissions)
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsFalse();
         await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsFalse();
     }
 
