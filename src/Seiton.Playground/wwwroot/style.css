@@ -6,16 +6,14 @@
   --bg: #1e2430;
   /* Matches CodeMirror 5 theme material-darker (.cm-s-material-darker.CodeMirror). */
   --editor-surface: #212121;
+  /* Max width cap for CodeMirror gutters (see comment at #editor gutter block). */
+  --editor-gutter-max-width: 5rem;
   /* Slightly darker than --bg — reads as one block with the editor column. */
   --results-surface: #171c26;
   --text: #eceff1;
   --muted: #78909c;
   --accent: #82aaff;
   --danger: #ff5370;
-  --fix-btn-bg: rgba(46, 204, 113, 0.22);
-  --fix-btn-border: rgba(105, 240, 174, 0.55);
-  --fix-btn-text: #c8f7df;
-  --fix-btn-glow: rgba(105, 240, 174, 0.35);
 }
 
 html {
@@ -291,44 +289,98 @@ main {
 }
 
 #editor-wrap .CodeMirror-scroll {
-  overflow-x: auto !important;
-  overflow-y: visible !important;
-  height: auto !important;
-  max-height: none !important;
+  overflow-x: auto;
+  overflow-y: visible;
+  height: auto;
+  max-height: none;
+}
+
+#editor-wrap .CodeMirror pre.CodeMirror-line {
+  line-height: 1.5;
+}
+
+/*
+ * Editor gutter width (CodeMirror 5): NOT a single CSS width.
+ * CM measures the widest rendered line-number string + gutter padding (.CodeMirror-linenumber),
+ * adds any named gutters (here: line numbers + `error-marker` from main.js),
+ * then sets inline `width` on `.CodeMirror-gutters` and each `.CodeMirror-gutter`.
+ * So plain `width` in style.css loses to inline except where `max-width` still constrains the used width.
+ * Tuning: `--editor-gutter-max-width`; `.CodeMirror-linenumber` padding (then run editor.refresh()); or narrower `error-marker` gutter in JS/CSS.
+ */
+#editor-wrap .CodeMirror.cm-s-material-darker .CodeMirror-gutters {
+  background-color: var(--editor-gutter-bg);
+  border-right: 1px solid rgba(0, 0, 0, 0.35);
+  padding-left: 0;
+  max-width: var(--editor-gutter-max-width);
+}
+
+#editor-wrap .CodeMirror.cm-s-material-darker .CodeMirror-linenumber {
+  box-sizing: border-box;
+  padding-left: 2px;
+  padding-right: 0;
+  min-width: 0;
+  text-align: right;
+}
+
+#editor-wrap .CodeMirror.cm-s-material-darker .CodeMirror-gutter.error-marker {
+  min-width: 0;
 }
 
 .apply-fixes-fab {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
+  top: 0.5rem;
+  right: 0.5rem;
   z-index: 20;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.82rem;
-  font-weight: 600;
+
+  appearance: none;
+  margin: 0;
+  padding: 0.46rem 0.9rem;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
   letter-spacing: 0.02em;
-  color: var(--fix-btn-text);
-  background: linear-gradient(160deg, rgba(57, 174, 117, 0.35) 0%, var(--fix-btn-bg) 100%);
-  border: 1px solid var(--fix-btn-border);
-  border-radius: 6px;
+
+  color: #bfe8d5;
+  background: rgba(22, 28, 25, 0.92);
+  border: 1px solid rgba(90, 160, 130, 0.45);
+  border-radius: 8px;
+
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(0, 0, 0, 0.15) inset,
-    0 0 12px var(--fix-btn-glow);
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
   cursor: pointer;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(10px);
+
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.1s ease;
 }
 
 .apply-fixes-fab:not([hidden]):hover {
-  background: linear-gradient(160deg, rgba(71, 201, 135, 0.45) 0%, rgba(46, 204, 113, 0.32) 100%);
-  border-color: rgba(165, 255, 216, 0.75);
+  color: #d8f4e9;
+  background: rgba(28, 36, 32, 0.96);
+  border-color: rgba(110, 200, 160, 0.55);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 0 16px var(--fix-btn-glow);
+    0 2px 10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .apply-fixes-fab:not([hidden]):active {
   transform: translateY(1px);
+}
+
+.apply-fixes-fab:focus-visible {
+  outline: 2px solid rgba(130, 170, 255, 0.55);
+  outline-offset: 2px;
+}
+
+.apply-fixes-fab[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Sticky diagnostics: follow viewport while scrolling long editor; inner scroll only when taller than viewport. */
