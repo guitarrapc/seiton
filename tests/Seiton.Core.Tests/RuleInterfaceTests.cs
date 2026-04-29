@@ -12624,7 +12624,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_TemplateInjection_Fix_BlockScalar_InsertsEnvBeforeRunKey()
+    public async Task LintEngine_TemplateInjection_Fix_BlockScalar_InsertsEnvAfterRunContent()
     {
         var yaml = """
         on: pull_request
@@ -12713,5 +12713,45 @@ public sealed class RuleInterfaceTests
 
         // Diagnostic should exist but without a fix attached
         await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_MultiLineEnvValue_InsertsAfterFullValue()
+    {
+        // When an existing env var has a multi-line block scalar value,
+        // the new env entry must be inserted AFTER the entire block, not inside it.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - env:
+                        SCRIPT: |
+                            echo "line1"
+                            echo "line2"
+                      run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-multiline-env.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // The new env entry must NOT be inside the SCRIPT block scalar
+        var scriptIdx = fixedText.IndexOf("SCRIPT: |", StringComparison.Ordinal);
+        var newEntryIdx = fixedText.IndexOf("GITHUB_EVENT_PULL_REQUEST_TITLE:", StringComparison.Ordinal);
+        var echoLine2Idx = fixedText.IndexOf("echo \"line2\"", StringComparison.Ordinal);
+        await Assert.That(newEntryIdx).IsGreaterThan(echoLine2Idx);
+
+        // The fixed output must still be valid YAML
+        var reparse = engine.Check(fixedBytes, "template-injection-fix-multiline-env.yml");
+        await Assert.That(reparse.HasFatalError).IsEqualTo(false);
     }
 }

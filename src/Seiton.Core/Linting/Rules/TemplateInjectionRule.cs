@@ -396,7 +396,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             ? "$env:" + envVarName
             : "${" + envVarName + "}";
 
-        // Build env insertion: insert env line before the run key
+        // Build env insertion: insert env block after the run value
         if (!TryBuildEnvInsertionEdit(step, envVarName, pathString, out var insertEdit))
         {
             return false;
@@ -514,14 +514,18 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
         if (step.Env?.Vars is not null && step.Env.Vars.Value.Count > 0)
         {
-            // Existing env mapping: insert after the last env entry
+            // Existing env mapping: insert after the last env entry (including multi-line values)
             var lastEnvLine = FindLastEnvEntryLine(step.Env);
             if (lastEnvLine < 1)
             {
                 return false;
             }
 
-            var childIndent = FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
+            // Use env key indentation (not value indentation) for the new sibling entry
+            var envKeyLine = FindEnvKeyLine(step.Env);
+            var childIndent = envKeyLine >= 0
+                ? FixFormatting.GetLineIndentation(utf8Yaml, envKeyLine)
+                : FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
             var insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
             var insertText = childIndent + envVarName + ": ${{ " + pathString + " }}" + lineEnding;
             edit = new TextEdit(insertOffset, 0, insertText);
@@ -550,17 +554,45 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return -1;
         }
 
-        var maxLine = -1;
+        var maxEndOffset = -1;
         foreach (var pair in env.Vars.Value)
         {
-            var valueLine = FindLineNumberFromOffset(Config.Utf8Yaml, Arena.GetStringSlice(pair.Value.Value).Offset);
-            if (valueLine > maxLine)
+            // Use the end of the value (start + length) to account for multi-line block scalars.
+            var slice = Arena.GetStringSlice(pair.Value.Value);
+            var endOffset = slice.Offset + slice.Length;
+            if (endOffset > maxEndOffset)
             {
-                maxLine = valueLine;
+                maxEndOffset = endOffset;
             }
         }
 
-        return maxLine;
+        if (maxEndOffset <= 0)
+        {
+            return -1;
+        }
+
+        // Return the line containing the last byte of the last value
+        return FindLineNumberFromOffset(Config.Utf8Yaml, maxEndOffset > 0 ? maxEndOffset - 1 : 0);
+    }
+
+    /// <summary>
+    /// Gets the indentation of env entry keys (not values), for correct sibling insertion.
+    /// </summary>
+    private int FindEnvKeyLine(Env env)
+    {
+        if (env.Vars is null || Config.Utf8Yaml is null)
+        {
+            return -1;
+        }
+
+        // Use the first env entry's key to determine key-level indentation
+        foreach (var pair in env.Vars.Value)
+        {
+            var nameSlice = Arena.GetStringSlice(pair.Value.Name);
+            return FindLineNumberFromOffset(Config.Utf8Yaml, nameSlice.Offset);
+        }
+
+        return -1;
     }
 
     private string DeduplicateEnvName(string baseName, Step step)
