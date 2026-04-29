@@ -150,7 +150,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read(); // consume key
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}", keyMark);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

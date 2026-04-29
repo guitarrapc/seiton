@@ -531,7 +531,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}", keyMark);
+            AddError(diagnostics, $"on.workflow_call.secrets unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

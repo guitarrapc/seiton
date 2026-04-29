@@ -232,6 +232,250 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_UnknownKey_JobLevel_IncludesJobIdInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                FOOBAR: 1
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build' unexpected key \"FOOBAR\" for \"job\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobConcurrency_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                concurrency:
+                    GROUP: my-group
+                    group: my-group
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.concurrency unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"concurrency\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobDefaults_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                defaults:
+                    RUN:
+                    run:
+                        SHELL: bash
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults expected \"run\" key for \"defaults\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults.run unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"run\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobStrategy_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                strategy:
+                    FAIL-FAST: true
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.strategy unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"strategy\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobEnvironment_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                environment:
+                    NAME: production
+                    name: production
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.environment unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"environment\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobContainer_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    IMAGE: foo:latest
+                    image: foo:latest
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.container unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"container\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobContainerCredentials_IncludesFullPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                container:
+                    image: foo:latest
+                    credentials:
+                        USERNAME: root
+                        username: root
+                        password: pass
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.container.credentials unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"credentials\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobService_IncludesServicePathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                services:
+                    redis:
+                        IMAGE: redis:latest
+                        image: redis:latest
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.services.'redis' unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"services\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobServiceCredentials_IncludesFullPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                services:
+                    redis:
+                        image: redis:latest
+                        credentials:
+                            USERNAME: root
+                            username: root
+                            password: pass
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.services.'redis'.credentials unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"credentials\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_WorkflowDispatchInputs_IncludesEventPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on:
+            workflow_dispatch:
+                inputs:
+                    myinput:
+                        DESCRIPTION: hello
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch.inputs unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"inputs\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_WorkflowCallSecrets_IncludesEventPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on:
+            workflow_call:
+                secrets:
+                    mysecret:
+                        DESCRIPTION: hello
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.secrets unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"secrets\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_WorkflowLevelConcurrency_NoJobPrefix()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            GROUP: my-group
+            group: my-group
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        // Workflow-level concurrency should keep the generic section name (no job prefix)
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("for \"concurrency\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_JobRunsOn_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on:
+                    LABELS: [ubuntu-latest]
+                    labels: [ubuntu-latest]
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.runs-on unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"runs-on\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_DuplicateWorkflowKey_ReportsError()
     {
         var yaml = NormalizeEol("""
@@ -1659,7 +1903,7 @@ public sealed class ParserTests
         {
             new ErrFixtureExpectation("empty.yaml", ["workflow root must be object"]),
             new ErrFixtureExpectation("empty_on.yaml", ["unknown event in on"]),
-            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "for \"job\" section"]),
+            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "jobs.'test1' unexpected key"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "must run script"]),

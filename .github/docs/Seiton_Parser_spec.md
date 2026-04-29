@@ -1134,6 +1134,44 @@ Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions wo
 
 When the job ID is unavailable (e.g., action metadata parsing), the step prefix falls back to `steps[{stepIndex}]`.
 
+#### Principle 6: Unexpected-key messages use dotted-path prefix for location context
+
+"Unexpected key" diagnostic messages use a **dotted-path prefix** followed by the original section-type `for` clause. This is consistent with step-level messages (Principle 5) and cleanly separates WHERE (prefix) from WHAT (section type in `for` clause).
+
+The format is:
+
+```
+{locationPath} unexpected key "{key}" for "{sectionType}" section. expected one of ...
+```
+
+When there is no location context (workflow-level), the prefix is omitted:
+
+```
+unexpected key "{key}" for "{sectionType}" section. expected one of ...
+```
+
+**Job-scope sections** — prefix with `jobs.'<id>'.<section>`:
+- `jobs.'build' unexpected key "X" for "job" section` (job top-level)
+- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job concurrency)
+- `jobs.'build'.strategy unexpected key "X" for "strategy" section` (strategy)
+- `jobs.'build'.environment unexpected key "X" for "environment" section` (environment)
+- `jobs.'build'.runs-on unexpected key "X" for "runs-on" section` (runs-on)
+- `jobs.'build'.container unexpected key "X" for "container" section` (container)
+- `jobs.'build'.container.credentials unexpected key "X" for "credentials" section` (container credentials)
+- `jobs.'build'.services.'redis' unexpected key "X" for "services" section` (service)
+- `jobs.'build'.services.'redis'.credentials unexpected key "X" for "credentials" section` (service credentials)
+
+**Shared helpers** (concurrency, defaults) — prefix only at job level:
+- `unexpected key "X" for "concurrency" section` (workflow-level, no prefix)
+- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job-level)
+- `expected "run" key for "defaults" section but got "X"` (workflow-level)
+- `jobs.'build'.defaults expected "run" key for "defaults" section but got "X"` (job-level)
+- `jobs.'build'.defaults.run unexpected key "X" for "run" section` (job-level defaults.run)
+
+**Event-scope sections** — prefix with `on.<event>.<section>`:
+- `on.workflow_dispatch.inputs unexpected key "X" for "inputs" section`
+- `on.workflow_call.secrets unexpected key "X" for "secrets" section`
+
 #### Normative empty-value message table
 
 These replace the former generic `"string should not be empty"` message:

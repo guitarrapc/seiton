@@ -239,7 +239,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}", keyMark);
+            AddError(diagnostics, $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

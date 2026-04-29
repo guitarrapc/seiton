@@ -307,7 +307,8 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Concurrency:
                         if (!reader.End)
                         {
-                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.concurrency must be string or object", ExpressionValidationContext.JobConcurrency, keyMark);
+                            var jobIdForConcurrency = DecodeUtf8(source, jobId);
+                            concurrencyNode = ParseConcurrencyNode(ref reader, arena, diagnostics, $"jobs.'{jobIdForConcurrency}'.concurrency must be string or object", ExpressionValidationContext.JobConcurrency, keyMark, sectionContext: $"jobs.'{jobIdForConcurrency}'");
                         }
 
                         break;
@@ -323,7 +324,8 @@ public static partial class WorkflowParser
                     case JobNodeMappingKey.Defaults:
                         if (!reader.End)
                         {
-                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.defaults must be object", ExpressionValidationContext.JobDefaultsRun);
+                            var jobIdForDefaults = DecodeUtf8(source, jobId);
+                            defaultsNode = ParseDefaultsNode(ref reader, arena, diagnostics, $"jobs.'{jobIdForDefaults}'.defaults must be object", ExpressionValidationContext.JobDefaultsRun, sectionContext: $"jobs.'{jobIdForDefaults}'");
                         }
 
                         break;
@@ -468,7 +470,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            AddError(diagnostics, $"unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}", keyMark);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -845,7 +847,7 @@ public static partial class WorkflowParser
 
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                AddError(diagnostics, $"unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}", keyMark);
+                AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}", keyMark);
                 if (!reader.End) reader.SkipCurrentNode();
             }
 
@@ -985,7 +987,7 @@ public static partial class WorkflowParser
 
             var unknownEnvKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}", keyMark);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
