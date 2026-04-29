@@ -5447,6 +5447,8 @@ public sealed class ParserTests
         var result = WorkflowParser.Parse(yaml.ToArray(), "test.yaml");
         var diag = result.Diagnostics.First(d => d.Message.Contains("key \"FOO\" is duplicated in \"with\" section"));
         await Assert.That(diag.Message).Contains("case insensitive");
+        await Assert.That(diag.Location.StartLine).IsEqualTo(9);
+        await Assert.That(diag.Location.StartColumn).IsEqualTo(11);
     }
 
     // regression: step diagnostics should include job context for actionability

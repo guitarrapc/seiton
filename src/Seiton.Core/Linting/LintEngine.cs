@@ -995,48 +995,75 @@ public sealed class LintEngine
     /// The message is normalized by stripping the leading <c>jobs.'…'.steps[N] </c> prefix
     /// so that alias-expanded steps sharing the same source position are deduplicated even
     /// though each carries a distinct step index.
+    /// Zero-alloc: stores the original message with a suffix start index instead of allocating
+    /// a Substring. Equality and hash operate on the suffix span.
     /// </summary>
-    private readonly record struct DiagnosticIdentity(
-        DiagnosticSeverity Severity,
-        string NormalizedMessage,
-        int StartLine)
+    private readonly struct DiagnosticIdentity : IEquatable<DiagnosticIdentity>
     {
+        private readonly DiagnosticSeverity _severity;
+        private readonly string _message;
+        private readonly int _suffixStart;
+        private readonly int _startLine;
+
         public DiagnosticIdentity(Diagnostic diagnostic)
-            : this(
-                diagnostic.Severity,
-                StripStepPrefix(diagnostic.Message),
-                diagnostic.Location.StartLine)
         {
+            _severity = diagnostic.Severity;
+            _message = diagnostic.Message;
+            _suffixStart = FindSuffixStart(diagnostic.Message);
+            _startLine = diagnostic.Location.StartLine;
         }
 
         /// <summary>
-        /// Strips the leading <c>jobs.'…'.steps[N] </c> prefix from a message so that
-        /// diagnostics differing only in step index are treated as identical for dedup.
+        /// Finds the start index of the message suffix after stripping the leading
+        /// <c>jobs.'…'.steps[N] </c> prefix. Returns 0 if pattern is not matched.
         /// </summary>
-        private static string StripStepPrefix(string message)
+        private static int FindSuffixStart(string message)
         {
             // Pattern: jobs.'<id>'.steps[<n>] <rest>
             if (!message.StartsWith("jobs.'", StringComparison.Ordinal))
             {
-                return message;
+                return 0;
             }
 
-            var idx = 6; // past "jobs.'"
             // Find closing quote of job id: '.steps[
-            var dotSteps = message.IndexOf("'.steps[", idx, StringComparison.Ordinal);
+            var dotSteps = message.IndexOf("'.steps[", 6, StringComparison.Ordinal);
             if (dotSteps < 0)
             {
-                return message;
+                return 0;
             }
 
             // Find "] " after the step index
             var bracketClose = message.IndexOf("] ", dotSteps + 8, StringComparison.Ordinal);
             if (bracketClose < 0)
             {
-                return message;
+                return 0;
             }
 
-            return message.Substring(bracketClose + 2);
+            return bracketClose + 2;
+        }
+
+        public bool Equals(DiagnosticIdentity other)
+        {
+            if (_severity != other._severity || _startLine != other._startLine)
+            {
+                return false;
+            }
+
+            var left = _message.AsSpan(_suffixStart);
+            var right = other._message.AsSpan(other._suffixStart);
+            return left.SequenceEqual(right);
+        }
+
+        public override bool Equals(object? obj) => obj is DiagnosticIdentity other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            var suffix = _message.AsSpan(_suffixStart);
+            var hash = new HashCode();
+            hash.Add((int)_severity);
+            hash.AddBytes(System.Runtime.InteropServices.MemoryMarshal.AsBytes(suffix));
+            hash.Add(_startLine);
+            return hash.ToHashCode();
         }
     }
 
