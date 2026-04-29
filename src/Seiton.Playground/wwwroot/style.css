@@ -6,6 +6,8 @@
   --bg: #1e2430;
   /* Matches CodeMirror 5 theme material-darker (.cm-s-material-darker.CodeMirror). */
   --editor-surface: #212121;
+  /* Slightly darker than --bg — reads as one block with the editor column. */
+  --results-surface: #171c26;
   --text: #eceff1;
   --muted: #78909c;
   --accent: #82aaff;
@@ -342,7 +344,7 @@ main {
   margin-left: -1px;
   font-size: 16px;
   min-width: 0;
-  background: var(--bg);
+  background: var(--results-surface);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -374,11 +376,16 @@ main {
   overflow-wrap: anywhere;
   word-break: break-word;
   min-width: 0;
+  border-bottom: 1px solid rgba(74, 99, 115, 0.35);
 }
 
 .result-table td:first-child {
   width: 9rem;
   vertical-align: top;
+}
+
+.result-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .results-column .notification {
