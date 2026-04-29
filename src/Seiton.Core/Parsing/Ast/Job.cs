@@ -8,6 +8,8 @@ public sealed class Snapshot
     public StringNodeId ImageName { get; init; }
 
     public StringNodeId If { get; init; }
+
+    public TextRange? IfKeyRange { get; init; }
 }
 
 /// <summary>AST node representing a single job in a workflow.</summary>
@@ -20,6 +22,8 @@ public sealed class Job
     public StringNodeId[]? Needs { get; init; }
 
     public Runner? RunsOn { get; init; }
+
+    public TextRange? RunsOnKeyRange { get; init; }
 
     public Permissions? Permissions { get; init; }
 
@@ -35,7 +39,11 @@ public sealed class Job
 
     public StringNodeId If { get; init; }
 
+    public TextRange? IfKeyRange { get; init; }
+
     public IReadOnlyList<Step>? Steps { get; init; }
+
+    public TextRange? StepsKeyRange { get; init; }
 
     public FloatNodeId TimeoutMinutes { get; init; }
 

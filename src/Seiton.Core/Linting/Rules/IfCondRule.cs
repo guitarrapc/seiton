@@ -14,21 +14,21 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 
     public override void VisitJobPre(Job job)
     {
-        ValidateCondition(job.If, job, null);
+        ValidateCondition(job.If, job, null, job.IfKeyRange);
 
         // snapshot.if
         if (job.Snapshot is { } snapshot)
         {
-            ValidateCondition(snapshot.If, job, null);
+            ValidateCondition(snapshot.If, job, null, snapshot.IfKeyRange);
         }
     }
 
     public override void VisitStep(Step step)
     {
-        ValidateCondition(step.If, null, step);
+        ValidateCondition(step.If, null, step, step.IfKeyRange);
     }
 
-    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
+    private void ValidateCondition(StringNodeId condition, Job? job, Step? step, TextRange? ifKeyRange)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
@@ -41,6 +41,45 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             return;
         }
 
+        // For block scalars (trailing \n), report at the block indicator position (same line as if: key)
+        // instead of the content position (next line). Scan backward from content start to find | or >.
+        var diagRange = Arena.GetStringRange(condition);
+        if (raw[raw.Length - 1] == (byte)'\n' && ifKeyRange is { } kr)
+        {
+            var yaml = Config.Utf8Yaml;
+            var contentStart = diagRange.Start;
+            var indicatorPos = -1;
+
+            // Scan backward from content start past whitespace/newlines to find | or >
+            for (var i = contentStart - 1; i >= kr.Start; i--)
+            {
+                var b = yaml[i];
+                if (b == (byte)'|' || b == (byte)'>')
+                {
+                    indicatorPos = i;
+                    break;
+                }
+
+                if (b != (byte)' ' && b != (byte)'\n' && b != (byte)'\r' && b != (byte)'-' && b != (byte)'+' && !(b >= (byte)'0' && b <= (byte)'9'))
+                {
+                    break; // Not part of indicator syntax, bail out
+                }
+            }
+
+            if (indicatorPos >= 0)
+            {
+                // Compute column by finding line start
+                var lineStart = indicatorPos;
+                while (lineStart > 0 && yaml[lineStart - 1] != (byte)'\n')
+                {
+                    lineStart--;
+                }
+
+                var indicatorCol = indicatorPos - lineStart + 1; // 1-based
+                diagRange = new TextRange(indicatorPos, 1, kr.StartLine, indicatorCol, kr.StartLine, indicatorCol + 1);
+            }
+        }
+
         // Detect "always true" pattern: value contains ${{ }} but has extra characters around it.
         // GitHub Actions evaluates the entire string as a template, producing a non-empty string → always truthy.
         // Examples: "${{ expr }}\n" (block scalar), "${{ expr }} " (trailing space), "${{ e1 }} && ${{ e2 }}"
@@ -50,12 +89,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             var message = $"if: condition \"{conditionText}\" is always evaluated to true because extra characters are around ${{{{ }}}}";
             if (job is not null)
             {
-                AddJobWarning(job, message, Arena.GetStringRange(condition));
+                AddJobWarning(job, message, diagRange);
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, message, Arena.GetStringRange(condition));
+                AddStepWarning(step, message, diagRange);
             }
 
             return;
@@ -68,12 +107,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         {
             if (job is not null)
             {
-                AddJobWarning(job, "job if condition contains syntax errors", Arena.GetStringRange(condition));
+                AddJobWarning(job, "job if condition contains syntax errors", diagRange);
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, "step if condition contains syntax errors", Arena.GetStringRange(condition));
+                AddStepWarning(step, "step if condition contains syntax errors", diagRange);
             }
 
             return;
@@ -85,12 +124,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             var message = $"constant expression \"{expressionText}\" in condition. remove the if: section";
             if (job is not null)
             {
-                AddJobWarning(job, message, Arena.GetStringRange(condition));
+                AddJobWarning(job, message, diagRange);
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, message, Arena.GetStringRange(condition));
+                AddStepWarning(step, message, diagRange);
             }
         }
     }

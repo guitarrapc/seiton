@@ -17,3 +17,8 @@ test.yaml:39:9: jobs.'test3'.steps[7] unexpected key "working-directory" for ste
 test.yaml:41:9: jobs.'test3'.steps[8] unexpected key "with" for step to run shell command. expected one of "continue-on-error", "env", "id", "if", "name", "run", "shell", "timeout-minutes", "working-directory" [syntax-check]
 test.yaml:45:9: jobs.'test3'.steps[9] unexpected key "foooo" for step to execute action. expected one of "continue-on-error", "env", "id", "if", "name", "timeout-minutes", "uses", "with" [syntax-check]
 test.yaml:47:9: jobs.'test3'.steps[10] unexpected key "foooo" for step to run shell command. expected one of "continue-on-error", "env", "id", "if", "name", "run", "shell", "timeout-minutes", "working-directory" [syntax-check]
+test.yaml:15:31: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA [action]
+test.yaml:34:31: action uses 'actions/checkout@v5' is not pinned to a full-length commit SHA [action]
+test.yaml:36:31: action uses 'actions/checkout@v5' is not pinned to a full-length commit SHA [action]
+test.yaml:38:31: action uses 'actions/checkout@v5' is not pinned to a full-length commit SHA [action]
+test.yaml:44:31: action uses 'actions/checkout@v5' is not pinned to a full-length commit SHA [action]

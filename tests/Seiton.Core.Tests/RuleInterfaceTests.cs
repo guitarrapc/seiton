@@ -1547,6 +1547,106 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_PopularActionInputsRule_TypoSuggestion()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-typo-underscore-for-hyphen",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/setup-node@v4
+                          with: { node_version: '20' }
+            """,
+            ["unknown input 'node_version' for action 'actions/setup-node@v4'. did you mean 'node-version'?"]),
+            new RuleCase(
+            "ng-typo-close-misspelling",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { fetch-depht: 1 }
+            """,
+            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'. did you mean 'fetch-depth'?"]),
+            new RuleCase(
+            "ng-no-suggestion-for-distant-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { totally-unknown-input: true }
+            """,
+            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'"]),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_PopularActionInputsRule_TypoAutoFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          fetch-depht: 1
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new PopularActionInputsRule()]);
+        var result = engine.Check(sourceBytes, "popular-action-inputs-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "popular-action-inputs" && x.Message.Contains("fetch-depht", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        await Assert.That(diagnostic.Fix!.Value.Description).Contains("fetch-depth");
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "popular-action-inputs-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText).Contains("fetch-depth: 1");
+        await Assert.That(revalidated.After.Diagnostics.Any(x =>
+            x.RuleId == "popular-action-inputs" && x.Message.Contains("unknown input", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task RuleRegression_PopularActionInputsRule_NoFixWhenDistant()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          totally-unknown-input: true
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new PopularActionInputsRule()]);
+        var result = engine.Check(sourceBytes, "popular-action-inputs-no-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "popular-action-inputs" && x.Message.Contains("totally-unknown-input", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task RuleRegression_PopularActionInputsRule_TableDriven()
     {
         var cases = new[]
@@ -4343,6 +4443,26 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task GlobPatternRule_BlockScalarTrailingNewline_ReportsAtIndicatorLine()
+    {
+        // MISS #6: block scalar `- |\n  foo.txt` should report at the `|` indicator line,
+        // not at the content line.
+        // Layout:
+        //   line 5: "      - |"           <- `|` at col 9
+        //   line 6: "        foo.txt"     <- content at col 9
+        // actionlint expects line 5, col 9
+        var yaml = "on:\n  push:\n    paths:\n      - 'ok'\n      - |\n        foo.txt\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = new LintEngine([new GlobPatternRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "glob-pattern" && d.Message.Contains("leading and trailing spaces")).ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        // Must report at block scalar indicator line, not content line
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
     public async Task RuleRegression_DenyWriteAllRule_TableDriven()
     {
         var cases = new[]
@@ -4425,7 +4545,38 @@ public sealed class RuleInterfaceTests
         var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
-        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsTrue();
+        // Workflow-level write-all should be fixed to {} (drop permissions), not read-all
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_DenyWriteAll_Fix_JobLevel_ReplacesWithEmptyMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                permissions: write-all
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyWriteAllRule()]);
+        var result = engine.Check(sourceBytes, "deny-write-all-job-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-write-all");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-job-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        // Job-level write-all should be fixed to {} (drop permissions)
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("write-all", StringComparison.Ordinal)).IsFalse();
         await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
 
@@ -4509,6 +4660,39 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
         var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        // Workflow-level read-all should be fixed to {}
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_DenyReadAll_Fix_JobLevel_ReplacesWithEmptyMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                permissions: read-all
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new DenyReadAllRule()]);
+        var result = engine.Check(sourceBytes, "deny-read-all-job-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-read-all");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-job-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        // Job-level read-all should be fixed to {} (drop permissions)
+        await Assert.That(fixedText.Contains("{}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("read-all", StringComparison.Ordinal)).IsFalse();
         await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsFalse();
     }
 
@@ -5797,6 +5981,66 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new IfCondRule(), "if-cond", cases);
+    }
+
+    [Test]
+    public async Task IfCondRule_BlockScalarConstant_ReportsAtIfKeyLine()
+    {
+        // MISS #7: block scalar `if: |\n  true` should report at the `if:` value line (where `|` is),
+        // not at the content line (where `true` is).
+        // Layout:
+        //   line 6: "      - if: |"       <- `if` at col 9, `|` at col 13
+        //   line 7: "          true"       <- content at col 11
+        // actionlint expects line 6, col 13 (the `|` position)
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          true\n        run: echo ng\n";
+        var result = new LintEngine([new IfCondRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("constant expression \"true\"");
+        // Must report at block scalar indicator line, not content line
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(6);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(13);
+    }
+
+    [Test]
+    public async Task IfCondRule_BlockScalarAlwaysTrue_ReportsAtIfKeyLine()
+    {
+        // MISS #8: block scalar `if: |\n  ${{ false }}` should report at the `if:` value line,
+        // not at the content line.
+        // Layout:
+        //   line 6: "      - if: |"              <- `|` at col 13
+        //   line 7: "          ${{ false }}"      <- content at col 11
+        // actionlint expects line 6, col 13
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          ${{ false }}\n        run: echo ng\n";
+        var result = new LintEngine([new IfCondRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("always evaluated to true");
+        // Must report at block scalar indicator line, not content line
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(6);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(13);
+    }
+
+    [Test]
+    public async Task IfCondRule_BlockScalarJobIf_ReportsAtIfKeyLine()
+    {
+        // Block scalar job-level `if: |\n  true` should also report at the `|` position.
+        // Layout:
+        //   line 4: "    if: |"      <- `if` at col 5, `|` at col 9
+        //   line 5: "      true"     <- content at col 7
+        var yaml = "on: push\njobs:\n  build:\n    if: |\n      true\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ng\n";
+        var result = new LintEngine([new IfCondRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("constant expression \"true\"");
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(4);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(9);
     }
 
     [Test]
@@ -9778,7 +10022,7 @@ public sealed class RuleInterfaceTests
                               with:
                                   fetch-depht: 1
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "unpinned-uses",
                 new UnpinnedUsesRule(),
@@ -12037,5 +12281,175 @@ public sealed class RuleInterfaceTests
             .Where(d => d.Message.Contains("unexpected key \"with\"", StringComparison.Ordinal))
             .ToArray();
         await Assert.That(unexpectedKeyDiags).Count().IsEqualTo(1);
+    }
+
+    // reusable-workflow forbidden-key diagnostics must report at the forbidden key position
+    [Test]
+    public async Task ReusableWorkflowRule_ForbiddenKey_ReportsAtKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var forbiddenKeyDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(forbiddenKeyDiag).Count().IsEqualTo(1);
+        // Must report at the 'steps:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(forbiddenKeyDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(forbiddenKeyDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_ForbiddenRunsOn_ReportsAtKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            runs-on: ubuntu-latest
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var forbiddenKeyDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'runs-on' is not allowed", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(forbiddenKeyDiag).Count().IsEqualTo(1);
+        // Must report at the 'runs-on:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(forbiddenKeyDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(forbiddenKeyDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_WithRequiresUses_ReportsAtWithKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call2:
+            with:
+              foo: bar
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var requiresUsesDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(requiresUsesDiag).Count().IsEqualTo(1);
+        // Must report at the 'with:' key position (line 4), not the job ID position (line 3)
+        await Assert.That(requiresUsesDiag[0].Location.StartLine).IsEqualTo(4);
+        await Assert.That(requiresUsesDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_SecretsRequiresUses_ReportsAtSecretsKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call3:
+            secrets:
+              aaa: bbb
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var requiresUsesDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(requiresUsesDiag).Count().IsEqualTo(1);
+        // Must report at the 'secrets:' key position (line 4), not the job ID position (line 3)
+        await Assert.That(requiresUsesDiag[0].Location.StartLine).IsEqualTo(4);
+        await Assert.That(requiresUsesDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task JobStructureRule_CannotHaveBothUsesAndSteps_ReportsAtStepsKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var bothDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(bothDiag).Count().IsEqualTo(1);
+        // Must report at the 'steps:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(bothDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(bothDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task JobStructureRule_CannotHaveBothUsesAndRunsOn_ReportsAtRunsOnKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            runs-on: ubuntu-latest
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var bothDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("cannot have both uses and runs-on", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(bothDiag).Count().IsEqualTo(1);
+        // Must report at the 'runs-on:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(bothDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(bothDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ContainsOverload_ObjectArg_ReportsAllOverloadMismatches()
+    {
+        // When contains() is called with an object type as first arg,
+        // both overloads (string,any) and (array<any>,any) should fail
+        // and both should be reported as diagnostics.
+        var yaml = NormalizeYaml("""
+        on: push
+        jobs:
+          foo:
+            strategy:
+              matrix:
+                include:
+                  - obj: ${{ fromJSON('{"bool":true,"arr":[false]}') }}
+                  - str: ${{ fromJSON('"hello"') }}
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ contains(matrix.obj, matrix.str) }}
+        """);
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+
+        // Should have two "not assignable" diagnostics — one per overload
+        var notAssignable = result.Diagnostics
+            .Where(d => d.Message.Contains("not assignable", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(notAssignable.Length).IsEqualTo(2)
+            .Because($"Expected 2 overload mismatch diagnostics but got:\n{string.Join("\n", allDiags)}");
+
+        // One should mention array<any>, the other should mention string
+        await Assert.That(notAssignable.Any(d => d.Message.Contains("\"array<any>\"", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(notAssignable.Any(d => d.Message.Contains("\"string\"", StringComparison.Ordinal))).IsTrue();
     }
 }

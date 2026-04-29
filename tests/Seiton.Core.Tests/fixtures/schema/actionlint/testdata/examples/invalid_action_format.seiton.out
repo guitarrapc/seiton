@@ -1,0 +1,4 @@
+test.yaml:7:9: action uses 'actions/checkout' has invalid reference format; expected owner/repo[/path]@ref [action]
+test.yaml:9:9: action uses 'checkout@v2' has invalid reference format; expected owner/repo[/path]@ref [action]
+test.yaml:11:9: tag of Docker action should not be empty: "docker://image" [action]
+test.yaml:13:9: action uses '.github/my-actions/do-something' has invalid reference format; expected owner/repo[/path]@ref [action]

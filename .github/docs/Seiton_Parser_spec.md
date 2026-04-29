@@ -177,6 +177,8 @@ ScheduleEntry: `Cron` (StringNode?, required), `Timezone` (StringNode?)
 
 DispatchInput: `Name`, `Description?`, `Required?`, `Default?`, `Type` (None/String/Number/Boolean/Choice/Environment), `Options?`
 
+**Empty option policy**: Empty strings (`''`) in `Options` are intentionally allowed without diagnostic. This is a legitimate GitHub Actions pattern for choice-type inputs representing "no selection" (e.g., `default: ''` with `options: ['', 'enable', 'disable']`). The parser collects empty option elements in the AST but does not emit an error.
+
 #### 2.3.4 WorkflowCallEvent
 
 | Field | Type | Description |
@@ -1115,7 +1117,6 @@ Events parsed under `on:` must use `on.{eventName}` as the section path:
 
 - `on.workflow_call input "foo" is missing "type"`
 - `on.workflow_call output "bar" is missing "value"`
-- `on.workflow_dispatch input "baz" option should not be empty`
 
 #### Principle 5: Diagnostic messages use dotted-path format for job and step context
 
@@ -1206,7 +1207,6 @@ These replace the former generic `"string should not be empty"` message:
 | step `id` | `step id should not be empty` |
 | webhook filter element | `"{filterName}" filter value should not be empty` |
 | `workflow_call` output value | `on.workflow_call output "{name}" value should not be empty` |
-| `workflow_dispatch` option element | `on.workflow_dispatch input "{name}" option should not be empty` |
 | glob pattern (linter) | `glob pattern should not be empty` |
 | job ID (linter) | `job ID should not be empty` |
 | step ID (linter) | `step ID should not be empty` |

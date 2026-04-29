@@ -1163,10 +1163,10 @@ public sealed class ParserTests
         evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options!.Count).IsEqualTo(3);
-        // Empty string in options is collected in AST for downstream rules, but parser
-        // now emits context-specific empty-value error.
+        // Empty string in options is legitimate for choice-type inputs (e.g. "no selection" option).
+        // Parser must NOT emit a diagnostic for empty option elements.
         var emptyDiag = result.Diagnostics.Where(d => d.Message.Contains("option should not be empty")).ToArray();
-        await Assert.That(emptyDiag.Length).IsEqualTo(1);
+        await Assert.That(emptyDiag.Length).IsEqualTo(0);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
         var emptyOptionNode = input.Options![0];
@@ -5782,9 +5782,9 @@ public sealed class ParserTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"schedule\" section should not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
-    // empty string element in workflow_dispatch choice options must be detected
+    // empty string element in workflow_dispatch choice options is legitimate (e.g. "no selection")
     [Test]
-    public async Task Parse_WorkflowDispatchEmptyOption_ReportsStringNotEmpty()
+    public async Task Parse_WorkflowDispatchEmptyOption_NoError()
     {
         var yaml = NormalizeEol("""
         on:
@@ -5802,9 +5802,8 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("option should not be empty"));
-        await Assert.That(diag.Message).IsNotNull();
-        await Assert.That(diag.Location.StartLine).IsEqualTo(7); // '' is on line 7
+        var hasEmptyOptionDiag = result.Diagnostics.Any(d => d.Message.Contains("option should not be empty"));
+        await Assert.That(hasEmptyOptionDiag).IsFalse();
     }
 
     // empty string element in image_version versions must be detected
@@ -6232,5 +6231,66 @@ public sealed class ParserTests
         var objDiags = result.Diagnostics.Where(d => d.Message.Contains("[Object]")).ToList();
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
         await Assert.That(objDiags.Count).IsGreaterThanOrEqualTo(2).Because($"Expected 2 object diagnostics on same line, got:\n{string.Join("\n", allDiags)}");
+    }
+
+    [Test]
+    public async Task Parse_RecursiveAliasInSteps_ReportsAliasNodeMessage()
+    {
+        // When a recursive alias (unresolvable) is used as a steps array element,
+        // the parser should emit "element of steps section is alias node" instead of generic "must be object".
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test: &recursive2
+            runs-on: ubuntu-latest
+            steps:
+              - &recursive1
+                env: *recursive1
+                run: *recursive2
+              - *recursive1
+              - *recursive2
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        // *recursive2 on the last step line should produce alias-specific message, not "must be object"
+        var hasAliasNodeDiag = result.Diagnostics.Any(d => d.Message.Contains("alias node but mapping node is expected", StringComparison.Ordinal));
+        await Assert.That(hasAliasNodeDiag).IsTrue().Because($"Expected alias-node diagnostic but got:\n{string.Join("\n", allDiags)}");
+        // The message should also include the "steps" context
+        var aliasNodeDiag = result.Diagnostics.First(d => d.Message.Contains("alias node but mapping node is expected", StringComparison.Ordinal));
+        await Assert.That(aliasNodeDiag.Message).Contains("\"steps\" section");
+        // It should still produce the "must run script / run action" diagnostic
+        var hasRunUsesDiag = result.Diagnostics.Any(d =>
+            d.Message.Contains("must run script", StringComparison.Ordinal) &&
+            d.Location.StartLine == aliasNodeDiag.Location.StartLine);
+        await Assert.That(hasRunUsesDiag).IsTrue().Because($"Expected run/uses diagnostic on same line as alias node diagnostic");
+    }
+
+    [Test]
+    public async Task Parse_RecursiveAliasInSteps_ReportsAtAliasPosition()
+    {
+        // Position of alias-node diagnostic should match the alias node position (15:9 in 1-based),
+        // not a position after the alias has been consumed.
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test: &recursive2
+            runs-on: ubuntu-latest
+            steps:
+              - &recursive1
+                env: *recursive1
+                run: *recursive2
+              - *recursive1
+              - *recursive2
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var hasAliasNodeDiag = result.Diagnostics.Any(d => d.Message.Contains("alias node but mapping node is expected", StringComparison.Ordinal));
+        await Assert.That(hasAliasNodeDiag).IsTrue();
+        var aliasNodeDiag = result.Diagnostics.First(d => d.Message.Contains("alias node but mapping node is expected", StringComparison.Ordinal));
+        // *recursive2 is at line 10 (1-based), column 9 (1-based)
+        // In source: "      - *recursive2" — the * is at column 9
+        await Assert.That(aliasNodeDiag.Location.StartLine).IsEqualTo(10);
+        await Assert.That(aliasNodeDiag.Location.StartColumn).IsEqualTo(9);
     }
 }

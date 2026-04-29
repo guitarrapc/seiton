@@ -1,1 +1,2 @@
 test.yaml:8:9: jobs.'foo'.steps[1] unexpected key "working-directory" for step to execute action. expected one of "continue-on-error", "env", "id", "if", "name", "timeout-minutes", "uses", "with" [syntax-check]
+test.yaml:7:31: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA [action]

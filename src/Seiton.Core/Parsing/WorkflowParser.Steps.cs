@@ -94,6 +94,11 @@ public static partial class WorkflowParser
                 AddError(diagnostics, $"{prefix} element of \"steps\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
                 AddError(diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
             }
+            else if (reader.CurrentKind == YamlEventKind.Alias)
+            {
+                AddError(diagnostics, $"{prefix} element of \"steps\" section is alias node but mapping node is expected", reader.CurrentStart);
+                AddError(diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
+            }
             else
             {
                 AddError(diagnostics, $"{prefix} must be object", reader.CurrentStart);
@@ -119,6 +124,7 @@ public static partial class WorkflowParser
         var hasAnyKey = false;
         StringNodeId idNode = default;
         StringNodeId ifNode = default;
+        TextPosition ifKeyMark = default;
         StringNodeId nameNode = default;
         Env? envNode = null;
         BoolNodeId continueOnErrorNode = default;
@@ -226,6 +232,7 @@ public static partial class WorkflowParser
                         break;
 
                     case StepMappingKey.If:
+                        ifKeyMark = keyMark;
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(
@@ -439,6 +446,7 @@ public static partial class WorkflowParser
         {
             Id = idNode,
             If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
             Name = nameNode,
             Exec = exec,
             Env = envNode,
