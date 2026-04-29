@@ -92,7 +92,10 @@ public static partial class WorkflowParser
                     var message = suggestion is not null
                         ? $"on.{eventInfo.Name} does not support option: {unknownKeyText}. did you mean \"{suggestion}\"?"
                         : $"on.{eventInfo.Name} does not support option: {unknownKeyText}";
-                    AddError(diagnostics, message, keyMark);
+                    var fix = suggestion is not null
+                        ? new DiagnosticFix($"replace '{unknownKeyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
+                        : (DiagnosticFix?)null;
+                    AddError(diagnostics, message, keyMark, fix);
                 }
                 if (!reader.End) { reader.SkipCurrentNode(); }
                 continue;
@@ -356,6 +359,7 @@ public static partial class WorkflowParser
             }
 
             var keyMark = reader.CurrentStart;
+            var keySlice2 = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
             var extMatch = Utf8MappingDispatch.TryMatchFirstOrdered<OnEventOptionsExtendedKeyTable>(keyUtf8, out var extOrd);
             var extKey = (OnEventOptionsExtendedMappingKey)extOrd;
@@ -387,7 +391,10 @@ public static partial class WorkflowParser
                 var message = suggestion is not null
                     ? $"on.{eventInfo.Name} does not support option: {key}. did you mean \"{suggestion}\"?"
                     : $"on.{eventInfo.Name} does not support option: {key}";
-                AddError(diagnostics, message, keyMark);
+                var fix = suggestion is not null
+                    ? new DiagnosticFix($"replace '{key}' with '{suggestion}'", [new TextEdit(keySlice2.Offset, keySlice2.Length, suggestion)])
+                    : (DiagnosticFix?)null;
+                AddError(diagnostics, message, keyMark, fix);
                 if (!reader.End)
                 {
                     reader.SkipCurrentNode();

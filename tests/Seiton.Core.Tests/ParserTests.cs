@@ -871,6 +871,64 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnEventUnknownOption_FixReplacesKeyWithSuggestion()
+    {
+        // "branch" → "branches": fix should replace the key bytes
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            branch: main
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "on-unknown-option-fix.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"branches\"?", StringComparison.Ordinal));
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        await Assert.That(diag.Fix!.Value.Description).Contains("branches");
+
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("branches: main");
+        await Assert.That(fixedText).DoesNotContain("branch: main");
+    }
+
+    [Test]
+    public async Task Parse_OnEventUnknownOption_NoFixWhenNoSuggestion()
+    {
+        // "xyz" has no close match → no fix should be attached
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            xyz: 1
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-fix.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push does not support option: xyz", StringComparison.Ordinal));
+        await Assert.That(diag.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnImageVersionUnknownOption_FixReplacesKeyWithSuggestion()
+    {
+        // "name" → "names": fix should replace the key bytes
+        var yaml = NormalizeEol("""
+        on:
+          image_version:
+            name: ["ubuntu"]
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "on-image-version-fix.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"names\"?", StringComparison.Ordinal));
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("names: [\"ubuntu\"]");
+    }
+
+    [Test]
     public async Task Parse_OnEventDisallowedOption_ReportsError()
     {
         var yaml = NormalizeEol("""

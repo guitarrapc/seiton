@@ -38,6 +38,7 @@ public static partial class WorkflowParser
             }
 
             var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
             if (IsMergeKey(keyUtf8, keyMark, diagnostics, "on.image_version"))
             {
@@ -86,7 +87,10 @@ public static partial class WorkflowParser
             var message = suggestion is not null
                 ? $"on.image_version does not support option: {unknown}. did you mean \"{suggestion}\"?"
                 : $"on.image_version does not support option: {unknown}";
-            AddError(diagnostics, message, keyMark);
+            var fix = suggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
+                : (DiagnosticFix?)null;
+            AddError(diagnostics, message, keyMark, fix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
