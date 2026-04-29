@@ -20,4 +20,18 @@ public static partial class LintInterop
             : filePath.Trim();
         return PlaygroundLintRunner.RunToJson(yamlSource ?? string.Empty, path);
     }
+
+    /// <summary>
+    /// Applies automatic fixes sequentially. Network-dependent pinning/digest remediation is unavailable in WASM.
+    /// The catalog marks <c>deny-read-all</c> non-disableable; its autofix (scalar <c>read-all</c> → empty mapping)
+    /// is skipped here so it cannot undo <c>deny-write-all</c>’s <c>read-all</c> suggestion.
+    /// </summary>
+    [JSExport]
+    public static string ApplyAllFixes(string? yamlSource, string? filePath)
+    {
+        var path = string.IsNullOrWhiteSpace(filePath)
+            ? ".github/workflows/test.yml"
+            : filePath.Trim();
+        return PlaygroundLintRunner.ApplyAllFixes(yamlSource ?? string.Empty, path);
+    }
 }

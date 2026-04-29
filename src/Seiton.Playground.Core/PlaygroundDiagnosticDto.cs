@@ -17,4 +17,10 @@ public sealed class PlaygroundDiagnosticDto
 
     /// <summary>Lint rule identifier, if applicable.</summary>
     public string? RuleId { get; init; }
+
+    /// <summary>Whether an automatic fix is available for this diagnostic.</summary>
+    public bool Fixable { get; init; }
+
+    /// <summary>Summary of the suggested fix, when <see cref="Fixable"/> is true.</summary>
+    public string? FixDescription { get; init; }
 }

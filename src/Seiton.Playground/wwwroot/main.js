@@ -1,6 +1,54 @@
-/* global CodeMirror, pako */
+/* global CodeMirror */
 
+import { deflate, inflate } from 'https://cdn.jsdelivr.net/npm/pako@2.1.0/+esm';
 import { dotnet } from './_framework/dotnet.js';
+
+/** Built-in snippets (classification depends on Document selector). */
+const SAMPLES = {
+    minimal:
+`on:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "hello"
+      - uses: actions/checkout@v4
+`,
+    fixPermissions:
+`on: push
+permissions: write-all
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+`,
+    matrix:
+`on: push
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: \${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "\${{ runner.os }}"
+`,
+    actionComposite:
+`name: My composite
+description: Demo action.yml
+runs:
+  using: composite
+  steps:
+    - run: echo hello world
+      shell: bash
+`,
+};
 
 const { getAssemblyExports, getConfig, runMain } = await dotnet
     .withApplicationArguments('playground')
@@ -16,7 +64,11 @@ const resultBody = document.getElementById('lint-result-body');
 const successMsg = document.getElementById('success-msg');
 const errorMsg = document.getElementById('error-msg');
 const fileSelect = document.getElementById('filetype-select');
+const sampleSelect = document.getElementById('sample-select');
 const permalinkBtn = document.getElementById('permalink-btn');
+const applyFixesBtn = document.getElementById('apply-fixes-btn');
+const urlInput = document.getElementById('url-input');
+const fetchBtn = document.getElementById('fetch-btn');
 
 const editor = CodeMirror(document.getElementById('editor'), {
     mode: 'yaml',
@@ -54,21 +106,113 @@ editor.on('change', (_cm, changeObj) => {
     }
 });
 
-fileSelect.addEventListener('change', () => runLint());
+fileSelect.addEventListener('change', () => {
+    runLint();
+});
+
+sampleSelect.addEventListener('change', () => {
+    const key = sampleSelect.value;
+    if (!key || !SAMPLES[key]) {
+        return;
+    }
+    const text = SAMPLES[key];
+    if (key === 'actionComposite') {
+        fileSelect.value = 'action.yml';
+    } else {
+        fileSelect.value = '.github/workflows/test.yml';
+    }
+    editor.setValue(text);
+    editor.refresh();
+    runLint();
+});
 
 permalinkBtn.addEventListener('click', () => {
     try {
         const src = new TextEncoder().encode(editor.getValue());
-        const compressed = pako.deflate(src, { level: 9 });
+        const compressed = deflate(src, { level: 9 });
         const b64 = uint8ToBase64(compressed);
         const url = `${location.pathname}${location.search}#${b64}`;
         history.replaceState(null, '', url);
-        permalinkBtn.textContent = 'Copied hash';
-        setTimeout(() => { permalinkBtn.textContent = 'Permalink'; }, 1200);
+        permalinkBtn.textContent = 'URL updated';
+        setTimeout(() => { permalinkBtn.textContent = 'Permalink'; }, 1400);
     } catch (e) {
         showError(e?.message ?? String(e));
     }
 });
+
+applyFixesBtn.addEventListener('click', () => {
+    try {
+        const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
+            editor.getValue(),
+            getSelectedFilePath(),
+        );
+        editor.setValue(yaml);
+        editor.refresh();
+        applyFixesBtn.hidden = true;
+        runLint();
+    } catch (e) {
+        showError(e?.message ?? String(e));
+    }
+});
+
+fetchBtn.addEventListener('click', () => fetchAndLint());
+urlInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+        fetchAndLint();
+    }
+});
+
+async function fetchAndLint() {
+    const raw = urlInput?.value?.trim() ?? '';
+    if (!raw) {
+        showError('Paste a URL first.');
+        return;
+    }
+    clearError();
+    fetchBtn.disabled = true;
+    try {
+        const fetchUrl = normalizeGitHubBlobToRaw(raw);
+        const res = await fetch(fetchUrl, { mode: 'cors', redirect: 'follow', cache: 'no-store' });
+        if (!res.ok) {
+            throw new Error(`fetch failed: ${res.status} ${res.statusText}`);
+        }
+        const ct = (res.headers.get('content-type') ?? '').toLowerCase();
+        if (ct.includes('text/html')) {
+            throw new Error('Got HTML (not raw YAML). For github.com files, use the “Raw” link, or a raw.githubusercontent.com / gist.githubusercontent.com URL.');
+        }
+        const text = await res.text();
+        editor.setValue(text);
+        editor.refresh();
+        runLint();
+    } catch (e) {
+        showError(e?.message ?? String(e));
+    } finally {
+        fetchBtn.disabled = false;
+    }
+}
+
+/**
+ * github.com/{owner}/{repo}/blob/{ref}/{path} → raw.githubusercontent.com
+ */
+function normalizeGitHubBlobToRaw(input) {
+    let u;
+    try {
+        u = new URL(input);
+    } catch {
+        throw new Error('Invalid URL');
+    }
+    if (u.hostname === 'raw.githubusercontent.com' || u.hostname === 'gist.githubusercontent.com') {
+        return u.href;
+    }
+    if (u.hostname === 'github.com') {
+        const m = u.pathname.match(/^\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+        if (m) {
+            const [, owner, repo, ref, rest] = m;
+            return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${rest}`;
+        }
+    }
+    return u.href;
+}
 
 function uint8ToBase64(buf) {
     let binary = '';
@@ -88,19 +232,30 @@ function runLint() {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
         renderResults(diagnostics);
+        clearError();
     } catch (err) {
         showError(err?.message ?? String(err));
     }
 }
 
 function renderResults(diagnostics) {
-    resultBody.textContent = '';
+    resultBody.replaceChildren();
     editor.clearGutter('error-marker');
-    errorMsg.style.display = 'none';
+
+    let anyFixable = false;
+    for (const diag of diagnostics) {
+        if (diag.fixable) {
+            anyFixable = true;
+            break;
+        }
+    }
+
+    applyFixesBtn.hidden = !anyFixable;
 
     if (diagnostics.length === 0) {
         resultTable.hidden = true;
         successMsg.style.display = 'block';
+        applyFixesBtn.hidden = true;
         return;
     }
 
@@ -125,6 +280,13 @@ function renderResults(diagnostics) {
 
         const descCell = document.createElement('td');
         descCell.appendChild(document.createTextNode(diag.message ?? ''));
+        if (diag.fixable) {
+            const fx = document.createElement('span');
+            fx.className = 'fix-chip';
+            fx.title = diag.fixDescription ?? 'Auto-fix available';
+            fx.textContent = 'Fix';
+            descCell.appendChild(fx);
+        }
         if (diag.ruleId) {
             const kindTag = document.createElement('span');
             kindTag.className = 'rule-chip';
@@ -137,10 +299,15 @@ function renderResults(diagnostics) {
 
         const lineIndex = Math.max(0, (diag.line ?? 1) - 1);
         const marker = document.createElement('div');
-        marker.style.color = '#ff5370';
+        marker.style.color = diag.severity === 'Error' ? '#ff5370' : '#ffcb6b';
         marker.textContent = '●';
         editor.setGutterMarker(lineIndex, 'error-marker', marker);
     }
+}
+
+function clearError() {
+    errorMsg.textContent = '';
+    errorMsg.style.display = 'none';
 }
 
 function showError(message) {
@@ -148,6 +315,7 @@ function showError(message) {
     errorMsg.style.display = 'block';
     successMsg.style.display = 'none';
     resultTable.hidden = true;
+    applyFixesBtn.hidden = true;
 }
 
 function getSelectedFilePath() {
@@ -163,25 +331,14 @@ function getDefaultSource() {
             for (let i = 0; i < binary.length; i++) {
                 compressed[i] = binary.charCodeAt(i);
             }
-            const decompressed = pako.inflate(compressed);
+            const decompressed = inflate(compressed);
             return new TextDecoder().decode(decompressed);
         } catch {
             /* ignore */
         }
     }
 
-    return `# Paste your workflow YAML to check with seiton
-
-on:
-  push:
-    branches: [main]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "hello"
-      - uses: actions/checkout@v4
-`;
+    return SAMPLES.minimal;
 }
 
 loading.style.display = 'none';

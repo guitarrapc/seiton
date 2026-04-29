@@ -8,7 +8,6 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
         crossorigin="anonymous"
         referrerpolicy="no-referrer"/>
-  <!-- Subresource integrity hashes vary by CDN builds; omit integrity for theme to avoid breakage -->
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css"
         crossorigin="anonymous"
@@ -23,6 +22,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"
           crossorigin="anonymous"
           referrerpolicy="no-referrer"></script>
+</head>
 <body>
   <nav id="header-bar">
     <header>
@@ -37,7 +37,23 @@
           <option value="action.yml">action.yml</option>
         </select>
       </label>
-      <button id="permalink-btn" type="button">Permalink</button>
+      <label>
+        Sample
+        <select id="sample-select" title="Load a built-in example">
+          <option value="">— custom —</option>
+          <option value="minimal">minimal workflow</option>
+          <option value="fixPermissions">fix: permissions (write-all)</option>
+          <option value="matrix">matrix + expressions</option>
+          <option value="actionComposite">action.yml (composite)</option>
+        </select>
+      </label>
+      <button id="permalink-btn" type="button" title="Store editor text in the URL hash">Permalink</button>
+      <button id="apply-fixes-btn" type="button" hidden>Apply all fixes</button>
+      <span class="fetch-wrap">
+        <input type="url" id="url-input" autocomplete="off" spellcheck="false"
+               placeholder="https:// raw GitHub/Gist YAML URL"/>
+        <button id="fetch-btn" type="button">Check</button>
+      </span>
     </div>
   </nav>
   <main>
@@ -56,7 +72,7 @@
     </section>
   </main>
   <footer>
-    <p><a href="https://github.com/guitarrapc/seiton-gh">seiton</a> — GitHub Actions workflow linter.</p>
+    <p><a href="https://github.com/guitarrapc/seiton-gh">seiton</a> — Playground fixes run offline. <strong>Apply all fixes</strong> skips the <code>deny-read-all</code> automatic replacement (would clear viable <code>read-all</code> after fixing <code>write-all</code>). Paste a <strong>raw</strong> GitHub/Gist YAML URL.</p>
   </footer>
   <script type="importmap"></script>
   <script type="module" src="main#[.{fingerprint}].js"></script>

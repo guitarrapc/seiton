@@ -50,20 +50,64 @@ html, body {
 
 #controls {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.65rem 0.75rem;
+  max-width: 78rem;
+  justify-content: flex-end;
 }
 
-#controls select, #permalink-btn {
+#controls label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+#controls select {
   background: var(--bg);
   color: var(--text);
   border: 1px solid #455a64;
   border-radius: 4px;
   padding: 0.35rem 0.5rem;
+  margin-left: 0.25rem;
 }
 
-#permalink-btn:hover {
+.fetch-wrap {
+  display: flex;
+  flex: 1 1 18rem;
+  gap: 0.35rem;
+  align-items: center;
+  min-width: 12rem;
+}
+
+.fetch-wrap input[type="url"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #455a64;
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+#controls button {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #455a64;
+  border-radius: 4px;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+#controls button:not(:disabled):hover {
   border-color: var(--accent);
+}
+
+#controls button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 #linter {
@@ -144,6 +188,16 @@ html, body {
   border-radius: 3px;
   font-size: 0.75rem;
   color: #cfd8dc;
+}
+
+.fix-chip {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.4rem;
+  background: rgba(105, 240, 174, 0.2);
+  color: #c3e9d0;
+  border-radius: 3px;
+  font-size: 0.72rem;
 }
 
 .notification {
