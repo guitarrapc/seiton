@@ -1015,31 +1015,38 @@ public sealed class LintEngine
 
         /// <summary>
         /// Finds the start index of the message suffix after stripping the leading
-        /// <c>jobs.'…'.steps[N] </c> prefix. Returns 0 if pattern is not matched.
+        /// <c>jobs.'…'.steps[N] </c> or <c>steps[N] </c> prefix.
+        /// Returns 0 if neither pattern is matched.
         /// </summary>
         private static int FindSuffixStart(string message)
         {
-            // Pattern: jobs.'<id>'.steps[<n>] <rest>
-            if (!message.StartsWith("jobs.'", StringComparison.Ordinal))
+            // Pattern 1: jobs.'<id>'.steps[<n>] <rest>
+            if (message.StartsWith("jobs.'", StringComparison.Ordinal))
             {
+                var dotSteps = message.IndexOf("'.steps[", 6, StringComparison.Ordinal);
+                if (dotSteps >= 0)
+                {
+                    var bracketClose = message.IndexOf("] ", dotSteps + 8, StringComparison.Ordinal);
+                    if (bracketClose >= 0)
+                    {
+                        return bracketClose + 2;
+                    }
+                }
+
                 return 0;
             }
 
-            // Find closing quote of job id: '.steps[
-            var dotSteps = message.IndexOf("'.steps[", 6, StringComparison.Ordinal);
-            if (dotSteps < 0)
+            // Pattern 2: steps[<n>] <rest> (action metadata composite steps)
+            if (message.StartsWith("steps[", StringComparison.Ordinal))
             {
-                return 0;
+                var bracketClose = message.IndexOf("] ", 6, StringComparison.Ordinal);
+                if (bracketClose >= 0)
+                {
+                    return bracketClose + 2;
+                }
             }
 
-            // Find "] " after the step index
-            var bracketClose = message.IndexOf("] ", dotSteps + 8, StringComparison.Ordinal);
-            if (bracketClose < 0)
-            {
-                return 0;
-            }
-
-            return bracketClose + 2;
+            return 0;
         }
 
         public bool Equals(DiagnosticIdentity other)

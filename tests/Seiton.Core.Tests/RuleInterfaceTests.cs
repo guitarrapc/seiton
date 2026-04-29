@@ -12009,4 +12009,33 @@ public sealed class RuleInterfaceTests
             .ToArray();
         await Assert.That(unexpectedKeyDiags).Count().IsEqualTo(1);
     }
+
+    // regression: action metadata composite steps with alias expansion must also dedup.
+    // steps[N] prefix (no jobs.'<id>') must be stripped for dedup consistency.
+    [Test]
+    public async Task LintEngine_AliasExpandedActionMetadataSteps_DedupDiagnosticsAtSamePosition()
+    {
+        var yaml = """
+        name: test
+        description: test action
+        runs:
+          using: composite
+          steps:
+            - &step
+              run: echo
+              with:
+                foo: bar
+            - *step
+            - *step
+            - *step
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "action.yaml");
+        // All alias-expanded steps point to the anchor position (same line:col).
+        // The "unexpected key" errors differ only in step index prefix (steps[N]) and must dedup to 1.
+        var unexpectedKeyDiags = result.Diagnostics
+            .Where(d => d.Message.Contains("unexpected key \"with\"", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(unexpectedKeyDiags).Count().IsEqualTo(1);
+    }
 }
