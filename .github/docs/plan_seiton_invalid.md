@@ -9,27 +9,28 @@
 
 ### 0.1 err/ fixtures (既存 ActionlintCompatTests)
 
-| 指標 | 最新 (2026-04-29) |
+| 指標 | 最新 (2026-04-30) |
 |---|---|
-| 互換 fixtures (MISS=0) | 90 / 95 (4 scope-out) |
-| マッチ率 (exact+line+near-line) | 485 / 486 (99%) |
+| 互換 fixtures (MISS=0) | 92 / 95 (4 scope-out) |
+| マッチ率 (exact+line+near-line) | 483 / 486 (99%) |
 | 完全一致マッチ率 (exact match) | 158 / 486 |
-| 列差異マッチ (same line, diff col/msg) | 321 / 486 |
-| 近接行マッチ (near-line, position diff) | 6 / 486 |
-| 未マッチ期待行 (MISS) | 1 (true gaps) |
+| 列差異マッチ (same line, diff col/msg) | 320 / 486 |
+| 近接行マッチ (near-line, position diff) | 5 / 486 |
+| 未マッチ期待行 (MISS) | 3 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 41 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
 
-| 指標 | 最新 (2026-04-29) |
+| 指標 | 最新 (2026-04-30) |
 |---|---|
 | 対象 examples fixtures | 49 (2 scope-out 除外) |
-| 互換 fixtures (MISS=0) | 43 / 49 |
-| 行レベルマッチ率 (line+col or line) | 126 / 143 (88%) |
-| 完全一致マッチ率 (exact match) | 21 / 143 |
+| 互換 fixtures (MISS=0) | 45 / 49 |
+| 行レベルマッチ率 (line+col or line) | 130 / 143 (90%) |
+| 完全一致マッチ率 (exact match) | 22 / 143 |
 | 列差異マッチ (same line, diff col/msg) | 105 / 143 |
-| 未マッチ期待行 (MISS) | 16 (true gaps) |
-| 余剰 seiton 行 (EXTRA) | 11 (additional detections) |
+| 近接行マッチ (near-line, position diff) | 3 / 143 |
+| 未マッチ期待行 (MISS) | 13 (true gaps) |
+| 余剰 seiton 行 (EXTRA) | 4 (additional detections) |
 | scope-out (shellcheck/pyflakes) | 2 (shellcheck_integration, pyflakes_integration) |
 
 ### 0.3 方針
@@ -425,5 +426,59 @@ scope-out fixtures:
 | Phase 4 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#15,#16) | recursive_anchors |
 | Phase 5 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#9,#10) | contains() overload |
 | Phase 6 | ✅完了 | 2026-04-29 | 2026-04-29 | 7 (#4,#5,#11,#13,#14,#18,#19) | テスト比較改善 |
+| Phase 7 | ✅完了 | 2026-04-30 | 2026-04-30 | -2 (意図的抑制) | workflow_dispatch 空文字option 抑制 |
+
+---
+
+## 6. 最新 MISS 分析 (2026-04-30)
+
+### 6.1 err/ fixtures 残 MISS (3件 / 3 fixtures)
+
+| # | Fixture | MISS 行 | actionlint 期待 | 根本原因 | 対処方針 |
+|---|---|---|---|---|---|
+| 1 | `workflow_dispatch_input_types` | 13:19 | `string should not be empty [syntax-check]` | `workflow_dispatch` の choice option で空文字 `''` を使用。seiton は**意図的に抑制** (GitHub Actions として合法な「選択なし」パターン) | **対処不要** (seiton ポリシー: 空文字 option は合法) |
+| 2 | `empty_sequence_or_string` | 10:13 | `string should not be empty [syntax-check]` | 同上: `workflow_dispatch` choice option の空文字 `''` 検出を意図的に抑制 | **対処不要** (同上) |
+| 3 | `invalid_snapshot` | 10:16 | `string should not be empty [syntax-check]` | seiton は `glob pattern should not be empty` で検出済みだが rule ID が異なる ([syntax-check] vs [glob]) ため near-line マッチ不成立 | **対処不要** (seiton のメッセージがより具体的; 同一コンセプトは検出済み) |
+
+**結論**: err/ fixtures の残 MISS 3件はすべて**対処不要**。#1/#2 は seiton ポリシーとして合法パターンを意図的に検出しない方針。#3 は同一コンセプトを別ルール/メッセージで検出済み。
+
+### 6.2 examples/ fixtures 残 MISS (13件 / 4 fixtures)
+
+| # | Fixture | MISS 数 | actionlint 期待 | 根本原因 | 優先度 |
+|---|---|---|---|---|---|
+| 1 | `action_metadata_syntax_validation` | 6 | local action metadata の各種バリデーション (`env` 禁止, `description` 必須, ファイル存在確認, branding, runner 名) | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
+| 2 | `invalid_action_format` | 4 | `uses:` 参照形式バリデーション (ref 欠如, owner 欠如, Docker tag 空, ローカル参照 `./` 欠如) | `unpinned-uses` ルールが actionlint の `[action]` ルールと同等チェックを行うが、テスト比較で `SeitonOnlyRules` 除外されている | **P1** |
+| 3 | `local_action_inputs` | 2 | missing required input / unknown input の検出 | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
+| 4 | `workflow_call_jobs` | 1 | `could not read reusable workflow file for "./..."` — ローカル reusable workflow ファイルの存在チェック | `reusable-workflow` ルールがファイル存在確認を行っていない (ルール仕様の範囲外) | **P2** |
+
+### 6.3 根本原因別の分類と対処
+
+#### カテゴリ A: テスト比較ロジックの問題 (修正可能、ルール実装変更不要)
+
+| 問題 | 影響 | 対処 |
+|---|---|---|
+| `invalid_action_format`: `unpinned-uses` が `SeitonOnlyRules` に含まれるため、seiton が検出した結果が比較から除外される | 4 MISS | `unpinned-uses` の一部チェック (ref 欠如, owner 欠如, Docker tag 空, `./` 欠如) は actionlint `[action]` と等価。テスト比較ロジックで `unpinned-uses` → `action` のマッピングを追加するか、`SeitonOnlyRules` から除外する |
+
+#### カテゴリ B: ルールの実行環境問題 (テスト設定修正)
+
+| 問題 | 影響 | 対処 |
+|---|---|---|
+| `local_action_inputs` / `action_metadata_syntax_validation`: `local-action-inputs` ルールがテストで使用するファイルパスからローカルアクションを解決できない | 8 MISS | `LocalActionInputsRule` のパス解決ロジックがテスト設定の `GetLintFilePath()` で返すパス相対でアクション metadata を見つけられない可能性。ルールのパス解決を確認し、テスト環境で `.github/actions/` が正しく解決されるよう修正 |
+
+#### カテゴリ C: 未実装機能 (ルール拡張必要)
+
+| 問題 | 影響 | 対処 |
+|---|---|---|
+| `workflow_call_jobs`: ローカル reusable workflow ファイルの存在チェック | 1 MISS | `reusable-workflow` ルールで `uses: ./.github/workflows/*.yml` 形式のローカル参照に対し、ファイル存在確認を追加。ファイルが見つからない場合に警告を発行 |
+
+### 6.4 対処優先度
+
+| 優先度 | 対処 | 期待 MISS 削減 | 難易度 |
+|---|---|---|---|
+| **P1-A** | `unpinned-uses` → `action` テスト比較マッピング追加 | -4 (invalid_action_format) | 低 (テスト変更のみ) |
+| **P1-B** | `local-action-inputs` ルールの examples テスト環境パス解決修正 | -8 (local_action_inputs + action_metadata_syntax_validation) | 中 (ルールのパス解決デバッグ) |
+| **P2** | reusable-workflow ローカルファイル存在チェック | -1 (workflow_call_jobs) | 中 (新機能追加) |
+
+**P1-A + P1-B を解消すれば examples/ MISS は 13→1 に削減可能** (残り 1 は P2 のファイル存在チェック)。
 
 ---
