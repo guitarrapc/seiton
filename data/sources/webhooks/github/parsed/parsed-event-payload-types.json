@@ -1,0 +1,3385 @@
+{
+  "schemaVersion": 2,
+  "source": "github-docs-webhook-events-and-payloads",
+  "events": [
+    {
+      "name": "branch_protection_configuration",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "branch_protection_rule",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "rule",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "check_run",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "check_run",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "check_suite",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "check_suite",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "code_scanning_alert",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "alert",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "commit_oid",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "commit_comment",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "comment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "create",
+      "properties": [
+        {
+          "name": "description",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "master_branch",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pusher_type",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "ref_type",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "custom_property",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "definition",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "custom_property_values",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "new_property_values",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "old_property_values",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "delete",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pusher_type",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "ref_type",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "dependabot_alert",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "alert",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "deploy_key",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "key",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "deployment",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "deployment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow_run",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "deployment_protection_rule",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "deployment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "deployment_callback_url",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "environment",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "event",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pull_requests",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sha",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "deployment_review",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "approver",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "reviewers",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "since",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "workflow_job_run",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow_job_runs",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "workflow_run",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "deployment_status",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "check_run",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "deployment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "deployment_status",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow_run",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "discussion",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "answer",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "discussion",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "discussion_comment",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "comment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "discussion",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "fork",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "forkee",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "github_app_authorization",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "gollum",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pages",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "installation",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repositories",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "requester",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "installation_repositories",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repositories_added",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "repositories_removed",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository_selection",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "requester",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "installation_target",
+      "properties": [
+        {
+          "name": "account",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "changes",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "target_type",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "issue_comment",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "comment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "issue",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "issue_dependencies",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "blocked_issue",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "blocked_issue_id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "blocking_issue",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "blocking_issue_id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "blocking_issue_repo",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "issues",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "assignee",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "issue",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "label",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "label",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "marketplace_purchase",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "effective_date",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "marketplace_purchase",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "previous_marketplace_purchase",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "member",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "changes",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "member",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "membership",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "member",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "team",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "merge_group",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "merge_group",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "meta",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "hook",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "hook_id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "milestone",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "milestone",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "org_block",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "blocked_user",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "membership",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "package",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "package",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "page_build",
+      "properties": [
+        {
+          "name": "build",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "personal_access_token_request",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "personal_access_token_request",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "ping",
+      "properties": [
+        {
+          "name": "hook",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "hook_id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "zen",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "project",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "project",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "project_card",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "changes",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "project_card",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "project_column",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "project_column",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "projects_v2",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "projects_v2",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "projects_v2_item",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "changes",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "projects_v2_item",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "projects_v2_status_update",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "projects_v2_status_update",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "public",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "pull_request",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "assignee",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "number",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pull_request",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "pull_request_review",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pull_request",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "review",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "pull_request_review_comment",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "comment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pull_request",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "pull_request_review_thread",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pull_request",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "thread",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "updated_at",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "pull_request_target",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "assignee",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "number",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pull_request",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "push",
+      "properties": [
+        {
+          "name": "after",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "base_ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "before",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "commits",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "compare",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "elementType": null
+        },
+        {
+          "name": "deleted",
+          "type": "bool",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "forced",
+          "type": "bool",
+          "elementType": null
+        },
+        {
+          "name": "head_commit",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "pusher",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "registry_package",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "registry_package",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "release",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "repository",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "repository_advisory",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository_advisory",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "repository_dispatch",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "client_payload",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "repository_import",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "repository_ruleset",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository_ruleset",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "repository_vulnerability_alert",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "alert",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "schedule",
+      "properties": [
+        {
+          "name": "schedule",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "secret_scanning_alert",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "alert",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "assignee",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "secret_scanning_alert_location",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "alert",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "location",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "secret_scanning_scan",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "completed_at",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "custom_pattern_name",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "custom_pattern_scope",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "secret_types",
+          "type": "array",
+          "elementType": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "started_at",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "security_advisory",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "security_advisory",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "security_and_analysis",
+      "properties": [
+        {
+          "name": "changes",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "sponsorship",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sponsorship",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "star",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "starred_at",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "properties": [
+        {
+          "name": "avatar_url",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "branches",
+          "type": "array",
+          "elementType": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "commit",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "context",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "created_at",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sha",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "target_url",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "updated_at",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "sub_issues",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "parent_issue",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "parent_issue_id",
+          "type": "number",
+          "elementType": null
+        },
+        {
+          "name": "parent_issue_repo",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sub_issue",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sub_issue_id",
+          "type": "number",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "team",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "team",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "team_add",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "team",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "watch",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_dispatch",
+      "properties": [
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "inputs",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow",
+          "type": "string",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_job",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "deployment",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow_job",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    },
+    {
+      "name": "workflow_run",
+      "properties": [
+        {
+          "name": "action",
+          "type": "string",
+          "elementType": null
+        },
+        {
+          "name": "enterprise",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "installation",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "organization",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "repository",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "sender",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow",
+          "type": "object",
+          "elementType": null
+        },
+        {
+          "name": "workflow_run",
+          "type": "object",
+          "elementType": null
+        }
+      ]
+    }
+  ]
+}

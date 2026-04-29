@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "local workflow schema fixture",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "on": {}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,2 @@
+test.yaml:8:20: receiver of object dereference "bar" must be type of object but got "string" [expression]
+test.yaml:9:20: {string => string} value in ${{ }} will be converted to string "[Object]" [expression]

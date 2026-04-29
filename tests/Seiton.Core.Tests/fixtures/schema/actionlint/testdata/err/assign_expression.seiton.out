@@ -1,0 +1,7 @@
+test.yaml:7:19: on.workflow_dispatch input required must be bool [syntax-check]
+test.yaml:11:20: on.workflow_dispatch input required must be bool [syntax-check]
+test.yaml:20:22: jobs.'test1'.strategy.max-parallel must be integer [syntax-check]
+test.yaml:24:23: jobs.'test1'.timeout-minutes must be number or expression [syntax-check]
+test.yaml:44:13: jobs.'test3'.strategy.matrix.include item must be object [syntax-check]
+test.yaml:44:11: "include" section should not be empty [syntax-check]
+test.yaml:52:14: array value in ${{ }} will be converted to string "[Array]" [expression]
