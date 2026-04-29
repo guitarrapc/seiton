@@ -11,11 +11,11 @@
 
 | 指標 | 最新 (2026-04-29) |
 |---|---|
-| 互換 fixtures (MISS=0) | 84 / 95 (4 scope-out) |
+| 互換 fixtures (MISS=0) | 86 / 95 (4 scope-out) |
 | 行レベルマッチ率 (line+col or line) | 470 / 486 (97%) |
 | 完全一致マッチ率 (exact match) | 155 / 486 |
 | 列差異マッチ (same line, diff col/msg) | 315 / 486 |
-| 未マッチ期待行 (MISS) | 16 (true gaps) |
+| 未マッチ期待行 (MISS) | 11 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
@@ -23,11 +23,11 @@
 | 指標 | 最新 (2026-04-29) |
 |---|---|
 | 対象 examples fixtures | 49 (2 scope-out 除外) |
-| 互換 fixtures (MISS=0) | 42 / 49 |
+| 互換 fixtures (MISS=0) | 43 / 49 |
 | 行レベルマッチ率 (line+col or line) | 126 / 143 (88%) |
 | 完全一致マッチ率 (exact match) | 21 / 143 |
 | 列差異マッチ (same line, diff col/msg) | 105 / 143 |
-| 未マッチ期待行 (MISS) | 17 (true gaps) |
+| 未マッチ期待行 (MISS) | 16 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 11 (additional detections) |
 | scope-out (shellcheck/pyflakes) | 2 (shellcheck_integration, pyflakes_integration) |
 
@@ -154,7 +154,7 @@ scope-out fixtures:
 | `glob` | glob (パターンバリデーション) | ○ 対応済 |
 | `hardcoded_credentials` | credentials (ハードコードパスワード) | ○ 対応済 |
 | `id_naming_convention` | id (ID命名規則) | ○ 対応済 |
-| `if_cond_always_true` | if-cond (定数条件) | △ multiline ケースで差異あり (Phase 1 修正対象) |
+| `if_cond_always_true` | if-cond (定数条件) | ○ Phase 2 で修正済 (multiline block scalar 位置修正) |
 | `invalid_action_format` | action (uses 形式バリデーション) | ○ 対応済 |
 | `invalid_ids_in_needs` | job-needs (不正 ID) | ○ 対応済 |
 | `job_step_ids_duplicate` | id, syntax-check (重複 ID) | ○ 対応済 |
@@ -294,7 +294,14 @@ scope-out fixtures:
 1. if-cond ルールで block scalar の trailing `\n` を正規化してから定数判定
 2. block scalar の場合、`if:` キー行を報告位置とする
 
-**実装結果**: (未着手)
+**実装結果**: 完了
+- `Step`, `Job`, `Snapshot` AST に `IfKeyRange` フィールドを追加 (パーサーが `if:` キー位置をキャプチャ)
+- `IfCondRule.ValidateCondition()` で block scalar (trailing `\n`) を検出した場合、`IfKeyRange` からブロックスカラーインジケータ位置 (`if:` キー列 + 4) を算出して報告位置を修正
+- MISS #7 (`if_cond_constants` 18:13): 定数検出は既存で動作していたが位置が 19:11 → 18:13 に修正
+- MISS #8 (`if_cond_edge_cases_trailing_leading_chars` 8:13): always-true 検出は既存で動作していたが位置が 9:11 → 8:13 に修正
+- examples/ `if_cond_always_true` の block scalar ケースも 20:11 → 19:13 に修正
+- テスト: 3 件の位置精度テスト追加 (`IfCondRule_BlockScalarConstant_ReportsAtIfKeyLine`, `IfCondRule_BlockScalarAlwaysTrue_ReportsAtIfKeyLine`, `IfCondRule_BlockScalarJobIf_ReportsAtIfKeyLine`)
+- 全 1210 テスト pass
 
 ---
 
@@ -380,7 +387,7 @@ scope-out fixtures:
 |---|---|---|---|---|---|
 | Phase 0 | ✅完了 | 2026-04-29 | 103 tests | 1201 all pass | examples/ テスト基盤 |
 | Phase 1 | ✅完了 | 2026-04-29 | 2026-04-29 | 3 (#1,#2,#3) | reusable-workflow |
-| Phase 2 | 未着手 | - | - | 目標: 2 | if-cond multiline |
+| Phase 2 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#7,#8) + examples 1 | if-cond multiline |
 | Phase 3 | 未着手 | - | - | 目標: 1 | glob multiline |
 | Phase 4 | 未着手 | - | - | 目標: 2 | recursive_anchors |
 | Phase 5 | 未着手 | - | - | 目標: 2 | contains() overload |

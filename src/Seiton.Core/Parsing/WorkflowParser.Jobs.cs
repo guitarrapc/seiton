@@ -124,6 +124,7 @@ public static partial class WorkflowParser
         Env? envNode = null;
         Defaults? defaultsNode = null;
         StringNodeId ifNode = default;
+        TextPosition ifKeyMark = default;
         Step[]? stepsNode = null;
         FloatNodeId timeoutMinutesNode = default;
         Strategy? strategyNode = null;
@@ -288,6 +289,7 @@ public static partial class WorkflowParser
                         break;
 
                     case JobNodeMappingKey.If:
+                        ifKeyMark = keyMark;
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobIf, out var ifErr, out var ifMark);
@@ -559,6 +561,7 @@ public static partial class WorkflowParser
             Env = envNode,
             Defaults = defaultsNode,
             If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
             Steps = stepsNode,
             StepsKeyRange = stepsNode is not null ? BuildScalarLocation(stepsKeyPos, 5) : null,
             TimeoutMinutes = timeoutMinutesNode,
@@ -648,6 +651,7 @@ public static partial class WorkflowParser
         StringNodeId versionNode = default;
         StringNodeId imageNameNode = default;
         StringNodeId ifNode = default;
+        TextPosition ifKeyMark = default;
         ulong seen = 0;
 
         reader.Read(); // consume MappingStart
@@ -706,6 +710,7 @@ public static partial class WorkflowParser
                         break;
 
                     case SnapshotMappingKey.If:
+                        ifKeyMark = keyMark;
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobSnapshotIf, out var ifErr, out var ifMark);
@@ -743,6 +748,7 @@ public static partial class WorkflowParser
             Version = versionNode,
             ImageName = imageNameNode,
             If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
         };
     }
 

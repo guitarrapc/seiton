@@ -14,21 +14,21 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 
     public override void VisitJobPre(Job job)
     {
-        ValidateCondition(job.If, job, null);
+        ValidateCondition(job.If, job, null, job.IfKeyRange);
 
         // snapshot.if
         if (job.Snapshot is { } snapshot)
         {
-            ValidateCondition(snapshot.If, job, null);
+            ValidateCondition(snapshot.If, job, null, snapshot.IfKeyRange);
         }
     }
 
     public override void VisitStep(Step step)
     {
-        ValidateCondition(step.If, null, step);
+        ValidateCondition(step.If, null, step, step.IfKeyRange);
     }
 
-    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
+    private void ValidateCondition(StringNodeId condition, Job? job, Step? step, TextRange? ifKeyRange)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
@@ -41,6 +41,15 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             return;
         }
 
+        // For block scalars (trailing \n), report at the block indicator position (same line as if: key)
+        // instead of the content position (next line). The indicator `|` or `>` is at keyCol + 4 ("if: ").
+        var diagRange = Arena.GetStringRange(condition);
+        if (raw[raw.Length - 1] == (byte)'\n' && ifKeyRange is { } kr)
+        {
+            var indicatorCol = kr.StartColumn + 4; // "if" (2) + ": " (2)
+            diagRange = new TextRange(diagRange.Start, diagRange.Length, kr.StartLine, indicatorCol, diagRange.EndLine, diagRange.EndColumn);
+        }
+
         // Detect "always true" pattern: value contains ${{ }} but has extra characters around it.
         // GitHub Actions evaluates the entire string as a template, producing a non-empty string → always truthy.
         // Examples: "${{ expr }}\n" (block scalar), "${{ expr }} " (trailing space), "${{ e1 }} && ${{ e2 }}"
@@ -50,12 +59,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             var message = $"if: condition \"{conditionText}\" is always evaluated to true because extra characters are around ${{{{ }}}}";
             if (job is not null)
             {
-                AddJobWarning(job, message, Arena.GetStringRange(condition));
+                AddJobWarning(job, message, diagRange);
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, message, Arena.GetStringRange(condition));
+                AddStepWarning(step, message, diagRange);
             }
 
             return;
@@ -68,12 +77,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         {
             if (job is not null)
             {
-                AddJobWarning(job, "job if condition contains syntax errors", Arena.GetStringRange(condition));
+                AddJobWarning(job, "job if condition contains syntax errors", diagRange);
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, "step if condition contains syntax errors", Arena.GetStringRange(condition));
+                AddStepWarning(step, "step if condition contains syntax errors", diagRange);
             }
 
             return;
@@ -85,12 +94,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             var message = $"constant expression \"{expressionText}\" in condition. remove the if: section";
             if (job is not null)
             {
-                AddJobWarning(job, message, Arena.GetStringRange(condition));
+                AddJobWarning(job, message, diagRange);
             }
 
             if (step is not null)
             {
-                AddStepWarning(step, message, Arena.GetStringRange(condition));
+                AddStepWarning(step, message, diagRange);
             }
         }
     }

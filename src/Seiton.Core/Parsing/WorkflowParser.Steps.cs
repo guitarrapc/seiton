@@ -119,6 +119,7 @@ public static partial class WorkflowParser
         var hasAnyKey = false;
         StringNodeId idNode = default;
         StringNodeId ifNode = default;
+        TextPosition ifKeyMark = default;
         StringNodeId nameNode = default;
         Env? envNode = null;
         BoolNodeId continueOnErrorNode = default;
@@ -226,6 +227,7 @@ public static partial class WorkflowParser
                         break;
 
                     case StepMappingKey.If:
+                        ifKeyMark = keyMark;
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(
@@ -439,6 +441,7 @@ public static partial class WorkflowParser
         {
             Id = idNode,
             If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
             Name = nameNode,
             Exec = exec,
             Env = envNode,

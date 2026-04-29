@@ -5800,6 +5800,66 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task IfCondRule_BlockScalarConstant_ReportsAtIfKeyLine()
+    {
+        // MISS #7: block scalar `if: |\n  true` should report at the `if:` value line (where `|` is),
+        // not at the content line (where `true` is).
+        // Layout:
+        //   line 6: "      - if: |"       <- `if` at col 9, `|` at col 13
+        //   line 7: "          true"       <- content at col 11
+        // actionlint expects line 6, col 13 (the `|` position)
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          true\n        run: echo ng\n";
+        var result = new LintEngine([new IfCondRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("constant expression \"true\"");
+        // Must report at block scalar indicator line, not content line
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(6);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(13);
+    }
+
+    [Test]
+    public async Task IfCondRule_BlockScalarAlwaysTrue_ReportsAtIfKeyLine()
+    {
+        // MISS #8: block scalar `if: |\n  ${{ false }}` should report at the `if:` value line,
+        // not at the content line.
+        // Layout:
+        //   line 6: "      - if: |"              <- `|` at col 13
+        //   line 7: "          ${{ false }}"      <- content at col 11
+        // actionlint expects line 6, col 13
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          ${{ false }}\n        run: echo ng\n";
+        var result = new LintEngine([new IfCondRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("always evaluated to true");
+        // Must report at block scalar indicator line, not content line
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(6);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(13);
+    }
+
+    [Test]
+    public async Task IfCondRule_BlockScalarJobIf_ReportsAtIfKeyLine()
+    {
+        // Block scalar job-level `if: |\n  true` should also report at the `|` position.
+        // Layout:
+        //   line 4: "    if: |"      <- `if` at col 5, `|` at col 9
+        //   line 5: "      true"     <- content at col 7
+        var yaml = "on: push\njobs:\n  build:\n    if: |\n      true\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ng\n";
+        var result = new LintEngine([new IfCondRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("constant expression \"true\"");
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(4);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
     public async Task RuleRegression_FakeTernaryRule_TableDriven()
     {
         var cases = new[]

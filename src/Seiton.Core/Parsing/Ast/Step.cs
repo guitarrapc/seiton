@@ -7,6 +7,8 @@ public sealed class Step
 
     public StringNodeId If { get; init; }
 
+    public TextRange? IfKeyRange { get; init; }
+
     public StringNodeId Name { get; init; }
 
     public StepExec Exec { get; init; } = null!;
