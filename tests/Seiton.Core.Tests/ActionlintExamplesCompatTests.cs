@@ -643,4 +643,70 @@ public sealed class ActionlintExamplesCompatTests
 
         await Assert.That(matchResult.UnmatchedExpected).Count().IsEqualTo(0);
     }
+
+    /// <summary>
+    /// Regression test: local-action-inputs rule resolves action metadata and produces
+    /// required/unknown input diagnostics for the local_action_inputs fixture.
+    /// </summary>
+    [Test]
+    public async Task LocalActionInputs_ResolvesMetadata_ZeroMiss()
+    {
+        var examplesRoot = GetExamplesFixturesRoot();
+        var yamlPath = Path.Combine(examplesRoot, "local_action_inputs.yaml");
+        var outPath = Path.Combine(examplesRoot, "local_action_inputs.out");
+
+        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var engine = new LintEngine();
+        var result = engine.Check(utf8Yaml, GetLintFilePath());
+
+        var seitonLines = FormatAsActionlint(result.Diagnostics);
+        var expectations = ParseOutFile(outPath);
+        var matchResult = Match(seitonLines, expectations, "local_action_inputs");
+
+        await Assert.That(matchResult.UnmatchedExpected).Count().IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// Regression test: action metadata validation (env not allowed, description required, etc.)
+    /// produces diagnostics matching actionlint's expectations for the action_metadata_syntax_validation fixture.
+    /// </summary>
+    [Test]
+    public async Task ActionMetadataSyntaxValidation_ResolvesMetadata_ZeroMiss()
+    {
+        var examplesRoot = GetExamplesFixturesRoot();
+        var yamlPath = Path.Combine(examplesRoot, "action_metadata_syntax_validation.yaml");
+        var outPath = Path.Combine(examplesRoot, "action_metadata_syntax_validation.out");
+
+        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var engine = new LintEngine();
+        var result = engine.Check(utf8Yaml, GetLintFilePath());
+
+        var seitonLines = FormatAsActionlint(result.Diagnostics);
+        var expectations = ParseOutFile(outPath);
+        var matchResult = Match(seitonLines, expectations, "action_metadata_syntax_validation");
+
+        await Assert.That(matchResult.UnmatchedExpected).Count().IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// Regression test: reusable workflow local file existence check produces a diagnostic
+    /// that matches actionlint's expectation for workflow_call_jobs fixture.
+    /// </summary>
+    [Test]
+    public async Task WorkflowCallJobs_LocalFileExistence_ZeroMiss()
+    {
+        var examplesRoot = GetExamplesFixturesRoot();
+        var yamlPath = Path.Combine(examplesRoot, "workflow_call_jobs.yaml");
+        var outPath = Path.Combine(examplesRoot, "workflow_call_jobs.out");
+
+        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var engine = new LintEngine();
+        var result = engine.Check(utf8Yaml, GetLintFilePath());
+
+        var seitonLines = FormatAsActionlint(result.Diagnostics);
+        var expectations = ParseOutFile(outPath);
+        var matchResult = Match(seitonLines, expectations, "workflow_call_jobs");
+
+        await Assert.That(matchResult.UnmatchedExpected).Count().IsEqualTo(0);
+    }
 }

@@ -1,0 +1,2 @@
+test.yaml:7:9: required input 'message' is not set for local action [action]
+test.yaml:13:22: unknown local action input 'additions'; declared inputs are: addition, message, name [action]

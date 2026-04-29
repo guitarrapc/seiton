@@ -24,12 +24,12 @@
 | 指標 | 最新 (2026-04-30) |
 |---|---|
 | 対象 examples fixtures | 49 (2 scope-out 除外) |
-| 互換 fixtures (MISS=0) | 46 / 49 |
-| 行レベルマッチ率 (line+col or line) | 134 / 143 (93%) |
+| 互換 fixtures (MISS=0) | 49 / 49 |
+| 行レベルマッチ率 (line+col or line) | 143 / 143 (100%) |
 | 完全一致マッチ率 (exact match) | 22 / 143 |
-| 列差異マッチ (same line, diff col/msg) | 105 / 143 |
-| 近接行マッチ (near-line, position diff) | 3 / 143 |
-| 未マッチ期待行 (MISS) | 9 (true gaps) |
+| 列差異マッチ (same line, diff col/msg) | 112 / 143 |
+| 近接行マッチ (near-line, position diff) | 9 / 143 |
+| 未マッチ期待行 (MISS) | 0 |
 | 余剰 seiton 行 (EXTRA) | 4 (additional detections) |
 | scope-out (shellcheck/pyflakes) | 2 (shellcheck_integration, pyflakes_integration) |
 
@@ -428,6 +428,7 @@ scope-out fixtures:
 | Phase 6 | ✅完了 | 2026-04-29 | 2026-04-29 | 7 (#4,#5,#11,#13,#14,#18,#19) | テスト比較改善 |
 | Phase 7 | ✅完了 | 2026-04-30 | 2026-04-30 | -2 (意図的抑制) | workflow_dispatch 空文字option 抑制 |
 | Phase 8 | ✅完了 | 2026-04-30 | 2026-04-30 | 4 (examples) | カテゴリA: unpinned-uses→action マッピング + Docker tag 空チェック |
+| Phase 9 | ✅完了 | 2026-04-30 | 2026-04-30 | 9 (examples) | カテゴリB+C: local-action-inputs パス解決 + reusable-workflow ファイル存在チェック位置修正 |
 
 ---
 
@@ -443,13 +444,13 @@ scope-out fixtures:
 
 **結論**: err/ fixtures の残 MISS 3件はすべて**対処不要**。#1/#2 は seiton ポリシーとして合法パターンを意図的に検出しない方針。#3 は同一コンセプトを別ルール/メッセージで検出済み。
 
-### 6.2 examples/ fixtures 残 MISS (9件 / 3 fixtures)
+### 6.2 examples/ fixtures 残 MISS ✅全解消
 
-| # | Fixture | MISS 数 | actionlint 期待 | 根本原因 | 優先度 |
-|---|---|---|---|---|---|
-| 1 | `action_metadata_syntax_validation` | 6 | local action metadata の各種バリデーション (`env` 禁止, `description` 必須, ファイル存在確認, branding, runner 名) | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
-| 2 | `local_action_inputs` | 2 | missing required input / unknown input の検出 | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
-| 3 | `workflow_call_jobs` | 1 | `could not read reusable workflow file for "./..."` — ローカル reusable workflow ファイルの存在チェック | `reusable-workflow` ルールがファイル存在確認を行っていない (ルール仕様の範囲外) | **P2** |
+Phase 9 で全 examples MISS を解消。
+
+**解決方法**:
+1. テスト環境に `.github/workflows/test.yaml` スタブファイルを作成 → `LocalActionInputsRule` と `ReusableWorkflowRule` の `File.Exists(Config.FilePath)` ガードを通過
+2. `ReusableWorkflowRule.GetLocalWorkflowContract()` の診断位置を `BuildJobLocation(job)` → `BuildUsesLocation(workflowCall)` に修正 → 行位置が actionlint 期待と一致
 
 ### 6.3 根本原因別の分類と対処
 
@@ -459,26 +460,26 @@ scope-out fixtures:
 |---|---|---|
 | `invalid_action_format`: `unpinned-uses` が `SeitonOnlyRules` に含まれるため、seiton が検出した結果が比較から除外されていた | 4 MISS → 0 | `unpinned-uses` を `SeitonOnlyRules` から削除し `RuleIdMap` に `unpinned-uses` → `action` を追加。Docker tag 空チェック (`docker://image:`) も `UnpinnedUsesRule` に追加。 |
 
-#### カテゴリ B: ルールの実行環境問題 (テスト設定修正)
+#### カテゴリ B: ルールの実行環境問題 ✅解決済 (Phase 9)
 
 | 問題 | 影響 | 対処 |
 |---|---|---|
-| `local_action_inputs` / `action_metadata_syntax_validation`: `local-action-inputs` ルールがテストで使用するファイルパスからローカルアクションを解決できない | 8 MISS | `LocalActionInputsRule` のパス解決ロジックがテスト設定の `GetLintFilePath()` で返すパス相対でアクション metadata を見つけられない可能性。ルールのパス解決を確認し、テスト環境で `.github/actions/` が正しく解決されるよう修正 |
+| `local_action_inputs` / `action_metadata_syntax_validation`: `local-action-inputs` ルールがテストで使用するファイルパスからローカルアクションを解決できなかった | 8 MISS → 0 | `.github/workflows/test.yaml` スタブファイル作成で `File.Exists` ガード通過 |
 
-#### カテゴリ C: 未実装機能 (ルール拡張必要)
+#### カテゴリ C: 未実装機能 ✅解決済 (Phase 9)
 
 | 問題 | 影響 | 対処 |
 |---|---|---|
-| `workflow_call_jobs`: ローカル reusable workflow ファイルの存在チェック | 1 MISS | `reusable-workflow` ルールで `uses: ./.github/workflows/*.yml` 形式のローカル参照に対し、ファイル存在確認を追加。ファイルが見つからない場合に警告を発行 |
+| `workflow_call_jobs`: ローカル reusable workflow ファイルの存在チェック | 1 MISS → 0 | `ReusableWorkflowRule` は既にファイル存在チェックを実装済み。テスト環境の `test.yaml` スタブ作成 + 診断位置を uses 値位置に修正で解消 |
 
 ### 6.4 対処優先度
 
 | 優先度 | 対処 | 期待 MISS 削減 | 難易度 |
 |---|---|---|---|
 | ~~**P1-A**~~ | ~~`unpinned-uses` → `action` テスト比較マッピング追加~~ | ~~-4 (invalid_action_format)~~ | ✅完了 (Phase 8) |
-| **P1-B** | `local-action-inputs` ルールの examples テスト環境パス解決修正 | -8 (local_action_inputs + action_metadata_syntax_validation) | 中 (ルールのパス解決デバッグ) |
-| **P2** | reusable-workflow ローカルファイル存在チェック | -1 (workflow_call_jobs) | 中 (新機能追加) |
+| ~~**P1-B**~~ | ~~`local-action-inputs` ルールの examples テスト環境パス解決修正~~ | ~~-8 (local_action_inputs + action_metadata_syntax_validation)~~ | ✅完了 (Phase 9) |
+| ~~**P2**~~ | ~~reusable-workflow ローカルファイル存在チェック~~ | ~~-1 (workflow_call_jobs)~~ | ✅完了 (Phase 9) |
 
-**P1-B を解消すれば examples/ MISS は 9→1 に削減可能** (残り 1 は P2 のファイル存在チェック)。
+**全 examples/ MISS 解消済み** (49/49 fixtures 完全互換)。
 
 ---

@@ -155,7 +155,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return;
         }
 
-        var contract = GetLocalWorkflowContract(job, jobId, relativePath, resolvedPath);
+        var contract = GetLocalWorkflowContract(job, workflowCall, jobId, relativePath, resolvedPath);
         if (contract is null)
         {
             return;
@@ -165,7 +165,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         ValidateWorkflowCallSecrets(job, jobId, workflowCall, contract);
     }
 
-    private LocalWorkflowContract? GetLocalWorkflowContract(Job job, string jobId, string relativePath, string resolvedPath)
+    private LocalWorkflowContract? GetLocalWorkflowContract(Job job, WorkflowCall workflowCall, string jobId, string relativePath, string resolvedPath)
     {
         if (localWorkflowContracts.TryGetValue(resolvedPath, out var cached))
         {
@@ -174,7 +174,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         if (!File.Exists(resolvedPath))
         {
-            AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but the file does not exist", BuildJobLocation(job));
+            AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but the file does not exist", BuildUsesLocation(workflowCall));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
@@ -193,7 +193,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         var parseResult = WorkflowParser.Parse(bytes, resolvedPath);
         if (parseResult.HasFatalError || parseResult.Workflow is null)
         {
-            AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but it could not be parsed", BuildJobLocation(job));
+            AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but it could not be parsed", BuildUsesLocation(workflowCall));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
