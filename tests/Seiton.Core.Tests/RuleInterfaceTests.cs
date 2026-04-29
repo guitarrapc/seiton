@@ -1593,6 +1593,60 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_PopularActionInputsRule_TypoAutoFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          fetch-depht: 1
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new PopularActionInputsRule()]);
+        var result = engine.Check(sourceBytes, "popular-action-inputs-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "popular-action-inputs" && x.Message.Contains("fetch-depht", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        await Assert.That(diagnostic.Fix!.Value.Description).Contains("fetch-depth");
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "popular-action-inputs-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText).Contains("fetch-depth: 1");
+        await Assert.That(revalidated.After.Diagnostics.Any(x =>
+            x.RuleId == "popular-action-inputs" && x.Message.Contains("unknown input", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task RuleRegression_PopularActionInputsRule_NoFixWhenDistant()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                          totally-unknown-input: true
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new PopularActionInputsRule()]);
+        var result = engine.Check(sourceBytes, "popular-action-inputs-no-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "popular-action-inputs" && x.Message.Contains("totally-unknown-input", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task RuleRegression_PopularActionInputsRule_TableDriven()
     {
         var cases = new[]
@@ -9968,7 +10022,7 @@ public sealed class RuleInterfaceTests
                               with:
                                   fetch-depht: 1
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "unpinned-uses",
                 new UnpinnedUsesRule(),

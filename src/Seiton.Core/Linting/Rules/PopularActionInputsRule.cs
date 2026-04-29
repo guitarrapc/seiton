@@ -54,7 +54,23 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 var unknownMessage = suggestion is not null
                     ? $"unknown input '{unknownInputName}' for action '{actionName}'. did you mean '{suggestion}'?"
                     : $"unknown input '{unknownInputName}' for action '{actionName}'";
-                AddStepWarning(step, unknownMessage, Arena.GetStringRange(pair.Value));
+
+                DiagnosticFix? fix = null;
+                if (suggestion is not null && Config.Fix.Enabled)
+                {
+                    fix = new DiagnosticFix(
+                        $"replace '{unknownInputName}' with '{suggestion}'",
+                        [new TextEdit(pair.Key.Offset, pair.Key.Length, suggestion)]);
+                }
+
+                if (fix is not null)
+                {
+                    AddStepWarning(step, unknownMessage, Arena.GetStringRange(pair.Value), fix.Value);
+                }
+                else
+                {
+                    AddStepWarning(step, unknownMessage, Arena.GetStringRange(pair.Value));
+                }
             }
         }
 
