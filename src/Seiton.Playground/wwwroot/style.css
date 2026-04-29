@@ -566,7 +566,7 @@ main {
 }
 
 #editor-wrap .CodeMirror pre.CodeMirror-line {
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .apply-fixes-fab {
