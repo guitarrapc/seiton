@@ -12283,7 +12283,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(unexpectedKeyDiags).Count().IsEqualTo(1);
     }
 
-    // Phase 1: reusable-workflow forbidden-key diagnostics must report at the forbidden key position
+    // reusable-workflow forbidden-key diagnostics must report at the forbidden key position
     [Test]
     public async Task ReusableWorkflowRule_ForbiddenKey_ReportsAtKeyPosition()
     {

@@ -300,9 +300,7 @@ public sealed class ActionlintExamplesCompatTests
         }
     }
 
-    // ──────────────────────────────────────────────
     // Format conversion: seiton → actionlint format
-    // ──────────────────────────────────────────────
 
     private static List<string> FormatAsActionlint(Diagnostic[] diagnostics)
     {
@@ -328,9 +326,7 @@ public sealed class ActionlintExamplesCompatTests
         return lines;
     }
 
-    // ──────────────────────────────────────────────
     // .out file parser
-    // ──────────────────────────────────────────────
 
     private readonly record struct ExpectedLine(string Pattern, bool IsRegex);
 
@@ -359,9 +355,7 @@ public sealed class ActionlintExamplesCompatTests
         return expectations;
     }
 
-    // ──────────────────────────────────────────────
     // Line matching engine
-    // ──────────────────────────────────────────────
 
     private sealed class MatchResult
     {

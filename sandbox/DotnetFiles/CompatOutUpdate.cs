@@ -84,7 +84,7 @@ foreach (var yamlPath in Directory.EnumerateFiles(errDir, "*.yaml").OrderBy(p =>
     // Keep lines from existing .out that are NOT produced by seiton (they represent detection gaps)
     // Replace matched lines with seiton's version
     // This approach: write seiton's output as the new .out
-    // Lines that actionlint detects but seiton doesn't are removed (they represent detection gaps for Phase 2)
+    // Lines that actionlint detects but seiton doesn't are removed
     var newOutLines = seitonLines;
 
     if (mode == "report")

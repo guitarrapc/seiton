@@ -249,9 +249,7 @@ public sealed class ActionlintCompatTests
         await Assert.That(totalFixtures).IsGreaterThan(0);
     }
 
-    // ──────────────────────────────────────────────
     // Format conversion: seiton → actionlint format
-    // ──────────────────────────────────────────────
 
     /// <summary>
     /// Converts seiton diagnostics to actionlint output format.
@@ -286,9 +284,7 @@ public sealed class ActionlintCompatTests
         return lines;
     }
 
-    // ──────────────────────────────────────────────
     // .out file parser
-    // ──────────────────────────────────────────────
 
     /// <summary>Parsed expectation line from an <c>.out</c> file.</summary>
     private readonly record struct ExpectedLine(string Pattern, bool IsRegex);
@@ -323,9 +319,7 @@ public sealed class ActionlintCompatTests
         return expectations;
     }
 
-    // ──────────────────────────────────────────────
     // Line matching engine
-    // ──────────────────────────────────────────────
 
     private sealed class MatchResult
     {
@@ -617,9 +611,7 @@ public sealed class ActionlintCompatTests
         return string.Equals(actual, expected.Pattern, StringComparison.Ordinal);
     }
 
-    // ──────────────────────────────────────────────
     // .seiton.out generation
-    // ──────────────────────────────────────────────
 
     /// <summary>
     /// Generates or updates <c>.seiton.out</c> files that capture seiton's actual output
