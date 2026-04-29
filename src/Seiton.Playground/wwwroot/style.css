@@ -94,12 +94,13 @@ html, body {
 
 /* Fixed widths so other controls (especially the URL field) do not jump when the selected option text changes. */
 #filetype-select {
-  width: 10.5rem;
+  width: 10rem;
+  max-width: min(10rem, 100%);
 }
 
 #sample-select {
-  width: 14rem;
-  max-width: min(14rem, 100%);
+  width: 10rem;
+  max-width: min(10rem, 100%);
 }
 
 /* URL + Check as one control (shared border, no inner gap) */
