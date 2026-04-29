@@ -4343,6 +4343,26 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task GlobPatternRule_BlockScalarTrailingNewline_ReportsAtIndicatorLine()
+    {
+        // MISS #6: block scalar `- |\n  foo.txt` should report at the `|` indicator line,
+        // not at the content line.
+        // Layout:
+        //   line 5: "      - |"           <- `|` at col 9
+        //   line 6: "        foo.txt"     <- content at col 9
+        // actionlint expects line 5, col 9
+        var yaml = "on:\n  push:\n    paths:\n      - 'ok'\n      - |\n        foo.txt\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+        var result = new LintEngine([new GlobPatternRule()]).Check(
+            System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "glob-pattern" && d.Message.Contains("leading and trailing spaces")).ToArray();
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        // Must report at block scalar indicator line, not content line
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
     public async Task RuleRegression_DenyWriteAllRule_TableDriven()
     {
         var cases = new[]

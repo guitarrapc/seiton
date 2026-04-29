@@ -97,6 +97,13 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
     {
         var range = Arena.GetStringRange(valueNode);
 
+        // For block scalars (trailing \n), report at the block indicator (| or >) position
+        // instead of the content position on the next line.
+        if (pattern.Length > 0 && pattern[^1] == (byte)'\n' && Config.Utf8Yaml is { } yaml)
+        {
+            range = AdjustBlockScalarRange(yaml, range);
+        }
+
         // Empty pattern
         if (pattern.Length == 0)
         {
@@ -274,6 +281,66 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
                 $"'.' and '..' are not allowed in glob path{FilterPatternNote}",
                 range);
         }
+    }
+
+    /// <summary>
+    /// Scans backward from the content start offset to find the block scalar indicator (<c>|</c> or <c>&gt;</c>)
+    /// and returns a range pointing to the indicator position instead of the content position.
+    /// </summary>
+    private static TextRange AdjustBlockScalarRange(byte[] yaml, TextRange contentRange)
+    {
+        var offset = contentRange.Start;
+        if (offset <= 0 || offset > yaml.Length)
+        {
+            return contentRange;
+        }
+
+        // Scan backward past whitespace and newlines to find | or >
+        var i = offset - 1;
+        while (i >= 0 && (yaml[i] == (byte)' ' || yaml[i] == (byte)'\n' || yaml[i] == (byte)'\r'))
+        {
+            i--;
+        }
+
+        // Possibly at a chomping/indentation modifier (e.g., |2, |-, |+, |2-)
+        // Scan further back to find the actual | or > indicator
+        while (i >= 0 && yaml[i] != (byte)'|' && yaml[i] != (byte)'>')
+        {
+            if (yaml[i] == (byte)'\n')
+            {
+                return contentRange; // Went too far, bail out
+            }
+
+            i--;
+        }
+
+        if (i < 0)
+        {
+            return contentRange;
+        }
+
+        // Found the indicator. Compute its line and column.
+        var lineStart = i;
+        while (lineStart > 0 && yaml[lineStart - 1] != (byte)'\n')
+        {
+            lineStart--;
+        }
+
+        var indicatorCol = i - lineStart + 1; // 1-based
+
+        // Count newlines between indicator and content to get the line delta
+        var newlineCount = 0;
+        for (var j = i; j < offset; j++)
+        {
+            if (yaml[j] == (byte)'\n')
+            {
+                newlineCount++;
+            }
+        }
+
+        var indicatorLine = contentRange.StartLine - newlineCount;
+
+        return new TextRange(i, contentRange.Length + (offset - i), indicatorLine, indicatorCol, contentRange.EndLine, contentRange.EndColumn);
     }
 
     private static bool IsRefNameForbiddenChar(byte b)

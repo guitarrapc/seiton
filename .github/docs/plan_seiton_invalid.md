@@ -11,11 +11,11 @@
 
 | 指標 | 最新 (2026-04-29) |
 |---|---|
-| 互換 fixtures (MISS=0) | 86 / 95 (4 scope-out) |
+| 互換 fixtures (MISS=0) | 87 / 95 (4 scope-out) |
 | 行レベルマッチ率 (line+col or line) | 470 / 486 (97%) |
 | 完全一致マッチ率 (exact match) | 155 / 486 |
 | 列差異マッチ (same line, diff col/msg) | 315 / 486 |
-| 未マッチ期待行 (MISS) | 11 (true gaps) |
+| 未マッチ期待行 (MISS) | 10 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
@@ -313,13 +313,17 @@ scope-out fixtures:
 
 **根本原因**:
 - YAML block scalar (`|`) で末尾に改行を含むパスが glob フィルターに渡された場合
-- seiton は `\n` 含みの multiline 文字列に対する leading/trailing 空白チェックを実行していない
-- actionlint は `foo.txt\n` → trailing 空白として検出
+- seiton は trailing `\n` を含むパターンの空白チェック自体は `IsGlobWhitespace(\n)` で検出していた
+- しかし報告位置がブロックスカラーの内容行 (例: 21:9) を指しており、actionlint の期待するインジケータ行 (20:9) と不一致だった
 
 **対処方針**:
-1. glob-pattern ルールの空白チェックで、block scalar 末尾の `\n` も空白として扱う
+1. glob-pattern ルールで、パターンが trailing `\n` を持つ場合 (block scalar)、`Config.Utf8Yaml` のソースバイトを後方スキャンして `|` / `>` インジケータの位置を特定し、報告位置をインジケータ行に調整する
 
-**実装結果**: (未着手)
+**実装結果**: ✅ 完了
+- `GlobPatternRule.ValidatePattern()` で block scalar (trailing `\n`) を検出した場合、`AdjustBlockScalarRange()` ヘルパーでソースバイトを後方スキャンし `|`/`>` インジケータ位置を算出して報告位置を修正
+- MISS #6 (`glob_more` 20:9): 21:9 → 20:9 に修正
+- テスト: 1 件の位置精度テスト追加 (`GlobPatternRule_BlockScalarTrailingNewline_ReportsAtIndicatorLine`)
+- 全 1211 テスト pass
 
 ---
 
@@ -388,7 +392,7 @@ scope-out fixtures:
 | Phase 0 | ✅完了 | 2026-04-29 | 103 tests | 1201 all pass | examples/ テスト基盤 |
 | Phase 1 | ✅完了 | 2026-04-29 | 2026-04-29 | 3 (#1,#2,#3) | reusable-workflow |
 | Phase 2 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#7,#8) + examples 1 | if-cond multiline |
-| Phase 3 | 未着手 | - | - | 目標: 1 | glob multiline |
+| Phase 3 | ✅完了 | 2026-04-29 | 2026-04-29 | 1 (#6) | glob multiline |
 | Phase 4 | 未着手 | - | - | 目標: 2 | recursive_anchors |
 | Phase 5 | 未着手 | - | - | 目標: 2 | contains() overload |
 | Phase 6 | 未着手 | - | - | 目標: 6+ | テスト比較改善 |
