@@ -1172,6 +1172,23 @@ unexpected key "{key}" for "{sectionType}" section. expected one of ...
 - `on.workflow_dispatch.inputs unexpected key "X" for "inputs" section`
 - `on.workflow_call.secrets unexpected key "X" for "secrets" section`
 
+#### Principle 6a: Prefix scope — when location prefixes are NOT added
+
+Dotted-path prefixes are added only when **multiple instances** of the same section type can coexist in a workflow, making the section name alone ambiguous. Structurally unique scopes do not receive a prefix.
+
+| Scope | Prefix added? | Reason |
+|---|---|---|
+| Workflow root (`"workflow"` section) | No | Only one workflow root exists per file |
+| Workflow-level `defaults`, `concurrency` | No | Only one workflow-level instance of each |
+| Event-level (`"workflow_call"`, `"workflow_dispatch"`, etc.) | No (*) | Each event name is unique under `on:` |
+| Event sub-sections with existing context (`inputs at workflow_call event`, `outputs at workflow_call event`) | No | The `at {event} event` suffix already provides context |
+| Job-level sections | **Yes** | Multiple jobs can define the same section (concurrency, defaults, strategy, etc.) |
+| Step-level | **Yes** | Multiple steps exist per job |
+
+(*) Exception: `on.workflow_dispatch.inputs` and `on.workflow_call.secrets` receive prefixes because their `for "inputs"` / `for "secrets"` clause alone does not indicate which event they belong to — other events also have inputs/secrets concepts.
+
+This design is an intentional divergence from actionlint, which does not use location prefixes. In actionlint compatibility tests, these messages are classified as `LINE_MATCH` (same YAML line, different message text) rather than `MATCH` (identical text). This is the expected classification for design-level message improvements, not a compatibility gap.
+
 #### Normative empty-value message table
 
 These replace the former generic `"string should not be empty"` message:
