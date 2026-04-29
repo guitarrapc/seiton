@@ -50,14 +50,30 @@ html, body {
 
 #controls {
   display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 0.65rem 0.75rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+  width: 100%;
   max-width: 78rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 0.75rem;
   justify-content: flex-end;
+  width: 100%;
 }
 
 #controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  max-width: 100%;
   font-size: 0.85rem;
   color: var(--muted);
 }
@@ -68,15 +84,31 @@ html, body {
   border: 1px solid #455a64;
   border-radius: 4px;
   padding: 0.35rem 0.5rem;
-  margin-left: 0.25rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* Fixed widths so other controls (especially the URL field) do not jump when the selected option text changes. */
+#filetype-select {
+  width: 10.5rem;
+}
+
+#sample-select {
+  width: 14rem;
+  max-width: min(14rem, 100%);
 }
 
 .fetch-wrap {
   display: flex;
-  flex: 1 1 18rem;
+  flex: 1 1 14rem;
   gap: 0.35rem;
   align-items: center;
-  min-width: 12rem;
+  min-width: min(14rem, 100%);
+  max-width: min(28rem, 100%);
+}
+
+.controls-row--primary .fetch-wrap {
+  justify-content: flex-end;
 }
 
 .fetch-wrap input[type="url"] {
