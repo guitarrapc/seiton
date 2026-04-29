@@ -6,6 +6,7 @@
   --bg: #1e2430;
   /* Matches CodeMirror 5 theme material-darker (.cm-s-material-darker.CodeMirror). */
   --editor-surface: #212121;
+  --editor-gutter-bg: #191919;
   /* Slightly darker than --bg — reads as one block with the editor column. */
   --results-surface: #171c26;
   --text: #eceff1;
@@ -295,6 +296,14 @@ main {
   overflow-y: visible !important;
   height: auto !important;
   max-height: none !important;
+}
+
+#editor-wrap .CodeMirror.cm-s-material-darker .CodeMirror-gutters {
+  background-color: var(--editor-gutter-bg);
+}
+
+#editor-wrap .CodeMirror pre.CodeMirror-line {
+  line-height: 1.5;
 }
 
 .apply-fixes-fab {
