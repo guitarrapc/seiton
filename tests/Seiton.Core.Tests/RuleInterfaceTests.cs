@@ -5004,6 +5004,17 @@ public sealed class RuleInterfaceTests
                         - run: echo ok
             """,
             ["self-hosted runner", "untrusted triggers"]),
+            new RuleCase(
+            "ng-self-hosted-message-has-runs-on-path",
+            """
+            on: pull_request
+            jobs:
+                ci:
+                    runs-on: self-hosted
+                    steps:
+                        - run: echo ok
+            """,
+            ["jobs.'ci'.runs-on"]),
         };
 
         await AssertRuleCases(new SelfHostedRunnerRule(), "self-hosted-runner", cases);

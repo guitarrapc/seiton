@@ -34,7 +34,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
                 var localJobId = Decode(Arena.GetStringSlice(job.Id));
                 AddJobWarning(
                     job,
-                    $"jobs.'{localJobId}'.uses local reusable workflow uses must not contain '@ref'",
+                    $"jobs.'{localJobId}'.uses local reusable workflow reference must not contain '@ref'",
                     usesRefLocation);
             }
 

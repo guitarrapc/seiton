@@ -1,4 +1,4 @@
-﻿// on: top-level shape (scalar | sequence | mapping), dispatch to per-event parsers, event name resolution.
+// on: top-level shape (scalar | sequence | mapping), dispatch to per-event parsers, event name resolution.
 
 using System.Text;
 using Seiton.Core.Generated;

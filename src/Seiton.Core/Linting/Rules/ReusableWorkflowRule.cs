@@ -148,7 +148,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             {
                 AddJobError(
                     job,
-                    $"jobs.'{jobId}'.uses local reusable workflow uses must not contain '@ref'",
+                    $"jobs.'{jobId}'.uses local reusable workflow reference must not contain '@ref'",
                     BuildUsesLocation(workflowCall));
             }
 
