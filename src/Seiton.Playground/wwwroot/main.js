@@ -85,6 +85,18 @@ const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 await runMain();
 
+const versionEl = document.getElementById('playground-version');
+try {
+    const v = exports.Seiton.Playground.LintInterop.GetProductVersion();
+    if (versionEl && typeof v === 'string' && v.length > 0) {
+        const label = v.startsWith('v') ? v : `v${v}`;
+        versionEl.textContent = label;
+        versionEl.hidden = false;
+    }
+} catch {
+    /* ignore — older bundles or trimmed exports */
+}
+
 const loading = document.getElementById('loading');
 const resultTable = document.getElementById('lint-result');
 const resultBody = document.getElementById('lint-result-body');

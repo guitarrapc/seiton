@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
 
 namespace Seiton.Playground;
@@ -7,6 +8,12 @@ namespace Seiton.Playground;
 /// </summary>
 public static partial class LintInterop
 {
+    /// <summary>
+    /// User-facing build version (same trimming as the seiton CLI). Exposed to the page script after WASM starts.
+    /// </summary>
+    [JSExport]
+    public static string GetProductVersion() => PlaygroundBuildInfo.GetDisplayVersion(typeof(LintInterop).Assembly);
+
     /// <summary>
     /// Lints <paramref name="yamlSource"/> as the file at <paramref name="filePath"/> and returns a JSON array of diagnostics.
     /// </summary>
