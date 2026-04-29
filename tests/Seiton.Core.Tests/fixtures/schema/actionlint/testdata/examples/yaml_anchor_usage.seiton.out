@@ -1,5 +1,5 @@
 test.yaml:18:26: expecting a single ${{...}} expression or mapping value for "env" section, but found plain text node [syntax-check]
-test.yaml:23:0: jobs.'test'.steps[3] env must be object [syntax-check]
+test.yaml:22:14: jobs.'test'.steps[3] env must be object [syntax-check]
 test.yaml:18:14: anchor "credentials" is defined but not used [syntax-check]
 test.yaml:22:14: recursive alias "recursive" is found. anchor was declared at line:19, column:9 [syntax-check]
 test.yaml:9:11: step.env key 'username' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]

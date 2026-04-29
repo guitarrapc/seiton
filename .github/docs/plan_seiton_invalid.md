@@ -11,11 +11,11 @@
 
 | 指標 | 最新 (2026-04-29) |
 |---|---|
-| 互換 fixtures (MISS=0) | 87 / 95 (4 scope-out) |
-| 行レベルマッチ率 (line+col or line) | 470 / 486 (97%) |
+| 互換 fixtures (MISS=0) | 88 / 95 (4 scope-out) |
+| 行レベルマッチ率 (line+col or line) | 472 / 486 (97%) |
 | 完全一致マッチ率 (exact match) | 155 / 486 |
 | 列差異マッチ (same line, diff col/msg) | 315 / 486 |
-| 未マッチ期待行 (MISS) | 10 (true gaps) |
+| 未マッチ期待行 (MISS) | 8 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
@@ -342,7 +342,14 @@ scope-out fixtures:
 1. alias ノードが steps 配列要素の場合、専用の診断メッセージを追加
 2. 行位置を alias ノードの位置に合わせる
 
-**実装結果**: (未着手)
+**実装結果**: ✅完了
+- `VYamlStreamAdapter.CurrentStart`: Alias イベントの `ResolveAliasStart()` 呼び出し追加 → `*alias` トークンの正確な位置を返す
+- `WorkflowParser.Steps.cs`: `ParseStep()` で `YamlEventKind.Alias` を明示的に検出し、alias 専用診断メッセージを出力
+  - `element of "steps" section is alias node but mapping node is expected`
+  - `must run script with "run" section or run action with "uses" section`
+- テスト: `Parse_RecursiveAliasInSteps_ReportsAliasNodeMessage`, `Parse_RecursiveAliasInSteps_ReportsAtAliasPosition` (2 tests)
+- .seiton.out 再生成: recursive_anchors, issue-610_recursive_raw_yaml_value, examples/recursive_anchors
+- ベンチマーク: 回帰なし
 
 ---
 
@@ -393,7 +400,7 @@ scope-out fixtures:
 | Phase 1 | ✅完了 | 2026-04-29 | 2026-04-29 | 3 (#1,#2,#3) | reusable-workflow |
 | Phase 2 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#7,#8) + examples 1 | if-cond multiline |
 | Phase 3 | ✅完了 | 2026-04-29 | 2026-04-29 | 1 (#6) | glob multiline |
-| Phase 4 | 未着手 | - | - | 目標: 2 | recursive_anchors |
+| Phase 4 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#15,#16) | recursive_anchors |
 | Phase 5 | 未着手 | - | - | 目標: 2 | contains() overload |
 | Phase 6 | 未着手 | - | - | 目標: 6+ | テスト比較改善 |
 
