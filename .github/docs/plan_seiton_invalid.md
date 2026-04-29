@@ -11,11 +11,11 @@
 
 | 指標 | 最新 (2026-04-29) |
 |---|---|
-| 互換 fixtures (MISS=0) | 88 / 95 (4 scope-out) |
-| 行レベルマッチ率 (line+col or line) | 472 / 486 (97%) |
+| 互換 fixtures (MISS=0) | 89 / 95 (4 scope-out) |
+| 行レベルマッチ率 (line+col or line) | 474 / 486 (98%) |
 | 完全一致マッチ率 (exact match) | 155 / 486 |
 | 列差異マッチ (same line, diff col/msg) | 315 / 486 |
-| 未マッチ期待行 (MISS) | 8 (true gaps) |
+| 未マッチ期待行 (MISS) | 6 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
@@ -367,7 +367,16 @@ scope-out fixtures:
 **対処方針**:
 1. ExpressionSemanticAnalyzer で overload 解決失敗時に全候補の不一致理由を診断出力
 
-**実装結果**: (未着手)
+**実装結果**: ✅完了
+- 根本原因特定: パーサーレベル `ValidateFunctionCall` は matrix context を `Any` 型で推論するため `contains()` の overload チェックが素通り。リントレベルの `ValidateNodePropertyAccess` は rich matrix override 型を持つが、関数引数型チェックを行っていなかった。
+- `ExpressionSemanticAnalyzer.ValidateFunctionCallWithOverrides()` を新設: override-aware 型推論で引数型を解決し、全 overload が失敗した場合に全候補の不一致理由を報告
+- メッセージ形式: `{ordinal} argument of function call is not assignable. "{actualType}" cannot be assigned to "{expectedType}". called function type is "{funcSignature}"`
+- `ValidateNodePropertyAccess` の `FunctionCall` ケースから呼び出し
+- ヘルパー追加: `FormatOrdinal()`, `FormatOverloadSignature()`
+- テスト: `ContainsOverload_ObjectArg_ReportsAllOverloadMismatches` (1 test)
+- .seiton.out 再生成: invalid_json_in_fromjson
+- ベンチマーク: 回帰なし
+- MISS #9, #10 は COL_DIFF (同一行 28、列 32 vs 19) として互換判定される見込み。overload 署名の差異 (`string, string` vs `string, any`) もあるが同一行マッチ
 
 ---
 
@@ -401,7 +410,7 @@ scope-out fixtures:
 | Phase 2 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#7,#8) + examples 1 | if-cond multiline |
 | Phase 3 | ✅完了 | 2026-04-29 | 2026-04-29 | 1 (#6) | glob multiline |
 | Phase 4 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#15,#16) | recursive_anchors |
-| Phase 5 | 未着手 | - | - | 目標: 2 | contains() overload |
+| Phase 5 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#9,#10) | contains() overload |
 | Phase 6 | 未着手 | - | - | 目標: 6+ | テスト比較改善 |
 
 ---

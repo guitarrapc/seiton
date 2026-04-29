@@ -12253,4 +12253,38 @@ public sealed class RuleInterfaceTests
         await Assert.That(bothDiag[0].Location.StartLine).IsEqualTo(5);
         await Assert.That(bothDiag[0].Location.StartColumn).IsEqualTo(5);
     }
+
+    [Test]
+    public async Task ContainsOverload_ObjectArg_ReportsAllOverloadMismatches()
+    {
+        // When contains() is called with an object type as first arg,
+        // both overloads (string,any) and (array<any>,any) should fail
+        // and both should be reported as diagnostics.
+        var yaml = NormalizeYaml("""
+        on: push
+        jobs:
+          foo:
+            strategy:
+              matrix:
+                include:
+                  - obj: ${{ fromJSON('{"bool":true,"arr":[false]}') }}
+                  - str: ${{ fromJSON('"hello"') }}
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo ${{ contains(matrix.obj, matrix.str) }}
+        """);
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+
+        // Should have two "not assignable" diagnostics — one per overload
+        var notAssignable = result.Diagnostics
+            .Where(d => d.Message.Contains("not assignable", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(notAssignable.Length).IsEqualTo(2)
+            .Because($"Expected 2 overload mismatch diagnostics but got:\n{string.Join("\n", allDiags)}");
+
+        // One should mention array<any>, the other should mention string
+        await Assert.That(notAssignable.Any(d => d.Message.Contains("\"array<any>\"", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(notAssignable.Any(d => d.Message.Contains("\"string\"", StringComparison.Ordinal))).IsTrue();
+    }
 }
