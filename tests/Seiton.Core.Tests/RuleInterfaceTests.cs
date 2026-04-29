@@ -12438,7 +12438,8 @@ public sealed class RuleInterfaceTests
               - run: echo ${{ contains(matrix.obj, matrix.str) }}
         """);
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
 
         // Should have two "not assignable" diagnostics — one per overload
         var notAssignable = result.Diagnostics

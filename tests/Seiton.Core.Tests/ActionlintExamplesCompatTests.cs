@@ -294,9 +294,9 @@ public sealed class ActionlintExamplesCompatTests
         }
         else
         {
-            // No .seiton.out yet — write it for the first time
-            Console.Write($"[{fixture.Name}] .seiton.out not found, writing {seitonLines.Count} lines");
-            File.WriteAllText(seitonOutPath, actualContent, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            throw new InvalidOperationException(
+                $"[{fixture.Name}] Missing expected output file '{seitonOutPath}'. " +
+                "Run with SEITON_UPDATE_OUT=1 to generate or update .seiton.out fixtures.");
         }
     }
 

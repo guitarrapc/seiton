@@ -46,8 +46,10 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         var diagRange = Arena.GetStringRange(condition);
         if (raw[raw.Length - 1] == (byte)'\n' && ifKeyRange is { } kr)
         {
-            var indicatorCol = kr.StartColumn + 4; // "if" (2) + ": " (2)
-            diagRange = new TextRange(diagRange.Start, diagRange.Length, kr.StartLine, indicatorCol, diagRange.EndLine, diagRange.EndColumn);
+            const int indicatorOffsetFromKeyStart = 4; // "if" (2) + ": " (2)
+            var indicatorStart = kr.Start + indicatorOffsetFromKeyStart;
+            var indicatorCol = kr.StartColumn + indicatorOffsetFromKeyStart;
+            diagRange = new TextRange(indicatorStart, 1, kr.StartLine, indicatorCol, kr.StartLine, indicatorCol + 1);
         }
 
         // Detect "always true" pattern: value contains ${{ }} but has extra characters around it.

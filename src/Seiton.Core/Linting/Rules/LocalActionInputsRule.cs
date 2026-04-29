@@ -37,7 +37,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
 
         var uses = Arena.GetStringValue(action.Uses);
-        if (!TryResolveLocalActionYamlPath(uses, out var actionYamlPath, out var invalidRef))
+        if (!TryResolveLocalActionYamlPath(uses, out var actionYamlPath, out var actionDisplayPath, out var invalidRef))
         {
             if (invalidRef)
             {
@@ -60,7 +60,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         if (_metadataCheckedPaths.Add(actionYamlPath))
         {
             ValidateRunsUsing(step, action, meta, actionSource, actionArena);
-            ValidateMetadata(step, action, meta, actionSource, actionArena, actionYamlPath);
+            ValidateMetadata(step, action, meta, actionSource, actionArena, actionYamlPath, actionDisplayPath);
         }
 
         if (meta.Inputs is null || meta.Inputs.Value.Count == 0)
@@ -207,18 +207,19 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             BuildUsesLocation(action));
     }
 
-    private void ValidateMetadata(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath)
+    private void ValidateMetadata(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath, string displayPath)
     {
         var usesLocation = BuildUsesLocation(action);
         var actionName = meta.Name.HasValue && HasNodeValue(meta.Name, actionArena)
             ? DecodeSlice(actionSource, actionArena.GetStringSlice(meta.Name))
             : Encoding.UTF8.GetString(Arena.GetStringValue(action.Uses));
         var actionDir = Path.GetDirectoryName(actionYamlPath) ?? actionYamlPath;
+        var displayDir = displayPath.Contains('/') ? displayPath[..displayPath.LastIndexOf('/')] : displayPath;
 
         // 1. description is required
         if (!meta.Description.HasValue || !HasNodeValue(meta.Description, actionArena))
         {
-            AddStepError(step, $"description is required in metadata of \"{actionName}\" action at \"{actionYamlPath}\"", usesLocation);
+            AddStepError(step, $"description is required in metadata of \"{actionName}\" action at \"{displayPath}\"", usesLocation);
         }
 
         if (meta.Runs is not null)
@@ -234,9 +235,9 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             // 3. File existence for JavaScript entry points (main, pre, post)
             if (isJsAction)
             {
-                ValidateJsEntryPoint(step, meta.Runs.Main, "main", actionName, actionDir, actionSource, actionArena, usesLocation);
-                ValidateJsEntryPoint(step, meta.Runs.Pre, "pre", actionName, actionDir, actionSource, actionArena, usesLocation);
-                ValidateJsEntryPoint(step, meta.Runs.Post, "post", actionName, actionDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, meta.Runs.Main, "main", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, meta.Runs.Pre, "pre", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, meta.Runs.Post, "post", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
             }
         }
 
@@ -247,7 +248,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             {
                 if (diag.Message.StartsWith("invalid branding", StringComparison.Ordinal))
                 {
-                    AddStepError(step, $"{diag.Message} in metadata of \"{actionName}\" action at \"{actionYamlPath}\"", usesLocation);
+                    AddStepError(step, $"{diag.Message} in metadata of \"{actionName}\" action at \"{displayPath}\"", usesLocation);
                 }
             }
         }
@@ -268,7 +269,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             && (span[3] == (byte)'e' || span[3] == (byte)'E');
     }
 
-    private void ValidateJsEntryPoint(Step step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
+    private void ValidateJsEntryPoint(Step step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, string displayDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
     {
         if (!entryPoint.HasValue || !HasNodeValue(entryPoint, actionArena))
         {
@@ -293,7 +294,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 
         if (!File.Exists(fullPath))
         {
-            AddStepError(step, $"file \"{fileName}\" does not exist in \"{actionDir}\". it is specified at \"{keyName}\" key in \"runs\" section in \"{actionName}\" action", usesLocation);
+            AddStepError(step, $"file \"{fileName}\" does not exist in \"{displayDir}\". it is specified at \"{keyName}\" key in \"runs\" section in \"{actionName}\" action", usesLocation);
         }
     }
 
@@ -381,9 +382,10 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return true;
     }
 
-    private bool TryResolveLocalActionYamlPath(ReadOnlySpan<byte> uses, out string actionYamlPath, out bool invalidRefFormat)
+    private bool TryResolveLocalActionYamlPath(ReadOnlySpan<byte> uses, out string actionYamlPath, out string displayPath, out bool invalidRefFormat)
     {
         actionYamlPath = string.Empty;
+        displayPath = string.Empty;
         invalidRefFormat = false;
 
         if (!uses.StartsWith("./"u8) && !uses.StartsWith("../"u8))
@@ -397,7 +399,8 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return false;
         }
 
-        var relativePath = DecodeAscii(uses).Replace('/', Path.DirectorySeparatorChar);
+        var usesStr = DecodeAscii(uses); // Keep forward slashes for display
+        var relativePath = usesStr.Replace('/', Path.DirectorySeparatorChar);
         var baseDirectory = ResolveLocalReferenceBaseDirectory(Config.FilePath!, relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
         {
@@ -421,6 +424,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
                 || fileName.Equals("action.yaml", StringComparison.OrdinalIgnoreCase))
             {
                 actionYamlPath = resolvedPath;
+                displayPath = usesStr;
                 return true;
             }
         }
@@ -432,12 +436,14 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             if (File.Exists(yml))
             {
                 actionYamlPath = yml;
+                displayPath = usesStr + "/action.yml";
                 return true;
             }
 
             if (File.Exists(yaml))
             {
                 actionYamlPath = yaml;
+                displayPath = usesStr + "/action.yaml";
                 return true;
             }
         }

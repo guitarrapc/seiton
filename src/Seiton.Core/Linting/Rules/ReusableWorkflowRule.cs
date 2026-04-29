@@ -352,8 +352,9 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return false;
         }
 
-        relativePath = DecodeAscii(uses).Replace('/', Path.DirectorySeparatorChar);
-        var baseDirectory = ResolveLocalReferenceBaseDirectory(Config.FilePath!, relativePath);
+        relativePath = DecodeAscii(uses); // Keep forward slashes for display in diagnostics
+        var localPath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(Config.FilePath!, localPath);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return false;
@@ -361,7 +362,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         try
         {
-            resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
+            resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(localPath)));
         }
         catch
         {
