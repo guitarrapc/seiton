@@ -617,8 +617,19 @@ actionlint playground を参照し、以下の機能を実装する:
 |---|---|
 | Permalink | URL hash にエディタ内容を Pako 圧縮 + Base64 エンコードで埋め込み |
 | GitHub/Gist URL からの読み込み | URL 入力 → raw ソースを fetch してエディタに設定 |
-| ダークモード | `prefers-color-scheme` に連動 |
 | severity フィルター | error/warning/info の表示切替 |
+
+### 8.3 カラーテーマ（ライト / ダーク）
+
+- **システム連動**: OS / ブラウザの `prefers-color-scheme`。手動で上書きしない場合は、`:root` のダークトークンをベースに、`@media (prefers-color-scheme: light)` の **` :root:not([data-theme])` だけ**がライト用トークンを上書きする（`no-preference` 含めて「ライト未指定」時はダーク側）。
+- **手動オーバーライド**: フッターのボタンで **System → Light → Dark** を巡回。選択は `localStorage` キー `seiton-playground-color-mode`（値 `light` / `dark` のみ永続化、`system` はキー削除）に保存。`html` に **`data-theme="light"`** を付与すると常にライト（` :root[data-theme="light"]` がシステム用ライトと同じトークン塊を適用）。**` data-theme="dark"`** は通常不要（`:root` 既定がダークのため）だが、一貫のためダーク選択時も付与し、`meta name="color-scheme"` を `light` / `dark` / `light dark` に合わせて更新する。
+- **初回描画**: `index.html` の **インライン `<script>`**（CSS より前）でストレージを読み、`data-theme` と `meta` を同期して FOUC を抑える。
+- **実装詳細**: ページ本体の色は `style.css` の **`var(--*)` トークン**のみ（生の色は `:root` / メディア / ` [data-theme="light"]` の定義部に限定）。
+- **CodeMirror**:
+  - **ダーク**: `material-darker`（CDN のテーマ CSS。シンタックス色用。将来 `wwwroot` にベンダーしてもよい）。
+  - **ライト**: **`default`**（`codemirror.min.css` に同梱の `.cm-s-default`）。追加のライト用テーマ CSS（例: eclipse）は **不要**。
+  - 実際のテーマ名は **ページの実効ライト/ダーク**（手動設定優先、なければ `prefers-color-scheme`）に合わせ、`main.js` が `editor.setOption('theme', …)` する。モードが **System** のときだけ OS の `change` でエディタも追従。
+- **ガターマーカー**: `.gutter-marker--error` / `--warning` と `var(--danger)` / `var(--warning)`。
 
 ---
 

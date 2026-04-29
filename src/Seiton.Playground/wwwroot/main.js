@@ -77,6 +77,67 @@ runs:
 `,
 };
 
+const THEME_STORAGE_KEY = 'seiton-playground-color-mode';
+const THEME_CYCLE_ORDER = ['system', 'light', 'dark'];
+
+function playgroundColorSchemeDarkQuery() {
+    return window.matchMedia('(prefers-color-scheme: dark)');
+}
+
+function getStoredColorMode() {
+    try {
+        const v = localStorage.getItem(THEME_STORAGE_KEY);
+        if (v === 'light' || v === 'dark') return v;
+    } catch (_) {
+        /* ignore */
+    }
+    return 'system';
+}
+
+function setStoredColorMode(mode) {
+    try {
+        if (mode === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
+        else localStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch (_) {
+        /* ignore */
+    }
+}
+
+function applyColorModeToDocument(mode) {
+    const root = document.documentElement;
+    if (mode === 'light') root.setAttribute('data-theme', 'light');
+    else if (mode === 'dark') root.setAttribute('data-theme', 'dark');
+    else root.removeAttribute('data-theme');
+    const meta = document.getElementById('meta-color-scheme');
+    if (meta) {
+        if (mode === 'light') meta.setAttribute('content', 'light');
+        else if (mode === 'dark') meta.setAttribute('content', 'dark');
+        else meta.setAttribute('content', 'light dark');
+    }
+}
+
+function effectiveUiIsDark() {
+    const mode = getStoredColorMode();
+    if (mode === 'light') return false;
+    if (mode === 'dark') return true;
+    return playgroundColorSchemeDarkQuery().matches;
+}
+
+function getCodeMirrorTheme() {
+    return effectiveUiIsDark() ? 'material-darker' : 'default';
+}
+
+function themeModeLabel(mode) {
+    switch (mode) {
+        case 'light':
+            return 'Color: Light';
+        case 'dark':
+            return 'Color: Dark';
+        default:
+            return 'Color: System';
+    }
+}
+
 const { getAssemblyExports, getConfig, runMain } = await dotnet
     .withApplicationArguments('playground')
     .create();
@@ -111,7 +172,7 @@ const fetchBtn = document.getElementById('fetch-btn');
 
 const editor = CodeMirror(document.getElementById('editor'), {
     mode: 'yaml',
-    theme: 'material-darker',
+    theme: getCodeMirrorTheme(),
     lineNumbers: true,
     lineWrapping: true,
     autofocus: true,
@@ -126,6 +187,37 @@ const editor = CodeMirror(document.getElementById('editor'), {
     },
     value: getDefaultSource(),
 });
+
+function syncEditorTheme() {
+    editor.setOption('theme', getCodeMirrorTheme());
+    editor.refresh();
+}
+
+playgroundColorSchemeDarkQuery().addEventListener('change', () => {
+    if (getStoredColorMode() === 'system') syncEditorTheme();
+});
+
+const themeCycleBtn = document.getElementById('theme-cycle-btn');
+
+function updateThemeCycleButton() {
+    if (themeCycleBtn) themeCycleBtn.textContent = themeModeLabel(getStoredColorMode());
+}
+
+function cycleColorMode() {
+    const cur = getStoredColorMode();
+    const i = Math.max(0, THEME_CYCLE_ORDER.indexOf(cur));
+    const next = THEME_CYCLE_ORDER[(i + 1) % THEME_CYCLE_ORDER.length];
+    setStoredColorMode(next);
+    applyColorModeToDocument(next);
+    syncEditorTheme();
+    updateThemeCycleButton();
+}
+
+if (themeCycleBtn) {
+    themeCycleBtn.addEventListener('click', cycleColorMode);
+    themeCycleBtn.setAttribute('title', 'Cycle color theme: System → Light → Dark');
+}
+updateThemeCycleButton();
 
 const DEBOUNCE_MS = 300;
 let debounceId = null;
@@ -395,7 +487,8 @@ function renderResults(diagnostics) {
 
         const lineIndex = Math.max(0, (diag.line ?? 1) - 1);
         const marker = document.createElement('div');
-        marker.style.color = diag.severity === 'Error' ? '#ff5370' : '#ffcb6b';
+        marker.className =
+            diag.severity === 'Error' ? 'gutter-marker gutter-marker--error' : 'gutter-marker gutter-marker--warning';
         marker.textContent = '●';
         editor.setGutterMarker(lineIndex, 'error-marker', marker);
     }

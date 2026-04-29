@@ -4,6 +4,33 @@
   <title>seiton playground</title>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" id="meta-color-scheme" content="light dark"/>
+  <script>
+    (function () {
+      var key = 'seiton-playground-color-mode';
+      var root = document.documentElement;
+      var meta = document.getElementById('meta-color-scheme');
+      function syncMeta(mode) {
+        if (!meta) return;
+        if (mode === 'light') meta.setAttribute('content', 'light');
+        else if (mode === 'dark') meta.setAttribute('content', 'dark');
+        else meta.setAttribute('content', 'light dark');
+      }
+      try {
+        var v = localStorage.getItem(key);
+        if (v === 'light') {
+          root.setAttribute('data-theme', 'light');
+          syncMeta('light');
+        } else if (v === 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          syncMeta('dark');
+        } else {
+          root.removeAttribute('data-theme');
+          syncMeta('system');
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
         crossorigin="anonymous"
@@ -107,6 +134,9 @@
   </section>
   <footer>
     <p><a href="https://github.com/guitarrapc/seiton">seiton</a> by guitarrapc. The source code and website content are licensed <a href="https://github.com/guitarrapc/seiton/blob/main/LICENSE.md">MIT</a>.</p>
+    <p class="footer-theme-wrap">
+      <button type="button" id="theme-cycle-btn" class="theme-cycle-btn">Color: System</button>
+    </p>
   </footer>
   <script type="importmap"></script>
   <script type="module" src="main#[.{fingerprint}].js"></script>
