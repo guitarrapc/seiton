@@ -27,10 +27,10 @@ html, body {
 #header-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
+  gap: 1.25rem 1.5rem;
+  padding: 1.3rem 1.5rem;
   background: var(--panel);
   border-bottom: 1px solid #37474f;
 }
@@ -47,7 +47,7 @@ html, body {
 }
 
 .tagline {
-  margin: 0.2rem 0 0;
+  margin: 0.35rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
 }
@@ -191,7 +191,7 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  height: calc(100vh - 8rem);
+  height: calc(100vh - 9.25rem);
   min-height: 320px;
 }
 
