@@ -80,8 +80,9 @@
     --muted: #5a6d7e;
     --accent: #1565c0;
     --link-visited: #6a1b9a;
-    --danger: #c62828;
-    --warning: #ef6c00;
+    --danger: #b71c1c;
+    /* Amber (yellow-orange) — keep well separated from error red on light backgrounds. */
+    --warning: #f57f17;
     --tagline-fg: #5a6d7e;
     --version-badge-fg: #0d47a1;
     --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -138,8 +139,9 @@
   --muted: #5a6d7e;
   --accent: #1565c0;
   --link-visited: #6a1b9a;
-  --danger: #c62828;
-  --warning: #ef6c00;
+  --danger: #b71c1c;
+  /* Amber (yellow-orange) — keep well separated from error red on light backgrounds. */
+  --warning: #f57f17;
   --tagline-fg: #5a6d7e;
   --version-badge-fg: #0d47a1;
   --version-badge-bg: rgba(21, 101, 192, 0.12);
