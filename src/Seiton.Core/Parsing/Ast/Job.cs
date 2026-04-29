@@ -21,6 +21,8 @@ public sealed class Job
 
     public Runner? RunsOn { get; init; }
 
+    public TextRange? RunsOnKeyRange { get; init; }
+
     public Permissions? Permissions { get; init; }
 
     public Environment? Environment { get; init; }
@@ -36,6 +38,8 @@ public sealed class Job
     public StringNodeId If { get; init; }
 
     public IReadOnlyList<Step>? Steps { get; init; }
+
+    public TextRange? StepsKeyRange { get; init; }
 
     public FloatNodeId TimeoutMinutes { get; init; }
 

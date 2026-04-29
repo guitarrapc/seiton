@@ -20,12 +20,12 @@ public sealed class JobStructureRule() : RuleBase(RuleId.JobStructure)
 
         if (hasUsesValue && hasSteps)
         {
-            AddJobError(job, $"jobs.'{jobId}' cannot have both uses and steps");
+            AddJobError(job, $"jobs.'{jobId}' cannot have both uses and steps", job.StepsKeyRange ?? BuildJobLocation(job));
         }
 
         if (hasUsesValue && hasRunsOn)
         {
-            AddJobError(job, $"jobs.'{jobId}' cannot have both uses and runs-on");
+            AddJobError(job, $"jobs.'{jobId}' cannot have both uses and runs-on", job.RunsOnKeyRange ?? BuildJobLocation(job));
         }
 
         if (!hasUsesKey && !hasRunsOn)

@@ -12038,4 +12038,139 @@ public sealed class RuleInterfaceTests
             .ToArray();
         await Assert.That(unexpectedKeyDiags).Count().IsEqualTo(1);
     }
+
+    // Phase 1: reusable-workflow forbidden-key diagnostics must report at the forbidden key position
+    [Test]
+    public async Task ReusableWorkflowRule_ForbiddenKey_ReportsAtKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var forbiddenKeyDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(forbiddenKeyDiag).Count().IsEqualTo(1);
+        // Must report at the 'steps:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(forbiddenKeyDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(forbiddenKeyDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_ForbiddenRunsOn_ReportsAtKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            runs-on: ubuntu-latest
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var forbiddenKeyDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'runs-on' is not allowed", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(forbiddenKeyDiag).Count().IsEqualTo(1);
+        // Must report at the 'runs-on:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(forbiddenKeyDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(forbiddenKeyDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_WithRequiresUses_ReportsAtWithKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call2:
+            with:
+              foo: bar
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var requiresUsesDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(requiresUsesDiag).Count().IsEqualTo(1);
+        // Must report at the 'with:' key position (line 4), not the job ID position (line 3)
+        await Assert.That(requiresUsesDiag[0].Location.StartLine).IsEqualTo(4);
+        await Assert.That(requiresUsesDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task ReusableWorkflowRule_SecretsRequiresUses_ReportsAtSecretsKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call3:
+            secrets:
+              aaa: bbb
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var requiresUsesDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(requiresUsesDiag).Count().IsEqualTo(1);
+        // Must report at the 'secrets:' key position (line 4), not the job ID position (line 3)
+        await Assert.That(requiresUsesDiag[0].Location.StartLine).IsEqualTo(4);
+        await Assert.That(requiresUsesDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task JobStructureRule_CannotHaveBothUsesAndSteps_ReportsAtStepsKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            steps:
+              - run: echo
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var bothDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(bothDiag).Count().IsEqualTo(1);
+        // Must report at the 'steps:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(bothDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(bothDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task JobStructureRule_CannotHaveBothUsesAndRunsOn_ReportsAtRunsOnKeyPosition()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          call1:
+            uses: org/repo/workflow.yml@v1
+            runs-on: ubuntu-latest
+        """u8;
+
+        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        var bothDiag = result.Diagnostics
+            .Where(d => d.Message.Contains("cannot have both uses and runs-on", StringComparison.Ordinal))
+            .ToArray();
+        await Assert.That(bothDiag).Count().IsEqualTo(1);
+        // Must report at the 'runs-on:' key position (line 5), not the job ID position (line 3)
+        await Assert.That(bothDiag[0].Location.StartLine).IsEqualTo(5);
+        await Assert.That(bothDiag[0].Location.StartColumn).IsEqualTo(5);
+    }
 }

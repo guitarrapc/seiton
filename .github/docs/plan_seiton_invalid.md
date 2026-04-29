@@ -11,11 +11,11 @@
 
 | 指標 | 最新 (2026-04-29) |
 |---|---|
-| 互換 fixtures (MISS=0) | 82 / 95 (4 scope-out) |
-| 行レベルマッチ率 (line+col or line) | 467 / 486 (96%) |
+| 互換 fixtures (MISS=0) | 84 / 95 (4 scope-out) |
+| 行レベルマッチ率 (line+col or line) | 470 / 486 (97%) |
 | 完全一致マッチ率 (exact match) | 155 / 486 |
-| 列差異マッチ (same line, diff col/msg) | 312 / 486 |
-| 未マッチ期待行 (MISS) | 19 (true gaps) |
+| 列差異マッチ (same line, diff col/msg) | 315 / 486 |
+| 未マッチ期待行 (MISS) | 16 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 57 (additional detections) |
 
 ### 0.2 examples/ fixtures (actionlint ドキュメント用サンプル)
@@ -23,11 +23,11 @@
 | 指標 | 最新 (2026-04-29) |
 |---|---|
 | 対象 examples fixtures | 49 (2 scope-out 除外) |
-| 互換 fixtures (MISS=0) | 40 / 49 |
-| 行レベルマッチ率 (line+col or line) | 123 / 143 (86%) |
+| 互換 fixtures (MISS=0) | 42 / 49 |
+| 行レベルマッチ率 (line+col or line) | 126 / 143 (88%) |
 | 完全一致マッチ率 (exact match) | 21 / 143 |
-| 列差異マッチ (same line, diff col/msg) | 102 / 143 |
-| 未マッチ期待行 (MISS) | 20 (true gaps) |
+| 列差異マッチ (same line, diff col/msg) | 105 / 143 |
+| 未マッチ期待行 (MISS) | 17 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 11 (additional detections) |
 | scope-out (shellcheck/pyflakes) | 2 (shellcheck_integration, pyflakes_integration) |
 
@@ -263,7 +263,19 @@ scope-out fixtures:
 2. `with`/`secrets` requires `uses` の診断位置を `with:`/`secrets:` キー位置にする
 3. テスト比較ロジックの改善: seiton の行位置で LINE_MATCH が成立するよう調整
 
-**実装結果**: (未着手)
+**実装結果**: ✅ 完了 (2026-04-29)
+
+**変更内容**:
+1. `Job` AST に `StepsKeyRange`, `RunsOnKeyRange` フィールドを追加
+2. `WorkflowCall` AST に `WithKeyRange`, `SecretsKeyRange` フィールドを追加
+3. パーサー: 禁止キー/requires-uses の診断位置をキー位置に変更 (`jobIdMark` → `stepsKeyPos`/`withKeyPos` 等)
+4. `JobStructureRule`: `cannot have both` の診断位置をキー位置に変更
+5. `ReusableWorkflowRule`: `ReportIfPresent` / `with`/`secrets` requires `uses` の診断位置をキー位置に変更
+
+**MISS 削減**: 3件 (#1, #2, #3) — err/workflow_call_job 行位置が actionlint と一致
+- #4 (`string should not be empty` at 24:10) は対象外 (seiton は独自メッセージで 25:18 で検出済み、Phase 6 で対応)
+
+**テスト**: 6 件の新規位置テスト + 全 1207 テスト通過
 
 ---
 
@@ -367,7 +379,7 @@ scope-out fixtures:
 | Phase | ステータス | 着手日 | 完了日 | MISS 削減数 | 備考 |
 |---|---|---|---|---|---|
 | Phase 0 | ✅完了 | 2026-04-29 | 103 tests | 1201 all pass | examples/ テスト基盤 |
-| Phase 1 | 未着手 | - | - | 目標: 3-4 | reusable-workflow |
+| Phase 1 | ✅完了 | 2026-04-29 | 2026-04-29 | 3 (#1,#2,#3) | reusable-workflow |
 | Phase 2 | 未着手 | - | - | 目標: 2 | if-cond multiline |
 | Phase 3 | 未着手 | - | - | 目標: 1 | glob multiline |
 | Phase 4 | 未着手 | - | - | 目標: 2 | recursive_anchors |

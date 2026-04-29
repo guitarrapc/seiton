@@ -33,27 +33,27 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         {
             if (workflowCall.Inputs is not null && workflowCall.Inputs.Value.Count > 0)
             {
-                AddJobError(job, $"jobs.'{jobId}' key 'with' requires uses");
+                AddJobError(job, $"jobs.'{jobId}' key 'with' requires uses", workflowCall.WithKeyRange ?? BuildJobLocation(job));
             }
 
             if ((workflowCall.Secrets is not null && workflowCall.Secrets.Value.Count > 0) || workflowCall.InheritSecrets)
             {
-                AddJobError(job, $"jobs.'{jobId}' key 'secrets' requires uses");
+                AddJobError(job, $"jobs.'{jobId}' key 'secrets' requires uses", workflowCall.SecretsKeyRange ?? BuildJobLocation(job));
             }
 
             return;
         }
 
-        ReportIfPresent(job, job.RunsOn is not null, "runs-on", jobId);
-        ReportIfPresent(job, job.Environment is not null, "environment", jobId);
-        ReportIfPresent(job, job.Outputs is not null && job.Outputs.Value.Count > 0, "outputs", jobId);
-        ReportIfPresent(job, job.Env is not null, "env", jobId);
-        ReportIfPresent(job, job.Defaults is not null, "defaults", jobId);
-        ReportIfPresent(job, job.Steps is not null && job.Steps.Count > 0, "steps", jobId);
-        ReportIfPresent(job, job.TimeoutMinutes.HasValue, "timeout-minutes", jobId);
-        ReportIfPresent(job, job.ContinueOnError.HasValue, "continue-on-error", jobId);
-        ReportIfPresent(job, job.Container is not null, "container", jobId);
-        ReportIfPresent(job, job.Services is not null, "services", jobId);
+        ReportIfPresent(job, job.RunsOn is not null, "runs-on", jobId, job.RunsOnKeyRange);
+        ReportIfPresent(job, job.Environment is not null, "environment", jobId, null);
+        ReportIfPresent(job, job.Outputs is not null && job.Outputs.Value.Count > 0, "outputs", jobId, null);
+        ReportIfPresent(job, job.Env is not null, "env", jobId, null);
+        ReportIfPresent(job, job.Defaults is not null, "defaults", jobId, null);
+        ReportIfPresent(job, job.Steps is not null && job.Steps.Count > 0, "steps", jobId, job.StepsKeyRange);
+        ReportIfPresent(job, job.TimeoutMinutes.HasValue, "timeout-minutes", jobId, null);
+        ReportIfPresent(job, job.ContinueOnError.HasValue, "continue-on-error", jobId, null);
+        ReportIfPresent(job, job.Container is not null, "container", jobId, null);
+        ReportIfPresent(job, job.Services is not null, "services", jobId, null);
 
         ValidateReusableWorkflowUses(job, workflowCall, jobId);
     }
@@ -463,14 +463,14 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         return new string(chars);
     }
 
-    private void ReportIfPresent(Job job, bool present, string keyName, string jobId)
+    private void ReportIfPresent(Job job, bool present, string keyName, string jobId, TextRange? keyRange)
     {
         if (!present)
         {
             return;
         }
 
-        AddJobError(job, $"when jobs.'{jobId}' calls reusable workflow with uses, key '{keyName}' is not allowed");
+        AddJobError(job, $"when jobs.'{jobId}' calls reusable workflow with uses, key '{keyName}' is not allowed", keyRange ?? BuildJobLocation(job));
     }
 
     private sealed record InputContract(string Name, WorkflowCallInputType Type);
