@@ -10188,7 +10188,7 @@ public sealed class RuleInterfaceTests
                         steps:
                             - run: echo "${{ github.event.pull_request.title }}"
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "expr-undefined-var",
                 new ExprUndefinedVarRule(),
@@ -12451,5 +12451,169 @@ public sealed class RuleInterfaceTests
         // One should mention array<any>, the other should mention string
         await Assert.That(notAssignable.Any(d => d.Message.Contains("\"array<any>\"", StringComparison.Ordinal))).IsTrue();
         await Assert.That(notAssignable.Any(d => d.Message.Contains("\"string\"", StringComparison.Ordinal))).IsTrue();
+    }
+
+    // ── template-injection fix tests ──────────────────────────────────────────────────────
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_InsertsEnvAndReplacesExpression()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // The expression should be replaced with a shell variable reference
+        await Assert.That(fixedText.Contains("${GITHUB_EVENT_PULL_REQUEST_TITLE}", StringComparison.Ordinal)).IsTrue();
+        // An env mapping should be inserted
+        await Assert.That(fixedText.Contains("GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}", StringComparison.Ordinal)).IsTrue();
+        // The run line should use the shell variable, not the raw expression
+        await Assert.That(fixedText.Contains("run: echo \"${GITHUB_EVENT_PULL_REQUEST_TITLE}\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_PowerShellUsesEnvPrefix()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - shell: pwsh
+                      run: Write-Host "${{ github.event.head_commit.message }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-pwsh.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("$env:GITHUB_EVENT_HEAD_COMMIT_MESSAGE", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("GITHUB_EVENT_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_DeduplicatesEnvName()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - env:
+                        GITHUB_EVENT_PULL_REQUEST_TITLE: existing
+                      run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-dedup.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // Should use _2 suffix since GITHUB_EVENT_PULL_REQUEST_TITLE already exists
+        await Assert.That(fixedText.Contains("GITHUB_EVENT_PULL_REQUEST_TITLE_2", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_ReusesExistingEnvMapping()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - env:
+                        PR_TITLE: ${{ github.event.pull_request.title }}
+                      run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-reuse.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // Should reuse existing mapping, only replace expression (no new env entry)
+        await Assert.That(fixedText.Contains("${PR_TITLE}", StringComparison.Ordinal)).IsTrue();
+        // Should NOT add a new env mapping
+        await Assert.That(fixedText.Contains("GITHUB_EVENT_PULL_REQUEST_TITLE", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_NoFix_WildcardPath()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ toJSON(github.event.*.body) }}'
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-no-fix-wildcard.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Wildcard paths can't generate a deterministic env var name
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_GithubHeadRef()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ github.head_ref }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-head-ref.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("${GITHUB_HEAD_REF}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("GITHUB_HEAD_REF: ${{ github.head_ref }}", StringComparison.Ordinal)).IsTrue();
     }
 }
