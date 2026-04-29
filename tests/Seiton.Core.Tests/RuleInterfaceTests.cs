@@ -12616,4 +12616,39 @@ public sealed class RuleInterfaceTests
         await Assert.That(fixedText.Contains("${GITHUB_HEAD_REF}", StringComparison.Ordinal)).IsTrue();
         await Assert.That(fixedText.Contains("GITHUB_HEAD_REF: ${{ github.head_ref }}", StringComparison.Ordinal)).IsTrue();
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_BlockScalar_InsertsEnvBeforeRunKey()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        echo "title: ${{ github.event.pull_request.title }}"
+                        echo "done"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-block.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // The env: block must appear BEFORE the run: key, not inside the script body
+        var envLine = fixedText.IndexOf("GITHUB_EVENT_PULL_REQUEST_TITLE:", StringComparison.Ordinal);
+        var runLine = fixedText.IndexOf("run: |", StringComparison.Ordinal);
+        await Assert.That(envLine).IsGreaterThanOrEqualTo(0);
+        await Assert.That(runLine).IsGreaterThan(0);
+        await Assert.That(envLine).IsLessThan(runLine);
+
+        // The shell variable should be inside the script body
+        await Assert.That(fixedText.Contains("${GITHUB_EVENT_PULL_REQUEST_TITLE}", StringComparison.Ordinal)).IsTrue();
+    }
 }

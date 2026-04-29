@@ -374,7 +374,6 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         // Check if an existing env mapping already points to this expression
-        var fullExpression = "${{ " + pathString + " }}";
         if (TryFindExistingEnvMapping(step, pathString, out var existingVarName))
         {
             // Only need to replace the expression with the shell variable reference
@@ -495,8 +494,16 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         var utf8Yaml = Config.Utf8Yaml;
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
 
-        // Find the run: key line from the step's exec range
-        var runLine = FindLineNumberFromOffset(utf8Yaml, step.Exec.Range.Start);
+        // Find the run: key line by scanning backwards from the value offset.
+        // For block scalars (run: |), the value range points into the script body,
+        // so we must locate the actual "run:" key which is always before the value.
+        var runKeyOffset = FindRunKeyOffset(utf8Yaml, step.Exec.Range.Start);
+        if (runKeyOffset < 0)
+        {
+            return false;
+        }
+
+        var runLine = FindLineNumberFromOffset(utf8Yaml, runKeyOffset);
         if (runLine < 1)
         {
             return false;
@@ -590,7 +597,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         {
             var nameBytes = Arena.GetStringValue(pair.Value.Name);
             var nameIndex = 0;
-            if (TryReadIdentifier(nameBytes, ref nameIndex, out var name))
+            if (TryReadIdentifier(nameBytes, ref nameIndex, out var name) && nameIndex == nameBytes.Length)
             {
                 names.Add(name);
             }
@@ -681,6 +688,25 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         return line;
+    }
+
+    private static int FindRunKeyOffset(byte[] utf8Yaml, int valueStart)
+    {
+        // Scan backwards from the value start offset to find the "run:" key.
+        // This handles both inline scalars (run: echo hello) and block scalars (run: |).
+        for (var i = valueStart - 1; i >= 3; i--)
+        {
+            if (utf8Yaml[i] == (byte)':' && utf8Yaml[i - 1] == (byte)'n' && utf8Yaml[i - 2] == (byte)'u' && utf8Yaml[i - 3] == (byte)'r')
+            {
+                // Verify it's not part of a larger word (e.g. "rerun:")
+                if (i - 4 < 0 || utf8Yaml[i - 4] == (byte)' ' || utf8Yaml[i - 4] == (byte)'\n' || utf8Yaml[i - 4] == (byte)'-')
+                {
+                    return i - 3;
+                }
+            }
+        }
+
+        return -1;
     }
 
     private static int FindRootIdentifierOffset(int nodeId, ExpressionNode[] nodes)
