@@ -9,6 +9,10 @@
   --muted: #78909c;
   --accent: #82aaff;
   --danger: #ff5370;
+  --fix-btn-bg: rgba(46, 204, 113, 0.22);
+  --fix-btn-border: rgba(105, 240, 174, 0.55);
+  --fix-btn-text: #c8f7df;
+  --fix-btn-glow: rgba(105, 240, 174, 0.35);
 }
 
 html, body {
@@ -98,31 +102,77 @@ html, body {
   max-width: min(14rem, 100%);
 }
 
-.fetch-wrap {
+/* URL + Check as one control (shared border, no inner gap) */
+.fetch-group {
   display: flex;
   flex: 1 1 14rem;
-  gap: 0.35rem;
-  align-items: center;
+  align-items: stretch;
   min-width: min(14rem, 100%);
   max-width: min(28rem, 100%);
+  border: 1px solid #455a64;
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
 }
 
-.controls-row--primary .fetch-wrap {
-  justify-content: flex-end;
+.fetch-group:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(130, 170, 255, 0.45);
 }
 
-.fetch-wrap input[type="url"] {
+.controls-row--primary .fetch-group {
+  justify-content: stretch;
+}
+
+.fetch-group input[type="url"] {
   flex: 1;
   min-width: 0;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
-  border: 1px solid #455a64;
-  border-radius: 4px;
-  padding: 0.35rem 0.5rem;
+  border: none;
+  border-radius: 0;
+  padding: 0.4rem 0.55rem;
   font-size: 0.85rem;
 }
 
-#controls button {
+.fetch-group input[type="url"]::placeholder {
+  color: #607d8b;
+}
+
+.fetch-group input[type="url"]:focus {
+  outline: none;
+}
+
+#fetch-btn {
+  align-self: stretch;
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  background: rgba(69, 90, 100, 0.45);
+  color: var(--text);
+  border: none;
+  border-left: 1px solid #455a64;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#fetch-btn:not(:disabled):hover {
+  background: rgba(130, 170, 255, 0.14);
+  color: #fff;
+}
+
+#fetch-btn:not(:disabled):active {
+  background: rgba(130, 170, 255, 0.22);
+}
+
+#fetch-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#permalink-btn {
   background: var(--bg);
   color: var(--text);
   border: 1px solid #455a64;
@@ -133,13 +183,8 @@ html, body {
   white-space: nowrap;
 }
 
-#controls button:not(:disabled):hover {
+#permalink-btn:not(:disabled):hover {
   border-color: var(--accent);
-}
-
-#controls button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 #linter {
@@ -163,6 +208,7 @@ html, body {
 }
 
 #editor-wrap {
+  position: relative;
   border-right: 1px solid #37474f;
   min-height: 240px;
   height: 100%;
@@ -173,6 +219,40 @@ html, body {
 #editor {
   flex: 1;
   min-height: 0;
+}
+
+.apply-fixes-fab {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 20;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fix-btn-text);
+  background: linear-gradient(160deg, rgba(57, 174, 117, 0.35) 0%, var(--fix-btn-bg) 100%);
+  border: 1px solid var(--fix-btn-border);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.15) inset,
+    0 0 12px var(--fix-btn-glow);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.apply-fixes-fab:not([hidden]):hover {
+  background: linear-gradient(160deg, rgba(71, 201, 135, 0.45) 0%, rgba(46, 204, 113, 0.32) 100%);
+  border-color: rgba(165, 255, 216, 0.75);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 16px var(--fix-btn-glow);
+}
+
+.apply-fixes-fab:not([hidden]):active {
+  transform: translateY(1px);
 }
 
 #editor-wrap .CodeMirror {

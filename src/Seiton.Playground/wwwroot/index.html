@@ -32,8 +32,7 @@
     <div id="controls">
       <div class="controls-row controls-row--primary">
         <button id="permalink-btn" type="button" title="Store editor text in the URL hash">Permalink</button>
-        <button id="apply-fixes-btn" type="button" hidden>Apply all fixes</button>
-        <span class="fetch-wrap">
+        <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
           <input type="url" id="url-input" autocomplete="off" spellcheck="false"
                  placeholder="https:// raw GitHub/Gist YAML URL"/>
           <button id="fetch-btn" type="button">Check</button>
@@ -64,6 +63,13 @@
   <main>
     <section id="linter">
       <div id="editor-wrap" class="split-pane">
+        <button id="apply-fixes-btn"
+                type="button"
+                class="apply-fixes-fab"
+                hidden
+                title="Apply every fix suggested in the diagnostics (runs offline). Skips deny-read-all auto-removal so read-all survives after fixing write-all.">
+          Apply all fixes
+        </button>
         <div id="editor"></div>
       </div>
       <div class="split-pane results-column">
