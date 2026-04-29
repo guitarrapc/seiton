@@ -187,6 +187,38 @@ internal static class WebhookTypes
                 _ => ActivityTypesMode.NotSupported,
             };
         }
+
+        public string[] GetAllowedOptionNames()
+        {
+            return Id switch
+            {                EventId.BranchProtectionRule => ["types"],
+                EventId.CheckRun => ["types"],
+                EventId.CheckSuite => ["types"],
+                EventId.Discussion => ["types"],
+                EventId.DiscussionComment => ["types"],
+                EventId.IssueComment => ["types"],
+                EventId.Issues => ["types"],
+                EventId.Label => ["types"],
+                EventId.MergeGroup => ["types", "branches", "branches-ignore"],
+                EventId.Milestone => ["types"],
+                EventId.Project => ["types"],
+                EventId.ProjectCard => ["types"],
+                EventId.ProjectColumn => ["types"],
+                EventId.PullRequest => ["types", "branches", "branches-ignore", "paths", "paths-ignore"],
+                EventId.PullRequestReview => ["types"],
+                EventId.PullRequestReviewComment => ["types"],
+                EventId.PullRequestTarget => ["types", "branches", "branches-ignore", "paths", "paths-ignore"],
+                EventId.Push => ["branches", "branches-ignore", "paths", "paths-ignore", "tags", "tags-ignore"],
+                EventId.RegistryPackage => ["types"],
+                EventId.Release => ["types"],
+                EventId.RepositoryDispatch => ["types"],
+                EventId.Watch => ["types"],
+                EventId.WorkflowCall => ["inputs", "outputs", "secrets"],
+                EventId.WorkflowDispatch => ["inputs"],
+                EventId.WorkflowRun => ["types", "branches", "branches-ignore", "workflows"],
+                _ => [],
+            };
+        }
     }
 
     /// <summary>Returns a comma-separated list of events that support the given filter option.</summary>

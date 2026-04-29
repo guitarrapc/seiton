@@ -1205,7 +1205,7 @@ This section remains as a boundary marker so the §0–§11 outline stays consis
 
 | Data | File | Description |
 |---|---|---|
-| Webhook event + activity types | `WebhookTypes.g.cs` | Static table mapping event names to allowed activity types and filter options |
+| Webhook event + activity types | `WebhookTypes.g.cs` | Static table mapping event names to allowed activity types, filter options, and allowed option names for suggestion |
 | Context availability | `Availability.g.cs` | Which expression contexts and special functions are available at each workflow position |
 | Popular actions metadata | `PopularActions.g.cs` | Well-known GitHub Actions with expected input/output names and types |
 | Context type definitions | `ContextTypes.g.cs` | Built-in context type schemas for all 11 context roots (source: `data/sources/context-types/github/context-types.json`) |
@@ -1233,7 +1233,18 @@ public readonly record struct Diagnostic(
     string? RuleId = null,
     TextRange[]? RelatedLocations = null,
     string? Help = null,
-    string? FilePath = null);
+    string? FilePath = null,
+    DiagnosticFix? Fix = null,
+    IReadOnlyDictionary<string, string>? Metadata = null);
+
+public readonly record struct DiagnosticFix(
+    string Description,
+    TextEdit[] Edits);
+
+public readonly record struct TextEdit(
+    int Offset,
+    int Length,
+    string NewText);
 ```
 
 TextRange:
@@ -1258,6 +1269,19 @@ public readonly record struct TextRange(
 | Exclusive constraint violation | Position of the causative key |
 | Duplicate key | Position of the 2nd key |
 | Expression error | Offset within expression mapped to source position |
+
+### 10.3 Parser-Originated Auto-Fix (Spec §3.4.2a)
+
+The parser attaches `DiagnosticFix` on error paths where a deterministic fix is available.
+
+**Implementation:**
+- `SuggestionHelper.FindClosest(input, candidates)` — Levenshtein distance-based suggestion utility in `Parsing/SuggestionHelper.cs`. Used only on error paths (allocations acceptable).
+- `EventSpec.GetAllowedOptionNames()` — generated method in `WebhookTypes.g.cs` returning `string[]` of valid option names per event.
+- Fix uses `Utf8Slice` (captured before `reader.Read()`) for byte offset and length of the key to replace.
+
+**Fixable parser diagnostics:**
+- Unknown webhook event option with close Levenshtein match → replaces key with suggestion
+- Unknown `image_version` option with close match → replaces key with suggestion (candidates: `names`, `versions`)
 
 ---
 
