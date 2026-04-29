@@ -35,7 +35,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services must be object or expression", reader.CurrentStart);
+            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services must be object or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -53,7 +53,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"job '{DecodeUtf8(source, jobId)}' services key must be string", reader.CurrentStart);
+                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -315,7 +315,7 @@ public static partial class WorkflowParser
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
-                        AddError(diagnostics, $"unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
+                        AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
                         if (!reader.End) reader.SkipCurrentNode();
                         continue;
                     default:
@@ -330,7 +330,7 @@ public static partial class WorkflowParser
             var expectedKeys = isService
                 ? Generated.ExpectedKeys.ServiceKeys
                 : Generated.ExpectedKeys.ContainerKeys;
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -490,7 +490,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}", keyMark);
+            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

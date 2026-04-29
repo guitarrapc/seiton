@@ -32,6 +32,6 @@ public sealed class WebhookTypesGeneratedTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "webhook-generated-unknown.yml");
 
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: not_existing_event", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event \"not_existing_event\"", StringComparison.Ordinal) && x.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal))).IsTrue();
     }
 }

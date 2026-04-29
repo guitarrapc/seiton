@@ -774,7 +774,7 @@ public static partial class WorkflowParser
         finally { vars.Dispose(); }
     }
 
-    private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null)
+    private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null, string sectionContext = "")
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -907,7 +907,8 @@ public static partial class WorkflowParser
 
                     var unknownRunKey = Encoding.UTF8.GetString(runKeyUtf8);
                     reader.Read();
-                    AddError(diagnostics, $"unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}", runKeyMark);
+                    var runPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults.run " : "";
+                    AddError(diagnostics, $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}", runKeyMark);
                     if (!reader.End) reader.SkipCurrentNode();
                 }
 
@@ -924,7 +925,8 @@ public static partial class WorkflowParser
 
             var unknownDefaultsKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"expected \"run\" key for \"defaults\" section but got \"{unknownDefaultsKey}\"", keyMark);
+            var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "";
+            AddError(diagnostics, $"{defaultsPrefix}expected \"run\" key for \"defaults\" section but got \"{unknownDefaultsKey}\"", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -953,7 +955,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext, TextPosition keyMark)
+    private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext, TextPosition keyMark, string sectionContext = "")
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -1039,7 +1041,8 @@ public static partial class WorkflowParser
 
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", innerKeyMark);
+            var concurrencyPrefix = sectionContext.Length > 0 ? $"{sectionContext}.concurrency " : "";
+            AddError(diagnostics, $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", innerKeyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

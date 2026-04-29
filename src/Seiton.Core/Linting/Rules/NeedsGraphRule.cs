@@ -31,7 +31,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
             {
                 var jobId = Decode(Arena.GetStringSlice(job.Id));
                 var needText = Decode(Arena.GetStringSlice(need));
-                AddJobError(job, $"job '{jobId}' references unknown job '{needText}' in needs", Arena.GetStringRange(need));
+                AddJobError(job, $"jobs.'{jobId}'.needs references unknown job '{needText}'", Arena.GetStringRange(need));
             }
 
             // Check for duplicates among earlier entries (case-insensitive, GitHub Actions job IDs are case-insensitive)
@@ -42,7 +42,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 {
                     var jobId = Decode(Arena.GetStringSlice(job.Id));
                     var needText = Decode(Arena.GetStringSlice(need));
-                    AddJobError(job, $"job '{jobId}' has duplicates '{needText}' in needs", Arena.GetStringRange(need));
+                    AddJobError(job, $"jobs.'{jobId}'.needs has duplicates '{needText}'", Arena.GetStringRange(need));
                     break;
                 }
             }

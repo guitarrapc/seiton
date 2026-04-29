@@ -47,7 +47,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 var axisName = Decode(Arena.GetStringSlice(row.Name));
                 AddJobWarning(
                     job,
-                    $"job '{jobId}' strategy.matrix axis '{axisName}' has no values; remove the axis or provide at least one value",
+                    $"jobs.'{jobId}'.strategy.matrix axis '{axisName}' has no values; remove the axis or provide at least one value",
                     Arena.GetStringRange(row.Name));
                 continue;
             }
@@ -75,7 +75,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             var jobIdForMessage = Decode(Arena.GetStringSlice(job.Id));
             AddJobWarning(
                 job,
-                $"job '{jobIdForMessage}' strategy.matrix expands to more than {MaxRecommendedCombinations} combinations; consider reducing matrix fan-out",
+                $"jobs.'{jobIdForMessage}'.strategy.matrix expands to more than {MaxRecommendedCombinations} combinations; consider reducing matrix fan-out",
                 matrixNode.Range);
             combinationWarningReported = true;
         }
@@ -124,7 +124,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 var valueText = Decode(Arena.GetStringSlice(current.Value));
                 AddJobWarning(
                     job,
-                    $"job '{jobId}' strategy.matrix axis '{axisName}' has duplicate value '{valueText}'",
+                    $"jobs.'{jobId}'.strategy.matrix axis '{axisName}' has duplicate value '{valueText}'",
                     Arena.GetStringRange(current.Value));
                 goto nextValue;
             }
@@ -178,7 +178,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                     var keyLocation = BuildKeyLocation(source, pair.Key);
                     AddJobWarning(
                         job,
-                        $"job '{jobId}' strategy.matrix.{section} references unknown axis '{axisName}'",
+                        $"jobs.'{jobId}'.strategy.matrix.{section} references unknown axis '{axisName}'",
                         keyLocation);
                     goto nextEntry;
                 }

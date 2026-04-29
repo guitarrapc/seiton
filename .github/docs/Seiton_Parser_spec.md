@@ -1117,6 +1117,78 @@ Events parsed under `on:` must use `on.{eventName}` as the section path:
 - `on.workflow_call output "bar" is missing "value"`
 - `on.workflow_dispatch input "baz" option should not be empty`
 
+#### Principle 5: Diagnostic messages use dotted-path format for job and step context
+
+Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions workflow syntax documentation (e.g., `jobs.<job_id>.steps[*]`, `jobs.<job_id>.<key>`), so the user immediately knows which job/step/property is affected.
+
+**Job-level examples:**
+- `jobs.'build'.name must be string` (property validation)
+- `jobs.'deploy'.strategy.max-parallel must be integer` (nested property)
+- `jobs.'test' cannot have both uses and steps` (structural error — space after prefix)
+- `"runs-on" section is missing in jobs.'build'` (missing-section messages)
+
+**Step-level examples:**
+- `jobs.'build'.steps[1] unexpected key "shell" for step to execute action. expected one of ...`
+- `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
+- `jobs.'test'.steps[2] element of "steps" section should not be empty. please remove this section if it's unnecessary`
+
+When the job ID is unavailable (e.g., action metadata parsing), the step prefix falls back to `steps[{stepIndex}]`.
+
+#### Principle 6: Unexpected-key messages use dotted-path prefix for location context
+
+"Unexpected key" diagnostic messages use a **dotted-path prefix** followed by the original section-type `for` clause. This is consistent with step-level messages (Principle 5) and cleanly separates WHERE (prefix) from WHAT (section type in `for` clause).
+
+The format is:
+
+```
+{locationPath} unexpected key "{key}" for "{sectionType}" section. expected one of ...
+```
+
+When there is no location context (workflow-level), the prefix is omitted:
+
+```
+unexpected key "{key}" for "{sectionType}" section. expected one of ...
+```
+
+**Job-scope sections** — prefix with `jobs.'<id>'.<section>`:
+- `jobs.'build' unexpected key "X" for "job" section` (job top-level)
+- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job concurrency)
+- `jobs.'build'.strategy unexpected key "X" for "strategy" section` (strategy)
+- `jobs.'build'.environment unexpected key "X" for "environment" section` (environment)
+- `jobs.'build'.runs-on unexpected key "X" for "runs-on" section` (runs-on)
+- `jobs.'build'.container unexpected key "X" for "container" section` (container)
+- `jobs.'build'.container.credentials unexpected key "X" for "credentials" section` (container credentials)
+- `jobs.'build'.services.'redis' unexpected key "X" for "services" section` (service)
+- `jobs.'build'.services.'redis'.credentials unexpected key "X" for "credentials" section` (service credentials)
+
+**Shared helpers** (concurrency, defaults) — prefix only at job level:
+- `unexpected key "X" for "concurrency" section` (workflow-level, no prefix)
+- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job-level)
+- `expected "run" key for "defaults" section but got "X"` (workflow-level)
+- `jobs.'build'.defaults expected "run" key for "defaults" section but got "X"` (job-level)
+- `jobs.'build'.defaults.run unexpected key "X" for "run" section` (job-level defaults.run)
+
+**Event-scope sections** — prefix with `on.<event>.<section>`:
+- `on.workflow_dispatch.inputs unexpected key "X" for "inputs" section`
+- `on.workflow_call.secrets unexpected key "X" for "secrets" section`
+
+#### Principle 6a: Prefix scope — when location prefixes are NOT added
+
+Dotted-path prefixes are added only when **multiple instances** of the same section type can coexist in a workflow, making the section name alone ambiguous. Structurally unique scopes do not receive a prefix.
+
+| Scope | Prefix added? | Reason |
+|---|---|---|
+| Workflow root (`"workflow"` section) | No | Only one workflow root exists per file |
+| Workflow-level `defaults`, `concurrency` | No | Only one workflow-level instance of each |
+| Event-level (`"workflow_call"`, `"workflow_dispatch"`, etc.) | No (*) | Each event name is unique under `on:` |
+| Event sub-sections with existing context (`inputs at workflow_call event`, `outputs at workflow_call event`) | No | The `at {event} event` suffix already provides context |
+| Job-level sections | **Yes** | Multiple jobs can define the same section (concurrency, defaults, strategy, etc.) |
+| Step-level | **Yes** | Multiple steps exist per job |
+
+(*) Exception: `on.workflow_dispatch.inputs` and `on.workflow_call.secrets` receive prefixes because their `for "inputs"` / `for "secrets"` clause alone does not indicate which event they belong to — other events also have inputs/secrets concepts.
+
+This design is an intentional divergence from actionlint, which does not use location prefixes. In actionlint compatibility tests, these messages are classified as `LINE_MATCH` (same YAML line, different message text) rather than `MATCH` (identical text). This is the expected classification for design-level message improvements, not a compatibility gap.
+
 #### Normative empty-value message table
 
 These replace the former generic `"string should not be empty"` message:

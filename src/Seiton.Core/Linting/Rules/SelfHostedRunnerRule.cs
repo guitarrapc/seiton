@@ -52,7 +52,7 @@ public sealed class SelfHostedRunnerRule() : RuleBase(RuleId.SelfHostedRunner)
             var jobId = Decode(Arena.GetStringSlice(job.Id));
             AddJobWarning(
                 job,
-                $"job '{jobId}' uses self-hosted runner under untrusted triggers; add strict job guards and isolate self-hosted execution paths",
+                $"jobs.'{jobId}'.runs-on uses self-hosted runner under untrusted triggers; add strict job guards and isolate self-hosted execution paths",
                 Arena.GetStringRange(label));
             return;
         }

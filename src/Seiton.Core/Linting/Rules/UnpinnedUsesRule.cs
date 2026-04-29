@@ -34,7 +34,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
                 var localJobId = Decode(Arena.GetStringSlice(job.Id));
                 AddJobWarning(
                     job,
-                    $"job '{localJobId}' local reusable workflow uses must not contain '@ref'",
+                    $"jobs.'{localJobId}'.uses local reusable workflow reference must not contain '@ref'",
                     usesRefLocation);
             }
 
@@ -47,7 +47,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobError(
                 job,
-                $"job '{formatJobId}' reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
+                $"jobs.'{formatJobId}'.uses reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
                 usesLocation);
             return;
         }
@@ -59,7 +59,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
         var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
-        AddJobWarning(job, $"job '{jobId}' reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
+        AddJobWarning(job, $"jobs.'{jobId}'.uses reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
     }
 
     public override void VisitStep(Step step)

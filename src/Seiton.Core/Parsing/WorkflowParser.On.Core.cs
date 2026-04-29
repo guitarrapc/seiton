@@ -256,7 +256,7 @@ public static partial class WorkflowParser
     {
         if (!eventInfo.IsKnown)
         {
-            AddError(diagnostics, $"unknown event in on: {eventInfo.Name}", eventMark);
+            AddError(diagnostics, $"unknown event \"{eventInfo.Name}\". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names", eventMark);
         }
     }
 

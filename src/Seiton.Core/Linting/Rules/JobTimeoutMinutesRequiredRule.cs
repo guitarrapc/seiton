@@ -22,7 +22,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
         }
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
-        var message = $"job '{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
+        var message = $"jobs.'{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
         if (Config.Fix.Enabled
             && Config.Utf8Yaml is not null
             && Config.Fix.Defaults.JobTimeoutMinutes is not null
