@@ -4,8 +4,7 @@
 
 :root {
   --bg: #1e2430;
-  --panel: #263238;
-  /* Matches CodeMirror 5 theme material-darker (.cm-s-material-darker.CodeMirror { background-color: #212121 }) — not header --panel */
+  /* Matches CodeMirror 5 theme material-darker (.cm-s-material-darker.CodeMirror). */
   --editor-surface: #212121;
   --text: #eceff1;
   --muted: #78909c;
@@ -51,7 +50,7 @@ main {
   justify-content: space-between;
   gap: 1.25rem 1.5rem;
   padding: 1.0rem 1.0rem;
-  background: var(--panel);
+  background: var(--bg);
   border-bottom: 1px solid #37474f;
 }
 
@@ -441,7 +440,7 @@ main {
 .resources {
   flex-shrink: 0;
   border-top: 1px solid #37474f;
-  background: var(--panel);
+  background: var(--bg);
   padding: 1.25rem 1.5rem 1.35rem;
   text-align: center;
 }
@@ -490,6 +489,7 @@ footer {
   color: var(--muted);
   border-top: 1px solid #37474f;
   text-align: center;
+  background: var(--bg);
 }
 
 footer p {
