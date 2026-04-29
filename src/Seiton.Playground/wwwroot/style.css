@@ -5,6 +5,8 @@
 :root {
   --bg: #1e2430;
   --panel: #263238;
+  /* Matches CodeMirror 5 theme material-darker (.cm-s-material-darker.CodeMirror { background-color: #212121 }) — not header --panel */
+  --editor-surface: #212121;
   --text: #eceff1;
   --muted: #78909c;
   --accent: #82aaff;
@@ -271,6 +273,7 @@ main {
   min-height: max(260px, 36dvh);
   display: flex;
   flex-direction: column;
+  background: var(--editor-surface);
 }
 
 #editor {
@@ -279,6 +282,7 @@ main {
   min-height: 200px;
   display: flex;
   flex-direction: column;
+  background: var(--editor-surface);
 }
 
 #editor-wrap .CodeMirror {
