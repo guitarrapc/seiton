@@ -392,8 +392,52 @@ html, body {
   color: #a5ffd6;
 }
 
+.resources {
+  border-top: 1px solid #37474f;
+  background: var(--panel);
+  padding: 1.25rem 1.5rem 1.35rem;
+  text-align: center;
+}
+
+.resources h2 {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.resources-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.5rem;
+  justify-content: center;
+  align-items: baseline;
+}
+
+.resources-links li {
+  margin: 0;
+  max-width: 100%;
+}
+
+.resources-links a {
+  color: var(--accent);
+  font-size: 0.88rem;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  overflow-wrap: anywhere;
+}
+
+.resources-links a:visited {
+  color: #b39ddb;
+}
+
 footer {
-  padding: 0.65rem 1.25rem;
+  padding: 1.15rem 1.5rem 1.35rem;
   font-size: 0.8rem;
   color: var(--muted);
   border-top: 1px solid #37474f;
