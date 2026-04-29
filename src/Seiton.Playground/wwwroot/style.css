@@ -52,26 +52,51 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 1.25rem 1.5rem;
-  padding: 1.0rem 1.0rem;
-  background: var(--bg);
-  border-bottom: 1px solid #37474f;
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(
+    180deg,
+    rgba(38, 50, 68, 0.85) 0%,
+    var(--bg) 65%,
+    var(--bg) 100%
+  );
+  border-bottom: 1px solid rgba(130, 170, 255, 0.22);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+#header-bar header {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: 1rem;
+  border-left: 4px solid var(--accent);
+  border-radius: 2px;
 }
 
 #header-bar h1 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2.35rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
 }
 
 #header-bar h1 a {
   color: var(--accent);
   text-decoration: none;
+  font-weight: 800;
+  text-shadow: 0 0 28px rgba(130, 170, 255, 0.4);
+}
+
+#header-bar h1 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .tagline {
-  margin: 0.35rem 0 0;
-  font-size: 0.85rem;
-  color: var(--muted);
+  margin: 0.45rem 0 0;
+  font-size: 0.92rem;
+  color: #90a4ae;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 #controls {
@@ -128,7 +153,11 @@ main {
 /* Phones only: keep Document + Sample on one row by allowing selects to shrink. */
 @media (max-width: 639.98px) {
   #header-bar {
-    padding: 1.0rem 0.5rem;
+    padding: 1rem 0.65rem;
+  }
+
+  #header-bar header {
+    padding-left: 0.75rem;
   }
 
   .controls-row--meta {
