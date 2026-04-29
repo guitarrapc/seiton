@@ -147,6 +147,32 @@ internal sealed class PopularActionsCSharpGenerator
                         };
                     }
 
+                    internal string[] GetInputNames()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (action.Inputs.Count == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => [],");
+                continue;
+            }
+
+            var items = string.Join(", ", action.Inputs.Select(static i => $"\"{i.Name}\""));
+            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+        }
+
+        sb.Append(
+            """
+                            _ => [],
+                        };
+                    }
+
                     internal byte[][] GetOutputNames()
                     {
                         return Id switch

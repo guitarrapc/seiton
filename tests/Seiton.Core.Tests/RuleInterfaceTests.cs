@@ -1547,6 +1547,52 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_PopularActionInputsRule_TypoSuggestion()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-typo-underscore-for-hyphen",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/setup-node@v4
+                          with: { node_version: '20' }
+            """,
+            ["unknown input 'node_version' for action 'actions/setup-node@v4'. did you mean 'node-version'?"]),
+            new RuleCase(
+            "ng-typo-close-misspelling",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { fetch-depht: 1 }
+            """,
+            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'. did you mean 'fetch-depth'?"]),
+            new RuleCase(
+            "ng-no-suggestion-for-distant-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with: { totally-unknown-input: true }
+            """,
+            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'"]),
+        };
+
+        await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_PopularActionInputsRule_TableDriven()
     {
         var cases = new[]

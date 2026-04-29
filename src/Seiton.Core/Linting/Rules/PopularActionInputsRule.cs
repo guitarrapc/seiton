@@ -50,7 +50,11 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 }
 
                 var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
-                AddStepWarning(step, $"unknown input '{unknownInputName}' for action '{actionName}'", Arena.GetStringRange(pair.Value));
+                var suggestion = FindClosestInput(unknownInputName, actionSpec);
+                var unknownMessage = suggestion is not null
+                    ? $"unknown input '{unknownInputName}' for action '{actionName}'. did you mean '{suggestion}'?"
+                    : $"unknown input '{unknownInputName}' for action '{actionName}'";
+                AddStepWarning(step, unknownMessage, Arena.GetStringRange(pair.Value));
             }
         }
 
@@ -85,5 +89,32 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         }
 
         return false;
+    }
+
+    private static string? FindClosestInput(string unknownInput, PopularActions.ActionSpec actionSpec)
+    {
+        var inputNames = actionSpec.GetInputNames();
+        if (inputNames.Length == 0)
+        {
+            return null;
+        }
+
+        // Threshold: max distance is roughly 1/3 of the input name length, minimum 2
+        var maxDistance = Math.Max(2, unknownInput.Length / 3);
+        string? best = null;
+        var bestDistance = int.MaxValue;
+
+        for (var i = 0; i < inputNames.Length; i++)
+        {
+            var candidate = inputNames[i];
+            var distance = EditDistance.ComputeIgnoreCase(unknownInput, candidate);
+            if (distance < bestDistance && distance <= maxDistance)
+            {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        return best;
     }
 }
