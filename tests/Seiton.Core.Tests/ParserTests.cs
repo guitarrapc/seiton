@@ -814,6 +814,63 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnEventUnknownOption_SuggestsClosestOption()
+    {
+        // "branch" is close to "branches" (Levenshtein distance 2)
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            branch: main
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-suggest.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("did you mean \"branches\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnEventUnknownOption_SuggestsTagsIgnore()
+    {
+        // "tags_ignore" is close to "tags-ignore" (Levenshtein distance 1)
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            tags_ignore: ["v*"]
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-suggest-tags.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("did you mean \"tags-ignore\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnEventUnknownOption_NoSuggestionWhenTooDistant()
+    {
+        // "xyz" is far from any valid option, no suggestion should be offered
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            xyz: 1
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-suggest.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push does not support option: xyz", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("did you mean", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_OnImageVersionUnknownOption_SuggestsClosestOption()
+    {
+        // "name" is close to "names" (Levenshtein distance 1)
+        var yaml = NormalizeEol("""
+        on:
+          image_version:
+            name: ["ubuntu"]
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-image-version-suggest.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("did you mean \"names\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_OnEventDisallowedOption_ReportsError()
     {
         var yaml = NormalizeEol("""

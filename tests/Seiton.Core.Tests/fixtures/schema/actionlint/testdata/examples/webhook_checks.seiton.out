@@ -1,4 +1,4 @@
-test.yaml:4:5: on.push does not support option: branch [syntax-check]
+test.yaml:4:5: on.push does not support option: branch. did you mean "branches"? [syntax-check]
 test.yaml:7:5: both "paths" and "paths-ignore" filters cannot be used for the same event "push". note: use '!' to negate patterns [syntax-check]
 test.yaml:10:12: on.issues.types contains unsupported activity type: created [syntax-check]
 test.yaml:13:5: "tags" filter is not available for release event. it is only for push events [syntax-check]

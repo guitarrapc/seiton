@@ -88,7 +88,11 @@ public static partial class WorkflowParser
                 }
                 else
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name} does not support option: {unknownKeyText}", keyMark);
+                    var suggestion = SuggestionHelper.FindClosest(unknownKeyText!, eventInfo.Spec.GetAllowedOptionNames());
+                    var message = suggestion is not null
+                        ? $"on.{eventInfo.Name} does not support option: {unknownKeyText}. did you mean \"{suggestion}\"?"
+                        : $"on.{eventInfo.Name} does not support option: {unknownKeyText}";
+                    AddError(diagnostics, message, keyMark);
                 }
                 if (!reader.End) { reader.SkipCurrentNode(); }
                 continue;
@@ -379,7 +383,11 @@ public static partial class WorkflowParser
             {
                 var key = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                AddError(diagnostics, $"on.{eventInfo.Name} does not support option: {key}", keyMark);
+                var suggestion = SuggestionHelper.FindClosest(key, eventInfo.Spec.GetAllowedOptionNames());
+                var message = suggestion is not null
+                    ? $"on.{eventInfo.Name} does not support option: {key}. did you mean \"{suggestion}\"?"
+                    : $"on.{eventInfo.Name} does not support option: {key}";
+                AddError(diagnostics, message, keyMark);
                 if (!reader.End)
                 {
                     reader.SkipCurrentNode();

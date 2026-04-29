@@ -7,6 +7,8 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    private static readonly string[] ImageVersionOptionNames = ["names", "versions"];
+
     private static ImageVersionEvent ParseImageVersionEvent<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -80,7 +82,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"on.image_version does not support option: {unknown}", keyMark);
+            var suggestion = SuggestionHelper.FindClosest(unknown, ImageVersionOptionNames);
+            var message = suggestion is not null
+                ? $"on.image_version does not support option: {unknown}. did you mean \"{suggestion}\"?"
+                : $"on.image_version does not support option: {unknown}";
+            AddError(diagnostics, message, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
