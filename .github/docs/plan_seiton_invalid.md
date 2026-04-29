@@ -24,12 +24,12 @@
 | 指標 | 最新 (2026-04-30) |
 |---|---|
 | 対象 examples fixtures | 49 (2 scope-out 除外) |
-| 互換 fixtures (MISS=0) | 45 / 49 |
-| 行レベルマッチ率 (line+col or line) | 130 / 143 (90%) |
+| 互換 fixtures (MISS=0) | 46 / 49 |
+| 行レベルマッチ率 (line+col or line) | 134 / 143 (93%) |
 | 完全一致マッチ率 (exact match) | 22 / 143 |
 | 列差異マッチ (same line, diff col/msg) | 105 / 143 |
 | 近接行マッチ (near-line, position diff) | 3 / 143 |
-| 未マッチ期待行 (MISS) | 13 (true gaps) |
+| 未マッチ期待行 (MISS) | 9 (true gaps) |
 | 余剰 seiton 行 (EXTRA) | 4 (additional detections) |
 | scope-out (shellcheck/pyflakes) | 2 (shellcheck_integration, pyflakes_integration) |
 
@@ -427,6 +427,7 @@ scope-out fixtures:
 | Phase 5 | ✅完了 | 2026-04-29 | 2026-04-29 | 2 (#9,#10) | contains() overload |
 | Phase 6 | ✅完了 | 2026-04-29 | 2026-04-29 | 7 (#4,#5,#11,#13,#14,#18,#19) | テスト比較改善 |
 | Phase 7 | ✅完了 | 2026-04-30 | 2026-04-30 | -2 (意図的抑制) | workflow_dispatch 空文字option 抑制 |
+| Phase 8 | ✅完了 | 2026-04-30 | 2026-04-30 | 4 (examples) | カテゴリA: unpinned-uses→action マッピング + Docker tag 空チェック |
 
 ---
 
@@ -442,22 +443,21 @@ scope-out fixtures:
 
 **結論**: err/ fixtures の残 MISS 3件はすべて**対処不要**。#1/#2 は seiton ポリシーとして合法パターンを意図的に検出しない方針。#3 は同一コンセプトを別ルール/メッセージで検出済み。
 
-### 6.2 examples/ fixtures 残 MISS (13件 / 4 fixtures)
+### 6.2 examples/ fixtures 残 MISS (9件 / 3 fixtures)
 
 | # | Fixture | MISS 数 | actionlint 期待 | 根本原因 | 優先度 |
 |---|---|---|---|---|---|
 | 1 | `action_metadata_syntax_validation` | 6 | local action metadata の各種バリデーション (`env` 禁止, `description` 必須, ファイル存在確認, branding, runner 名) | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
-| 2 | `invalid_action_format` | 4 | `uses:` 参照形式バリデーション (ref 欠如, owner 欠如, Docker tag 空, ローカル参照 `./` 欠如) | `unpinned-uses` ルールが actionlint の `[action]` ルールと同等チェックを行うが、テスト比較で `SeitonOnlyRules` 除外されている | **P1** |
-| 3 | `local_action_inputs` | 2 | missing required input / unknown input の検出 | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
-| 4 | `workflow_call_jobs` | 1 | `could not read reusable workflow file for "./..."` — ローカル reusable workflow ファイルの存在チェック | `reusable-workflow` ルールがファイル存在確認を行っていない (ルール仕様の範囲外) | **P2** |
+| 2 | `local_action_inputs` | 2 | missing required input / unknown input の検出 | `local-action-inputs` ルールが examples テスト環境でローカルアクション解決に失敗している | **P1** |
+| 3 | `workflow_call_jobs` | 1 | `could not read reusable workflow file for "./..."` — ローカル reusable workflow ファイルの存在チェック | `reusable-workflow` ルールがファイル存在確認を行っていない (ルール仕様の範囲外) | **P2** |
 
 ### 6.3 根本原因別の分類と対処
 
-#### カテゴリ A: テスト比較ロジックの問題 (修正可能、ルール実装変更不要)
+#### カテゴリ A: テスト比較ロジックの問題 ✅解決済 (Phase 8)
 
 | 問題 | 影響 | 対処 |
 |---|---|---|
-| `invalid_action_format`: `unpinned-uses` が `SeitonOnlyRules` に含まれるため、seiton が検出した結果が比較から除外される | 4 MISS | `unpinned-uses` の一部チェック (ref 欠如, owner 欠如, Docker tag 空, `./` 欠如) は actionlint `[action]` と等価。テスト比較ロジックで `unpinned-uses` → `action` のマッピングを追加するか、`SeitonOnlyRules` から除外する |
+| `invalid_action_format`: `unpinned-uses` が `SeitonOnlyRules` に含まれるため、seiton が検出した結果が比較から除外されていた | 4 MISS → 0 | `unpinned-uses` を `SeitonOnlyRules` から削除し `RuleIdMap` に `unpinned-uses` → `action` を追加。Docker tag 空チェック (`docker://image:`) も `UnpinnedUsesRule` に追加。 |
 
 #### カテゴリ B: ルールの実行環境問題 (テスト設定修正)
 
@@ -475,10 +475,10 @@ scope-out fixtures:
 
 | 優先度 | 対処 | 期待 MISS 削減 | 難易度 |
 |---|---|---|---|
-| **P1-A** | `unpinned-uses` → `action` テスト比較マッピング追加 | -4 (invalid_action_format) | 低 (テスト変更のみ) |
+| ~~**P1-A**~~ | ~~`unpinned-uses` → `action` テスト比較マッピング追加~~ | ~~-4 (invalid_action_format)~~ | ✅完了 (Phase 8) |
 | **P1-B** | `local-action-inputs` ルールの examples テスト環境パス解決修正 | -8 (local_action_inputs + action_metadata_syntax_validation) | 中 (ルールのパス解決デバッグ) |
 | **P2** | reusable-workflow ローカルファイル存在チェック | -1 (workflow_call_jobs) | 中 (新機能追加) |
 
-**P1-A + P1-B を解消すれば examples/ MISS は 13→1 に削減可能** (残り 1 は P2 のファイル存在チェック)。
+**P1-B を解消すれば examples/ MISS は 9→1 に削減可能** (残り 1 は P2 のファイル存在チェック)。
 
 ---

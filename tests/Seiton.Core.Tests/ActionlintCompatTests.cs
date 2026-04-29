@@ -37,12 +37,12 @@ public sealed class ActionlintCompatTests
         ["popular-action-inputs"] = "action",
         ["local-action-inputs"] = "action",
         ["outdated-action-runner"] = "action",
+        ["unpinned-uses"] = "action",
     };
 
     // Seiton-only rule IDs that have no actionlint equivalent and should be excluded.
     private static readonly HashSet<string> SeitonOnlyRules = new(StringComparer.Ordinal)
     {
-        "unpinned-uses",
         "unpinned-image",
         "dangerous-triggers",
         "job-permissions-required",

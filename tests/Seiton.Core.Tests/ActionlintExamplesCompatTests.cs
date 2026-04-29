@@ -38,12 +38,12 @@ public sealed class ActionlintExamplesCompatTests
         ["popular-action-inputs"] = "action",
         ["local-action-inputs"] = "action",
         ["outdated-action-runner"] = "action",
+        ["unpinned-uses"] = "action",
     };
 
     // Seiton-only rule IDs that have no actionlint equivalent and should be excluded.
     private static readonly HashSet<string> SeitonOnlyRules = new(StringComparer.Ordinal)
     {
-        "unpinned-uses",
         "unpinned-image",
         "dangerous-triggers",
         "job-permissions-required",
@@ -620,5 +620,27 @@ public sealed class ActionlintExamplesCompatTests
         }
 
         return string.Equals(actual, expected.Pattern, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Regression test: unpinned-uses format checks (ref missing, owner missing, etc.)
+    /// should map to actionlint's [action] rule and produce zero MISS for this fixture.
+    /// </summary>
+    [Test]
+    public async Task InvalidActionFormat_UnpinnedUsesFormatChecks_ZeroMiss()
+    {
+        var examplesRoot = GetExamplesFixturesRoot();
+        var yamlPath = Path.Combine(examplesRoot, "invalid_action_format.yaml");
+        var outPath = Path.Combine(examplesRoot, "invalid_action_format.out");
+
+        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var engine = new LintEngine();
+        var result = engine.Check(utf8Yaml, GetLintFilePath());
+
+        var seitonLines = FormatAsActionlint(result.Diagnostics);
+        var expectations = ParseOutFile(outPath);
+        var matchResult = Match(seitonLines, expectations, "invalid_action_format");
+
+        await Assert.That(matchResult.UnmatchedExpected).Count().IsEqualTo(0);
     }
 }
