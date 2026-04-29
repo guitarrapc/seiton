@@ -317,8 +317,8 @@ main {
 
 .gutter-marker {
   text-align: center;
-  line-height: 1;
-  font-size: 0.65rem;
+  line-height: 1.2;
+  font-size: 0.8rem;
 }
 
 .gutter-marker--error {
@@ -563,6 +563,13 @@ main {
 #editor-wrap .CodeMirror .CodeMirror-gutters {
   background-color: var(--editor-gutter-bg);
   border-right: 1px solid var(--border-pane);
+}
+
+/* Center diagnostic bullet vertically within the line box (line number gutter unchanged). */
+#editor-wrap .CodeMirror .CodeMirror-gutter.error-marker .CodeMirror-gutter-elt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #editor-wrap .CodeMirror pre.CodeMirror-line {
