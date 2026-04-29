@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>seiton playground</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"/>
+  <!-- Subresource integrity hashes vary by CDN builds; omit integrity for theme to avoid breakage -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"/>
+  <link rel="stylesheet" href="style#[.{fingerprint}].css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+<body>
+  <nav id="header-bar">
+    <header>
+      <h1><a href="https://github.com/guitarrapc/seiton-gh">seiton</a> playground</h1>
+      <p class="tagline">Static checker for GitHub Actions workflow files</p>
+    </header>
+    <div id="controls">
+      <label>
+        Document
+        <select id="filetype-select">
+          <option value=".github/workflows/test.yml" selected>workflow</option>
+          <option value="action.yml">action.yml</option>
+        </select>
+      </label>
+      <button id="permalink-btn" type="button">Permalink</button>
+    </div>
+  </nav>
+  <main>
+    <section id="linter">
+      <div id="editor-wrap" class="split-pane">
+        <div id="editor"></div>
+      </div>
+      <div class="split-pane results-column">
+        <div id="loading" class="notification">Loading WebAssembly binary...</div>
+        <table id="lint-result" class="result-table" hidden>
+          <tbody id="lint-result-body"></tbody>
+        </table>
+        <div id="error-msg" class="notification error" style="display:none"></div>
+        <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <p><a href="https://github.com/guitarrapc/seiton-gh">seiton</a> — GitHub Actions workflow linter.</p>
+  </footer>
+  <script type="importmap"></script>
+  <script type="module" src="main#[.{fingerprint}].js"></script>
+</body>
+</html>
