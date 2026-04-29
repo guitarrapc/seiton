@@ -12754,4 +12754,70 @@ public sealed class RuleInterfaceTests
         var reparse = engine.Check(fixedBytes, "template-injection-fix-multiline-env.yml");
         await Assert.That(reparse.HasFatalError).IsEqualTo(false);
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_DeduplicateEnvName_SkipsWhenExhausted()
+    {
+        // When baseName through baseName_99 are all taken, the fix should NOT be attached
+        // rather than producing a duplicate env key name.
+        var envLines = string.Join("\n", Enumerable.Range(2, 98)
+            .Select(i => $"                GITHUB_EVENT_PULL_REQUEST_TITLE_{i}: placeholder"));
+        var yaml = "on: pull_request\n" +
+            "jobs:\n" +
+            "    build:\n" +
+            "        runs-on: ubuntu-latest\n" +
+            "        steps:\n" +
+            "            - env:\n" +
+            "                GITHUB_EVENT_PULL_REQUEST_TITLE: existing\n" +
+            envLines + "\n" +
+            "              run: echo \"${{ github.event.pull_request.title }}\"\n";
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-dedup-exhausted.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix should not be attached since all candidate names are taken
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_BlockScalarContentStartsWithRun_FindsCorrectKey()
+    {
+        // When a block scalar's first content line starts with "run:", the fix must
+        // still correctly find the actual YAML run: key, not the content text.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        run: echo "${{ github.event.pull_request.title }}"
+                        echo "second line"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-fix-run-in-content.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        // Fixed YAML must be parseable
+        var reparse = engine.Check(fixedBytes, "template-injection-fix-run-in-content.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        await Assert.That(reparse.HasFatalError).IsEqualTo(false);
+
+        // After applying the fix, the template-injection diagnostic must be resolved.
+        // If the env was inserted inside the block scalar (wrong), the expression remains
+        // unresolved and the diagnostic persists.
+        var remaining = reparse.Diagnostics.Where(x => x.RuleId == "template-injection").ToList();
+        await Assert.That(remaining).Count().IsEqualTo(0);
+    }
 }

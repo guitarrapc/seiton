@@ -388,8 +388,11 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         // Generate mechanical env var name and deduplicate
-        var envVarName = PathToEnvVarName(pathString);
-        envVarName = DeduplicateEnvName(envVarName, step);
+        var envVarName = DeduplicateEnvName(PathToEnvVarName(pathString), step);
+        if (envVarName is null)
+        {
+            return false;
+        }
 
         // Build shell variable replacement
         var shellReplacement = IsPowerShell(Arena, step, Config.Utf8Yaml)
@@ -595,7 +598,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return -1;
     }
 
-    private string DeduplicateEnvName(string baseName, Step step)
+    private string? DeduplicateEnvName(string baseName, Step step)
     {
         var existing = CollectExistingEnvNames(step);
         if (!existing.Contains(baseName, StringComparer.OrdinalIgnoreCase))
@@ -612,7 +615,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             }
         }
 
-        return baseName + "_99";
+        // All candidate names exhausted; skip attaching a fix
+        return null;
     }
 
     private HashSet<string> CollectExistingEnvNames(Step step)
@@ -844,8 +848,10 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
                 i += 2;
             }
 
-            // Check for `run:` at this position
+            // Check for `run:` at this position, ensuring it's before the value start
+            // (guards against matching `run:` text inside block scalar content)
             if (i + 3 < utf8Yaml.Length
+                && i < valueStart
                 && utf8Yaml[i] == (byte)'r'
                 && utf8Yaml[i + 1] == (byte)'u'
                 && utf8Yaml[i + 2] == (byte)'n'
