@@ -613,6 +613,8 @@ public sealed class RuleInterfaceTests
             await Assert.That(ruleDiagnostics.Any(m => m.Contains("missing required reusable workflow input 'target'", StringComparison.Ordinal))).IsTrue();
             await Assert.That(ruleDiagnostics.Any(m => m.Contains("expects boolean but got 'maybe'", StringComparison.Ordinal))).IsTrue();
             await Assert.That(ruleDiagnostics.Any(m => m.Contains("missing required reusable workflow secret 'token'", StringComparison.Ordinal))).IsTrue();
+            // Input type error should use jobs.'<id>'.with path (not .input)
+            await Assert.That(ruleDiagnostics.Any(m => m.Contains("jobs.'deploy'.with", StringComparison.Ordinal) && m.Contains("expects boolean", StringComparison.Ordinal))).IsTrue();
         }
         finally
         {
@@ -678,6 +680,101 @@ public sealed class RuleInterfaceTests
                 Directory.Delete(rootDir, recursive: true);
             }
         }
+    }
+
+    [Test]
+    public async Task LintEngine_ReusableWorkflowRule_LocalWorkflowContractValidation_NumberTypeMismatch_UsesWithPath()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-reuse-number-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var calleePath = Path.Combine(workflowsDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var calleeYaml = """
+            on:
+                workflow_call:
+                    inputs:
+                        retries:
+                            required: true
+                            type: number
+            jobs:
+                noop:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo callee
+            """;
+
+            var callerYaml = """
+            on: push
+            jobs:
+                deploy:
+                    uses: ./.github/workflows/reusable.yml
+                    with:
+                        retries: abc
+            """;
+
+            File.WriteAllText(calleePath, NormalizeYaml(calleeYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new ReusableWorkflowRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+
+            var ruleDiagnostics = result.Diagnostics.Where(x => x.RuleId == "reusable-workflow").Select(x => x.Message).ToArray();
+
+            // Number type error should use jobs.'<id>'.with path
+            await Assert.That(ruleDiagnostics.Any(m => m.Contains("jobs.'deploy'.with", StringComparison.Ordinal) && m.Contains("expects number but got 'abc'", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task LintEngine_UnpinnedUsesRule_LocalReusableWorkflowWithAtRef_UsesPath()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                deploy:
+                    uses: ./.github/workflows/reusable.yml@v1
+            """);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-local-ref.yml");
+
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses").ToArray();
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        // Local @ref warning should use jobs.'<id>'.uses path
+        await Assert.That(diagnostics[0].Message).Contains("jobs.'deploy'.uses");
+        await Assert.That(diagnostics[0].Message).Contains("must not contain '@ref'");
+    }
+
+    [Test]
+    public async Task LintEngine_UnpinnedUsesRule_InvalidRemoteReusableWorkflowFormat_UsesPath()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                deploy:
+                    uses: invalid-format-no-at-ref
+            """);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-invalid-format.yml");
+
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses").ToArray();
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        // Invalid format error should use jobs.'<id>'.uses path
+        await Assert.That(diagnostics[0].Message).Contains("jobs.'deploy'.uses");
+        await Assert.That(diagnostics[0].Message).Contains("invalid reference format");
     }
 
     [Test]
@@ -1986,6 +2083,24 @@ public sealed class RuleInterfaceTests
         var refStartColumn = usesLine.IndexOf("@main", StringComparison.Ordinal) + 1;
         await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(refStartColumn);
         await Assert.That(diagnostic.Location.EndColumn).IsEqualTo(refStartColumn + "@main".Length);
+    }
+
+    [Test]
+    public async Task LintEngine_UnpinnedUsesRule_ReusableWorkflow_MessageIncludesUsesPath()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                release:
+                    uses: owner/repo/.github/workflows/reusable.yml@main
+            """);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-uses-path.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
+
+        // Message should include jobs.'<id>'.uses path segment
+        await Assert.That(diagnostic.Message).Contains("jobs.'release'.uses");
     }
 
     [Test]

@@ -148,7 +148,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             {
                 AddJobError(
                     job,
-                    $"jobs.'{jobId}' local reusable workflow uses must not contain '@ref'",
+                    $"jobs.'{jobId}'.uses local reusable workflow uses must not contain '@ref'",
                     BuildUsesLocation(workflowCall));
             }
 
@@ -278,7 +278,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
             AddJobError(
                 job,
-                $"jobs.'{jobId}'.input '{expected.Name}' expects boolean but got '{valueText}'",
+                $"jobs.'{jobId}'.with '{expected.Name}' expects boolean but got '{valueText}'",
                 Arena.GetStringRange(value));
             return;
         }
@@ -292,7 +292,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
             AddJobError(
                 job,
-                $"jobs.'{jobId}'.input '{expected.Name}' expects number but got '{valueText}'",
+                $"jobs.'{jobId}'.with '{expected.Name}' expects number but got '{valueText}'",
                 Arena.GetStringRange(value));
         }
     }
