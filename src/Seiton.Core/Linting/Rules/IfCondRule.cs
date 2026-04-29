@@ -42,14 +42,42 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         }
 
         // For block scalars (trailing \n), report at the block indicator position (same line as if: key)
-        // instead of the content position (next line). The indicator `|` or `>` is at keyCol + 4 ("if: ").
+        // instead of the content position (next line). Scan backward from content start to find | or >.
         var diagRange = Arena.GetStringRange(condition);
         if (raw[raw.Length - 1] == (byte)'\n' && ifKeyRange is { } kr)
         {
-            const int indicatorOffsetFromKeyStart = 4; // "if" (2) + ": " (2)
-            var indicatorStart = kr.Start + indicatorOffsetFromKeyStart;
-            var indicatorCol = kr.StartColumn + indicatorOffsetFromKeyStart;
-            diagRange = new TextRange(indicatorStart, 1, kr.StartLine, indicatorCol, kr.StartLine, indicatorCol + 1);
+            var yaml = Config.Utf8Yaml;
+            var contentStart = diagRange.Start;
+            var indicatorPos = -1;
+
+            // Scan backward from content start past whitespace/newlines to find | or >
+            for (var i = contentStart - 1; i >= kr.Start; i--)
+            {
+                var b = yaml[i];
+                if (b == (byte)'|' || b == (byte)'>')
+                {
+                    indicatorPos = i;
+                    break;
+                }
+
+                if (b != (byte)' ' && b != (byte)'\n' && b != (byte)'\r' && b != (byte)'-' && b != (byte)'+' && !(b >= (byte)'0' && b <= (byte)'9'))
+                {
+                    break; // Not part of indicator syntax, bail out
+                }
+            }
+
+            if (indicatorPos >= 0)
+            {
+                // Compute column by finding line start
+                var lineStart = indicatorPos;
+                while (lineStart > 0 && yaml[lineStart - 1] != (byte)'\n')
+                {
+                    lineStart--;
+                }
+
+                var indicatorCol = indicatorPos - lineStart + 1; // 1-based
+                diagRange = new TextRange(indicatorPos, 1, kr.StartLine, indicatorCol, kr.StartLine, indicatorCol + 1);
+            }
         }
 
         // Detect "always true" pattern: value contains ${{ }} but has extra characters around it.

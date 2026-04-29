@@ -119,6 +119,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         var maxDistance = Math.Max(2, unknownInput.Length / 3);
         string? best = null;
         var bestDistance = int.MaxValue;
+        var tied = false;
 
         for (var i = 0; i < inputNames.Length; i++)
         {
@@ -128,9 +129,15 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
             {
                 bestDistance = distance;
                 best = candidate;
+                tied = false;
+            }
+            else if (distance == bestDistance && distance <= maxDistance)
+            {
+                tied = true;
             }
         }
 
-        return best;
+        // When multiple candidates are equally close, suppress the suggestion
+        return tied ? null : best;
     }
 }
