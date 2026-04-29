@@ -566,7 +566,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-type.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: true", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event \"true\"", StringComparison.Ordinal) && x.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal))).IsTrue();
 
         var yaml2 = NormalizeEol("""
         on: &a ref
@@ -574,7 +574,7 @@ public sealed class ParserTests
         """);
 
         var result2 = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml2), "on-type2.yml");
-        await Assert.That(result2.Diagnostics.Any(x => x.Message.Contains("unknown event in on: ref", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result2.Diagnostics.Any(x => x.Message.Contains("unknown event \"ref\"", StringComparison.Ordinal) && x.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -771,7 +771,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-scalar.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: unknown_event", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event \"unknown_event\"", StringComparison.Ordinal) && x.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -784,7 +784,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-sequence.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event in on: unknown_event", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event \"unknown_event\"", StringComparison.Ordinal) && x.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1902,7 +1902,7 @@ public sealed class ParserTests
         var expectations = new[]
         {
             new ErrFixtureExpectation("empty.yaml", ["workflow root must be object"]),
-            new ErrFixtureExpectation("empty_on.yaml", ["unknown event in on"]),
+            new ErrFixtureExpectation("empty_on.yaml", ["unknown event"]),
             new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "jobs.'test1' unexpected key"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
