@@ -251,6 +251,49 @@ function uint8ToBase64(buf) {
     return btoa(binary);
 }
 
+/** Typical https? URLs in prose (excluding spaces and angle brackets / parens in path edge cases). */
+const URL_SPLIT_RE = /https?:\/\/[^\s<>()]+/gi;
+
+/**
+ * Turns http(s) substrings into links under `parent`; row clicks are not propagated from links.
+ * @param {HTMLElement} parent
+ * @param {string} [text]
+ */
+function appendTextLinkifyingUrls(parent, text) {
+    const s = String(text ?? '');
+    const matches = [...s.matchAll(URL_SPLIT_RE)];
+    if (matches.length === 0) {
+        parent.appendChild(document.createTextNode(s));
+        return;
+    }
+    let sliceFrom = 0;
+    for (const m of matches) {
+        const full = m[0];
+        const start = /** @type {number} */ (m.index);
+        if (start > sliceFrom) {
+            parent.appendChild(document.createTextNode(s.slice(sliceFrom, start)));
+        }
+        sliceFrom = start + full.length;
+        const hrefRaw = full.replace(/[).,;:!?]+$/g, '');
+        const a = document.createElement('a');
+        a.className = 'result-link';
+        try {
+            a.href = new URL(hrefRaw).href;
+        } catch {
+            parent.appendChild(document.createTextNode(full));
+            continue;
+        }
+        a.textContent = full;
+        a.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+        });
+        parent.appendChild(a);
+    }
+    if (sliceFrom < s.length) {
+        parent.appendChild(document.createTextNode(s.slice(sliceFrom)));
+    }
+}
+
 function runLint() {
     const source = editor.getValue();
     const filePath = getSelectedFilePath();
@@ -306,7 +349,7 @@ function renderResults(diagnostics) {
         row.appendChild(posCell);
 
         const descCell = document.createElement('td');
-        descCell.appendChild(document.createTextNode(diag.message ?? ''));
+        appendTextLinkifyingUrls(descCell, diag.message ?? '');
         if (diag.fixable) {
             const fx = document.createElement('span');
             fx.className = 'fix-chip';
@@ -333,12 +376,13 @@ function renderResults(diagnostics) {
 }
 
 function clearError() {
-    errorMsg.textContent = '';
+    errorMsg.replaceChildren();
     errorMsg.style.display = 'none';
 }
 
 function showError(message) {
-    errorMsg.textContent = message;
+    errorMsg.replaceChildren();
+    appendTextLinkifyingUrls(errorMsg, message ?? '');
     errorMsg.style.display = 'block';
     successMsg.style.display = 'none';
     resultTable.hidden = true;
