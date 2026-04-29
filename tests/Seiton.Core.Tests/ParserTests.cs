@@ -4923,6 +4923,8 @@ public sealed class ParserTests
         // Must say "step id should not be empty", NOT "must be string"
         await Assert.That(diag.Message).Contains("step id should not be empty");
         await Assert.That(diag.Message).DoesNotContain("must be string");
+        // Must include job/step prefix for actionability
+        await Assert.That(diag.Message).Contains("jobs.'test'.steps[1]");
     }
 
     // regression: Utf8Slice internal representation must not leak into error messages
