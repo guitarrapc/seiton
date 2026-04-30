@@ -35,6 +35,8 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         {
             string[]? inputNames = null;
             string? availableInputs = null;
+            var url = ActionRefHelpers.BuildGitHubUrl(actionName);
+            var urlSuffix = url is not null ? $" see {url}" : "";
 
             foreach (var pair in inputs)
             {
@@ -56,8 +58,6 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 inputNames ??= actionSpec.GetInputNames();
                 var suggestion = FindClosestInput(unknownInputName, inputNames);
                 availableInputs ??= FormatAvailableInputs(inputNames);
-                var url = ActionRefHelpers.BuildGitHubUrl(actionName);
-                var urlSuffix = url is not null ? $" see {url}" : "";
                 var unknownMessage = suggestion is not null
                     ? $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}. did you mean '{suggestion}'?{urlSuffix}"
                     : $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}.{urlSuffix}";
