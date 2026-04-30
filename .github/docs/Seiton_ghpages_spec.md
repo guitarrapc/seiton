@@ -275,18 +275,16 @@ function runLint() {
         const diagnostics = JSON.parse(json);
         renderResults(diagnostics);
     } catch (err) {
-        showError(err.message);
+        showToast(err.message, 'error');
     }
 }
 
 function renderResults(diagnostics) {
     const body = document.getElementById('lint-result-body');
     const successMsg = document.getElementById('success-msg');
-    const errorMsg = document.getElementById('error-msg');
 
     body.textContent = '';
     editor.clearGutter('error-marker');
-    errorMsg.style.display = 'none';
 
     if (diagnostics.length === 0) {
         successMsg.style.display = 'block';
@@ -329,10 +327,8 @@ function renderResults(diagnostics) {
     }
 }
 
-function showError(message) {
-    const el = document.getElementById('error-msg');
-    el.textContent = message;
-    el.style.display = 'block';
+function showToast(message, variant = 'info') {
+    /* 画面上部の固定スタック（`#toast-stack`）へ表示。実装は `wwwroot/main.js` */
 }
 
 function getSelectedFilePath() {
@@ -414,9 +410,9 @@ runLint();
           </button>
           <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
             <input type="url" id="url-input" aria-label="YAML URL" placeholder="https://…"/>
-            <button id="fetch-btn" type="button" class="toolbar-icon-btn"
-                    title="Fetch and lint YAML from this URL"
-                    aria-label="Fetch and lint YAML from this URL">
+            <button id="fetch-btn" type="button" class="toolbar-icon-btn" disabled
+                    title="Enter a YAML URL first"
+                    aria-label="Fetch and lint YAML — enter a URL first">
               <svg class="toolbar-icon-btn__svg" viewBox="0 0 24 24" aria-hidden="true"><!-- 虫眼鏡 path は同上 --></svg>
             </button>
           </span>
@@ -427,6 +423,7 @@ runLint();
         </select>
       </div>
     </nav>
+    <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
     <main>
       <section id="linter">
         <div id="editor" class="split-pane"></div>
@@ -435,7 +432,6 @@ runLint();
           <table id="lint-result" class="table">
             <tbody id="lint-result-body"></tbody>
           </table>
-          <div id="error-msg" class="notification" style="display:none"></div>
           <div id="success-msg" class="notification" style="display:none">No errors found.</div>
         </div>
       </section>
@@ -630,7 +626,8 @@ actionlint playground を参照し、以下の機能を実装する:
 | 機能 | 説明 |
 |---|---|
 | 共有 URL（permalink） | `#permalink-btn`。**ラベルは共有（アップロード風）SVG アイコンのみ** — `title` / `aria-label` で説明。クリック後に `history.replaceState` で hash を更新しつつ、**完全な現在ページ URL（`location.href`）をクリップボードへコピー**（同期の一時 `textarea` + `execCommand('copy')` を優先し、無効時は `navigator.clipboard.writeText`。いずれも拒否時はユーザーにアドレスバーからコピーできる旨をツールチップで示す）。DOM id は後方互換のため `permalink-btn`。 |
-| GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**で、`title` / `aria-label` で操作説明。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。 |
+| GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**で、URL が空の間は **`disabled`**・`title` / `aria-label` は「先に URL を入れる」旨。入力に応じて `main.js` が有効化。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。HTTP 失敗・HTML 返却・無効 URL などは **結果ペインを伏せない** で、画面上部 **`#toast-stack` のトースト**（クリックで閉じる・自動消失）で知らせる。成功時もトーストで「読み込み完了」を短く通知してよい。 |
+| トースト（診断パネルとは独立） | WASM / 共有 / fetch / Apply fixes などで **lint 結果テーブルの表示を崩さない**。`RunLint` が例外を投げたときも直前の診断を残し、メッセージはトーストのみ。`role="alert"`（error）/ `status`（成功・その他）。スタイルは `style.css` の `.toast-stack` / `.toast--*`。 |
 | severity フィルター | error/warning/info の表示切替 |
 
 ### 8.3 カラーテーマ（ライト / ダーク）

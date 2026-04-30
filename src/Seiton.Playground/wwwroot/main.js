@@ -162,7 +162,7 @@ const loading = document.getElementById('loading');
 const resultTable = document.getElementById('lint-result');
 const resultBody = document.getElementById('lint-result-body');
 const successMsg = document.getElementById('success-msg');
-const errorMsg = document.getElementById('error-msg');
+const toastStack = document.getElementById('toast-stack');
 const fileSelect = document.getElementById('filetype-select');
 const sampleSelect = document.getElementById('sample-select');
 const permalinkBtn = document.getElementById('permalink-btn');
@@ -172,6 +172,75 @@ const permalinkDoneNoClipboard = 'URL updated — copy from address bar if clipb
 const applyFixesBtn = document.getElementById('apply-fixes-btn');
 const urlInput = document.getElementById('url-input');
 const fetchBtn = document.getElementById('fetch-btn');
+
+/** @typedef {'error'|'success'|'info'} ToastVariant */
+
+const FETCH_READY_TITLE = 'Fetch and lint YAML from this URL';
+const FETCH_READY_LABEL = 'Fetch and lint YAML from this URL';
+const FETCH_EMPTY_TITLE = 'Enter a YAML URL first';
+const FETCH_EMPTY_LABEL = 'Fetch and lint YAML — enter a URL first';
+
+/** @type {Record<ToastVariant, number>} */
+const TOAST_DURATION_MS = { error: 8000, success: 3800, info: 4200 };
+
+/**
+ * Toast at top of viewport; does not clear lint diagnostics.
+ * @param {string} message
+ * @param {ToastVariant} [variant]
+ * @param {number} [durationMs]
+ */
+function showToast(message, variant = 'info', durationMs) {
+    const stack = toastStack;
+    if (!stack) return;
+    const ms = durationMs ?? TOAST_DURATION_MS[variant] ?? TOAST_DURATION_MS.info;
+
+    const el = document.createElement('div');
+    el.className = `toast toast--${variant}`;
+    el.setAttribute('role', variant === 'error' ? 'alert' : 'status');
+    el.title = 'Dismiss';
+    appendTextLinkifyingUrls(el, message ?? '');
+
+    stack.appendChild(el);
+    requestAnimationFrame(() => {
+        el.classList.add('toast--show');
+    });
+
+    let hideTimer = window.setTimeout(() => removeToastElement(el), ms);
+    const dismiss = () => {
+        window.clearTimeout(hideTimer);
+        hideTimer = 0;
+        removeToastElement(el);
+    };
+    el.addEventListener('click', dismiss);
+}
+
+/** @param {HTMLElement} el */
+function removeToastElement(el) {
+    if (!el?.parentElement || el.dataset.toastClosing) return;
+    el.dataset.toastClosing = '1';
+    el.classList.remove('toast--show');
+    el.classList.add('toast--out');
+    window.setTimeout(() => {
+        try {
+            el.remove();
+        } catch {
+            /* ignore */
+        }
+    }, 240);
+}
+
+function syncFetchButtonEnabled() {
+    if (!fetchBtn || !urlInput) return;
+    const hasUrl = (urlInput.value ?? '').trim().length > 0;
+    fetchBtn.disabled = !hasUrl;
+    if (hasUrl) {
+        fetchBtn.title = FETCH_READY_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_READY_LABEL);
+    } else {
+        fetchBtn.title = FETCH_EMPTY_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_EMPTY_LABEL);
+    }
+}
 
 const editor = CodeMirror(document.getElementById('editor'), {
     mode: 'yaml',
@@ -333,7 +402,7 @@ permalinkBtn.addEventListener('click', () => {
         }
         schedulePermalinkFeedback(false);
     } catch (e) {
-        showError(e?.message ?? String(e));
+        showToast(e?.message ?? String(e), 'error');
     }
 });
 
@@ -348,24 +417,30 @@ applyFixesBtn.addEventListener('click', () => {
         applyFixesBtn.hidden = true;
         runLint();
     } catch (e) {
-        showError(e?.message ?? String(e));
+        showToast(e?.message ?? String(e), 'error');
     }
 });
 
 fetchBtn.addEventListener('click', () => fetchAndLint());
-urlInput.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') {
-        fetchAndLint();
-    }
-});
+if (urlInput) {
+    urlInput.addEventListener('input', syncFetchButtonEnabled);
+    /** Paste updates value asynchronously; next frame picks up pasted URL. */
+    urlInput.addEventListener('paste', () => {
+        requestAnimationFrame(() => syncFetchButtonEnabled());
+    });
+    urlInput.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+            fetchAndLint();
+        }
+    });
+}
+syncFetchButtonEnabled();
 
 async function fetchAndLint() {
     const raw = urlInput?.value?.trim() ?? '';
     if (!raw) {
-        showError('Paste a URL first.');
         return;
     }
-    clearError();
     fetchBtn.disabled = true;
     try {
         const fetchUrl = normalizeGitHubBlobToRaw(raw);
@@ -381,10 +456,11 @@ async function fetchAndLint() {
         editor.setValue(text);
         editor.refresh();
         runLint();
+        showToast('Loaded YAML from URL.', 'success');
     } catch (e) {
-        showError(e?.message ?? String(e));
+        showToast(e?.message ?? String(e), 'error');
     } finally {
-        fetchBtn.disabled = false;
+        syncFetchButtonEnabled();
     }
 }
 
@@ -472,9 +548,8 @@ function runLint() {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
         renderResults(diagnostics);
-        clearError();
     } catch (err) {
-        showError(err?.message ?? String(err));
+        showToast(err?.message ?? String(err), 'error');
     }
 }
 
@@ -544,20 +619,6 @@ function renderResults(diagnostics) {
         marker.textContent = '●';
         editor.setGutterMarker(lineIndex, 'error-marker', marker);
     }
-}
-
-function clearError() {
-    errorMsg.replaceChildren();
-    errorMsg.style.display = 'none';
-}
-
-function showError(message) {
-    errorMsg.replaceChildren();
-    appendTextLinkifyingUrls(errorMsg, message ?? '');
-    errorMsg.style.display = 'block';
-    successMsg.style.display = 'none';
-    resultTable.hidden = true;
-    applyFixesBtn.hidden = true;
 }
 
 function getSelectedFilePath() {

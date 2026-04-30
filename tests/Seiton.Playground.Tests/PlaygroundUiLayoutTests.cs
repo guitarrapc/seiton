@@ -162,8 +162,9 @@ public sealed class PlaygroundUiLayoutTests
             "M16 5.63636L14.58 6.92727",
             StringComparison.Ordinal);
         await Assert.That(html).Contains(
-            "Fetch and lint YAML from this URL",
+            "Fetch and lint YAML — enter a URL first",
             StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"toast-stack\"", StringComparison.Ordinal);
     }
 
     private static async Task GotoPlaygroundAndWaitForLinterGridAsync(IPage page, string baseUrl)

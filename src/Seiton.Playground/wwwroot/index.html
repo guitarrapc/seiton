@@ -91,9 +91,9 @@
         <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
           <input type="url" id="url-input" aria-label="YAML URL" autocomplete="off" spellcheck="false"
                  placeholder="https://raw GitHub/Gist YAML URL"/>
-          <button id="fetch-btn" type="button" class="toolbar-icon-btn"
-                  title="Fetch and lint YAML from this URL"
-                  aria-label="Fetch and lint YAML from this URL">
+          <button id="fetch-btn" type="button" class="toolbar-icon-btn" disabled
+                  title="Enter a YAML URL first"
+                  aria-label="Fetch and lint YAML — enter a URL first">
             <svg class="toolbar-icon-btn__svg" fill="currentColor" viewBox="0 0 24 24" width="24" height="24"
                  xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path fill="currentColor"
@@ -124,6 +124,7 @@
       </div>
     </div>
   </nav>
+  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
   <main>
     <section id="linter">
       <div id="editor-wrap" class="split-pane">
@@ -141,7 +142,6 @@
         <table id="lint-result" class="result-table" hidden>
           <tbody id="lint-result-body"></tbody>
         </table>
-        <div id="error-msg" class="notification error" style="display:none"></div>
         <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
       </div>
     </section>

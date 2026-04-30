@@ -228,6 +228,71 @@ main {
   box-shadow: var(--header-shadow);
 }
 
+/* Top-of-viewport toasts (fetch errors, success, interop errors) */
+.toast-stack {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(36rem, calc(100% - 1.25rem));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  margin: 0;
+  padding: 0.55rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  cursor: pointer;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--border-pane);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.toast--show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast--out {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition-duration: 0.2s;
+}
+
+.toast--error {
+  background: var(--notification-error-bg);
+  color: var(--notification-error-fg);
+  border-left: 3px solid var(--danger);
+}
+
+.toast--success {
+  background: var(--notification-success-bg);
+  color: var(--notification-success-fg);
+}
+
+.toast--info {
+  background: var(--results-surface);
+  color: var(--text);
+}
+
+.toast .result-link {
+  color: var(--result-link-notification);
+}
+
 #header-bar header {
   flex: 0 1 auto;
   min-width: 0;
