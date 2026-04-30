@@ -1,4 +1,4 @@
-// on.repository_dispatch — types and options.
+﻿// on.repository_dispatch — types and options.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;

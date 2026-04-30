@@ -217,16 +217,16 @@ public static partial class WorkflowParser
                         type = ParseDispatchInputType(ref reader, arena, diagnostics);
                         continue;
                     case WorkflowDispatchInputFieldKey.Options:
-                    {
-                        var optSeqMark = reader.CurrentStart;
-                        var inputName = Encoding.UTF8.GetString(arena.GetStringValue(nameNode));
-                        options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
-                        if (optErr)
-                            AddError(diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
-                        else if (options is { Length: 0 })
-                            AddError(diagnostics, "\"options\" section should not be empty", optSeqMark);
-                        continue;
-                    }
+                        {
+                            var optSeqMark = reader.CurrentStart;
+                            var inputName = Encoding.UTF8.GetString(arena.GetStringValue(nameNode));
+                            options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
+                            if (optErr)
+                                AddError(diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
+                            else if (options is { Length: 0 })
+                                AddError(diagnostics, "\"options\" section should not be empty", optSeqMark);
+                            continue;
+                        }
                     default:
                         if (!reader.End)
                         {

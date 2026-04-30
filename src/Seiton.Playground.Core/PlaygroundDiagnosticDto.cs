@@ -1,4 +1,4 @@
-namespace Seiton.Playground;
+﻿namespace Seiton.Playground;
 
 /// <summary>JSON-serializable diagnostic for the browser playground UI.</summary>
 public sealed class PlaygroundDiagnosticDto

@@ -1,6 +1,4 @@
-using TUnit.Core;
-
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 /// <summary>
 /// Ensures Playwright static session teardown is safe to invoke repeatedly (assembly hook + process-exit fallback).

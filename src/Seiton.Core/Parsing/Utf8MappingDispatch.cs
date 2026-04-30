@@ -8,9 +8,9 @@ namespace Seiton.Core.Parsing;
 /// </summary>
 internal interface IUtf8OrderedKeyTable
 {
-    static abstract int KeyCount { get; }
+    public abstract static int KeyCount { get; }
 
-    static abstract ReadOnlySpan<byte> Utf8Key(int ordinal);
+    public abstract static ReadOnlySpan<byte> Utf8Key(int ordinal);
 }
 
 /// <summary>

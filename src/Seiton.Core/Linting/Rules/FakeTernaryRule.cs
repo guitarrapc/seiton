@@ -1,8 +1,6 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
-using static Seiton.Core.Parsing.SpanHelpers;
-
 namespace Seiton.Core.Linting.Rules;
 
 /// <summary>Flags the <c>&amp;&amp; ... || ...</c> fake ternary pattern which has surprising short-circuit behavior.</summary>

@@ -1,4 +1,4 @@
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 internal static class RepoPaths
 {

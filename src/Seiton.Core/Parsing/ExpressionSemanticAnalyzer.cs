@@ -3,7 +3,6 @@ using System.Text.Json;
 using Seiton.Core.Generated;
 
 using static Seiton.Core.Parsing.SpanHelpers;
-using static Seiton.Core.Parsing.ExpressionScanHelpers;
 
 namespace Seiton.Core.Parsing;
 

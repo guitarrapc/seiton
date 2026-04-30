@@ -11,7 +11,7 @@ namespace Seiton.Core.Linting.OnlineAudit;
 public interface IActionRefResolver
 {
     /// <summary>Resolves a GitHub Actions reference to determine commit existence, branch, and tag status.</summary>
-    Task<ActionRefResolution> ResolveAsync(
+    public Task<ActionRefResolution> ResolveAsync(
         string owner,
         string repo,
         string reference,

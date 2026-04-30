@@ -4,7 +4,7 @@
 public interface IActionAdvisoryProvider
 {
     /// <summary>Retrieves a security advisory for the specified action reference, if one exists.</summary>
-    Task<ActionAdvisory?> GetAdvisoryAsync(
+    public Task<ActionAdvisory?> GetAdvisoryAsync(
         string owner,
         string repo,
         string reference,

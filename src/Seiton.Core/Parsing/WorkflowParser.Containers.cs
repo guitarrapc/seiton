@@ -258,23 +258,23 @@ public static partial class WorkflowParser
                         continue;
                     case ContainerMappingKey.Ports:
                     case ContainerMappingKey.Volumes:
-                    {
-                        var pvKey = ck == ContainerMappingKey.Ports ? "ports" : "volumes";
-                        if (reader.CurrentKind == YamlEventKind.Scalar)
                         {
-                            // Ports/volumes require sequence, not scalar
-                            var pvTag = reader.GetScalarTag();
-                            var pvTagStr = pvTag == ScalarTag.Int ? "!!int" : "!!str";
-                            AddError(diagnostics, $"\"{pvKey}\" section must be sequence node but got scalar node with \"{pvTagStr}\" tag", reader.CurrentStart);
-                            reader.Read();
-                        }
-                        else
-                        {
-                            var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark, allowElemEmpty: true, emptyElementMessage: $"\"container\" {pvKey} element should not be empty");
-                            if (pvErr)
+                            var pvKey = ck == ContainerMappingKey.Ports ? "ports" : "volumes";
+                            if (reader.CurrentKind == YamlEventKind.Scalar)
                             {
-                                AddError(diagnostics, $"\"container\" {pvKey} element must be a string", pvMark);
+                                // Ports/volumes require sequence, not scalar
+                                var pvTag = reader.GetScalarTag();
+                                var pvTagStr = pvTag == ScalarTag.Int ? "!!int" : "!!str";
+                                AddError(diagnostics, $"\"{pvKey}\" section must be sequence node but got scalar node with \"{pvTagStr}\" tag", reader.CurrentStart);
+                                reader.Read();
                             }
+                            else
+                            {
+                                var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark, allowElemEmpty: true, emptyElementMessage: $"\"container\" {pvKey} element should not be empty");
+                                if (pvErr)
+                                {
+                                    AddError(diagnostics, $"\"container\" {pvKey} element must be a string", pvMark);
+                                }
                                 if (ck == ContainerMappingKey.Ports)
                                 {
                                     ports = pvValues;
@@ -283,9 +283,9 @@ public static partial class WorkflowParser
                                 {
                                     volumes = pvValues;
                                 }
+                            }
+                            continue;
                         }
-                        continue;
-                    }
                     case ContainerMappingKey.Options:
                         if (reader.CurrentKind != YamlEventKind.Scalar)
                         {
@@ -434,7 +434,8 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))            {
+            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))
+            {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
                 continue;

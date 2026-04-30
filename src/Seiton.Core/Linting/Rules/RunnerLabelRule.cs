@@ -360,72 +360,72 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             switch (value)
             {
                 case RawYamlString scalar:
-                {
-                    if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
                     {
-                        continue;
-                    }
+                        if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                        {
+                            continue;
+                        }
 
-                    var labelUtf8 = Arena.GetStringValue(scalar.Value);
-                    if (labelUtf8.IsEmpty
-                        || RunnerLabels.IsKnownHostedLabel(labelUtf8)
-                        || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8)
-                        || IsAdditionalKnownHostedLabel(labelUtf8))
-                    {
-                        continue;
-                    }
+                        var labelUtf8 = Arena.GetStringValue(scalar.Value);
+                        if (labelUtf8.IsEmpty
+                            || RunnerLabels.IsKnownHostedLabel(labelUtf8)
+                            || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8)
+                            || IsAdditionalKnownHostedLabel(labelUtf8))
+                        {
+                            continue;
+                        }
 
-                    var labelText = Decode(Arena.GetStringSlice(scalar.Value));
-                    AddJobWarning(job, BuildUnknownLabelMessage(labelText), Arena.GetStringRange(scalar.Value));
-                    break;
-                }
+                        var labelText = Decode(Arena.GetStringSlice(scalar.Value));
+                        AddJobWarning(job, BuildUnknownLabelMessage(labelText), Arena.GetStringRange(scalar.Value));
+                        break;
+                    }
 
                 case RawYamlArray array:
-                {
-                    // If any element is "self-hosted", the whole entry is self-hosted runner labels
-                    var hasSelfHosted = false;
-                    for (var j = 0; j < array.Items.Count; j++)
                     {
-                        if (array.Items[j] is RawYamlString item && RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(item.Value)))
+                        // If any element is "self-hosted", the whole entry is self-hosted runner labels
+                        var hasSelfHosted = false;
+                        for (var j = 0; j < array.Items.Count; j++)
                         {
-                            hasSelfHosted = true;
-                            break;
+                            if (array.Items[j] is RawYamlString item && RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(item.Value)))
+                            {
+                                hasSelfHosted = true;
+                                break;
+                            }
                         }
-                    }
 
-                    if (hasSelfHosted)
-                    {
-                        continue;
-                    }
-
-                    // Validate each element
-                    for (var j = 0; j < array.Items.Count; j++)
-                    {
-                        if (array.Items[j] is not RawYamlString element)
+                        if (hasSelfHosted)
                         {
                             continue;
                         }
 
-                        if (ExpressionScanHelpers.ContainsExpressionMarker(element.Value, Arena))
+                        // Validate each element
+                        for (var j = 0; j < array.Items.Count; j++)
                         {
-                            continue;
+                            if (array.Items[j] is not RawYamlString element)
+                            {
+                                continue;
+                            }
+
+                            if (ExpressionScanHelpers.ContainsExpressionMarker(element.Value, Arena))
+                            {
+                                continue;
+                            }
+
+                            var elemUtf8 = Arena.GetStringValue(element.Value);
+                            if (elemUtf8.IsEmpty
+                                || RunnerLabels.IsKnownHostedLabel(elemUtf8)
+                                || RunnerLabels.IsSelfHostedPresetLabel(elemUtf8)
+                                || IsAdditionalKnownHostedLabel(elemUtf8))
+                            {
+                                continue;
+                            }
+
+                            var elemText = Decode(Arena.GetStringSlice(element.Value));
+                            AddJobWarning(job, BuildUnknownLabelMessage(elemText), Arena.GetStringRange(element.Value));
                         }
 
-                        var elemUtf8 = Arena.GetStringValue(element.Value);
-                        if (elemUtf8.IsEmpty
-                            || RunnerLabels.IsKnownHostedLabel(elemUtf8)
-                            || RunnerLabels.IsSelfHostedPresetLabel(elemUtf8)
-                            || IsAdditionalKnownHostedLabel(elemUtf8))
-                        {
-                            continue;
-                        }
-
-                        var elemText = Decode(Arena.GetStringSlice(element.Value));
-                        AddJobWarning(job, BuildUnknownLabelMessage(elemText), Arena.GetStringRange(element.Value));
+                        break;
                     }
-
-                    break;
-                }
             }
         }
     }

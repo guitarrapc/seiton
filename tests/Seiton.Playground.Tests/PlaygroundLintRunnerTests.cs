@@ -1,5 +1,4 @@
-using System.Text.Json;
-using Seiton.Playground;
+﻿using System.Text.Json;
 
 namespace Seiton.Playground.Tests;
 

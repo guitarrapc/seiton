@@ -1,8 +1,6 @@
-﻿namespace Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing.Ast;
 
-using System.Collections.Generic;
-using Seiton.Core.Parsing.Ast;
-
+namespace Seiton.Core.Parsing;
 /// <summary>Severity level for parser and lint diagnostics.</summary>
 public enum DiagnosticSeverity
 {

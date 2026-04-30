@@ -1,6 +1,5 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.Playwright;
-using TUnit.Core;
 
 namespace Seiton.Playground.Tests;
 

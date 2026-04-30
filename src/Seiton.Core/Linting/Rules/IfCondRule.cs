@@ -3,8 +3,6 @@ using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
-using static Seiton.Core.Parsing.SpanHelpers;
-
 namespace Seiton.Core.Linting.Rules;
 
 /// <summary>Checks <c>if:</c> conditions for common mistakes (e.g. missing expression delimiters, always-true patterns).</summary>
@@ -202,64 +200,64 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
                 return ConstantResult.NullVal;
 
             case ExpressionNodeKind.NumberLiteral:
-            {
-                var numToken = node.Token.AsSpan(expression);
-                if (Utf8Parser.TryParse(numToken, out double d, out _))
                 {
-                    return ConstantResult.Num(d);
-                }
+                    var numToken = node.Token.AsSpan(expression);
+                    if (Utf8Parser.TryParse(numToken, out double d, out _))
+                    {
+                        return ConstantResult.Num(d);
+                    }
 
-                return ConstantResult.NotConst;
-            }
+                    return ConstantResult.NotConst;
+                }
 
             case ExpressionNodeKind.StringLiteral:
-            {
-                var strToken = node.Token.AsSpan(expression);
-                return ConstantResult.Str(Encoding.UTF8.GetString(strToken));
-            }
+                {
+                    var strToken = node.Token.AsSpan(expression);
+                    return ConstantResult.Str(Encoding.UTF8.GetString(strToken));
+                }
 
             case ExpressionNodeKind.Unary when node.Operator == ExpressionOperator.Not:
-            {
-                var child = TryEvaluateConstant(node.Left, nodes, arguments, expression);
-                if (!child.IsConstant)
                 {
-                    return ConstantResult.NotConst;
-                }
+                    var child = TryEvaluateConstant(node.Left, nodes, arguments, expression);
+                    if (!child.IsConstant)
+                    {
+                        return ConstantResult.NotConst;
+                    }
 
-                return ConstantResult.Bool(!child.IsTruthy);
-            }
+                    return ConstantResult.Bool(!child.IsTruthy);
+                }
 
             case ExpressionNodeKind.Binary when node.Operator == ExpressionOperator.And:
-            {
-                var left = TryEvaluateConstant(node.Left, nodes, arguments, expression);
-                if (!left.IsConstant)
                 {
-                    return ConstantResult.NotConst;
-                }
+                    var left = TryEvaluateConstant(node.Left, nodes, arguments, expression);
+                    if (!left.IsConstant)
+                    {
+                        return ConstantResult.NotConst;
+                    }
 
-                if (!left.IsTruthy)
-                {
-                    return left; // short-circuit: falsy && x → falsy
-                }
+                    if (!left.IsTruthy)
+                    {
+                        return left; // short-circuit: falsy && x → falsy
+                    }
 
-                return TryEvaluateConstant(node.Right, nodes, arguments, expression);
-            }
+                    return TryEvaluateConstant(node.Right, nodes, arguments, expression);
+                }
 
             case ExpressionNodeKind.Binary when node.Operator == ExpressionOperator.Or:
-            {
-                var left = TryEvaluateConstant(node.Left, nodes, arguments, expression);
-                if (!left.IsConstant)
                 {
-                    return ConstantResult.NotConst;
-                }
+                    var left = TryEvaluateConstant(node.Left, nodes, arguments, expression);
+                    if (!left.IsConstant)
+                    {
+                        return ConstantResult.NotConst;
+                    }
 
-                if (left.IsTruthy)
-                {
-                    return left; // short-circuit: truthy || x → truthy
-                }
+                    if (left.IsTruthy)
+                    {
+                        return left; // short-circuit: truthy || x → truthy
+                    }
 
-                return TryEvaluateConstant(node.Right, nodes, arguments, expression);
-            }
+                    return TryEvaluateConstant(node.Right, nodes, arguments, expression);
+                }
 
             case ExpressionNodeKind.FunctionCall:
                 return TryEvaluateConstantFunction(node, nodes, arguments, expression);

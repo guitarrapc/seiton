@@ -1,6 +1,4 @@
-using Seiton.Playground;
-
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 public sealed class PlaygroundBuildInfoTests
 {

@@ -12,11 +12,11 @@ public interface IOnlineRule : IRule
     /// <summary>
     /// Targets collected during the most recent visitor traversal.
     /// </summary>
-    IReadOnlyList<ActionAuditTarget> CollectedTargets { get; }
+    public IReadOnlyList<ActionAuditTarget> CollectedTargets { get; }
 
     /// <summary>
     /// Evaluate a single resolved target and add diagnostics if applicable.
     /// Called by <see cref="OnlineAuditEngine"/> after async resolution.
     /// </summary>
-    void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution);
+    public void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution);
 }
