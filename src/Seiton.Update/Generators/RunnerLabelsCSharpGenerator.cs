@@ -1,9 +1,10 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 using Seiton.Update.Model;
 
 namespace Seiton.Update.Generators;
 
-internal sealed class RunnerLabelsCSharpGenerator
+internal sealed partial class RunnerLabelsCSharpGenerator
 {
     public string Generate(RunnerLabelsModel model)
     {
@@ -24,10 +25,16 @@ internal sealed class RunnerLabelsCSharpGenerator
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-runner-labels");
 
-        // Build the full label list string for diagnostic messages (hosted + self-hosted presets)
+        // Categorize labels for diagnostic messages
         var selfHostedPresets = new[] { "self-hosted", "x64", "arm", "arm64", "linux", "macos", "windows" };
-        var allLabels = stable.Concat(preview).Concat(selfHostedPresets).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
-        var labelListStr = string.Join(", ", allLabels.Select(static l => $"\\\"" + l + "\\\""));
+
+        var allHosted = stable.Concat(preview).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        var largerLabels = allHosted.Where(IsLargerRunnerLabel).ToArray();
+        var standardLabels = allHosted.Where(l => !IsLargerRunnerLabel(l)).ToArray();
+
+        var standardListStr = string.Join(", ", standardLabels.Select(static l => $"\\\"" + l + "\\\""));
+        var largerListStr = string.Join(", ", largerLabels.Select(static l => $"\\\"" + l + "\\\""));
+        var selfHostedListStr = string.Join(", ", selfHostedPresets.OrderBy(static x => x, StringComparer.Ordinal).Select(static l => $"\\\"" + l + "\\\""));
 
         sb.AppendLine(
             $$"""
@@ -35,8 +42,14 @@ internal sealed class RunnerLabelsCSharpGenerator
 
             internal static class RunnerLabels
             {
-                /// <summary>Comma-separated list of all known hosted runner labels for diagnostic messages.</summary>
-                internal const string KnownHostedLabelList = "{{labelListStr}}";
+                /// <summary>Comma-separated list of standard hosted runner labels for diagnostic messages.</summary>
+                internal const string HostedLabelList = "{{standardListStr}}";
+
+                /// <summary>Comma-separated list of larger runner labels for diagnostic messages.</summary>
+                internal const string LargerLabelList = "{{largerListStr}}";
+
+                /// <summary>Comma-separated list of self-hosted preset labels for diagnostic messages.</summary>
+                internal const string SelfHostedPresetLabelList = "{{selfHostedListStr}}";
 
                 internal static bool IsKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
                 {
@@ -149,4 +162,14 @@ internal sealed class RunnerLabelsCSharpGenerator
 
         return TextNormalization.NormalizeToLf(sb.ToString());
     }
+
+    private static bool IsLargerRunnerLabel(string label)
+    {
+        return label.EndsWith("-large", StringComparison.Ordinal)
+            || label.EndsWith("-xlarge", StringComparison.Ordinal)
+            || LargerCoresRegex().IsMatch(label);
+    }
+
+    [GeneratedRegex(@"-\d+-cores$")]
+    private static partial Regex LargerCoresRegex();
 }

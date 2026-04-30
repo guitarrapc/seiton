@@ -78,7 +78,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             }
 
             var labelText = Decode(Arena.GetStringSlice(label));
-            AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(label));
+            AddJobWarning(job, BuildUnknownLabelMessage(labelText), Arena.GetStringRange(label));
         }
     }
 
@@ -297,6 +297,18 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         return additionalKnownHostedLabels.Contains(NormalizeAsciiLower(labelUtf8));
     }
 
+    private string BuildUnknownLabelMessage(string labelText)
+    {
+        var msg = $"label \"{labelText}\" is unknown. available labels are - hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}";
+        if (additionalKnownHostedLabels.Count > 0)
+        {
+            var customList = string.Join(", ", additionalKnownHostedLabels.OrderBy(static x => x, StringComparer.Ordinal).Select(static l => $"\"{l}\""));
+            msg += $". custom labels: {customList}";
+        }
+        msg += ". if it is a custom label for self-hosted runner, set list of labels in config file";
+        return msg;
+    }
+
     /// <summary>
     /// When <c>runs-on</c> is a single <c>${{ matrix.AXIS }}</c> expression,
     /// resolves the matrix dimension and validates each scalar value as a runner label.
@@ -364,7 +376,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                     }
 
                     var labelText = Decode(Arena.GetStringSlice(scalar.Value));
-                    AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(scalar.Value));
+                    AddJobWarning(job, BuildUnknownLabelMessage(labelText), Arena.GetStringRange(scalar.Value));
                     break;
                 }
 
@@ -409,7 +421,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                         }
 
                         var elemText = Decode(Arena.GetStringSlice(element.Value));
-                        AddJobWarning(job, $"label \"{elemText}\" is unknown. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(element.Value));
+                        AddJobWarning(job, BuildUnknownLabelMessage(elemText), Arena.GetStringRange(element.Value));
                     }
 
                     break;

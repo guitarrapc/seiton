@@ -13330,7 +13330,7 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RunnerLabelRule_UnknownLabel_ListsAllAvailableLabels()
     {
-        // The "unknown label" message should list all available labels, not truncate with "... and more".
+        // The "unknown label" message should categorize labels by type.
         var yaml = """
         on: push
         jobs:
@@ -13344,12 +13344,49 @@ public sealed class RuleInterfaceTests
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "unknown-label.yml");
 
         var runnerLabelDiag = result.Diagnostics.First(d => d.RuleId == "runner-label");
-        // Must NOT contain "... and more" truncation
-        await Assert.That(runnerLabelDiag.Message).DoesNotContain("... and more");
-        // Must contain actual labels like "windows-latest"
-        await Assert.That(runnerLabelDiag.Message).Contains("windows-latest");
-        // Must include self-hosted preset labels in the available list
+        // Must contain categorized sections
+        await Assert.That(runnerLabelDiag.Message).Contains("hosted runners:");
+        await Assert.That(runnerLabelDiag.Message).Contains("larger runners:");
+        await Assert.That(runnerLabelDiag.Message).Contains("self-hosted presets:");
+        // Hosted runners section should contain standard labels
+        await Assert.That(runnerLabelDiag.Message).Contains("\"ubuntu-latest\"");
+        await Assert.That(runnerLabelDiag.Message).Contains("\"windows-latest\"");
+        // Larger runners section should contain larger labels
+        await Assert.That(runnerLabelDiag.Message).Contains("\"macos-latest-xlarge\"");
+        await Assert.That(runnerLabelDiag.Message).Contains("\"ubuntu-latest-4-cores\"");
+        // Self-hosted presets section should contain self-hosted labels
         await Assert.That(runnerLabelDiag.Message).Contains("\"self-hosted\"");
+    }
+
+    [Test]
+    public async Task RunnerLabelRule_UnknownLabel_WithCustomLabels_ShowsCustomSection()
+    {
+        // When custom labels are configured, the message should show them in a separate section.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: nonexistent-runner
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "custom-label.yml",
+            new LintConfig
+            {
+                Rules = new Dictionary<string, RuleConfig>
+                {
+                    ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["my-custom-runner", "team-gpu"]) },
+                },
+            });
+
+        var runnerLabelDiag = result.Diagnostics.First(d => d.RuleId == "runner-label");
+        await Assert.That(runnerLabelDiag.Message).Contains("custom labels:");
+        await Assert.That(runnerLabelDiag.Message).Contains("\"my-custom-runner\"");
+        await Assert.That(runnerLabelDiag.Message).Contains("\"team-gpu\"");
     }
 
     [Test]
