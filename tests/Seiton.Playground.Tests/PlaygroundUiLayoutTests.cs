@@ -1,11 +1,13 @@
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
+using TUnit.Core;
 
 namespace Seiton.Playground.Tests;
 
 /// <summary>
 /// Browser-level layout checks against a locally published playground (real fingerprinted assets).
 /// </summary>
+[NotInParallel(PlaygroundUiTestHost.ParallelLockKey)]
 public sealed class PlaygroundUiLayoutTests
 {
     private static readonly Regex s_localStylesheetHref = new(@"href=""style[^""]*\.css""",
@@ -120,5 +122,28 @@ public sealed class PlaygroundUiLayoutTests
         var minDrop = Math.Max(40.0, editorBox!.Height * 0.25);
         await Assert.That((double)resultsBox!.Y).IsGreaterThan((double)editorBox.Y + minDrop);
         await Assert.That((double)Math.Abs(editorBox.X - resultsBox.X)).IsLessThanOrEqualTo(24.0);
+    }
+
+    /// <summary>
+    /// Called once per assembly from <see cref="PlaygroundUiTestAssemblyHooks"/> to avoid holding Chromium after the test run.
+    /// </summary>
+    internal static async Task DisposePlaywrightSessionAsync()
+    {
+        await s_browserGate.WaitAsync();
+        try
+        {
+            if (s_browser is not null)
+            {
+                await s_browser.DisposeAsync();
+                s_browser = null;
+            }
+
+            s_playwright?.Dispose();
+            s_playwright = null;
+        }
+        finally
+        {
+            s_browserGate.Release();
+        }
     }
 }

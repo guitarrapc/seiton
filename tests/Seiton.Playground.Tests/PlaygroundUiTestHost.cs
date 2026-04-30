@@ -13,10 +13,30 @@ namespace Seiton.Playground.Tests;
 /// </summary>
 internal static class PlaygroundUiTestHost
 {
+    /// <summary>
+    /// Shared with browser UI tests so nothing mutates the cached host in parallel with Playwright runs.
+    /// </summary>
+    internal const string ParallelLockKey = "seiton-playground-ui-static-host";
+
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static HostState? s_state;
 
-    public sealed record HostState(string BaseUrl, string WwwRootPath, WebApplication App);
+    static PlaygroundUiTestHost()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try
+            {
+                ShutdownAsync().GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // best effort — runner is exiting
+            }
+        };
+    }
+
+    public sealed record HostState(string BaseUrl, string WwwRootPath, string PublishRoot, WebApplication App);
 
     public static async Task<HostState> GetOrCreateAsync(CancellationToken cancellationToken = default)
     {
@@ -33,6 +53,64 @@ internal static class PlaygroundUiTestHost
         finally
         {
             Gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Stops the Kestrel host, disposes it, and deletes the temporary publish directory (best effort).
+    /// Safe to call multiple times and from <see cref="AppDomain.ProcessExit"/>.
+    /// </summary>
+    public static async Task ShutdownAsync(CancellationToken cancellationToken = default)
+    {
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = s_state;
+            if (state is null)
+            {
+                return;
+            }
+
+            s_state = null;
+
+            try
+            {
+                await state.App.StopAsync(cancellationToken);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
+                await state.App.DisposeAsync();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            TryDeletePublishRoot(state.PublishRoot);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private static void TryDeletePublishRoot(string publishRoot)
+    {
+        try
+        {
+            if (Directory.Exists(publishRoot))
+            {
+                Directory.Delete(publishRoot, recursive: true);
+            }
+        }
+        catch
+        {
+            // best effort — CI / AV / timing
         }
     }
 
@@ -91,6 +169,6 @@ internal static class PlaygroundUiTestHost
         var urlBase = addresses.First(u => u.StartsWith("http://", StringComparison.Ordinal)).TrimEnd('/');
         var baseUrl = urlBase + "/";
 
-        return new HostState(baseUrl, wwwroot, app);
+        return new HostState(baseUrl, wwwroot, publishDir, app);
     }
 }
