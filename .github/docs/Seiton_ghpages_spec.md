@@ -341,7 +341,7 @@ function getSelectedFilePath() {
 }
 
 function getDefaultSource() {
-    // URL hash からの復元 (permalink 対応)
+    // URL hash からの復元（ツールバー共有ボタンで `history.replaceState` したハッシュ）
     if (window.location.hash) {
         try {
             const b64 = window.location.hash.slice(1);
@@ -406,11 +406,25 @@ runLint();
         <h2>Static checker for GitHub Actions workflow files</h2>
       </header>
       <div id="controls">
+        <div class="controls-row controls-row--primary">
+          <button id="permalink-btn" type="button" class="toolbar-icon-btn"
+                  title="Share — store editor text in the URL hash"
+                  aria-label="Share — store editor text in the URL hash">
+            <svg class="toolbar-icon-btn__svg" viewBox="0 0 24 24" aria-hidden="true"><!-- 共有アイコン path は実装の `wwwroot/index.html` と同じ --></svg>
+          </button>
+          <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
+            <input type="url" id="url-input" aria-label="YAML URL" placeholder="https://…"/>
+            <button id="fetch-btn" type="button" class="toolbar-icon-btn"
+                    title="Fetch and lint YAML from this URL"
+                    aria-label="Fetch and lint YAML from this URL">
+              <svg class="toolbar-icon-btn__svg" viewBox="0 0 24 24" aria-hidden="true"><!-- 虫眼鏡 path は同上 --></svg>
+            </button>
+          </span>
+        </div>
         <select id="filetype-select">
           <option value=".github/workflows/test.yml" selected>workflow</option>
           <option value="action.yml">action.yml</option>
         </select>
-        <a id="permalink-btn" class="button">Permalink</a>
       </div>
     </nav>
     <main>
@@ -615,8 +629,8 @@ actionlint playground を参照し、以下の機能を実装する:
 
 | 機能 | 説明 |
 |---|---|
-| Permalink | URL hash にエディタ内容を Pako 圧縮 + Base64 エンコードで埋め込み |
-| GitHub/Gist URL からの読み込み | URL 入力 → raw ソースを fetch してエディタに設定 |
+| 共有 URL（permalink） | `#permalink-btn`。**ラベルは共有（アップロード風）SVG アイコンのみ** — `title` / `aria-label` で説明（例: 「Share — …」）。クリックで URL hash にエディタ全文を Pako 圧縮 + Base64 で埋め込み、`history.replaceState` でアドレスバー更新（完了時もツールチップでフィードバック）。DOM id は後方互換のため `permalink-btn` のまま。 |
+| GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**で、`title` / `aria-label` で操作説明。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。 |
 | severity フィルター | error/warning/info の表示切替 |
 
 ### 8.3 カラーテーマ（ライト / ダーク）

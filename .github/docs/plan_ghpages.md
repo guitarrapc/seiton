@@ -53,7 +53,7 @@
 
 1. 仕様 4.3〜4.4 の UI: CodeMirror、debounce、`renderResults`、`getDefaultSource`、`loading` の非表示タイミング。
 2. `.github/workflows/test.yml` / `action.yml` の切替（`filetype-select`）と `filePath` 連携。
-3. オプション（Post-MVP 扱いでよいが仕様にコードあり）: Permalink（Pako + hash）、`preload` リンクは実際の `_framework` ファイル名に合わせる。
+3. オプション（Post-MVP 扱いでよいが仕様にコードあり）: 共有アイコン（`#permalink-btn`、Pako + hash）、`preload` リンクは実際の `_framework` ファイル名に合わせる。
 
 **完了条件**:
 
@@ -84,8 +84,8 @@
 
 仕様 8.2 の順に、必要に応じてバックログ化:
 
-- Permalink（完全版）
-- GitHub / Gist URL 取り込み（CORS 制約のドキュメント付き）
+- 共有 URL / ツールバー共有アイコン（`#permalink-btn`、完全版）
+- GitHub / Gist URL 取り込み（虫眼鏡ボタン、CORS 制約のドキュメント付き）
 - ダークモード、`prefers-color-scheme`
 - severity フィルター
 

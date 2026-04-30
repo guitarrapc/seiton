@@ -459,19 +459,30 @@ main {
   outline: none;
 }
 
+.toolbar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.toolbar-icon-btn__svg {
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
 #fetch-btn {
   align-self: stretch;
   margin: 0;
-  padding: 0.35rem 0.75rem;
+  padding: 0.4rem 0.55rem;
   background: var(--fetch-btn-bg);
   color: var(--text);
   border: none;
   border-left: 1px solid var(--border-default);
   border-radius: 0;
   cursor: pointer;
-  font-size: 0.85rem;
   font-weight: 500;
-  white-space: nowrap;
 }
 
 #fetch-btn:not(:disabled):hover {
@@ -493,10 +504,9 @@ main {
   color: var(--text);
   border: 1px solid var(--border-default);
   border-radius: 4px;
-  padding: 0.35rem 0.55rem;
+  padding: 0.42rem;
   cursor: pointer;
-  font-size: 0.85rem;
-  white-space: nowrap;
+  min-width: 2.25rem;
 }
 
 #permalink-btn:not(:disabled):hover {

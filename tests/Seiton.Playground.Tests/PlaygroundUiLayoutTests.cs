@@ -155,6 +155,15 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That(s_localStylesheetHref.IsMatch(html)).IsTrue();
         await Assert.That(s_fingerprintedMainScriptSrc.IsMatch(html)).IsTrue();
         await Assert.That(html).Contains("<script type=\"importmap\">", StringComparison.Ordinal);
+
+        await Assert.That(html.Contains(">Permalink</button>", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(html.Contains(">Check</button>", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(html).Contains(
+            "M16 5.63636L14.58 6.92727",
+            StringComparison.Ordinal);
+        await Assert.That(html).Contains(
+            "Fetch and lint YAML from this URL",
+            StringComparison.Ordinal);
     }
 
     private static async Task GotoPlaygroundAndWaitForLinterGridAsync(IPage page, string baseUrl)

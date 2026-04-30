@@ -166,6 +166,8 @@ const errorMsg = document.getElementById('error-msg');
 const fileSelect = document.getElementById('filetype-select');
 const sampleSelect = document.getElementById('sample-select');
 const permalinkBtn = document.getElementById('permalink-btn');
+const permalinkShareTitle = 'Share — store editor text in the URL hash';
+const permalinkDoneTitle = 'URL updated — address bar hash now contains this YAML';
 const applyFixesBtn = document.getElementById('apply-fixes-btn');
 const urlInput = document.getElementById('url-input');
 const fetchBtn = document.getElementById('fetch-btn');
@@ -278,8 +280,12 @@ permalinkBtn.addEventListener('click', () => {
         const b64 = uint8ToBase64(compressed);
         const url = `${location.pathname}${location.search}#${b64}`;
         history.replaceState(null, '', url);
-        permalinkBtn.textContent = 'URL updated';
-        setTimeout(() => { permalinkBtn.textContent = 'Permalink'; }, 1400);
+        permalinkBtn.title = permalinkDoneTitle;
+        permalinkBtn.setAttribute('aria-label', permalinkDoneTitle);
+        setTimeout(() => {
+            permalinkBtn.title = permalinkShareTitle;
+            permalinkBtn.setAttribute('aria-label', permalinkShareTitle);
+        }, 1400);
     } catch (e) {
         showError(e?.message ?? String(e));
     }
