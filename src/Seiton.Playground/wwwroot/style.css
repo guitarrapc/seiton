@@ -907,8 +907,21 @@ footer a {
   color: var(--accent);
 }
 
-.footer-theme-wrap {
-  margin: 0.85rem 0 0;
+.footer-copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem 0.35rem;
+}
+
+.footer-copy-text {
+  text-align: center;
+}
+
+.footer-copy-sep {
+  color: var(--muted);
+  user-select: none;
 }
 
 .theme-cycle-btn {
