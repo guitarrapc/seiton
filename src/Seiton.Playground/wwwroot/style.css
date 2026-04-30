@@ -855,11 +855,10 @@ a.version-badge:focus-visible {
 
 .resources h2 {
   margin: 0 0 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 1.4rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
 }
 
 .resources-links {
