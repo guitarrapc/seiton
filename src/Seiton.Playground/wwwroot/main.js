@@ -166,8 +166,9 @@ const errorMsg = document.getElementById('error-msg');
 const fileSelect = document.getElementById('filetype-select');
 const sampleSelect = document.getElementById('sample-select');
 const permalinkBtn = document.getElementById('permalink-btn');
-const permalinkShareTitle = 'Share — store editor text in the URL hash';
-const permalinkDoneTitle = 'URL updated — address bar hash now contains this YAML';
+const permalinkShareTitle = 'Share — copy link to clipboard; YAML is stored in URL hash';
+const permalinkDoneCopied = 'Link copied to clipboard';
+const permalinkDoneNoClipboard = 'URL updated — copy from address bar if clipboard was blocked';
 const applyFixesBtn = document.getElementById('apply-fixes-btn');
 const urlInput = document.getElementById('url-input');
 const fetchBtn = document.getElementById('fetch-btn');
@@ -273,6 +274,40 @@ sampleSelect.addEventListener('change', () => {
     runLint();
 });
 
+/**
+ * Synchronous clipboard fallback (helps while the originating click is still a “user gesture”).
+ * @param {string} text
+ * @returns {boolean}
+ */
+function tryClipboardCopyViaTextArea(text) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+    } catch {
+        return false;
+    }
+}
+
+function schedulePermalinkFeedback(copied) {
+    const msg = copied ? permalinkDoneCopied : permalinkDoneNoClipboard;
+    permalinkBtn.title = msg;
+    permalinkBtn.setAttribute('aria-label', msg);
+    window.setTimeout(() => {
+        permalinkBtn.title = permalinkShareTitle;
+        permalinkBtn.setAttribute('aria-label', permalinkShareTitle);
+    }, 1800);
+}
+
 permalinkBtn.addEventListener('click', () => {
     try {
         const src = new TextEncoder().encode(editor.getValue());
@@ -280,12 +315,23 @@ permalinkBtn.addEventListener('click', () => {
         const b64 = uint8ToBase64(compressed);
         const url = `${location.pathname}${location.search}#${b64}`;
         history.replaceState(null, '', url);
-        permalinkBtn.title = permalinkDoneTitle;
-        permalinkBtn.setAttribute('aria-label', permalinkDoneTitle);
-        setTimeout(() => {
-            permalinkBtn.title = permalinkShareTitle;
-            permalinkBtn.setAttribute('aria-label', permalinkShareTitle);
-        }, 1400);
+        const fullUrl = location.href;
+        if (tryClipboardCopyViaTextArea(fullUrl)) {
+            schedulePermalinkFeedback(true);
+            return;
+        }
+        const w = navigator.clipboard?.writeText;
+        if (w) {
+            w.call(navigator.clipboard, fullUrl)
+                .then(() => {
+                    schedulePermalinkFeedback(true);
+                })
+                .catch(() => {
+                    schedulePermalinkFeedback(false);
+                });
+            return;
+        }
+        schedulePermalinkFeedback(false);
     } catch (e) {
         showError(e?.message ?? String(e));
     }

@@ -408,8 +408,8 @@ runLint();
       <div id="controls">
         <div class="controls-row controls-row--primary">
           <button id="permalink-btn" type="button" class="toolbar-icon-btn"
-                  title="Share — store editor text in the URL hash"
-                  aria-label="Share — store editor text in the URL hash">
+                  title="Share — copy link to clipboard; YAML is stored in URL hash"
+                  aria-label="Share — copy link to clipboard; YAML is stored in URL hash">
             <svg class="toolbar-icon-btn__svg" viewBox="0 0 24 24" aria-hidden="true"><!-- 共有アイコン path は実装の `wwwroot/index.html` と同じ --></svg>
           </button>
           <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
@@ -629,7 +629,7 @@ actionlint playground を参照し、以下の機能を実装する:
 
 | 機能 | 説明 |
 |---|---|
-| 共有 URL（permalink） | `#permalink-btn`。**ラベルは共有（アップロード風）SVG アイコンのみ** — `title` / `aria-label` で説明（例: 「Share — …」）。クリックで URL hash にエディタ全文を Pako 圧縮 + Base64 で埋め込み、`history.replaceState` でアドレスバー更新（完了時もツールチップでフィードバック）。DOM id は後方互換のため `permalink-btn` のまま。 |
+| 共有 URL（permalink） | `#permalink-btn`。**ラベルは共有（アップロード風）SVG アイコンのみ** — `title` / `aria-label` で説明。クリック後に `history.replaceState` で hash を更新しつつ、**完全な現在ページ URL（`location.href`）をクリップボードへコピー**（同期の一時 `textarea` + `execCommand('copy')` を優先し、無効時は `navigator.clipboard.writeText`。いずれも拒否時はユーザーにアドレスバーからコピーできる旨をツールチップで示す）。DOM id は後方互換のため `permalink-btn`。 |
 | GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**で、`title` / `aria-label` で操作説明。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。 |
 | severity フィルター | error/warning/info の表示切替 |
 
