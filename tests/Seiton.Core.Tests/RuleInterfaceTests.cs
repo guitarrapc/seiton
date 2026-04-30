@@ -12971,4 +12971,41 @@ public sealed class RuleInterfaceTests
         // Fix must NOT be attached because the path is embedded in a larger expression
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_MultipleExpressionsInStep_OnlyFirstGetsFix()
+    {
+        // When a single run: step has multiple untrusted expressions, only the first
+        // diagnostic should get a fix attached. Multiple fixes would produce duplicate
+        // insertion edits at the same offset, causing FixEngine.Apply to throw.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        echo "${{ github.event.pull_request.title }}"
+                        echo "${{ github.event.pull_request.body }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-multi.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostics = result.Diagnostics
+            .Where(x => x.RuleId == "template-injection")
+            .ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(2);
+
+        // First diagnostic gets a fix
+        await Assert.That(diagnostics[0].Fix is not null).IsTrue();
+        // Second diagnostic must NOT get a fix (would conflict at same insertion offset)
+        await Assert.That(diagnostics[1].Fix is null).IsTrue();
+
+        // Applying the single fix must not throw
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, result.FixableDiagnostics);
+        await Assert.That(fixedYaml).IsNotNull();
+    }
 }

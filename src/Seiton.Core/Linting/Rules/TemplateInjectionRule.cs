@@ -13,6 +13,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 {
     private Workflow? _currentWorkflow;
     private Job? _currentJob;
+    private bool _fixAttachedForCurrentStep;
     private static readonly string[][] untrustedPaths =
     [
         ["github", "event", "issue", "title"],
@@ -75,6 +76,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         {
             return;
         }
+
+        _fixAttachedForCurrentStep = false;
 
         if (step.Exec is ExecRun run)
         {
@@ -372,6 +375,14 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
+        // Only one fix per step: multiple fixes would produce env insertion edits at
+        // the same offset, causing FixEngine.Apply to throw. The multi-pass CLI will
+        // fix remaining expressions on subsequent passes.
+        if (_fixAttachedForCurrentStep)
+        {
+            return false;
+        }
+
         // Wildcard paths can't generate a deterministic env var name
         if (pathString.Contains('*'))
         {
@@ -402,6 +413,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             fix = new DiagnosticFix(
                 $"replace untrusted expression with existing env variable {existingVarName}",
                 [new TextEdit(exprAbsoluteOffset, exprLength, replacement)]);
+            _fixAttachedForCurrentStep = true;
             return true;
         }
 
@@ -426,6 +438,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         fix = new DiagnosticFix(
             $"map untrusted expression to env variable {envVarName}",
             [insertEdit, new TextEdit(exprAbsoluteOffset, exprLength, shellReplacement)]);
+        _fixAttachedForCurrentStep = true;
         return true;
     }
 
