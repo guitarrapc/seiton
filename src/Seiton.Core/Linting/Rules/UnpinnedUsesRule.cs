@@ -59,7 +59,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
         var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
-        AddJobWarning(job, $"jobs.'{jobId}'.uses reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
+        var url = ActionRefHelpers.BuildGitHubUrl(usesText);
+        var urlSuffix = url is not null ? $". see {url}" : "";
+        AddJobWarning(job, $"jobs.'{jobId}'.uses reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
     }
 
     public override void VisitStep(Step step)
@@ -152,7 +154,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         var usesText = Decode(usesSlice);
-        var msg = $"action uses '{usesText}' is not pinned to a full-length commit SHA";
+        var url = ActionRefHelpers.BuildGitHubUrl(usesText);
+        var urlSuffix = url is not null ? $". see {url}" : "";
+        var msg = $"action uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)";
         _lastUnpinnedStepUsesSlice = usesSlice;
         _lastUnpinnedStepMessage = msg;
         return msg;
