@@ -6484,4 +6484,24 @@ public sealed class ParserTests
         var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
         await Assert.That(requiresLabelsDiag.Message).IsNullOrEmpty();
     }
+
+    [Test]
+    public async Task Parse_RunsOnMappingGroupSequence_ReportsUserFriendlyMessage()
+    {
+        // When group is given a sequence instead of string, the error message
+        // should follow the same pattern as "labels" type mismatch.
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              group: [hello, world]
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("group", StringComparison.Ordinal));
+        await Assert.That(diag.Message).Contains("\"group\" must be string, got array");
+    }
 }

@@ -862,9 +862,8 @@ public static partial class WorkflowParser
                         case RunsOnMappingKey.Group:
                             if (!reader.End && reader.CurrentKind != YamlEventKind.Scalar)
                             {
-                                var grpTag = reader.CurrentKind == YamlEventKind.SequenceStart ? "!!seq" : "!!map";
-                                var grpNodeType = reader.CurrentKind == YamlEventKind.SequenceStart ? "sequence" : "mapping";
-                                AddError(diagnostics, $"expected scalar node for string value but found {grpNodeType} node with \"{grpTag}\" tag", reader.CurrentStart);
+                                var grpNodeType = reader.CurrentKind == YamlEventKind.SequenceStart ? "array" : "object";
+                                AddError(diagnostics, $"\"group\" must be string, got {grpNodeType}", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else if (!reader.End && reader.GetScalarUtf8().Length == 0)
