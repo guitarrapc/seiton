@@ -19,6 +19,16 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_UrlFetchInputPlaceholder_HasNoTypoAfterScheme()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html.Contains("https:// raw ", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(html).Contains(
+            "placeholder=\"https://raw GitHub/Gist YAML URL\"",
+            StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task IndexTemplate_HasStableShellLandmarksForLayout()
     {
         var html = await ReadSourceIndexHtmlAsync();
