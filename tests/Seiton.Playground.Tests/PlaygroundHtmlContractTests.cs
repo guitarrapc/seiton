@@ -19,9 +19,10 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
-    public async Task IndexTemplate_UrlFetchInputPlaceholder_HasNoTypoAfterScheme()
+    public async Task IndexTemplate_UrlFetchInput_HasAccessibleNameAndPlaceholder()
     {
         var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("id=\"url-input\" aria-label=\"YAML URL\"", StringComparison.Ordinal);
         await Assert.That(html.Contains("https:// raw ", StringComparison.Ordinal)).IsFalse();
         await Assert.That(html).Contains(
             "placeholder=\"https://raw GitHub/Gist YAML URL\"",
