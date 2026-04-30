@@ -88,16 +88,13 @@
       <div class="controls-row controls-row--meta">
         <label
           title="Virtual path selects workflow YAML vs composite action.yml — Seiton chooses parse/lint modes the same way GitHub does by file location/name.">
-          Document
           <select id="filetype-select">
             <option value=".github/workflows/test.yml" selected>workflow</option>
             <option value="action.yml">action.yml</option>
           </select>
         </label>
         <label>
-          Sample
           <select id="sample-select" title="Load a built-in example">
-            <option value="">— custom —</option>
             <option value="default">default workflow</option>
             <option value="minimal">minimal workflow</option>
             <option value="fixPermissions">fix: permissions (write-all)</option>
