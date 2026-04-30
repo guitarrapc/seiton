@@ -774,6 +774,7 @@ public static partial class WorkflowParser
             StringNodeId labelsExpr = default;
             StringNodeId group = default;
             ulong seen = 0;
+            var hasUnknownKey = false;
             var mappingStartMark = reader.CurrentStart;
 
             reader.Read();
@@ -885,6 +886,7 @@ public static partial class WorkflowParser
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
                 AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}", keyMark);
+                hasUnknownKey = true;
                 if (!reader.End) reader.SkipCurrentNode();
             }
 
@@ -893,7 +895,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            if (labels is null && !labelsExpr.HasValue)
+            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey)
             {
                 AddError(diagnostics, $"{section} requires labels", mappingStartMark);
             }

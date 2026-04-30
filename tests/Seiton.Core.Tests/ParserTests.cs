@@ -6438,4 +6438,27 @@ public sealed class ParserTests
         // "runs-on:" is at line 4 col 5; the mapping value starts at line 5
         await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
     }
+
+    [Test]
+    public async Task Parse_RunsOnMappingUnknownKey_NoRequiresLabelsDiagnostic()
+    {
+        // When runs-on mapping has an unknown key (e.g. "groups" instead of "group"),
+        // the parser should report "unexpected key" but NOT also "requires labels".
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              groups: [foo, bar]
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var unexpectedKeyDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("unexpected key", StringComparison.Ordinal));
+        await Assert.That(unexpectedKeyDiag.Message).IsNotEmpty();
+
+        var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
+        await Assert.That(requiresLabelsDiag.Message).IsNullOrEmpty();
+    }
 }
