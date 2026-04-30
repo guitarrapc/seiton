@@ -72,6 +72,17 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_AboutPlaygroundSection_AppearsBeforeReferences()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("id=\"about-playground-heading\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("class=\"playground-about\"", StringComparison.Ordinal);
+        var ixAbout = html.IndexOf("class=\"playground-about\"", StringComparison.Ordinal);
+        var ixResources = html.IndexOf("class=\"resources\"", StringComparison.Ordinal);
+        await Assert.That(ixAbout >= 0 && ixResources >= 0 && ixAbout < ixResources).IsTrue();
+    }
+
+    [Test]
     public async Task IndexTemplate_FooterThemeCycleButton_HasIconSvgsAndAccessibleName()
     {
         var html = await ReadSourceIndexHtmlAsync();
