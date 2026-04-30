@@ -328,7 +328,7 @@ function renderResults(diagnostics) {
 }
 
 function showToast(message, variant = 'info') {
-    /* 画面上部の固定スタック（`#toast-stack`）へ表示。実装は `wwwroot/main.js` */
+    /* `#toast-stack`: ラッパー + `.toast__body` + `button.toast__dismiss`。実装は `wwwroot/main.js` */
 }
 
 function getSelectedFilePath() {
@@ -626,8 +626,8 @@ actionlint playground を参照し、以下の機能を実装する:
 | 機能 | 説明 |
 |---|---|
 | 共有 URL（permalink） | `#permalink-btn`。**ラベルは共有（アップロード風）SVG アイコンのみ** — `title` / `aria-label` で説明。クリック後に `history.replaceState` で hash を更新しつつ、**完全な現在ページ URL（`location.href`）をクリップボードへコピー**（同期の一時 `textarea` + `execCommand('copy')` を優先し、無効時は `navigator.clipboard.writeText`。いずれも拒否時はユーザーにアドレスバーからコピーできる旨をツールチップで示す）。DOM id は後方互換のため `permalink-btn`。 |
-| GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**で、URL が空の間は **`disabled`**・`title` / `aria-label` は「先に URL を入れる」旨。入力に応じて `main.js` が有効化。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。HTTP 失敗・HTML 返却・無効 URL などは **結果ペインを伏せない** で、画面上部 **`#toast-stack` のトースト**（クリックで閉じる・自動消失）で知らせる。成功時もトーストで「読み込み完了」を短く通知してよい。 |
-| トースト（診断パネルとは独立） | WASM / 共有 / fetch / Apply fixes などで **lint 結果テーブルの表示を崩さない**。`RunLint` が例外を投げたときも直前の診断を残し、メッセージはトーストのみ。`role="alert"`（error）/ `status`（成功・その他）。スタイルは `style.css` の `.toast-stack` / `.toast--*`。 |
+| GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**で、URL が空の間は **`disabled`**・`title` / `aria-label` は「先に URL を入れる」旨。入力に応じて `main.js` が有効化。キーボードで **Enter** を押したときも URL 空なら短い info トーストで案内（フェッチは走らせない）。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。HTTP 失敗・HTML 返却・無効 URL などは **結果ペインを伏せない** で、画面上部 **`#toast-stack` のトースト**（**`button.toast__dismiss` または Escape で閉じる**、自動消失）で知らせる。成功時もトーストで「読み込み完了」を短く通知してよい。 |
+| トースト（診断パネルとは独立） | WASM / 共有 / fetch / Apply fixes などで **lint 結果テーブルの表示を崩さない**。`RunLint` が例外を投げたときも直前の診断を残し、メッセージはトーストのみ。**本文に URL リンクを含め得るため、トースト全体をクリックで閉じるのではなく**、専用の閉じる `button` と **Escape** で閉じる。外枠に `role="alert"`（error）/ `status`（成功・その他）。スタイルは `style.css` の `.toast-stack` / `.toast--*` / `.toast__dismiss`。 |
 | severity フィルター | error/warning/info の表示切替 |
 
 ### 8.3 カラーテーマ（ライト / ダーク）

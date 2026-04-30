@@ -158,9 +158,11 @@ public sealed class PlaygroundUiLayoutTests
 
         await Assert.That(html.Contains(">Permalink</button>", StringComparison.Ordinal)).IsFalse();
         await Assert.That(html.Contains(">Check</button>", StringComparison.Ordinal)).IsFalse();
-        await Assert.That(html).Contains(
-            "M16 5.63636L14.58 6.92727",
-            StringComparison.Ordinal);
+
+        // Structural checks (avoid pinning full SVG path d= — brittle on harmless icon tweaks).
+        await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""permalink-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
+        await Assert.That(html).Contains("copy link to clipboard", StringComparison.OrdinalIgnoreCase);
+        await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""fetch-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
         await Assert.That(html).Contains(
             "Fetch and lint YAML — enter a URL first",
             StringComparison.Ordinal);

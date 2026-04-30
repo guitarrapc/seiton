@@ -194,24 +194,39 @@ function showToast(message, variant = 'info', durationMs) {
     if (!stack) return;
     const ms = durationMs ?? TOAST_DURATION_MS[variant] ?? TOAST_DURATION_MS.info;
 
-    const el = document.createElement('div');
-    el.className = `toast toast--${variant}`;
-    el.setAttribute('role', variant === 'error' ? 'alert' : 'status');
-    el.title = 'Dismiss';
-    appendTextLinkifyingUrls(el, message ?? '');
+    const wrap = document.createElement('div');
+    wrap.className = `toast toast--${variant}`;
+    wrap.setAttribute('role', variant === 'error' ? 'alert' : 'status');
 
-    stack.appendChild(el);
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'toast__body';
+    appendTextLinkifyingUrls(bodyEl, message ?? '');
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.className = 'toast__dismiss';
+    dismissBtn.setAttribute('aria-label', 'Dismiss notification');
+    dismissBtn.textContent = '\u2715';
+
+    wrap.append(bodyEl, dismissBtn);
+    stack.appendChild(wrap);
     requestAnimationFrame(() => {
-        el.classList.add('toast--show');
+        wrap.classList.add('toast--show');
     });
 
-    let hideTimer = window.setTimeout(() => removeToastElement(el), ms);
+    let hideTimer = window.setTimeout(() => removeToastElement(wrap), ms);
     const dismiss = () => {
         window.clearTimeout(hideTimer);
         hideTimer = 0;
-        removeToastElement(el);
+        removeToastElement(wrap);
     };
-    el.addEventListener('click', dismiss);
+    dismissBtn.addEventListener('click', dismiss);
+    wrap.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') {
+            ev.preventDefault();
+            dismiss();
+        }
+    });
 }
 
 /** @param {HTMLElement} el */
@@ -349,21 +364,23 @@ sampleSelect.addEventListener('change', () => {
  * @returns {boolean}
  */
 function tryClipboardCopyViaTextArea(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
     try {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        ta.style.top = '0';
-        document.body.appendChild(ta);
         ta.focus();
         ta.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        return ok;
+        return document.execCommand('copy');
     } catch {
         return false;
+    } finally {
+        if (ta.parentNode) {
+            ta.parentNode.removeChild(ta);
+        }
     }
 }
 
@@ -429,9 +446,17 @@ if (urlInput) {
         requestAnimationFrame(() => syncFetchButtonEnabled());
     });
     urlInput.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') {
-            fetchAndLint();
+        if (ev.key !== 'Enter') {
+            return;
         }
+        ev.preventDefault();
+        const raw = (urlInput.value ?? '').trim();
+        if (!raw.length) {
+            urlInput.focus();
+            showToast(FETCH_EMPTY_TITLE, 'info', 2600);
+            return;
+        }
+        fetchAndLint();
     });
 }
 syncFetchButtonEnabled();
