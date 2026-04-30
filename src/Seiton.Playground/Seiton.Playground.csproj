@@ -17,10 +17,23 @@
     <WasmEnableWebcil>true</WasmEnableWebcil>
   </PropertyGroup>
 
+  <!--
+    CSS: default #[.{fingerprint}]! keeps fingerprinted files for cache busting.
+    Standalone publish often leaves href="style.css" while only style.<hash>.css exists on disk;
+    UI tests pass -p:PlaygroundSoftCssFingerprint=true to use ? so style.css is emitted (matches tests / simple static hosts).
+    If gh-pages shows missing styles with ! only, add a publish target to rewrite the link or align with SDK updates.
+  -->
+  <PropertyGroup Condition="'$(PlaygroundSoftCssFingerprint)' == 'true'">
+    <PlaygroundCssFingerprintExpression>#[.{fingerprint}]?</PlaygroundCssFingerprintExpression>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PlaygroundSoftCssFingerprint)' != 'true'">
+    <PlaygroundCssFingerprintExpression>#[.{fingerprint}]!</PlaygroundCssFingerprintExpression>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Seiton.Playground.Core\Seiton.Playground.Core.csproj" />
     <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]!" />
-    <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="#[.{fingerprint}]!" />
+    <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="$(PlaygroundCssFingerprintExpression)" />
   </ItemGroup>
 
 </Project>

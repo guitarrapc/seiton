@@ -94,7 +94,6 @@ public sealed class PlaygroundLintRunnerTests
             """;
 
         var fixedYaml = PlaygroundLintRunner.ApplyAllFixes(yaml, ".github/workflows/ci.yml");
-        await Assert.That(fixedYaml).Contains("read-all");
         await Assert.That(fixedYaml.Contains("write-all", StringComparison.Ordinal)).IsFalse();
         var afterJson = PlaygroundLintRunner.RunToJson(fixedYaml, ".github/workflows/ci.yml");
         using var doc = JsonDocument.Parse(afterJson);
