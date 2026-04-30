@@ -13250,9 +13250,9 @@ public sealed class RuleInterfaceTests
     public async Task LintEngine_DefaultSortOrder_GloballySortsParserAndRuleDiagnostics()
     {
         // Parser diagnostic ("does not support option: branch") appears at line 8 (on.push.branch).
-        // Rule diagnostic (job-permissions-required) appears at line 3 (jobs.build).
+        // Rule diagnostic (job-permissions-required) appears at line 2 (jobs.build).
         // Without global sort, parser diagnostics come first regardless of line number.
-        // With correct global sort, line 3 (rule) must appear before line 8 (parser).
+        // With correct global sort, line 2 (rule) must appear before line 8 (parser).
         var yaml = """
         jobs:
           build:
@@ -13267,7 +13267,7 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "global-sort.yml");
 
-        // Should have at least 2 diagnostics: parser (line 8) + rule (line 3)
+        // Should have at least 2 diagnostics: parser (line 8) + rule (line 2)
         await Assert.That(result.Diagnostics.Length).IsGreaterThanOrEqualTo(2);
 
         // Verify ALL diagnostics are globally sorted by line number
