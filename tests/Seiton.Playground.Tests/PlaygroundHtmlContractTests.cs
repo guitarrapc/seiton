@@ -72,6 +72,45 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_FooterThemeCycleButton_HasIconSvgsAndAccessibleName()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("footer-copy-row", StringComparison.Ordinal);
+        await Assert.That(html).Contains("footer-copy-text", StringComparison.Ordinal);
+        await Assert.That(html).Contains("footer-copy-sep", StringComparison.Ordinal);
+        await Assert.That(Regex.Matches(html, @"class\s*=\s*""footer-copy-sep""", RegexOptions.IgnoreCase).Count).IsEqualTo(2);
+        await Assert.That(html).Contains("|</span>", StringComparison.Ordinal);
+        await Assert.That(html.Contains("footer-theme-wrap", StringComparison.Ordinal)).IsFalse();
+        var ixFooter = html.IndexOf("<footer>", StringComparison.Ordinal);
+        await Assert.That(ixFooter >= 0).IsTrue();
+        var beforeFooter = html[..ixFooter];
+        await Assert.That(beforeFooter.Contains("repo-mark", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(Regex.IsMatch(html,
+                @"<footer>[\s\S]*?footer-copy-row[\s\S]*?repo-mark[\s\S]*?footer-copy-text",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline, TimeSpan.FromSeconds(3)))
+            .IsTrue();
+        await Assert.That(html).Contains("seiton on GitHub", StringComparison.Ordinal);
+        await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""theme-cycle-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
+        await Assert.That(html).Contains("data-theme-mode=\"system\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("theme-cycle-btn__svg--system", StringComparison.Ordinal);
+        await Assert.That(html).Contains("theme-cycle-btn__svg--light", StringComparison.Ordinal);
+        await Assert.That(html).Contains("theme-cycle-btn__svg--dark", StringComparison.Ordinal);
+        await Assert.That(html.Contains("Color: System", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task Stylesheet_FooterCopyRowUsesFlexForCopyrightAndTheme()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".footer-copy-row");
+        await Assert.That(css).Contains(".footer-copy-row .repo-mark");
+        await Assert.That(css).Contains("column-gap");
+        await Assert.That(css).Contains(".footer-copy-sep");
+        await Assert.That(css.Contains(".footer-theme-wrap", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task Stylesheet_UsesTwoColumnGridForMainLinterRegion()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");

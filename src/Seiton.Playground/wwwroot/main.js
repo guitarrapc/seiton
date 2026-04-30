@@ -127,15 +127,16 @@ function getCodeMirrorTheme() {
     return effectiveUiIsDark() ? 'material-darker' : 'default';
 }
 
-function themeModeLabel(mode) {
-    switch (mode) {
-        case 'light':
-            return 'Color: Light';
-        case 'dark':
-            return 'Color: Dark';
-        default:
-            return 'Color: System';
+/** Accessible name for theme cycle control (visual is icon-only). */
+function themeAccessibilityLabel(mode) {
+    const suffix = 'Click to cycle: System, Light, Dark.';
+    if (mode === 'light') {
+        return `Color theme: Light. ${suffix}`;
     }
+    if (mode === 'dark') {
+        return `Color theme: Dark. ${suffix}`;
+    }
+    return `Color theme: System. ${suffix}`;
 }
 
 const { getAssemblyExports, getConfig, runMain } = await dotnet
@@ -395,7 +396,12 @@ playgroundColorSchemeDarkQuery().addEventListener('change', () => {
 const themeCycleBtn = document.getElementById('theme-cycle-btn');
 
 function updateThemeCycleButton() {
-    if (themeCycleBtn) themeCycleBtn.textContent = themeModeLabel(getStoredColorMode());
+    if (!themeCycleBtn) {
+        return;
+    }
+    const mode = getStoredColorMode();
+    themeCycleBtn.dataset.themeMode = mode;
+    themeCycleBtn.setAttribute('aria-label', themeAccessibilityLabel(mode));
 }
 
 function cycleColorMode() {
@@ -410,7 +416,6 @@ function cycleColorMode() {
 
 if (themeCycleBtn) {
     themeCycleBtn.addEventListener('click', cycleColorMode);
-    themeCycleBtn.setAttribute('title', 'Cycle color theme: System → Light → Dark');
 }
 updateThemeCycleButton();
 
