@@ -663,7 +663,17 @@ actionlint playground を参照し、以下の機能を実装する:
 
 ## 10. Lessons Learned
 
-(実装後に追記)
+### 10.1 `[JSExport]` メソッドからの例外伝播で WASM ランタイムが死ぬ
+
+**問題**: `[JSExport]` メソッド内でハンドルされない例外が interop 境界を超えて伝播すると、Mono WASM ランタイムが exit code 1 で abort する。一度 abort すると、以降のすべての `[JSExport]` 呼び出しが `"Assert failed: .NET runtime already exited with 1"` で失敗し、ページのリロードなしには復旧不可能になる。
+
+**発生シナリオ**: ユーザーがエディタで新規行を追加しながらタイプ中に debounce が発火 → 不完全な YAML に対してパーサー/リンターが例外を送出 → ランタイム死亡 → 以降の lint 呼び出しすべてが連鎖的に失敗。
+
+**対策**:
+1. **C# 側**: すべての `[JSExport]` メソッド内に `try/catch(Exception)` を配置。例外をキャッチしてエラー JSON を返すことで、例外が interop 境界を超えないようにする。
+2. **JS 側**: `runtimeAlive` フラグを導入。"runtime already exited" パターンを検出したら以降の呼び出しを停止し、「ページをリロードしてください」メッセージを表示。
+
+**教訓**: .NET WASM (browser-wasm) の `[JSExport]` メソッドは、例外が絶対に外に漏れない設計にしなければならない。通常の .NET アプリケーションと異なり、ハンドルされない例外＝プロセス終了＝復帰不可能。
 
 ---
 

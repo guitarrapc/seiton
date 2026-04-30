@@ -6,7 +6,7 @@ import { dotnet } from './_framework/dotnet.js';
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
     default:
-`# Paste your workflow YAML to this code editor
+        `# Paste your workflow YAML to this code editor
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
       - run: npm install && npm test
 `,
     minimal:
-`on:
+        `on:
   push:
     branches: [main]
 jobs:
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
 `,
     fixPermissions:
-`on: push
+        `on: push
 permissions: write-all
 jobs:
   build:
@@ -55,7 +55,7 @@ jobs:
       - run: echo ok
 `,
     matrix:
-`on: push
+        `on: push
 jobs:
   test:
     strategy:
@@ -67,7 +67,7 @@ jobs:
       - run: echo "\${{ runner.os }}"
 `,
     actionComposite:
-`name: My composite
+        `name: My composite
 description: Demo action.yml
 runs:
   using: composite
@@ -181,6 +181,9 @@ const fetchBtn = document.getElementById('fetch-btn');
 
 /** True while <code>fetchAndLint</code> awaits network; blocks overlapping runs and input echo re-enabling the button. */
 let fetchInFlight = false;
+
+/** Set to false if the .NET WASM runtime has crashed; prevents further calls into dead runtime. */
+let runtimeAlive = true;
 
 /** @typedef {'error'|'success'|'info'} ToastVariant */
 
@@ -537,6 +540,7 @@ permalinkBtn.addEventListener('click', () => {
 });
 
 applyFixesBtn.addEventListener('click', () => {
+    if (!runtimeAlive) return;
     try {
         const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
             editor.getValue(),
@@ -547,6 +551,10 @@ applyFixesBtn.addEventListener('click', () => {
         applyFixesBtn.hidden = true;
         runLint();
     } catch (e) {
+        if (isRuntimeDeadError(e)) {
+            handleRuntimeDeath();
+            return;
+        }
         showToast(e?.message ?? String(e), 'error');
     }
 });
@@ -695,7 +703,49 @@ function appendTextLinkifyingUrls(parent, text) {
     }
 }
 
+/**
+ * Detects whether an error indicates the .NET WASM runtime has exited/crashed.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isRuntimeDeadError(err) {
+    if (!err) return false;
+    const msg = String(err?.message ?? err);
+    return msg.includes('runtime already exited') || msg.includes('runtime has already exited');
+}
+
+/**
+ * Called once when the .NET WASM runtime is detected as dead.
+ * Stops all lint calls and shows a persistent error message.
+ */
+function handleRuntimeDeath() {
+    runtimeAlive = false;
+    if (debounceId !== null) {
+        clearTimeout(debounceId);
+        debounceId = null;
+    }
+    showToast(
+        'The WebAssembly runtime has crashed. Please reload the page to continue.',
+        'error',
+        60000,
+    );
+    // Show an inline message in the result area
+    resultBody.replaceChildren();
+    resultTable.hidden = false;
+    successMsg.style.display = 'none';
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.setAttribute('colspan', '2');
+    cell.textContent = 'Runtime crashed — please reload the page.';
+    cell.style.color = 'var(--danger, #ff5370)';
+    row.appendChild(cell);
+    resultBody.appendChild(row);
+}
+
 function runLint() {
+    if (!runtimeAlive) {
+        return;
+    }
     const source = editor.getValue();
     const filePath = getSelectedFilePath();
 
@@ -704,6 +754,10 @@ function runLint() {
         const diagnostics = JSON.parse(json);
         renderResults(diagnostics);
     } catch (err) {
+        if (isRuntimeDeadError(err)) {
+            handleRuntimeDeath();
+            return;
+        }
         showToast(err?.message ?? String(err), 'error');
     }
 }
