@@ -27,7 +27,7 @@ internal static class PlaygroundUiTestHost
         {
             try
             {
-                ShutdownAsync().GetAwaiter().GetResult();
+                ShutdownForProcessExitAsync().GetAwaiter().GetResult();
             }
             catch
             {
@@ -57,46 +57,81 @@ internal static class PlaygroundUiTestHost
     }
 
     /// <summary>
+    /// Best-effort teardown when the process is exiting. Does not wait indefinitely for
+    /// <see cref="Gate"/> (another thread may be in <see cref="CreateAsync"/> during publish).
+    /// </summary>
+    private static async Task ShutdownForProcessExitAsync()
+    {
+        if (!await Gate.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            await ShutdownCoreAsync(deadline.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Deadline — process exit should not hang on slow IO.
+        }
+        catch
+        {
+            // best effort
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>
     /// Stops the Kestrel host, disposes it, and deletes the temporary publish directory (best effort).
-    /// Safe to call multiple times and from <see cref="AppDomain.ProcessExit"/>.
+    /// Safe to call multiple times and from <see cref="AppDomain.ProcessExit"/> via <see cref="ShutdownForProcessExitAsync"/>.
     /// </summary>
     public static async Task ShutdownAsync(CancellationToken cancellationToken = default)
     {
         await Gate.WaitAsync(cancellationToken);
         try
         {
-            var state = s_state;
-            if (state is null)
-            {
-                return;
-            }
-
-            s_state = null;
-
-            try
-            {
-                await state.App.StopAsync(cancellationToken);
-            }
-            catch
-            {
-                // ignore
-            }
-
-            try
-            {
-                await state.App.DisposeAsync();
-            }
-            catch
-            {
-                // ignore
-            }
-
-            await TryDeletePublishRootAsync(state.PublishRoot, cancellationToken);
+            await ShutdownCoreAsync(cancellationToken);
         }
         finally
         {
             Gate.Release();
         }
+    }
+
+    private static async Task ShutdownCoreAsync(CancellationToken cancellationToken)
+    {
+        var state = s_state;
+        if (state is null)
+        {
+            return;
+        }
+
+        s_state = null;
+
+        try
+        {
+            await state.App.StopAsync(cancellationToken);
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            await state.App.DisposeAsync();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        await TryDeletePublishRootAsync(state.PublishRoot, cancellationToken);
     }
 
     /// <summary>
