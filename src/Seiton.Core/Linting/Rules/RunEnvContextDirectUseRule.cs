@@ -108,7 +108,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
         return true;
     }
 
-    private static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
+    internal static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
     {
         if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
         {
@@ -192,7 +192,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
         return false;
     }
 
-    private static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, int lineStartInSource, out HereDocState state)
+    internal static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, int lineStartInSource, out HereDocState state)
     {
         state = default;
         var i = 0;
@@ -247,5 +247,5 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
         return false;
     }
 
-    private readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
+    internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
 }

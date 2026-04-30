@@ -373,6 +373,13 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
+        // Skip fix when expression is inside a no-expand heredoc body (<<'EOF' / <<"EOF")
+        // where shell variables won't expand, matching RunEnvContextDirectUseRule behavior
+        if (RunEnvContextDirectUseRule.IsInsideNoExpandHereDoc(Config.Utf8Yaml, exprAbsoluteOffset))
+        {
+            return false;
+        }
+
         // Check if an existing env mapping already points to this expression
         if (TryFindExistingEnvMapping(step, pathString, out var existingVarName))
         {

@@ -12748,6 +12748,7 @@ public sealed class RuleInterfaceTests
         var scriptIdx = fixedText.IndexOf("SCRIPT: |", StringComparison.Ordinal);
         var newEntryIdx = fixedText.IndexOf("GITHUB_EVENT_PULL_REQUEST_TITLE:", StringComparison.Ordinal);
         var echoLine2Idx = fixedText.IndexOf("echo \"line2\"", StringComparison.Ordinal);
+        await Assert.That(scriptIdx).IsGreaterThan(-1);
         await Assert.That(newEntryIdx).IsGreaterThan(echoLine2Idx);
 
         // The fixed output must still be valid YAML
@@ -12819,5 +12820,32 @@ public sealed class RuleInterfaceTests
         // unresolved and the diagnostic persists.
         var remaining = reparse.Diagnostics.Where(x => x.RuleId == "template-injection").ToList();
         await Assert.That(remaining).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_NoExpandHeredoc_SkipsFix()
+    {
+        // When the untrusted expression is inside a no-expand heredoc body (<<'EOF'),
+        // shell variables won't expand, so the fix must NOT be attached.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat <<'EOF'
+                        ${{ github.event.pull_request.title }}
+                        EOF
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-heredoc.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix must NOT be attached because shell variable expansion is disabled in heredoc
+        await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 }
