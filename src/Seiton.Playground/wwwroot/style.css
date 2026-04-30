@@ -39,7 +39,8 @@
   --fetch-btn-hover-bg: rgba(130, 170, 255, 0.14);
   --fetch-btn-hover-fg: #fff;
   --fetch-btn-active-bg: rgba(130, 170, 255, 0.22);
-  --placeholder-fg: #607d8b;
+  /* Lighter grey so placeholder clears 4.5:1 vs editor (--editor-surface) and vs fetch row (--bg). */
+  --placeholder-fg: #78909c;
   --result-link-notification: #a6c8ff;
   --result-row-border: rgba(74, 99, 115, 0.35);
   --result-row-hover: rgba(130, 170, 255, 0.08);
@@ -81,8 +82,8 @@
     --accent: #1565c0;
     --link-visited: #6a1b9a;
     --danger: #b71c1c;
-    /* Amber (yellow-orange) — keep well separated from error red on light backgrounds. */
-    --warning: #f57f17;
+    /* Deep orange — 4.5:1+ on light gutter vs pale amber; stays visually separate from error red. */
+    --warning: #bf360c;
     --tagline-fg: #5a6d7e;
     --version-badge-fg: #0d47a1;
     --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -97,7 +98,7 @@
     --fetch-btn-hover-bg: rgba(21, 101, 192, 0.12);
     --fetch-btn-hover-fg: #0d47a1;
     --fetch-btn-active-bg: rgba(21, 101, 192, 0.2);
-    --placeholder-fg: #78909c;
+    --placeholder-fg: #546e7a;
     --result-link-notification: #1565c0;
     --result-row-border: rgba(69, 90, 100, 0.18);
     --result-row-hover: rgba(21, 101, 192, 0.08);
@@ -140,8 +141,8 @@
   --accent: #1565c0;
   --link-visited: #6a1b9a;
   --danger: #b71c1c;
-  /* Amber (yellow-orange) — keep well separated from error red on light backgrounds. */
-  --warning: #f57f17;
+  /* Deep orange (not amber) — 4.5:1+ on light gutter (--editor-gutter-bg) while staying distinct from --danger red. */
+  --warning: #bf360c;
   --tagline-fg: #5a6d7e;
   --version-badge-fg: #0d47a1;
   --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -156,7 +157,7 @@
   --fetch-btn-hover-bg: rgba(21, 101, 192, 0.12);
   --fetch-btn-hover-fg: #0d47a1;
   --fetch-btn-active-bg: rgba(21, 101, 192, 0.2);
-  --placeholder-fg: #78909c;
+  --placeholder-fg: #546e7a;
   --result-link-notification: #1565c0;
   --result-row-border: rgba(69, 90, 100, 0.18);
   --result-row-hover: rgba(21, 101, 192, 0.08);
