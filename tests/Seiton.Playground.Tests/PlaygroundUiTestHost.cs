@@ -91,7 +91,7 @@ internal static class PlaygroundUiTestHost
                 // ignore
             }
 
-            TryDeletePublishRoot(state.PublishRoot);
+            await TryDeletePublishRootAsync(state.PublishRoot, cancellationToken);
         }
         finally
         {
@@ -99,18 +99,45 @@ internal static class PlaygroundUiTestHost
         }
     }
 
-    private static void TryDeletePublishRoot(string publishRoot)
+    /// <summary>
+    /// Deletes the publish tree with retries — file locks / AV on Windows and CI can need a few attempts.
+    /// </summary>
+    private static async Task TryDeletePublishRootAsync(string publishRoot, CancellationToken cancellationToken)
     {
-        try
+        const int maxAttempts = 25;
+        var delay = TimeSpan.FromMilliseconds(150);
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            if (Directory.Exists(publishRoot))
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!Directory.Exists(publishRoot))
+            {
+                return;
+            }
+
+            try
             {
                 Directory.Delete(publishRoot, recursive: true);
             }
-        }
-        catch
-        {
-            // best effort — CI / AV / timing
+            catch
+            {
+                // File locks, indexer, AV — try again after backoff.
+            }
+
+            if (!Directory.Exists(publishRoot))
+            {
+                return;
+            }
+
+            try
+            {
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 
