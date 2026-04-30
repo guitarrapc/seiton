@@ -30,6 +30,13 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_ImportMapScript_ContainsValidMinimalJson()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("<script type=\"importmap\">{}</script>", StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task IndexTemplate_HasStableShellLandmarksForLayout()
     {
         var html = await ReadSourceIndexHtmlAsync();
