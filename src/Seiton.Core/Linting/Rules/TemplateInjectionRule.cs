@@ -350,7 +350,11 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
         var message = $"\"{pathString}\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details";
 
-        if (TryBuildFix(step, pathString, sinkName, exprAbsoluteOffset, exprLength, out var fix))
+        // Only attach fix when the untrusted path IS the entire expression.
+        // If the path is embedded in a larger expression (e.g., with ||, &&, format()),
+        // replacing the whole ${{ ... }} would silently drop surrounding logic.
+        var isWholeExpression = rootTokenOffset == 0 && endOffset == expression.Length;
+        if (isWholeExpression && TryBuildFix(step, pathString, sinkName, exprAbsoluteOffset, exprLength, out var fix))
         {
             AddStepError(step, message, location, fix);
         }

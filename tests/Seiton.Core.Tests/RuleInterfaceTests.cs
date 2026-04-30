@@ -12946,4 +12946,29 @@ public sealed class RuleInterfaceTests
         // Fix must NOT be attached because empty env mapping would lead to duplicate env: keys
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_CompoundExpression_SkipsFix()
+    {
+        // When the untrusted path is inside a larger expression (e.g., with || operator),
+        // the fix must NOT be attached because replacing the entire ${{ ... }} would
+        // silently drop the surrounding expression logic.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ github.event.pull_request.title || 'default' }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-compound.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix must NOT be attached because the path is embedded in a larger expression
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
 }
