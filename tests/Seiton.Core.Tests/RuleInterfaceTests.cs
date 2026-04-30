@@ -13132,9 +13132,9 @@ public sealed class RuleInterfaceTests
     public async Task LintEngine_DefaultSortOrder_SortsByLocation()
     {
         // This workflow triggers:
-        // - runner-no-latest (priority 20) at line 5 (runs-on: ubuntu-latest)
+        // - runner-no-latest (priority 20) at line 4 (runs-on: ubuntu-latest)
         // - job-permissions-required (priority 7) at line 3 (job 'build' without permissions)
-        // Default sort (location) should order by line: line 3 before line 5.
+        // Default sort (location) should order by line: line 3 before line 4.
         var yaml = """
         on: push
         jobs:
@@ -13152,7 +13152,7 @@ public sealed class RuleInterfaceTests
             .ToArray();
 
         await Assert.That(ruleDiags.Length).IsEqualTo(2);
-        // With location-based sort (default): job-permissions-required (line 3) before runner-no-latest (line 5)
+        // With location-based sort (default): job-permissions-required (line 3) before runner-no-latest (line 4)
         await Assert.That(ruleDiags[0].RuleId).IsEqualTo("job-permissions-required");
         await Assert.That(ruleDiags[1].RuleId).IsEqualTo("runner-no-latest");
     }
