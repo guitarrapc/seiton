@@ -524,6 +524,12 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
         if (step.Env?.Vars is not null && step.Env.Vars.Value.Count > 0)
         {
+            // Flow-style env (e.g. env: { A: 1 }) cannot be extended by inserting a new line
+            if (IsFlowStyleEnv(utf8Yaml, step.Env))
+            {
+                return false;
+            }
+
             // Existing env mapping: insert after the last env entry (including multi-line values)
             var lastEnvLine = FindLastEnvEntryLine(step.Env);
             if (lastEnvLine < 1)
@@ -603,6 +609,32 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Detects flow-style env mappings (e.g. <c>env: { A: 1 }</c>).
+    /// Flow-style cannot be extended by line insertion.
+    /// </summary>
+    private static bool IsFlowStyleEnv(byte[] utf8Yaml, Env env)
+    {
+        // env.Range.Start points to the first content byte inside the mapping.
+        // For flow-style, the '{' is on the same line immediately before.
+        // Scan backward from env.Range.Start to the beginning of that line looking for '{'.
+        for (var i = env.Range.Start - 1; i >= 0; i--)
+        {
+            var b = utf8Yaml[i];
+            if (b == (byte)'\n' || b == (byte)'\r')
+            {
+                break;
+            }
+
+            if (b == (byte)'{')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private string? DeduplicateEnvName(string baseName, Step step)

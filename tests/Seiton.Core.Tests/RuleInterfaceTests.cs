@@ -9974,7 +9974,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task AutoFixCatalog_OnlySevenRulesAttachFix_TableDriven()
+    public async Task AutoFixCatalog_FixableRulesAttachFix_TableDriven()
     {
         var cases = new[]
         {
@@ -12846,6 +12846,32 @@ public sealed class RuleInterfaceTests
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         // Fix must NOT be attached because shell variable expansion is disabled in heredoc
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_FlowStyleEnv_SkipsFix()
+    {
+        // When existing env is flow-style (e.g. env: { A: 1 }), inserting a new line
+        // after it would create a sibling key at step level, not inside env.
+        // The fix must NOT be attached for flow-style env maps.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - env: { SCRIPT: "hello" }
+                      run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-flow-env.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix must NOT be attached because flow-style env can't be extended by line insertion
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 }
