@@ -12874,4 +12874,51 @@ public sealed class RuleInterfaceTests
         // Fix must NOT be attached because flow-style env can't be extended by line insertion
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_ActionMetadata_NoStaleStateFromPreviousWorkflow()
+    {
+        // When a LintEngine instance first checks a workflow (setting _currentWorkflow/_currentJob),
+        // then checks an action.yml, the stale state must not influence the action metadata check.
+        // The workflow has env var GITHUB_EVENT_PULL_REQUEST_TITLE that, if stale state leaks,
+        // would cause the action fix to deduplicate with _2 suffix.
+        var workflowYaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    GITHUB_EVENT_PULL_REQUEST_TITLE: "placeholder"
+                steps:
+                    - run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var actionYaml = """
+        name: My Action
+        description: Test action
+        runs:
+            using: composite
+            steps:
+                - run: echo "${{ github.event.pull_request.title }}"
+                  shell: bash
+        """;
+
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var fixConfig = new LintConfig { Fix = new FixConfig { Enabled = true } };
+
+        // First: check the workflow (this populates _currentWorkflow and _currentJob)
+        engine.Check(Encoding.UTF8.GetBytes(workflowYaml), ".github/workflows/ci.yml", fixConfig);
+
+        // Second: check the action metadata
+        var actionResult = engine.Check(Encoding.UTF8.GetBytes(actionYaml), "action.yml", fixConfig);
+        await Assert.That(actionResult.HasFatalError).IsEqualTo(false);
+        var actionDiag = actionResult.Diagnostics.First(x => x.RuleId == "template-injection");
+        await Assert.That(actionDiag.Fix is not null).IsTrue();
+
+        // The fix must use GITHUB_EVENT_PULL_REQUEST_TITLE (not _2 suffix from stale dedup)
+        await Assert.That(actionDiag.Fix!.Value.Description)
+            .Contains("GITHUB_EVENT_PULL_REQUEST_TITLE");
+        await Assert.That(actionDiag.Fix!.Value.Description)
+            .DoesNotContain("_2");
+    }
 }

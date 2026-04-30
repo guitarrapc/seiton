@@ -52,6 +52,13 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         _currentJob = null;
     }
 
+    public override void VisitActionMetadataPre(ActionMetadata metadata)
+    {
+        base.VisitActionMetadataPre(metadata);
+        _currentWorkflow = null;
+        _currentJob = null;
+    }
+
     public override void VisitJobPre(Job job)
     {
         _currentJob = job;
@@ -374,8 +381,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         // Skip fix when expression is inside a no-expand heredoc body (<<'EOF' / <<"EOF")
-        // where shell variables won't expand, matching RunEnvContextDirectUseRule behavior
-        if (RunEnvContextDirectUseRule.IsInsideNoExpandHereDoc(Config.Utf8Yaml, exprAbsoluteOffset))
+        // where shell variables won't expand
+        if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, exprAbsoluteOffset))
         {
             return false;
         }
