@@ -88,11 +88,13 @@
     {
       "dataset": "runner-labels",
       "sourceUrls": [
-        "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md"
+        "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md",
+        "https://docs.github.com/en/actions/reference/runners/larger-runners.md"
       ],
-      "fetchedAtUtc": "2026-04-15T16:43:48.6871053\u002B00:00",
+      "fetchedAtUtc": "2026-04-30T13:16:23.4804512\u002B00:00",
       "rawFileHashes": {
-        "github-hosted-runners.docs.md": "sha256:7550f3ebad58d1d9cb1e32324e1163c83100a5367055b8dd12e440af2e931ccb"
+        "github-hosted-runners.docs.md": "sha256:7550f3ebad58d1d9cb1e32324e1163c83100a5367055b8dd12e440af2e931ccb",
+        "larger-runners.docs.md": "sha256:cc293fa44c032b6b01c2922d9973329142b48b943987e0b25ae65b3905305bb8"
       }
     },
     {

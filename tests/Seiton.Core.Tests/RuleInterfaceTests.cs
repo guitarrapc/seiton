@@ -13348,6 +13348,42 @@ public sealed class RuleInterfaceTests
         await Assert.That(runnerLabelDiag.Message).DoesNotContain("... and more");
         // Must contain actual labels like "windows-latest"
         await Assert.That(runnerLabelDiag.Message).Contains("windows-latest");
+        // Must include self-hosted preset labels in the available list
+        await Assert.That(runnerLabelDiag.Message).Contains("\"self-hosted\"");
+    }
+
+    [Test]
+    public async Task RunnerLabelRule_LargerRunnerLabels_NotReportedAsUnknown()
+    {
+        // GitHub larger runners (macOS) from docs should be known labels.
+        var cases = new[]
+        {
+            "macos-latest-xlarge",
+            "macos-latest-large",
+            "macos-15-xlarge",
+            "macos-15-large",
+            "macos-14-xlarge",
+            "macos-14-large",
+            "macos-26-xlarge",
+            "macos-26-large",
+        };
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        foreach (var label in cases)
+        {
+            var yaml = $"""
+            on: push
+            jobs:
+              build:
+                runs-on: {label}
+                steps:
+                  - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+            """;
+            var result = engine.Check(Encoding.UTF8.GetBytes(yaml), $"larger-runner-{label}.yml");
+            var diags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
+            await Assert.That(diags.Length).IsEqualTo(0)
+                .Because($"'{label}' is a GitHub larger runner label and should not be reported as unknown");
+        }
     }
 
     [Test]

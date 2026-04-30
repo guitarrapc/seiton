@@ -9,7 +9,7 @@ namespace Seiton.Core.Generated;
 internal static class RunnerLabels
 {
     /// <summary>Comma-separated list of all known hosted runner labels for diagnostic messages.</summary>
-    internal const string KnownHostedLabelList = "\"macos-14\", \"macos-15\", \"macos-15-intel\", \"macos-26\", \"macos-26-intel\", \"macos-latest\", \"ubuntu-22.04\", \"ubuntu-22.04-arm\", \"ubuntu-24.04\", \"ubuntu-24.04-arm\", \"ubuntu-latest\", \"ubuntu-slim\", \"windows-11-arm\", \"windows-2022\", \"windows-2025\", \"windows-2025-vs2026\", \"windows-latest\"";
+    internal const string KnownHostedLabelList = "\"arm\", \"arm64\", \"linux\", \"macos\", \"macos-14\", \"macos-14-large\", \"macos-14-xlarge\", \"macos-15\", \"macos-15-intel\", \"macos-15-large\", \"macos-15-xlarge\", \"macos-26\", \"macos-26-intel\", \"macos-26-large\", \"macos-26-xlarge\", \"macos-latest\", \"macos-latest-large\", \"macos-latest-xlarge\", \"self-hosted\", \"ubuntu-22.04\", \"ubuntu-22.04-arm\", \"ubuntu-24.04\", \"ubuntu-24.04-arm\", \"ubuntu-latest\", \"ubuntu-slim\", \"windows\", \"windows-11-arm\", \"windows-2022\", \"windows-2025\", \"windows-2025-vs2026\", \"windows-latest\", \"x64\"";
 
     internal static bool IsKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
@@ -25,11 +25,19 @@ internal static class RunnerLabels
     internal static bool IsStableHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
         return EqualsAsciiIgnoreCase(labelUtf8, "macos-14"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-14-large"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-14-xlarge"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos-15"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos-15-intel"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-15-large"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-15-xlarge"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos-26"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos-26-intel"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-26-large"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-26-xlarge"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos-latest"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-latest-large"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos-latest-xlarge"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-22.04"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-22.04-arm"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-24.04"u8)

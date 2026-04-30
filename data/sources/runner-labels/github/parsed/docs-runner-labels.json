@@ -7,11 +7,27 @@
       "isPreview": false
     },
     {
+      "label": "macos-14-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-14-xlarge",
+      "isPreview": false
+    },
+    {
       "label": "macos-15",
       "isPreview": false
     },
     {
       "label": "macos-15-intel",
+      "isPreview": false
+    },
+    {
+      "label": "macos-15-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-15-xlarge",
       "isPreview": false
     },
     {
@@ -23,7 +39,23 @@
       "isPreview": false
     },
     {
+      "label": "macos-26-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-26-xlarge",
+      "isPreview": false
+    },
+    {
       "label": "macos-latest",
+      "isPreview": false
+    },
+    {
+      "label": "macos-latest-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-latest-xlarge",
       "isPreview": false
     },
     {

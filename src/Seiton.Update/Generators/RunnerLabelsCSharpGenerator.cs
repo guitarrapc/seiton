@@ -24,8 +24,9 @@ internal sealed class RunnerLabelsCSharpGenerator
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-runner-labels");
 
-        // Build the full label list string for diagnostic messages
-        var allLabels = stable.Concat(preview).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        // Build the full label list string for diagnostic messages (hosted + self-hosted presets)
+        var selfHostedPresets = new[] { "self-hosted", "x64", "arm", "arm64", "linux", "macos", "windows" };
+        var allLabels = stable.Concat(preview).Concat(selfHostedPresets).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
         var labelListStr = string.Join(", ", allLabels.Select(static l => $"\\\"" + l + "\\\""));
 
         sb.AppendLine(

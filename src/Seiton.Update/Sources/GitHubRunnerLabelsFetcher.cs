@@ -9,6 +9,7 @@ namespace Seiton.Update.Sources;
 internal sealed class GitHubRunnerLabelsFetcher
 {
     private const string DocsSourceUrl = "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md";
+    private const string LargerRunnersDocsUrl = "https://docs.github.com/en/actions/reference/runners/larger-runners.md";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -24,15 +25,17 @@ internal sealed class GitHubRunnerLabelsFetcher
 
         var paths = Paths(repoRoot);
         var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var largerHash = ComputeSha256(File.ReadAllText(paths.RawLargerRunnersPath));
 
         return new SourceManifestEntry
         {
             Dataset = "runner-labels",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = [DocsSourceUrl, LargerRunnersDocsUrl],
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
                 [Path.GetFileName(paths.RawDocsPath)] = docsHash,
+                [Path.GetFileName(paths.RawLargerRunnersPath)] = largerHash,
             },
         };
     }
@@ -49,12 +52,18 @@ internal sealed class GitHubRunnerLabelsFetcher
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:runner-labels:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
+        var largerContent = await client.GetStringAsync(LargerRunnersDocsUrl);
+        var largerHash = ComputeSha256(largerContent);
+        UpdateLogger.Info($"[fetch:runner-labels:sources] downloaded larger-runners={largerContent.Length} bytes ({largerHash[..16]}...)");
+
         var paths = Paths(repoRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(paths.RawDocsPath)!);
 
         File.WriteAllText(paths.RawDocsPath, TextNormalization.NormalizeToLf(docsContent));
+        File.WriteAllText(paths.RawLargerRunnersPath, TextNormalization.NormalizeToLf(largerContent));
 
         UpdateLogger.Info($"[fetch:runner-labels:sources] wrote {paths.RawDocsPath}");
+        UpdateLogger.Info($"[fetch:runner-labels:sources] wrote {paths.RawLargerRunnersPath}");
     }
 
     public void ParseLocalSourceFiles(string repoRoot)
@@ -69,9 +78,19 @@ internal sealed class GitHubRunnerLabelsFetcher
 
         UpdateLogger.Info("[parse:runner-labels:sources] parsing local raw source files...");
 
-        var docsText = File.ReadAllText(paths.RawDocsPath);
         var parser = new GitHubDocsRunnerLabelsMarkdownParser();
+
+        // Parse standard hosted runners
+        var docsText = File.ReadAllText(paths.RawDocsPath);
         var labels = parser.ParseSupportedRunnerLabels(docsText);
+
+        // Parse larger runners (if raw file exists)
+        if (File.Exists(paths.RawLargerRunnersPath))
+        {
+            var largerText = File.ReadAllText(paths.RawLargerRunnersPath);
+            var largerLabels = parser.ParseLargerRunnerLabels(largerText);
+            labels = labels.Concat(largerLabels).ToArray();
+        }
 
         var parsed = new ParsedRunnerLabelsSnapshot
         {
@@ -159,6 +178,7 @@ internal sealed class GitHubRunnerLabelsFetcher
         return new RunnerLabelsPaths
         {
             RawDocsPath = Path.Combine(baseDir, "raw", "github-hosted-runners.docs.md"),
+            RawLargerRunnersPath = Path.Combine(baseDir, "raw", "larger-runners.docs.md"),
             ParsedDocsPath = Path.Combine(baseDir, "parsed", "docs-runner-labels.json"),
             MergedSnapshotPath = Path.Combine(baseDir, "runner_labels.json"),
         };
@@ -174,6 +194,7 @@ internal sealed class GitHubRunnerLabelsFetcher
     private sealed class RunnerLabelsPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
+        public string RawLargerRunnersPath { get; set; } = string.Empty;
         public string ParsedDocsPath { get; set; } = string.Empty;
         public string MergedSnapshotPath { get; set; } = string.Empty;
     }
