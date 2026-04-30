@@ -468,6 +468,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
+        var pathUtf8 = System.Text.Encoding.UTF8.GetBytes(pathString);
         var matches = 0;
         foreach (var pair in env.Vars.Value)
         {
@@ -477,9 +478,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
                 continue;
             }
 
-            // Compare the expression body (trimmed) against pathString
-            var bodyStr = System.Text.Encoding.UTF8.GetString(body);
-            if (!string.Equals(bodyStr, pathString, StringComparison.OrdinalIgnoreCase))
+            // Compare the expression body (trimmed) against pathString as UTF-8 spans
+            if (!body.SequenceEqual(pathUtf8))
             {
                 continue;
             }
@@ -658,7 +658,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     private string? DeduplicateEnvName(string baseName, Step step)
     {
         var existing = CollectExistingEnvNames(step);
-        if (!existing.Contains(baseName, StringComparer.OrdinalIgnoreCase))
+        if (!existing.Contains(baseName))
         {
             return baseName;
         }
@@ -666,7 +666,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         for (var i = 2; i <= 99; i++)
         {
             var candidate = baseName + "_" + i;
-            if (!existing.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            if (!existing.Contains(candidate))
             {
                 return candidate;
             }
