@@ -173,6 +173,9 @@ const applyFixesBtn = document.getElementById('apply-fixes-btn');
 const urlInput = document.getElementById('url-input');
 const fetchBtn = document.getElementById('fetch-btn');
 
+/** True while <code>fetchAndLint</code> awaits network; blocks overlapping runs and input echo re-enabling the button. */
+let fetchInFlight = false;
+
 /** @typedef {'error'|'success'|'info'} ToastVariant */
 
 const FETCH_READY_TITLE = 'Fetch and lint YAML from this URL';
@@ -181,6 +184,8 @@ const FETCH_EMPTY_TITLE = 'Enter a YAML URL first';
 const FETCH_EMPTY_LABEL = 'Fetch and lint YAML — enter a URL first';
 const FETCH_INVALID_TITLE = 'Incomplete URL — use a full hostname (two or more labels), localhost, or an IP.';
 const FETCH_INVALID_LABEL = 'Fetch YAML — URL looks incomplete or invalid.';
+const FETCH_BUSY_TITLE = 'Fetching YAML…';
+const FETCH_BUSY_LABEL = 'Fetching YAML — please wait';
 
 /** @type {Record<ToastVariant, number>} */
 const TOAST_DURATION_MS = { error: 8000, success: 3800, info: 4200 };
@@ -239,6 +244,11 @@ function looksLikePlausibleHttpFetchUrl(trimmed) {
 }
 
 /**
+ * Toast host: holds dismiss callback for global Escape (capture phase).
+ * @typedef {HTMLElement & { _seitonToastDismiss?: () => void }} SeitonToastHost
+ */
+
+/**
  * Toast at top of viewport; does not clear lint diagnostics.
  * @param {string} message
  * @param {ToastVariant} [variant]
@@ -276,12 +286,9 @@ function showToast(message, variant = 'info', durationMs) {
         removeToastElement(wrap);
     };
     dismissBtn.addEventListener('click', dismiss);
-    wrap.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape') {
-            ev.preventDefault();
-            dismiss();
-        }
-    });
+    /** @type {SeitonToastHost} */
+    const toastHost = /** @type {SeitonToastHost} */ (wrap);
+    toastHost._seitonToastDismiss = dismiss;
 }
 
 /** @param {HTMLElement} el */
@@ -299,8 +306,42 @@ function removeToastElement(el) {
     }, 240);
 }
 
+function installToastGlobalEscapeDismiss() {
+    if (!toastStack) {
+        return;
+    }
+    document.addEventListener(
+        'keydown',
+        (ev) => {
+            if (ev.key !== 'Escape') {
+                return;
+            }
+            /** @type {SeitonToastHost | null} */
+            const top = /** @type {SeitonToastHost | null} */ (toastStack.lastElementChild);
+            if (!top || typeof top._seitonToastDismiss !== 'function') {
+                return;
+            }
+            ev.preventDefault();
+            ev.stopPropagation();
+            top._seitonToastDismiss();
+        },
+        true,
+    );
+}
+
+installToastGlobalEscapeDismiss();
+
 function syncFetchButtonEnabled() {
     if (!fetchBtn || !urlInput) return;
+    if (fetchInFlight) {
+        fetchBtn.disabled = true;
+        urlInput.disabled = true;
+        fetchBtn.title = FETCH_BUSY_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_BUSY_LABEL);
+        return;
+    }
+    urlInput.disabled = false;
+
     const raw = (urlInput.value ?? '').trim();
     if (!raw.length) {
         fetchBtn.disabled = true;
@@ -512,6 +553,9 @@ if (urlInput) {
             return;
         }
         ev.preventDefault();
+        if (fetchInFlight) {
+            return;
+        }
         const raw = (urlInput.value ?? '').trim();
         if (!raw.length) {
             urlInput.focus();
@@ -529,6 +573,9 @@ if (urlInput) {
 syncFetchButtonEnabled();
 
 async function fetchAndLint() {
+    if (fetchInFlight) {
+        return;
+    }
     const raw = urlInput?.value?.trim() ?? '';
     if (!raw) {
         return;
@@ -537,7 +584,8 @@ async function fetchAndLint() {
         showToast(FETCH_INVALID_TITLE, 'info');
         return;
     }
-    fetchBtn.disabled = true;
+    fetchInFlight = true;
+    syncFetchButtonEnabled();
     try {
         const fetchUrl = normalizeGitHubBlobToRaw(raw);
         const res = await fetch(fetchUrl, { mode: 'cors', redirect: 'follow', cache: 'no-store' });
@@ -556,6 +604,7 @@ async function fetchAndLint() {
     } catch (e) {
         showToast(e?.message ?? String(e), 'error');
     } finally {
+        fetchInFlight = false;
         syncFetchButtonEnabled();
     }
 }
