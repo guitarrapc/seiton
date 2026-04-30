@@ -104,6 +104,8 @@ To run all tests:
 dotnet test
 ```
 
+`tests/Seiton.Core.Tests/fixtures` are stored with LF line endings (`.gitattributes`). Actionlint compat tests normalize YAML newlines when loading fixtures so a Windows checkout with `core.autocrlf` does not shift byte indexes in golden `.out` / `.seiton.out` expectations.
+
 To run specific tests (e.g., ExpressionTests), from the repo root:
 
 ```shell

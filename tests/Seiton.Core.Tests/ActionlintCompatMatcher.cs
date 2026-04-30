@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.IO;
+using System.Text.RegularExpressions;
 
 namespace Seiton.Core.Tests;
 
@@ -21,6 +22,53 @@ internal sealed class MatchResult
 /// </summary>
 internal static class ActionlintCompatMatcher
 {
+    /// <summary>
+    /// Reads YAML fixture bytes with newline normalization to LF (0x0A).
+    /// Golden actionlint <c>.out</c> / <c>.seiton.out</c> files assume LF; a Windows checkout with
+    /// <c>core.autocrlf</c> rewrites YAML to CRLF and shifts byte indexes and embedded newlines in diagnostics.
+    /// </summary>
+    public static byte[] ReadYamlUtf8Normalized(string path) =>
+        NormalizeUtf8NewlinesToLf(File.ReadAllBytes(path));
+
+    /// <summary>Replaces CR and CRLF with LF in UTF-8 bytes (no-op if no CR present).</summary>
+    public static byte[] NormalizeUtf8NewlinesToLf(byte[] utf8)
+    {
+        var needsWork = false;
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            if (utf8[i] == (byte)'\r')
+            {
+                needsWork = true;
+                break;
+            }
+        }
+
+        if (!needsWork)
+        {
+            return utf8;
+        }
+
+        using var ms = new MemoryStream(utf8.Length);
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            if (utf8[i] == (byte)'\r')
+            {
+                if (i + 1 < utf8.Length && utf8[i + 1] == (byte)'\n')
+                {
+                    i++;
+                }
+
+                ms.WriteByte((byte)'\n');
+            }
+            else
+            {
+                ms.WriteByte(utf8[i]);
+            }
+        }
+
+        return ms.ToArray();
+    }
+
     /// <summary>
     /// Parses an actionlint <c>.out</c> file into expectation lines.
     /// Lines wrapped in <c>/pattern/</c> are treated as regex; others are literal.

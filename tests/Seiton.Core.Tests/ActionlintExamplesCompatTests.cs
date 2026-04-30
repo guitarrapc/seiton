@@ -152,7 +152,7 @@ public sealed class ActionlintExamplesCompatTests
         }
 
         // 1. Run seiton lint
-        var utf8Yaml = File.ReadAllBytes(fixture.YamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(fixture.YamlPath);
         var engine = new LintEngine();
         var lintFilePath = GetLintFilePath();
         var result = engine.Check(utf8Yaml, lintFilePath);
@@ -216,7 +216,7 @@ public sealed class ActionlintExamplesCompatTests
 
             totalFixtures++;
 
-            var utf8Yaml = File.ReadAllBytes(yamlPath);
+            var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
             var engine = new LintEngine();
             var result = engine.Check(utf8Yaml, lintFilePath);
 
@@ -267,7 +267,7 @@ public sealed class ActionlintExamplesCompatTests
             return;
         }
 
-        var utf8Yaml = File.ReadAllBytes(fixture.YamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(fixture.YamlPath);
         var engine = new LintEngine();
         var lintFilePath = GetLintFilePath();
         var result = engine.Check(utf8Yaml, lintFilePath);
@@ -343,7 +343,7 @@ public sealed class ActionlintExamplesCompatTests
         var yamlPath = Path.Combine(examplesRoot, "invalid_action_format.yaml");
         var outPath = Path.Combine(examplesRoot, "invalid_action_format.out");
 
-        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
         var engine = new LintEngine();
         var result = engine.Check(utf8Yaml, GetLintFilePath());
 
@@ -365,7 +365,7 @@ public sealed class ActionlintExamplesCompatTests
         var yamlPath = Path.Combine(examplesRoot, "local_action_inputs.yaml");
         var outPath = Path.Combine(examplesRoot, "local_action_inputs.out");
 
-        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
         var engine = new LintEngine();
         var result = engine.Check(utf8Yaml, GetLintFilePath());
 
@@ -387,7 +387,7 @@ public sealed class ActionlintExamplesCompatTests
         var yamlPath = Path.Combine(examplesRoot, "action_metadata_syntax_validation.yaml");
         var outPath = Path.Combine(examplesRoot, "action_metadata_syntax_validation.out");
 
-        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
         var engine = new LintEngine();
         var result = engine.Check(utf8Yaml, GetLintFilePath());
 
@@ -409,7 +409,7 @@ public sealed class ActionlintExamplesCompatTests
         var yamlPath = Path.Combine(examplesRoot, "workflow_call_jobs.yaml");
         var outPath = Path.Combine(examplesRoot, "workflow_call_jobs.out");
 
-        var utf8Yaml = File.ReadAllBytes(yamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
         var engine = new LintEngine();
         var result = engine.Check(utf8Yaml, GetLintFilePath());
 

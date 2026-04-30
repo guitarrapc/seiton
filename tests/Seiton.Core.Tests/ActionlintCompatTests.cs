@@ -143,7 +143,7 @@ public sealed class ActionlintCompatTests
         }
 
         // 1. Run seiton lint
-        var utf8Yaml = File.ReadAllBytes(fixture.YamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(fixture.YamlPath);
         var engine = new LintEngine();
         var result = engine.Check(utf8Yaml, "test.yaml");
 
@@ -211,7 +211,7 @@ public sealed class ActionlintCompatTests
 
             totalFixtures++;
 
-            var utf8Yaml = File.ReadAllBytes(yamlPath);
+            var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
             var engine = new LintEngine();
             var result = engine.Check(utf8Yaml, "test.yaml");
 
@@ -304,7 +304,7 @@ public sealed class ActionlintCompatTests
     [DisplayName("SeitonOut: $name")]
     public async Task GenerateOrVerifySeitonOut(CompatFixture fixture)
     {
-        var utf8Yaml = File.ReadAllBytes(fixture.YamlPath);
+        var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(fixture.YamlPath);
         var engine = new LintEngine();
         var result = engine.Check(utf8Yaml, "test.yaml");
 
@@ -358,7 +358,7 @@ public sealed class ActionlintCompatTests
                 continue;
             }
 
-            var utf8Yaml = File.ReadAllBytes(yamlPath);
+            var utf8Yaml = ActionlintCompatMatcher.ReadYamlUtf8Normalized(yamlPath);
             var engine = new LintEngine();
             var result = engine.Check(utf8Yaml, "test.yaml");
 
