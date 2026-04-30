@@ -912,7 +912,9 @@ footer a {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem 0.35rem;
+  /* Equal spacing between repo | copyright | theme; separators are narrow `|` nodes. */
+  column-gap: clamp(0.55rem, 2.25vw, 1.05rem);
+  row-gap: 0.4rem;
 }
 
 .footer-copy-row .repo-mark {
@@ -935,8 +937,11 @@ footer a {
 }
 
 .footer-copy-sep {
+  flex: 0 0 auto;
   color: var(--muted);
   user-select: none;
+  opacity: 0.9;
+  line-height: 1;
 }
 
 .theme-cycle-btn {
