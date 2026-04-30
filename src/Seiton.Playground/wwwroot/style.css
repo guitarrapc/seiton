@@ -927,7 +927,7 @@ footer a {
 .theme-cycle-btn {
   background: var(--bg);
   color: var(--text);
-  border: 1px solid var(--border-default);
+  border: 0px solid var(--border-default);
   border-radius: 4px;
   padding: 0.42rem;
   cursor: pointer;
@@ -951,7 +951,7 @@ footer a {
   border-color: var(--accent);
 }
 
+.theme-cycle-btn:focus,
 .theme-cycle-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
 }
