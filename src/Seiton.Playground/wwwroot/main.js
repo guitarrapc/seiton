@@ -146,12 +146,17 @@ const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 await runMain();
 
+/** Base URL for GitHub release pages; path segment is the semver tag (displayed with leading v). */
+const SEITON_RELEASE_TAG_BASE_URL = 'https://github.com/guitarrapc/seiton/releases/tag/';
+
 const versionEl = document.getElementById('playground-version');
 try {
     const v = exports.Seiton.Playground.LintInterop.GetProductVersion();
     if (versionEl && typeof v === 'string' && v.length > 0) {
         const label = v.startsWith('v') ? v : `v${v}`;
         versionEl.textContent = label;
+        versionEl.href = SEITON_RELEASE_TAG_BASE_URL + encodeURIComponent(label);
+        versionEl.setAttribute('aria-label', `Release ${label} — open on GitHub`);
         versionEl.hidden = false;
     }
 } catch {
