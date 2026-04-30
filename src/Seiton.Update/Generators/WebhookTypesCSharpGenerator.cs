@@ -177,6 +177,31 @@ internal sealed class WebhookTypesCSharpGenerator
                     }
             """);
 
+        // Generate GetAllowedOptionNames: returns string[] of valid option names for suggestion
+        sb.Append(
+            """
+
+                    public string[] GetAllowedOptionNames()
+                    {
+                        return Id switch
+                        {
+            """);
+        foreach (var e in events)
+        {
+            if (optionMap.TryGetValue(e.Name, out var options) && options.Length > 0)
+            {
+                var arrayLiteral = string.Join(", ", options.Select(static o => $"\"{o}\""));
+                sb.Append($"                EventId.{ToEventIdName(e.Name)} => [{arrayLiteral}],\n");
+            }
+        }
+
+        sb.AppendLine(
+            """
+                            _ => [],
+                        };
+                    }
+            """);
+
         if (usePullRequestHelper && pullRequestTypes is not null)
         {
             sb.Append(

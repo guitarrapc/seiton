@@ -1,4 +1,4 @@
-test.yaml:3:5: on.push does not support option: branch [syntax-check]
+test.yaml:3:5: on.push does not support option: branch. did you mean "branches"? [syntax-check]
 test.yaml:22:13: receiver of object dereference "permissions" must be type of object but got "string" [expression]
 test.yaml:17:25: unknown input 'node_version' for action 'actions/setup-node@v4'. did you mean 'node-version'? [action]
 test.yaml:14:31: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA [action]

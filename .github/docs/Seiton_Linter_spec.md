@@ -241,7 +241,7 @@ Residual gaps continue to be tracked as parity-hardening work items in the imple
 | `workflow-call-input-default` | Validates `on.workflow_call.inputs` default values against declared types. | Required input with a default; boolean input defaulting to `"yes"`; number input defaulting to `"abc"`. | Prevents invalid reusable workflow input contracts that cause runtime confusion or silent type mismatch. | Remove default from required inputs; use `true`/`false` for boolean defaults; use numeric literals for number defaults. | ✗ | Expression defaults are skipped from type validation; runtime coercion may still differ from declared type intent. |
 | `deny-write-all` | Fail-safe rule forbidding `write-all` permissions. | Workflow/job uses `permissions: write-all`. | Enforces hard least-privilege baseline and prevents blanket write grants. | Replace with `read-all` or explicit minimal scopes. | ✓ | Reduced scopes can break required write operations; add explicit targeted scopes where needed. |
 | `credentials` | Warns when private/custom registry images lack credentials config. | `container.image` or `services.*.image` points to private host without `credentials`. | Prevents pull failures and accidental fallback assumptions. | Add proper `credentials` or move to approved public registry. | ✗ | Credential presence is not credential safety. Ensure secret storage, rotation, and least scope. |
-| `template-injection` | Detects unsafe direct interpolation of untrusted event data. | `run` script text directly embeds `github.event.*` user-controlled fields. | Mitigates command/script injection and unsafe template expansion. | Use safe indirection (`env` mapping, strict quoting, validation/sanitization). | ✗ | Sanitization defects may remain. Add allowlist validation and escape-by-context patterns. |
+| `template-injection` | Detects unsafe direct interpolation of untrusted event data. | `run` script text directly embeds `github.event.*` user-controlled fields. | Mitigates command/script injection and unsafe template expansion. | Use safe indirection (`env` mapping, strict quoting, validation/sanitization). | △ Partial | Partial auto-fix applies only to `run:` sinks with deterministic paths (no wildcards); `actions/github-script` `script` inputs are not auto-fixed. Fix generates a mechanical env var name (e.g., `GITHUB_EVENT_HEAD_COMMIT_MESSAGE`) and inserts an `env:` mapping. If an existing unique env mapping for the same expression is found, it reuses that variable name. Names are deduplicated with `_2` suffix. **Fix boundary conditions (fix skipped when any apply):** (1) sink is not `run:` (e.g., `actions/github-script`); (2) path contains wildcard (`*`); (3) expression is part of a compound expression (not the whole `${{ }}`); (4) expression is inside a no-expand heredoc body (`<<'EOF'` / `<<"EOF"`); (5) expression is inside shell single quotes (`'...'`) where `${VAR}` would not expand; (6) step env is flow-style (`env: { ... }`); (7) step env exists but is empty (`env: {}`); (8) only one fix per step (multi-pass CLI handles remaining); (9) env var name deduplication exhausted (3 attempts). Sanitization defects may remain; add allowlist validation and escape-by-context patterns. |
 | `expr-undefined-var` | Detects context roots unavailable in current expression scope. | Job-level expression uses `steps.*`; invalid root for that location. | Prevents silent logic errors and brittle condition behavior. | Replace with scope-valid contexts or restructure where data is produced/consumed. | ✗ | Scope-valid expression can still be semantically wrong. Add tests for condition truth tables. |
 | `run-env-context-direct-use` | Disallows `${{ env.* }}` direct expansion inside `run`. | `run: echo "${{ env.VERSION }}"`. | Avoids timing/context confusion and unsafe interpolation style. | Map to shell variables and reference as shell-native syntax. | △ Partial | Auto-fix intentionally skips quoted heredoc bodies (`<<'EOF'`, `<<"EOF"`) where shell variable expansion is disabled; applying `${VAR}` there would silently break output semantics. Variable source may still be untrusted, so apply quoting and input validation in shell commands. |
 | `run-secrets-context-direct-use` | Disallows direct `${{ secrets.* }}` usage inside `run`. | `run: curl -H "Auth: ${{ secrets.TOKEN }}" ...`. | Reduces accidental secret exposure in command rendering/logging paths. | Map secrets into `env` and use shell variables with careful redaction handling. | △ Partial | Partial auto-fix applies only when a unique existing `env` mapping points to the same secret key. Secret can still leak via command args, process lists, or logs; prefer stdin/files where possible. |
@@ -688,7 +688,7 @@ The following are **not active** (online rules; require `rules.<id>.enabled: tru
 
 `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`
 
-**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `run-env-context-direct-use` (partial), `job-permissions-required`, `deny-read-all`, `permissions` (partial), `id-naming` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `checkout-persist-credentials` (partial). `unpinned-uses` / `unpinned-image` do **not** carry fixes.
+**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `run-env-context-direct-use` (partial), `job-permissions-required`, `deny-read-all`, `permissions` (partial), `id-naming` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `checkout-persist-credentials` (partial). Parser-originated fixes attach for unknown event option keys with Levenshtein suggestions (§8.3.1). `unpinned-uses` / `unpinned-image` do **not** carry fixes.
 
 ---
 
@@ -1122,6 +1122,19 @@ Rules that support auto-fix must attach `DiagnosticFix` to each fixable `Diagnos
 - If a rule cannot guarantee a safe fix for a specific diagnostic instance, it must omit the `Fix` field rather than emit an unsafe fix.
 
 The existing `GetDiagnostics()` contract is unchanged; fixes are embedded within returned `Diagnostic` values.
+
+### 8.3.1 Parser-Originated Fixes
+
+The parser may also attach `DiagnosticFix` to parser-originated diagnostics when a deterministic fix is available. Parser fixes follow the same data model and application contract as rule fixes (§8.1, §8.2).
+
+Current parser-originated fixes:
+
+| Diagnostic | Fix Description |
+|---|---|
+| Unknown event option with Levenshtein suggestion (`on.<event> does not support option: X. did you mean "Y"?`) | Replace key bytes with suggested option name |
+| Unknown `image_version` option with suggestion | Replace key bytes with suggested option name |
+
+Parser fixes are always attached (no config gate) because they are on error paths only and the suggestion is unambiguous (single closest match within distance threshold).
 
 ### 8.4 Fixable Rule Catalog
 

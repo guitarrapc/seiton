@@ -442,7 +442,7 @@ When the scalar is an event name:
 For mapping form of `image_version`:
 - `names` -> sequence of scalar
 - `versions` -> sequence of scalar
-- other -> unexpectedKey
+- other -> unknownOptionWithSuggestion (candidates: `names`, `versions`)
 
 #### 3.4.2 WebhookEvent Parse
 
@@ -457,8 +457,29 @@ ParseWebhookEvent(name, configNode):
     "paths"            -> parseWebhookEventFilter
     "paths-ignore"     -> parseWebhookEventFilter
     "workflows"        -> parseStringOrStringSequence   (workflow_run only)
-    other              -> unexpectedKey
+    other              -> unknownOptionWithSuggestion
 ```
+
+#### 3.4.2a Unknown Option Suggestion and Auto-Fix
+
+When a webhook event option or `image_version` option key is unknown (not in the event's allowed option set), the parser performs Levenshtein distance matching against the event's valid option names.
+
+**Algorithm:**
+1. Compute Levenshtein distance between the unknown key and each allowed option for the event.
+2. Select the closest match if it is within an acceptable distance threshold.
+3. Distance threshold adapts to input length: ≤4 chars → max 1, ≤8 chars → max 2, >8 chars → max 3.
+
+**Diagnostic behavior:**
+- When a close match is found: message includes `did you mean "{suggestion}"?` suffix, and the diagnostic carries a `DiagnosticFix` that replaces the unknown key bytes with the suggested option name.
+- When no match is within threshold: plain `does not support option: {key}` message with no fix attached.
+
+**Examples:**
+- `on.push` with key `branch` → suggests `branches` (distance 2, fix attached)
+- `on.push` with key `tags_ignore` → suggests `tags-ignore` (distance 1, fix attached)
+- `on.push` with key `xyz` → no suggestion (distance too large, no fix)
+- `on.image_version` with key `name` → suggests `names` (distance 1, fix attached)
+
+This is an error-path-only feature; Levenshtein computation does not affect parse performance on valid inputs.
 
 #### 3.4.3 Exclusive Filter Validation
 
@@ -787,7 +808,7 @@ The parser uses tag information (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`
 
 | Situation | Recovery |
 |---|---|
-| Unknown key | error + SkipCurrentNode for value |
+| Unknown key | error + SkipCurrentNode for value. For event option keys, includes Levenshtein suggestion and auto-fix when a close match is found (§3.4.2a) |
 | Type mismatch | error + SkipCurrentNode |
 | Missing required key | aggregate error after mapping traversal |
 | Exclusive constraint violation | aggregate error after mapping traversal |
@@ -1070,6 +1091,8 @@ Key parser-relevant contract points (see `Seiton_Update_spec.md` for full detail
 | RelatedLocations | TextRange[]? | Related positions (e.g., opposing side of exclusive constraint) |
 | Help | string? | Fix suggestion |
 | FilePath | string? | Source file path propagated from Parse/Lint entrypoint |
+| Fix | DiagnosticFix? | Auto-fix data (description + text edits). See Linter spec §8.1 for structure |
+| Metadata | map[string,string]? | Rule-specific key-value metadata |
 
 ### 10.2 Location Policy
 

@@ -330,4 +330,215 @@ internal static class RunContextDirectUseAnalyzer
 
         return matchCount == 1;
     }
+
+    // HereDoc Detection
+
+    internal static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
+    {
+        if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
+        {
+            return false;
+        }
+
+        Span<HereDocState> hereDocs = stackalloc HereDocState[4];
+        var hereDocCount = 0;
+        var targetLine = 1;
+        for (var i = 0; i < targetOffset; i++)
+        {
+            if (source[i] == (byte)'\n')
+            {
+                targetLine++;
+            }
+        }
+
+        var currentLine = 1;
+        var lineStart = 0;
+        while (lineStart <= source.Length)
+        {
+            var lineEnd = lineStart;
+            while (lineEnd < source.Length && source[lineEnd] != (byte)'\n')
+            {
+                lineEnd++;
+            }
+
+            var isTargetLine = currentLine == targetLine;
+            var line = source.AsSpan(lineStart, lineEnd - lineStart);
+            if (line.Length > 0 && line[^1] == (byte)'\r')
+            {
+                line = line[..^1];
+            }
+
+            if (hereDocCount > 0)
+            {
+                var top = hereDocs[hereDocCount - 1];
+                var candidate = line;
+                if (top.StripTabs)
+                {
+                    var trimIndex = 0;
+                    while (trimIndex < candidate.Length && candidate[trimIndex] == (byte)'\t')
+                    {
+                        trimIndex++;
+                    }
+
+                    candidate = candidate[trimIndex..];
+                }
+
+                if (candidate.SequenceEqual(source.AsSpan(top.TerminatorOffset, top.TerminatorLength)))
+                {
+                    hereDocCount--;
+                }
+                else if (isTargetLine)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                if (TryParseNoExpandHereDocStart(line, lineStart, out var state) && hereDocCount < hereDocs.Length)
+                {
+                    hereDocs[hereDocCount++] = state;
+                }
+
+                if (isTargetLine)
+                {
+                    return false;
+                }
+            }
+
+            if (lineEnd >= source.Length)
+            {
+                break;
+            }
+
+            currentLine++;
+            lineStart = lineEnd + 1;
+        }
+
+        return false;
+    }
+
+    internal static bool TryParseNoExpandHereDocStart(ReadOnlySpan<byte> line, int lineStartInSource, out HereDocState state)
+    {
+        state = default;
+        var i = 0;
+        while (i < line.Length - 1)
+        {
+            if (line[i] != (byte)'<' || line[i + 1] != (byte)'<')
+            {
+                i++;
+                continue;
+            }
+
+            i += 2;
+            var stripTabs = false;
+            if (i < line.Length && line[i] == (byte)'-')
+            {
+                stripTabs = true;
+                i++;
+            }
+
+            while (i < line.Length && (line[i] == (byte)' ' || line[i] == (byte)'\t'))
+            {
+                i++;
+            }
+
+            if (i >= line.Length)
+            {
+                return false;
+            }
+
+            var quote = line[i];
+            if (quote is not ((byte)'\'' or (byte)'"'))
+            {
+                return false;
+            }
+
+            i++;
+            var start = i;
+            while (i < line.Length && line[i] != quote)
+            {
+                i++;
+            }
+
+            if (i <= start || i >= line.Length)
+            {
+                return false;
+            }
+
+            state = new HereDocState(lineStartInSource + start, i - start, stripTabs);
+            return true;
+        }
+
+        return false;
+    }
+
+    internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
+
+    // Single-Quote Detection
+
+    /// <summary>
+    /// Returns true when <paramref name="targetOffset"/> falls inside a shell single-quoted
+    /// string on the same line. Shell single quotes suppress all variable expansion, so
+    /// replacing ${{ }} with ${VAR} would be ineffective.
+    /// </summary>
+    internal static bool IsInsideShellSingleQuotes(byte[] source, int targetOffset)
+    {
+        if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
+        {
+            return false;
+        }
+
+        // Find start of the line containing targetOffset
+        var lineStart = targetOffset;
+        while (lineStart > 0 && source[lineStart - 1] != (byte)'\n')
+        {
+            lineStart--;
+        }
+
+        // Walk from lineStart to targetOffset using a small single-line shell
+        // quoting state machine. Single quotes only toggle when not inside
+        // double quotes. Double quotes only toggle when not inside single
+        // quotes. Backslashes escape the next character outside single quotes.
+        var insideSingleQuote = false;
+        var insideDoubleQuote = false;
+        var escaped = false;
+        for (var i = lineStart; i < targetOffset; i++)
+        {
+            var current = source[i];
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (insideSingleQuote)
+            {
+                if (current == (byte)'\'')
+                {
+                    insideSingleQuote = false;
+                }
+
+                continue;
+            }
+
+            if (current == (byte)'\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (current == (byte)'"')
+            {
+                insideDoubleQuote = !insideDoubleQuote;
+                continue;
+            }
+
+            if (!insideDoubleQuote && current == (byte)'\'')
+            {
+                insideSingleQuote = true;
+            }
+        }
+
+        return insideSingleQuote;
+    }
 }
