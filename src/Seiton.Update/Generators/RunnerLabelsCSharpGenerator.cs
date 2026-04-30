@@ -114,14 +114,24 @@ internal sealed partial class RunnerLabelsCSharpGenerator
                 /// </summary>
                 internal static bool IsSelfHostedPresetLabel(ReadOnlySpan<byte> labelUtf8)
                 {
-                    return EqualsAsciiIgnoreCase(labelUtf8, "self-hosted"u8)
-                        || EqualsAsciiIgnoreCase(labelUtf8, "linux"u8)
-                        || EqualsAsciiIgnoreCase(labelUtf8, "macos"u8)
-                        || EqualsAsciiIgnoreCase(labelUtf8, "windows"u8)
-                        || EqualsAsciiIgnoreCase(labelUtf8, "x64"u8)
-                        || EqualsAsciiIgnoreCase(labelUtf8, "arm"u8)
-                        || EqualsAsciiIgnoreCase(labelUtf8, "arm64"u8);
+            """);
+        sb.AppendLine();
+
+        for (var i = 0; i < selfHostedPresets.Length; i++)
+        {
+            var op = i == 0 ? "return " : "    || ";
+            var suffix = i == selfHostedPresets.Length - 1 ? ";" : string.Empty;
+            sb.AppendLine($"        {op}EqualsAsciiIgnoreCase(labelUtf8, \"{selfHostedPresets[i]}\"u8){suffix}");
+        }
+
+        sb.Append(
+            """
                 }
+            """);
+
+        sb.Append(
+            """
+
 
                 static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
                 {

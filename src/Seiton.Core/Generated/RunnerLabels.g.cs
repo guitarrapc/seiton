@@ -73,12 +73,12 @@ internal static class RunnerLabels
     internal static bool IsSelfHostedPresetLabel(ReadOnlySpan<byte> labelUtf8)
     {
         return EqualsAsciiIgnoreCase(labelUtf8, "self-hosted"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "linux"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "macos"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "windows"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "x64"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "arm"u8)
-            || EqualsAsciiIgnoreCase(labelUtf8, "arm64"u8);
+            || EqualsAsciiIgnoreCase(labelUtf8, "arm64"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "linux"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "macos"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows"u8);
     }
 
     static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
