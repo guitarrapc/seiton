@@ -3702,7 +3702,75 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(fixedText).Contains("build-job:");
         await Assert.That(fixedText).DoesNotContain("\"build job\"");
-        await Assert.That(fixedText).Contains("build-job");
+        await Assert.That(fixedText).Contains("needs: [build-job, test]");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_JobIdWithSpace_UpdatesNeedsSequenceReferences_CaseInsensitive()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "build job":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo build
+            test:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo test
+            deploy:
+                needs: ["BUILD JOB", test]
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo deploy
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("build-job:");
+        await Assert.That(fixedText).DoesNotContain("\"BUILD JOB\"");
+        await Assert.That(fixedText).Contains("needs: [build-job, test]");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_InvalidJobId_UnderscoresInSuggestedNameBecomeHyphens()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "foo_bar baz":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo ng
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-underscore-kebab.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-underscore-kebab.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("foo-bar-baz:");
+        await Assert.That(fixedText).DoesNotContain("foo_bar");
         await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
     }
 

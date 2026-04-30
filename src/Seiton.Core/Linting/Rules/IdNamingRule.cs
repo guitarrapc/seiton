@@ -114,7 +114,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         // Edit for all needs references to this job ID across all jobs
         if (_workflow is not null && Config.Utf8Yaml is not null)
         {
-            var originalIdBytes = Encoding.UTF8.GetBytes(originalId);
+            var jobIdUtf8 = Arena.GetStringValue(idNode);
             foreach (var (_, job) in _workflow.Jobs)
             {
                 if (job.Needs is null)
@@ -131,7 +131,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
                     }
 
                     var needsValue = Arena.GetStringValue(needsNode);
-                    if (needsValue.SequenceEqual(originalIdBytes))
+                    if (SpanEqualsIgnoreCaseAscii(needsValue, jobIdUtf8))
                     {
                         var needsEdit = BuildSliceReplacementEdit(needsNode, newId);
                         edits.Add(needsEdit);
@@ -192,9 +192,16 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 
                 sb.Append((char)(c + 32)); // to lowercase
             }
-            else if (c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-' or '_')
+            else if (c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-')
             {
                 sb.Append(c);
+            }
+            else if (c == '_')
+            {
+                if (sb.Length > 0 && sb[sb.Length - 1] != '-')
+                {
+                    sb.Append('-');
+                }
             }
             else
             {
