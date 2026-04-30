@@ -1,2 +1,0 @@
-test.yaml:6:7: job.env key 'FOO=BAR' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]
-test.yaml:7:7: job.env key 'FOO BAR' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]

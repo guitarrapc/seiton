@@ -1,3 +1,0 @@
-test.yaml:19:20: property "platform" is not defined in object type {os: string; node: string; package: object; npm: any} [expression]
-test.yaml:21:20: property "dev" is not defined in object type {name: any; optional: bool} [expression]
-test.yaml:34:20: property "os" is not defined in object type {} [expression]

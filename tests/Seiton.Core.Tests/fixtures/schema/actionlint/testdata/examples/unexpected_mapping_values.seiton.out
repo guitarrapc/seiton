@@ -1,3 +1,0 @@
-test.yaml:6:18: jobs.'test'.strategy.fail-fast must be bool or expression [syntax-check]
-test.yaml:8:21: jobs.'test'.strategy.max-parallel must be integer [syntax-check]
-test.yaml:13:26: jobs.'test'.steps[1] timeout-minutes must be number or expression [syntax-check]

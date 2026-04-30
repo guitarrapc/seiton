@@ -1,4 +1,0 @@
-test.yaml:8:16: shell name 'dash' is invalid; valid values are: bash, cmd, powershell, pwsh, python, sh, or a custom shell command containing '{0}' [syntax-check]
-test.yaml:11:16: shell 'powershell' is not available on linux runners [syntax-check]
-test.yaml:17:16: shell name 'fish' is invalid; valid values are: bash, cmd, powershell, pwsh, python, sh, or a custom shell command containing '{0}' [syntax-check]
-test.yaml:27:9: shell 'sh' is not available on windows runners [syntax-check]

@@ -1,3 +1,0 @@
-test.yaml:8:19: property "cache" is not defined in object type {} [expression]
-test.yaml:10:28: action uses 'actions/cache@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/cache/tree/v4 (fixable with --fix --enable-pin-network) [action]
-test.yaml:18:19: property "cache_hit" is not defined in object type {cache-hit: string} [expression]

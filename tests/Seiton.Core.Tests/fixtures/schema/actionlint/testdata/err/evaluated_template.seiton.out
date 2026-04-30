@@ -1,5 +1,0 @@
-test.yaml:9:28: action uses 'actions/cache@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/cache/tree/v4 (fixable with --fix --enable-pin-network) [action]
-test.yaml:22:20: object value in ${{ }} will be converted to string "[Object]" [expression]
-test.yaml:22:38: {cache-hit: string} value in ${{ }} will be converted to string "[Object]" [expression]
-test.yaml:22:63: array value in ${{ }} will be converted to string "[Array]" [expression]
-test.yaml:24:20: null value in ${{ }} will be converted to empty string [expression]

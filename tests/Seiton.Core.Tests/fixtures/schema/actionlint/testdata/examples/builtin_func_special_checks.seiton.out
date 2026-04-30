@@ -1,4 +1,0 @@
-test.yaml:6:18: property "mac" is not defined in object type {win: string; linux: string} [syntax-check]
-test.yaml:9:24: format string does not contain placeholder {2}; remove argument which is unused [syntax-check]
-test.yaml:11:24: format placeholder '{2}' requires argument 3, but got 2 format argument(s) [syntax-check]
-test.yaml:14:13: fromJSON() argument is not valid JSON: Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 23. [syntax-check]

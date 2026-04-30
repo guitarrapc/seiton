@@ -1,2 +1,0 @@
-test.yaml:4:18: jobs.'foo'.needs has duplicates 'BAR' [job-needs]
-test.yaml:9:13: jobs.'bar'.needs references unknown job 'unknown' [job-needs]

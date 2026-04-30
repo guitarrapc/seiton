@@ -1,7 +1,0 @@
-test.yaml:4:3: workflow.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]
-test.yaml:4:3: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "secrets". called in workflow env [expression]
-test.yaml:12:9: property "foooooo" is not defined in object type {arch: string; debug: string; environment: string; name: string; os: string; temp: string; tool_cache: string} [expression]
-test.yaml:14:7: job.env key '${{ runner.fooooooo }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]
-test.yaml:14:7: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix", "secrets". called in job env [expression]
-test.yaml:14:7: property "fooooooo" is not defined in object type {arch: string; debug: string; environment: string; name: string; os: string; temp: string; tool_cache: string} [expression]
-test.yaml:18:11: step.env key '${{ runner.name }}' is not portable; use [A-Z_][A-Z0-9_]* naming [syntax-check]

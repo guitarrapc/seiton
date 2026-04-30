@@ -1,1 +1,0 @@
-test.yaml:7:16: property "imagetag" is not defined in object type {image_tag: string} [expression]
