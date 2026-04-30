@@ -72,6 +72,18 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_FooterThemeCycleButton_HasIconSvgsAndAccessibleName()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""theme-cycle-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
+        await Assert.That(html).Contains("data-theme-mode=\"system\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("theme-cycle-btn__svg--system", StringComparison.Ordinal);
+        await Assert.That(html).Contains("theme-cycle-btn__svg--light", StringComparison.Ordinal);
+        await Assert.That(html).Contains("theme-cycle-btn__svg--dark", StringComparison.Ordinal);
+        await Assert.That(html.Contains("Color: System", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task Stylesheet_UsesTwoColumnGridForMainLinterRegion()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
