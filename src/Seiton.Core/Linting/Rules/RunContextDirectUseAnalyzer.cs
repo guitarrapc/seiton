@@ -473,4 +473,40 @@ internal static class RunContextDirectUseAnalyzer
     }
 
     internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
+
+    // Single-Quote Detection
+
+    /// <summary>
+    /// Returns true when <paramref name="targetOffset"/> falls inside a shell single-quoted
+    /// string on the same line. Shell single quotes suppress all variable expansion, so
+    /// replacing ${{ }} with ${VAR} would be ineffective.
+    /// </summary>
+    internal static bool IsInsideShellSingleQuotes(byte[] source, int targetOffset)
+    {
+        if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
+        {
+            return false;
+        }
+
+        // Find start of the line containing targetOffset
+        var lineStart = targetOffset;
+        while (lineStart > 0 && source[lineStart - 1] != (byte)'\n')
+        {
+            lineStart--;
+        }
+
+        // Walk from lineStart to targetOffset, counting unescaped single quotes.
+        // In shell, single quotes cannot be escaped inside single-quoted strings
+        // (there's no backslash escape), so we just toggle state on each '.
+        var insideSingleQuote = false;
+        for (var i = lineStart; i < targetOffset; i++)
+        {
+            if (source[i] == (byte)'\'')
+            {
+                insideSingleQuote = !insideSingleQuote;
+            }
+        }
+
+        return insideSingleQuote;
+    }
 }

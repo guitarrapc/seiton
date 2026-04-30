@@ -402,6 +402,12 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
+        // Skip fix when expression is inside shell single quotes where ${VAR} won't expand
+        if (IsInsideShellSingleQuotes(Config.Utf8Yaml, exprAbsoluteOffset))
+        {
+            return false;
+        }
+
         // Check if an existing env mapping already points to this expression
         if (TryFindExistingEnvMapping(step, pathString, out var existingVarName))
         {

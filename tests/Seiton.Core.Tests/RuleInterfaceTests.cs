@@ -13008,4 +13008,76 @@ public sealed class RuleInterfaceTests
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, result.FixableDiagnostics);
         await Assert.That(fixedYaml).IsNotNull();
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_InsideSingleQuotes_SkipsFix()
+    {
+        // When the untrusted expression is inside shell single quotes,
+        // shell variables won't expand, so fixing to ${VAR} would be nonsensical.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ github.event.pull_request.title }}'
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-single-quote.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix must NOT be attached because shell variable expansion is disabled in single quotes
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_InsideDoubleQuotes_GetsFix()
+    {
+        // When the untrusted expression is inside shell double quotes,
+        // shell variables DO expand, so fix should be attached.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-double-quote.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix SHOULD be attached because shell variable expansion works in double quotes
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_MultilineSingleQuotes_SkipsFix()
+    {
+        // Multi-line run with expression inside single quotes on a specific line
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        echo 'prefix ${{ github.event.pull_request.title }} suffix'
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-multiline-sq.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix must NOT be attached - inside single quotes
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
 }
