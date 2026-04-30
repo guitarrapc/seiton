@@ -19,10 +19,13 @@
     <Project Path="src/Seiton/Seiton.csproj" />
     <Project Path="src/Seiton.Benchmark/Seiton.Benchmark.csproj" />
     <Project Path="src/Seiton.Core/Seiton.Core.csproj" />
+    <Project Path="src/Seiton.Playground.Core/Seiton.Playground.Core.csproj" />
+    <Project Path="src/Seiton.Playground/Seiton.Playground.csproj" />
     <Project Path="src/Seiton.Update/Seiton.Update.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Seiton.Core.Tests/Seiton.Core.Tests.csproj" />
+    <Project Path="tests/Seiton.Playground.Tests/Seiton.Playground.Tests.csproj" />
     <Project Path="tests/Seiton.Tests/Seiton.Tests.csproj" />
     <Project Path="tests/Seiton.Update.Tests/Seiton.Update.Tests.csproj" />
   </Folder>

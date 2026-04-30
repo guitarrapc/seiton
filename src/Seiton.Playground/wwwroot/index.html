@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>seiton playground</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" id="meta-color-scheme" content="light dark"/>
+  <script>
+    (function () {
+      var key = 'seiton-playground-color-mode';
+      var root = document.documentElement;
+      var meta = document.getElementById('meta-color-scheme');
+      function syncMeta(mode) {
+        if (!meta) return;
+        if (mode === 'light') meta.setAttribute('content', 'light');
+        else if (mode === 'dark') meta.setAttribute('content', 'dark');
+        else meta.setAttribute('content', 'light dark');
+      }
+      try {
+        var v = localStorage.getItem(key);
+        if (v === 'light') {
+          root.setAttribute('data-theme', 'light');
+          syncMeta('light');
+        } else if (v === 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          syncMeta('dark');
+        } else {
+          root.removeAttribute('data-theme');
+          syncMeta('system');
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+        integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"/>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css"
+        integrity="sha384-eZTPTN0EvJdn23s24UDYJmUM2T7C2ZFa3qFLypeBruJv8mZeTusKUAO/j5zPAQ6l"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"/>
+  <link rel="stylesheet" href="style#[.{fingerprint}].css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"
+          integrity="sha384-ZYmwuq4n2gOcNxMSiJ6jyTj+BbIrilr7p6dlq6q5nmSWKmsH9UU4K1qqjycMkfmR"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"
+          integrity="sha384-9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"
+          integrity="sha384-hcxaXyAtJ30s2NeDu1OHWsQRiHiWuYLTbI596+YFb+f2pFhzO0mDuahZziRPPDxg"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+</head>
+<body>
+  <nav id="header-bar">
+    <header>
+      <div class="site-title-row">
+        <a class="repo-mark"
+           href="https://github.com/guitarrapc/seiton"
+           target="_blank"
+           rel="noopener noreferrer"
+           aria-label="seiton on GitHub">
+          <svg class="repo-mark__icon" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"
+                  d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.235-22.23-5.42-22.23-24.251 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.251 1.75 1.52 3.318 4.491 3.318 9.022 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/>
+          </svg>
+        </a>
+        <h1>seiton playground</h1>
+        <span id="playground-version"
+              class="version-badge"
+              hidden
+              aria-label="Playground build version"></span>
+      </div>
+      <p class="tagline">Static checker for GitHub Actions workflow files</p>
+    </header>
+    <div id="controls">
+      <div class="controls-row controls-row--primary">
+        <button id="permalink-btn" type="button" title="Store editor text in the URL hash">Permalink</button>
+        <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
+          <input type="url" id="url-input" aria-label="YAML URL" autocomplete="off" spellcheck="false"
+                 placeholder="https://raw GitHub/Gist YAML URL"/>
+          <button id="fetch-btn" type="button">Check</button>
+        </span>
+      </div>
+      <div class="controls-row controls-row--meta">
+        <label title="Virtual path selects workflow YAML vs composite action.yml — Seiton chooses parse/lint modes the same way GitHub does by file location/name.">
+          Document
+          <select id="filetype-select">
+            <option value=".github/workflows/test.yml" selected>workflow</option>
+            <option value="action.yml">action.yml</option>
+          </select>
+        </label>
+        <label>
+          Sample
+          <select id="sample-select" title="Load a built-in example">
+            <option value="">— custom —</option>
+            <option value="default">default workflow</option>
+            <option value="minimal">minimal workflow</option>
+            <option value="fixPermissions">fix: permissions (write-all)</option>
+            <option value="matrix">matrix + expressions</option>
+            <option value="actionComposite">action.yml (composite)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </nav>
+  <main>
+    <section id="linter">
+      <div id="editor-wrap" class="split-pane">
+        <button id="apply-fixes-btn"
+                type="button"
+                class="apply-fixes-fab"
+                hidden
+                title="Apply every fix suggested in the diagnostics. Playground fixes run offline, it skips network-dependent pinning/digest remediation.">
+          Apply all fixes
+        </button>
+        <div id="editor"></div>
+      </div>
+      <div class="split-pane results-column">
+        <div id="loading" class="notification">Loading WebAssembly binary...</div>
+        <table id="lint-result" class="result-table" hidden>
+          <tbody id="lint-result-body"></tbody>
+        </table>
+        <div id="error-msg" class="notification error" style="display:none"></div>
+        <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
+      </div>
+    </section>
+  </main>
+  <section class="resources" aria-labelledby="resources-heading">
+    <h2 id="resources-heading">Resources</h2>
+    <ul class="resources-links">
+      <li>
+        <a href="https://github.com/guitarrapc/seiton/blob/main/docs/checks.md">Seiton checks</a>
+      </li>
+      <li>
+        <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax">Workflow syntax for GitHub Actions</a>
+      </li>
+      <li>
+        <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/contexts">Contexts reference for GitHub Actions</a>
+      </li>
+      <li>
+        <a href="https://docs.github.com/en/actions/reference/security/secure-use">Secure use of GitHub Actions</a>
+      </li>
+    </ul>
+  </section>
+  <footer>
+    <p class="footer-theme-wrap">
+      <button type="button" id="theme-cycle-btn" class="theme-cycle-btn">Color: System</button>
+    </p>
+    <p><a href="https://github.com/guitarrapc/seiton">seiton</a> by <a href="https://github.com/guitarrapc">guitarrapc</a>. The source code and website content are licensed <a href="https://github.com/guitarrapc/seiton/blob/main/LICENSE.md">MIT</a>.</p>
+  </footer>
+  <script type="importmap">{}</script>
+  <script type="module" src="main#[.{fingerprint}].js"></script>
+</body>
+</html>

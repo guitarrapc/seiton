@@ -405,3 +405,6 @@ FodyWeavers.xsd
 
 # Custom
 .references/
+.tmp-pg/
+.tmp-pg2/
+.tmp-pg-rel/
