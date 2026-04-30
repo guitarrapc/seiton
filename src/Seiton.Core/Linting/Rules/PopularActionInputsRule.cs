@@ -51,9 +51,10 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
                 var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
                 var suggestion = FindClosestInput(unknownInputName, actionSpec);
+                var availableInputs = FormatAvailableInputs(actionSpec);
                 var unknownMessage = suggestion is not null
-                    ? $"unknown input '{unknownInputName}' for action '{actionName}'. did you mean '{suggestion}'?"
-                    : $"unknown input '{unknownInputName}' for action '{actionName}'";
+                    ? $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}. did you mean '{suggestion}'?"
+                    : $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}";
 
                 DiagnosticFix? fix = null;
                 if (suggestion is not null && Config.Fix.Enabled)
@@ -139,5 +140,11 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
         // When multiple candidates are equally close, suppress the suggestion
         return tied ? null : best;
+    }
+
+    private static string FormatAvailableInputs(PopularActions.ActionSpec actionSpec)
+    {
+        var inputNames = actionSpec.GetInputNames();
+        return string.Join(", ", inputNames.Select(static n => $"\"{n}\""));
     }
 }
