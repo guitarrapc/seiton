@@ -13355,7 +13355,7 @@ public sealed class RuleInterfaceTests
     [Test]
     public async Task RunnerLabelRule_LargerRunnerLabels_NotReportedAsUnknown()
     {
-        // GitHub larger runners (macOS) from docs should be known labels.
+        // GitHub larger runners (macOS from docs + Ubuntu/Windows supplemental) should be known labels.
         var cases = new[]
         {
             "macos-latest-xlarge",
@@ -13366,6 +13366,11 @@ public sealed class RuleInterfaceTests
             "macos-14-large",
             "macos-26-xlarge",
             "macos-26-large",
+            // Supplemental larger runners (not in docs, from blog announcement)
+            "ubuntu-latest-4-cores",
+            "ubuntu-latest-8-cores",
+            "ubuntu-latest-16-cores",
+            "windows-latest-8-cores",
         };
 
         var engine = new LintEngine([new RunnerLabelRule()]);

@@ -141,6 +141,20 @@ internal sealed class GitHubRunnerLabelsFetcher
             .OrderBy(static x => x.Label, StringComparer.Ordinal)
             .ToArray();
 
+        // Merge supplemental labels (hand-written, not from docs)
+        var supplementalStable = Array.Empty<string>();
+        var supplementalPreview = Array.Empty<string>();
+        if (File.Exists(paths.SupplementalLabelsPath))
+        {
+            var supText = File.ReadAllText(paths.SupplementalLabelsPath);
+            var supDoc = JsonSerializer.Deserialize<JsonElement>(supText);
+            if (supDoc.TryGetProperty("stableLabels", out var stableArr))
+                supplementalStable = stableArr.EnumerateArray().Select(e => e.GetString()!).ToArray();
+            if (supDoc.TryGetProperty("previewLabels", out var previewArr))
+                supplementalPreview = previewArr.EnumerateArray().Select(e => e.GetString()!).ToArray();
+            UpdateLogger.Info($"[merge:runner-labels:sources] merged {supplementalStable.Length + supplementalPreview.Length} supplemental labels from {Path.GetFileName(paths.SupplementalLabelsPath)}");
+        }
+
         var snapshot = new
         {
             schemaVersion = 1,
@@ -148,10 +162,16 @@ internal sealed class GitHubRunnerLabelsFetcher
             stableLabels = labels
                 .Where(static x => !x.IsPreview)
                 .Select(static x => x.Label)
+                .Concat(supplementalStable)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static x => x, StringComparer.Ordinal)
                 .ToArray(),
             previewLabels = labels
                 .Where(static x => x.IsPreview)
                 .Select(static x => x.Label)
+                .Concat(supplementalPreview)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static x => x, StringComparer.Ordinal)
                 .ToArray(),
         };
 
@@ -180,6 +200,7 @@ internal sealed class GitHubRunnerLabelsFetcher
             RawDocsPath = Path.Combine(baseDir, "raw", "github-hosted-runners.docs.md"),
             RawLargerRunnersPath = Path.Combine(baseDir, "raw", "larger-runners.docs.md"),
             ParsedDocsPath = Path.Combine(baseDir, "parsed", "docs-runner-labels.json"),
+            SupplementalLabelsPath = Path.Combine(baseDir, "supplemental-labels.json"),
             MergedSnapshotPath = Path.Combine(baseDir, "runner_labels.json"),
         };
     }
@@ -196,6 +217,7 @@ internal sealed class GitHubRunnerLabelsFetcher
         public string RawDocsPath { get; set; } = string.Empty;
         public string RawLargerRunnersPath { get; set; } = string.Empty;
         public string ParsedDocsPath { get; set; } = string.Empty;
+        public string SupplementalLabelsPath { get; set; } = string.Empty;
         public string MergedSnapshotPath { get; set; } = string.Empty;
     }
 
