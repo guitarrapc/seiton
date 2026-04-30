@@ -427,6 +427,16 @@ let debounceId = null;
 /** Coalesce refreshes while typing so measurements track height for layout (page scroll). */
 let sizingRaf = null;
 
+/**
+ * Concurrency & staleness control for lint execution.
+ * - lintInProgress: true while RunLint is executing (prevents re-entry)
+ * - lintPendingRetry: set to true if a change occurred while lint was in progress; triggers re-lint on completion
+ * - lastLintedFingerprint: tracks (source + filePath) to skip redundant lint for identical content
+ */
+let lintInProgress = false;
+let lintPendingRetry = false;
+let lastLintedFingerprint = '';
+
 editor.on('change', (_cm, changeObj) => {
     if (sizingRaf === null) {
         sizingRaf = requestAnimationFrame(() => {
@@ -434,6 +444,13 @@ editor.on('change', (_cm, changeObj) => {
             editor.refresh();
         });
     }
+
+    // If lint is currently in progress, mark that a retry is needed after it finishes.
+    // The debounce timer is still managed so that rapid typing coalesces properly.
+    if (lintInProgress) {
+        lintPendingRetry = true;
+    }
+
     if (debounceId !== null) {
         clearTimeout(debounceId);
     }
@@ -455,6 +472,8 @@ window.addEventListener('resize', () => {
 });
 
 fileSelect.addEventListener('change', () => {
+    // filePath changed — invalidate fingerprint so lint runs even if source is the same.
+    lastLintedFingerprint = '';
     runLint();
 });
 
@@ -471,6 +490,7 @@ sampleSelect.addEventListener('change', () => {
     }
     editor.setValue(text);
     editor.refresh();
+    lastLintedFingerprint = '';
     runLint();
 });
 
@@ -549,6 +569,8 @@ applyFixesBtn.addEventListener('click', () => {
         editor.setValue(yaml);
         editor.refresh();
         applyFixesBtn.hidden = true;
+        // Invalidate fingerprint so the lint after fix application actually runs.
+        lastLintedFingerprint = '';
         runLint();
     } catch (e) {
         if (isRuntimeDeadError(e)) {
@@ -617,6 +639,7 @@ async function fetchAndLint() {
         const text = await res.text();
         editor.setValue(text);
         editor.refresh();
+        lastLintedFingerprint = '';
         runLint();
         showToast('Loaded YAML from URL.', 'success');
     } catch (e) {
@@ -746,12 +769,30 @@ function runLint() {
     if (!runtimeAlive) {
         return;
     }
+
+    // Re-entry guard: if lint is already in progress (shouldn't happen with sync calls,
+    // but defensive against future async changes or unexpected event ordering).
+    if (lintInProgress) {
+        lintPendingRetry = true;
+        return;
+    }
+
     const source = editor.getValue();
     const filePath = getSelectedFilePath();
+
+    // Staleness check: skip if content + filePath are identical to last successful lint.
+    const fingerprint = filePath + '\x00' + source;
+    if (fingerprint === lastLintedFingerprint) {
+        return;
+    }
+
+    lintInProgress = true;
+    lintPendingRetry = false;
 
     try {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
+        lastLintedFingerprint = fingerprint;
         renderResults(diagnostics);
     } catch (err) {
         if (isRuntimeDeadError(err)) {
@@ -759,6 +800,20 @@ function runLint() {
             return;
         }
         showToast(err?.message ?? String(err), 'error');
+    } finally {
+        lintInProgress = false;
+    }
+
+    // If content changed while we were executing, schedule a re-lint after debounce.
+    if (lintPendingRetry) {
+        lintPendingRetry = false;
+        if (debounceId !== null) {
+            clearTimeout(debounceId);
+        }
+        debounceId = setTimeout(() => {
+            debounceId = null;
+            runLint();
+        }, DEBOUNCE_MS);
     }
 }
 
