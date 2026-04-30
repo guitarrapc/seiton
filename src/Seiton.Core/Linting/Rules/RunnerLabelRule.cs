@@ -72,7 +72,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 continue;
             }
 
-            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
+            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
             {
                 continue;
             }

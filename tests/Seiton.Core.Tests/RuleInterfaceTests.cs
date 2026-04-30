@@ -13326,4 +13326,26 @@ public sealed class RuleInterfaceTests
         // Must contain actual labels like "windows-latest"
         await Assert.That(runnerLabelDiag.Message).Contains("windows-latest");
     }
+
+    [Test]
+    public async Task RunnerLabelRule_SelfHostedPresetLabel_NotReportedAsUnknown()
+    {
+        // Self-hosted preset labels (x64, arm, arm64, linux, macos, windows) should not
+        // be flagged as unknown even without "self-hosted" in the array.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: x64
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "preset-label.yml");
+
+        var runnerLabelDiags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
+        await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
+            .Because("x64 is a self-hosted preset label and should not be reported as unknown");
+    }
 }
