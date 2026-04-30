@@ -13281,4 +13281,126 @@ public sealed class RuleInterfaceTests
                 .Because($"Diagnostic at index {i} (line {currLine}: {curr.Message}) should not appear before diagnostic at index {i - 1} (line {prevLine}: {prev.Message})");
         }
     }
+
+    [Test]
+    public async Task RunnerLabelRule_EmptyLabel_NoDuplicateWithParser()
+    {
+        // Parser reports "runs-on label should not be empty" (syntax-check).
+        // RunnerLabelRule should NOT also report the empty label as unknown.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ''
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "empty-label.yml");
+
+        var runnerLabelDiags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
+        await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
+            .Because("Empty labels are already reported by the parser as syntax-check; runner-label should not duplicate");
+    }
+
+    [Test]
+    public async Task RunnerLabelRule_UnknownLabel_ListsAllAvailableLabels()
+    {
+        // The "unknown label" message should list all available labels, not truncate with "... and more".
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: nonexistent-runner
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "unknown-label.yml");
+
+        var runnerLabelDiag = result.Diagnostics.First(d => d.RuleId == "runner-label");
+        // Must NOT contain "... and more" truncation
+        await Assert.That(runnerLabelDiag.Message).DoesNotContain("... and more");
+        // Must contain actual labels like "windows-latest"
+        await Assert.That(runnerLabelDiag.Message).Contains("windows-latest");
+    }
+
+    [Test]
+    public async Task RunnerLabelRule_SelfHostedPresetLabel_NotReportedAsUnknown()
+    {
+        // Self-hosted preset labels (x64, arm, arm64, linux, macos, windows) should not
+        // be flagged as unknown even without "self-hosted" in the array.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: x64
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "preset-label.yml");
+
+        var runnerLabelDiags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
+        await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
+            .Because("x64 is a self-hosted preset label and should not be reported as unknown");
+    }
+
+    [Test]
+    public async Task Parser_EmptyRunsOnLabel_MessageIncludesAvailableLabels()
+    {
+        // When runs-on has an empty label, the parser message should include
+        // available labels so the user knows what valid values are.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ''
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true);
+        await Assert.That(emptyLabelDiag.Message).IsNotNull();
+        await Assert.That(emptyLabelDiag.Message!).Contains("available labels are");
+        await Assert.That(emptyLabelDiag.Message!).Contains("ubuntu-latest");
+    }
+
+    [Test]
+    public async Task Parser_EmptyRunsOnLabelInArray_MessageIncludesAvailableLabels()
+    {
+        // When runs-on array has an empty element, the parser message for the
+        // empty element should include available labels.
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ['ubuntu-latest', '']\n    steps:\n      - run: echo\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true);
+        await Assert.That(emptyLabelDiag.Message).IsNotNull();
+        await Assert.That(emptyLabelDiag.Message!).Contains("available labels are");
+        await Assert.That(emptyLabelDiag.Message!).Contains("ubuntu-latest");
+    }
+
+    [Test]
+    public async Task Parser_EmptyRunsOnArray_MessageIncludesAvailableLabels()
+    {
+        // When runs-on is an empty array [], the message should include available labels.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: []
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true);
+        await Assert.That(emptyDiag.Message).IsNotNull();
+        await Assert.That(emptyDiag.Message!).Contains("available labels are");
+        await Assert.That(emptyDiag.Message!).Contains("ubuntu-latest");
+    }
 }

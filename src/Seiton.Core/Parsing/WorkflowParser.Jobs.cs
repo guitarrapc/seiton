@@ -1,10 +1,20 @@
 ﻿using System.Text;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    private static readonly string RunsOnEmptyLabelMessage =
+        $"\"runs-on\" label should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+
+    private static readonly string RunsOnSectionEmptyMessage =
+        $"\"runs-on\" section should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+
+    private static readonly string LabelsSectionEmptyMessage =
+        $"\"labels\" section should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+
     private enum JobNodeMappingKey : byte
     {
         RunsOn = 0,
@@ -764,6 +774,8 @@ public static partial class WorkflowParser
             StringNodeId labelsExpr = default;
             StringNodeId group = default;
             ulong seen = 0;
+            var hasUnknownKey = false;
+            var mappingStartMark = reader.CurrentStart;
 
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -807,7 +819,7 @@ public static partial class WorkflowParser
                             {
                                 if (reader.CurrentKind == YamlEventKind.MappingStart)
                                 {
-                                    AddError(diagnostics, "\"labels\" section must be sequence node but got mapping node with \"!!map\" tag", reader.CurrentStart);
+                                    AddError(diagnostics, $"{section}.labels must be string or array, got object", reader.CurrentStart);
                                     reader.SkipCurrentNode();
                                 }
                                 else if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -824,7 +836,7 @@ public static partial class WorkflowParser
                                         if (lblErr1)
                                         {
                                             if (labels.Length > 0)
-                                                AddError(diagnostics, "\"runs-on\" label should not be empty", lblMark1);
+                                                AddError(diagnostics, RunsOnEmptyLabelMessage, lblMark1);
                                             else
                                                 AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark1);
                                         }
@@ -833,14 +845,14 @@ public static partial class WorkflowParser
                                 else
                                 {
                                     var lblSeqMark = reader.CurrentStart;
-                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2, allowElemEmpty: true, emptyElementMessage: "\"runs-on\" label should not be empty");
+                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2, allowElemEmpty: true, emptyElementMessage: RunsOnEmptyLabelMessage);
                                     if (lblErr2)
                                     {
                                         AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark2);
                                     }
                                     else if (labels.Length == 0)
                                     {
-                                        AddError(diagnostics, "\"labels\" section should not be empty", lblSeqMark);
+                                        AddError(diagnostics, LabelsSectionEmptyMessage, lblSeqMark);
                                     }
                                 }
                             }
@@ -850,9 +862,8 @@ public static partial class WorkflowParser
                         case RunsOnMappingKey.Group:
                             if (!reader.End && reader.CurrentKind != YamlEventKind.Scalar)
                             {
-                                var grpTag = reader.CurrentKind == YamlEventKind.SequenceStart ? "!!seq" : "!!map";
-                                var grpNodeType = reader.CurrentKind == YamlEventKind.SequenceStart ? "sequence" : "mapping";
-                                AddError(diagnostics, $"expected scalar node for string value but found {grpNodeType} node with \"{grpTag}\" tag", reader.CurrentStart);
+                                var grpNodeType = reader.CurrentKind == YamlEventKind.SequenceStart ? "array" : "object";
+                                AddError(diagnostics, $"{section}.group must be string, got {grpNodeType}", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else if (!reader.End && reader.GetScalarUtf8().Length == 0)
@@ -874,6 +885,7 @@ public static partial class WorkflowParser
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
                 AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}", keyMark);
+                hasUnknownKey = true;
                 if (!reader.End) reader.SkipCurrentNode();
             }
 
@@ -882,9 +894,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            if (labels is null && !labelsExpr.HasValue)
+            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey && (seen & (1UL << (int)RunsOnMappingKey.Group)) == 0 && (seen & (1UL << (int)RunsOnMappingKey.Labels)) == 0)
             {
-                AddError(diagnostics, $"{section} requires labels", new TextPosition(0, 1, 1));
+                AddError(diagnostics, $"{section} requires labels", mappingStartMark);
             }
 
             return new Runner
@@ -913,17 +925,17 @@ public static partial class WorkflowParser
 
         var fbSeqMark = reader.CurrentStart;
         var fbWasScalar = reader.CurrentKind == YamlEventKind.Scalar;
-        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true, emptyElementMessage: "\"runs-on\" label should not be empty");
+        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true, emptyElementMessage: RunsOnEmptyLabelMessage);
         if (lblFbErr)
         {
             if (fbWasScalar)
-                AddError(diagnostics, "\"runs-on\" label should not be empty", lblFbMark);
+                AddError(diagnostics, RunsOnEmptyLabelMessage, lblFbMark);
             else
                 AddError(diagnostics, $"{section} must be string, sequence, or mapping", lblFbMark);
         }
         else if (labelsFallback.Length == 0)
         {
-            AddError(diagnostics, "\"runs-on\" section should not be empty", fbSeqMark);
+            AddError(diagnostics, RunsOnSectionEmptyMessage, fbSeqMark);
         }
         return new Runner
         {

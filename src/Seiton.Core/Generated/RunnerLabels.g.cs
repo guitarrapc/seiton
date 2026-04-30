@@ -8,6 +8,9 @@ namespace Seiton.Core.Generated;
 
 internal static class RunnerLabels
 {
+    /// <summary>Comma-separated list of all known hosted runner labels for diagnostic messages.</summary>
+    internal const string KnownHostedLabelList = "\"macos-14\", \"macos-15\", \"macos-15-intel\", \"macos-26\", \"macos-26-intel\", \"macos-latest\", \"ubuntu-22.04\", \"ubuntu-22.04-arm\", \"ubuntu-24.04\", \"ubuntu-24.04-arm\", \"ubuntu-latest\", \"ubuntu-slim\", \"windows-11-arm\", \"windows-2022\", \"windows-2025\", \"windows-2025-vs2026\", \"windows-latest\"";
+
     internal static bool IsKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
         return IsStableHostedLabel(labelUtf8)

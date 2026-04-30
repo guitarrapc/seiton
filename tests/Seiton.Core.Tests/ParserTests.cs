@@ -3068,7 +3068,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "labels-empty.yml");
-        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "\"runs-on\" label should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message?.Contains("label should not be empty") == true);
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "labels: ''" is on line 5
         await Assert.That(diag.Location.StartColumn).IsEqualTo(15); // col at ''
@@ -6244,24 +6244,32 @@ public sealed class ParserTests
         await Assert.That(secretErr.Message).Contains("GITHUB_TOKEN");
     }
 
-    // empty label in runs-on should be reported as unknown by runner-label rule
+    // empty label in runs-on is reported by parser (syntax-check), not runner-label rule
     [Test]
-    public async Task Lint_RunsOnEmptyLabel_ReportsUnknownLabel()
+    public async Task Lint_RunsOnEmptyLabel_ReportedByParserNotRunnerLabel()
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ''\n    steps:\n      - run: echo\n";
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // Parser reports the empty label
+        var parserErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty") && d.RuleId is null);
+        await Assert.That(parserErr.Message).IsNotNull();
+        // runner-label rule should NOT duplicate the report
         var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
-        await Assert.That(labelErr.Message).IsNotNull();
+        await Assert.That(labelErr.Message).IsNull();
     }
 
-    // empty label in runs-on array should be reported as unknown by runner-label rule
+    // empty label in runs-on array is reported by parser (syntax-check), not runner-label rule
     [Test]
-    public async Task Lint_RunsOnEmptyLabelInArray_ReportsUnknownLabel()
+    public async Task Lint_RunsOnEmptyLabelInArray_ReportedByParserNotRunnerLabel()
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ['x64', '']\n    steps:\n      - run: echo\n";
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
-        await Assert.That(labelErr.Message).IsNotNull();
+        // Parser reports the empty label
+        var parserErr = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true && d.RuleId is null);
+        await Assert.That(parserErr.Message).IsNotNull();
+        // runner-label rule should NOT duplicate the report
+        var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("label \"\" is unknown") == true && d.RuleId == "runner-label");
+        await Assert.That(labelErr.Message).IsNull();
     }
 
     // environment.name missing should report at the environment key position, not inside mapping
@@ -6271,7 +6279,7 @@ public sealed class ParserTests
         // line 4: `    environment:`, line 5: `      url: https://example.com`
         var yaml = "on: push\njobs:\n  test:\n    environment:\n      url: https://example.com\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("name is missing in \"environment\" section"));
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("name is missing in \"environment\" section") == true);
         await Assert.That(diag.Message).IsNotNull();
         // Should point to line 4 (environment: key), not line 5 (url: inside the mapping)
         await Assert.That(diag.Location.StartLine).IsEqualTo(4);
@@ -6407,5 +6415,123 @@ public sealed class ParserTests
         // In source: "      - *recursive2" — the * is at column 9
         await Assert.That(aliasNodeDiag.Location.StartLine).IsEqualTo(10);
         await Assert.That(aliasNodeDiag.Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingWithoutLabels_GroupOnly_NoDiagnostics()
+    {
+        // When runs-on has a mapping with group but no labels, no "requires labels"
+        // diagnostic should be reported because group-based runners don't need labels.
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              group: foo
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNullOrEmpty();
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingUnknownKey_NoRequiresLabelsDiagnostic()
+    {
+        // When runs-on mapping has an unknown key (e.g. "groups" instead of "group"),
+        // the parser should report "unexpected key" but NOT also "requires labels".
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              groups: [foo, bar]
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var unexpectedKeyDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("unexpected key", StringComparison.Ordinal) == true);
+        await Assert.That(unexpectedKeyDiag.Message).IsNotNull();
+
+        var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("requires labels", StringComparison.Ordinal) == true);
+        await Assert.That(requiresLabelsDiag.Message).IsNull();
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingGroupPresent_NoRequiresLabelsDiagnostic()
+    {
+        // When runs-on mapping has a group key (even with empty value),
+        // "requires labels" should NOT be reported because group-based runners don't need labels.
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              group:
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // "group should not be empty" is expected
+        var groupEmptyDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("group should not be empty", StringComparison.Ordinal) == true);
+        await Assert.That(groupEmptyDiag.Message).IsNotNull();
+
+        // "requires labels" should NOT be reported
+        var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("requires labels", StringComparison.Ordinal) == true);
+        await Assert.That(requiresLabelsDiag.Message).IsNull();
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingGroupSequence_ReportsUserFriendlyMessage()
+    {
+        // When group is given a sequence instead of string, the error message
+        // should follow the same pattern as "labels" type mismatch.
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              group: [hello, world]
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("group", StringComparison.Ordinal) == true);
+        await Assert.That(diag.Message).IsNotNull();
+        await Assert.That(diag.Message!).Contains(".group must be string, got array");
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingLabelsMapping_NoRequiresLabelsAndUserFriendlyMessage()
+    {
+        // When labels is given a mapping instead of string/array,
+        // "requires labels" should NOT be reported (labels key is present),
+        // and the type-mismatch message should be user-friendly (no !!map).
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              labels:
+                hello: world
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+
+        // Should report a type mismatch in user-friendly terms
+        var typeDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("labels", StringComparison.Ordinal) == true);
+        await Assert.That(typeDiag.Message).IsNotNull();
+        await Assert.That(typeDiag.Message!).Contains(".labels must be string or array, got object");
+
+        // "requires labels" should NOT be reported since labels key is present
+        var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("requires labels", StringComparison.Ordinal) == true);
+        await Assert.That(requiresLabelsDiag.Message).IsNull();
     }
 }

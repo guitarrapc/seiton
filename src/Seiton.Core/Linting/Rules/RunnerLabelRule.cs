@@ -68,17 +68,17 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             var labelUtf8 = Arena.GetStringValue(label);
             if (labelUtf8.IsEmpty)
             {
-                AddJobWarning(job, "label \"\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(label));
+                // Empty labels are already reported by the parser as syntax-check.
                 continue;
             }
 
-            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
+            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
             {
                 continue;
             }
 
             var labelText = Decode(Arena.GetStringSlice(label));
-            AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(label));
+            AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(label));
         }
     }
 
@@ -364,7 +364,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                     }
 
                     var labelText = Decode(Arena.GetStringSlice(scalar.Value));
-                    AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(scalar.Value));
+                    AddJobWarning(job, $"label \"{labelText}\" is unknown. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(scalar.Value));
                     break;
                 }
 
@@ -409,7 +409,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                         }
 
                         var elemText = Decode(Arena.GetStringSlice(element.Value));
-                        AddJobWarning(job, $"label \"{elemText}\" is unknown. available labels are \"ubuntu-latest\", \"ubuntu-24.04\", ... and more. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(element.Value));
+                        AddJobWarning(job, $"label \"{elemText}\" is unknown. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file", Arena.GetStringRange(element.Value));
                     }
 
                     break;
