@@ -947,8 +947,7 @@ footer a {
 .theme-cycle-btn {
   background: var(--bg);
   color: var(--text);
-  border: 0px solid var(--border-default);
-  border-radius: 4px;
+  border-style: none;
   padding: 0.42rem;
   cursor: pointer;
   min-width: 2.25rem;
@@ -965,13 +964,4 @@ footer a {
 .theme-cycle-btn[data-theme-mode='light'] .theme-cycle-btn__svg--light,
 .theme-cycle-btn[data-theme-mode='dark'] .theme-cycle-btn__svg--dark {
   display: block;
-}
-
-.theme-cycle-btn:hover {
-  border-color: var(--accent);
-}
-
-.theme-cycle-btn:focus,
-.theme-cycle-btn:focus-visible {
-  outline: none;
 }
