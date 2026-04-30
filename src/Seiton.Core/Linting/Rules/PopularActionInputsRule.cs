@@ -33,7 +33,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         // Check unknown inputs
         if (actionExec.Inputs is { Count: > 0 } inputs)
         {
-            var inputNames = actionSpec.GetInputNames();
+            string[]? inputNames = null;
             string? availableInputs = null;
 
             foreach (var pair in inputs)
@@ -53,6 +53,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 }
 
                 var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
+                inputNames ??= actionSpec.GetInputNames();
                 var suggestion = FindClosestInput(unknownInputName, inputNames);
                 availableInputs ??= FormatAvailableInputs(inputNames);
                 var unknownMessage = suggestion is not null
