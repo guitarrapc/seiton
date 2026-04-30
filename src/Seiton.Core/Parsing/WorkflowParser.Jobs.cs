@@ -9,6 +9,12 @@ public static partial class WorkflowParser
     private static readonly string RunsOnEmptyLabelMessage =
         $"\"runs-on\" label should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
 
+    private static readonly string RunsOnSectionEmptyMessage =
+        $"\"runs-on\" section should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+
+    private static readonly string LabelsSectionEmptyMessage =
+        $"\"labels\" section should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+
     private enum JobNodeMappingKey : byte
     {
         RunsOn = 0,
@@ -845,7 +851,7 @@ public static partial class WorkflowParser
                                     }
                                     else if (labels.Length == 0)
                                     {
-                                        AddError(diagnostics, "\"labels\" section should not be empty", lblSeqMark);
+                                        AddError(diagnostics, LabelsSectionEmptyMessage, lblSeqMark);
                                     }
                                 }
                             }
@@ -928,7 +934,7 @@ public static partial class WorkflowParser
         }
         else if (labelsFallback.Length == 0)
         {
-            AddError(diagnostics, "\"runs-on\" section should not be empty", fbSeqMark);
+            AddError(diagnostics, RunsOnSectionEmptyMessage, fbSeqMark);
         }
         return new Runner
         {

@@ -13381,4 +13381,23 @@ public sealed class RuleInterfaceTests
         await Assert.That(emptyLabelDiag.Message).Contains("available labels are");
         await Assert.That(emptyLabelDiag.Message).Contains("ubuntu-latest");
     }
+
+    [Test]
+    public async Task Parser_EmptyRunsOnArray_MessageIncludesAvailableLabels()
+    {
+        // When runs-on is an empty array [], the message should include available labels.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: []
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty"));
+        await Assert.That(emptyDiag.Message).Contains("available labels are");
+        await Assert.That(emptyDiag.Message).Contains("ubuntu-latest");
+    }
 }
