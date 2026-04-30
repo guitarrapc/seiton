@@ -17,8 +17,25 @@ public sealed class PlaygroundUiLayoutTests
         RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     private static readonly SemaphoreSlim s_browserGate = new(1, 1);
+    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> (assembly teardown + process exit).</summary>
     private static IPlaywright? s_playwright;
+    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> (assembly teardown + process exit).</summary>
     private static IBrowser? s_browser;
+
+    static PlaygroundUiLayoutTests()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try
+            {
+                DisposePlaywrightSessionAsync().GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // best effort
+            }
+        };
+    }
 
     private static async Task<IBrowser> GetBrowserAsync()
     {
@@ -134,12 +151,27 @@ public sealed class PlaygroundUiLayoutTests
         {
             if (s_browser is not null)
             {
+                try
+                {
+                    if (s_browser.IsConnected)
+                    {
+                        await s_browser.CloseAsync();
+                    }
+                }
+                catch
+                {
+                    // ignore — driver may already be closing
+                }
+
                 await s_browser.DisposeAsync();
                 s_browser = null;
             }
 
-            s_playwright?.Dispose();
-            s_playwright = null;
+            if (s_playwright is not null)
+            {
+                s_playwright.Dispose();
+                s_playwright = null;
+            }
         }
         finally
         {
