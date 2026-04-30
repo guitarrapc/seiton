@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.Rules;
@@ -13364,9 +13364,10 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty"));
-        await Assert.That(emptyLabelDiag.Message).Contains("available labels are");
-        await Assert.That(emptyLabelDiag.Message).Contains("ubuntu-latest");
+        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true);
+        await Assert.That(emptyLabelDiag.Message).IsNotNull();
+        await Assert.That(emptyLabelDiag.Message!).Contains("available labels are");
+        await Assert.That(emptyLabelDiag.Message!).Contains("ubuntu-latest");
     }
 
     [Test]
@@ -13377,9 +13378,10 @@ public sealed class RuleInterfaceTests
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ['ubuntu-latest', '']\n    steps:\n      - run: echo\n";
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty"));
-        await Assert.That(emptyLabelDiag.Message).Contains("available labels are");
-        await Assert.That(emptyLabelDiag.Message).Contains("ubuntu-latest");
+        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true);
+        await Assert.That(emptyLabelDiag.Message).IsNotNull();
+        await Assert.That(emptyLabelDiag.Message!).Contains("available labels are");
+        await Assert.That(emptyLabelDiag.Message!).Contains("ubuntu-latest");
     }
 
     [Test]
@@ -13396,8 +13398,9 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var emptyDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty"));
-        await Assert.That(emptyDiag.Message).Contains("available labels are");
-        await Assert.That(emptyDiag.Message).Contains("ubuntu-latest");
+        var emptyDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true);
+        await Assert.That(emptyDiag.Message).IsNotNull();
+        await Assert.That(emptyDiag.Message!).Contains("available labels are");
+        await Assert.That(emptyDiag.Message!).Contains("ubuntu-latest");
     }
 }
