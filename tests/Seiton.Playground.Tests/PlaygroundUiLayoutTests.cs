@@ -184,6 +184,40 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FetchUrl_SingleLabelHost_KeepsFetchButtonDisabled()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+
+        await page.FillAsync("#url-input", "http://oops");
+        await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsTrue();
+    }
+
+    [Test]
+    public async Task FetchUrl_MultiLabelHttpsHost_EnablesFetchButton()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+
+        await page.FillAsync(
+            "#url-input",
+            "https://raw.githubusercontent.com/acme/repo/main/.github/workflows/ci.yml");
+        await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsFalse();
+    }
+
+    [Test]
     public async Task Layout_WideViewport_UsesTwoColumnGridForLinterSection()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();

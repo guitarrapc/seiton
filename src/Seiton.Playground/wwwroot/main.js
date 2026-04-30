@@ -179,9 +179,64 @@ const FETCH_READY_TITLE = 'Fetch and lint YAML from this URL';
 const FETCH_READY_LABEL = 'Fetch and lint YAML from this URL';
 const FETCH_EMPTY_TITLE = 'Enter a YAML URL first';
 const FETCH_EMPTY_LABEL = 'Fetch and lint YAML — enter a URL first';
+const FETCH_INVALID_TITLE = 'Incomplete URL — use a full hostname (two or more labels), localhost, or an IP.';
+const FETCH_INVALID_LABEL = 'Fetch YAML — URL looks incomplete or invalid.';
 
 /** @type {Record<ToastVariant, number>} */
 const TOAST_DURATION_MS = { error: 8000, success: 3800, info: 4200 };
+
+/**
+ * Client-side gate: non-empty-but-broken pasted strings ("https://github.", "//x", paths only) stay non-actionable.
+ * Does not guarantee fetch success; normalization + server round-trip decide that.
+ * @param {string} trimmed
+ * @returns {boolean}
+ */
+function looksLikePlausibleHttpFetchUrl(trimmed) {
+    if (!trimmed) {
+        return false;
+    }
+    let u;
+    try {
+        u = new URL(trimmed);
+    } catch {
+        return false;
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+        return false;
+    }
+    const host = u.hostname.toLowerCase();
+    if (!host) {
+        return false;
+    }
+
+    if (host === 'localhost') {
+        return true;
+    }
+    if (host.includes(':')) {
+        return true;
+    }
+    /** @type {boolean} */
+    const looksIpv4 =
+        /^(\d{1,3}\.){3}\d{1,3}$/.test(host) && host.split('.').every((p) => Number(p) >= 0 && Number(p) <= 255);
+
+    if (looksIpv4) {
+        return true;
+    }
+
+    /** Two labels minimum (domain + public suffix-ish segment). Blocks bare "github" / typos stopped mid-host. */
+    const labels = host.split('.');
+    if (labels.some((part) => part.length === 0)) {
+        return false;
+    }
+    if (labels.length < 2) {
+        return false;
+    }
+    const leaf = labels[labels.length - 1];
+    if (leaf.length < 2 || !/^[a-z0-9-]{1,63}$/i.test(leaf)) {
+        return false;
+    }
+    return labels.every((part) => part.length <= 63 && /^[a-z0-9-]{1,63}$/i.test(part));
+}
 
 /**
  * Toast at top of viewport; does not clear lint diagnostics.
@@ -246,15 +301,22 @@ function removeToastElement(el) {
 
 function syncFetchButtonEnabled() {
     if (!fetchBtn || !urlInput) return;
-    const hasUrl = (urlInput.value ?? '').trim().length > 0;
-    fetchBtn.disabled = !hasUrl;
-    if (hasUrl) {
-        fetchBtn.title = FETCH_READY_TITLE;
-        fetchBtn.setAttribute('aria-label', FETCH_READY_LABEL);
-    } else {
+    const raw = (urlInput.value ?? '').trim();
+    if (!raw.length) {
+        fetchBtn.disabled = true;
         fetchBtn.title = FETCH_EMPTY_TITLE;
         fetchBtn.setAttribute('aria-label', FETCH_EMPTY_LABEL);
+        return;
     }
+    const okShape = looksLikePlausibleHttpFetchUrl(raw);
+    fetchBtn.disabled = !okShape;
+    if (!okShape) {
+        fetchBtn.title = FETCH_INVALID_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_INVALID_LABEL);
+        return;
+    }
+    fetchBtn.title = FETCH_READY_TITLE;
+    fetchBtn.setAttribute('aria-label', FETCH_READY_LABEL);
 }
 
 const editor = CodeMirror(document.getElementById('editor'), {
@@ -456,6 +518,11 @@ if (urlInput) {
             showToast(FETCH_EMPTY_TITLE, 'info', 2600);
             return;
         }
+        if (!looksLikePlausibleHttpFetchUrl(raw)) {
+            urlInput.focus();
+            showToast(FETCH_INVALID_TITLE, 'info', 3200);
+            return;
+        }
         fetchAndLint();
     });
 }
@@ -464,6 +531,10 @@ syncFetchButtonEnabled();
 async function fetchAndLint() {
     const raw = urlInput?.value?.trim() ?? '';
     if (!raw) {
+        return;
+    }
+    if (!looksLikePlausibleHttpFetchUrl(raw)) {
+        showToast(FETCH_INVALID_TITLE, 'info');
         return;
     }
     fetchBtn.disabled = true;
