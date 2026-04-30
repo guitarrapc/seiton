@@ -131,11 +131,17 @@ internal static class PlaygroundUiTestHost
         };
 
         using var publish = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start dotnet publish.");
+        var stdoutTask = publish.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = publish.StandardError.ReadToEndAsync(cancellationToken);
         await publish.WaitForExitAsync(cancellationToken);
+        await Task.WhenAll(stdoutTask, stderrTask);
+
         if (publish.ExitCode != 0)
         {
-            var err = await publish.StandardError.ReadToEndAsync(cancellationToken);
-            throw new InvalidOperationException($"dotnet publish failed ({publish.ExitCode}): {err}");
+            var err = await stderrTask;
+            var stdoutText = await stdoutTask;
+            var detail = string.IsNullOrWhiteSpace(err) ? stdoutText : err;
+            throw new InvalidOperationException($"dotnet publish failed ({publish.ExitCode}): {detail}");
         }
 
         var wwwroot = Path.Combine(publishDir, "wwwroot");
