@@ -134,7 +134,7 @@ jobs:
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | △ |
+| ✓ | — | ✗ |
 
 Validates `permissions` values. Scalar must be `read-all` or `write-all`. Per-scope values must be `read`, `write`, or `none`.
 
@@ -145,7 +145,7 @@ permissions:
   contents: admin   # ERROR: invalid value
 ```
 
-**Remediation:** Use `read`, `write`, or `none` for each scope. Use `read-all` or `write-all` for the scalar form.
+**Remediation:** Use `read`, `write`, or `none` for each scope. `read-all` and `write-all` are also accepted but seiton warn against their use in favor of explicit scopes.
 
 ---
 
@@ -193,7 +193,7 @@ steps:
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | △ |
+| ✓ | — | ✗ |
 
 Validates `job.id` and `step.id` values. IDs must use only alphanumeric characters, hyphens, and underscores.
 
@@ -271,7 +271,7 @@ runs-on: ubuntu-latest    # WARNING: prefer explicit version
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | ✗ |
+| ✓ | — | △ |
 
 Validates input names for well-known popular actions. Reports unknown input keys that are likely typos.
 
@@ -383,7 +383,7 @@ Detects deprecated workflow command syntax (`::set-output`, `::save-state`, `::a
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | ✗ |
+| ✓ | — | △ |
 
 Detects unsafe direct interpolation of untrusted `github.event`-origin data into `run` script sinks. Using `${{ github.event.* }}` directly in a script can allow attackers to inject arbitrary shell commands through PR titles, comments, or labels.
 

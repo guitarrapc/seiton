@@ -93,14 +93,14 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 |---|---|---|---|
 | [job-structure](docs/checks.md#job-structure) | ✓ | ✗ | `uses` is mutually exclusive with `steps`/`runs-on` |
 | [reusable-workflow](docs/checks.md#reusable-workflow) | ✓ | ✗ | Reusable workflow call semantics |
-| [permissions](docs/checks.md#permissions) | ✓ | △ | Invalid permission scope values |
+| [permissions](docs/checks.md#permissions) | ✓ | ✗ | Invalid permission scope values |
 | [needs-graph](docs/checks.md#needs-graph) | ✓ | ✗ | Unknown dependency targets and cycles |
 | [shell-name](docs/checks.md#shell-name) | ✓ | ✗ | Unsupported shell names |
-| [id-naming](docs/checks.md#id-naming) | ✓ | △ | Invalid characters in job/step IDs |
+| [id-naming](docs/checks.md#id-naming) | ✓ | ✗ | Invalid characters in job/step IDs |
 | [glob-pattern](docs/checks.md#glob-pattern) | ✓ | ✗ | Invalid glob syntax and filter conflicts |
 | [runner-label](docs/checks.md#runner-label) | ✓ | ✗ | Unknown GitHub-hosted runner labels |
 | [runner-no-latest](docs/checks.md#runner-no-latest) | ✓ | ✗ | Moving `*-latest` runner labels |
-| [popular-action-inputs](docs/checks.md#popular-action-inputs) | ✓ | ✗ | Typos in popular action input names |
+| [popular-action-inputs](docs/checks.md#popular-action-inputs) | ✓ | △ | Typos in popular action input names |
 | [outdated-action-runner](docs/checks.md#outdated-action-runner) | ✓ | ✗ | Deprecated action `runs.using` runtimes |
 | [local-action-inputs](docs/checks.md#local-action-inputs) | ✓ | ✗ | Local action metadata contract validation |
 | [action-shell-is-required](docs/checks.md#action-shell-is-required) | ✓ | ✗ | Missing `shell` in composite action `run` steps |
@@ -117,7 +117,7 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [template-injection](docs/checks.md#template-injection) | ✓ | ✗ | Untrusted data in `run` scripts |
+| [template-injection](docs/checks.md#template-injection) | ✓ | △ | Untrusted data in `run` scripts |
 | [dangerous-triggers](docs/checks.md#dangerous-triggers) | ✓ | ✗ | High-risk trigger events |
 | [run-env-context-direct-use](docs/checks.md#run-env-context-direct-use) | ✓ | △ | `${{ env.* }}` in `run` scripts |
 | [run-secrets-context-direct-use](docs/checks.md#run-secrets-context-direct-use) | ✓ | △ | `${{ secrets.* }}` in `run` scripts |

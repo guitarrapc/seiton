@@ -693,7 +693,7 @@ The following are **not active** (online rules; require `rules.<id>.enabled: tru
 
 `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`
 
-**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `run-env-context-direct-use` (partial), `job-permissions-required`, `deny-read-all`, `permissions` (partial), `id-naming` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `checkout-persist-credentials` (partial). Parser-originated fixes attach for unknown event option keys with Levenshtein suggestions (§8.3.1). `unpinned-uses` / `unpinned-image` do **not** carry fixes.
+**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `deny-read-all`, `job-permissions-required`, `run-env-context-direct-use` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `template-injection` (partial), `popular-action-inputs` (partial), `checkout-persist-credentials` (partial), `job-timeout-minutes-required` (partial). `unpinned-uses` / `unpinned-image` carry pin-network fixes (require `--enable-pin-network` / `--enable-image-network`).
 
 ---
 
@@ -1186,7 +1186,7 @@ The following table classifies each default rule by fix feasibility.
 | `unpinned-uses` | ✗ Not auto-fixable | Requires resolving current SHA for the referenced action/workflow at fix time (external I/O). |
 | `unpinned-image` | ✗ Not auto-fixable | Requires resolving current digest for the referenced image at fix time (external I/O). |
 | `dangerous-triggers` | ✗ Not auto-fixable | Correct replacement is semantic (remove event, or restructure trigger) and context-dependent. |
-| `permissions` | △ Partial | For scalar form only: replace invalid scalar with `read-all`. Scope value corrections are ambiguous (correct value is context-dependent). |
+| `permissions` | ✗ Not auto-fixable | Correct value is context-dependent; `deny-write-all` / `deny-read-all` handle the scalar form. |
 | `job-structure` | ✗ Not auto-fixable | Structural problems (missing `runs-on`, conflicting keys) require user intent to resolve. |
 | `reusable-workflow` | ✗ Not auto-fixable | Forbidden key removal requires user to confirm intent. |
 | `popular-action-inputs` | △ Partial | When a unique closest input name is found (unambiguous Levenshtein match within threshold), replace the unknown input key with the suggested name. No fix is attached when no suggestion is found or when the match would be ambiguous. |
@@ -1194,10 +1194,10 @@ The following table classifies each default rule by fix feasibility.
 | `shell-name` | ✗ Not auto-fixable | Correct shell name is ambiguous; user must select. |
 | `runner-label` | ✗ Not auto-fixable | Closest known label may be suggested but apply is ambiguous. |
 | `runner-no-latest` | ✗ Not auto-fixable | Replacing `*-latest` with a concrete runner version requires repository policy/compatibility intent. |
-| `id-naming` | △ Partial | Replace invalid characters with `-` for `job.id` and `step.id` only when single invalid character substitution is unambiguous. |
+| `id-naming` | ✗ Not auto-fixable | Correct replacement character choice and downstream reference updates require user intent. |
 | `glob-pattern` | ✗ Not auto-fixable | Glob correction requires understanding user intent. |
 | `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |
-| `template-injection` | ✗ Not auto-fixable | Safe remediation patterns (env variable indirection, `toJSON()`) are context-dependent. |
+| `template-injection` | △ Partial | For `run:` script sinks with deterministic paths, auto-fix generates env var indirection (new env mapping + shell variable reference). Skips `actions/github-script` `script` inputs, heredoc no-expand bodies, and shell single-quoted strings. One fix per step per pass (multi-pass handles remaining). |
 | `expr-undefined-var` | ✗ Not auto-fixable | Correct context variable cannot be inferred automatically. |
 | `run-secrets-context-direct-use` | △ Partial | Replace simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` in `run:` only when exactly one existing `env` variable maps to the same secret key; ambiguous/no-mapping cases remain no-fix. |
 | `run-inputs-context-direct-use` | △ Partial | Replace simple `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}` (and bracket forms) in `run:` only when exactly one existing `env` variable maps to the same input key; ambiguous/no-mapping cases remain no-fix. |
