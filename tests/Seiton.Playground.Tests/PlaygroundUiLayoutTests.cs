@@ -155,6 +155,18 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That(s_localStylesheetHref.IsMatch(html)).IsTrue();
         await Assert.That(s_fingerprintedMainScriptSrc.IsMatch(html)).IsTrue();
         await Assert.That(html).Contains("<script type=\"importmap\">", StringComparison.Ordinal);
+
+        await Assert.That(html.Contains(">Permalink</button>", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(html.Contains(">Check</button>", StringComparison.Ordinal)).IsFalse();
+
+        // Structural checks (avoid pinning full SVG path d= — brittle on harmless icon tweaks).
+        await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""permalink-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
+        await Assert.That(html).Contains("copy link to clipboard", StringComparison.OrdinalIgnoreCase);
+        await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""fetch-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
+        await Assert.That(html).Contains(
+            "Fetch and lint YAML — enter a URL first",
+            StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"toast-stack\"", StringComparison.Ordinal);
     }
 
     private static async Task GotoPlaygroundAndWaitForLinterGridAsync(IPage page, string baseUrl)
@@ -169,6 +181,131 @@ public sealed class PlaygroundUiLayoutTests
             "() => { const el = document.querySelector('#linter'); return el !== null && getComputedStyle(el).display === 'grid'; }",
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 90_000 });
+    }
+
+    /// <summary>
+    /// <c>main.js</c> attaches URL listeners after the WASM bootstrap; layout-only tests do not need this.
+    /// </summary>
+    private static async Task WaitForLoadingHiddenAsync(IPage page)
+    {
+        await page.WaitForFunctionAsync(
+            "() => { const l = document.getElementById('loading'); return l !== null && l.style.display === 'none'; }",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 120_000 });
+    }
+
+    [Test]
+    public async Task Fetch_InFlight_KeepsButtonAndUrlFieldDisabled_OnInputPulse()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+            var browser = await GetBrowserAsync();
+            await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+            });
+            var page = await context.NewPageAsync();
+
+            await page.RouteAsync(
+                "**/seiton-fetch-stall.example.invalid/**",
+
+                async route =>
+                {
+                    await release.Task.ConfigureAwait(false);
+                    await route.FulfillAsync(new RouteFulfillOptions { Body = "# ok:\n", ContentType = "text/yaml", Status = 200 });
+                });
+
+            await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+            await WaitForLoadingHiddenAsync(page);
+
+            await page.FillAsync("#url-input", "https://seiton-fetch-stall.example.invalid/workflow.yml");
+
+            await page.Locator("#fetch-btn").ClickAsync();
+
+            await page.WaitForFunctionAsync(
+                "() => document.querySelector(\"#fetch-btn\")?.disabled === true && document.querySelector(\"#url-input\")?.disabled === true");
+
+            await page.EvaluateAsync(
+                "() => { document.querySelector(\"#url-input\")?.dispatchEvent(new Event(\"input\", { bubbles: true })); }");
+
+            await page.WaitForTimeoutAsync(200);
+
+            await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsTrue();
+            await Assert.That(await page.Locator("#url-input").EvaluateAsync<bool>("el => el.disabled")).IsTrue();
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+    }
+
+    [Test]
+    public async Task Toast_Escape_WithFocusOutsideStack_DismissesTopToast()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForLoadingHiddenAsync(page);
+
+        // Enter on an invalid-but-filled URL shows an info toast; focus stays in #url-input.
+        await page.Locator("#url-input").FillAsync("http://oops");
+        await page.Locator("#url-input").FocusAsync();
+        await page.Keyboard.PressAsync("Enter");
+
+        await page.Locator("#toast-stack .toast").WaitForAsync(new LocatorWaitForOptions { Timeout = 10_000 });
+
+        await page.Locator("#editor-wrap .CodeMirror").ClickAsync();
+
+        await page.Keyboard.PressAsync("Escape");
+
+        await page.WaitForFunctionAsync(
+            "() => document.querySelectorAll('#toast-stack .toast').length === 0",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 5000 });
+
+        await Assert.That(await page.Locator("#toast-stack").Locator(".toast").CountAsync()).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task FetchUrl_SingleLabelHost_KeepsFetchButtonDisabled()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForLoadingHiddenAsync(page);
+
+        await page.FillAsync("#url-input", "http://oops");
+        await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsTrue();
+    }
+
+    [Test]
+    public async Task FetchUrl_MultiLabelHttpsHost_EnablesFetchButton()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForLoadingHiddenAsync(page);
+
+        await page.FillAsync("#url-input", "https://example.com/raw.yml");
+        await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsFalse();
     }
 
     [Test]

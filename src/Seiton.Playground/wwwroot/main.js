@@ -146,12 +146,17 @@ const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 await runMain();
 
+/** Base URL for GitHub release pages; path segment is the semver tag (displayed with leading v). */
+const SEITON_RELEASE_TAG_BASE_URL = 'https://github.com/guitarrapc/seiton/releases/tag/';
+
 const versionEl = document.getElementById('playground-version');
 try {
     const v = exports.Seiton.Playground.LintInterop.GetProductVersion();
     if (versionEl && typeof v === 'string' && v.length > 0) {
         const label = v.startsWith('v') ? v : `v${v}`;
         versionEl.textContent = label;
+        versionEl.href = SEITON_RELEASE_TAG_BASE_URL + encodeURIComponent(label);
+        versionEl.setAttribute('aria-label', `Release ${label} — open on GitHub`);
         versionEl.hidden = false;
     }
 } catch {
@@ -162,13 +167,203 @@ const loading = document.getElementById('loading');
 const resultTable = document.getElementById('lint-result');
 const resultBody = document.getElementById('lint-result-body');
 const successMsg = document.getElementById('success-msg');
-const errorMsg = document.getElementById('error-msg');
+const toastStack = document.getElementById('toast-stack');
 const fileSelect = document.getElementById('filetype-select');
 const sampleSelect = document.getElementById('sample-select');
 const permalinkBtn = document.getElementById('permalink-btn');
+const permalinkShareTitle = 'Share — copy link to clipboard; YAML is stored in URL hash';
+const permalinkDoneCopied = 'Link copied to clipboard';
+const permalinkDoneNoClipboard = 'URL updated — copy from address bar if clipboard was blocked';
 const applyFixesBtn = document.getElementById('apply-fixes-btn');
 const urlInput = document.getElementById('url-input');
 const fetchBtn = document.getElementById('fetch-btn');
+
+/** True while <code>fetchAndLint</code> awaits network; blocks overlapping runs and input echo re-enabling the button. */
+let fetchInFlight = false;
+
+/** @typedef {'error'|'success'|'info'} ToastVariant */
+
+const FETCH_READY_TITLE = 'Fetch and lint YAML from this URL';
+const FETCH_READY_LABEL = 'Fetch and lint YAML from this URL';
+const FETCH_EMPTY_TITLE = 'Enter a YAML URL first';
+const FETCH_EMPTY_LABEL = 'Fetch and lint YAML — enter a URL first';
+const FETCH_INVALID_TITLE = 'Incomplete URL — use a full hostname (two or more labels), localhost, or an IP.';
+const FETCH_INVALID_LABEL = 'Fetch YAML — URL looks incomplete or invalid.';
+const FETCH_BUSY_TITLE = 'Fetching YAML…';
+const FETCH_BUSY_LABEL = 'Fetching YAML — please wait';
+
+/** @type {Record<ToastVariant, number>} */
+const TOAST_DURATION_MS = { error: 8000, success: 3800, info: 4200 };
+
+/**
+ * Client-side gate: non-empty-but-broken pasted strings ("https://github.", "//x", paths only) stay non-actionable.
+ * Does not guarantee fetch success; normalization + server round-trip decide that.
+ * @param {string} trimmed
+ * @returns {boolean}
+ */
+function looksLikePlausibleHttpFetchUrl(trimmed) {
+    if (!trimmed) {
+        return false;
+    }
+    let u;
+    try {
+        u = new URL(trimmed);
+    } catch {
+        return false;
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+        return false;
+    }
+    const host = u.hostname.toLowerCase();
+    if (!host) {
+        return false;
+    }
+
+    if (host === 'localhost') {
+        return true;
+    }
+    if (host.includes(':')) {
+        return true;
+    }
+    /** @type {boolean} */
+    const looksIpv4 =
+        /^(\d{1,3}\.){3}\d{1,3}$/.test(host) && host.split('.').every((p) => Number(p) >= 0 && Number(p) <= 255);
+
+    if (looksIpv4) {
+        return true;
+    }
+
+    /** Two labels minimum (domain + public suffix-ish segment). Blocks bare "github" / typos stopped mid-host. */
+    const labels = host.split('.');
+    if (labels.some((part) => part.length === 0)) {
+        return false;
+    }
+    if (labels.length < 2) {
+        return false;
+    }
+    const leaf = labels[labels.length - 1];
+    if (leaf.length < 2 || !/^[a-z0-9-]{1,63}$/i.test(leaf)) {
+        return false;
+    }
+    return labels.every((part) => part.length <= 63 && /^[a-z0-9-]{1,63}$/i.test(part));
+}
+
+/**
+ * Toast host: holds dismiss callback for global Escape (capture phase).
+ * @typedef {HTMLElement & { _seitonToastDismiss?: () => void }} SeitonToastHost
+ */
+
+/**
+ * Toast at top of viewport; does not clear lint diagnostics.
+ * @param {string} message
+ * @param {ToastVariant} [variant]
+ * @param {number} [durationMs]
+ */
+function showToast(message, variant = 'info', durationMs) {
+    const stack = toastStack;
+    if (!stack) return;
+    const ms = durationMs ?? TOAST_DURATION_MS[variant] ?? TOAST_DURATION_MS.info;
+
+    const wrap = document.createElement('div');
+    wrap.className = `toast toast--${variant}`;
+    wrap.setAttribute('role', variant === 'error' ? 'alert' : 'status');
+
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'toast__body';
+    appendTextLinkifyingUrls(bodyEl, message ?? '');
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.className = 'toast__dismiss';
+    dismissBtn.setAttribute('aria-label', 'Dismiss notification');
+    dismissBtn.textContent = '\u2715';
+
+    wrap.append(bodyEl, dismissBtn);
+    stack.appendChild(wrap);
+    requestAnimationFrame(() => {
+        wrap.classList.add('toast--show');
+    });
+
+    let hideTimer = window.setTimeout(() => removeToastElement(wrap), ms);
+    const dismiss = () => {
+        window.clearTimeout(hideTimer);
+        hideTimer = 0;
+        removeToastElement(wrap);
+    };
+    dismissBtn.addEventListener('click', dismiss);
+    /** @type {SeitonToastHost} */
+    const toastHost = /** @type {SeitonToastHost} */ (wrap);
+    toastHost._seitonToastDismiss = dismiss;
+}
+
+/** @param {HTMLElement} el */
+function removeToastElement(el) {
+    if (!el?.parentElement || el.dataset.toastClosing) return;
+    el.dataset.toastClosing = '1';
+    el.classList.remove('toast--show');
+    el.classList.add('toast--out');
+    window.setTimeout(() => {
+        try {
+            el.remove();
+        } catch {
+            /* ignore */
+        }
+    }, 240);
+}
+
+function installToastGlobalEscapeDismiss() {
+    if (!toastStack) {
+        return;
+    }
+    document.addEventListener(
+        'keydown',
+        (ev) => {
+            if (ev.key !== 'Escape') {
+                return;
+            }
+            /** @type {SeitonToastHost | null} */
+            const top = /** @type {SeitonToastHost | null} */ (toastStack.lastElementChild);
+            if (!top || typeof top._seitonToastDismiss !== 'function') {
+                return;
+            }
+            ev.preventDefault();
+            ev.stopPropagation();
+            top._seitonToastDismiss();
+        },
+        true,
+    );
+}
+
+installToastGlobalEscapeDismiss();
+
+function syncFetchButtonEnabled() {
+    if (!fetchBtn || !urlInput) return;
+    if (fetchInFlight) {
+        fetchBtn.disabled = true;
+        urlInput.disabled = true;
+        fetchBtn.title = FETCH_BUSY_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_BUSY_LABEL);
+        return;
+    }
+    urlInput.disabled = false;
+
+    const raw = (urlInput.value ?? '').trim();
+    if (!raw.length) {
+        fetchBtn.disabled = true;
+        fetchBtn.title = FETCH_EMPTY_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_EMPTY_LABEL);
+        return;
+    }
+    const okShape = looksLikePlausibleHttpFetchUrl(raw);
+    fetchBtn.disabled = !okShape;
+    if (!okShape) {
+        fetchBtn.title = FETCH_INVALID_TITLE;
+        fetchBtn.setAttribute('aria-label', FETCH_INVALID_LABEL);
+        return;
+    }
+    fetchBtn.title = FETCH_READY_TITLE;
+    fetchBtn.setAttribute('aria-label', FETCH_READY_LABEL);
+}
 
 const editor = CodeMirror(document.getElementById('editor'), {
     mode: 'yaml',
@@ -271,6 +466,42 @@ sampleSelect.addEventListener('change', () => {
     runLint();
 });
 
+/**
+ * Synchronous clipboard fallback (helps while the originating click is still a “user gesture”).
+ * @param {string} text
+ * @returns {boolean}
+ */
+function tryClipboardCopyViaTextArea(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    try {
+        ta.focus();
+        ta.select();
+        return document.execCommand('copy');
+    } catch {
+        return false;
+    } finally {
+        if (ta.parentNode) {
+            ta.parentNode.removeChild(ta);
+        }
+    }
+}
+
+function schedulePermalinkFeedback(copied) {
+    const msg = copied ? permalinkDoneCopied : permalinkDoneNoClipboard;
+    permalinkBtn.title = msg;
+    permalinkBtn.setAttribute('aria-label', msg);
+    window.setTimeout(() => {
+        permalinkBtn.title = permalinkShareTitle;
+        permalinkBtn.setAttribute('aria-label', permalinkShareTitle);
+    }, 1800);
+}
+
 permalinkBtn.addEventListener('click', () => {
     try {
         const src = new TextEncoder().encode(editor.getValue());
@@ -278,10 +509,25 @@ permalinkBtn.addEventListener('click', () => {
         const b64 = uint8ToBase64(compressed);
         const url = `${location.pathname}${location.search}#${b64}`;
         history.replaceState(null, '', url);
-        permalinkBtn.textContent = 'URL updated';
-        setTimeout(() => { permalinkBtn.textContent = 'Permalink'; }, 1400);
+        const fullUrl = location.href;
+        if (tryClipboardCopyViaTextArea(fullUrl)) {
+            schedulePermalinkFeedback(true);
+            return;
+        }
+        const w = navigator.clipboard?.writeText;
+        if (w) {
+            w.call(navigator.clipboard, fullUrl)
+                .then(() => {
+                    schedulePermalinkFeedback(true);
+                })
+                .catch(() => {
+                    schedulePermalinkFeedback(false);
+                });
+            return;
+        }
+        schedulePermalinkFeedback(false);
     } catch (e) {
-        showError(e?.message ?? String(e));
+        showToast(e?.message ?? String(e), 'error');
     }
 });
 
@@ -296,25 +542,55 @@ applyFixesBtn.addEventListener('click', () => {
         applyFixesBtn.hidden = true;
         runLint();
     } catch (e) {
-        showError(e?.message ?? String(e));
+        showToast(e?.message ?? String(e), 'error');
     }
 });
 
 fetchBtn.addEventListener('click', () => fetchAndLint());
-urlInput.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') {
+if (urlInput) {
+    urlInput.addEventListener('input', syncFetchButtonEnabled);
+    /** Paste updates value asynchronously; next frame picks up pasted URL. */
+    urlInput.addEventListener('paste', () => {
+        requestAnimationFrame(() => syncFetchButtonEnabled());
+    });
+    urlInput.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter') {
+            return;
+        }
+        ev.preventDefault();
+        if (fetchInFlight) {
+            return;
+        }
+        const raw = (urlInput.value ?? '').trim();
+        if (!raw.length) {
+            urlInput.focus();
+            showToast(FETCH_EMPTY_TITLE, 'info', 2600);
+            return;
+        }
+        if (!looksLikePlausibleHttpFetchUrl(raw)) {
+            urlInput.focus();
+            showToast(FETCH_INVALID_TITLE, 'info', 3200);
+            return;
+        }
         fetchAndLint();
-    }
-});
+    });
+}
+syncFetchButtonEnabled();
 
 async function fetchAndLint() {
-    const raw = urlInput?.value?.trim() ?? '';
-    if (!raw) {
-        showError('Paste a URL first.');
+    if (fetchInFlight) {
         return;
     }
-    clearError();
-    fetchBtn.disabled = true;
+    const raw = urlInput?.value?.trim() ?? '';
+    if (!raw) {
+        return;
+    }
+    if (!looksLikePlausibleHttpFetchUrl(raw)) {
+        showToast(FETCH_INVALID_TITLE, 'info');
+        return;
+    }
+    fetchInFlight = true;
+    syncFetchButtonEnabled();
     try {
         const fetchUrl = normalizeGitHubBlobToRaw(raw);
         const res = await fetch(fetchUrl, { mode: 'cors', redirect: 'follow', cache: 'no-store' });
@@ -329,10 +605,12 @@ async function fetchAndLint() {
         editor.setValue(text);
         editor.refresh();
         runLint();
+        showToast('Loaded YAML from URL.', 'success');
     } catch (e) {
-        showError(e?.message ?? String(e));
+        showToast(e?.message ?? String(e), 'error');
     } finally {
-        fetchBtn.disabled = false;
+        fetchInFlight = false;
+        syncFetchButtonEnabled();
     }
 }
 
@@ -420,9 +698,8 @@ function runLint() {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
         renderResults(diagnostics);
-        clearError();
     } catch (err) {
-        showError(err?.message ?? String(err));
+        showToast(err?.message ?? String(err), 'error');
     }
 }
 
@@ -492,20 +769,6 @@ function renderResults(diagnostics) {
         marker.textContent = '●';
         editor.setGutterMarker(lineIndex, 'error-marker', marker);
     }
-}
-
-function clearError() {
-    errorMsg.replaceChildren();
-    errorMsg.style.display = 'none';
-}
-
-function showError(message) {
-    errorMsg.replaceChildren();
-    appendTextLinkifyingUrls(errorMsg, message ?? '');
-    errorMsg.style.display = 'block';
-    successMsg.style.display = 'none';
-    resultTable.hidden = true;
-    applyFixesBtn.hidden = true;
 }
 
 function getSelectedFilePath() {

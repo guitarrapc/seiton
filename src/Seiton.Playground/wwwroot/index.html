@@ -70,20 +70,39 @@
           </svg>
         </a>
         <h1>seiton playground</h1>
-        <span id="playground-version"
-              class="version-badge"
-              hidden
-              aria-label="Playground build version"></span>
+        <a id="playground-version"
+           class="version-badge"
+           hidden
+           target="_blank"
+           rel="noopener noreferrer"
+           href="https://github.com/guitarrapc/seiton/releases"
+           aria-label="Playground build version — GitHub releases"></a>
       </div>
       <p class="tagline">Static checker for GitHub Actions workflow files</p>
     </header>
     <div id="controls">
       <div class="controls-row controls-row--primary">
-        <button id="permalink-btn" type="button" title="Store editor text in the URL hash">Permalink</button>
+        <button id="permalink-btn" type="button" class="toolbar-icon-btn"
+                title="Share — copy link to clipboard; YAML is stored in URL hash"
+                aria-label="Share — copy link to clipboard; YAML is stored in URL hash">
+          <svg class="toolbar-icon-btn__svg" fill="currentColor" viewBox="0 0 24 24" width="24" height="24"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path fill="currentColor"
+                  d="M16 5.63636L14.58 6.92727L12.99 5.48182V15.6364H11.01V5.48182L9.42 6.92727L8 5.63636L12 2L16 5.63636ZM20 10.1818V20.1818C20 21.1818 19.1 22 18 22H6C4.89 22 4 21.1818 4 20.1818V10.1818C4 9.17273 4.89 8.36364 6 8.36364H9V10.1818H6V20.1818H18V10.1818H15V8.36364H18C19.1 8.36364 20 9.17273 20 10.1818Z"/>
+          </svg>
+        </button>
         <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
           <input type="url" id="url-input" aria-label="YAML URL" autocomplete="off" spellcheck="false"
                  placeholder="https://raw GitHub/Gist YAML URL"/>
-          <button id="fetch-btn" type="button">Check</button>
+          <button id="fetch-btn" type="button" class="toolbar-icon-btn" disabled
+                  title="Enter a YAML URL first"
+                  aria-label="Fetch and lint YAML — enter a URL first">
+            <svg class="toolbar-icon-btn__svg" fill="currentColor" viewBox="0 0 24 24" width="24" height="24"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path fill="currentColor"
+                    d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+          </button>
         </span>
       </div>
       <div class="controls-row controls-row--meta">
@@ -108,6 +127,7 @@
       </div>
     </div>
   </nav>
+  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
   <main>
     <section id="linter">
       <div id="editor-wrap" class="split-pane">
@@ -125,7 +145,6 @@
         <table id="lint-result" class="result-table" hidden>
           <tbody id="lint-result-body"></tbody>
         </table>
-        <div id="error-msg" class="notification error" style="display:none"></div>
         <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
       </div>
     </section>

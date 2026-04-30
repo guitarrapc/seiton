@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -212,6 +213,10 @@ internal static class PlaygroundUiTestHost
             throw new InvalidOperationException($"Published index.html not found under '{wwwroot}'.");
         }
 
+        // main.js imports ./_framework/dotnet.js; SDK publish often places the loader at {publishRoot}/dotnet.js
+        // (not under wwwroot). Bare static hosts need it under wwwroot/_framework for that relative import.
+        EnsureDotNetJsForStaticHosting(publishDir, wwwroot);
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             ContentRootPath = wwwroot,
@@ -238,5 +243,112 @@ internal static class PlaygroundUiTestHost
         var baseUrl = urlBase + "/";
 
         return new HostState(baseUrl, wwwroot, publishDir, app);
+    }
+
+    /// <summary>
+    /// Ensures <c>wwwroot/_framework/dotnet.js</c> exists for <c>main.*.js</c> imports.
+    /// Prefer the SDK-published <c>{publishDir}/dotnet.js</c>; fall back to copying a hashed <c>_framework/dotnet.*.js</c>.
+    /// </summary>
+    private static void EnsureDotNetJsForStaticHosting(string publishDir, string wwwroot)
+    {
+        var frameworkDir = Path.Combine(wwwroot, "_framework");
+        if (!Directory.Exists(frameworkDir))
+        {
+            return;
+        }
+
+        var target = Path.Combine(frameworkDir, "dotnet.js");
+        if (File.Exists(target))
+        {
+            return;
+        }
+
+        var publishRootLoader = Path.Combine(publishDir, "dotnet.js");
+        if (File.Exists(publishRootLoader))
+        {
+            File.Copy(publishRootLoader, target, overwrite: false);
+            return;
+        }
+
+        EnsureFrameworkDotNetJsAlias(wwwroot);
+    }
+
+    /// <summary>
+    /// Fallback: copy an on-disk hashed dotnet loader chunk to <c>dotnet.js</c> when the SDK leaves no sibling file.
+    /// </summary>
+    private static void EnsureFrameworkDotNetJsAlias(string wwwroot)
+    {
+        var frameworkDir = Path.Combine(wwwroot, "_framework");
+        if (!Directory.Exists(frameworkDir))
+        {
+            return;
+        }
+
+        var target = Path.Combine(frameworkDir, "dotnet.js");
+        if (File.Exists(target))
+        {
+            return;
+        }
+
+        var candidates = Directory.EnumerateFiles(frameworkDir, "*.js", SearchOption.TopDirectoryOnly)
+            .Select(Path.GetFullPath).Where(IsDotNetFingerprintedJs).ToArray();
+
+        if (candidates.Length == 0)
+        {
+            return;
+        }
+
+        var bootstrap =
+            ResolveDotNetLoaderByContent(candidates)
+            ?? candidates.OrderByDescending(p => new FileInfo(p).Length).ThenBy(Path.GetFileName, StringComparer.Ordinal).First();
+
+        File.Copy(bootstrap, target, overwrite: false);
+    }
+
+    private static bool IsDotNetFingerprintedJs(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name.StartsWith("dotnet.", StringComparison.Ordinal)
+            && !name.Contains(".native.", StringComparison.Ordinal)
+            && !name.Contains(".runtime.", StringComparison.Ordinal)
+            && !name.Contains(".cli.", StringComparison.Ordinal)
+            && !string.Equals(name, "dotnet.js", StringComparison.Ordinal);
+    }
+
+    private static string? ResolveDotNetLoaderByContent(IEnumerable<string> candidatePaths)
+    {
+        foreach (var path in candidatePaths.OrderBy(Path.GetFileName, StringComparer.Ordinal))
+        {
+            long byteLimit = 96 * 1024;
+            var fi = new FileInfo(path);
+            if (fi.Length < byteLimit)
+            {
+                byteLimit = fi.Length;
+            }
+
+            if (byteLimit <= 0)
+            {
+                continue;
+            }
+
+            var prefix = ReadUtf8Prefix(path, (int)byteLimit);
+            if (prefix.Contains("createDotnetRuntime", StringComparison.Ordinal)
+                || prefix.Contains("export { dotnet", StringComparison.Ordinal)
+                || prefix.Contains("dotnet as", StringComparison.Ordinal)
+                || (prefix.Contains("export", StringComparison.Ordinal) && prefix.Contains("dotnet.run", StringComparison.Ordinal)))
+            {
+                return path;
+            }
+        }
+
+        return null;
+    }
+
+    private static string ReadUtf8Prefix(string path, int maxBytes)
+    {
+        var buf = new byte[maxBytes];
+        using var fs = File.OpenRead(path);
+        var read = fs.ReadAtLeast(buf, maxBytes, throwOnEndOfStream: false);
+        return Encoding.UTF8.GetString(buf, 0, read);
     }
 }
