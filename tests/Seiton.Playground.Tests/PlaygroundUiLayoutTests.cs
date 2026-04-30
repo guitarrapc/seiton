@@ -183,6 +183,17 @@ public sealed class PlaygroundUiLayoutTests
             new PageWaitForFunctionOptions { Timeout = 90_000 });
     }
 
+    /// <summary>
+    /// <c>main.js</c> attaches URL listeners after the WASM bootstrap; layout-only tests do not need this.
+    /// </summary>
+    private static async Task WaitForLoadingHiddenAsync(IPage page)
+    {
+        await page.WaitForFunctionAsync(
+            "() => { const l = document.getElementById('loading'); return l !== null && l.style.display === 'none'; }",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 120_000 });
+    }
+
     [Test]
     public async Task FetchUrl_SingleLabelHost_KeepsFetchButtonDisabled()
     {
@@ -194,6 +205,7 @@ public sealed class PlaygroundUiLayoutTests
         });
         var page = await context.NewPageAsync();
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForLoadingHiddenAsync(page);
 
         await page.FillAsync("#url-input", "http://oops");
         await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsTrue();
@@ -210,10 +222,9 @@ public sealed class PlaygroundUiLayoutTests
         });
         var page = await context.NewPageAsync();
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForLoadingHiddenAsync(page);
 
-        await page.FillAsync(
-            "#url-input",
-            "https://raw.githubusercontent.com/acme/repo/main/.github/workflows/ci.yml");
+        await page.FillAsync("#url-input", "https://example.com/raw.yml");
         await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsFalse();
     }
 
