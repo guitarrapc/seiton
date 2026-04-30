@@ -1,0 +1,1 @@
+test.yaml:7:18: workflow_call input 'path' has the default value but is also required. if an input is required, its default value will never be used [workflow-call-input-default]

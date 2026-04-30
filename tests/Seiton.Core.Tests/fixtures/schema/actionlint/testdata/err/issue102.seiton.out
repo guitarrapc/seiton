@@ -1,0 +1,1 @@
+test.yaml:8:13: jobs.'actionlint'.steps[1] must run script with "run" section or run action with "uses" section [syntax-check]

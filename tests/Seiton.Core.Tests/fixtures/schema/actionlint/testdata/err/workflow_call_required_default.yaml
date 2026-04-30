@@ -1,0 +1,23 @@
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: "Path"
+        required: true
+        default: ""
+        type: string
+      name:
+        description: "Name"
+        required: false
+        default: "hello"
+        type: string
+      count:
+        description: "Count"
+        required: true
+        type: number
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.path }}"

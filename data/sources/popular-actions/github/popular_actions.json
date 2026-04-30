@@ -1,0 +1,855 @@
+{
+  "schemaVersion": 1,
+  "source": "github-official-merged-snapshot",
+  "actions": [
+    {
+      "uses": "actions/cache",
+      "inputs": [
+        {
+          "name": "enableCrossOsArchive",
+          "required": false
+        },
+        {
+          "name": "fail-on-cache-miss",
+          "required": false
+        },
+        {
+          "name": "key",
+          "required": true
+        },
+        {
+          "name": "lookup-only",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": true
+        },
+        {
+          "name": "restore-keys",
+          "required": false
+        },
+        {
+          "name": "save-always",
+          "required": false,
+          "deprecationMessage": "save-always does not work as intended and will be removed in a future release. A separate \u0060actions/cache/restore\u0060 step should be used instead. See https://github.com/actions/cache/tree/main/save#always-save-cache for more details"
+        },
+        {
+          "name": "upload-chunk-size",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "actions/checkout",
+      "inputs": [
+        {
+          "name": "clean",
+          "required": false
+        },
+        {
+          "name": "fetch-depth",
+          "required": false
+        },
+        {
+          "name": "fetch-tags",
+          "required": false
+        },
+        {
+          "name": "filter",
+          "required": false
+        },
+        {
+          "name": "github-server-url",
+          "required": false
+        },
+        {
+          "name": "lfs",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": false
+        },
+        {
+          "name": "persist-credentials",
+          "required": false
+        },
+        {
+          "name": "ref",
+          "required": false
+        },
+        {
+          "name": "repository",
+          "required": false
+        },
+        {
+          "name": "set-safe-directory",
+          "required": false
+        },
+        {
+          "name": "show-progress",
+          "required": false
+        },
+        {
+          "name": "sparse-checkout",
+          "required": false
+        },
+        {
+          "name": "sparse-checkout-cone-mode",
+          "required": false
+        },
+        {
+          "name": "ssh-key",
+          "required": false
+        },
+        {
+          "name": "ssh-known-hosts",
+          "required": false
+        },
+        {
+          "name": "ssh-strict",
+          "required": false
+        },
+        {
+          "name": "ssh-user",
+          "required": false
+        },
+        {
+          "name": "submodules",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "commit"
+        },
+        {
+          "name": "ref"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "actions/download-artifact",
+      "inputs": [
+        {
+          "name": "artifact-ids",
+          "required": false
+        },
+        {
+          "name": "digest-mismatch",
+          "required": false
+        },
+        {
+          "name": "github-token",
+          "required": false
+        },
+        {
+          "name": "merge-multiple",
+          "required": false
+        },
+        {
+          "name": "name",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": false
+        },
+        {
+          "name": "pattern",
+          "required": false
+        },
+        {
+          "name": "repository",
+          "required": false
+        },
+        {
+          "name": "run-id",
+          "required": false
+        },
+        {
+          "name": "skip-decompress",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "download-path"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "actions/setup-dotnet",
+      "inputs": [
+        {
+          "name": "architecture",
+          "required": false
+        },
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "config-file",
+          "required": false
+        },
+        {
+          "name": "dotnet-quality",
+          "required": false
+        },
+        {
+          "name": "dotnet-version",
+          "required": false
+        },
+        {
+          "name": "global-json-file",
+          "required": false
+        },
+        {
+          "name": "owner",
+          "required": false
+        },
+        {
+          "name": "source-url",
+          "required": false
+        },
+        {
+          "name": "workloads",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "dotnet-version"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "actions/setup-go",
+      "inputs": [
+        {
+          "name": "architecture",
+          "required": false
+        },
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "check-latest",
+          "required": false
+        },
+        {
+          "name": "go-download-base-url",
+          "required": false
+        },
+        {
+          "name": "go-version",
+          "required": false
+        },
+        {
+          "name": "go-version-file",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "go-version"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "actions/setup-node",
+      "inputs": [
+        {
+          "name": "architecture",
+          "required": false
+        },
+        {
+          "name": "cache",
+          "required": false
+        },
+        {
+          "name": "cache-dependency-path",
+          "required": false
+        },
+        {
+          "name": "check-latest",
+          "required": false
+        },
+        {
+          "name": "mirror",
+          "required": false
+        },
+        {
+          "name": "mirror-token",
+          "required": false
+        },
+        {
+          "name": "node-version",
+          "required": false
+        },
+        {
+          "name": "node-version-file",
+          "required": false
+        },
+        {
+          "name": "package-manager-cache",
+          "required": false
+        },
+        {
+          "name": "registry-url",
+          "required": false
+        },
+        {
+          "name": "scope",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cache-hit"
+        },
+        {
+          "name": "node-version"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "actions/stale",
+      "inputs": [
+        {
+          "name": "any-of-issue-labels",
+          "required": false
+        },
+        {
+          "name": "any-of-labels",
+          "required": false
+        },
+        {
+          "name": "any-of-pr-labels",
+          "required": false
+        },
+        {
+          "name": "ascending",
+          "required": false
+        },
+        {
+          "name": "close-issue-label",
+          "required": false
+        },
+        {
+          "name": "close-issue-message",
+          "required": false
+        },
+        {
+          "name": "close-issue-reason",
+          "required": false
+        },
+        {
+          "name": "close-pr-label",
+          "required": false
+        },
+        {
+          "name": "close-pr-message",
+          "required": false
+        },
+        {
+          "name": "days-before-close",
+          "required": false
+        },
+        {
+          "name": "days-before-issue-close",
+          "required": false
+        },
+        {
+          "name": "days-before-issue-stale",
+          "required": false
+        },
+        {
+          "name": "days-before-pr-close",
+          "required": false
+        },
+        {
+          "name": "days-before-pr-stale",
+          "required": false
+        },
+        {
+          "name": "days-before-stale",
+          "required": false
+        },
+        {
+          "name": "debug-only",
+          "required": false
+        },
+        {
+          "name": "delete-branch",
+          "required": false
+        },
+        {
+          "name": "enable-statistics",
+          "required": false
+        },
+        {
+          "name": "exempt-all-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-all-issue-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-all-issue-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-all-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-all-pr-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-all-pr-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-draft-pr",
+          "required": false
+        },
+        {
+          "name": "exempt-issue-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-issue-labels",
+          "required": false
+        },
+        {
+          "name": "exempt-issue-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-milestones",
+          "required": false
+        },
+        {
+          "name": "exempt-pr-assignees",
+          "required": false
+        },
+        {
+          "name": "exempt-pr-labels",
+          "required": false
+        },
+        {
+          "name": "exempt-pr-milestones",
+          "required": false
+        },
+        {
+          "name": "ignore-issue-updates",
+          "required": false
+        },
+        {
+          "name": "ignore-pr-updates",
+          "required": false
+        },
+        {
+          "name": "ignore-updates",
+          "required": false
+        },
+        {
+          "name": "include-only-assigned",
+          "required": false
+        },
+        {
+          "name": "labels-to-add-when-unstale",
+          "required": false
+        },
+        {
+          "name": "labels-to-remove-when-stale",
+          "required": false
+        },
+        {
+          "name": "labels-to-remove-when-unstale",
+          "required": false
+        },
+        {
+          "name": "only-issue-labels",
+          "required": false
+        },
+        {
+          "name": "only-issue-types",
+          "required": false
+        },
+        {
+          "name": "only-labels",
+          "required": false
+        },
+        {
+          "name": "only-pr-labels",
+          "required": false
+        },
+        {
+          "name": "operations-per-run",
+          "required": false
+        },
+        {
+          "name": "remove-issue-stale-when-updated",
+          "required": false
+        },
+        {
+          "name": "remove-pr-stale-when-updated",
+          "required": false
+        },
+        {
+          "name": "remove-stale-when-updated",
+          "required": false
+        },
+        {
+          "name": "repo-token",
+          "required": false
+        },
+        {
+          "name": "sort-by",
+          "required": false
+        },
+        {
+          "name": "stale-issue-label",
+          "required": false
+        },
+        {
+          "name": "stale-issue-message",
+          "required": false
+        },
+        {
+          "name": "stale-pr-label",
+          "required": false
+        },
+        {
+          "name": "stale-pr-message",
+          "required": false
+        },
+        {
+          "name": "start-date",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "closed-issues-prs"
+        },
+        {
+          "name": "staled-issues-prs"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 8
+    },
+    {
+      "uses": "actions/upload-artifact",
+      "inputs": [
+        {
+          "name": "archive",
+          "required": false
+        },
+        {
+          "name": "compression-level",
+          "required": false
+        },
+        {
+          "name": "if-no-files-found",
+          "required": false
+        },
+        {
+          "name": "include-hidden-files",
+          "required": false
+        },
+        {
+          "name": "name",
+          "required": false
+        },
+        {
+          "name": "overwrite",
+          "required": false
+        },
+        {
+          "name": "path",
+          "required": true
+        },
+        {
+          "name": "retention-days",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "artifact-digest"
+        },
+        {
+          "name": "artifact-id"
+        },
+        {
+          "name": "artifact-url"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 3
+    },
+    {
+      "uses": "docker/login-action",
+      "inputs": [
+        {
+          "name": "ecr",
+          "required": false
+        },
+        {
+          "name": "logout",
+          "required": false
+        },
+        {
+          "name": "password",
+          "required": false
+        },
+        {
+          "name": "registry",
+          "required": false
+        },
+        {
+          "name": "registry-auth",
+          "required": false
+        },
+        {
+          "name": "scope",
+          "required": false
+        },
+        {
+          "name": "username",
+          "required": false
+        }
+      ],
+      "outputs": [],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 2
+    },
+    {
+      "uses": "octokit/request-action",
+      "inputs": [
+        {
+          "name": "mediaType",
+          "required": false
+        },
+        {
+          "name": "route",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "data"
+        },
+        {
+          "name": "headers"
+        },
+        {
+          "name": "status"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 0
+    },
+    {
+      "uses": "pypa/gh-action-pypi-publish",
+      "inputs": [
+        {
+          "name": "attestations",
+          "required": false
+        },
+        {
+          "name": "packages-dir",
+          "required": false
+        },
+        {
+          "name": "packages_dir",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060packages-dir\u0060 instead"
+        },
+        {
+          "name": "password",
+          "required": false
+        },
+        {
+          "name": "print-hash",
+          "required": false
+        },
+        {
+          "name": "print_hash",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060print-hash\u0060 instead"
+        },
+        {
+          "name": "repository-url",
+          "required": false
+        },
+        {
+          "name": "repository_url",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060repository-url\u0060 instead"
+        },
+        {
+          "name": "skip-existing",
+          "required": false
+        },
+        {
+          "name": "skip_existing",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060skip-existing\u0060 instead"
+        },
+        {
+          "name": "user",
+          "required": false
+        },
+        {
+          "name": "verbose",
+          "required": false
+        },
+        {
+          "name": "verify-metadata",
+          "required": false
+        },
+        {
+          "name": "verify_metadata",
+          "required": false,
+          "deprecationMessage": "The inputs have been normalized to use kebab-case. Use \u0060verify-metadata\u0060 instead"
+        }
+      ],
+      "outputs": [],
+      "runsUsing": "composite",
+      "maxDeprecatedMajorVersion": 0
+    },
+    {
+      "uses": "reviewdog/action-actionlint",
+      "inputs": [
+        {
+          "name": "actionlint_flags",
+          "required": false
+        },
+        {
+          "name": "fail_level",
+          "required": false
+        },
+        {
+          "name": "fail_on_error",
+          "required": false,
+          "deprecationMessage": "Deprecated, use \u0060fail_level\u0060 instead"
+        },
+        {
+          "name": "filter_mode",
+          "required": false
+        },
+        {
+          "name": "github_token",
+          "required": false
+        },
+        {
+          "name": "level",
+          "required": false
+        },
+        {
+          "name": "reporter",
+          "required": false
+        },
+        {
+          "name": "reviewdog_flags",
+          "required": false
+        },
+        {
+          "name": "tool_name",
+          "required": false
+        }
+      ],
+      "outputs": [],
+      "runsUsing": "docker",
+      "maxDeprecatedMajorVersion": 0
+    },
+    {
+      "uses": "rhysd/action-setup-vim",
+      "inputs": [
+        {
+          "name": "configure-args",
+          "required": false
+        },
+        {
+          "name": "neovim",
+          "required": false
+        },
+        {
+          "name": "token",
+          "required": false
+        },
+        {
+          "name": "version",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "executable"
+        },
+        {
+          "name": "vim-dir"
+        }
+      ],
+      "runsUsing": "node24",
+      "maxDeprecatedMajorVersion": 0
+    }
+  ]
+}

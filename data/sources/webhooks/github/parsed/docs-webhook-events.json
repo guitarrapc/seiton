@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "source": "github-docs-markdown-raw",
+  "events": [
+    {
+      "name": "branch_protection_rule",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "edited"
+      ]
+    },
+    {
+      "name": "check_run",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "completed",
+        "created",
+        "requested_action",
+        "rerequested"
+      ]
+    },
+    {
+      "name": "check_suite",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "completed"
+      ]
+    },
+    {
+      "name": "create",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "delete",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "deployment",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "deployment_status",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "discussion",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "answered",
+        "category_changed",
+        "created",
+        "deleted",
+        "edited",
+        "labeled",
+        "locked",
+        "pinned",
+        "transferred",
+        "unanswered",
+        "unlabeled",
+        "unlocked",
+        "unpinned"
+      ]
+    },
+    {
+      "name": "discussion_comment",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "edited"
+      ]
+    },
+    {
+      "name": "fork",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "gollum",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "image_version",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "issue_comment",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "edited"
+      ]
+    },
+    {
+      "name": "issues",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "assigned",
+        "closed",
+        "deleted",
+        "demilestoned",
+        "edited",
+        "labeled",
+        "locked",
+        "milestoned",
+        "opened",
+        "pinned",
+        "reopened",
+        "transferred",
+        "typed",
+        "unassigned",
+        "unlabeled",
+        "unlocked",
+        "unpinned",
+        "untyped"
+      ]
+    },
+    {
+      "name": "label",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "edited"
+      ]
+    },
+    {
+      "name": "merge_group",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "checks_requested"
+      ]
+    },
+    {
+      "name": "milestone",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "closed",
+        "created",
+        "deleted",
+        "edited",
+        "opened"
+      ]
+    },
+    {
+      "name": "page_build",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "project",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "closed",
+        "created",
+        "deleted",
+        "edited",
+        "reopened"
+      ]
+    },
+    {
+      "name": "project_card",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "converted",
+        "created",
+        "deleted",
+        "edited",
+        "moved"
+      ]
+    },
+    {
+      "name": "project_column",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "moved",
+        "updated"
+      ]
+    },
+    {
+      "name": "public",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "pull_request",
+      "hasParseableActivityTypes": false,
+      "activityTypes": null
+    },
+    {
+      "name": "pull_request_review",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "dismissed",
+        "edited",
+        "submitted"
+      ]
+    },
+    {
+      "name": "pull_request_review_comment",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "edited"
+      ]
+    },
+    {
+      "name": "pull_request_target",
+      "hasParseableActivityTypes": false,
+      "activityTypes": null
+    },
+    {
+      "name": "push",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "registry_package",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "published",
+        "updated"
+      ]
+    },
+    {
+      "name": "release",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "created",
+        "deleted",
+        "edited",
+        "prereleased",
+        "published",
+        "released",
+        "unpublished"
+      ]
+    },
+    {
+      "name": "repository_dispatch",
+      "hasParseableActivityTypes": true,
+      "activityTypes": null
+    },
+    {
+      "name": "schedule",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "status",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "watch",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "started"
+      ]
+    },
+    {
+      "name": "workflow_call",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "workflow_dispatch",
+      "hasParseableActivityTypes": true,
+      "activityTypes": []
+    },
+    {
+      "name": "workflow_run",
+      "hasParseableActivityTypes": true,
+      "activityTypes": [
+        "completed",
+        "in_progress",
+        "requested"
+      ]
+    }
+  ]
+}

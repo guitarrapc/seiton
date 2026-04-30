@@ -1,0 +1,1 @@
+test.yaml:9:19: value "13" in "exclude" does not match in matrix "node" combinations. possible values are "10", "12", "14" [matrix]

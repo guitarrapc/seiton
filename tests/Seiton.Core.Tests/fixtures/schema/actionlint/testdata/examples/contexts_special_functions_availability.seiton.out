@@ -1,0 +1,3 @@
+test.yaml:14:13: context "runner" is not allowed here. available contexts are "github", "inputs", "vars", "needs". called in job strategy [expression]
+test.yaml:18:13: context "env" is not allowed here. available contexts are "github", "inputs", "vars", "needs", "strategy", "matrix", "secrets". called in job env [expression]
+test.yaml:24:29: function "success" is not allowed here. "success" is only available in "if" conditions of jobs and steps. called in step run [expression]

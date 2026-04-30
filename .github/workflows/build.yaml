@@ -1,0 +1,51 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: 10.0
+      - name: Install wasm-tools workload (Seiton.Playground / Blazor WASM)
+        run: dotnet workload install wasm-tools
+      - name: Build
+        run: dotnet build -c Release
+      - name: Install Playwright (Chromium) for playground UI tests
+        run: pwsh tests/Seiton.Playground.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+  verify-updater:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: 10.0
+      - name: Validate Popular Actions Targets
+        run: dotnet run --project src/Seiton.Update -- validate-popular-actions-targets
+      - name: Verify Generated Data
+        run: dotnet run --project src/Seiton.Update -- verify --dataset all

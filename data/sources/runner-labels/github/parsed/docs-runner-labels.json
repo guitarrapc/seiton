@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "source": "github-docs-hosted-and-larger-runners",
+  "labels": [
+    {
+      "label": "macos-14",
+      "isPreview": false
+    },
+    {
+      "label": "macos-14-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-14-xlarge",
+      "isPreview": false
+    },
+    {
+      "label": "macos-15",
+      "isPreview": false
+    },
+    {
+      "label": "macos-15-intel",
+      "isPreview": false
+    },
+    {
+      "label": "macos-15-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-15-xlarge",
+      "isPreview": false
+    },
+    {
+      "label": "macos-26",
+      "isPreview": false
+    },
+    {
+      "label": "macos-26-intel",
+      "isPreview": false
+    },
+    {
+      "label": "macos-26-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-26-xlarge",
+      "isPreview": false
+    },
+    {
+      "label": "macos-latest",
+      "isPreview": false
+    },
+    {
+      "label": "macos-latest-large",
+      "isPreview": false
+    },
+    {
+      "label": "macos-latest-xlarge",
+      "isPreview": false
+    },
+    {
+      "label": "ubuntu-22.04",
+      "isPreview": false
+    },
+    {
+      "label": "ubuntu-22.04-arm",
+      "isPreview": false
+    },
+    {
+      "label": "ubuntu-24.04",
+      "isPreview": false
+    },
+    {
+      "label": "ubuntu-24.04-arm",
+      "isPreview": false
+    },
+    {
+      "label": "ubuntu-latest",
+      "isPreview": false
+    },
+    {
+      "label": "ubuntu-slim",
+      "isPreview": false
+    },
+    {
+      "label": "windows-11-arm",
+      "isPreview": false
+    },
+    {
+      "label": "windows-2022",
+      "isPreview": false
+    },
+    {
+      "label": "windows-2025",
+      "isPreview": false
+    },
+    {
+      "label": "windows-2025-vs2026",
+      "isPreview": true
+    },
+    {
+      "label": "windows-latest",
+      "isPreview": false
+    }
+  ]
+}

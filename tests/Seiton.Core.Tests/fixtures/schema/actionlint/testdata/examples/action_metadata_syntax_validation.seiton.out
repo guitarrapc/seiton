@@ -1,0 +1,6 @@
+test.yaml:8:9: "env" is not allowed in "runs" section because "My action" is a JavaScript action [action]
+test.yaml:8:9: description is required in metadata of "My action" action at "./.github/actions/my-invalid-action/action.yml" [action]
+test.yaml:8:9: file "this-file-does-not-exist.js" does not exist in "./.github/actions/my-invalid-action". it is specified at "main" key in "runs" section in "My action" action [action]
+test.yaml:8:9: invalid branding color "gray-white"; expected one of: white, black, yellow, blue, green, orange, red, purple, gray-dark in metadata of "My action" action at "./.github/actions/my-invalid-action/action.yml" [action]
+test.yaml:8:9: invalid branding icon "dog"; see https://feathericons.com for valid icon names in metadata of "My action" action at "./.github/actions/my-invalid-action/action.yml" [action]
+test.yaml:8:9: local action has invalid runs.using 'node14'; expected node20, node24, composite, or docker [action]

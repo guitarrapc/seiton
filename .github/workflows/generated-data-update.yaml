@@ -1,0 +1,103 @@
+name: generated-data-update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  update-generated-data:
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.SYNCED_ACTIONS_BOT_APPID }}
+          private-key: ${{ secrets.SYNCED_ACTIONS_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.repository }}
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: 10.0
+
+      - name: Validate popular-actions targets
+        run: dotnet run --project src/Seiton.Update -- validate-popular-actions-targets
+
+      - name: Sync generated data
+        run: dotnet run --project src/Seiton.Update -- sync --dataset all
+
+      - name: Verify generated data
+        run: dotnet run --project src/Seiton.Update -- verify --dataset all
+
+      - name: Detect generated-data changes
+        id: changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push update branch
+        if: ${{ steps.changes.outputs.has_changes == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B automation/generated-data-update
+          git add -A
+          git commit -m "chore: update generated data snapshots"
+
+          git remote set-url origin "https://github-actions:${GITHUB_TOKEN}@github.com/${{ github.repository }}"
+          git push --force-with-lease origin automation/generated-data-update
+
+      - name: Create or update pull request via gh
+        if: ${{ steps.changes.outputs.has_changes == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          title="chore: update generated data snapshots"
+          body=$'Automated update by generated-data-update workflow.\n\n- Ran: sync --dataset all\n- Ran: verify --dataset all'
+
+          pr_number=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "automation/generated-data-update" \
+            --base "main" \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+
+          if [ -z "$pr_number" ]; then
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --base "main" \
+              --head "automation/generated-data-update" \
+              --title "$title" \
+              --body "$body" \
+              --label "automated" \
+              --label "generated-data"
+          else
+            gh pr edit "$pr_number" \
+              --repo "${{ github.repository }}" \
+              --title "$title" \
+              --body "$body" \
+              --add-label "automated" \
+              --add-label "generated-data"
+          fi

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "source": "github-expressions-docs-raw",
+  "functionNames": [
+    "always",
+    "cancelled",
+    "case",
+    "contains",
+    "endswith",
+    "failure",
+    "format",
+    "fromjson",
+    "hashfiles",
+    "join",
+    "startswith",
+    "success",
+    "tojson"
+  ]
+}
