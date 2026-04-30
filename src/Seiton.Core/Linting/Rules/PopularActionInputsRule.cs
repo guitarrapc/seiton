@@ -33,6 +33,9 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         // Check unknown inputs
         if (actionExec.Inputs is { Count: > 0 } inputs)
         {
+            string[]? inputNames = null;
+            string? availableInputs = null;
+
             foreach (var pair in inputs)
             {
                 if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
@@ -50,10 +53,12 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 }
 
                 var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
-                var suggestion = FindClosestInput(unknownInputName, actionSpec);
+                inputNames ??= actionSpec.GetInputNames();
+                var suggestion = FindClosestInput(unknownInputName, inputNames);
+                availableInputs ??= FormatAvailableInputs(inputNames);
                 var unknownMessage = suggestion is not null
-                    ? $"unknown input '{unknownInputName}' for action '{actionName}'. did you mean '{suggestion}'?"
-                    : $"unknown input '{unknownInputName}' for action '{actionName}'";
+                    ? $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}. did you mean '{suggestion}'?"
+                    : $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}";
 
                 DiagnosticFix? fix = null;
                 if (suggestion is not null && Config.Fix.Enabled)
@@ -107,9 +112,8 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         return false;
     }
 
-    private static string? FindClosestInput(string unknownInput, PopularActions.ActionSpec actionSpec)
+    private static string? FindClosestInput(string unknownInput, string[] inputNames)
     {
-        var inputNames = actionSpec.GetInputNames();
         if (inputNames.Length == 0)
         {
             return null;
@@ -139,5 +143,10 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
         // When multiple candidates are equally close, suppress the suggestion
         return tied ? null : best;
+    }
+
+    private static string FormatAvailableInputs(string[] inputNames)
+    {
+        return string.Join(", ", inputNames.Select(static n => $"\"{n}\""));
     }
 }

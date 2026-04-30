@@ -1,3 +1,3 @@
 test.yaml:7:15: missing required input 'key' for action 'actions/cache@v4' [action]
 test.yaml:7:28: action uses 'actions/cache@v4' is not pinned to a full-length commit SHA [action]
-test.yaml:10:13: unknown input 'keys' for action 'actions/cache@v4'. did you mean 'key'? [action]
+test.yaml:10:13: unknown input 'keys' for action 'actions/cache@v4'. available inputs are "enableCrossOsArchive", "fail-on-cache-miss", "key", "lookup-only", "path", "restore-keys", "save-always", "upload-chunk-size". did you mean 'key'? [action]

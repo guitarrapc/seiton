@@ -1562,7 +1562,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/setup-node@v4
                           with: { node_version: '20' }
             """,
-            ["unknown input 'node_version' for action 'actions/setup-node@v4'. did you mean 'node-version'?"]),
+            ["unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are", "did you mean 'node-version'?"]),
             new RuleCase(
             "ng-typo-close-misspelling",
             """
@@ -1574,7 +1574,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
                           with: { fetch-depht: 1 }
             """,
-            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'. did you mean 'fetch-depth'?"]),
+            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'. available inputs are", "did you mean 'fetch-depth'?"]),
             new RuleCase(
             "ng-no-suggestion-for-distant-input",
             """
@@ -1586,7 +1586,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
                           with: { totally-unknown-input: true }
             """,
-            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'"]),
+            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'. available inputs are"]),
         };
 
         await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
@@ -1674,7 +1674,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
                           with: { fetch-depht: 1 }
             """,
-            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'"]),
+            ["unknown input 'fetch-depht' for action 'actions/checkout@v4'. available inputs are"]),
             new RuleCase(
             "ng-unknown-input",
             """
@@ -1686,7 +1686,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
                           with: { totally-unknown-input: true }
             """,
-            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'"]),
+            ["unknown input 'totally-unknown-input' for action 'actions/checkout@v4'. available inputs are"]),
         };
 
         await AssertRuleCases(new PopularActionInputsRule(), "popular-action-inputs", cases);
