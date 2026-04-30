@@ -95,7 +95,7 @@ internal sealed class GitHubRunnerLabelsFetcher
         var parsed = new ParsedRunnerLabelsSnapshot
         {
             SchemaVersion = 1,
-            Source = "github-hosted-runners-docs-rendered",
+            Source = "github-docs-hosted-and-larger-runners",
             Labels = labels
                 .OrderBy(static x => x.Label, StringComparer.Ordinal)
                 .Select(static x => new ParsedRunnerLabelEntry

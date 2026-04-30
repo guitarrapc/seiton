@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "source": "github-hosted-runners-docs-rendered",
+  "source": "github-docs-hosted-and-larger-runners",
   "labels": [
     {
       "label": "macos-14",
