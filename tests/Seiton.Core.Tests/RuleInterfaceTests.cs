@@ -12921,4 +12921,29 @@ public sealed class RuleInterfaceTests
         await Assert.That(actionDiag.Fix!.Value.Description)
             .DoesNotContain("_2");
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_EmptyEnvMapping_SkipsFix()
+    {
+        // When step has env: {} (empty mapping), inserting a new env: block would create
+        // a duplicate env: key in the same step mapping. Fix must NOT be attached.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - env: {}
+                      run: echo "${{ github.event.pull_request.title }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-empty-env.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix must NOT be attached because empty env mapping would lead to duplicate env: keys
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
 }

@@ -555,6 +555,13 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return true;
         }
 
+        // Empty env mapping (env: {}) already occupies the env: key; inserting a new env: block
+        // would create duplicate keys. Skip fix in this case.
+        if (step.Env is not null)
+        {
+            return false;
+        }
+
         // No existing env: insert env block after the run: line (or block scalar content).
         // Inserting before `- run:` would place env: outside the list item mapping.
         var childIndentUnit = FixFormatting.InferIndentationUnit(utf8Yaml);
