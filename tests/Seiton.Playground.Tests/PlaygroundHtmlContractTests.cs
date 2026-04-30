@@ -30,6 +30,30 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_CodeMirrorCdnAssetsHaveSubresourceIntegrity()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("codemirror/5.65.16/", StringComparison.Ordinal);
+        var matches = Regex.Matches(html, @"integrity=""sha384-[A-Za-z0-9+/=]+""");
+        await Assert.That(matches.Count).IsEqualTo(5);
+
+        // SHA-384 of files from cdnjs 5.65.16 — recompute when bumping the CodeMirror version in index.html.
+        foreach (var digest in Codemirror_5_65_16_Sha384Digests)
+        {
+            await Assert.That(html).Contains("sha384-" + digest, StringComparison.Ordinal);
+        }
+    }
+
+    private static readonly string[] Codemirror_5_65_16_Sha384Digests =
+    [
+        "zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT",
+        "eZTPTN0EvJdn23s24UDYJmUM2T7C2ZFa3qFLypeBruJv8mZeTusKUAO/j5zPAQ6l",
+        "ZYmwuq4n2gOcNxMSiJ6jyTj+BbIrilr7p6dlq6q5nmSWKmsH9UU4K1qqjycMkfmR",
+        "9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9",
+        "hcxaXyAtJ30s2NeDu1OHWsQRiHiWuYLTbI596+YFb+f2pFhzO0mDuahZziRPPDxg",
+    ];
+
+    [Test]
     public async Task IndexTemplate_ImportMapScript_ContainsValidMinimalJson()
     {
         var html = await ReadSourceIndexHtmlAsync();

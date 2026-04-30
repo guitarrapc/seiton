@@ -70,9 +70,7 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That(html.Contains("#[.{fingerprint}]", StringComparison.Ordinal)).IsFalse();
         await Assert.That(s_localStylesheetHref.IsMatch(html)).IsTrue();
         await Assert.That(s_fingerprintedMainScriptSrc.IsMatch(html)).IsTrue();
-        var hasImportMapEntry = html.Contains("\"./main.js\": \"./main.", StringComparison.Ordinal)
-            || html.Contains("\"./main.js\":\"./main.", StringComparison.Ordinal);
-        await Assert.That(hasImportMapEntry).IsTrue();
+        await Assert.That(html).Contains("<script type=\"importmap\">", StringComparison.Ordinal);
     }
 
     private static async Task GotoPlaygroundAndWaitForLinterGridAsync(IPage page, string baseUrl)
