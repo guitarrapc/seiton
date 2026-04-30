@@ -260,6 +260,17 @@ public sealed class LintEngine
             _diagnostics.Add(current);
         }
 
+        // Global sort: parser diagnostics were prepended before rule diagnostics;
+        // re-sort the entire list so all diagnostics are in the configured order.
+        if (sortOrder == DiagnosticSortOrder.Rule)
+        {
+            _diagnostics.Sort(static (x, y) => CompareDiagnosticsByRulePriority(x, y));
+        }
+        else
+        {
+            _diagnostics.Sort(static (x, y) => CompareDiagnosticsByLocation(x, y));
+        }
+
         return new LintResult(parseResult, _diagnostics.ToArray())
         {
             SuppressionSummary = new SuppressionSummary(_suppressionRecords.Count, new Dictionary<string, int>(_suppressedByRule, StringComparer.Ordinal), _suppressionRecords.ToArray()),

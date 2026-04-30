@@ -1,6 +1,6 @@
-test.yaml:11:13: "schedule" section should not be empty [syntax-check]
 test.yaml:4:18: on.schedule timezone 'Not/A/Timezone' is invalid [schedule-event]
 test.yaml:6:18: on.schedule timezone 'UTC' is invalid [schedule-event]
 test.yaml:8:18: on.schedule timezone 'local' is invalid [schedule-event]
 test.yaml:10:17: on.schedule timezone must not be empty [schedule-event]
+test.yaml:11:13: "schedule" section should not be empty [syntax-check]
 test.yaml:11:13: on.schedule cron must not be empty [schedule-event]

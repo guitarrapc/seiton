@@ -13245,4 +13245,40 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.IsValid).IsTrue();
         await Assert.That(result.Config!.Output.SortOrder).IsEqualTo(DiagnosticSortOrder.Location);
     }
+
+    [Test]
+    public async Task LintEngine_DefaultSortOrder_GloballySortsParserAndRuleDiagnostics()
+    {
+        // Parser diagnostic ("does not support option: branch") appears at line 8 (on.push.branch).
+        // Rule diagnostic (job-permissions-required) appears at line 3 (jobs.build).
+        // Without global sort, parser diagnostics come first regardless of line number.
+        // With correct global sort, line 3 (rule) must appear before line 8 (parser).
+        var yaml = """
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        on:
+          push:
+            branch: main
+        """;
+
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "global-sort.yml");
+
+        // Should have at least 2 diagnostics: parser (line 8) + rule (line 3)
+        await Assert.That(result.Diagnostics.Length).IsGreaterThanOrEqualTo(2);
+
+        // Verify ALL diagnostics are globally sorted by line number
+        for (var i = 1; i < result.Diagnostics.Length; i++)
+        {
+            var prev = result.Diagnostics[i - 1];
+            var curr = result.Diagnostics[i];
+            var prevLine = prev.Location.StartLine;
+            var currLine = curr.Location.StartLine;
+            await Assert.That(currLine).IsGreaterThanOrEqualTo(prevLine)
+                .Because($"Diagnostic at index {i} (line {currLine}: {curr.Message}) should not appear before diagnostic at index {i - 1} (line {prevLine}: {prev.Message})");
+        }
+    }
 }
