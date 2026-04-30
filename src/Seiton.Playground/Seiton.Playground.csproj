@@ -6,11 +6,12 @@
     <AssemblyName>Seiton.Playground</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <InvariantTimezone>true</InvariantTimezone>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <InvariantTimezone>true</InvariantTimezone>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>full</TrimMode>
     <RunAOTCompilation>true</RunAOTCompilation>
