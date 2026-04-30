@@ -895,7 +895,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey)
+            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey && (seen & (1UL << (int)RunsOnMappingKey.Group)) == 0)
             {
                 AddError(diagnostics, $"{section} requires labels", mappingStartMark);
             }

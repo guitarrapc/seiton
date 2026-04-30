@@ -6418,10 +6418,10 @@ public sealed class ParserTests
     }
 
     [Test]
-    public async Task Parse_RunsOnMappingWithoutLabels_ReportsAtRunsOnKey()
+    public async Task Parse_RunsOnMappingWithoutLabels_GroupOnly_NoDiagnostics()
     {
-        // When runs-on has a mapping with group but no labels, the "requires labels"
-        // diagnostic must point at the runs-on mapping (not 1:1).
+        // When runs-on has a mapping with group but no labels, no "requires labels"
+        // diagnostic should be reported because group-based runners don't need labels.
         var yaml = """
         on: push
         jobs:
@@ -6434,9 +6434,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
-        await Assert.That(diag.Message).IsNotEmpty();
-        // "runs-on:" is at line 4 col 5; the mapping value starts at line 5
-        await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
+        await Assert.That(diag.Message).IsNullOrEmpty();
     }
 
     [Test]
@@ -6458,6 +6456,31 @@ public sealed class ParserTests
         var unexpectedKeyDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("unexpected key", StringComparison.Ordinal));
         await Assert.That(unexpectedKeyDiag.Message).IsNotEmpty();
 
+        var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
+        await Assert.That(requiresLabelsDiag.Message).IsNullOrEmpty();
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingGroupPresent_NoRequiresLabelsDiagnostic()
+    {
+        // When runs-on mapping has a group key (even with empty value),
+        // "requires labels" should NOT be reported because group-based runners don't need labels.
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              group:
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // "group should not be empty" is expected
+        var groupEmptyDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("group should not be empty", StringComparison.Ordinal));
+        await Assert.That(groupEmptyDiag.Message).IsNotEmpty();
+
+        // "requires labels" should NOT be reported
         var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
         await Assert.That(requiresLabelsDiag.Message).IsNullOrEmpty();
     }
