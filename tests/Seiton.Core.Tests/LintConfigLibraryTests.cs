@@ -15,19 +15,24 @@ public sealed class LintConfigLibraryTests
         await Assert.That(yaml.Contains("exclusions:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("fix:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("network:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("output:", StringComparison.Ordinal)).IsTrue();
 
         var rulesLine = lines.FirstOrDefault(x => x.Trim() == "rules:");
         var fixLine = lines.FirstOrDefault(x => x.Trim() == "fix:");
         var networkLine = lines.FirstOrDefault(x => x.Trim() == "network:");
+        var outputLine = lines.FirstOrDefault(x => x.Trim() == "output:");
         await Assert.That(rulesLine).IsNotNull();
         await Assert.That(fixLine).IsNotNull();
         await Assert.That(networkLine).IsNotNull();
+        await Assert.That(outputLine).IsNotNull();
 
         var rulesIndent = rulesLine!.Length - rulesLine.TrimStart().Length;
         var fixIndent = fixLine!.Length - fixLine.TrimStart().Length;
         var networkIndent = networkLine!.Length - networkLine.TrimStart().Length;
+        var outputIndent = outputLine!.Length - outputLine.TrimStart().Length;
         await Assert.That(fixIndent).IsEqualTo(rulesIndent);
         await Assert.That(networkIndent).IsEqualTo(rulesIndent);
+        await Assert.That(outputIndent).IsEqualTo(rulesIndent);
     }
 
     [Test]

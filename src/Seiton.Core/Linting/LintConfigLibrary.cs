@@ -111,6 +111,9 @@ public static class LintConfigLibrary
           # github:
           #   ghes-api-url: ""
           #   ghes-fallback: false
+
+        output:
+          # sort-order: location    # location (default) | rule
         """;
     }
 
@@ -182,6 +185,7 @@ public static class LintConfigLibrary
             Exclusions = normalizedExclusions.Exclusions,
             Fix = normalizedFix.Fix,
             Network = normalizedNetwork.Network,
+            Output = parseResult.Output,
         };
 
         return new LintConfigValidationResult(config, diagnostics.ToArray());
