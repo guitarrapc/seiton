@@ -319,6 +319,7 @@ Default values (current C# runtime):
 | `network.max-concurrency` | `4` |
 | `network.github.ghes-api-url` | empty (github.com only) |
 | `network.github.ghes-fallback` | `false` |
+| `output.sort-order` | `location` |
 
 Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable. This prevents malicious config files from redirecting token resolution to unintended environment variables.
 
@@ -618,6 +619,9 @@ network:
   github:
     ghes-api-url: ""
     ghes-fallback: false
+
+output:
+  sort-order: location    # location (default) | rule
 ```
 
 Interpretation notes:
@@ -630,6 +634,7 @@ Interpretation notes:
 - `fix.pinning` configures network-assisted SHA pin remediation for `unpinned-uses`.
 - `fix.images` configures network-assisted digest pin remediation for `unpinned-image`.
 - `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
+- `output.sort-order` controls diagnostic output ordering: `location` (default) sorts by source position for file-reading order; `rule` sorts by rule priority for batch-fixing.
 - `exclusions[].files` and optional `exclusions[].jobs` define config-based suppression scope.
 - `exclusions[].rules` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
@@ -1006,6 +1011,19 @@ Token resolution:
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
 
+### 5.14 `output` Section Specification
+
+The `output` top-level section controls diagnostic output behavior. All keys are optional; omitted keys use built-in defaults.
+
+```yaml
+output:
+  sort-order: location            # location | rule
+```
+
+- `output.sort-order`: controls the order in which diagnostics are emitted.
+  - `location` (default): sort by source position (StartLine → StartColumn → RuleId → Message). This matches the reading order of the source file and is the most natural output for interactive use.
+  - `rule`: sort by rule priority first, then severity, then source position. Groups diagnostics by rule, useful for batch-fixing all instances of a single rule at a time.
+
 ---
 
 ## 6. Diagnostic Processing Contract
@@ -1014,7 +1032,7 @@ Diagnostic processing in linter entrypoint must be deterministic.
 
 1. Start with parser diagnostics from parse result.
 2. Append rule diagnostics from active rule set.
-3. Apply stable sort (rule priority, severity, position, message or equivalent deterministic key).
+3. Apply stable sort according to configured sort order (see §6.2).
 4. Deduplicate using deterministic diagnostic identity.
 5. Apply final filtering phase.
 
@@ -1046,6 +1064,26 @@ Linter output must include suppression observability data.
   - matched diagnostic location (`line`, `column`)
 
 This observability data enables CI detection of suppression increases.
+
+### 6.2 Diagnostic Sort Order
+
+The sort order for rule diagnostics is configurable via the `output.sort-order` configuration key.
+
+| `sort-order` value | Sort key sequence | Description |
+|---|---|---|
+| `location` (default) | StartLine → StartColumn → RuleId → Message | Groups diagnostics by source position. Easier to follow when reading a file top-to-bottom. |
+| `rule` | RulePriority → Severity → StartLine → StartColumn → Message | Groups diagnostics by rule. Useful for batch-fixing all instances of one rule at a time. |
+
+Default behavior (no config or `sort-order: location`):
+
+- Diagnostics are ordered by their source position (line, column).
+- When multiple diagnostics share the same position, rule ID (lexicographic) breaks the tie.
+- This matches the reading order of the source file and is the most natural output for interactive use.
+
+`sort-order: rule`:
+
+- Diagnostics are ordered by internal rule priority (lower priority numbers first), then severity, then position.
+- This groups all diagnostics from the same rule together, regardless of their source position.
 
 ---
 

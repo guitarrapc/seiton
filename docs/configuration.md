@@ -167,6 +167,10 @@ network:
   github:
     ghes-api-url: ""           # GitHub Enterprise Server API URL (empty = github.com).
     ghes-fallback: false       # Fall back to github.com if GHES request fails.
+
+# ─── Output settings ──────────────────────────────────────────────────────────
+output:
+  sort-order: location         # location (default) | rule. Controls diagnostic output ordering.
 ```
 
 ---
@@ -401,6 +405,34 @@ This order is hardcoded and cannot be changed via config file.
 
 ---
 
+## Output Configuration
+
+Controls diagnostic output behavior.
+
+```yaml
+output:
+  sort-order: location         # location | rule
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `sort-order` | `location` | `location` sorts diagnostics by source position (line/column). `rule` groups diagnostics by rule priority. |
+
+### Sort Order
+
+By default, diagnostics are sorted by source location (line, then column), with rule ID as a tiebreaker. This matches the natural reading order of the file.
+
+Set `sort-order: rule` to group diagnostics by rule instead:
+
+```yaml
+output:
+  sort-order: rule
+```
+
+This is useful when batch-fixing all instances of a single rule at a time.
+
+---
+
 ## Defaults Reference
 
 | Config Key | Default |
@@ -420,3 +452,4 @@ This order is hardcoded and cannot be changed via config file.
 | `network.max-concurrency` | `4` |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
+| `output.sort-order` | `location` |

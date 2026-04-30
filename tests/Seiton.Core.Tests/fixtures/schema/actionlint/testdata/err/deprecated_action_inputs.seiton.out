@@ -1,3 +1,3 @@
+test.yaml:7:42: action uses 'pypa/gh-action-pypi-publish@release/v1' is not pinned to a full-length commit SHA [action]
 test.yaml:9:25: avoid using deprecated input "packages_dir" in action "pypa/gh-action-pypi-publish@release/v1": The inputs have been normalized to use kebab-case. Use `packages-dir` instead [action]
 test.yaml:10:27: avoid using deprecated input "repository_url" in action "pypa/gh-action-pypi-publish@release/v1": The inputs have been normalized to use kebab-case. Use `repository-url` instead [action]
-test.yaml:7:42: action uses 'pypa/gh-action-pypi-publish@release/v1' is not pinned to a full-length commit SHA [action]

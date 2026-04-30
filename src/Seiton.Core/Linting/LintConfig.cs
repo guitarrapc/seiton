@@ -96,6 +96,9 @@ public sealed class LintConfig
     /// <summary>Gets the network configuration section.</summary>
     public NetworkConfig Network { get; init; } = new();
 
+    /// <summary>Gets the output configuration section.</summary>
+    public OutputConfig Output { get; init; } = new();
+
     /// <summary>Looks up the rule configuration for the specified <paramref name="ruleId"/>.</summary>
     public RuleConfig? GetRuleConfig(string ruleId)
     {
@@ -240,4 +243,20 @@ public sealed record GitHubNetworkConfig
     public string? GhesApiUrl { get; init; }
     /// <summary>Gets whether to fall back to the public GitHub API when GHES fails.</summary>
     public bool GhesFallback { get; init; }
+}
+
+/// <summary>Configuration for the <c>output:</c> section controlling diagnostic output behavior.</summary>
+public sealed record OutputConfig
+{
+    /// <summary>Gets the diagnostic sort order. Defaults to <see cref="DiagnosticSortOrder.Location"/>.</summary>
+    public DiagnosticSortOrder SortOrder { get; init; } = DiagnosticSortOrder.Location;
+}
+
+/// <summary>Specifies how diagnostics are sorted in the final output.</summary>
+public enum DiagnosticSortOrder
+{
+    /// <summary>Sort by source location (line, column) with rule ID as tiebreaker. This is the default.</summary>
+    Location,
+    /// <summary>Sort by rule priority first, then severity, then location.</summary>
+    Rule,
 }

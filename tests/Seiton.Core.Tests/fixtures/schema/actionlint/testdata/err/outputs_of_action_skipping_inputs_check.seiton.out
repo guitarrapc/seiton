@@ -1,4 +1,4 @@
+test.yaml:7:37: action uses 'octokit/request-action@v2.x' is not pinned to a full-length commit SHA [action]
 test.yaml:11:18: unknown input 'owner' for action 'octokit/request-action@v2.x' [action]
 test.yaml:12:17: unknown input 'repo' for action 'octokit/request-action@v2.x' [action]
-test.yaml:7:37: action uses 'octokit/request-action@v2.x' is not pinned to a full-length commit SHA [action]
 test.yaml:16:36: property "this_output_does_not_exist" is not defined in object type {data: string; headers: string; status: string} [expression]
