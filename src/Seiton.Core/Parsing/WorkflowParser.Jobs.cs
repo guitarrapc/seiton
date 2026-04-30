@@ -7,13 +7,13 @@ namespace Seiton.Core.Parsing;
 public static partial class WorkflowParser
 {
     private static readonly string RunsOnEmptyLabelMessage =
-        $"\"runs-on\" label should not be empty. available labels are - hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+        $"\"runs-on\" label should not be empty. available labels are: hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
 
     private static readonly string RunsOnSectionEmptyMessage =
-        $"\"runs-on\" section should not be empty. available labels are - hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+        $"\"runs-on\" section should not be empty. available labels are: hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
 
     private static readonly string LabelsSectionEmptyMessage =
-        $"\"labels\" section should not be empty. available labels are - hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+        $"\"labels\" section should not be empty. available labels are: hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
 
     private enum JobNodeMappingKey : byte
     {

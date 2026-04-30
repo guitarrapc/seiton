@@ -299,7 +299,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
     private string BuildUnknownLabelMessage(string labelText)
     {
-        var msg = $"label \"{labelText}\" is unknown. available labels are - hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}";
+        var msg = $"label \"{labelText}\" is unknown. available labels are: hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}";
         if (additionalKnownHostedLabels.Count > 0)
         {
             var customList = string.Join(", ", additionalKnownHostedLabels.OrderBy(static x => x, StringComparer.Ordinal).Select(static l => $"\"{l}\""));
