@@ -764,6 +764,7 @@ public static partial class WorkflowParser
             StringNodeId labelsExpr = default;
             StringNodeId group = default;
             ulong seen = 0;
+            var mappingStartMark = reader.CurrentStart;
 
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -884,7 +885,7 @@ public static partial class WorkflowParser
 
             if (labels is null && !labelsExpr.HasValue)
             {
-                AddError(diagnostics, $"{section} requires labels", new TextPosition(0, 1, 1));
+                AddError(diagnostics, $"{section} requires labels", mappingStartMark);
             }
 
             return new Runner

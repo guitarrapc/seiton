@@ -23,12 +23,20 @@ internal sealed class RunnerLabelsCSharpGenerator
 
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-runner-labels");
+
+        // Build the full label list string for diagnostic messages
+        var allLabels = stable.Concat(preview).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        var labelListStr = string.Join(", ", allLabels.Select(static l => $"\\\"" + l + "\\\""));
+
         sb.AppendLine(
-            """
+            $$"""
             namespace Seiton.Core.Generated;
 
             internal static class RunnerLabels
             {
+                /// <summary>Comma-separated list of all known hosted runner labels for diagnostic messages.</summary>
+                internal const string KnownHostedLabelList = "{{labelListStr}}";
+
                 internal static bool IsKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
                 {
                     return IsStableHostedLabel(labelUtf8)

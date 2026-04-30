@@ -13281,4 +13281,49 @@ public sealed class RuleInterfaceTests
                 .Because($"Diagnostic at index {i} (line {currLine}: {curr.Message}) should not appear before diagnostic at index {i - 1} (line {prevLine}: {prev.Message})");
         }
     }
+
+    [Test]
+    public async Task RunnerLabelRule_EmptyLabel_NoDuplicateWithParser()
+    {
+        // Parser reports "runs-on label should not be empty" (syntax-check).
+        // RunnerLabelRule should NOT also report the empty label as unknown.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ''
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "empty-label.yml");
+
+        var runnerLabelDiags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
+        await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
+            .Because("Empty labels are already reported by the parser as syntax-check; runner-label should not duplicate");
+    }
+
+    [Test]
+    public async Task RunnerLabelRule_UnknownLabel_ListsAllAvailableLabels()
+    {
+        // The "unknown label" message should list all available labels, not truncate with "... and more".
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: nonexistent-runner
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new RunnerLabelRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "unknown-label.yml");
+
+        var runnerLabelDiag = result.Diagnostics.First(d => d.RuleId == "runner-label");
+        // Must NOT contain "... and more" truncation
+        await Assert.That(runnerLabelDiag.Message).DoesNotContain("... and more");
+        // Must contain actual labels like "windows-latest"
+        await Assert.That(runnerLabelDiag.Message).Contains("windows-latest");
+    }
 }

@@ -6244,24 +6244,32 @@ public sealed class ParserTests
         await Assert.That(secretErr.Message).Contains("GITHUB_TOKEN");
     }
 
-    // empty label in runs-on should be reported as unknown by runner-label rule
+    // empty label in runs-on is reported by parser (syntax-check), not runner-label rule
     [Test]
-    public async Task Lint_RunsOnEmptyLabel_ReportsUnknownLabel()
+    public async Task Lint_RunsOnEmptyLabel_ReportedByParserNotRunnerLabel()
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ''\n    steps:\n      - run: echo\n";
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // Parser reports the empty label
+        var parserErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty") && d.RuleId is null);
+        await Assert.That(parserErr.Message).IsNotNull();
+        // runner-label rule should NOT duplicate the report
         var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
-        await Assert.That(labelErr.Message).IsNotNull();
+        await Assert.That(labelErr.Message).IsNull();
     }
 
-    // empty label in runs-on array should be reported as unknown by runner-label rule
+    // empty label in runs-on array is reported by parser (syntax-check), not runner-label rule
     [Test]
-    public async Task Lint_RunsOnEmptyLabelInArray_ReportsUnknownLabel()
+    public async Task Lint_RunsOnEmptyLabelInArray_ReportedByParserNotRunnerLabel()
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ['x64', '']\n    steps:\n      - run: echo\n";
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        // Parser reports the empty label
+        var parserErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty") && d.RuleId is null);
+        await Assert.That(parserErr.Message).IsNotNull();
+        // runner-label rule should NOT duplicate the report
         var labelErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("label \"\" is unknown") && d.RuleId == "runner-label");
-        await Assert.That(labelErr.Message).IsNotNull();
+        await Assert.That(labelErr.Message).IsNull();
     }
 
     // environment.name missing should report at the environment key position, not inside mapping
@@ -6407,5 +6415,27 @@ public sealed class ParserTests
         // In source: "      - *recursive2" — the * is at column 9
         await Assert.That(aliasNodeDiag.Location.StartLine).IsEqualTo(10);
         await Assert.That(aliasNodeDiag.Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
+    public async Task Parse_RunsOnMappingWithoutLabels_ReportsAtRunsOnKey()
+    {
+        // When runs-on has a mapping with group but no labels, the "requires labels"
+        // diagnostic must point at the runs-on mapping (not 1:1).
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              group: foo
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotEmpty();
+        // "runs-on:" is at line 4 col 5; the mapping value starts at line 5
+        await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
     }
 }
