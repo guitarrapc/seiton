@@ -337,13 +337,12 @@ issue280_runs_on,11,"test.yaml:46:14: expected scalar node for string value but 
 issue280_runs_on,12,"test.yaml:52:15: ""labels"" section should not be empty [syntax-check]",9,"test.yaml:52:15: ""labels"" section should not be empty. available labels are ""macos-14"", ""macos-15"", ""macos-15-intel"", ""m...",LINE_MATCH
 issue280_runs_on,13,"/test\.yaml:58:15: label """" is unknown\. available labels are .+\. if it is a custom label for self-hosted runner, set l...",10,"test.yaml:58:15: ""runs-on"" label should not be empty. available labels are ""macos-14"", ""macos-15"", ""macos-15-intel"", ""ma...",LINE_MATCH
 issue280_runs_on,15,"/test\.yaml:64:21: label """" is unknown\. available labels are .+\. if it is a custom label for self-hosted runner, set l...",11,"test.yaml:64:20: ""runs-on"" label should not be empty. available labels are ""macos-14"", ""macos-15"", ""macos-15-intel"", ""ma...",LINE_MATCH
-issue280_runs_on,17,"test.yaml:71:9: ""labels"" section must be sequence node but got mapping node with ""!!map"" tag [syntax-check]",13,"test.yaml:71:14: ""labels"" section must be sequence node but got mapping node with ""!!map"" tag [syntax-check]",LINE_MATCH
+issue280_runs_on,17,"test.yaml:71:9: ""labels"" section must be sequence node but got mapping node with ""!!map"" tag [syntax-check]",12,"test.yaml:71:14: ""labels"" must be string or array, got object [syntax-check]",LINE_MATCH
 issue280_runs_on,2,"test.yaml:7:13: string should not be empty [syntax-check]",-,,MISS
 issue280_runs_on,5,"test.yaml:17:14: string should not be empty [syntax-check]",-,,MISS
 issue280_runs_on,7,"test.yaml:22:22: string should not be empty [syntax-check]",-,,MISS
 issue280_runs_on,14,"test.yaml:58:15: string should not be empty [syntax-check]",-,,MISS
 issue280_runs_on,16,"test.yaml:64:21: string should not be empty [syntax-check]",-,,MISS
-issue280_runs_on,-,,12,"test.yaml:70:13: jobs.'test12'.runs-on requires labels [syntax-check]",EXTRA
 issue558_read_write_none_are_not_always_valid_permissions,1,"test.yaml:8:17: ""read"" is invalid as permission of scope ""id-token"". available values are ""write"", ""none"" [permissions]",1,"test.yaml:8:17: ""read"" is invalid as permission of scope ""id-token"". available values are ""write"", ""none"" [permissions]",MATCH
 issue558_read_write_none_are_not_always_valid_permissions,2,"test.yaml:9:15: ""write"" is invalid as permission of scope ""models"". available values are ""read"", ""none"" [permissions]",2,"test.yaml:9:15: ""write"" is invalid as permission of scope ""models"". available values are ""read"", ""none"" [permissions]",MATCH
 issue558_read_write_none_are_not_always_valid_permissions,-,,3,"test.yaml:11:31: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA [action]",EXTRA

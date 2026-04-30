@@ -6504,4 +6504,32 @@ public sealed class ParserTests
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("group", StringComparison.Ordinal));
         await Assert.That(diag.Message).Contains("\"group\" must be string, got array");
     }
+
+    [Test]
+    public async Task Parse_RunsOnMappingLabelsMapping_NoRequiresLabelsAndUserFriendlyMessage()
+    {
+        // When labels is given a mapping instead of string/array,
+        // "requires labels" should NOT be reported (labels key is present),
+        // and the type-mismatch message should be user-friendly (no !!map).
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on:
+              labels:
+                hello: world
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+
+        // Should report a type mismatch in user-friendly terms
+        var typeDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("labels", StringComparison.Ordinal));
+        await Assert.That(typeDiag.Message).Contains("\"labels\" must be string or array, got object");
+
+        // "requires labels" should NOT be reported since labels key is present
+        var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));
+        await Assert.That(requiresLabelsDiag.Message).IsNullOrEmpty();
+    }
 }

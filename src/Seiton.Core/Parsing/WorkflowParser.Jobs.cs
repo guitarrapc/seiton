@@ -819,7 +819,7 @@ public static partial class WorkflowParser
                             {
                                 if (reader.CurrentKind == YamlEventKind.MappingStart)
                                 {
-                                    AddError(diagnostics, "\"labels\" section must be sequence node but got mapping node with \"!!map\" tag", reader.CurrentStart);
+                                    AddError(diagnostics, "\"labels\" must be string or array, got object", reader.CurrentStart);
                                     reader.SkipCurrentNode();
                                 }
                                 else if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -894,7 +894,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey && (seen & (1UL << (int)RunsOnMappingKey.Group)) == 0)
+            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey && (seen & (1UL << (int)RunsOnMappingKey.Group)) == 0 && (seen & (1UL << (int)RunsOnMappingKey.Labels)) == 0)
             {
                 AddError(diagnostics, $"{section} requires labels", mappingStartMark);
             }
