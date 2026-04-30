@@ -1194,7 +1194,7 @@ The following table classifies each default rule by fix feasibility.
 | `shell-name` | ✗ Not auto-fixable | Correct shell name is ambiguous; user must select. |
 | `runner-label` | ✗ Not auto-fixable | Closest known label may be suggested but apply is ambiguous. |
 | `runner-no-latest` | ✗ Not auto-fixable | Replacing `*-latest` with a concrete runner version requires repository policy/compatibility intent. |
-| `id-naming` | ✗ Not auto-fixable | Correct replacement character choice and downstream reference updates require user intent. |
+| `id-naming` | △ Partial | For job IDs with invalid characters, auto-fix converts to kebab-case and updates `needs:` references within the same workflow. Expression references (e.g. `needs.<id>.outputs`) are not updated automatically. |
 | `glob-pattern` | ✗ Not auto-fixable | Glob correction requires understanding user intent. |
 | `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |
 | `template-injection` | △ Partial | For `run:` script sinks with deterministic paths, auto-fix generates env var indirection (new env mapping + shell variable reference). Skips `actions/github-script` `script` inputs, heredoc no-expand bodies, and shell single-quoted strings. One fix per step per pass (multi-pass handles remaining). |

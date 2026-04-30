@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -8,9 +9,16 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 {
     public override string Name => "Id Naming Rule";
 
+    private Workflow? _workflow;
     private Job? _currentJob;
     private Step? _currentStep;
     private List<Utf8Slice>? _seenStepIdSlices;
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _workflow = workflow;
+    }
 
     public override void VisitJobPre(Job job)
     {
@@ -43,6 +51,11 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         _seenStepIdSlices = null;
     }
 
+    public override void VisitWorkflowPost(Workflow workflow)
+    {
+        _workflow = null;
+    }
+
     private void ValidateId(StringNodeId idNode, string kind)
     {
         var value = Arena.GetStringValue(idNode);
@@ -61,14 +74,148 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
             ? $"{kind} should not be empty"
             : $"invalid {kind} \"{idText}\". {kind} must start with a letter or _ and contain only alphanumeric characters, -, or _";
 
+        DiagnosticFix? fix = null;
+        if (value.Length > 0 && _currentJob is not null)
+        {
+            fix = BuildJobIdFix(idNode, idText);
+        }
+
         if (_currentJob is not null)
         {
-            AddJobError(_currentJob, message, Arena.GetStringRange(idNode));
+            if (fix is not null)
+            {
+                AddJobError(_currentJob, message, Arena.GetStringRange(idNode), fix.Value);
+            }
+            else
+            {
+                AddJobError(_currentJob, message, Arena.GetStringRange(idNode));
+            }
         }
         else if (_currentStep is not null)
         {
             AddStepError(_currentStep, message, Arena.GetStringRange(idNode));
         }
+    }
+
+    private DiagnosticFix? BuildJobIdFix(StringNodeId idNode, string originalId)
+    {
+        var newId = ToKebabCase(originalId);
+        if (newId.Length == 0 || !IsValidId(Encoding.UTF8.GetBytes(newId)))
+        {
+            return null;
+        }
+
+        var edits = new List<TextEdit>();
+
+        // Edit for the job ID key itself
+        var idEdit = BuildSliceReplacementEdit(idNode, newId);
+        edits.Add(idEdit);
+
+        // Edit for all needs references to this job ID across all jobs
+        if (_workflow is not null && Config.Utf8Yaml is not null)
+        {
+            var originalIdBytes = Encoding.UTF8.GetBytes(originalId);
+            foreach (var (_, job) in _workflow.Jobs)
+            {
+                if (job.Needs is null)
+                {
+                    continue;
+                }
+
+                for (var i = 0; i < job.Needs.Length; i++)
+                {
+                    var needsNode = job.Needs[i];
+                    if (!needsNode.HasValue)
+                    {
+                        continue;
+                    }
+
+                    var needsValue = Arena.GetStringValue(needsNode);
+                    if (needsValue.SequenceEqual(originalIdBytes))
+                    {
+                        var needsEdit = BuildSliceReplacementEdit(needsNode, newId);
+                        edits.Add(needsEdit);
+                    }
+                }
+            }
+        }
+
+        return new DiagnosticFix($"rename job ID to '{newId}'", edits.ToArray());
+    }
+
+    private TextEdit BuildSliceReplacementEdit(StringNodeId node, string newText)
+    {
+        var slice = Arena.GetStringSlice(node);
+        var offset = slice.Offset;
+        var length = slice.Length;
+
+        // If the node is quoted, expand the range to include quotes
+        if (Arena.GetStringQuoted(node) && Config.Utf8Yaml is not null)
+        {
+            var before = offset - 1;
+            var after = offset + length;
+            if (before >= 0 && after < Config.Utf8Yaml.Length)
+            {
+                var bc = Config.Utf8Yaml[before];
+                var ac = Config.Utf8Yaml[after];
+                if ((bc == (byte)'\'' && ac == (byte)'\'') || (bc == (byte)'"' && ac == (byte)'"'))
+                {
+                    offset = before;
+                    length += 2;
+                }
+            }
+        }
+
+        return new TextEdit(offset, length, newText);
+    }
+
+    private static string ToKebabCase(string input)
+    {
+        var sb = new StringBuilder(input.Length);
+        for (var i = 0; i < input.Length; i++)
+        {
+            var c = input[i];
+            if (c is >= 'A' and <= 'Z')
+            {
+                if (sb.Length > 0 && sb[sb.Length - 1] != '-')
+                {
+                    // Insert hyphen before uppercase if previous char is lowercase/digit
+                    if (i > 0)
+                    {
+                        var prev = input[i - 1];
+                        if (prev is (>= 'a' and <= 'z') or (>= '0' and <= '9'))
+                        {
+                            sb.Append('-');
+                        }
+                    }
+                }
+
+                sb.Append((char)(c + 32)); // to lowercase
+            }
+            else if (c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-' or '_')
+            {
+                sb.Append(c);
+            }
+            else
+            {
+                // Replace invalid chars (spaces, dots, etc.) with hyphen
+                if (sb.Length > 0 && sb[sb.Length - 1] != '-')
+                {
+                    sb.Append('-');
+                }
+            }
+        }
+
+        // Trim leading/trailing hyphens
+        var result = sb.ToString().Trim('-');
+
+        // Collapse consecutive hyphens
+        while (result.Contains("--", StringComparison.Ordinal))
+        {
+            result = result.Replace("--", "-");
+        }
+
+        return result;
     }
 
     private static bool IsValidId(ReadOnlySpan<byte> value)
