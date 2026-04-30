@@ -21,8 +21,8 @@
   --results-surface: #171c26;
   --text: #eceff1;
   --muted: #78909c;
-  --accent: #82aaff;
-  --link-visited: #b39ddb;
+  --accent: #5590ff;
+  --link-visited: #caaef0;
   --danger: #ff5370;
   --warning: #ffcb6b;
   --tagline-fg: #90a4ae;
@@ -31,7 +31,7 @@
   --version-badge-border: rgba(130, 170, 255, 0.45);
   --version-badge-inset: rgba(0, 0, 0, 0.2);
   --version-badge-glow: rgba(130, 170, 255, 0.12);
-  --title-link-shadow: 0 0 28px rgba(130, 170, 255, 0.4);
+  --title-link-shadow: 0 0 28px rgba(155, 184, 255, 0.42);
   --border-default: #455a64;
   --border-pane: #37474f;
   --fetch-focus-ring: rgba(130, 170, 255, 0.45);
@@ -41,15 +41,15 @@
   --fetch-btn-active-bg: rgba(130, 170, 255, 0.22);
   /* Lighter grey so placeholder clears 4.5:1 vs editor (--editor-surface) and vs fetch row (--bg). */
   --placeholder-fg: #78909c;
-  --result-link-notification: #a6c8ff;
+  --result-link-notification: #aecfff;
   --result-row-border: rgba(74, 99, 115, 0.35);
   --result-row-hover: rgba(130, 170, 255, 0.08);
-  --pos-chip-bg: #37474f;
-  --pos-chip-fg: #eceff1;
-  --rule-chip-bg: #455a64;
-  --rule-chip-fg: #cfd8dc;
+  --pos-chip-bg: #2e333f;
+  --pos-chip-fg: #ffffff;
+  --rule-chip-bg: #2e333f;
+  --rule-chip-fg: #eceff1;
   --fix-chip-bg: rgba(105, 240, 174, 0.2);
-  --fix-chip-fg: #c3e9d0;
+  --fix-chip-fg: #e8fcf2;
   --notification-error-bg: rgba(255, 83, 112, 0.18);
   --notification-error-fg: #ff8a95;
   --notification-success-bg: rgba(105, 240, 174, 0.12);
@@ -79,7 +79,7 @@
     --results-surface: #e9eef5;
     --text: #1a2332;
     --muted: #5a6d7e;
-    --accent: #1565c0;
+    --accent: #1545f0;
     --link-visited: #6a1b9a;
     --danger: #b71c1c;
     /* Deep orange — 4.5:1+ on light gutter vs pale amber; stays visually separate from error red. */
@@ -102,12 +102,12 @@
     --result-link-notification: #1565c0;
     --result-row-border: rgba(69, 90, 100, 0.18);
     --result-row-hover: rgba(21, 101, 192, 0.08);
-    --pos-chip-bg: #cfd8dc;
-    --pos-chip-fg: #37474f;
-    --rule-chip-bg: #b0bec5;
-    --rule-chip-fg: #263238;
+    --pos-chip-bg: #363835;
+    --pos-chip-fg: #f3f3f3;
+    --rule-chip-bg: #363835;
+    --rule-chip-fg: #f3f3f3;
     --fix-chip-bg: rgba(46, 125, 50, 0.16);
-    --fix-chip-fg: #1b5e20;
+    --fix-chip-fg: #010d0a;
     --notification-error-bg: rgba(198, 40, 40, 0.1);
     --notification-error-fg: #b71c1c;
     --notification-success-bg: rgba(46, 125, 50, 0.1);
@@ -138,7 +138,7 @@
   --results-surface: #e9eef5;
   --text: #1a2332;
   --muted: #5a6d7e;
-  --accent: #1565c0;
+  --accent: #1545f0;
   --link-visited: #6a1b9a;
   --danger: #b71c1c;
   /* Deep orange (not amber) — 4.5:1+ on light gutter (--editor-gutter-bg) while staying distinct from --danger red. */
@@ -161,12 +161,12 @@
   --result-link-notification: #1565c0;
   --result-row-border: rgba(69, 90, 100, 0.18);
   --result-row-hover: rgba(21, 101, 192, 0.08);
-  --pos-chip-bg: #cfd8dc;
-  --pos-chip-fg: #37474f;
-  --rule-chip-bg: #b0bec5;
-  --rule-chip-fg: #263238;
-  --fix-chip-bg: rgba(46, 125, 50, 0.16);
-  --fix-chip-fg: #1b5e20;
+  --pos-chip-bg: #363835;
+  --pos-chip-fg: #f3f3f3;
+  --rule-chip-bg: #363835;
+  --rule-chip-fg: #f3f3f3;
+  --fix-chip-bg: #363835;
+  --fix-chip-fg: #010d0a;
   --notification-error-bg: rgba(198, 40, 40, 0.1);
   --notification-error-fg: #b71c1c;
   --notification-success-bg: rgba(46, 125, 50, 0.1);
