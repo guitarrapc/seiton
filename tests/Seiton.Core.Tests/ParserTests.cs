@@ -6502,7 +6502,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("group", StringComparison.Ordinal));
-        await Assert.That(diag.Message).Contains("\"group\" must be string, got array");
+        await Assert.That(diag.Message).Contains(".group must be string, got array");
     }
 
     [Test]
@@ -6526,7 +6526,7 @@ public sealed class ParserTests
 
         // Should report a type mismatch in user-friendly terms
         var typeDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("labels", StringComparison.Ordinal));
-        await Assert.That(typeDiag.Message).Contains("\"labels\" must be string or array, got object");
+        await Assert.That(typeDiag.Message).Contains(".labels must be string or array, got object");
 
         // "requires labels" should NOT be reported since labels key is present
         var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("requires labels", StringComparison.Ordinal));

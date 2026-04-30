@@ -819,7 +819,7 @@ public static partial class WorkflowParser
                             {
                                 if (reader.CurrentKind == YamlEventKind.MappingStart)
                                 {
-                                    AddError(diagnostics, "\"labels\" must be string or array, got object", reader.CurrentStart);
+                                    AddError(diagnostics, $"{section}.labels must be string or array, got object", reader.CurrentStart);
                                     reader.SkipCurrentNode();
                                 }
                                 else if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -863,7 +863,7 @@ public static partial class WorkflowParser
                             if (!reader.End && reader.CurrentKind != YamlEventKind.Scalar)
                             {
                                 var grpNodeType = reader.CurrentKind == YamlEventKind.SequenceStart ? "array" : "object";
-                                AddError(diagnostics, $"\"group\" must be string, got {grpNodeType}", reader.CurrentStart);
+                                AddError(diagnostics, $"{section}.group must be string, got {grpNodeType}", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else if (!reader.End && reader.GetScalarUtf8().Length == 0)
