@@ -80,6 +80,15 @@ public sealed class PlaygroundHtmlContractTests
         await Assert.That(html).Contains("footer-copy-sep", StringComparison.Ordinal);
         await Assert.That(html).Contains("> | </span>", StringComparison.Ordinal);
         await Assert.That(html.Contains("footer-theme-wrap", StringComparison.Ordinal)).IsFalse();
+        var ixFooter = html.IndexOf("<footer>", StringComparison.Ordinal);
+        await Assert.That(ixFooter >= 0).IsTrue();
+        var beforeFooter = html[..ixFooter];
+        await Assert.That(beforeFooter.Contains("repo-mark", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(Regex.IsMatch(html,
+                @"<footer>[\s\S]*?footer-copy-row[\s\S]*?repo-mark[\s\S]*?footer-copy-text",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline, TimeSpan.FromSeconds(3)))
+            .IsTrue();
+        await Assert.That(html).Contains("aria-label=\"seiton on GitHub\"", StringComparison.Ordinal);
         await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""theme-cycle-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
         await Assert.That(html).Contains("data-theme-mode=\"system\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("theme-cycle-btn__svg--system", StringComparison.Ordinal);
@@ -94,6 +103,7 @@ public sealed class PlaygroundHtmlContractTests
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
         var css = await File.ReadAllTextAsync(path);
         await Assert.That(css).Contains(".footer-copy-row");
+        await Assert.That(css).Contains(".footer-copy-row .repo-mark");
         await Assert.That(css).Contains(".footer-copy-sep");
         await Assert.That(css.Contains(".footer-theme-wrap", StringComparison.Ordinal)).IsFalse();
     }

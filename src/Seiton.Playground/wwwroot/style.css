@@ -915,6 +915,21 @@ footer a {
   gap: 0.15rem 0.35rem;
 }
 
+.footer-copy-row .repo-mark {
+  align-self: center;
+  margin-right: 0;
+  color: var(--muted);
+}
+
+.footer-copy-row .repo-mark:hover {
+  color: var(--accent);
+}
+
+.footer-copy-row .repo-mark__icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
 .footer-copy-text {
   text-align: center;
 }
