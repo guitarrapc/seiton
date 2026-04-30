@@ -36,6 +36,8 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 10.0
+      - name: Install wasm-tools workload (Seiton.Playground / Blazor WASM)
+        run: dotnet workload install wasm-tools
       - name: dotnet build
         run: dotnet build -c Release
       - name: benchmark
