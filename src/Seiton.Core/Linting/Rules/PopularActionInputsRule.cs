@@ -33,6 +33,9 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         // Check unknown inputs
         if (actionExec.Inputs is { Count: > 0 } inputs)
         {
+            var inputNames = actionSpec.GetInputNames();
+            string? availableInputs = null;
+
             foreach (var pair in inputs)
             {
                 if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
@@ -50,8 +53,8 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 }
 
                 var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
-                var suggestion = FindClosestInput(unknownInputName, actionSpec);
-                var availableInputs = FormatAvailableInputs(actionSpec);
+                var suggestion = FindClosestInput(unknownInputName, inputNames);
+                availableInputs ??= FormatAvailableInputs(inputNames);
                 var unknownMessage = suggestion is not null
                     ? $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}. did you mean '{suggestion}'?"
                     : $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}";
@@ -108,9 +111,8 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         return false;
     }
 
-    private static string? FindClosestInput(string unknownInput, PopularActions.ActionSpec actionSpec)
+    private static string? FindClosestInput(string unknownInput, string[] inputNames)
     {
-        var inputNames = actionSpec.GetInputNames();
         if (inputNames.Length == 0)
         {
             return null;
@@ -142,9 +144,8 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         return tied ? null : best;
     }
 
-    private static string FormatAvailableInputs(PopularActions.ActionSpec actionSpec)
+    private static string FormatAvailableInputs(string[] inputNames)
     {
-        var inputNames = actionSpec.GetInputNames();
         return string.Join(", ", inputNames.Select(static n => $"\"{n}\""));
     }
 }
