@@ -1,7 +1,7 @@
-# Seiton — GitHub Actions Lint & Fix Tool
+# Seiton — Security-Focused Linter & Fixer for GitHub Actions
 
-**Seiton** is a fast, opinionated static analysis tool for GitHub Actions.
-It parses workflow files and action metadata files, then runs a curated set of lint rules to catch mistakes, security issues, and policy violations before they reach production.
+**Seiton** is a security-focused linter & fixer for GitHub Actions.
+It parses workflow files and action metadata files, then runs a curated set of lint rules to catch security issues, policy violations, and mistakes before they reach production.
 
 ---
 

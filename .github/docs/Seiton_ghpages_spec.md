@@ -399,7 +399,7 @@ runLint();
         <h1>
           <a href="https://github.com/guitarrapc/seiton">seiton</a> playground
         </h1>
-        <h2>Static checker for GitHub Actions workflow files</h2>
+        <h2>Security-focused linter &amp; fixer for GitHub Actions</h2>
       </header>
       <div id="controls">
         <div class="controls-row controls-row--primary">
@@ -438,7 +438,7 @@ runLint();
     </main>
     <footer>
       <p>
-        <a href="https://github.com/guitarrapc/seiton">seiton</a> — Static checker for GitHub Actions workflow files.
+        <a href="https://github.com/guitarrapc/seiton">seiton</a> — Security-focused linter & fixer for GitHub Actions.
       </p>
     </footer>
     <script type="module" src="main.js"></script>

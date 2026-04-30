@@ -1,7 +1,7 @@
 # seiton
 
-**Seiton** is a fast, opinionated static analysis tool for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
-It catches mistakes, security issues, and policy violations before they reach production — then optionally fixes them.
+**Seiton** is a security-focused linter & fixer for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
+It catches security issues, policy violations, and mistakes before they reach production — then optionally fixes them.
 
 Features:
 
