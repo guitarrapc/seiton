@@ -1,3 +1,3 @@
-test.yaml:7:37: action uses 'rhysd/action-setup-vim@v1' is not pinned to a full-length commit SHA [action]
-test.yaml:9:23: unknown input 'entrypoint' for action 'rhysd/action-setup-vim@v1'. available inputs are "configure-args", "neovim", "token", "version" [action]
-test.yaml:10:17: unknown input 'args' for action 'rhysd/action-setup-vim@v1'. available inputs are "configure-args", "neovim", "token", "version" [action]
+test.yaml:7:37: action uses 'rhysd/action-setup-vim@v1' is not pinned to a full-length commit SHA. see https://github.com/rhysd/action-setup-vim/tree/v1 (fixable with --fix --enable-pin-network) [action]
+test.yaml:9:23: unknown input 'entrypoint' for action 'rhysd/action-setup-vim@v1'. available inputs are "configure-args", "neovim", "token", "version". see https://github.com/rhysd/action-setup-vim/tree/v1 [action]
+test.yaml:10:17: unknown input 'args' for action 'rhysd/action-setup-vim@v1'. available inputs are "configure-args", "neovim", "token", "version". see https://github.com/rhysd/action-setup-vim/tree/v1 [action]

@@ -548,4 +548,19 @@ internal static class ActionRefHelpers
         cache[(patternIndex, pathIndex)] = result;
         return result;
     }
+
+    /// <summary>
+    /// Builds a GitHub tree URL from an action reference string (e.g., "actions/setup-node@v4"
+    /// → "https://github.com/actions/setup-node/tree/v4").
+    /// Returns null if the reference cannot be parsed.
+    /// </summary>
+    internal static string? BuildGitHubUrl(string actionRef)
+    {
+        if (!TryParseActionReference(actionRef, out var owner, out var repo, out var reference))
+        {
+            return null;
+        }
+
+        return $"https://github.com/{owner}/{repo}/tree/{reference}";
+    }
 }

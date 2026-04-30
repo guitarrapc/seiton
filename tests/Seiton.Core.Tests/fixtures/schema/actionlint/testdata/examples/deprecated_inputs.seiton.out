@@ -1,2 +1,2 @@
-test.yaml:6:42: action uses 'reviewdog/action-actionlint@v1' is not pinned to a full-length commit SHA [action]
+test.yaml:6:42: action uses 'reviewdog/action-actionlint@v1' is not pinned to a full-length commit SHA. see https://github.com/reviewdog/action-actionlint/tree/v1 (fixable with --fix --enable-pin-network) [action]
 test.yaml:9:26: avoid using deprecated input "fail_on_error" in action "reviewdog/action-actionlint@v1": Deprecated, use `fail_level` instead [action]

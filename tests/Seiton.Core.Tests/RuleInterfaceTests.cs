@@ -2204,6 +2204,29 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_UnpinnedUsesRule_FixableHint_AppearsAfterUrl()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-uses-fixable-order.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
+
+        // URL should come before the fixable hint
+        var urlIdx = diagnostic.Message.IndexOf("see https://", StringComparison.Ordinal);
+        var fixableIdx = diagnostic.Message.IndexOf("(fixable with", StringComparison.Ordinal);
+        await Assert.That(urlIdx).IsGreaterThan(-1);
+        await Assert.That(fixableIdx).IsGreaterThan(urlIdx);
+    }
+
+    [Test]
     public async Task RuleRegression_UnpinnedImageRule_TableDriven()
     {
         var cases = new[]
