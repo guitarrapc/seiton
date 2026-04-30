@@ -17,9 +17,9 @@ public sealed class PlaygroundUiLayoutTests
         RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     private static readonly SemaphoreSlim s_browserGate = new(1, 1);
-    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> (assembly teardown + process exit).</summary>
+    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> or <see cref="TryDisposePlaywrightSessionOnProcessExit"/>.</summary>
     private static IPlaywright? s_playwright;
-    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> (assembly teardown + process exit).</summary>
+    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> or <see cref="TryDisposePlaywrightSessionOnProcessExit"/>.</summary>
     private static IBrowser? s_browser;
 
     static PlaygroundUiLayoutTests()
@@ -28,13 +28,75 @@ public sealed class PlaygroundUiLayoutTests
         {
             try
             {
-                DisposePlaywrightSessionAsync().GetAwaiter().GetResult();
+                TryDisposePlaywrightSessionOnProcessExit();
             }
             catch
             {
                 // best effort
             }
         };
+    }
+
+    /// <summary>
+    /// Process exit must not block on <see cref="s_browserGate"/> if another thread is in
+    /// <see cref="GetBrowserAsync"/> (e.g. launching Chromium).
+    /// </summary>
+    private static void TryDisposePlaywrightSessionOnProcessExit()
+    {
+        if (!s_browserGate.Wait(TimeSpan.FromSeconds(1)))
+        {
+            return;
+        }
+
+        IBrowser? browser;
+        IPlaywright? playwright;
+        try
+        {
+            browser = s_browser;
+            playwright = s_playwright;
+            s_browser = null;
+            s_playwright = null;
+        }
+        finally
+        {
+            s_browserGate.Release();
+        }
+
+        if (browser is not null)
+        {
+            try
+            {
+                if (browser.IsConnected)
+                {
+                    browser.CloseAsync().GetAwaiter().GetResult();
+                }
+            }
+            catch
+            {
+                // driver may already be closing
+            }
+
+            try
+            {
+                browser.DisposeAsync().GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // best effort
+            }
+        }
+
+        if (playwright is not null)
+        {
+            try
+            {
+                playwright.Dispose();
+            }
+            catch
+            {
+                // best effort
+            }
+        }
     }
 
     private static async Task<IBrowser> GetBrowserAsync()
@@ -140,7 +202,10 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     /// <summary>
-    /// Called once per assembly from <see cref="PlaygroundUiTestAssemblyHooks"/> to avoid holding Chromium after the test run.
+    /// <summary>
+    /// Called once per assembly from <see cref="PlaygroundUiTestAssemblyHooks"/>; process exit uses
+    /// <see cref="TryDisposePlaywrightSessionOnProcessExit"/> so teardown does not wait indefinitely on <see cref="s_browserGate"/>.
+    /// </summary>
     /// </summary>
     internal static async Task DisposePlaywrightSessionAsync()
     {
