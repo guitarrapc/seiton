@@ -495,15 +495,47 @@ internal static class RunContextDirectUseAnalyzer
             lineStart--;
         }
 
-        // Walk from lineStart to targetOffset, counting unescaped single quotes.
-        // In shell, single quotes cannot be escaped inside single-quoted strings
-        // (there's no backslash escape), so we just toggle state on each '.
+        // Walk from lineStart to targetOffset using a small single-line shell
+        // quoting state machine. Single quotes only toggle when not inside
+        // double quotes. Double quotes only toggle when not inside single
+        // quotes. Backslashes escape the next character outside single quotes.
         var insideSingleQuote = false;
+        var insideDoubleQuote = false;
+        var escaped = false;
         for (var i = lineStart; i < targetOffset; i++)
         {
-            if (source[i] == (byte)'\'')
+            var current = source[i];
+            if (escaped)
             {
-                insideSingleQuote = !insideSingleQuote;
+                escaped = false;
+                continue;
+            }
+
+            if (insideSingleQuote)
+            {
+                if (current == (byte)'\'')
+                {
+                    insideSingleQuote = false;
+                }
+
+                continue;
+            }
+
+            if (current == (byte)'\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (current == (byte)'"')
+            {
+                insideDoubleQuote = !insideDoubleQuote;
+                continue;
+            }
+
+            if (!insideDoubleQuote && current == (byte)'\'')
+            {
+                insideSingleQuote = true;
             }
         }
 

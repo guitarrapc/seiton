@@ -573,7 +573,10 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
                 ? FixFormatting.GetLineIndentation(utf8Yaml, envKeyLine)
                 : FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
             var insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
-            var insertText = childIndent + envVarName + ": ${{ " + pathString + " }}" + lineEnding;
+            // If the file doesn't end with a newline and we're inserting at EOF, prepend one
+            var needsLeadingNewline = insertOffset == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
+            var insertText = (needsLeadingNewline ? lineEnding : "")
+                + childIndent + envVarName + ": ${{ " + pathString + " }}" + lineEnding;
             edit = new TextEdit(insertOffset, 0, insertText);
             return true;
         }
@@ -592,8 +595,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         var runEndLine = FindRunEndLine(utf8Yaml, runLine, stepKeyIndent);
         var insertAfterRun = FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
         // If the file doesn't end with a newline, prepend one before the env block
-        var needsLeadingNewline = insertAfterRun == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
-        var envBlock = (needsLeadingNewline ? lineEnding : "")
+        var needsLeadingNewlineForEnvBlock = insertAfterRun == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
+        var envBlock = (needsLeadingNewlineForEnvBlock ? lineEnding : "")
             + stepKeyIndent + "env:" + lineEnding
             + envChildIndent + envVarName + ": ${{ " + pathString + " }}" + lineEnding;
         edit = new TextEdit(insertAfterRun, 0, envBlock);

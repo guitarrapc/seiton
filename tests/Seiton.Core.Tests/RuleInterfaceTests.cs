@@ -13080,4 +13080,51 @@ public sealed class RuleInterfaceTests
         // Fix must NOT be attached - inside single quotes
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_SingleQuotesInsideDoubleQuotes_GetsFix()
+    {
+        // Single quotes inside double quotes are literal characters, NOT shell delimiters.
+        // The expression is inside double quotes where ${VAR} expands, so fix should attach.
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "'${{ github.event.pull_request.title }}'"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-sq-in-dq.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix SHOULD be attached - single quotes inside double quotes don't suppress expansion
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_Fix_ExistingEnvNoTrailingNewline_InsertsCorrectly()
+    {
+        // When the file ends without a trailing newline and the last env entry is on the
+        // final line (env after run), insertion must still produce valid YAML.
+        var yaml = "on: pull_request\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.pull_request.title }}\"\n        env:\n          EXISTING: value";
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        var result = engine.Check(sourceBytes, "template-injection-no-trailing-newline.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Fix should be attached (existing env, not flow-style)
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        // Apply fix should produce valid output without corrupting the last line
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, result.FixableDiagnostics);
+        var fixedStr = Encoding.UTF8.GetString(fixedYaml);
+        // The new env entry must be on its own line, not appended to the last env line
+        await Assert.That(fixedStr).Contains("\n          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}");
+    }
 }
