@@ -3068,7 +3068,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "labels-empty.yml");
-        var diag = result.Diagnostics.FirstOrDefault(x => x.Message == "\"runs-on\" label should not be empty");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("label should not be empty"));
         await Assert.That(diag.Message).IsNotNull();
         await Assert.That(diag.Location.StartLine).IsEqualTo(5);  // "labels: ''" is on line 5
         await Assert.That(diag.Location.StartColumn).IsEqualTo(15); // col at ''

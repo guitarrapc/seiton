@@ -13348,4 +13348,37 @@ public sealed class RuleInterfaceTests
         await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
             .Because("x64 is a self-hosted preset label and should not be reported as unknown");
     }
+
+    [Test]
+    public async Task Parser_EmptyRunsOnLabel_MessageIncludesAvailableLabels()
+    {
+        // When runs-on has an empty label, the parser message should include
+        // available labels so the user knows what valid values are.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ''
+            steps:
+              - run: echo hello
+        """;
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty"));
+        await Assert.That(emptyLabelDiag.Message).Contains("available labels are");
+        await Assert.That(emptyLabelDiag.Message).Contains("ubuntu-latest");
+    }
+
+    [Test]
+    public async Task Parser_EmptyRunsOnLabelInArray_MessageIncludesAvailableLabels()
+    {
+        // When runs-on array has an empty element, the parser message for the
+        // empty element should include available labels.
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ['ubuntu-latest', '']\n    steps:\n      - run: echo\n";
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var emptyLabelDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty"));
+        await Assert.That(emptyLabelDiag.Message).Contains("available labels are");
+        await Assert.That(emptyLabelDiag.Message).Contains("ubuntu-latest");
+    }
 }

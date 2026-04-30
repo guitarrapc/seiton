@@ -1,10 +1,14 @@
 ﻿using System.Text;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    private static readonly string RunsOnEmptyLabelMessage =
+        $"\"runs-on\" label should not be empty. available labels are {RunnerLabels.KnownHostedLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
+
     private enum JobNodeMappingKey : byte
     {
         RunsOn = 0,
@@ -825,7 +829,7 @@ public static partial class WorkflowParser
                                         if (lblErr1)
                                         {
                                             if (labels.Length > 0)
-                                                AddError(diagnostics, "\"runs-on\" label should not be empty", lblMark1);
+                                                AddError(diagnostics, RunsOnEmptyLabelMessage, lblMark1);
                                             else
                                                 AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark1);
                                         }
@@ -834,7 +838,7 @@ public static partial class WorkflowParser
                                 else
                                 {
                                     var lblSeqMark = reader.CurrentStart;
-                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2, allowElemEmpty: true, emptyElementMessage: "\"runs-on\" label should not be empty");
+                                    labels = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblErr2, out var lblMark2, allowElemEmpty: true, emptyElementMessage: RunsOnEmptyLabelMessage);
                                     if (lblErr2)
                                     {
                                         AddError(diagnostics, $"{section}.labels must be string, array, or expression", lblMark2);
@@ -914,11 +918,11 @@ public static partial class WorkflowParser
 
         var fbSeqMark = reader.CurrentStart;
         var fbWasScalar = reader.CurrentKind == YamlEventKind.Scalar;
-        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true, emptyElementMessage: "\"runs-on\" label should not be empty");
+        var labelsFallback = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var lblFbErr, out var lblFbMark, allowElemEmpty: true, emptyElementMessage: RunsOnEmptyLabelMessage);
         if (lblFbErr)
         {
             if (fbWasScalar)
-                AddError(diagnostics, "\"runs-on\" label should not be empty", lblFbMark);
+                AddError(diagnostics, RunsOnEmptyLabelMessage, lblFbMark);
             else
                 AddError(diagnostics, $"{section} must be string, sequence, or mapping", lblFbMark);
         }
