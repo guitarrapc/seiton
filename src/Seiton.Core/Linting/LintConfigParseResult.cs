@@ -8,4 +8,5 @@ internal readonly record struct LintConfigParseResult(
     List<LintExclusion> Exclusions,
     FixConfig Fix,
     NetworkConfig Network,
+    OutputConfig Output,
     Diagnostic[] Diagnostics);

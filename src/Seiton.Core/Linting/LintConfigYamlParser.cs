@@ -55,6 +55,7 @@ internal static class LintConfigYamlParser
                 [],
                 new FixConfig(),
                 new NetworkConfig(),
+                new OutputConfig(),
                 [d]);
         }
 
@@ -206,7 +207,8 @@ internal static class LintConfigYamlParser
                 && !string.Equals(key, "rules", StringComparison.Ordinal)
                 && !string.Equals(key, "exclusions", StringComparison.Ordinal)
                 && !string.Equals(key, "fix", StringComparison.Ordinal)
-                && !string.Equals(key, "network", StringComparison.Ordinal))
+                && !string.Equals(key, "network", StringComparison.Ordinal)
+                && !string.Equals(key, "output", StringComparison.Ordinal))
             {
                 diagnostics.Add(Diag(
                     $"unknown top-level key '{key}'",
@@ -277,7 +279,20 @@ internal static class LintConfigYamlParser
             }
         }
 
-        return new LintConfigParseResult(rules, exclusions, fix, network, diagnostics.ToArray());
+        var output = new OutputConfig();
+        if (root.TryGetValue("output", out var outputObj) && outputObj is not null)
+        {
+            if (AsMap(outputObj) is not { } outputMap)
+            {
+                diagnostics.Add(Diag("output must be a mapping section", DomLine, 1, 6, filePath));
+            }
+            else
+            {
+                output = ParseOutput(outputMap, diagnostics, filePath);
+            }
+        }
+
+        return new LintConfigParseResult(rules, exclusions, fix, network, output, diagnostics.ToArray());
     }
 
     private static void AddRule(
@@ -834,6 +849,39 @@ internal static class LintConfigYamlParser
         }
 
         return new GitHubNetworkConfig { GhesApiUrl = ghesApiUrl, GhesFallback = ghesFallback };
+    }
+
+    private static OutputConfig ParseOutput(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
+    {
+        var sortOrder = DiagnosticSortOrder.Location;
+
+        foreach (var (key, value) in map)
+        {
+            switch (key)
+            {
+                case "sort-order":
+                    var sv = ScalarToString(value);
+                    if (string.Equals(sv, "location", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sortOrder = DiagnosticSortOrder.Location;
+                    }
+                    else if (string.Equals(sv, "rule", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sortOrder = DiagnosticSortOrder.Rule;
+                    }
+                    else
+                    {
+                        diagnostics.Add(Diag("output.sort-order must be 'location' or 'rule'", DomLine, 3, 10, filePath));
+                    }
+
+                    break;
+                default:
+                    diagnostics.Add(Diag($"unknown output key '{key}'", DomLine, 3, key.Length, filePath));
+                    break;
+            }
+        }
+
+        return new OutputConfig { SortOrder = sortOrder };
     }
 
     private static void AddExclusion(

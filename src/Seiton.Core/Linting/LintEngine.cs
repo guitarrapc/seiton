@@ -123,6 +123,7 @@ public sealed class LintEngine
             Rules = normalizedRules.Rules,
             Fix = config?.Fix ?? new FixConfig(),
             Network = config?.Network ?? new NetworkConfig(),
+            Output = config?.Output ?? new OutputConfig(),
         };
 
         _activeRules.Clear();
@@ -197,7 +198,15 @@ public sealed class LintEngine
             }
         }
 
-        _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByPriority(x, y));
+        var sortOrder = effectiveConfig.Output.SortOrder;
+        if (sortOrder == DiagnosticSortOrder.Rule)
+        {
+            _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByRulePriority(x, y));
+        }
+        else
+        {
+            _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByLocation(x, y));
+        }
 
         _seen.Clear();
 
@@ -957,7 +966,7 @@ public sealed class LintEngine
 
         return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
     }
-    private static int CompareDiagnosticsByPriority(Diagnostic x, Diagnostic y)
+    private static int CompareDiagnosticsByRulePriority(Diagnostic x, Diagnostic y)
     {
         var byPriority = RuleCatalog.GetPriority(x.RuleId).CompareTo(RuleCatalog.GetPriority(y.RuleId));
         if (byPriority != 0)
@@ -981,6 +990,29 @@ public sealed class LintEngine
         if (byColumn != 0)
         {
             return byColumn;
+        }
+
+        return string.CompareOrdinal(x.Message, y.Message);
+    }
+
+    private static int CompareDiagnosticsByLocation(Diagnostic x, Diagnostic y)
+    {
+        var byLine = x.Location.StartLine.CompareTo(y.Location.StartLine);
+        if (byLine != 0)
+        {
+            return byLine;
+        }
+
+        var byColumn = x.Location.StartColumn.CompareTo(y.Location.StartColumn);
+        if (byColumn != 0)
+        {
+            return byColumn;
+        }
+
+        var byRuleId = string.CompareOrdinal(x.RuleId, y.RuleId);
+        if (byRuleId != 0)
+        {
+            return byRuleId;
         }
 
         return string.CompareOrdinal(x.Message, y.Message);

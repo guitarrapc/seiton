@@ -13127,4 +13127,122 @@ public sealed class RuleInterfaceTests
         // The new env entry must be on its own line, not appended to the last env line
         await Assert.That(fixedStr).Contains("\n          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}");
     }
+
+    [Test]
+    public async Task LintEngine_DefaultSortOrder_SortsByLocation()
+    {
+        // This workflow triggers:
+        // - runner-no-latest (priority 20) at line 4 (runs-on: ubuntu-latest)
+        // - job-permissions-required (priority 7) at line 3 (job 'build' without permissions)
+        // Default sort (location) should order by line: line 3 before line 4.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var engine = new LintEngine([new JobPermissionsRequiredRule(), new RunnerNoLatestRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "sort-order-default.yml");
+
+        var ruleDiags = result.Diagnostics
+            .Where(x => x.RuleId == "job-permissions-required" || x.RuleId == "runner-no-latest")
+            .ToArray();
+
+        await Assert.That(ruleDiags.Length).IsEqualTo(2);
+        // With location-based sort (default): job-permissions-required (line 3) before runner-no-latest (line 4)
+        await Assert.That(ruleDiags[0].RuleId).IsEqualTo("job-permissions-required");
+        await Assert.That(ruleDiags[1].RuleId).IsEqualTo("runner-no-latest");
+    }
+
+    [Test]
+    public async Task LintEngine_RuleSortOrder_SortsByRulePriority()
+    {
+        // Same workflow as above but with sort-order: rule config.
+        // Rule priority: job-permissions-required (7) < runner-no-latest (20)
+        // So job-permissions-required should still come first (lower priority number = higher priority).
+        // But if they were on same lines, rule-priority sort would group by rule.
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
+        """;
+
+        var config = new LintConfig
+        {
+            Output = new OutputConfig { SortOrder = DiagnosticSortOrder.Rule },
+        };
+        var engine = new LintEngine([new JobPermissionsRequiredRule(), new RunnerNoLatestRule()]);
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "sort-order-rule.yml", config);
+
+        var ruleDiags = result.Diagnostics
+            .Where(x => x.RuleId == "job-permissions-required" || x.RuleId == "runner-no-latest")
+            .ToArray();
+
+        await Assert.That(ruleDiags.Length).IsEqualTo(2);
+        // With rule sort: job-permissions-required (priority 7) before runner-no-latest (priority 20)
+        await Assert.That(ruleDiags[0].RuleId).IsEqualTo("job-permissions-required");
+        await Assert.That(ruleDiags[1].RuleId).IsEqualTo("runner-no-latest");
+    }
+
+    [Test]
+    public async Task LintConfig_Validate_OutputSortOrder_Parses()
+    {
+        var yaml = """
+        output:
+          sort-order: rule
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Output.SortOrder).IsEqualTo(DiagnosticSortOrder.Rule);
+    }
+
+    [Test]
+    public async Task LintConfig_Validate_OutputSortOrder_Location()
+    {
+        var yaml = """
+        output:
+          sort-order: location
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Output.SortOrder).IsEqualTo(DiagnosticSortOrder.Location);
+    }
+
+    [Test]
+    public async Task LintConfig_Validate_OutputSortOrder_InvalidValue_ReportsError()
+    {
+        var yaml = """
+        output:
+          sort-order: invalid
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("sort-order", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintConfig_Validate_OutputSortOrder_Default_IsLocation()
+    {
+        var yaml = """
+        rules: {}
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Output.SortOrder).IsEqualTo(DiagnosticSortOrder.Location);
+    }
 }
