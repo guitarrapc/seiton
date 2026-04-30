@@ -114,9 +114,31 @@ public sealed class PlaygroundUiLayoutTests
                 return s_browser;
             }
 
-            s_playwright = await Playwright.CreateAsync();
-            s_browser = await s_playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
-            return s_browser;
+            IPlaywright? playwrightLocal = null;
+            try
+            {
+                playwrightLocal = await Playwright.CreateAsync();
+                var browser = await playwrightLocal.Chromium.LaunchAsync(
+                    new BrowserTypeLaunchOptions { Headless = true });
+                s_playwright = playwrightLocal;
+                s_browser = browser;
+                playwrightLocal = null;
+                return browser;
+            }
+            finally
+            {
+                if (playwrightLocal is not null)
+                {
+                    try
+                    {
+                        playwrightLocal.Dispose();
+                    }
+                    catch
+                    {
+                        // best effort — launch failed after CreateAsync
+                    }
+                }
+            }
         }
         finally
         {
@@ -202,10 +224,8 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     /// <summary>
-    /// <summary>
     /// Called once per assembly from <see cref="PlaygroundUiTestAssemblyHooks"/>; process exit uses
     /// <see cref="TryDisposePlaywrightSessionOnProcessExit"/> so teardown does not wait indefinitely on <see cref="s_browserGate"/>.
-    /// </summary>
     /// </summary>
     internal static async Task DisposePlaywrightSessionAsync()
     {
