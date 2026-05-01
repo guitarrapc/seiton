@@ -27,7 +27,7 @@
 | ID | 項目 | 深刻度（相対） | 主な経路・根拠 |
 |---|---|---|---|
 | **C-1** | `network.github.ghes-api-url` への **Bearer トークン付きリクエスト** | **高** | URL はトリムのみ。`https` / ホストの強制検証なし。`GithubActionShaResolver` / `OnlineAudit/ActionRefResolver` がトークン付き GET。意図しないホストへの到達やリダイレクト経由の漏えいが設計次第で現実になり得る。 |
-| **C-2** | `fix.pinning.ignore-actions` の **`uses` / `ref` がそのまま正規表現**としてコンパイル | **中〜高（可用性）** | `RegexOptions.Compiled`。**マッチタイムアウト未指定**。悪意のあるパターンで ReDoS。`exclude-branches` は `Regex.Escape` でリテラル化されているが、`ignore-actions` のみユーザー正規表現。 |
+| **C-2** | `fix.pinning.ignore-actions` の **`uses` / `ref` がそのまま正規表現**としてコンパイル | **中〜高（可用性）** | `RegexOptions.Compiled`。**マッチタイムアウト未指定**。悪意のあるパターンで ReDoS。`exclude-branches` は `Regex.Escape` でリテラル化されているが、`ignore-actions` のみユーザー正規表現。**→ 2026-05-02 に Regex 全廃で完全解決**。 |
 | **C-3** | **リソース枯渇**（メモリ・時間・並列 HTTP） | **中** | `File.ReadAllText` にサイズ上限なし。`LintConfigYamlParser.ParseYamlDom` で入力と同サイズの `byte[]` を再確保。ネスト深度・コレクション要素数の明示上限なし。`network.max-concurrency` は `>0` のみで上限なし。`timeout-seconds` は負のみ拒否で、極大の正の値を許容。 |
 | **C-4** | `exclusions` による **セキュリティルールの広域抑止** | **低（ガバナンス）** | 技術的脆弱性というより、「悪意ある／不注意な PR」で検知を丸ごと無効化し得る。 |
 | **C-5** | `exclusions.files` の **グロブ**の計算コスト | **低** | `ActionRefHelpers.GlobMatch` はメモ化あり。極長パターン＋パスで辞書サイズ増。 |
@@ -40,7 +40,7 @@
 | ID | 状態 |
 |---|---|
 | **C-1** | **部分緩和**: HTTPS 必須、URL 埋め込み資格情報の拒否、`GitHubApiHttpClientFactory`＋同一オリジン リダイレクトのみ。**未解決の本質**: 設定を書き換えられる主体が、`SEITON_GITHUB_TOKEN` / `GITHUB_TOKEN` を付けて**任意の「正しい HTTPS」ホスト**へ送らせられる（ホスト allowlist は未実装）→ **§5.1** |
-| **C-2** | **緩和**: `LintConfigResourceLimits.IgnoreActionRegexMatchTimeout` ほか。**残り**: マッチ単位では 2s だが、**解決ループごと・多数のステップ・多数の無視パターン**での累積遅延 → **§5.2** |
+| **C-2** | **解決済み**: Regex を全廃し wildcard マッチング / 完全一致 / 部分文字列一致に置換。ReDoS リスクは完全に排除 → **§5.2** |
 | **C-3** | **緩和**: `LintConfigResourceLimits`（サイズ／深さ／構造単位数／timeout≤300／concurrency≤CPU）、`ValidateFile` 事前サイズ。**残り**: グロブ探索の細部、設定 DOM 生成と VYaml イベント・アンカー相互作用の検証余地 → **§5.3** |
 | **C-4** | **運用**: ドキュメントで利用者リポのレビューを推奨（上流に CODEOWNERS は配置しない）。 |
 | **C-5** | 設定規模上限で **過剰パターン**は抑制。**理論上** `GlobMatch` の内部キャッシュやパスとの組み合わせでのコストは残る → **§5.3** |
@@ -76,7 +76,7 @@
 
 | # | 対策 | 内容 |
 |---|---|---|
-| P1-1 | **`ignore-actions` の正規表現** | 各 `Regex` に **`MatchTimeout`**（`TimeSpan`）を指定する。または **グロブ／サブセット言語に置き換え**、`(` `)` `|` `*` の深さ制限などで危険パターンを排除。 |
+| P1-1 | **`ignore-actions` のパターンマッチング** | **完了**: Regex を全廃し **wildcard マッチング**（`*` / `?`）に置換。ReDoS リスクなし。`exclude-branches` は `string.Equals` 完全一致、CLI `--ignore` は `string.Contains` 部分文字列一致に変更。 |
 | P1-2 | **設定ファイルサイズ上限** | 例: **512 KiB 〜 1 MiB**（プロダクトで合意した値）。超過時は設定エラーで読まない。`File.ReadAllText` 前に長さチェック、またはストリーム読み。 |
 | P1-3 | **`network.max-concurrency` の上限** | ホストの **論理プロセッサ数**（`Environment.ProcessorCount`、最低 **`1`**）まで。超過はクランプおよびエラー。 |
 | P1-4 | **`network.timeout-seconds` の上限** | 例: **最大 300** 秒など。超過はクランプまたはエラー。 |
@@ -136,15 +136,14 @@
 | **OCI / コンテナ画像解決** | `OciImageDigestResolver` は **ワークフロー内の画像参照からレジストリ URL を構成**する。`fix.images.*` は主にスキップ用のリスト／グロブで、**設定だけで任意 URL を指す経路ではない**。ただし **`new HttpClient()`**（クロスオリジン自動リダイレクト許容）は **レジストリ**向けであり、ワークフローが悪意あるレジストリを参照する場合との**合成リスク**はワークフロー側とセットで評価。 |
 | **タイムアウト** | `PinRemediationEngine` は `CancellationTokenSource.CancelAfter(network.timeout)` で **1 解決試行あたり**上限。`OnlineAuditEngine` も `TimeoutSeconds` を使用。 **`0` は無期限**になり得る点は設定側の運用依存。 |
 
-### 5.2 正規表現（可用性）
+### 5.2 パターンマッチング（可用性）
 
 | 項 | 内容 |
 |---|---|
-| **ReDoS（`fix.pinning.ignore-actions`）** | `GitHubActionShaResolver` は `IgnoreActionRegexPatterns` 経由で **`MatchTimeout` ≈ 2s**（`LintConfigResourceLimits.IgnoreActionRegexMatchTimeout`）。タイムアウト時は **ピン解決のスキップに使わない**扱い（`RegexMatchTimeoutException`）。 |
-| **`OnlineAuditEngine`** | 同じ **`IgnoreActionEntry`** を第 4 引数で渡した場合、**同一コンパイル**を使い、`ShouldIgnore` で **`RegexMatchTimeoutException` は「無視しない」**（監査を進める）。無名引数省略時はリスト空。 |
-| **CLI `--ignore`** | 診断メッセージ用 Regex にも **同じタイムアウト**。**タイムアウト時はフィルタしない**（診断は残る）。 |
-| **累積** | **1 試行**は上で有界でも、多数の参照 × 無視エントリでの **合計遅延・ジッタ**は残り得る。 |
-| **`exclude-branches`** | **`Regex.Escape`** 済み＋ **`MatchTimeout`**（`ExcludeBranchRegexMatchTimeout`）。 |
+| **`fix.pinning.ignore-actions`** | **Regex を全廃し wildcard マッチング**（`*` / `?`）に置換。ReDoS リスクは完全に排除。アルゴリズムは決定的で指数爆発しない。 |
+| **`OnlineAuditEngine`** | 同じ wildcard マッチング。`ShouldIgnore` は単純なループで、タイムアウト例外なし。 |
+| **CLI `--ignore`** | **部分文字列一致**（`string.Contains`, 大文字小文字無視）に置換。Regex 不使用。 |
+| **`exclude-branches`** | **完全一致**（`string.Equals`, ordinal）に置換。Regex 不使用。 |
 
 ### 5.3 リソース・パース・グロブ
 
@@ -173,9 +172,10 @@
 | 2026-05-01 | 初版: 設定まわりの脅威調査結果と P0/P1/P2 対策案を文書化。 |
 | 2026-05-01 | P0: `ghes-api-url` HTTPS 検証、GitHub 向け HttpClient の同一オリジン リダイレクト制限。 |
 | 2026-05-01 | P1: 設定 UTF-8 1MiB 上限、YAML DOM 深さ/ユニット上限、`ignore-actions` Regex `MatchTimeout`、ネットワーク timeout/concurrency 上限。 |
+| 2026-05-02 | P1: **Regex 全廃**。`ignore-actions` を wildcard (`*`/`?`) に、`exclude-branches` を完全一致に、CLI `--ignore` を部分文字列一致に置換。`IgnoreActionRegexPatterns` 削除、`LintConfigResourceLimits` から Regex タイムアウト定数削除。 |
 | 2026-05-01 | `network.max-concurrency` 上限を固定 64 から **論理プロセッサ数** に変更。 |
 | 2026-05-01 | P2（上流）: `SEITON_CONFIG`/CI の信頼境界ドキュメント、CLI `--verbose` の `config:` ログ、`LintConfigYamlParser` の冗長 **`byte[]`** コピー削減。 |
 | 2026-05-01 | P2 の範囲修正: **`CODEOWNERS` は Seiton を導入した利用者リポジトリの運用**。上流 `.github/CODEOWNERS` を削除し計画書・ユーザー向けドキュメントでスコープを明確化。 |
 | 2026-05-01 | §1.1 を対策**前**として明記。**§1.2** と **§5** に対策後の要約・残存攻撃ベクターを追記。 |
 | 2026-05-01 | **§5.2 実装**: `OnlineAuditEngine` の ignore 用 Regex を `MatchTimeout` 化＋タイムアウト時は監査継続。**`fix.pinning.ignore-actions`** を第 4 引数で適用可能に。CLI `--ignore` に同タイムアウト。共通化 `IgnoreActionRegexPatterns`。 |
-
+| 2026-05-02 | **§5.2 実装**: Regex を全廃。`ignore-actions` は wildcard マッチング、`exclude-branches` は完全一致、CLI `--ignore` は部分文字列一致に置換。`IgnoreActionRegexPatterns` 削除。ReDoS リスク完全排除。 |

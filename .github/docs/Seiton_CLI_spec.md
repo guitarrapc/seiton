@@ -142,7 +142,7 @@ All flags apply to the default root command unless otherwise noted.
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--ignore` | | `string[]` | (none) | Regex patterns matched against diagnostic messages to suppress. Repeatable. Maps to `LintConfig.IgnorePatterns`. |
+| `--ignore` | | `string[]` | (none) | Substring patterns matched against diagnostic messages to suppress (case-insensitive). Repeatable. |
 | `--min-severity` | | `error\|warning\|info` | (none) | Suppress diagnostics below this severity. |
 | `--fix` | | `bool` | `false` | Run the root command in fix mode (equivalent to `seiton fix`). |
 

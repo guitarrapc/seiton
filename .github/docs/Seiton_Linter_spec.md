@@ -977,7 +977,7 @@ fix:
 - `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via `PinRemediationEngine`. Default: `false`.
 - `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
 - `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
-- `fix.pinning.ignore-actions`: list of `{uses, ref}` regex patterns to skip during SHA resolution.
+- `fix.pinning.ignore-actions`: list of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during SHA resolution. No regex.
 - `fix.images.enable-network`: when `true`, `unpinned-image` diagnostics may receive network-resolved digest fix payloads. Default: `false`.
 - `fix.images.exclude-images`: image names to skip. `scratch` is always enforced regardless of config.
 - `fix.images.exclude-tags`: tag names to skip. Default: `["latest"]`.
@@ -1354,7 +1354,7 @@ Comparison of reference tools:
 | GHES support | Yes (`ghes.api_url`, `ghes.fallback`) | No | No |
 | Age filtering for updates | `--min-age` / `PINACT_MIN_AGE` (default 0; update target candidate filtering) | — | — |
 | OCI auth | — | `authn.DefaultKeychain` (`~/.docker/config.json`) | `authn.DefaultKeychain` |
-| Default excludes | `ignore_actions` (regex) | `ignore-images` (glob, negation) | `exclude_branches: [main, master]`; `scratch` always; `latest` by default |
+| Default excludes | `ignore_actions` (wildcard) | `ignore-images` (glob, negation) | `exclude_branches: [main, master]`; `scratch` always; `latest` by default |
 | Separate command | `pinact run` | `dockerfile-pin run` | `frizbee actions` / `frizbee image` |
 | Skip sentinel | — | — | `ErrReferenceSkipped` |
 
@@ -1484,11 +1484,11 @@ HTTP clients carrying the GitHub Bearer token are built without automatic redire
 
 #### 12.3.4 `fix.pinning.ignore-actions`
 
-List of `{uses, ref}` patterns (regex) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA.
+List of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA. No regex — wildcard matching only, eliminating ReDoS risk.
 
 #### 12.3.5 `fix.pinning.exclude-branches`
 
-Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
+Branch names (exact string match, ordinal) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
 #### 12.3.6 `fix.pinning.min-age-days`
 

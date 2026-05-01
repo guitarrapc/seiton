@@ -1,5 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
@@ -11,8 +10,8 @@ namespace Seiton.Core.Linting.OnlineAudit;
 /// whose targets were collected during <see cref="WorkflowVisitor"/> traversal.
 /// </summary>
 /// <param name="ignorePinningActions">
-/// Optional <c>fix.pinning.ignore-actions</c> list (same semantics as pin remediation). Patterns compile with
-/// <see cref="LintConfigResourceLimits.IgnoreActionRegexMatchTimeout"/>; timeouts do not suppress online resolution.
+/// Optional <c>fix.pinning.ignore-actions</c> list (same semantics as pin remediation). Patterns use
+/// wildcard matching (<c>*</c> / <c>?</c>); no regex or backtracking risk.
 /// </param>
 public sealed class OnlineAuditEngine(
     IActionAdvisoryProvider? actionAdvisoryProvider,
@@ -191,16 +190,9 @@ public sealed class OnlineAuditEngine(
         for (var i = 0; i < compiledIgnoreActions.Length; i++)
         {
             var entry = compiledIgnoreActions[i];
-            try
+            if (WildcardMatch(name, entry.NamePattern) && WildcardMatch(target.Reference, entry.RefPattern))
             {
-                if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(target.Reference))
-                {
-                    return true;
-                }
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                // Bounded ReDoS: do not suppress online audit when regex cannot decide in time (aligns with pin resolver).
+                return true;
             }
         }
 
@@ -218,16 +210,62 @@ public sealed class OnlineAuditEngine(
         for (var i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            compiled[i] = new CompiledIgnoreActionEntry(
-                IgnoreActionRegexPatterns.Compile(entry.NamePattern),
-                IgnoreActionRegexPatterns.Compile(entry.RefPattern));
+            compiled[i] = new CompiledIgnoreActionEntry(entry.NamePattern, entry.RefPattern);
         }
 
         return compiled;
     }
 
     private readonly record struct TargetResolution(ActionAdvisory? Advisory, ActionRefResolution? RefResolution, bool Skipped, bool Failed);
-    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct CompiledIgnoreActionEntry(string NamePattern, string RefPattern);
+
+    /// <summary>
+    /// Wildcard pattern match using <c>*</c> (match any sequence) and <c>?</c> (match single char).
+    /// No regex, no backtracking risk.
+    /// </summary>
+    private static bool WildcardMatch(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern)
+    {
+        var textIndex = 0;
+        var patternIndex = 0;
+        var starIndex = -1;
+        var matchIndex = 0;
+
+        while (textIndex < text.Length)
+        {
+            if (patternIndex < pattern.Length
+                && (pattern[patternIndex] == '?' || pattern[patternIndex] == text[textIndex]))
+            {
+                patternIndex++;
+                textIndex++;
+                continue;
+            }
+
+            if (patternIndex < pattern.Length && pattern[patternIndex] == '*')
+            {
+                starIndex = patternIndex;
+                matchIndex = textIndex;
+                patternIndex++;
+                continue;
+            }
+
+            if (starIndex >= 0)
+            {
+                patternIndex = starIndex + 1;
+                matchIndex++;
+                textIndex = matchIndex;
+                continue;
+            }
+
+            return false;
+        }
+
+        while (patternIndex < pattern.Length && pattern[patternIndex] == '*')
+        {
+            patternIndex++;
+        }
+
+        return patternIndex == pattern.Length;
+    }
 }
 
 /// <summary>An action reference identified for online audit during AST traversal.</summary>

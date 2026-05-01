@@ -26,7 +26,7 @@
 
 ### 1-2. 設定名が「何をしたいか」ではなく「どう実装しているか」になっている
 
-`additiveCustomization` は典型です。  
+`additiveCustomization` は典型です。
 ユーザーが考えるのは「危険イベントを追加したい」「公開レジストリ扱いを増やしたい」であって、「加算的カスタマイズをしたい」ではありません。
 
 同様に、
@@ -44,7 +44,7 @@
 
 ### 1-3. rule-id と設定が直接結びついていない
 
-ルール一覧は rule-id 単位で理解されます。  
+ルール一覧は rule-id 単位で理解されます。
 しかし現状 config では、rule に効く補助設定が rule の近くにありません。
 
 たとえば次の関係は、実装を知らないと読み解きづらくなっています。
@@ -77,7 +77,7 @@
 
 ### 1-5. 重要度の違う設定が同じレベルに並んでいる
 
-`rules` や `exclusions` は、ほぼすべてのユーザーが日常的に触る設定です。  
+`rules` や `exclusions` は、ほぼすべてのユーザーが日常的に触る設定です。
 一方で、`token_env_vars`、`request_timeout_sec`、`max_concurrency` などは低レベルな実行エンジン設定です。
 
 これらが同じレベルで表に出てくると、
@@ -130,7 +130,7 @@
 - `rules`: ルール個別の enable / severity 調整
 - `exclusions`: ファイルや job 単位の局所的な除外
 
-この二つは、ユーザーの思考とかなり一致しています。  
+この二つは、ユーザーの思考とかなり一致しています。
 したがって今後の config 設計でも、この二つは中心に据えるのがよいです。
 
 ---
@@ -376,8 +376,8 @@ fix:
       - main
       - master
     ignore-actions:
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+      - uses: "slsa-framework/*"
+        ref: "*"
 
   images:
     enable-network: true
@@ -441,7 +441,7 @@ network:
 
 ### 5-5. 高度設定がノイズになりにくい
 
-`rules` と `exclusions` を見れば多くのユーザーは十分で、  
+`rules` と `exclusions` を見れば多くのユーザーは十分で、
 さらに必要な場合だけ `analysis` / `fix` / `audit` / `network` を見ればよい構造になっています。
 
 ---
@@ -452,21 +452,21 @@ network:
 
 ### 6-1. `fix.pinning` と `fix.images` の粒度
 
-これはまだ subsystem 的です。  
+これはまだ subsystem 的です。
 将来的には `unpinned-uses` / `unpinned-image` 配下にさらに寄せる余地があります。
 
 ---
 
 ### 6-2. `audit.enable-online-rules` の表現
 
-これもまだやや抽象的です。  
+これもまだやや抽象的です。
 `online_audit` よりは良いですが、最終的には online rule 群の扱いをもう少し自然な語に寄せてもよいです。
 
 ---
 
 ### 6-3. `extend` と最終集合宣言のどちらを採るか
 
-UI/UX 的には `extend` はまだ許容範囲ですが、  
+UI/UX 的には `extend` はまだ許容範囲ですが、
 より強く分かりやすさを求めるなら「最終集合の明示」に寄せる選択肢もあります。
 
 ただし built-in 値との関係が見えにくくなるため、製品としては `extend` のほうが実用的な可能性があります。

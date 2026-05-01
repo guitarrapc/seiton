@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 
 namespace Seiton.Core.Linting;
 
-/// <summary>Central limits for seiton configuration loading and related network / regex behavior.</summary>
+/// <summary>Central limits for seiton configuration loading and related network behavior.</summary>
 public static class LintConfigResourceLimits
 {
     /// <summary>Maximum UTF-8 byte length accepted for a single seiton config file or <see cref="LintConfigLibrary.Validate"/> input.</summary>
@@ -25,10 +25,4 @@ public static class LintConfigResourceLimits
 
     /// <summary>Upper bound for <c>network.timeout-seconds</c> after normalization.</summary>
     public const int MaxNetworkTimeoutSeconds = 300;
-
-    /// <summary>Per-match timeout for user-supplied <c>fix.pinning.ignore-actions</c> regular expressions.</summary>
-    public static readonly TimeSpan IgnoreActionRegexMatchTimeout = TimeSpan.FromSeconds(2);
-
-    /// <summary>Per-match timeout for compiled <c>fix.pinning.exclude-branches</c> patterns (literal, but bounded for defense in depth).</summary>
-    public static readonly TimeSpan ExcludeBranchRegexMatchTimeout = TimeSpan.FromSeconds(2);
 }

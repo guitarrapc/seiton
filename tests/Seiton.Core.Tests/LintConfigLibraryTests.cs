@@ -185,8 +185,8 @@ public sealed class LintConfigLibraryTests
             exclude-branches:
               - release
             ignore-actions:
-              - uses: "slsa-framework/.*"
-                ref: ".*"
+              - uses: "slsa-framework/*"
+                ref: "*"
           images:
             enable-network: true
             exclude-images:
@@ -208,8 +208,8 @@ public sealed class LintConfigLibraryTests
         await Assert.That(fix.Pinning.MinAgeDays).IsEqualTo(30);
         await Assert.That(fix.Pinning.ExcludeBranches).Contains("release");
         await Assert.That(fix.Pinning.IgnoreActions.Count).IsEqualTo(1);
-        await Assert.That(fix.Pinning.IgnoreActions[0].NamePattern).IsEqualTo("slsa-framework/.*");
-        await Assert.That(fix.Pinning.IgnoreActions[0].RefPattern).IsEqualTo(".*");
+        await Assert.That(fix.Pinning.IgnoreActions[0].NamePattern).IsEqualTo("slsa-framework/*");
+        await Assert.That(fix.Pinning.IgnoreActions[0].RefPattern).IsEqualTo("*");
 
         await Assert.That(fix.Images.EnableNetwork).IsTrue();
         await Assert.That(fix.Images.ExcludeImages).Contains("alpine");
@@ -562,8 +562,8 @@ public sealed class LintConfigLibraryTests
               - main
               - master
             ignore-actions:
-              - uses: "slsa-framework/.*"
-                ref: ".*"
+              - uses: "slsa-framework/*"
+                ref: "*"
           images:
             enable-network: true
             exclude-images:

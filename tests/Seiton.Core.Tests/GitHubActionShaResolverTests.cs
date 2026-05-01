@@ -8,14 +8,6 @@ namespace Seiton.Core.Tests;
 public sealed class GitHubActionShaResolverTests
 {
     [Test]
-    public async Task CompileUserIgnoreRegexForTests_SetsExpectedMatchTimeout()
-    {
-        var re = GitHubActionShaResolver.CompileUserIgnoreRegexForTests("(a+)+$");
-
-        await Assert.That(re.MatchTimeout).IsEqualTo(LintConfigResourceLimits.IgnoreActionRegexMatchTimeout);
-    }
-
-    [Test]
     public async Task ResolveAsync_ReturnsCommitSha_ForDirectTagReference()
     {
         var handler = new StubHttpMessageHandler();
@@ -112,7 +104,7 @@ public sealed class GitHubActionShaResolverTests
             new FixPinningConfig
             {
                 ExcludeBranches = ["main"],
-                IgnoreActions = [new IgnoreActionEntry("actions/checkout", ".*")],
+                IgnoreActions = [new IgnoreActionEntry("actions/checkout", "*")],
             });
 
         var skippedBranch = await resolver.ResolveAsync("actions", "checkout", "main");

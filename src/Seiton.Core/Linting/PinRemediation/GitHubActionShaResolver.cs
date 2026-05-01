@@ -3,7 +3,6 @@ using Seiton.Core.Linting;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
@@ -17,7 +16,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly FixPinningConfig _pinningConfig = pinningConfig;
     private readonly GitHubNetworkConfig _githubConfig = githubConfig;
     private readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
-    private readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(pinningConfig.ExcludeBranches);
+    private readonly string[] _excludeBranches = ToExcludeBranchArray(pinningConfig.ExcludeBranches);
     private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
     public async Task<(string? Sha, string? TagComment)> ResolveAsync(
@@ -306,16 +305,9 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         for (var i = 0; i < _compiledIgnoreActions.Length; i++)
         {
             var entry = _compiledIgnoreActions[i];
-            try
+            if (WildcardMatch(name, entry.NamePattern) && WildcardMatch(refStr, entry.RefPattern))
             {
-                if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(refStr))
-                {
-                    return true;
-                }
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                // Treat as non-match — do not suppress pinning/remediation due to catastrophic backtracking.
+                return true;
             }
         }
 
@@ -324,18 +316,11 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private bool MatchesExcludedBranch(string refStr)
     {
-        for (var i = 0; i < _compiledExcludeBranches.Length; i++)
+        for (var i = 0; i < _excludeBranches.Length; i++)
         {
-            try
+            if (string.Equals(_excludeBranches[i], refStr, StringComparison.Ordinal))
             {
-                if (_compiledExcludeBranches[i].IsMatch(refStr))
-                {
-                    return true;
-                }
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                // Treat as non-excluded — proceed with pinning.
+                return true;
             }
         }
 
@@ -501,23 +486,20 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private static Uri NormalizeApiBaseUri(string apiUrl) => GitHubEnterpriseApiBase.ToRequestBaseUri(apiUrl);
 
-    private static Regex[] CompileLiteralBranchPatterns(IReadOnlyList<string> branches)
+    private static string[] ToExcludeBranchArray(IReadOnlyList<string> branches)
     {
         if (branches.Count == 0)
         {
             return [];
         }
 
-        var compiled = new Regex[branches.Count];
+        var result = new string[branches.Count];
         for (var i = 0; i < branches.Count; i++)
         {
-            compiled[i] = new Regex(
-                "^" + Regex.Escape(branches[i]) + "$",
-                RegexOptions.CultureInvariant | RegexOptions.Compiled,
-                LintConfigResourceLimits.ExcludeBranchRegexMatchTimeout);
+            result[i] = branches[i];
         }
 
-        return compiled;
+        return result;
     }
 
     private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
@@ -531,18 +513,11 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         for (var i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            compiled[i] = new CompiledIgnoreActionEntry(
-                CompileUserIgnoreRegex(entry.NamePattern),
-                CompileUserIgnoreRegex(entry.RefPattern));
+            compiled[i] = new CompiledIgnoreActionEntry(entry.NamePattern, entry.RefPattern);
         }
 
         return compiled;
     }
-
-    /// <summary>Compiles ignore-action regex with bounded match time — exposed for invariant tests (<see cref="LintConfigResourceLimits.IgnoreActionRegexMatchTimeout"/>).</summary>
-    internal static Regex CompileUserIgnoreRegexForTests(string pattern) => CompileUserIgnoreRegex(pattern);
-
-    private static Regex CompileUserIgnoreRegex(string pattern) => IgnoreActionRegexPatterns.Compile(pattern);
 
     private static InvalidOperationException CreateResolutionException(
         string owner,
@@ -687,5 +662,53 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
 
-    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct CompiledIgnoreActionEntry(string NamePattern, string RefPattern);
+
+    /// <summary>
+    /// Wildcard pattern match using <c>*</c> (match any sequence) and <c>?</c> (match single char).
+    /// This is intentionally simple: no regex, no backtracking risk, O(n*m) worst case with star.
+    /// </summary>
+    private static bool WildcardMatch(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern)
+    {
+        var textIndex = 0;
+        var patternIndex = 0;
+        var starIndex = -1;
+        var matchIndex = 0;
+
+        while (textIndex < text.Length)
+        {
+            if (patternIndex < pattern.Length
+                && (pattern[patternIndex] == '?' || pattern[patternIndex] == text[textIndex]))
+            {
+                patternIndex++;
+                textIndex++;
+                continue;
+            }
+
+            if (patternIndex < pattern.Length && pattern[patternIndex] == '*')
+            {
+                starIndex = patternIndex;
+                matchIndex = textIndex;
+                patternIndex++;
+                continue;
+            }
+
+            if (starIndex >= 0)
+            {
+                patternIndex = starIndex + 1;
+                matchIndex++;
+                textIndex = matchIndex;
+                continue;
+            }
+
+            return false;
+        }
+
+        while (patternIndex < pattern.Length && pattern[patternIndex] == '*')
+        {
+            patternIndex++;
+        }
+
+        return patternIndex == pattern.Length;
+    }
 }
