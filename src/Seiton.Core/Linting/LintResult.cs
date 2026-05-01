@@ -9,9 +9,8 @@ public readonly record struct LintResult(
     Diagnostic[] Diagnostics)
 {
     /// <summary>
-    /// Gets the number of valid diagnostics in <see cref="Diagnostics"/>.
-    /// The backing array may be oversized when a reusable buffer is used;
-    /// always iterate up to <c>DiagnosticCount</c>, not <c>Diagnostics.Length</c>.
+    /// Gets the number of diagnostics in <see cref="Diagnostics"/>.
+    /// Defaults to <see cref="Diagnostics"/>.<see cref="System.Array.Length"/>.
     /// </summary>
     public int DiagnosticCount { get; init; } = Diagnostics.Length;
 
