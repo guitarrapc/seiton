@@ -1,353 +1,153 @@
-# GitHub Actions lint/fix ツール向け config 設計メモ
+# Seiton Config 設計仕様
 
-## 1. 現状 config への批判まとめ（ユーザー視点の UI/UX）
-
-現状の config は、機能としては揃っているものの、**ユーザーが「何をしたいか」で自然に読める構造になっていない**のが最大の問題です。
-
-自然に理解しやすいのは `rules` と `exclusions` までで、それ以外は実装都合の概念や内部モジュール名が前面に出ています。ルール群は rule-id ベースで整理されているのに、config 側は途中から rule-id とは別の軸で切られており、見た人が「この設定はどのルールに効くのか」「なぜここにあるのか」を直感的に追えません。
+本ドキュメントは Seiton の設定ファイル（`.github/seiton.yaml` / `seiton.yaml`）の設計仕様を定義する。ユーザー向けリファレンスは [`docs/configuration.md`](../../docs/configuration.md) を参照。
 
 ---
 
-### 1-1. ユーザーの思考単位と config の単位がズレている
+## 1. 設計の動機
 
-ユーザーは普通、次のように考えます。
+### 1.1 旧設計の課題
 
-- このルールを弱めたい
-- このファイルだけ除外したい
-- この判定対象を増やしたい
-- このルールだけネットワーク監査を有効にしたい
-- fix の挙動だけ調整したい
+初期の設定設計では以下の課題があった。
 
-つまり、ユーザーの思考単位は基本的に **rule-id** です。
+| # | 課題 | 具体例 |
+|---|---|---|
+| **U-1** | ユーザーの思考単位と config の単位がズレている | ユーザーは rule-id 単位で考えるが、`additiveCustomization`、`exprContext`、`pin_resolution`、`online_audit` のように内部実装の都合で切られた概念が表面に出ていた |
+| **U-2** | 設定名が「何をしたいか」ではなく「どう実装しているか」になっている | `additiveCustomization`（加算的カスタマイズ）、`exprContext`（式コンテキスト）など内部モジュール名が前面に出ていた |
+| **U-3** | rule-id と設定が直接結びついていない | `dangerous-triggers` と `additionalDangerousEvents`、`runner-label` と `additionalKnownHostedLabels` など、関連する設定が離れた場所にあった |
+| **U-4** | 同種の設定が複数箇所に分散していた | ネットワーク系設定（timeout、concurrency、fail-open）が `pin_resolution` と `online_audit` に重複 |
+| **U-5** | 重要度の違う設定が同じレベルに並んでいた | 日常的な `rules` と低レベルな `token_env_vars`、`request_timeout_sec` が同列 |
+| **U-6** | 追加専用の思想が UI に出すぎていた | `additionalDangerousEvents` — ユーザーは最終集合を知りたいだけ |
+| **U-7** | 命名規則と抽象度が揃っていない | kebab-case と snake_case の混在、`additional...` の冗長な名前 |
 
-しかし現状 config では、`additiveCustomization`、`exprContext`、`pin_resolution`、`online_audit` のように、**ユーザーの問題ではなく内部実装の都合で切られた概念**が表に出ています。これは UI/UX 的に筋が悪いです。
+### 1.2 解決方針
 
----
+上記課題に対して、以下の設計原則を適用して現行スキーマを設計した。
 
-### 1-2. 設定名が「何をしたいか」ではなく「どう実装しているか」になっている
+| 原則 | 内容 | 対応する課題 |
+|---|---|---|
+| **ユーザーの思考単位で切る** | rule-id、exclusions、fix、network を軸にする | U-1 |
+| **ルールに効く設定はルールの近くに** | rule-specific options を `rules.<rule-id>` 配下に配置 | U-3 |
+| **日常設定と高度設定を分離** | `rules` / `exclusions` が主、`network` は詳細設定 | U-5 |
+| **「何をしたいか」で命名** | `events.extend`、`known-hosted-labels.extend` など目的語 | U-2, U-6 |
+| **同種の設定はまとめる** | ネットワーク系は `network` に集約 | U-4 |
+| **命名規則を統一** | 全キー kebab-case | U-7 |
+| **内部概念は隠す** | `analysis`、`audit` は独立キーにせず既存構造に統合 | U-2 |
 
-`additiveCustomization` は典型です。
-ユーザーが考えるのは「危険イベントを追加したい」「公開レジストリ扱いを増やしたい」であって、「加算的カスタマイズをしたい」ではありません。
+### 1.3 設計判断のトレードオフ
 
-同様に、
-
-- `exprContext`
-- `pin_resolution`
-- `online_audit`
-- `token_env_vars`
-
-なども、ユーザーにとっては目的ではなく実装の内部事情に見えます。
-
-設定ファイルでは、**内部モジュール名ではなく、ユーザーがやりたい操作の名前**が前面に出るべきです。
-
----
-
-### 1-3. rule-id と設定が直接結びついていない
-
-ルール一覧は rule-id 単位で理解されます。
-しかし現状 config では、rule に効く補助設定が rule の近くにありません。
-
-たとえば次の関係は、実装を知らないと読み解きづらくなっています。
-
-- `dangerous-triggers` と `additionalDangerousEvents`
-- `runner-label` と `additionalKnownHostedLabels`
-- `credentials` と `additionalPublicRegistries`
-- `unpinned-uses` / `unpinned-image` と `pin_resolution`
-- `known-vulnerable-actions` / `impostor-commit` / `ref-confusion` / `stale-action-refs` と `online_audit`
-
-ユーザー視点では、**その rule の設定はその rule の近くにあるべき**です。
+| 項目 | 判断 | 理由 |
+|---|---|---|
+| `analysis` トップレベルキー | **不採用** | `assume-events` は `rules.expr-undefined-var.assume-events` として rule 配下に収まる。独立セクションにする必然性がない |
+| `audit` トップレベルキー | **不採用** | online rule の有効化は `rules.<rule-id>.enabled: true` で統一。別セクションは二重管理になる |
+| `network.fail-open` | **`network.on-error: skip \| fail` を採用** | fail-open/fail-closed はセキュリティ用語として曖昧。明示的な列挙値のほうが意図が伝わる |
+| `exclusions[].files` | **スカラー（単一 glob）を採用** | 複数パターンは複数エントリで表現。パーサーが単純になり、1 エントリ = 1 パターンの対応が明確 |
+| `extend` キーワード | **採用** | built-in 値との関係が明確。最終集合宣言より実用的 |
 
 ---
 
-### 1-4. 同じ種類の設定が複数箇所に分散している
+## 2. 現行スキーマ
 
-ネットワーク利用可否、タイムアウト、並列度、fail-open のような設定が `pin_resolution` と `online_audit` に重複しています。
+### 2.1 トップレベル構造
 
-これは、
+```yaml
+rules:        # ルール個別の enable / severity / rule-specific options
+exclusions:   # ファイル・ジョブ単位の診断抑制
+fix:          # auto-fix の挙動制御
+network:      # ネットワーク系の共通設定
+output:       # 診断出力の制御
+```
 
-- どちらがどこまで効くのか分かりにくい
-- 同じ意味の設定を複数箇所で書くことになる
-- 将来のメンテナンスで設定 drift を起こしやすい
+すべてのセクションは省略可能。空ファイルはデフォルト設定と同等。未知のトップレベルキーは設定エラーとなる。
 
-という問題を生みます。
+### 2.2 `rules`
 
-同様に、抑制も `rules.enabled: false` と `exclusions` に分かれており、全体無効化と局所除外の関係が読み取りづらくなっています。
-
----
-
-### 1-5. 重要度の違う設定が同じレベルに並んでいる
-
-`rules` や `exclusions` は、ほぼすべてのユーザーが日常的に触る設定です。
-一方で、`token_env_vars`、`request_timeout_sec`、`max_concurrency` などは低レベルな実行エンジン設定です。
-
-これらが同じレベルで表に出てくると、
-
-- 一般ユーザーにはノイズになる
-- 詳しいユーザーには危険な足場になる
-- 「設定可能である必然性」が薄い項目まで露出してしまう
-
-という問題が出ます。
-
-特に `token_env_vars` は、公開設定として見せる必然性が弱く、誤設定や意図しない token 選択を招きやすい項目です。
-
----
-
-### 1-6. 「追加専用」の思想が UI に出すぎている
-
-`additionalDangerousEvents` のような追加専用設計は、内部モデルとしては理解できても、UI としては不自然です。
-
-ユーザーは「最終的に何が危険イベントとして扱われるか」を設定したいのであって、「内蔵セットに追加する」という実装方式を意識したくありません。
-
-少なくとも UI 上は、
-
-- 最終集合を宣言する
-- あるいは `extend` / `append` のような分かりやすい概念で見せる
-
-べきです。
-
----
-
-### 1-7. 命名規則と抽象度が揃っていない
-
-現状案では、次のようなズレがあります。
-
-- kebab-case の rule-id
-- snake_case の top-level key
-- `additional...` の冗長な名前
-- `forbiddenUsesDenyPatterns` のような長く歪な複合語
-- `eventTypes` のような曖昧な短名
-
-これは単なる見た目の問題ではなく、**設定ファイル全体の構造理解を妨げる**問題です。
-
-良い config では、命名規則と抽象度が揃っていて、「この階層にはこういう種類の設定が入る」と予測できる必要があります。
-
----
-
-### 1-8. `rules` と `exclusions` は比較的良い
-
-現状案でも、以下は比較的自然です。
-
-- `rules`: ルール個別の enable / severity 調整
-- `exclusions`: ファイルや job 単位の局所的な除外
-
-この二つは、ユーザーの思考とかなり一致しています。
-したがって今後の config 設計でも、この二つは中心に据えるのがよいです。
-
----
-
-## 2. 良い config が満たすべき設計原則
-
-ここでは、今後の config を設計するときの原則を整理します。
-
----
-
-### 原則1. ユーザーの思考単位で切る
-
-設定は、内部実装やエンジン構造ではなく、**ユーザーが考える単位**で切るべきです。
-
-このツールにおいてユーザーの思考単位は主に次です。
-
-- rule-id
-- exclusions
-- analysis assumptions
-- fix defaults
-- network/runtime behavior
-
-したがって、`rules` と `exclusions` を中心にしつつ、その他の設定も「何のための設定か」がすぐ分かる階層に置くべきです。
-
----
-
-### 原則2. ルールに効く設定は、できるだけそのルールの近くに置く
-
-rule に直接関係する補助設定は、その rule の近くに置くのが自然です。
-
-たとえば、
-
-- `dangerous-triggers` のイベント拡張
-- `runner-label` の known-hosted-labels
-- `credentials` の public-registries
-- `forbidden-uses` の deny パターン
-
-は、その rule に近い場所にあるほうが理解しやすいです。
-
----
-
-### 原則3. 日常設定と高度設定を分離する
-
-大半のユーザーが頻繁に触る設定と、低頻度な実行エンジン設定は分けるべきです。
-
-日常設定:
-- `rules`
-- `exclusions`
-- `analysis`
-- `fix.defaults`
-
-高度設定:
-- network の fail-open
-- timeout
-- concurrency
-- 監査の有効化
-- 特殊な pinning 挙動
-
-これにより、普段の config が見やすくなり、高度設定も必要なときだけ触ればよくなります。
-
----
-
-### 原則4. 「何をしたいか」で名前を付ける
-
-名前は内部都合ではなく、ユーザーがやりたい操作を表すべきです。
-
-悪い例:
-- `additiveCustomization`
-- `exprContext`
-- `pin_resolution`
-
-良い方向:
-- `analysis.assume-events`
-- `fix.defaults.job-timeout-minutes`
-- `network.fail-open`
-- `dangerous-triggers.events.extend`
-
----
-
-### 原則5. 同種の設定はまとめる
-
-同じ性質の設定が複数箇所に分かれていると、理解も保守も難しくなります。
-
-たとえば、
-
-- ネットワーク利用に関する設定
-- 実行時挙動に関する設定
-- fix 既定値に関する設定
-
-は、まとまっているべきです。
-
----
-
-### 原則6. 実装の内部概念はできるだけ外に出さない
-
-ユーザーは AST パスや監査フェーズや pin 解決 subsystem を意識したくありません。
-
-したがって、
-
-- 内部の engine 名
-- 内部用の token 解決戦略
-- subsystem 固有の命名
-
-は、できるだけ外に出さないほうがよいです。
-
-どうしても出す場合でも、ユーザーが理解できる概念に翻訳すべきです。
-
----
-
-### 原則7. 追加専用ではなく、最終的な意味が分かる形にする
-
-`additional...` は内部設計としては便利でも、UI としては分かりにくいです。
-
-ユーザーに見せるなら、
-
-- `extend`
-- `append`
-- `allow`
-- `deny`
-- `defaults`
-
-のように、最終的に何が起きるかが読める語を使うべきです。
-
----
-
-### 原則8. 命名規則を統一する
-
-少なくとも config 表面に出るキーは、表記ルールを統一したほうがよいです。
-
-たとえば、
-
-- top-level と nested key は kebab-case
-- rule-id も kebab-case
-- 単位を持つ値は明示的な名前にする
-
-のように揃えると、かなり見やすくなります。
-
----
-
-### 原則9. 低レベル設定は本当に必要なものだけ露出する
-
-外部公開 config に出す設定は、「多くのユーザーが調整する合理性があるか」で選ぶべきです。
-
-露出に慎重であるべきもの:
-- `token_env_vars`
-- 内部キャッシュ戦略
-- 内部解決順序
-- subsystem 固有の細かい動作
-
-公開する価値が高いもの:
-- severity / enabled
-- exclusions
-- analysis assumptions
-- fix defaults
-- fail-open / timeout / concurrency のような明確な運用設定
-
----
-
-## 3. 推奨方針: 案1 + 案2 の折衷
-
-採用方針としては、**rule 中心**を軸にしつつ、**日常設定と高度設定を軽く分離する**のがよいです。
-
-狙いは次です。
-
-- ユーザーが最初に見るのは `rules` と `exclusions`
-- rule に強く結びつく補助設定は rule の近く
-- fixer の既定値は `fix`
-- 解析上の仮定は `analysis`
-- ネットワークや運用系は `network` / `audit` に分離
-- 内部 subsystem 名は外に出さない
-
-この方針なら、現状 config の問題だった
-
-- `additiveCustomization`
-- `exprContext`
-- `pin_resolution`
-- `online_audit`
-
-のような内部整理っぽさをかなり減らせます。
-
----
-
-## 4. UI/UX 的に筋のよい config 案（折衷案）
-
-以下は、案1 + 案2 の折衷としての提案です。
+ルール個別の設定。キーは rule-id（kebab-case）。未知の rule-id は設定エラー。
 
 ```yaml
 rules:
-  job-permissions-required:
+  # 無効化
+  runner-no-latest:
     enabled: false
 
-  deny-write-all:
-    severity: error
+  # severity 上書き
+  checkout-persist-credentials:
+    severity: warning    # error | warning | info
 
+  # opt-in online rule の有効化
+  known-vulnerable-actions:
+    enabled: true
+
+  # rule-specific: イベント拡張
   dangerous-triggers:
     severity: error
     events:
       extend:
         - issue_comment
 
-  action-shell-is-required:
-    severity: warning
-
+  # rule-specific: ランナーラベル拡張
   runner-label:
     known-hosted-labels:
       extend:
-        - ubuntu-24.04-large
+        - ubuntu-24.04-arm
 
+  # rule-specific: 公開レジストリ拡張
   credentials:
     public-registries:
       extend:
         - registry.example.com
 
+  # rule-specific: untrusted trigger 拡張
+  cache-poisoning:
+    untrusted-triggers:
+      extend:
+        - issue_comment
+
+  # rule-specific: 出力コマンド拡張
+  unredacted-secrets:
+    output-commands:
+      extend:
+        - tee
+
+  # rule-specific: uses 参照の deny/allow
   forbidden-uses:
     deny:
-      - some-untrusted-org/*
+      - "deprecated-org/*"
+    allow:
+      - "approved-org/*"
 
+  # rule-specific: 式の未定義変数チェック用イベント仮定
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+
+  # rule-specific: シークレット過剰供給の閾値
+  overprovisioned-secrets:
+    max-step-env-secrets: 5
+    max-job-secrets: 10
+```
+
+#### rule-specific options 一覧
+
+| Rule | Key | 型 | 説明 |
+|---|---|---|---|
+| `dangerous-triggers` | `events.extend` | `string[]` | 危険トリガーイベントの追加 |
+| `runner-label` | `known-hosted-labels.extend` | `string[]` | 既知ランナーラベルの追加 |
+| `credentials` | `public-registries.extend` | `string[]` | 公開レジストリの追加 |
+| `cache-poisoning` | `untrusted-triggers.extend` | `string[]` | 信頼できないトリガーの追加 |
+| `unredacted-secrets` | `output-commands.extend` | `string[]` | 監視対象出力コマンドの追加 |
+| `forbidden-uses` | `deny` / `allow` | `string[]` | `uses:` 参照の拒否/許可 wildcard パターン |
+| `expr-undefined-var` | `assume-events` | `string[]` | 式評価時に仮定するイベント |
+| `overprovisioned-secrets` | `max-step-env-secrets` | `int` | ステップ単位のシークレット数上限 |
+| `overprovisioned-secrets` | `max-job-secrets` | `int` | ジョブ単位のシークレット数上限 |
+
+`extend` リストは **built-in セットに追加**する。置換はしない。
+
+### 2.3 `exclusions`
+
+ファイル・ジョブ単位でルール診断を抑制する。
+
+```yaml
 exclusions:
   - files: ".github/workflows/legacy-*.yml"
     rules:
@@ -359,12 +159,21 @@ exclusions:
       - publish
     rules:
       - credentials
+```
 
-analysis:
-  assume-events:
-    - workflow_dispatch
-    - repository_dispatch
+| Key | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `files` | `string`（スカラー） | Yes | glob パターン（`*` / `**`、パス区切り `/`、大小文字区別） |
+| `rules` | `string[]` | Yes | 抑制対象の rule-id リスト |
+| `jobs` | `string[]` | No | 対象ジョブ ID（`job.id`）。省略時はファイル全体に適用 |
 
+**注意**: `files` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
+
+### 2.4 `fix`
+
+auto-fix（`seiton fix`）の挙動を制御する。
+
+```yaml
 fix:
   defaults:
     job-timeout-minutes: 15
@@ -385,104 +194,128 @@ fix:
       - scratch
     exclude-tags:
       - latest
-
-audit:
-  enable-online-rules: true
-
-network:
-  fail-open: true
-  timeout-seconds: 30
-  max-concurrency: 4
+    ignore-images:
+      - "mcr.microsoft.com/**"
 ```
 
----
+| Key | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `defaults.job-timeout-minutes` | `int?` | `null` | `job-timeout-minutes-required` の auto-fix が挿入する値。`null` で auto-fix 無効 |
+| `pinning.enable-network` | `bool` | `false` | ネットワーク経由の SHA 解決を有効化 |
+| `pinning.min-age-days` | `int` | `14` | コミットの最低経過日数 |
+| `pinning.exclude-branches` | `string[]` | `["main", "master"]` | ピン留めをスキップするブランチ名（**完全一致**、ordinal） |
+| `pinning.ignore-actions` | `IgnoreActionEntry[]` | `[]` | ピン留めをスキップするアクション（**wildcard マッチング**: `*` = 任意列、`?` = 任意 1 文字）。Regex 不使用、ReDoS リスクなし |
+| `images.enable-network` | `bool` | `false` | ネットワーク経由のダイジェスト解決を有効化 |
+| `images.exclude-images` | `string[]` | `["scratch"]` | ピン留めをスキップするイメージ名 |
+| `images.exclude-tags` | `string[]` | `["latest"]` | ピン留めをスキップするタグ名 |
+| `images.ignore-images` | `string[]` | `[]` | ピン留めをスキップするイメージ（glob パターン） |
 
-## 5. この折衷案の良い点
+### 2.5 `network`
 
-### 5-1. `rules` と `exclusions` が主役のまま維持される
+ネットワーク系の共通設定。online rule および network-assisted fix の両方に適用。
 
-ユーザーが最も頻繁に触る設定が先頭にあり、理解しやすい構成です。
+```yaml
+network:
+  on-error: skip
+  timeout-seconds: 30
+  max-concurrency: 4
+  github:
+    ghes-api-url: ""
+    ghes-fallback: false
+```
 
----
+| Key | 型 | デフォルト | 制約 | 説明 |
+|---|---|---|---|---|
+| `on-error` | `string` | `skip` | `skip` \| `fail` | ネットワークエラー時の挙動 |
+| `timeout-seconds` | `int` | `30` | `0`–`300`（超過はエラー＋クランプ） | リクエスト単位のタイムアウト |
+| `max-concurrency` | `int` | `min(4, CPU数)` | `1`–`CPU数`（超過はエラー＋クランプ） | 並列リクエスト数 |
+| `github.ghes-api-url` | `string` | `""` | 空 = github.com のみ。HTTPS 必須、userinfo 禁止 | GHES API ベース URL |
+| `github.ghes-fallback` | `bool` | `false` | — | GHES 失敗時に github.com にフォールバック |
 
-### 5-2. rule に強く紐づく補助設定が rule の近くにある
+HTTP クライアントは **`AllowAutoRedirect` 無効**で、**同一オリジンのリダイレクトのみ**追従する。異なるオリジンへの `3xx` はトークン漏えい防止のためリクエストを発行しない。
 
-- `dangerous-triggers` のイベント拡張
-- `runner-label` の known-hosted-labels
-- `credentials` の public registries
-- `forbidden-uses` の deny パターン
+### 2.6 `output`
 
-が rule の配下に入るため、どこに効く設定か直感的です。
+```yaml
+output:
+  sort-order: location    # location | rule
+```
 
----
-
-### 5-3. `analysis` と `fix` が独立して意味を持つ
-
-`exprContext` のような内部用語をやめ、`analysis.assume-events` とすることで、「これは静的解析時の仮定だ」と分かります。
-
-また `default_job_timeout_minutes_for_fix` を `fix.defaults.job-timeout-minutes` に分解することで、fixer 用の既定値だと理解しやすくなります。
-
----
-
-### 5-4. ネットワーク系設定を共通化できる
-
-`pin_resolution` と `online_audit` に分散していた
-
-- allow network
-- fail-open
-- timeout
-- concurrency
-
-のうち、共通運用設定は `network` に集約できます。
-
-これにより、設定の重複と分散を減らせます。
-
----
-
-### 5-5. 高度設定がノイズになりにくい
-
-`rules` と `exclusions` を見れば多くのユーザーは十分で、
-さらに必要な場合だけ `analysis` / `fix` / `audit` / `network` を見ればよい構造になっています。
+| Key | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `sort-order` | `string` | `location` | `location`: ソース位置順。`rule`: ルール優先度順 |
 
 ---
 
-## 6. 今後さらに詰めるべき論点
+## 3. パターンマッチングの種別
 
-この折衷案でも、まだ詰めるべき点はあります。
+設定値で使用されるパターンマッチングは用途ごとに異なる。
 
-### 6-1. `fix.pinning` と `fix.images` の粒度
+| 設定箇所 | アルゴリズム | 詳細 |
+|---|---|---|
+| `exclusions[].files` | `GlobMatch` | セグメント区切り `*` / `**`、大小文字区別 |
+| `fix.pinning.ignore-actions` | `WildcardMatch` (char) | `*` = 任意列、`?` = 任意 1 文字。Regex 不使用 |
+| `fix.images.ignore-images` | `GlobMatch` | `exclusions[].files` と同一 |
+| `rules.forbidden-uses.deny/allow` | `WildcardMatchUsesPolicy` (byte) | パス区切り `/` を跨ぐ `*`、`?` = 任意 1 文字 |
+| CLI `--ignore` | `string.Contains` | 部分文字列一致、大小文字無視 |
+| `fix.pinning.exclude-branches` | `string.Equals` | 完全一致、ordinal |
 
-これはまだ subsystem 的です。
-将来的には `unpinned-uses` / `unpinned-image` 配下にさらに寄せる余地があります。
-
----
-
-### 6-2. `audit.enable-online-rules` の表現
-
-これもまだやや抽象的です。
-`online_audit` よりは良いですが、最終的には online rule 群の扱いをもう少し自然な語に寄せてもよいです。
-
----
-
-### 6-3. `extend` と最終集合宣言のどちらを採るか
-
-UI/UX 的には `extend` はまだ許容範囲ですが、
-より強く分かりやすさを求めるなら「最終集合の明示」に寄せる選択肢もあります。
-
-ただし built-in 値との関係が見えにくくなるため、製品としては `extend` のほうが実用的な可能性があります。
+`WildcardMatch` と `WildcardMatchUsesPolicy` は同一アルゴリズム（2 ポインタ＋ star-index バックトラック）の `char` / `byte` オーバーロードで、`ActionRefHelpers` に共通実装として配置されている。決定的で指数爆発しないため ReDoS リスクはない。
 
 ---
 
-## 7. 結論
+## 4. ローダーのリソース制限
 
-現状 config の問題は、機能不足ではなく、**ユーザーが理解する単位と config の切り方がズレていること**にあります。
+悪意ある設定入力に対する防御。
 
-したがって改善方針は明確です。
+| 制限 | 値 | 説明 |
+|---|---|---|
+| UTF-8 ペイロード上限 | `1 048 576` bytes | `--config` / `ValidateFile` / `Validate` 共通 |
+| YAML DOM 最大深度 | `64` | マッピング/シーケンスのネスト |
+| DOM 構造ユニット上限 | `50 000` | スカラーキー＋スカラーリーフ＋コンパウンドの合計 |
 
-- `rules` と `exclusions` を中心に据える
-- rule に効く設定は rule の近くに寄せる
-- `analysis` と `fix` を意味の通る名前で分離する
-- 共通のネットワーク／運用設定は一か所にまとめる
-- 内部 subsystem 名や低レベル実装設定は表に出しすぎない
+超過時は検証エラーとなり、設定は読み込まれない。
 
-この方針に基づく **案1 + 案2 の折衷**は、現状よりかなり自然で、製品としても説明しやすい config になります。
+---
+
+## 5. 設定ファイルの発見
+
+1. `--config` オプション / `SEITON_CONFIG` 環境変数（明示指定）
+2. カレントディレクトリから親方向に走査:
+   - `.github/seiton.yaml`
+   - `.github/seiton.yml`
+   - `seiton.yaml`
+   - `seiton.yml`
+3. 見つからなければ built-in デフォルト
+
+### 信頼境界
+
+- 設定ファイルはレビュー対象のコミット済みファイルを推奨
+- `SEITON_CONFIG` / `--config` は任意パスを受け入れるため、共有ランナーでは信頼できるパスのみを指定する
+- Fork PR のマージ ref から設定を読む場合は注意が必要
+- `seiton check --verbose` / `seiton fix --verbose` で `config:` の解決パスを stderr に出力
+
+---
+
+## 6. デフォルト値一覧
+
+| 設定 | デフォルト |
+|---|---|
+| `rules.<rule-id>.enabled` | `true`（ローカルルール）/ `false`（online ルール） |
+| `rules.<rule-id>.severity` | ルール固有のデフォルト |
+| `exclusions` | `[]` |
+| `fix.defaults.job-timeout-minutes` | `null`（auto-fix 無効） |
+| `fix.pinning.enable-network` | `false` |
+| `fix.pinning.min-age-days` | `14` |
+| `fix.pinning.exclude-branches` | `["main", "master"]` |
+| `fix.pinning.ignore-actions` | `[]` |
+| `fix.images.enable-network` | `false` |
+| `fix.images.exclude-images` | `["scratch"]` |
+| `fix.images.exclude-tags` | `["latest"]` |
+| `fix.images.ignore-images` | `[]` |
+| `network.on-error` | `skip` |
+| `network.timeout-seconds` | `30` |
+| `network.max-concurrency` | `min(4, 論理プロセッサ数)` |
+| `network.github.ghes-api-url` | `""`（github.com のみ） |
+| `network.github.ghes-fallback` | `false` |
+| `output.sort-order` | `location` |
