@@ -3747,6 +3747,64 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_IdNaming_Fix_SuggestedJobIdCollidesWithExisting_NoFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "build job":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo a
+            build-job:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo b
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-collision-kebab-existing.yml");
+
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "id-naming"
+            && x.Message.Contains("\"build job\"", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_SuggestedJobIdCollidesWithExisting_DifferentAsciiCase_NoFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "BUILD JOB":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo a
+            BUILD-JOB:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo b
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-collision-case-insensitive.yml");
+
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "id-naming"
+            && x.Message.Contains("\"BUILD JOB\"", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
     public async Task LintEngine_IdNaming_Fix_InvalidJobId_UnderscoresInSuggestedNameBecomeHyphens()
     {
         var yaml = """

@@ -100,9 +100,30 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
     private DiagnosticFix? BuildJobIdFix(StringNodeId idNode, string originalId)
     {
         var newId = ToKebabCase(originalId);
-        if (newId.Length == 0 || !IsValidId(Encoding.UTF8.GetBytes(newId)))
+        if (newId.Length == 0)
         {
             return null;
+        }
+
+        var newIdUtf8 = Encoding.UTF8.GetBytes(newId);
+        if (!IsValidId(newIdUtf8))
+        {
+            return null;
+        }
+
+        var currentJobIdUtf8 = Arena.GetStringValue(idNode);
+
+        if (_workflow is not null)
+        {
+            foreach (var (_, job) in _workflow.Jobs)
+            {
+                var existingJobIdUtf8 = Arena.GetStringValue(job.Id);
+                if (SpanEqualsIgnoreCaseAscii(existingJobIdUtf8, newIdUtf8)
+                    && !SpanEqualsIgnoreCaseAscii(existingJobIdUtf8, currentJobIdUtf8))
+                {
+                    return null;
+                }
+            }
         }
 
         var edits = new List<TextEdit>();
@@ -114,7 +135,6 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         // Edit for all needs references to this job ID across all jobs
         if (_workflow is not null && Config.Utf8Yaml is not null)
         {
-            var jobIdUtf8 = Arena.GetStringValue(idNode);
             foreach (var (_, job) in _workflow.Jobs)
             {
                 if (job.Needs is null)
@@ -131,7 +151,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
                     }
 
                     var needsValue = Arena.GetStringValue(needsNode);
-                    if (SpanEqualsIgnoreCaseAscii(needsValue, jobIdUtf8))
+                    if (SpanEqualsIgnoreCaseAscii(needsValue, currentJobIdUtf8))
                     {
                         var needsEdit = BuildSliceReplacementEdit(needsNode, newId);
                         edits.Add(needsEdit);
