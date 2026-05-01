@@ -193,7 +193,7 @@ steps:
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | ✗ |
+| ✓ | — | △ |
 
 Validates `job.id` and `step.id` values. IDs must use only alphanumeric characters, hyphens, and underscores.
 
