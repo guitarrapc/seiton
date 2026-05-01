@@ -194,4 +194,105 @@ public sealed class LintEngineConfigReuseTests
         }
         await Assert.That(result.FixableDiagnosticCount).IsEqualTo(manualFixCount);
     }
+
+    [Test]
+    public async Task Check_WithRuleConfig_RepeatedCalls_ProducesCorrectResults()
+    {
+        // NormalizeRules dictionary reuse must not leak state between calls.
+        var engine = new LintEngine();
+
+        // Use unpinned-uses which is disableable and fires on actions/checkout@v4
+        var yaml = Encoding.UTF8.GetBytes("on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
+
+        // First call: disable unpinned-uses via config rules
+        var configDisable = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new() { Enabled = false },
+            },
+        };
+        var result1 = engine.Check(yaml, ".github/workflows/ci.yml", configDisable);
+        var hasUnpinned1 = result1.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+
+        // Second call: no rule config (unpinned-uses should fire)
+        var result2 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var hasUnpinned2 = result2.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+
+        // Third call: disable again
+        var result3 = engine.Check(yaml, ".github/workflows/ci.yml", configDisable);
+        var hasUnpinned3 = result3.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+
+        await Assert.That(hasUnpinned1).IsFalse();
+        await Assert.That(hasUnpinned2).IsTrue();
+        await Assert.That(hasUnpinned3).IsFalse();
+    }
+
+    [Test]
+    public async Task Check_WithInlineSuppression_RepeatedCalls_ProducesCorrectResults()
+    {
+        // ParseInlineSuppression dictionary reuse must not leak suppressions between calls.
+        var engine = new LintEngine();
+
+        // Source with inline suppression for unpinned-uses
+        var yamlWithSuppression = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      # seiton: disable-next-line unpinned-uses\n      - uses: actions/checkout@v4\n");
+
+        // Source without suppression
+        var yamlWithout = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
+
+        // First: suppressed → unpinned-uses should be suppressed
+        var result1 = engine.Check(yamlWithSuppression, ".github/workflows/ci.yml");
+        var suppressed1 = result1.SuppressionSummary.TotalSuppressed > 0
+            && result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
+
+        // Second: no suppression → unpinned-uses should appear
+        var result2 = engine.Check(yamlWithout, ".github/workflows/ci.yml");
+        var hasUnpinned2 = result2.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+
+        // Third: suppressed again
+        var result3 = engine.Check(yamlWithSuppression, ".github/workflows/ci.yml");
+        var suppressed3 = result3.SuppressionSummary.TotalSuppressed > 0
+            && result3.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
+
+        await Assert.That(suppressed1).IsTrue();
+        await Assert.That(hasUnpinned2).IsTrue();
+        await Assert.That(suppressed3).IsTrue();
+    }
+
+    [Test]
+    public async Task Check_WithRuleConfigAndSuppression_Combined_ProducesCorrectResults()
+    {
+        // Both NormalizeRules and ParseInlineSuppression reuse must work together.
+        var engine = new LintEngine();
+
+        // Source with file-level suppression for unpinned-uses
+        var yamlFileSuppression = Encoding.UTF8.GetBytes(
+            "# seiton: disable-file unpinned-uses\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
+
+        // Source without suppression
+        var yamlPlain = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
+
+        // Call 1: file suppression + rule config disabling runner-label
+        var config1 = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["runner-label"] = new() { Enabled = false },
+            },
+        };
+        var result1 = engine.Check(yamlFileSuppression, ".github/workflows/ci.yml", config1);
+
+        // Call 2: no suppression, no rule config
+        var result2 = engine.Check(yamlPlain, ".github/workflows/ci.yml");
+
+        // unpinned-uses should be suppressed in result1, present in result2
+        var suppressed1 = result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
+        var hasUnpinned2 = result2.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+
+        await Assert.That(suppressed1).IsTrue();
+        await Assert.That(hasUnpinned2).IsTrue();
+    }
 }
