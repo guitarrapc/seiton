@@ -25,6 +25,7 @@ public sealed class LintEngine
     private readonly HashSet<DiagnosticIdentity> _seen = new();
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
+    private readonly LintConfig _effectiveConfig = new();
 
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
@@ -115,16 +116,15 @@ public sealed class LintEngine
         }
 
         _visitor.Reset();
-        var effectiveConfig = new LintConfig
-        {
-            Utf8Yaml = utf8Yaml,
-            Arena = parseResult.Arena,
-            FilePath = filePath,
-            Rules = normalizedRules.Rules,
-            Fix = config?.Fix ?? new FixConfig(),
-            Network = config?.Network ?? new NetworkConfig(),
-            Output = config?.Output ?? new OutputConfig(),
-        };
+        _effectiveConfig.PrepareForRun(
+            utf8Yaml,
+            parseResult.Arena,
+            filePath,
+            normalizedRules.Rules,
+            config?.Fix,
+            config?.Network,
+            config?.Output);
+        var effectiveConfig = _effectiveConfig;
 
         _activeRules.Clear();
         for (var i = 0; i < rules.Count; i++)

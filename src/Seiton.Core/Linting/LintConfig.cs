@@ -15,13 +15,13 @@ public sealed class LintConfig
     public static LintConfig Empty { get; } = new();
 
     /// <summary>Gets the raw UTF-8 YAML bytes being linted (used for expression caching and fix generation).</summary>
-    public byte[]? Utf8Yaml { get; init; }
+    public byte[]? Utf8Yaml { get; set; }
 
     /// <summary>Gets the AST arena from the parse result (used for per-run shared data).</summary>
-    public AstArena? Arena { get; init; }
+    public AstArena? Arena { get; set; }
 
     /// <summary>Gets the file path of the document being linted.</summary>
-    public string? FilePath { get; init; }
+    public string? FilePath { get; set; }
 
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
@@ -85,19 +85,51 @@ public sealed class LintConfig
     }
 
     /// <summary>Gets the rule configurations keyed by rule ID string.</summary>
-    public IReadOnlyDictionary<string, RuleConfig>? Rules { get; init; }
+    public IReadOnlyDictionary<string, RuleConfig>? Rules { get; set; }
 
     /// <summary>Gets the list of exclusion entries from the config.</summary>
-    public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
+    public IReadOnlyList<LintExclusion>? Exclusions { get; set; }
 
     /// <summary>Gets the fix configuration section.</summary>
-    public FixConfig Fix { get; init; } = new();
+    public FixConfig Fix { get; set; } = new();
 
     /// <summary>Gets the network configuration section.</summary>
-    public NetworkConfig Network { get; init; } = new();
+    public NetworkConfig Network { get; set; } = new();
 
     /// <summary>Gets the output configuration section.</summary>
-    public OutputConfig Output { get; init; } = new();
+    public OutputConfig Output { get; set; } = new();
+
+    private static readonly FixConfig DefaultFix = new();
+    private static readonly NetworkConfig DefaultNetwork = new();
+    private static readonly OutputConfig DefaultOutput = new();
+
+    /// <summary>
+    /// Resets per-call state and updates properties for a new lint run.
+    /// Clears caches that depend on the source bytes (expression cache, line starts).
+    /// Reuses the dictionary allocation for expression cache across calls.
+    /// </summary>
+    internal void PrepareForRun(
+        byte[] utf8Yaml,
+        AstArena? arena,
+        string filePath,
+        IReadOnlyDictionary<string, RuleConfig>? rules,
+        FixConfig? fix,
+        NetworkConfig? network,
+        OutputConfig? output)
+    {
+        Utf8Yaml = utf8Yaml;
+        Arena = arena;
+        FilePath = filePath;
+        Rules = rules;
+        Fix = fix ?? DefaultFix;
+        Network = network ?? DefaultNetwork;
+        Output = output ?? DefaultOutput;
+        _lineStarts = null;
+        if (_expressionCache is not null)
+        {
+            _expressionCache.Clear();
+        }
+    }
 
     /// <summary>Looks up the rule configuration for the specified <paramref name="ruleId"/>.</summary>
     public RuleConfig? GetRuleConfig(string ruleId)
