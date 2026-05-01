@@ -337,6 +337,7 @@ public sealed class FixEngineTests
             "checkout-persist-credentials",
             "deny-read-all",
             "job-timeout-minutes-required",
+            "id-naming",
         };
 
         var attachedFixRuleIds = result.Diagnostics

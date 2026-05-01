@@ -3604,6 +3604,235 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_IdNaming_Fix_JobIdWithSpace_ConvertsToKebabCase()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "bad id":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo ng
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("bad-id:");
+        await Assert.That(fixedText).DoesNotContain("\"bad id\"");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_JobIdWithSpace_UpdatesNeedsReferences()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "build job":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo build
+            deploy:
+                needs: "build job"
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo deploy
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-needs-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("build-job:");
+        await Assert.That(fixedText).DoesNotContain("\"build job\"");
+        await Assert.That(fixedText).Contains("needs: build-job");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_JobIdWithSpace_UpdatesNeedsSequenceReferences()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "build job":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo build
+            test:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo test
+            deploy:
+                needs: ["build job", test]
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo deploy
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("build-job:");
+        await Assert.That(fixedText).DoesNotContain("\"build job\"");
+        await Assert.That(fixedText).Contains("needs: [build-job, test]");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_JobIdWithSpace_UpdatesNeedsSequenceReferences_CaseInsensitive()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "build job":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo build
+            test:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo test
+            deploy:
+                needs: ["BUILD JOB", test]
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo deploy
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("build-job:");
+        await Assert.That(fixedText).DoesNotContain("\"BUILD JOB\"");
+        await Assert.That(fixedText).Contains("needs: [build-job, test]");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_SuggestedJobIdCollidesWithExisting_NoFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "build job":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo a
+            build-job:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo b
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-collision-kebab-existing.yml");
+
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "id-naming"
+            && x.Message.Contains("\"build job\"", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_SuggestedJobIdCollidesWithExisting_DifferentAsciiCase_NoFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "BUILD JOB":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo a
+            BUILD-JOB:
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo b
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-collision-case-insensitive.yml");
+
+        var diagnostic = result.Diagnostics.First(x =>
+            x.RuleId == "id-naming"
+            && x.Message.Contains("\"BUILD JOB\"", StringComparison.Ordinal));
+
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_IdNaming_Fix_InvalidJobId_UnderscoresInSuggestedNameBecomeHyphens()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            "foo_bar baz":
+                runs-on: ubuntu-24.04
+                permissions: {}
+                steps:
+                    - run: echo ng
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var engine = new LintEngine([new IdNamingRule()]);
+        var result = engine.Check(sourceBytes, "id-naming-underscore-kebab.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
+
+        await Assert.That(diagnostic.Fix).IsNotNull();
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-underscore-kebab.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+
+        await Assert.That(fixedText).Contains("foo-bar-baz:");
+        await Assert.That(fixedText).DoesNotContain("foo_bar");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "id-naming")).IsFalse();
+    }
+
+    [Test]
     public async Task RuleRegression_DispatchInputsRule_TableDriven()
     {
         var cases = new[]
@@ -10157,7 +10386,7 @@ public sealed class RuleInterfaceTests
                         steps:
                             - run: echo ok
                 """,
-                ExpectsFix: false),
+                ExpectsFix: true),
             new FixabilityCase(
                 "glob-pattern",
                 new GlobPatternRule(),
