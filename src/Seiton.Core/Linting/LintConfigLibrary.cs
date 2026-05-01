@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Security;
+using System.Text;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
@@ -154,14 +155,9 @@ public static class LintConfigLibrary
         {
             fileLengthBytes = new FileInfo(configPath).Length;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (IsConfigPathAccessFailure(ex))
         {
-            var io = new Diagnostic(
-                DiagnosticSeverity.Error,
-                $"config file '{configPath}' could not be read: {ex.Message}",
-                new TextRange(0, 1, 1, 1, 1, 2),
-                FilePath: configPath);
-            return new LintConfigValidationResult(null, [io]);
+            return ConfigFileAccessDiagnostics(configPath, ex);
         }
 
         if (IsConfigFileOverSizeBytes(fileLengthBytes))
@@ -174,8 +170,33 @@ public static class LintConfigLibrary
             return new LintConfigValidationResult(null, [tooLarge]);
         }
 
-        var yamlText = File.ReadAllText(configPath);
+        string yamlText;
+        try
+        {
+            yamlText = File.ReadAllText(configPath);
+        }
+        catch (Exception ex) when (IsConfigPathAccessFailure(ex))
+        {
+            return ConfigFileAccessDiagnostics(configPath, ex);
+        }
+
         return Validate(yamlText, configPath);
+    }
+
+    /// <summary>True for failures when resolving or opening the config path (not parse/validation errors).</summary>
+    private static bool IsConfigPathAccessFailure(Exception ex) =>
+        ex is IOException
+        or UnauthorizedAccessException
+        or SecurityException;
+
+    private static LintConfigValidationResult ConfigFileAccessDiagnostics(string configPath, Exception ex)
+    {
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Error,
+            $"config file '{configPath}' could not be read: {ex.Message}",
+            new TextRange(0, 1, 1, 1, 1, 2),
+            FilePath: configPath);
+        return new LintConfigValidationResult(null, [diag]);
     }
 
     private static bool IsConfigFileOverSizeBytes(long length) =>
