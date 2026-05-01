@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
@@ -323,7 +322,7 @@ public sealed class OnlineAuditEngineTests
             advisoryThrows,
             refThrows,
             new NetworkConfig(),
-            [new IgnoreActionEntry("^actions/.*$", "^v4$")]);
+            [new IgnoreActionEntry("actions/*", "v4")]);
 
         var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
 
@@ -332,25 +331,19 @@ public sealed class OnlineAuditEngineTests
     }
 
     [Test]
-    public async Task AuditAsync_IgnoreRegex_TimeoutTreatsAsNotIgnored_AdvisoryRuns()
+    public async Task AuditAsync_WildcardNonMatch_AdvisoryRuns()
     {
         var engine = new LintEngine();
-        var evilRef = new string('a', 29) + "b";
-        var source = Encoding.UTF8.GetBytes($"""
+        var source = Encoding.UTF8.GetBytes(
+            """
             jobs:
               build:
                 runs-on: ubuntu-latest
                 steps:
-                  - uses: actions/checkout@{evilRef}
+                  - uses: actions/checkout@v4
             """);
 
         var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
-
-        // Pre-validate that the pattern actually triggers a timeout with the evil ref, so that
-        // `calls == 1` below proves the timeout handler was triggered (not merely a non-match).
-        var ignorePattern = "(a+)+$";
-        var re = GitHubActionShaResolver.CompileUserIgnoreRegexForTests(ignorePattern);
-        await Assert.That(() => re.IsMatch(evilRef)).Throws<RegexMatchTimeoutException>();
 
         var calls = 0;
 
@@ -363,7 +356,7 @@ public sealed class OnlineAuditEngineTests
             new DelegateActionRefResolver((_, _, _, _) =>
                 Task.FromResult(new ActionRefResolution())),
             new NetworkConfig(),
-            [new IgnoreActionEntry("^actions/.*$", ignorePattern)]);
+            [new IgnoreActionEntry("other-org/*", "*")]);
 
         var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
 

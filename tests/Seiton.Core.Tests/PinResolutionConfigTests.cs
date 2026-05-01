@@ -83,10 +83,10 @@ public sealed class PinResolutionConfigTests
     public async Task IgnoreActionEntry_StoresNameAndRefPattern()
     {
         var entry = new IgnoreActionEntry(
-            @"slsa-framework/slsa-github-generator/.*",
-            @".*");
+            "slsa-framework/slsa-github-generator/*",
+            "*");
 
-        await Assert.That(entry.NamePattern).IsEqualTo(@"slsa-framework/slsa-github-generator/.*");
-        await Assert.That(entry.RefPattern).IsEqualTo(@".*");
+        await Assert.That(entry.NamePattern).IsEqualTo("slsa-framework/slsa-github-generator/*");
+        await Assert.That(entry.RefPattern).IsEqualTo("*");
     }
 }

@@ -211,9 +211,7 @@ internal static class FixCommand
             // Apply ignore patterns
             if (ignore.Length > 0)
             {
-                var patterns = DiagnosticsIgnoreFilter.CompileMessagePatterns(ignore);
-
-                allDiagnostics.RemoveAll(d => DiagnosticsIgnoreFilter.IsMessageIgnored(patterns, d.Message));
+                allDiagnostics.RemoveAll(d => DiagnosticsIgnoreFilter.IsMessageIgnored(ignore, d.Message));
             }
 
             // Apply min-severity filter

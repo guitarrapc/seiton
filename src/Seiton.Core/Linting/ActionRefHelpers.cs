@@ -223,6 +223,54 @@ internal static class ActionRefHelpers
         return patternIndex == pattern.Length;
     }
 
+    /// <summary>
+    /// Char-based wildcard match using <c>*</c> (match any sequence) and <c>?</c> (match single char).
+    /// Same algorithm as <see cref="WildcardMatchUsesPolicy"/> but operates on <see cref="char"/> spans.
+    /// </summary>
+    internal static bool WildcardMatch(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern)
+    {
+        var textIndex = 0;
+        var patternIndex = 0;
+        var starIndex = -1;
+        var matchIndex = 0;
+
+        while (textIndex < text.Length)
+        {
+            if (patternIndex < pattern.Length
+                && (pattern[patternIndex] == '?' || pattern[patternIndex] == text[textIndex]))
+            {
+                patternIndex++;
+                textIndex++;
+                continue;
+            }
+
+            if (patternIndex < pattern.Length && pattern[patternIndex] == '*')
+            {
+                starIndex = patternIndex;
+                matchIndex = textIndex;
+                patternIndex++;
+                continue;
+            }
+
+            if (starIndex >= 0)
+            {
+                patternIndex = starIndex + 1;
+                matchIndex++;
+                textIndex = matchIndex;
+                continue;
+            }
+
+            return false;
+        }
+
+        while (patternIndex < pattern.Length && pattern[patternIndex] == '*')
+        {
+            patternIndex++;
+        }
+
+        return patternIndex == pattern.Length;
+    }
+
     internal static bool IsFullCommitSha(string reference)
     {
         if (reference.Length != 40)

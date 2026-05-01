@@ -1,38 +1,17 @@
-using System.Text.RegularExpressions;
-using Seiton.Core.Linting;
-
-namespace Seiton.Commands;
+﻿namespace Seiton.Commands;
 
 internal static class DiagnosticsIgnoreFilter
 {
-    internal static Regex[] CompileMessagePatterns(string[] ignore)
-    {
-        var patterns = new Regex[ignore.Length];
-        for (var i = 0; i < ignore.Length; i++)
-        {
-            patterns[i] = new Regex(
-                ignore[i],
-                RegexOptions.CultureInvariant | RegexOptions.Compiled,
-                LintConfigResourceLimits.IgnoreActionRegexMatchTimeout);
-        }
-
-        return patterns;
-    }
-
-    /// <returns>True when any pattern matches; timeouts are treated as non-match (keep diagnostic).</returns>
-    internal static bool IsMessageIgnored(ReadOnlySpan<Regex> patterns, string message)
+    /// <returns>True when any pattern is found as a substring in <paramref name="message"/> (case-insensitive, ordinal).</returns>
+    internal static bool IsMessageIgnored(ReadOnlySpan<string> patterns, string message)
     {
         for (var i = 0; i < patterns.Length; i++)
         {
-            try
-            {
-                if (patterns[i].IsMatch(message))
-                    return true;
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                // Bounded ReDoS: do not suppress the diagnostic when regex cannot decide in time
-            }
+            var pattern = patterns[i];
+            if (string.IsNullOrWhiteSpace(pattern))
+                continue;
+            if (message.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
         }
 
         return false;

@@ -79,7 +79,7 @@ public static class LintConfigLibrary
           #   enabled: true
 
         exclusions:
-          # - files: .github/workflows/legacy-*.yml
+          # - file: .github/workflows/legacy-*.yml
           #   rules:
           #     - runner-no-latest
           #   jobs:
@@ -95,8 +95,8 @@ public static class LintConfigLibrary
             #   - main
             #   - master
             # ignore-actions:
-            #   - uses: "slsa-framework/.*"
-            #     ref: ".*"
+            #   - uses: "slsa-framework/*"
+            #     ref: "*"
           images:
             # exclude-images:
             #   - scratch
@@ -276,11 +276,11 @@ public static class LintConfigLibrary
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
-            if (string.IsNullOrWhiteSpace(exclusion.Files))
+            if (string.IsNullOrWhiteSpace(exclusion.File))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    "exclusion files must not be empty",
+                    "exclusion file must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
                     FilePath: filePath));
                 continue;
@@ -310,7 +310,7 @@ public static class LintConfigLibrary
                 jobs = normalizedJobs;
             }
 
-            normalized.Add(new LintExclusion(exclusion.Files.Trim(), [.. ruleIds], jobs.Count > 0 ? jobs : null));
+            normalized.Add(new LintExclusion(exclusion.File.Trim(), [.. ruleIds], jobs.Count > 0 ? jobs : null));
         }
 
         return new NormalizedExclusions(normalized, diagnostics.ToArray());

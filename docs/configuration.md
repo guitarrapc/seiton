@@ -72,7 +72,7 @@ To limit denial-of-service from maliciously large configuration inputs, validati
 - **Maximum UTF‑8 payload size**: `1 048 576` bytes for both `--config` / `ValidateFile` on-disk reads and `LintConfigLibrary.Validate`.
 - **Maximum YAML DOM depth**: **`64`** nested mappings/sequences when building the config parse tree (`lint config YAML exceeds maximum nesting depth`).
 - **Maximum DOM structural units**: **`50 000`** scalar keys/scalar leaves/compound containers while building the DOM (`lint config YAML exceeds maximum structural size`).
-- **`fix.pinning.ignore-actions`** patterns compile as **`Regex`** with **`MatchTimeout`** = **`2`** seconds; if a timeout occurs during skip evaluation, matching is treated as failed (pinning/remediation proceeds). **`fix.pinning.exclude-branches`** uses the same timeout for **`IsMatch`** (defense-in-depth on escaped literals).
+- **`fix.pinning.ignore-actions`** uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk. **`fix.pinning.exclude-branches`** uses exact string equality (`string.Equals`, ordinal).
 
 ### Annotated Example
 
@@ -115,10 +115,6 @@ rules:
         - registry.example.com
         - mirror.example.net:5000
 
-  # Set the default timeout used by the job-timeout-minutes-required auto-fix.
-  # Remove or set to null to disable auto-fix attachment.
-  job-timeout-minutes-required:
-    default-timeout-minutes: 15
 
   # Extend the trigger set that cache-poisoning considers untrusted.
   cache-poisoning:
@@ -142,14 +138,12 @@ rules:
 # ─── Exclusions ──────────────────────────────────────────────────────────────
 exclusions:
   # Suppress specific rules for all files matching a path glob.
-  - files:
-      - ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - unpinned-uses
 
   # Suppress specific rules in a specific job within a file.
-  - files:
-      - ".github/workflows/publish.yml"
+  - file: ".github/workflows/publish.yml"
     jobs:
       - publish
     rules:
@@ -166,9 +160,9 @@ fix:
     exclude-branches:          # Skip SHA pinning for these branch refs.
       - main
       - master
-    ignore-actions:            # Skip pinning for actions matching these patterns.
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+    ignore-actions:            # Skip pinning for actions matching these wildcard patterns.
+      - uses: "slsa-framework/*"
+        ref: "*"
 
   images:
     enable-network: false      # Set true to allow network-assisted digest pinning.
@@ -241,7 +235,7 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
 | `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
-| `job-timeout-minutes-required` | `default-timeout-minutes` | Default `timeout-minutes` value added by auto-fix (unset = no auto-fix). |
+| `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
 
 ---
 
@@ -255,8 +249,7 @@ Suppress one or more rules for all files matching a glob pattern:
 
 ```yaml
 exclusions:
-  - files:
-      - ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - unpinned-uses
       - runner-no-latest
@@ -270,8 +263,7 @@ Suppress rules for a specific job ID within a file:
 
 ```yaml
 exclusions:
-  - files:
-      - ".github/workflows/publish.yml"
+  - file: ".github/workflows/publish.yml"
     jobs:
       - publish
     rules:
@@ -356,9 +348,9 @@ fix:
     exclude-branches:          # Do not replace branch-style refs.
       - main
       - master
-    ignore-actions:            # Skip pinning for actions matching these patterns.
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+    ignore-actions:            # Skip pinning for actions matching these wildcard patterns.
+      - uses: "slsa-framework/*"
+        ref: "*"
 ```
 
 ### Network-Assisted Image Digest Pinning
