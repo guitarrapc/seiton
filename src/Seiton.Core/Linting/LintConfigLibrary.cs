@@ -84,7 +84,7 @@ public static class LintConfigLibrary
           #     - runner-no-latest
           #   jobs:
           #     - legacy
-          # File-only exclusion (excludes entire file from all checks):
+          # File-only exclusion (excludes entire file from rule checks):
           # - file: .github/workflows/generated.yml
 
         fix:

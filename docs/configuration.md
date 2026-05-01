@@ -241,12 +241,12 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 
 ## Exclusions
 
-Exclusions suppress diagnostics for specific files, jobs, or rule combinations. Fields are additive (progressive narrowing):
+Exclusions suppress **rule diagnostics** for specific files, jobs, or rule combinations. Parser errors and configuration errors are never suppressed by exclusions. Fields are additive (progressive narrowing):
 
-- **`file` only** → exclude the entire file from all checks
-- **`file` + `jobs`** → exclude specified jobs from all checks
-- **`file` + `rules`** → suppress specified rules for the whole file
-- **`file` + `jobs` + `rules`** → suppress specified rules for specified jobs
+- **`file` only** → suppress all rule diagnostics for the entire file
+- **`file` + `jobs`** → suppress all rule diagnostics for specified jobs only
+- **`file` + `rules`** → suppress specified rule diagnostics for the whole file
+- **`file` + `jobs` + `rules`** → suppress specified rule diagnostics for specified jobs
 
 ### File-Level Exclusion (all rules)
 
