@@ -45,6 +45,8 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
+        CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
+
         // Resolve input files
         string[] resolvedFiles;
         try

@@ -30,6 +30,17 @@ export SEITON_CONFIG=path/to/seiton.yaml
 seiton
 ```
 
+### Trust, `SEITON_CONFIG`, and CI
+
+- **Prefer** a committed file (`.github/seiton.yaml` or discovery) so policy changes go through normal review.
+- **`SEITON_CONFIG`** and **`--config`** select **any** path on disk. On **shared runners**, only set them to paths you trust (typically under the checked-out repository). Do not pass PR-provided or untrusted strings as the path.
+- **Fork pull request** jobs often run with an untrusted merge ref. Avoid `SEITON_CONFIG` pointing at a path writable by that ref; rely on discovery from the base branch checkout or omit a config file to use defaults.
+- **Observation**: with **`seiton check --verbose`** or **`seiton fix --verbose`**, Seiton prints **`config: …`** (absolute resolved path) or **`config: (none, using defaults)`** to stderr immediately after loading the config.
+
+**Governance in *your* repository** (when you adopt Seiton): treat `seiton.yaml` like security policy — wide `exclusions` or disabling online rules can blunt detection. Teams often add rules under **CODEOWNERS** plus branch protection (**require review from Code Owners**) for paths such as `.github/seiton.yaml` and root `seiton.yaml`. See GitHub’s [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
+
+This is guidance for **consumer** repos; Seiton itself does not ship a CODEOWNERS file for adopters — you configure that in **your** project.
+
 ---
 
 ## Generating a Starter Config

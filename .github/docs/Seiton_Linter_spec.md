@@ -1013,7 +1013,15 @@ Token resolution:
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
 
-Additionally, **`LintConfigLibrary` / `LintConfigYamlParser`** enforce resource caps on YAML configuration payloads: **`1 048 576`** UTF‑8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units (mapping keys + scalar reads + compounds). Oversized payloads fail validation with deterministic error messages (`seiton configuration … maximum size …` / `lint config YAML exceeds maximum …`). **`fix.pinning.ignore-actions`** compiles **`Regex`** with **`MatchTimeout` = **`2`** **s**, and regex-timeouts during branch/ignore evaluations are handled as non-matches/non-exclusions so pinning does not wedge the process.
+Additionally, **`LintConfigLibrary` / `LintConfigYamlParser`** enforce resource caps on YAML configuration payloads: **`1 048 576`** UTF‑8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units (mapping keys + scalar reads + compounds). Oversized payloads fail validation with deterministic error messages (`seiton configuration … maximum size …` / `lint config YAML exceeds maximum …`). **`fix.pinning.ignore-actions`** compiles **`Regex`** with **`MatchTimeout` = **`2`** **s**, and regex-timeouts during branch/ignore evaluations are handled as non-matches/non-exclusions so pinning does not wedge the process. For **`LintConfigYamlParser`** array-backed payloads (normal `Validate` / `ValidateFile` path), the implementation parses from the same **`byte[]`** as **`LintConfig.Utf8Yaml`** without allocating a redundant full-length copy — **fallback** allocates only when **`ReadOnlyMemory<byte>`** is not array-backed.
+
+**Governance and observability (configuration path):**
+
+- Prefer **committed** config paths (discovery or `--config` relative to the checkout) so changes are reviewed like application code.
+- **`SEITON_CONFIG` / `--config`** can name **any** absolute path; on shared CI runners, set them only to **trusted** locations (e.g. under the repository root you control). Do not derive the path from untrusted **fork PR** inputs.
+- **Fork pull request** workflows: avoid pointing `SEITON_CONFIG` at a file the PR branch can overwrite; use default discovery (config on the merge target) or no config (defaults).
+- **Consumer repositories** (projects that adopt Seiton, not this Seiton codebase): teams may use **CODEOWNERS** plus branch protection **in their own repo** on `seiton.yaml` paths so broad `exclusions` or disabled security rules require explicit owner review ([About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)).
+- CLI **`--verbose`**: after a successful config load, Seiton prints **`config: <absolute path>`** or **`config: (none, using defaults)`** on **stderr**.
 
 
 ### 5.14 `output` Section Specification

@@ -1,4 +1,6 @@
-﻿using System.Globalization;
+﻿using System.Buffers;
+using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
@@ -98,33 +100,69 @@ internal static class LintConfigYamlParser
     /// </summary>
     private static Dictionary<string, object?>? ParseYamlDom(ReadOnlyMemory<byte> utf8Yaml)
     {
-        // YamlParser.FromBytes requires Memory<byte>; copy if needed.
-        var mutable = new byte[utf8Yaml.Length];
-        utf8Yaml.Span.CopyTo(mutable);
-        var parser = YamlParser.FromBytes(mutable.AsMemory());
-
-        // VYaml event sequence: StreamStart → DocumentStart → content → DocumentEnd → StreamEnd
-        // Advance past StreamStart
-        if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+        // YamlParser.FromBytes requires Memory<byte>. When callers pass array-backed ReadOnlyMemory
+        // from LintConfigLibrary (same backing array as LintConfig.Utf8Yaml), parse in-place —
+        // VYaml does not mutate the UTF-8 source (same invariant as workflow VYamlStreamAdapter).
+        Memory<byte> parserMemory;
+        byte[]? poolBuffer = null;
+        if (MemoryMarshal.TryGetArray(utf8Yaml, out var segment) && segment.Array is not null)
         {
-            return null;
+            parserMemory = segment.Array.AsMemory(segment.Offset, segment.Count);
+        }
+        else
+        {
+            poolBuffer = ArrayPool<byte>.Shared.Rent(utf8Yaml.Length);
+            utf8Yaml.Span.CopyTo(poolBuffer.AsSpan(0, utf8Yaml.Length));
+            parserMemory = poolBuffer.AsMemory(0, utf8Yaml.Length);
         }
 
-        // Advance past DocumentStart
-        if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+        YamlParser parser;
+        try
         {
-            return null;
+            parser = YamlParser.FromBytes(parserMemory);
+        }
+        catch
+        {
+            if (poolBuffer is not null)
+            {
+                ArrayPool<byte>.Shared.Return(poolBuffer);
+            }
+
+            throw;
         }
 
-        // Advance to first content event (MappingStart, SequenceStart, or Scalar)
-        if (!parser.Read() || parser.CurrentEventType is ParseEventType.DocumentEnd or ParseEventType.StreamEnd)
+        try
         {
-            return null;
-        }
+            // VYaml event sequence: StreamStart → DocumentStart → content → DocumentEnd → StreamEnd
+            // Advance past StreamStart
+            if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+            {
+                return null;
+            }
 
-        var limiter = new YamlDomParseLimiter();
-        var result = ReadValue(ref parser, limiter);
-        return result as Dictionary<string, object?>;
+            // Advance past DocumentStart
+            if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+            {
+                return null;
+            }
+
+            // Advance to first content event (MappingStart, SequenceStart, or Scalar)
+            if (!parser.Read() || parser.CurrentEventType is ParseEventType.DocumentEnd or ParseEventType.StreamEnd)
+            {
+                return null;
+            }
+
+            var limiter = new YamlDomParseLimiter();
+            var result = ReadValue(ref parser, limiter);
+            return result as Dictionary<string, object?>;
+        }
+        finally
+        {
+            if (poolBuffer is not null)
+            {
+                ArrayPool<byte>.Shared.Return(poolBuffer);
+            }
+        }
     }
 
     private static object? ReadValue(ref YamlParser parser, YamlDomParseLimiter limiter)

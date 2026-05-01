@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting;
+﻿using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -33,6 +34,23 @@ public sealed class LintConfigLibraryTests
         await Assert.That(fixIndent).IsEqualTo(rulesIndent);
         await Assert.That(networkIndent).IsEqualTo(rulesIndent);
         await Assert.That(outputIndent).IsEqualTo(rulesIndent);
+    }
+
+    [Test]
+    public async Task Validate_Utf8YamlBytesMatchInputUtf8Encoding()
+    {
+        var yaml = """
+        rules:
+          dangerous-triggers:
+            enabled: false
+        """;
+
+        var expectedUtf8 = Encoding.UTF8.GetBytes(yaml);
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Utf8Yaml.AsSpan().SequenceEqual(expectedUtf8)).IsTrue();
     }
 
     [Test]

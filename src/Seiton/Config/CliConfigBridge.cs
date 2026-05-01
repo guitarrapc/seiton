@@ -41,6 +41,20 @@ public static class CliConfigBridge
     }
 
     /// <summary>
+    /// Writes the resolved lint config path or default notice to stderr when <paramref name="verbose"/> is true.
+    /// </summary>
+    public static void WriteResolvedConfigVerbose(TextWriter stderr, bool verbose, string? configPath)
+    {
+        if (!verbose)
+            return;
+
+        if (configPath is not null)
+            stderr.WriteLine($"config: {Path.GetFullPath(configPath)}");
+        else
+            stderr.WriteLine("config: (none, using defaults)");
+    }
+
+    /// <summary>
     /// Load and validate config from file, then apply CLI flag overrides.
     /// Returns null config (use defaults) if no config file found.
     /// </summary>

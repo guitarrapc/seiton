@@ -71,11 +71,15 @@
 
 ### P2 — ガバナンス・観測性・軽微な改善
 
-| # | 対策 | 内容 |
-|---|---|---|
-| P2-1 | **CI ポリシー** | `exclusions` や `known-vulnerable-actions` 無効化など、セキュリティ関連キー変更を **CODEOWNERS / 必須レビュー**に含める。 |
-| P2-2 | **`SEITON_CONFIG` の扱い** | 共有ランナーでは信頼できるパスに固定し、フォーク PR のワークフローでは未設定にする等の **推奨パターン**をドキュメント化。 |
-| P2-3 | **メモリ二重化の削減** | `ParseYamlDom` の `mutable` コピーが必須か再評価し、可能なら **コピー回避**（セキュリティより性能・メモリだが、大ファイル時の OOM リスク低減にも寄与）。 |
+`seiton.yaml` が **入力の入り口**になり得るのは **Seiton を導入している利用者のリポジトリ／CI**。P2-1（CODEOWNERS 等）は **そちら側の運用推奨**であり、**seiton 上流リポジトリにファイルを追加する話ではない**（誤って上流に `CODEOWNERS` を置かない）。
+
+**本リポジトリで行ったもの**と **利用者のみが行うもの**の整理:
+
+| # | 対策 | 本リポジトリ | 利用者側（推奨の例） |
+|---|---|---|---|
+| P2-1 | **レビューポリシー** | ドキュメントで案内のみ | `exclusions` やオンラインルール無効化など。**独自**リポジトリの `.github/CODEOWNERS` とブランチ保護で `seiton.yaml` を保護 |
+| P2-2 | **`SEITON_CONFIG`** | `docs/configuration.md` / `Seiton_Linter_spec.md` で信頼境界を記載 | 共有 CI・フォーク PR でパスと値を運用規定 |
+| P2-3 | **DOM パース時のバッファ** | `LintConfigYamlParser.ParseYamlDom` で冗長 **`byte[]`** コピー削減 | （該当なし） |
 
 ---
 
@@ -87,7 +91,8 @@
 - [x] P0: リダイレクト挙動: GitHub Bearer 経路では **同一オリジンの 3xx のみフォロー**する（クロスオリジンではフォローせず Bearer を再送信しない）。
 - [x] P1: 悪意ある `ignore-actions` パターンで **プロセスが事実上固まらない**（タイムアウトまたは拒否）。
 - [x] P1: 巨大設定ファイル・巨大 `exclusions` リストで **明確にエラー**または **上限内に収まる**。
-- [ ] 回帰: 既存 `LintConfigLibraryTests` および fix / online 系テストが通ること。
+- [x] P2: SEITON_CONFIG／ガバナンスを **利用者向け**にドキュメント化。**上流に CODEOWNERS は置かない**。`--verbose` の `config:`、`ParseYamlDom` の冗長コピー削減。
+- [x] 回帰: 既存 `LintConfigLibraryTests` および fix / online 系テストが通ること。
 
 ---
 
@@ -113,3 +118,5 @@
 | 2026-05-01 | P0: `ghes-api-url` HTTPS 検証、GitHub 向け HttpClient の同一オリジン リダイレクト制限。 |
 | 2026-05-01 | P1: 設定 UTF-8 1MiB 上限、YAML DOM 深さ/ユニット上限、`ignore-actions` Regex `MatchTimeout`、ネットワーク timeout/concurrency 上限。 |
 | 2026-05-01 | `network.max-concurrency` 上限を固定 64 から **論理プロセッサ数** に変更。 |
+| 2026-05-01 | P2（上流）: `SEITON_CONFIG`/CI の信頼境界ドキュメント、CLI `--verbose` の `config:` ログ、`LintConfigYamlParser` の冗長 **`byte[]`** コピー削減。 |
+| 2026-05-01 | P2 の範囲修正: **`CODEOWNERS` は Seiton を導入した利用者リポジトリの運用**。上流 `.github/CODEOWNERS` を削除し計画書・ユーザー向けドキュメントでスコープを明確化。 |
