@@ -41,7 +41,7 @@
 | `analysis` トップレベルキー | **不採用** | `assume-events` は `rules.expr-undefined-var.assume-events` として rule 配下に収まる。独立セクションにする必然性がない |
 | `audit` トップレベルキー | **不採用** | online rule の有効化は `rules.<rule-id>.enabled: true` で統一。別セクションは二重管理になる |
 | `network.fail-open` | **`network.on-error: skip \| fail` を採用** | fail-open/fail-closed はセキュリティ用語として曖昧。明示的な列挙値のほうが意図が伝わる |
-| `exclusions[].files` | **スカラー（単一 glob）を採用** | 複数パターンは複数エントリで表現。パーサーが単純になり、1 エントリ = 1 パターンの対応が明確 |
+| `exclusions[].files` → `exclusions[].file` | **スカラー（単一 glob）を採用** | 単数形が型と一致し誤解を防ぐ。複数パターンは複数エントリで表現 |
 | `extend` キーワード | **採用** | built-in 値との関係が明確。最終集合宣言より実用的 |
 
 ---
@@ -149,12 +149,12 @@ rules:
 
 ```yaml
 exclusions:
-  - files: ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - runner-no-latest
       - job-permissions-required
 
-  - files: ".github/workflows/release.yml"
+  - file: ".github/workflows/release.yml"
     jobs:
       - publish
     rules:
@@ -163,11 +163,11 @@ exclusions:
 
 | Key | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `files` | `string`（スカラー） | Yes | glob パターン（`*` / `**`、パス区切り `/`、大小文字区別） |
+| `file` | `string`（スカラー） | Yes | glob パターン（`*` / `**`、パス区切り `/`、大小文字区別） |
 | `rules` | `string[]` | Yes | 抑制対象の rule-id リスト |
 | `jobs` | `string[]` | No | 対象ジョブ ID（`job.id`）。省略時はファイル全体に適用 |
 
-**注意**: `files` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
+**注意**: `file` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
 
 ### 2.4 `fix`
 
@@ -253,9 +253,9 @@ output:
 
 | 設定箇所 | アルゴリズム | 詳細 |
 |---|---|---|
-| `exclusions[].files` | `GlobMatch` | セグメント区切り `*` / `**`、大小文字区別 |
+| `exclusions[].file` | `GlobMatch` | セグメント区切り `*` / `**`、大小文字区別 |
 | `fix.pinning.ignore-actions` | `WildcardMatch` (char) | `*` = 任意列、`?` = 任意 1 文字。Regex 不使用 |
-| `fix.images.ignore-images` | `GlobMatch` | `exclusions[].files` と同一 |
+| `fix.images.ignore-images` | `GlobMatch` | `exclusions[].file` と同一 |
 | `rules.forbidden-uses.deny/allow` | `WildcardMatchUsesPolicy` (byte) | パス区切り `/` を跨ぐ `*`、`?` = 任意 1 文字 |
 | CLI `--ignore` | `string.Contains` | 部分文字列一致、大小文字無視 |
 | `fix.pinning.exclude-branches` | `string.Equals` | 完全一致、ordinal |

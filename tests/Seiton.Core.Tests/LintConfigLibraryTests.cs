@@ -83,7 +83,7 @@ public sealed class LintConfigLibraryTests
                 - tee
         exclusions:
           -
-            files: .github/workflows/legacy-*.yml
+            file: .github/workflows/legacy-*.yml
             rules:
               - runner-label
         """;
@@ -380,7 +380,7 @@ public sealed class LintConfigLibraryTests
         var yaml = """
         exclusions:
           -
-            files: .github/workflows/release.yml
+            file: .github/workflows/release.yml
             rules:
               - credentials
             jobs:
@@ -395,7 +395,7 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config!.Exclusions).Count().IsEqualTo(1);
 
         var excl = result.Config.Exclusions![0];
-        await Assert.That(excl.Files).IsEqualTo(".github/workflows/release.yml");
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/release.yml");
         await Assert.That(excl.Rules).Contains("credentials");
         await Assert.That(excl.Jobs).IsNotNull();
         await Assert.That(excl.Jobs!.Count).IsEqualTo(2);
@@ -408,11 +408,11 @@ public sealed class LintConfigLibraryTests
     {
         var yaml = """
         exclusions:
-          - files: ".github/workflows/legacy-*.yml"
+          - file: ".github/workflows/legacy-*.yml"
             rules:
               - runner-no-latest
               - job-permissions-required
-          - files: ".github/workflows/release.yml"
+          - file: ".github/workflows/release.yml"
             jobs:
               - publish
             rules:
@@ -426,15 +426,33 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(2);
 
         var excl0 = result.Config.Exclusions![0];
-        await Assert.That(excl0.Files).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl0.File).IsEqualTo(".github/workflows/legacy-*.yml");
         await Assert.That(excl0.Rules).Contains("runner-no-latest");
         await Assert.That(excl0.Rules).Contains("job-permissions-required");
 
         var excl1 = result.Config.Exclusions![1];
-        await Assert.That(excl1.Files).IsEqualTo(".github/workflows/release.yml");
+        await Assert.That(excl1.File).IsEqualTo(".github/workflows/release.yml");
         await Assert.That(excl1.Rules).Contains("credentials");
         await Assert.That(excl1.Jobs).IsNotNull();
         await Assert.That(excl1.Jobs![0]).IsEqualTo("publish");
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_FileKey_Singular_ParsesCorrectly()
+    {
+        var yaml = """
+        exclusions:
+          - file: ".github/workflows/legacy-*.yml"
+            rules:
+              - runner-no-latest
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        await Assert.That(result.Config.Exclusions![0].File).IsEqualTo(".github/workflows/legacy-*.yml");
     }
 
     [Test]
@@ -542,11 +560,11 @@ public sealed class LintConfigLibraryTests
             enabled: true
 
         exclusions:
-          - files: ".github/workflows/legacy-*.yml"
+          - file: ".github/workflows/legacy-*.yml"
             rules:
               - runner-no-latest
               - job-permissions-required
-          - files: ".github/workflows/release.yml"
+          - file: ".github/workflows/release.yml"
             jobs:
               - publish
             rules:
@@ -599,7 +617,7 @@ public sealed class LintConfigLibraryTests
 
         // exclusions (inline format)
         await Assert.That(result.Config.Exclusions!.Count).IsEqualTo(2);
-        await Assert.That(result.Config.Exclusions[0].Files).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(result.Config.Exclusions[0].File).IsEqualTo(".github/workflows/legacy-*.yml");
         await Assert.That(result.Config.Exclusions[1].Jobs![0]).IsEqualTo("publish");
 
         // fix
@@ -829,5 +847,45 @@ rules:
 
         sb.Append(Environment.NewLine);
         return sb.ToString();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_AsIs_IsValidConfig()
+    {
+        // The template with all lines commented out should parse as a valid (empty) config
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_Uncommented_IsValidConfig()
+    {
+        // Uncomment only config-example lines (indented, not prose) and verify it parses without errors
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+        var lines = yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var uncommented = string.Join('\n', lines.Select(line =>
+        {
+            var trimmed = line.TrimStart();
+            // Only uncomment lines that are indented (inside a section) and whose
+            // content after "# " looks like YAML config (starts with '- ' or 'word[-word]*:')
+            if (trimmed.StartsWith("# ", StringComparison.Ordinal))
+            {
+                var indent = line.Length - trimmed.Length;
+                if (indent == 0) return line; // header comments
+                var content = trimmed[2..];
+                if (content.Length > 0 && char.IsUpper(content[0])) return line; // English prose
+                if (content.Contains("(omit", StringComparison.Ordinal)) return line; // documentation hint
+                return new string(' ', indent) + content;
+            }
+            return line;
+        }));
+
+        var result = LintConfigLibrary.Validate(uncommented, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue()
+            .Because($"Template uncommented should be valid, but got: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}");
     }
 }

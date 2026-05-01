@@ -138,12 +138,12 @@ rules:
 # ─── Exclusions ──────────────────────────────────────────────────────────────
 exclusions:
   # Suppress specific rules for all files matching a path glob.
-  - files: ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - unpinned-uses
 
   # Suppress specific rules in a specific job within a file.
-  - files: ".github/workflows/publish.yml"
+  - file: ".github/workflows/publish.yml"
     jobs:
       - publish
     rules:
@@ -249,7 +249,7 @@ Suppress one or more rules for all files matching a glob pattern:
 
 ```yaml
 exclusions:
-  - files: ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - unpinned-uses
       - runner-no-latest
@@ -263,7 +263,7 @@ Suppress rules for a specific job ID within a file:
 
 ```yaml
 exclusions:
-  - files: ".github/workflows/publish.yml"
+  - file: ".github/workflows/publish.yml"
     jobs:
       - publish
     rules:

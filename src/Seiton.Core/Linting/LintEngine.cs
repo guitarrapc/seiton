@@ -415,7 +415,7 @@ public sealed class LintEngine
         for (var i = 0; i < normalizedExclusions.Count; i++)
         {
             var exclusion = normalizedExclusions[i];
-            if (!GlobMatch(exclusion.Files, normalizedFilePath))
+            if (!GlobMatch(exclusion.File, normalizedFilePath))
             {
                 continue;
             }
@@ -938,11 +938,11 @@ public sealed class LintEngine
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
-            if (string.IsNullOrWhiteSpace(exclusion.Files))
+            if (string.IsNullOrWhiteSpace(exclusion.File))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    "exclusion files pattern must not be empty",
+                    "exclusion file pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
                     FilePath: filePath));
                 continue;
@@ -972,7 +972,7 @@ public sealed class LintEngine
                 }
             }
 
-            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.Files), normalizedRuleIds, exclusion.Jobs));
+            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
         }
 
         return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
@@ -1154,7 +1154,7 @@ public sealed class LintEngine
     }
 
     private readonly record struct NormalizedExclusion(
-        string Files,
+        string File,
         IReadOnlySet<string> Rules,
         IReadOnlyList<string>? Jobs);
 }

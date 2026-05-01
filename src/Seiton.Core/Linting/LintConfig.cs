@@ -148,7 +148,7 @@ public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
 /// <summary>An exclusion entry that suppresses rules for matching files/jobs.</summary>
 public sealed record LintExclusion(
-    string Files,
+    string File,
     IReadOnlyList<string> Rules,
     IReadOnlyList<string>? Jobs = null);
 

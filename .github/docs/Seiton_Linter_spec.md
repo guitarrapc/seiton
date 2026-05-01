@@ -578,12 +578,12 @@ rules:
     enabled: true
 
 exclusions:
-  - files: ".github/workflows/legacy/*.yml"
+  - file: ".github/workflows/legacy/*.yml"
     rules:
       - dangerous-triggers
       - job-permissions-required
 
-  - files: ".github/workflows/release.yml"
+  - file: ".github/workflows/release.yml"
     jobs:
       - publish
     rules:
@@ -635,7 +635,7 @@ Interpretation notes:
 - `fix.images` configures network-assisted digest pin remediation for `unpinned-image`.
 - `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
 - `output.sort-order` controls diagnostic output ordering: `location` (default) sorts by source position for file-reading order; `rule` sorts by rule priority for batch-fixing.
-- `exclusions[].files` and optional `exclusions[].jobs` define config-based suppression scope.
+- `exclusions[].file` and optional `exclusions[].jobs` define config-based suppression scope.
 - `exclusions[].rules` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
 - Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable.
@@ -724,7 +724,7 @@ Active rules: same as Profile 1 minus `action-shell-is-required`
 
 ```yaml
 exclusions:
-  - files: ".github/workflows/legacy-release.yml"
+  - file: ".github/workflows/legacy-release.yml"
     rules:
       - runner-no-latest
       - job-permissions-required
@@ -879,11 +879,11 @@ rules:
     enabled: true
 
 exclusions:
-  - files: ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - runner-no-latest
       - job-permissions-required
-  - files: ".github/workflows/release.yml"
+  - file: ".github/workflows/release.yml"
     jobs:
       - publish
     rules:
