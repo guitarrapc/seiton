@@ -180,6 +180,9 @@ public sealed class AstArena : IDisposable
     /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
+    /// Backing arrays that have grown beyond their default capacity are replaced with
+    /// default-sized arrays to prevent the ThreadStatic cache from permanently retaining
+    /// high-water-mark allocations (critical for memory-constrained environments like WASM).
     /// </summary>
     public void Dispose()
     {
@@ -188,7 +191,30 @@ public sealed class AstArena : IDisposable
         _intCount = 0;
         _floatCount = 0;
         _source = [];
+
+        // Cap backing arrays to default sizes to prevent unbounded growth.
+        // Grow() doubles arrays but Dispose() must shrink them back so the ThreadStatic
+        // cache doesn't permanently retain peak-sized arrays.
+        ShrinkIfOversized(ref _strings, DefaultStringCapacity);
+        ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
+        ShrinkIfOversized(ref _ints, DefaultIntCapacity);
+        ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
+
         cached ??= this;
+    }
+
+    /// <summary>Default capacities used for size cap in Dispose.</summary>
+    private const int DefaultStringCapacity = 256;
+    private const int DefaultBoolCapacity = 32;
+    private const int DefaultIntCapacity = 16;
+    private const int DefaultFloatCapacity = 8;
+
+    private static void ShrinkIfOversized<T>(ref T[] array, int maxRetainedCapacity)
+    {
+        if (array.Length > maxRetainedCapacity)
+        {
+            array = new T[maxRetainedCapacity];
+        }
     }
 
     private static AstArena CreateNew(byte[] source)

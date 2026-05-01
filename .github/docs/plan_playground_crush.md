@@ -202,11 +202,20 @@ public static string RunLint(string? yamlSource, string? filePath)
 
 ただし `GC.Collect()` は SGEN の full collection を強制し、それ自体が OOM の原因になりうるため、**Arena Dispose が先**。
 
-### 4.5 [中優先] PlaygroundLintRunner を stateless 化 ✅ 実装済み
+### 4.5 [中優先] PlaygroundLintRunner を stateless 化 → ❌ 撤回、static Engine に戻した
 
-actionlint のパターンに倣い、`LintEngine` を呼び出しごとに生成する。
-static `Engine` フィールドと `lock (EngineGate)` を除去し、`RunToJson` / `ApplyAllFixes` の各呼び出し（ApplyAllFixes はループ内の各パス）で `new LintEngine()` を生成する設計に変更。
-これにより各呼び出し後に engine の内部バッファ（rule リスト、diagnostic リスト、HashSet 等）が全て GC 対象になる。
+**当初の変更**: `new LintEngine()` per call でルールオブジェクトを毎回新規生成する設計に変更。
+**問題**: 呼び出しごとに 50+ のルールオブジェクト + 内部 List/HashSet/Dictionary を新規作成し、GC 圧力を大幅に増大させた。Debug WASM のベースラインが ~800MB の環境では逆効果。
+
+**撤回後の設計**: static `LintEngine` + `lock(EngineGate)` に戻し、以下を維持:
+- Arena.Dispose() は毎回呼び出し
+- AstArena.Dispose() でバッキング配列の高水位キャップを追加（Grow で膨張した配列をデフォルトサイズに縮小）
+
+**教訓**: `LintEngine` は再利用設計（Check() 冒頭で全リスト Clear、ルールは VisitWorkflowPre で diagnostics Clear）。per-call インスタンス生成は actionlint の Go パターンを模倣したが、Go は GC が世代別ではなく並行マーク＆スイープなので事情が異なる。.NET WASM の SGEN GC では短命大量オブジェクトが nursery → major heap プロモーションを引き起こし、memory.grow 失敗の原因になる。
+
+### 4.7 [新規] AstArena バッキング配列の高水位キャップ ✅ 実装済み
+
+`AstArena.Dispose()` で、Grow() によって膨張したバッキング配列がデフォルト容量を超えている場合、デフォルトサイズの新しい配列に置き換える。ThreadStatic キャッシュがピーク時の大きな配列を永続的に保持する問題を解消。
 
 ### 4.6 [低優先] VYaml ThreadStatic バッファの制御
 
@@ -221,9 +230,10 @@ VYaml 内部の ThreadStatic バッファは shrink しない設計。長期的�
 | 1 | AstArena の明示的 Dispose | 低 | **大** | 低（dispose 後に Arena 参照しないことを確認済み） |
 | 2 | InvariantGlobalization を全構成で有効化 | 低 | **大** | なし（lint に文化依存処理不要） | ✅ |
 | 3 | EmccMaximumHeapSize / EmccInitialHeapSize 設定 | 低 | 中（断片化耐性向上） | 低 | ✅ (64MB init / 1GB max) |
-| 4 | PlaygroundLintRunner stateless 化 | 中 | 中 | 毎回の初期化コスト増 | ✅ |
+| 4 | PlaygroundLintRunner stateless 化 | 中 | ~~中~~ **逆効果** | GC 圧増大 | ❌ 撤回 |
 | 5 | GC.Collect 検討 | 低 | 小 | full GC 自体の OOM リスク |
 | 6 | VYaml パッチ | 高 | 小 | 上流変更管理 |
+| 7 | AstArena バッキング配列の高水位キャップ | 低 | 中 | 低 | ✅ |
 
 ---
 
@@ -250,3 +260,40 @@ WASM 環境では：
 - 特に Chromium 系は WASM memory の grow に保守的な場合がある
 
 実際のメモリ使用量は小さい YAML 入力であっても、ランタイム自体が 100MB 以上消費している可能性が高く、GC が新しい section を確保しようとした時点で linear memory の上限に達している。
+
+---
+
+## 8. Debug ビルドの根本的なメモリ問題
+
+### 8.1 測定結果
+
+Debug ビルドの `_framework/` ディレクトリ:
+- **182 個の .wasm アセンブリ** (合計 35.3 MB on disk)
+- `dotnet.native.wasm`: 13.9 MB (Mono ランタイム)
+- `System.Private.CoreLib`: 4.6 MB
+- `System.Private.Xml`: 3.0 MB (lint に不要)
+- `System.Data.Common`: 1.0 MB (lint に不要)
+- `Microsoft.VisualBasic.Core`: 0.4 MB (lint に不要)
+- その他 175 の BCL アセンブリ
+
+### 8.2 なぜ Debug ビルドで ~800MB 消費するか
+
+1. **未トリム**: `PublishTrimmed` は Release only。全 BCL アセンブリがロードされる
+2. **非 AOT**: IL インタプリタがメソッド本体 + メタデータテーブルをメモリ上に展開
+3. **HotReload**: `Microsoft.DotNet.HotReload.WebAssembly.Browser` がロードされる
+4. **35 MB on disk → ~500-800 MB in memory**: メタデータ展開 + 型解決テーブル + GC ヒープ管理
+
+### 8.3 推奨: Release ビルドで Playground を実行
+
+Debug ビルドの 182 アセンブリ × IL インタプリタのベースラインは ~800 MB。
+アプリケーションコードの最適化だけでは根本解決できない。
+
+```shell
+# Release ビルドで実行（トリム + AOT 適用）
+dotnet run --project src/Seiton.Playground -c Release
+```
+
+Release ビルドでは:
+- `PublishTrimmed=true` + `TrimMode=full` → 不要なアセンブリ除去
+- `RunAOTCompilation=true` → IL インタプリタのメタデータ展開不要
+- 推定ベースライン: 50-100 MB（Debug の 1/10 以下）

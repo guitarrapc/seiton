@@ -5,9 +5,9 @@ namespace Seiton.Playground.Tests;
 public sealed class PlaygroundLintRunnerTests
 {
     /// <summary>
-    /// Verifies that rapid sequential lint calls produce stable results and don't
-    /// accumulate state. After the stateless refactor, each call creates a fresh
-    /// LintEngine so no cross-call contamination is possible.
+    /// Verifies that rapid sequential lint calls produce stable results.
+    /// The shared static LintEngine properly clears state between calls,
+    /// so repeated invocations should yield identical diagnostic counts.
     /// </summary>
     [Test]
     public async Task RunToJson_RepeatedCalls_ProducesConsistentDiagnosticCount()
