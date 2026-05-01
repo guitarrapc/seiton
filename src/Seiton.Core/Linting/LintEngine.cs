@@ -83,12 +83,21 @@ public sealed class LintEngine
     }
 
     /// <summary>Parses and lints the given YAML with no explicit configuration.</summary>
+    /// <inheritdoc cref="Check(byte[], string, LintConfig?)"/>
     public LintResult Check(byte[] utf8Yaml, string filePath)
     {
         return Check(utf8Yaml, filePath, config: null);
     }
 
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> shares backing arrays with the engine
+    /// via a two-buffer swap pattern. Only the most recent result and the immediately preceding one are
+    /// guaranteed to remain valid. Callers must not retain a <see cref="LintResult"/> across more than one
+    /// subsequent <see cref="Check"/> call on the same <see cref="LintEngine"/> instance.
+    /// </para>
+    /// </remarks>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);

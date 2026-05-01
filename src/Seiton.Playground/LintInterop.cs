@@ -1,4 +1,6 @@
-﻿using System.Runtime.InteropServices.JavaScript;
+﻿using System.Buffers;
+using System.Runtime.InteropServices.JavaScript;
+using System.Text;
 using System.Text.Json;
 
 namespace Seiton.Playground;
@@ -70,9 +72,23 @@ public static partial class LintInterop
     /// </summary>
     private static string SerializeInternalError(Exception ex)
     {
-        // Manually construct JSON to avoid depending on the internal PlaygroundJsonSerializerContext.
-        // The message is JSON-escaped to prevent injection.
-        var escapedMessage = JsonEncodedText.Encode($"[internal error] {ex.GetType().Name}: {ex.Message}");
-        return "[{\"message\":\"" + escapedMessage + "\",\"line\":1,\"column\":1,\"severity\":\"Error\",\"ruleId\":\"internal-error\",\"fixable\":false}]";
+        // Use Utf8JsonWriter to produce correctly escaped JSON without depending on
+        // reflection-based serialization (which is unavailable under NativeAOT/trimming).
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartArray();
+            writer.WriteStartObject();
+            writer.WriteString("message"u8, $"[internal error] {ex.GetType().Name}: {ex.Message}");
+            writer.WriteNumber("line"u8, 1);
+            writer.WriteNumber("column"u8, 1);
+            writer.WriteString("severity"u8, "Error");
+            writer.WriteString("ruleId"u8, "internal-error");
+            writer.WriteBoolean("fixable"u8, false);
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 }

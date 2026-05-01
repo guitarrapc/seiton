@@ -201,7 +201,23 @@ public sealed class AstArena : IDisposable
         ShrinkIfOversized(ref _ints, DefaultIntCapacity);
         ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
 
-        cached ??= this;
+        if (cached is null)
+        {
+            cached = this;
+        }
+        else
+        {
+            // Cache is already occupied — return rented arrays to the pool
+            // so they are not leaked.
+            ArrayPool<StringNodeData>.Shared.Return(_strings);
+            ArrayPool<BoolNodeData>.Shared.Return(_bools);
+            ArrayPool<IntNodeData>.Shared.Return(_ints);
+            ArrayPool<FloatNodeData>.Shared.Return(_floats);
+            _strings = null!;
+            _bools = null!;
+            _ints = null!;
+            _floats = null!;
+        }
     }
 
     /// <summary>Default capacities used for size cap in Dispose.</summary>

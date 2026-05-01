@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Linting;
+using Seiton.Core.Parsing;
 using System.Text;
 
 namespace Seiton.Core.Tests;
@@ -133,15 +134,29 @@ public sealed class LintEngineConfigReuseTests
         // Both should have the same diagnostics count
         await Assert.That(result1.Diagnostics.Length).IsEqualTo(result2.Diagnostics.Length);
 
-        // With enough diagnostics from different rules, the order should differ
-        // (unless all diagnostics happen to be on the same line from the same rule)
-        if (result1.Diagnostics.Length > 1)
-        {
-            var order1 = string.Join(",", result1.Diagnostics.Select(d => $"{d.RuleId}:{d.Location.StartLine}"));
-            var order2 = string.Join(",", result2.Diagnostics.Select(d => $"{d.RuleId}:{d.Location.StartLine}"));
-            // We just verify both calls succeed; order difference is expected but not guaranteed
-            await Assert.That(result1.Diagnostics.Length).IsGreaterThan(0);
-        }
+        // Verify each result is sorted according to its configured comparator.
+        await Assert.That(result1.Diagnostics.Length).IsGreaterThan(1);
+
+        static string Signature(Diagnostic d) =>
+            $"{d.RuleId}:{d.Location.StartLine}:{d.Location.StartColumn}";
+
+        // Location sort: line → column → ruleId → message (matches CompareDiagnosticsByLocation)
+        var actualLocationOrder = string.Join(",", result1.Diagnostics.Select(Signature));
+        var expectedLocationOrder = string.Join(",",
+            result1.Diagnostics
+                .OrderBy(d => d.Location.StartLine)
+                .ThenBy(d => d.Location.StartColumn)
+                .ThenBy(d => d.RuleId, StringComparer.Ordinal)
+                .ThenBy(d => d.Message, StringComparer.Ordinal)
+                .Select(Signature));
+
+        await Assert.That(actualLocationOrder).IsEqualTo(expectedLocationOrder);
+
+        // Rule sort uses RuleCatalog.GetPriority (internal), so we can't replicate the
+        // exact comparator in the test. Instead, verify the two sort orders actually differ,
+        // proving that the SortOrder config is effective between calls.
+        var ruleOrderSignature = string.Join(",", result2.Diagnostics.Select(Signature));
+        await Assert.That(ruleOrderSignature).IsNotEqualTo(actualLocationOrder);
     }
 
     [Test]
