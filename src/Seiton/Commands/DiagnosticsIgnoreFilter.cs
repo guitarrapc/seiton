@@ -7,7 +7,10 @@ internal static class DiagnosticsIgnoreFilter
     {
         for (var i = 0; i < patterns.Length; i++)
         {
-            if (message.Contains(patterns[i], StringComparison.OrdinalIgnoreCase))
+            var pattern = patterns[i];
+            if (string.IsNullOrWhiteSpace(pattern))
+                continue;
+            if (message.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

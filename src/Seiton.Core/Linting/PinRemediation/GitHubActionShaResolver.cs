@@ -305,7 +305,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         for (var i = 0; i < _compiledIgnoreActions.Length; i++)
         {
             var entry = _compiledIgnoreActions[i];
-            if (WildcardMatch(name, entry.NamePattern) && WildcardMatch(refStr, entry.RefPattern))
+            if (ActionRefHelpers.WildcardMatch(name, entry.NamePattern) && ActionRefHelpers.WildcardMatch(refStr, entry.RefPattern))
             {
                 return true;
             }
@@ -663,52 +663,4 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
 
     private readonly record struct CompiledIgnoreActionEntry(string NamePattern, string RefPattern);
-
-    /// <summary>
-    /// Wildcard pattern match using <c>*</c> (match any sequence) and <c>?</c> (match single char).
-    /// This is intentionally simple: no regex, no backtracking risk, O(n*m) worst case with star.
-    /// </summary>
-    private static bool WildcardMatch(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern)
-    {
-        var textIndex = 0;
-        var patternIndex = 0;
-        var starIndex = -1;
-        var matchIndex = 0;
-
-        while (textIndex < text.Length)
-        {
-            if (patternIndex < pattern.Length
-                && (pattern[patternIndex] == '?' || pattern[patternIndex] == text[textIndex]))
-            {
-                patternIndex++;
-                textIndex++;
-                continue;
-            }
-
-            if (patternIndex < pattern.Length && pattern[patternIndex] == '*')
-            {
-                starIndex = patternIndex;
-                matchIndex = textIndex;
-                patternIndex++;
-                continue;
-            }
-
-            if (starIndex >= 0)
-            {
-                patternIndex = starIndex + 1;
-                matchIndex++;
-                textIndex = matchIndex;
-                continue;
-            }
-
-            return false;
-        }
-
-        while (patternIndex < pattern.Length && pattern[patternIndex] == '*')
-        {
-            patternIndex++;
-        }
-
-        return patternIndex == pattern.Length;
-    }
 }
