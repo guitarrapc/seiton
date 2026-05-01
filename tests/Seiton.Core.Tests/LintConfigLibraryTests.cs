@@ -510,6 +510,7 @@ public sealed class LintConfigLibraryTests
 
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
 
+        await Assert.That(result.IsValid).IsTrue();
         await Assert.That(result.Config).IsNotNull();
         await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(0);
     }

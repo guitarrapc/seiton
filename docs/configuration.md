@@ -250,7 +250,7 @@ Exclusions suppress **rule diagnostics** for specific files, jobs, or rule combi
 
 ### File-Level Exclusion (all rules)
 
-Exclude a file entirely from linting:
+Suppress all rule diagnostics for a file:
 
 ```yaml
 exclusions:
