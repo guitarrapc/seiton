@@ -987,7 +987,8 @@ internal static class LintConfigYamlParser
         }
 
         string? file = null;
-        IReadOnlyList<string> rulesList = [];
+        IReadOnlyList<string>? rulesList = null;
+        bool rulesKeyPresent = false;
         IReadOnlyList<string> jobsList = [];
 
         foreach (var (key, value) in item)
@@ -998,6 +999,7 @@ internal static class LintConfigYamlParser
             }
             else if (key == "rules")
             {
+                rulesKeyPresent = true;
                 rulesList = ParseStringList(value, "rules", diagnostics, filePath);
             }
             else if (key == "jobs")
@@ -1016,13 +1018,9 @@ internal static class LintConfigYamlParser
             return;
         }
 
-        if (rulesList.Count == 0)
-        {
-            diagnostics.Add(Diag("exclusion rules is required", DomLine, 3, 1, filePath));
-            return;
-        }
-
-        exclusions.Add(new LintExclusion(file, rulesList, jobsList.Count > 0 ? jobsList : null));
+        // rules omitted → null (all rules); rules: [] → empty list (no-op, handled by normalizer)
+        IReadOnlyList<string>? finalRules = rulesKeyPresent ? (rulesList ?? []) : null;
+        exclusions.Add(new LintExclusion(file, finalRules, jobsList.Count > 0 ? jobsList : null));
     }
 
     private static Dictionary<string, object?>? AsMap(object? o)

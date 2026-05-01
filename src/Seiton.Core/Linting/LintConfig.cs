@@ -147,9 +147,13 @@ public sealed record RuleConfig
 public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
 /// <summary>An exclusion entry that suppresses rules for matching files/jobs.</summary>
+/// <remarks>
+/// <para><c>Rules</c> = <c>null</c>: all rules are suppressed (file/job-level exclusion).</para>
+/// <para><c>Rules</c> = non-null list: only those rules are suppressed.</para>
+/// </remarks>
 public sealed record LintExclusion(
     string File,
-    IReadOnlyList<string> Rules,
+    IReadOnlyList<string>? Rules,
     IReadOnlyList<string>? Jobs = null);
 
 /// <summary>Configuration for the <c>fix:</c> section controlling auto-fix behavior.</summary>
