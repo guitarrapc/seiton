@@ -143,4 +143,55 @@ public sealed class LintEngineConfigReuseTests
             await Assert.That(result1.Diagnostics.Length).IsGreaterThan(0);
         }
     }
+
+    [Test]
+    public async Task Check_DiagnosticCount_MatchesDiagnosticsArrayLength()
+    {
+        // DiagnosticCount must always equal Diagnostics.Length (exact-sized result arrays).
+        var engine = new LintEngine();
+
+        // Small workflow with known diagnostics
+        var yaml1 = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
+        var result1 = engine.Check(yaml1, ".github/workflows/ci.yml");
+
+        await Assert.That(result1.DiagnosticCount).IsEqualTo(result1.Diagnostics.Length);
+        await Assert.That(result1.DiagnosticCount).IsGreaterThan(0);
+        for (var i = 0; i < result1.Diagnostics.Length; i++)
+        {
+            await Assert.That(result1.Diagnostics[i].Message).IsNotNull();
+        }
+
+        // Larger workflow → more diagnostics
+        var yaml2 = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: echo ok\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: echo test\n");
+        var result2 = engine.Check(yaml2, ".github/workflows/ci.yml");
+        await Assert.That(result2.DiagnosticCount).IsEqualTo(result2.Diagnostics.Length);
+
+        // Smaller workflow again → result array must shrink to exact size
+        var yaml3 = Encoding.UTF8.GetBytes("on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
+        var result3 = engine.Check(yaml3, ".github/workflows/ci.yml");
+        await Assert.That(result3.DiagnosticCount).IsEqualTo(result3.Diagnostics.Length);
+    }
+
+    [Test]
+    public async Task Check_FixableDiagnosticCount_ConsistentWithDiagnostics()
+    {
+        // FixableDiagnosticCount must count fix-bearing diagnostics correctly.
+        var engine = new LintEngine();
+        var yaml = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    permissions:\n      contents: read\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
+
+        var config = new LintConfig { Fix = new FixConfig { Enabled = true } };
+        var result = engine.Check(yaml, ".github/workflows/ci.yml", config);
+
+        await Assert.That(result.Diagnostics.Length).IsGreaterThan(0);
+
+        var manualFixCount = 0;
+        for (var i = 0; i < result.Diagnostics.Length; i++)
+        {
+            if (result.Diagnostics[i].Fix is not null)
+            {
+                manualFixCount++;
+            }
+        }
+        await Assert.That(result.FixableDiagnosticCount).IsEqualTo(manualFixCount);
+    }
 }

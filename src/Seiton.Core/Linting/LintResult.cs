@@ -8,6 +8,13 @@ public readonly record struct LintResult(
     ParseResult ParseResult,
     Diagnostic[] Diagnostics)
 {
+    /// <summary>
+    /// Gets the number of valid diagnostics in <see cref="Diagnostics"/>.
+    /// The backing array may be oversized when a reusable buffer is used;
+    /// always iterate up to <c>DiagnosticCount</c>, not <c>Diagnostics.Length</c>.
+    /// </summary>
+    public int DiagnosticCount { get; init; } = Diagnostics.Length;
+
     /// <summary>Gets the summary of suppressed diagnostics from inline and exclusion rules.</summary>
     public SuppressionSummary SuppressionSummary { get; init; } = SuppressionSummary.Empty;
 
@@ -32,7 +39,8 @@ public readonly record struct LintResult(
         get
         {
             var count = 0;
-            for (var i = 0; i < Diagnostics.Length; i++)
+            var len = DiagnosticCount;
+            for (var i = 0; i < len; i++)
             {
                 if (Diagnostics[i].Fix is not null)
                 {
@@ -49,14 +57,15 @@ public readonly record struct LintResult(
     {
         get
         {
-            if (Diagnostics.Length == 0)
+            if (DiagnosticCount == 0)
             {
                 return [];
             }
 
             var result = new Diagnostic[FixableDiagnosticCount];
             var index = 0;
-            for (var i = 0; i < Diagnostics.Length; i++)
+            var len = DiagnosticCount;
+            for (var i = 0; i < len; i++)
             {
                 if (Diagnostics[i].Fix is null)
                 {
@@ -75,14 +84,15 @@ public readonly record struct LintResult(
     {
         get
         {
-            if (Diagnostics.Length == 0)
+            if (DiagnosticCount == 0)
             {
                 return [];
             }
 
             var result = new DiagnosticFix[FixableDiagnosticCount];
             var index = 0;
-            for (var i = 0; i < Diagnostics.Length; i++)
+            var len = DiagnosticCount;
+            for (var i = 0; i < len; i++)
             {
                 var fix = Diagnostics[i].Fix;
                 if (fix is null)
@@ -104,6 +114,12 @@ public readonly record struct SuppressionSummary(
     IReadOnlyDictionary<string, int> SuppressedByRule,
     SuppressionRecord[] Records)
 {
+    /// <summary>
+    /// Gets the number of valid records in <see cref="Records"/>.
+    /// The backing array may be oversized when a reusable buffer is used.
+    /// </summary>
+    public int RecordCount { get; init; } = Records.Length;
+
     /// <summary>Gets an empty suppression summary with no suppressed diagnostics.</summary>
     public static SuppressionSummary Empty { get; } = new(0, new Dictionary<string, int>(StringComparer.Ordinal), []);
 }

@@ -26,6 +26,12 @@ public sealed class LintEngine
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
     private readonly LintConfig _effectiveConfig = new();
+    private Diagnostic[] _resultDiagnostics = new Diagnostic[16];
+    private Diagnostic[] _resultDiagnosticsSwap = new Diagnostic[16];
+    private SuppressionRecord[] _resultSuppressionRecords = [];
+    private SuppressionRecord[] _resultSuppressionRecordsSwap = [];
+    private Dictionary<string, int>? _resultSuppressedByRule;
+    private Dictionary<string, int>? _resultSuppressedByRuleSwap;
 
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
@@ -109,10 +115,7 @@ public sealed class LintEngine
 
         if (rules.Count == 0 && _onlineRules.Count == 0)
         {
-            return new LintResult(parseResult, _diagnostics.ToArray())
-            {
-                SuppressionSummary = SuppressionSummary.Empty,
-            };
+            return BuildLintResult(parseResult);
         }
 
         _visitor.Reset();
@@ -167,10 +170,7 @@ public sealed class LintEngine
 
         if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
-            return new LintResult(parseResult, _diagnostics.ToArray())
-            {
-                SuppressionSummary = SuppressionSummary.Empty,
-            };
+            return BuildLintResult(parseResult);
         }
 
         if (parseResult.Workflow is not null)
@@ -271,9 +271,83 @@ public sealed class LintEngine
             _diagnostics.Sort(static (x, y) => CompareDiagnosticsByLocation(x, y));
         }
 
-        return new LintResult(parseResult, _diagnostics.ToArray())
+        return BuildLintResultWithSuppression(parseResult);
+    }
+
+    /// <summary>
+    /// Copies <c>_diagnostics</c> into an exact-sized array using a two-buffer swap pattern.
+    /// When the previous result's array (now in <c>_resultDiagnosticsSwap</c>) has the right length,
+    /// it is reused with zero allocation. Otherwise a new array is allocated.
+    /// </summary>
+    private LintResult BuildLintResult(ParseResult parseResult)
+    {
+        var count = _diagnostics.Count;
+
+        // Swap: the previous result's array becomes the candidate for this call
+        (_resultDiagnostics, _resultDiagnosticsSwap) = (_resultDiagnosticsSwap, _resultDiagnostics);
+
+        if (_resultDiagnostics.Length != count)
         {
-            SuppressionSummary = new SuppressionSummary(_suppressionRecords.Count, new Dictionary<string, int>(_suppressedByRule, StringComparer.Ordinal), _suppressionRecords.ToArray()),
+            _resultDiagnostics = new Diagnostic[count];
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            _resultDiagnostics[i] = _diagnostics[i];
+        }
+
+        return new LintResult(parseResult, _resultDiagnostics)
+        {
+            SuppressionSummary = SuppressionSummary.Empty,
+        };
+    }
+
+    /// <summary>
+    /// Builds a <see cref="LintResult"/> with suppression summary using the two-buffer swap pattern.
+    /// </summary>
+    private LintResult BuildLintResultWithSuppression(ParseResult parseResult)
+    {
+        var count = _diagnostics.Count;
+
+        (_resultDiagnostics, _resultDiagnosticsSwap) = (_resultDiagnosticsSwap, _resultDiagnostics);
+
+        if (_resultDiagnostics.Length != count)
+        {
+            _resultDiagnostics = new Diagnostic[count];
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            _resultDiagnostics[i] = _diagnostics[i];
+        }
+
+        // Swap suppression record arrays
+        var suppressionCount = _suppressionRecords.Count;
+
+        (_resultSuppressionRecords, _resultSuppressionRecordsSwap) = (_resultSuppressionRecordsSwap, _resultSuppressionRecords);
+
+        if (_resultSuppressionRecords.Length != suppressionCount)
+        {
+            _resultSuppressionRecords = new SuppressionRecord[suppressionCount];
+        }
+
+        for (var i = 0; i < suppressionCount; i++)
+        {
+            _resultSuppressionRecords[i] = _suppressionRecords[i];
+        }
+
+        // Swap suppressed-by-rule dictionaries
+        (_resultSuppressedByRule, _resultSuppressedByRuleSwap) = (_resultSuppressedByRuleSwap, _resultSuppressedByRule);
+        _resultSuppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
+        _resultSuppressedByRule.Clear();
+        foreach (var pair in _suppressedByRule)
+        {
+            _resultSuppressedByRule[pair.Key] = pair.Value;
+        }
+
+        return new LintResult(parseResult, _resultDiagnostics)
+        {
+            SuppressionSummary = new SuppressionSummary(suppressionCount, _resultSuppressedByRule, _resultSuppressionRecords),
         };
     }
 
