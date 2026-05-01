@@ -8,6 +8,14 @@ namespace Seiton.Core.Tests;
 public sealed class GitHubActionShaResolverTests
 {
     [Test]
+    public async Task CompileUserIgnoreRegexForTests_SetsExpectedMatchTimeout()
+    {
+        var re = GitHubActionShaResolver.CompileUserIgnoreRegexForTests("(a+)+$");
+
+        await Assert.That(re.MatchTimeout).IsEqualTo(LintConfigResourceLimits.IgnoreActionRegexMatchTimeout);
+    }
+
+    [Test]
     public async Task ResolveAsync_ReturnsCommitSha_ForDirectTagReference()
     {
         var handler = new StubHttpMessageHandler();

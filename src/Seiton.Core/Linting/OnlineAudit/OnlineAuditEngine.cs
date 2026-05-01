@@ -10,15 +10,21 @@ namespace Seiton.Core.Linting.OnlineAudit;
 /// Performs post-traversal async resolution for <see cref="IOnlineRule"/> instances
 /// whose targets were collected during <see cref="WorkflowVisitor"/> traversal.
 /// </summary>
+/// <param name="ignorePinningActions">
+/// Optional <c>fix.pinning.ignore-actions</c> list (same semantics as pin remediation). Patterns compile with
+/// <see cref="LintConfigResourceLimits.IgnoreActionRegexMatchTimeout"/>; timeouts do not suppress online resolution.
+/// </param>
 public sealed class OnlineAuditEngine(
     IActionAdvisoryProvider? actionAdvisoryProvider,
     IActionRefResolver? actionRefResolver,
-    NetworkConfig networkConfig)
+    NetworkConfig networkConfig,
+    IReadOnlyList<IgnoreActionEntry>? ignorePinningActions = null)
 {
     private readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
     private readonly IActionRefResolver? refResolver = actionRefResolver;
     private readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
-    private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
+    private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions =
+        CompileIgnoreActions(ignorePinningActions ?? Array.Empty<IgnoreActionEntry>());
 
     /// <summary>
     /// Resolve targets collected by <paramref name="onlineRules"/> during visitor traversal,
@@ -185,9 +191,16 @@ public sealed class OnlineAuditEngine(
         for (var i = 0; i < compiledIgnoreActions.Length; i++)
         {
             var entry = compiledIgnoreActions[i];
-            if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(target.Reference))
+            try
             {
-                return true;
+                if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(target.Reference))
+                {
+                    return true;
+                }
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Bounded ReDoS: do not suppress online audit when regex cannot decide in time (aligns with pin resolver).
             }
         }
 
@@ -204,9 +217,10 @@ public sealed class OnlineAuditEngine(
         var compiled = new CompiledIgnoreActionEntry[entries.Count];
         for (var i = 0; i < entries.Count; i++)
         {
+            var entry = entries[i];
             compiled[i] = new CompiledIgnoreActionEntry(
-                new Regex(entries[i].NamePattern, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase),
-                new Regex(entries[i].RefPattern, RegexOptions.CultureInvariant));
+                IgnoreActionRegexPatterns.Compile(entry.NamePattern),
+                IgnoreActionRegexPatterns.Compile(entry.RefPattern));
         }
 
         return compiled;
@@ -229,7 +243,7 @@ public readonly record struct ActionAuditTarget(
     public bool IsCommitSha => IsFullCommitSha(Reference);
 }
 
-/// <summary>Aggregated result of an online audit pass: diagnostics, skip/fail counts.</summary>
+/// <summary>Aggregated result from an online audit pass: diagnostics, skip/fail counts.</summary>
 public readonly record struct OnlineAuditResult(
     Diagnostic[] Diagnostics,
     int AddedCount,

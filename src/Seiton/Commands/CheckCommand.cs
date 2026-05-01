@@ -39,6 +39,8 @@ internal static class CheckCommand
         if (HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
+        CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
+
         // Resolve input files
         string[] resolvedFiles;
         try
@@ -91,19 +93,9 @@ internal static class CheckCommand
         // Apply ignore patterns
         if (ignore.Length > 0)
         {
-            var patterns = new System.Text.RegularExpressions.Regex[ignore.Length];
-            for (var i = 0; i < ignore.Length; i++)
-                patterns[i] = new System.Text.RegularExpressions.Regex(ignore[i], System.Text.RegularExpressions.RegexOptions.Compiled);
+            var patterns = DiagnosticsIgnoreFilter.CompileMessagePatterns(ignore);
 
-            allDiagnostics.RemoveAll(d =>
-            {
-                for (var i = 0; i < patterns.Length; i++)
-                {
-                    if (patterns[i].IsMatch(d.Message))
-                        return true;
-                }
-                return false;
-            });
+            allDiagnostics.RemoveAll(d => DiagnosticsIgnoreFilter.IsMessageIgnored(patterns, d.Message));
         }
 
         // Apply min-severity filter

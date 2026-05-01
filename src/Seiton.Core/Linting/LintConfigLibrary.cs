@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Security;
+using System.Text;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
@@ -107,7 +108,7 @@ public static class LintConfigLibrary
         network:
           # on-error: skip
           # timeout-seconds: 30
-          # max-concurrency: 4
+          # max-concurrency: (omit; default is min(4, logical CPUs))
           # github:
           #   ghes-api-url: ""
           #   ghes-fallback: false
@@ -149,15 +150,73 @@ public static class LintConfigLibrary
             return new LintConfigValidationResult(null, [missing]);
         }
 
-        var yamlText = File.ReadAllText(configPath);
+        long fileLengthBytes;
+        try
+        {
+            fileLengthBytes = new FileInfo(configPath).Length;
+        }
+        catch (Exception ex) when (IsConfigPathAccessFailure(ex))
+        {
+            return ConfigFileAccessDiagnostics(configPath, ex);
+        }
+
+        if (IsConfigFileOverSizeBytes(fileLengthBytes))
+        {
+            var tooLarge = new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"seiton configuration file exceeds maximum size ({LintConfigResourceLimits.MaxConfigUtf8Bytes} bytes): '{configPath}'",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: configPath);
+            return new LintConfigValidationResult(null, [tooLarge]);
+        }
+
+        string yamlText;
+        try
+        {
+            yamlText = File.ReadAllText(configPath);
+        }
+        catch (Exception ex) when (IsConfigPathAccessFailure(ex))
+        {
+            return ConfigFileAccessDiagnostics(configPath, ex);
+        }
+
         return Validate(yamlText, configPath);
     }
+
+    /// <summary>True for failures when resolving or opening the config path (not parse/validation errors).</summary>
+    private static bool IsConfigPathAccessFailure(Exception ex) =>
+        ex is IOException
+        or UnauthorizedAccessException
+        or SecurityException;
+
+    private static LintConfigValidationResult ConfigFileAccessDiagnostics(string configPath, Exception ex)
+    {
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Error,
+            $"config file '{configPath}' could not be read: {ex.Message}",
+            new TextRange(0, 1, 1, 1, 1, 2),
+            FilePath: configPath);
+        return new LintConfigValidationResult(null, [diag]);
+    }
+
+    private static bool IsConfigFileOverSizeBytes(long length) =>
+        length > LintConfigResourceLimits.MaxConfigUtf8Bytes;
 
     /// <summary>Parses and validates the given YAML text as a seiton configuration.</summary>
     public static LintConfigValidationResult Validate(string yamlText, string filePath)
     {
         ArgumentNullException.ThrowIfNull(yamlText);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        if (Encoding.UTF8.GetByteCount(yamlText) > LintConfigResourceLimits.MaxConfigUtf8Bytes)
+        {
+            var tooLarge = new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"seiton configuration exceeds maximum size ({LintConfigResourceLimits.MaxConfigUtf8Bytes} UTF-8 bytes)",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath);
+            return new LintConfigValidationResult(null, [tooLarge]);
+        }
 
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlText);
         var parseResult = LintConfigYamlParser.Parse(utf8Yaml.AsMemory(), filePath);
@@ -309,6 +368,15 @@ public static class LintConfigLibrary
                 FilePath: filePath));
             timeout = 30;
         }
+        else if (timeout > LintConfigResourceLimits.MaxNetworkTimeoutSeconds)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"network.timeout-seconds must be <= {LintConfigResourceLimits.MaxNetworkTimeoutSeconds}",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            timeout = LintConfigResourceLimits.MaxNetworkTimeoutSeconds;
+        }
 
         var maxConcurrency = network.MaxConcurrency;
         if (maxConcurrency <= 0)
@@ -318,13 +386,36 @@ public static class LintConfigLibrary
                 "network.max-concurrency must be > 0",
                 new TextRange(0, 1, 1, 1, 1, 2),
                 FilePath: filePath));
-            maxConcurrency = 4;
+            maxConcurrency = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
+        }
+        else if (maxConcurrency > LintConfigResourceLimits.MaxNetworkConcurrencyCap)
+        {
+            var cap = LintConfigResourceLimits.MaxNetworkConcurrencyCap;
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"network.max-concurrency must be <= {cap} (logical processor count)",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            maxConcurrency = cap;
         }
 
         var ghesApiUrl = network.GitHub.GhesApiUrl?.Trim();
         if (string.IsNullOrEmpty(ghesApiUrl))
         {
             ghesApiUrl = null;
+        }
+        else if (!GitHubEnterpriseApiBase.TryValidateForConfig(ghesApiUrl, out var canonicalGhes, out var ghesDiagnostic))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                ghesDiagnostic,
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            ghesApiUrl = null;
+        }
+        else
+        {
+            ghesApiUrl = canonicalGhes;
         }
 
         var normalizedNetwork = network with

@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting;
+﻿using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -33,6 +34,23 @@ public sealed class LintConfigLibraryTests
         await Assert.That(fixIndent).IsEqualTo(rulesIndent);
         await Assert.That(networkIndent).IsEqualTo(rulesIndent);
         await Assert.That(outputIndent).IsEqualTo(rulesIndent);
+    }
+
+    [Test]
+    public async Task Validate_Utf8YamlBytesMatchInputUtf8Encoding()
+    {
+        var yaml = """
+        rules:
+          dangerous-triggers:
+            enabled: false
+        """;
+
+        var expectedUtf8 = Encoding.UTF8.GetBytes(yaml);
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Utf8Yaml.AsSpan().SequenceEqual(expectedUtf8)).IsTrue();
     }
 
     [Test]
@@ -242,6 +260,61 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Network_GhesApiUrl_Http_ReturnsError_AndClearsUrl()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: http://ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("https scheme", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Network_GhesApiUrl_WithUserInfo_ReturnsError()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: https://user:pass@ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("credentials", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Network_GhesApiUrl_NonAbsolute_ReturnsError()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("absolute https URL", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_Network_InvalidTimeoutSeconds_ReturnsError()
     {
         var yaml = """
@@ -267,6 +340,7 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("max-concurrency must be > 0", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -500,7 +574,6 @@ public sealed class LintConfigLibraryTests
         network:
           on-error: skip
           timeout-seconds: 30
-          max-concurrency: 4
           github:
             ghes-api-url: ""
             ghes-fallback: false
@@ -538,7 +611,7 @@ public sealed class LintConfigLibraryTests
         // network
         await Assert.That(result.Config.Network.OnError).IsEqualTo(NetworkErrorMode.Skip);
         await Assert.That(result.Config.Network.TimeoutSeconds).IsEqualTo(30);
-        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(4);
+        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -605,5 +678,156 @@ public sealed class LintConfigLibraryTests
         await Assert.That(forbidden.Allow![0]).IsEqualTo("actions/*");
         await Assert.That(forbidden.Deny).IsNotNull();
         await Assert.That(forbidden.Deny![0]).IsEqualTo("bad-org/*");
+    }
+
+    [Test]
+    public async Task Validate_MinYaml_OmittedNetwork_MaxConcurrency_NoNormalizationErrorAndMatchesDefault()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            severity: warning
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.Diagnostics.All(d =>
+            !d.Message.Contains("max-concurrency", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
+    }
+
+    [Test]
+    public async Task Validate_Network_TimeoutSeconds_OverMaximum_ReturnsError_AndCaps()
+    {
+        var yaml = """
+        network:
+          timeout-seconds: 301
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x =>
+                x.Message.Contains("timeout-seconds must be <= ", StringComparison.Ordinal)))
+            .IsTrue();
+        await Assert.That(result.Config!.Network.TimeoutSeconds).IsEqualTo(LintConfigResourceLimits.MaxNetworkTimeoutSeconds);
+    }
+
+    [Test]
+    public async Task Validate_Network_MaxConcurrency_OverMaximum_ReturnsError_AndCaps()
+    {
+        var yaml = """
+        network:
+          max-concurrency: 200
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        var cap = LintConfigResourceLimits.MaxNetworkConcurrencyCap;
+        await Assert.That(result.Diagnostics.Any(x =>
+                x.Message.Contains($"max-concurrency must be <= {cap}", StringComparison.Ordinal)))
+            .IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(cap);
+    }
+
+    [Test]
+    public async Task Validate_Utf8TextOverMaximum_ReturnsError()
+    {
+        var payload = new string('x', LintConfigResourceLimits.MaxConfigUtf8Bytes + 1);
+
+        var result = LintConfigLibrary.Validate(payload, "big.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config).IsNull();
+        await Assert.That(result.Diagnostics.Single().Message.Contains("maximum size", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateFile_OnDiskOverMaximum_ReturnsError()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seiton-p1-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var path = Path.Combine(tempDir, "seiton.yaml");
+        try
+        {
+            var bytes = new byte[LintConfigResourceLimits.MaxConfigUtf8Bytes + 1];
+            Array.Fill(bytes, (byte)' ');
+            bytes[^1] = (byte)'\n';
+            await File.WriteAllBytesAsync(path, bytes);
+
+            var result = LintConfigLibrary.ValidateFile(path);
+
+            await Assert.That(result.IsValid).IsFalse();
+            await Assert.That(result.Config).IsNull();
+            await Assert.That(result.Diagnostics.Single().Message.Contains("maximum size", StringComparison.Ordinal)).IsTrue();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
+    }
+
+    [Test]
+    public async Task Validate_YamlNesting_OverMaximumDepth_ReturnsError()
+    {
+        var yaml = BuildDeepMappingYaml(64);
+
+        var result = LintConfigLibrary.Validate(yaml, "nested.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("maximum nesting depth", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_YamlStructuralUnits_OverMaximum_ReturnsError()
+    {
+        var yaml = BuildLargeExtendListYaml(52_000);
+
+        var result = LintConfigLibrary.Validate(yaml, "units.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("structural size", StringComparison.Ordinal))).IsTrue();
+    }
+
+    private static string BuildDeepMappingYaml(int descendantMappingCount)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("root:");
+        var indent = new string(' ', 2);
+        for (var i = 0; i < descendantMappingCount; i++)
+        {
+            sb.Append(indent).Append('k').Append(i).AppendLine(":");
+            indent += "  ";
+        }
+
+        return sb.ToString();
+    }
+
+    private static string BuildLargeExtendListYaml(int itemCount)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("""
+rules:
+  credentials:
+    public-registries:
+      extend:
+""");
+        sb.Append(Environment.NewLine);
+        var linePrefix = Environment.NewLine + "        - ";
+        for (var i = 0; i < itemCount; i++)
+        {
+            sb.Append(linePrefix).Append('z');
+        }
+
+        sb.Append(Environment.NewLine);
+        return sb.ToString();
     }
 }

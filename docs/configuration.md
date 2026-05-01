@@ -30,6 +30,17 @@ export SEITON_CONFIG=path/to/seiton.yaml
 seiton
 ```
 
+### Trust, `SEITON_CONFIG`, and CI
+
+- **Prefer** a committed file (`.github/seiton.yaml` or discovery) so policy changes go through normal review.
+- **`SEITON_CONFIG`** and **`--config`** select **any** path on disk. On **shared runners**, only set them to paths you trust (typically under the checked-out repository). Do not pass PR-provided or untrusted strings as the path.
+- **Fork pull request** jobs often run with an untrusted merge ref. Avoid `SEITON_CONFIG` pointing at a path writable by that ref; rely on discovery from the base branch checkout or omit a config file to use defaults.
+- **Observation**: with **`seiton check --verbose`** or **`seiton fix --verbose`**, Seiton prints **`config: …`** (absolute resolved path) or **`config: (none, using defaults)`** to stderr immediately after loading the config.
+
+**Governance in *your* repository** (when you adopt Seiton): treat `seiton.yaml` like security policy — wide `exclusions` or disabling online rules can blunt detection. Teams often add rules under **CODEOWNERS** plus branch protection (**require review from Code Owners**) for paths such as `.github/seiton.yaml` and root `seiton.yaml`. See GitHub’s [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
+
+This is guidance for **consumer** repos; Seiton itself does not ship a CODEOWNERS file for adopters — you configure that in **your** project.
+
 ---
 
 ## Generating a Starter Config
@@ -53,6 +64,15 @@ $EDITOR .github/seiton.yaml
 The config file is YAML. All top-level sections are optional. An empty file is valid and behaves identically to running without a config.
 
 Unknown top-level keys and unknown rule IDs are reported as configuration errors.
+
+### Loader resource limits
+
+To limit denial-of-service from maliciously large configuration inputs, validation enforces:
+
+- **Maximum UTF‑8 payload size**: `1 048 576` bytes for both `--config` / `ValidateFile` on-disk reads and `LintConfigLibrary.Validate`.
+- **Maximum YAML DOM depth**: **`64`** nested mappings/sequences when building the config parse tree (`lint config YAML exceeds maximum nesting depth`).
+- **Maximum DOM structural units**: **`50 000`** scalar keys/scalar leaves/compound containers while building the DOM (`lint config YAML exceeds maximum structural size`).
+- **`fix.pinning.ignore-actions`** patterns compile as **`Regex`** with **`MatchTimeout`** = **`2`** seconds; if a timeout occurs during skip evaluation, matching is treated as failed (pinning/remediation proceeds). **`fix.pinning.exclude-branches`** uses the same timeout for **`IsMatch`** (defense-in-depth on escaped literals).
 
 ### Annotated Example
 
@@ -163,9 +183,9 @@ fix:
 network:
   on-error: skip               # skip | fail. How to handle network errors from online rules.
   timeout-seconds: 30          # Per-request timeout for GitHub API calls.
-  max-concurrency: 4           # Maximum concurrent network requests.
+  max-concurrency: 4           # Optional. Omitted default: min(4, logical CPUs). Max: logical CPU count.
   github:
-    ghes-api-url: ""           # GitHub Enterprise Server API URL (empty = github.com).
+    ghes-api-url: ""           # GHES REST API URL (empty = github.com). Must be https; userinfo prohibited.
     ghes-fallback: false       # Fall back to github.com if GHES request fails.
 
 # ─── Output settings ──────────────────────────────────────────────────────────
@@ -380,7 +400,7 @@ Used by online audit rules and network-assisted fix operations.
 network:
   on-error: skip           # skip | fail
   timeout-seconds: 30
-  max-concurrency: 4
+  max-concurrency: 4       # optional; omit uses min(4, logical CPUs)
   github:
     ghes-api-url: ""       # Leave empty for github.com
     ghes-fallback: false
@@ -389,10 +409,12 @@ network:
 | Key | Default | Description |
 |---|---|---|
 | `on-error` | `skip` | `skip` silently ignores network failures. `fail` treats them as errors. |
-| `timeout-seconds` | `30` | Per-request timeout for GitHub API calls. |
-| `max-concurrency` | `4` | Maximum number of concurrent GitHub API requests. |
-| `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com. |
+| `timeout-seconds` | `30` | Per-request GitHub REST timeout (**`0`**–**`300`** seconds; larger values emit an error diagnostic and clamp to **`300`**). |
+| `max-concurrency` | `min(4, ProcessorCount)` | Concurrent GitHub requests. When omitted, effective default is **`min(4, N)`**, where **N** = `Environment.ProcessorCount`, minimum **`1`** (never exceeds **N**). When set explicitly: **`1`**–**N**; larger values emit an error diagnostic and clamp to **N**. |
+| `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com only. Must be an absolute **`https`** URL (non-HTTPS schemes and embedded user credentials are rejected during config validation). |
 | `github.ghes-fallback` | `false` | Fall back to github.com if GHES request fails. |
+
+Outbound GitHub/GitHub Enterprise HTTP clients used by network-assisted pinning and GitHub-hosted online rules **`AllowAutoRedirect` is disabled** at the socket layer and follow **same-origin redirects only**. If the API returns `3xx` to a different scheme/host/port than the preceding request URL, Seiton surfaces the redirect response and does **not** issue a second request carrying the Bearer token — this limits token replay to other origins after hostile redirects.
 
 ### GitHub API Token
 
@@ -448,8 +470,8 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `fix.images.exclude-images` | `scratch` |
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
-| `network.timeout-seconds` | `30` |
-| `network.max-concurrency` | `4` |
+| `network.timeout-seconds` | `30` (`0`–`300` enforced; excess rejected + clamped) |
+| `network.max-concurrency` | `min(4, logical processors)` | Same rules as **`max-concurrency`** above (**`1`**–logical processor count for explicit values; excess rejected + clamped). |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |

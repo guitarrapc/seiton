@@ -229,7 +229,7 @@ public sealed record NetworkConfig
     /// <summary>Gets the timeout in seconds for network requests.</summary>
     public int TimeoutSeconds { get; init; } = 30;
     /// <summary>Gets the maximum number of concurrent network requests.</summary>
-    public int MaxConcurrency { get; init; } = 4;
+    public int MaxConcurrency { get; init; } = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
     /// <summary>Gets the GitHub-specific network configuration.</summary>
     public GitHubNetworkConfig GitHub { get; init; } = new();
 }

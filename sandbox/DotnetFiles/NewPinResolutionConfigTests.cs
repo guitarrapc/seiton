@@ -58,7 +58,7 @@ public sealed class PinResolutionConfigTests
 
         await Assert.That(config.OnError).IsEqualTo(NetworkErrorMode.Skip);
         await Assert.That(config.TimeoutSeconds).IsEqualTo(30);
-        await Assert.That(config.MaxConcurrency).IsEqualTo(4);
+        await Assert.That(config.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
