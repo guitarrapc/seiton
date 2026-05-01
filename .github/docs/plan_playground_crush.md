@@ -204,24 +204,11 @@ public static string RunLint(string? yamlSource, string? filePath)
 
 ただし `GC.Collect()` は SGEN の full collection を強制し、それ自体が OOM の原因になりうるため、**Arena Dispose が先**。
 
-### 4.5 [中優先] PlaygroundLintRunner を stateless 化
+### 4.5 [中優先] PlaygroundLintRunner を stateless 化 ✅ 実装済み
 
-actionlint のパターンに倣い、`LintEngine` を呼び出しごとに生成する選択肢:
-
-```csharp
-public static string RunToJson(string yamlSource, string filePath)
-{
-    var engine = new LintEngine(); // 毎回新規
-    var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
-    var result = engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-    // ... serialize ...
-    result.ParseResult.Arena?.Dispose();
-    return json;
-    // engine が GC 対象に → 全 rule の内部バッファも解放可能
-}
-```
-
-**トレードオフ**: ルール初期化コスト（数十 ms）が毎回かかる。ただし Playground は 300ms debounce があるため許容範囲の可能性が高い。
+actionlint のパターンに倣い、`LintEngine` を呼び出しごとに生成する。
+static `Engine` フィールドと `lock (EngineGate)` を除去し、`RunToJson` / `ApplyAllFixes` の各呼び出し（ApplyAllFixes はループ内の各パス）で `new LintEngine()` を生成する設計に変更。
+これにより各呼び出し後に engine の内部バッファ（rule リスト、diagnostic リスト、HashSet 等）が全て GC 対象になる。
 
 ### 4.6 [低優先] VYaml ThreadStatic バッファの制御
 
@@ -236,7 +223,7 @@ VYaml 内部の ThreadStatic バッファは shrink しない設計。長期的�
 | 1 | AstArena の明示的 Dispose | 低 | **大** | 低（dispose 後に Arena 参照しないことを確認済み） |
 | 2 | InvariantGlobalization を全構成で有効化 | 低 | **大** | なし（lint に文化依存処理不要） |
 | 3 | EmccMaximumHeapSize / EmccInitialHeapSize 設定 | 低 | 中（断片化耐性向上） | 低 |
-| 4 | PlaygroundLintRunner stateless 化 | 中 | 中 | 毎回の初期化コスト増 |
+| 4 | PlaygroundLintRunner stateless 化 | 中 | 中 | 毎回の初期化コスト増 | ✅ |
 | 5 | GC.Collect 検討 | 低 | 小 | full GC 自体の OOM リスク |
 | 6 | VYaml パッチ | 高 | 小 | 上流変更管理 |
 
@@ -244,9 +231,9 @@ VYaml 内部の ThreadStatic バッファは shrink しない設計。長期的�
 
 ## 6. 推奨実装順序
 
-1. **4.1 + 4.2 + 4.3 を同時に実装**（数分で完了、最大効果）
+1. **4.1 + 4.2 + 4.3 を同時に実装**（数分で完了、最大効果）— 4.1 は実装済み
 2. 改善後に再テスト
-3. それでも OOM が発生する場合は 4.5 を検討
+3. ~~それでも OOM が発生する場合は 4.5 を検討~~ → 4.5 も実装済み
 4. 4.4 は最終手段
 
 ---

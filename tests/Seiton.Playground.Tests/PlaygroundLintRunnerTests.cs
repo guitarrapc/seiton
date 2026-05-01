@@ -4,6 +4,34 @@ namespace Seiton.Playground.Tests;
 
 public sealed class PlaygroundLintRunnerTests
 {
+    /// <summary>
+    /// Verifies that rapid sequential lint calls produce stable results and don't
+    /// accumulate state. After the stateless refactor, each call creates a fresh
+    /// LintEngine so no cross-call contamination is possible.
+    /// </summary>
+    [Test]
+    public async Task RunToJson_RepeatedCalls_ProducesConsistentDiagnosticCount()
+    {
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        int? firstCount = null;
+        for (var i = 0; i < 10; i++)
+        {
+            var json = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+            using var doc = JsonDocument.Parse(json);
+            var count = doc.RootElement.GetArrayLength();
+            firstCount ??= count;
+            await Assert.That(count).IsEqualTo(firstCount.Value);
+        }
+    }
     [Test]
     public async Task RunToJson_ValidMinimalWorkflow_ReturnsJsonArray()
     {

@@ -8,11 +8,16 @@ namespace Seiton.Playground;
 
 /// <summary>
 /// Runs <see cref="LintEngine"/> and serializes diagnostics to a JSON array for the playground UI.
+/// <para>
+/// Each method creates a fresh <see cref="LintEngine"/> per call (stateless) so that all
+/// internal buffers (rule lists, diagnostic lists, hash sets) become eligible for GC
+/// immediately after the call returns. This is critical in the WASM playground where the
+/// Mono SGEN GC operates under tight linear-memory constraints and cannot tolerate
+/// high-water-mark buffers surviving across lint invocations.
+/// </para>
 /// </summary>
 public static class PlaygroundLintRunner
 {
-    private static readonly LintEngine Engine = new();
-    private static readonly object EngineGate = new();
 
     /// <summary>Apply fixes for higher-priority rule IDs before broader structural autofixes (otherwise one batch can corrupt YAML).</summary>
     private static readonly string[] FixRuleApplyPriority =
@@ -39,11 +44,8 @@ public static class PlaygroundLintRunner
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
-        LintResult result;
-        lock (EngineGate)
-        {
-            result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-        }
+        var engine = new LintEngine();
+        var result = engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
 
         var list = new List<PlaygroundDiagnosticDto>(result.Diagnostics.Length);
         for (var i = 0; i < result.Diagnostics.Length; i++)
@@ -83,29 +85,27 @@ public static class PlaygroundLintRunner
         const int maxPasses = 64;
         for (var pass = 0; pass < maxPasses; pass++)
         {
-            lock (EngineGate)
+            var engine = new LintEngine();
+            var result = engine.Check(current, filePath, LintWithFixMetadata);
+            if (!result.HasFixableDiagnostics)
             {
-                var result = Engine.Check(current, filePath, LintWithFixMetadata);
-                if (!result.HasFixableDiagnostics)
-                {
-                    result.ParseResult.Arena?.Dispose();
-                    return Encoding.UTF8.GetString(current);
-                }
-
-                var filtered = CollectAutoApplicableFixes(result.FixableDiagnostics);
-                if (filtered.Length == 0)
-                {
-                    // Still has diagnostics with fixes attached, but none we auto-apply here (see CollectAutoApplicableFixes).
-                    result.ParseResult.Arena?.Dispose();
-                    return Encoding.UTF8.GetString(current);
-                }
-
-                var diag = PickNextDiagnosticToApply(filtered);
-                current = FixEngine.Apply(current, new[] { diag });
-
-                // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
                 result.ParseResult.Arena?.Dispose();
+                return Encoding.UTF8.GetString(current);
             }
+
+            var filtered = CollectAutoApplicableFixes(result.FixableDiagnostics);
+            if (filtered.Length == 0)
+            {
+                // Still has diagnostics with fixes attached, but none we auto-apply here (see CollectAutoApplicableFixes).
+                result.ParseResult.Arena?.Dispose();
+                return Encoding.UTF8.GetString(current);
+            }
+
+            var diag = PickNextDiagnosticToApply(filtered);
+            current = FixEngine.Apply(current, new[] { diag });
+
+            // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
+            result.ParseResult.Arena?.Dispose();
         }
 
         return Encoding.UTF8.GetString(current);
