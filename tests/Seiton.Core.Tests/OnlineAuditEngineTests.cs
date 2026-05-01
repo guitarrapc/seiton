@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
@@ -345,6 +346,12 @@ public sealed class OnlineAuditEngineTests
 
         var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
 
+        // Pre-validate that the pattern actually triggers a timeout with the evil ref, so that
+        // `calls == 1` below proves the timeout handler was triggered (not merely a non-match).
+        var ignorePattern = "(a+)+$";
+        var re = GitHubActionShaResolver.CompileUserIgnoreRegexForTests(ignorePattern);
+        await Assert.That(() => re.IsMatch(evilRef)).Throws<RegexMatchTimeoutException>();
+
         var calls = 0;
 
         var auditEngine = new OnlineAuditEngine(
@@ -356,7 +363,7 @@ public sealed class OnlineAuditEngineTests
             new DelegateActionRefResolver((_, _, _, _) =>
                 Task.FromResult(new ActionRefResolution())),
             new NetworkConfig(),
-            [new IgnoreActionEntry("^actions/.*$", "(a+)+$")]);
+            [new IgnoreActionEntry("^actions/.*$", ignorePattern)]);
 
         var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
 

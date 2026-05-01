@@ -72,7 +72,7 @@ To limit denial-of-service from maliciously large configuration inputs, validati
 - **Maximum UTF‑8 payload size**: `1 048 576` bytes for both `--config` / `ValidateFile` on-disk reads and `LintConfigLibrary.Validate`.
 - **Maximum YAML DOM depth**: **`64`** nested mappings/sequences when building the config parse tree (`lint config YAML exceeds maximum nesting depth`).
 - **Maximum DOM structural units**: **`50 000`** scalar keys/scalar leaves/compound containers while building the DOM (`lint config YAML exceeds maximum structural size`).
-- **`fix.pinning.ignore-actions`** patterns compile as **`Regex`** with **`MatchTimeout` = **`2`** seconds; if a timeout occurs during skip evaluation, matching is treated as failed (pinning/remediation proceeds). **`fix.pinning.exclude-branches`** uses the same timeout for **`IsMatch`** (defense-in-depth on escaped literals).
+- **`fix.pinning.ignore-actions`** patterns compile as **`Regex`** with **`MatchTimeout`** = **`2`** seconds; if a timeout occurs during skip evaluation, matching is treated as failed (pinning/remediation proceeds). **`fix.pinning.exclude-branches`** uses the same timeout for **`IsMatch`** (defense-in-depth on escaped literals).
 
 ### Annotated Example
 
