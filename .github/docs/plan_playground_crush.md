@@ -423,3 +423,110 @@ private static readonly LintConfig LintWithFixMetadata = new()
 ### P5: AstArena バッキング配列を ArrayPool 化 ✅ 実装済み
 
 全 `new T[]` を `ArrayPool<T>.Shared.Rent/Return` に置換済み。Grow/Shrink 時の旧配列が GC ゴミにならず ArrayPool に返却される。
+
+---
+
+## 11. 追加アロケーション削減 — 深層分析結果
+
+P0–P5 実装後の残存アロケーションを Seiton.Core 全体にわたって網羅的に調査した結果。
+**後方互換性は無視し、根本的な構造変更を含む。**
+
+### 11.1 優先度 S（最優先）: パーサー毎回実行ホットパス
+
+毎回の `Check()` 呼び出しで **無条件に** 発生し、ファイルサイズに比例して影響が拡大するもの。
+
+| # | 箇所 | アロケーション | 推定影響 | 対策 |
+|---|------|-------------|---------|------|
+| S-1 | `WorkflowParser.ParseClassified` L68 | `new (string, TextPosition)[8]` unusedBuf | 小（固定 8 要素） | `stackalloc` + ref struct 化、または static フィールド化して再利用 |
+| S-2 | `WorkflowParser.ParseClassified` L70 | `new (string, TextPosition, TextPosition)[8]` recursiveBuf | 小（固定 8 要素） | 同上 |
+| S-3 | `WorkflowParser.ParseClassified` L115 | `diagnostics.ToArray()` — パーサー診断の最終配列 | 中（診断数依存） | `PooledBuffer<Diagnostic>` の所有権を `ParseResult` に移転し、ToArray を廃止。ParseResult が PooledBuffer を保持し、AsSpan で参照を返す設計に変更 |
+| S-4 | `WorkflowParser.ParseCore` L249 | `new List<Diagnostic>(16)` | 中（List本体 + 内部配列） | `PooledBuffer<Diagnostic>` に置換。ParseCore を PooledBuffer ベースに変更 |
+| S-5 | `WorkflowParser.ParseCore` L546 | `diagnostics.ToArray()` — workflow/action の最終配列 | 中 | S-3 と連動: ParseResult が PooledBuffer 所有権を取る |
+| S-6 | `LintEngine.BuildKnownJobIdSlices` L843 | `new Utf8Slice[count]` — ジョブ ID スライス配列 | 中（ジョブ数依存） | LintEngine フィールドに `Utf8Slice[]` を保持し、容量が足りればそのまま再利用。不足時のみ拡張 |
+| S-7 | `ExpressionSemanticAnalyzer.Validate` L71-73 | `new List<Diagnostic>()` + `.ToArray()` | 大（式ごとに呼出） | PooledBuffer 化 or 呼び出し元が渡す共有バッファ |
+| S-8 | `ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess` L1400-1409 | `new List<Diagnostic>()` + `.ToArray()` | 大（動的プロパティアクセスごと） | 同上 |
+| S-9 | `ExpressionSemanticAnalyzer.ValidateFunctionCall` L468 | `new ExprType[argCount]` | 中（関数呼出ごと） | stackalloc + Span 化（argCount は通常 1-3） |
+
+### 11.2 優先度 A（高）: ルール実行ホットパス
+
+ルール Visit メソッド内で **ステップごと・ジョブごと** に発生するもの。
+
+| # | 箇所 | アロケーション | 推定影響 | 対策 |
+|---|------|-------------|---------|------|
+| A-1 | `DynamicContextTypeBuilder.BuildStepsOverride` L44,57 | `new Dictionary<byte[], ExprType>()` per VisitStep | 大（ステップ数 × ジョブ数） | Dictionary をルールフィールドで保持し Clear + 再投入。ExprType 側を不変にし、steps override を差分更新にする |
+| A-2 | `ExprUndefinedVarRule.VisitEvent` L104,112 | `new[] { incrementalInputsOverride }` — 1要素配列 | 小（input_default 数依存） | static readonly 1要素配列をフィールド化し、要素を書き換えて再利用 |
+| A-3 | `ExprUndefinedVarRule.VisitWorkflowPost` L194 | `new (byte[], ExprType)[]` — 2要素配列 | 小（workflow_call のみ） | 同上（2要素フィールド） |
+| A-4 | `PopularActionInputsRule.VisitStep` L31 | `Decode(usesSlice)` — string 変換 | 中（popular action ステップごと） | UTF-8 span ベースのルックアップに変更。action spec の名前を byte[] で保持し、span 比較 |
+| A-5 | `UnpinnedUsesRule.VisitStep` L134 | `Decode(usesSlice)` — PinDiagnosticMetadata 用 | 中（unpinned ステップごと） | メタデータを Utf8Slice ベースに変更し、Decode を遅延化（表示時のみ） |
+| A-6 | `RuleBase.Decode(Utf8Slice/Utf8String)` L195-207 | `Encoding.UTF8.GetString` per diagnostic | 中（全ルールの診断メッセージ生成） | Diagnostic.Message を `Utf8String` ベースに変更し、表示時のみ string 化。根本的だが影響範囲が非常に大きい |
+| A-7 | `RunContextDirectUseAnalyzer.IsPowerShell` L59 | `Encoding.UTF8.GetString` per shell check | 小 | UTF-8 span 比較に置換（`"pwsh"u8`, `"powershell"u8` 等） |
+| A-8 | `LintEngine.NormalizeExclusions` L1025-1079 | `new List<>`, `new HashSet<>`, `.ToArray()` | 小（exclusion 設定時のみ） | フィールド化して Clear + 再利用 |
+
+### 11.3 優先度 B（中）: パーサー AST 構築パス
+
+AST ノード生成とそのバッキング配列。ファイルごとに 1 回だが、サイズが大きいと影響する。
+
+| # | 箇所 | アロケーション | 推定影響 | 対策 |
+|---|------|-------------|---------|------|
+| B-1 | `WorkflowParser` 各所 | `PooledBuffer<SliceMap<T>.Entry>.ToArray()` — jobs, permissions, env, outputs 等のバッキング配列 | 大（全 SliceMap の Entry[] コピー） | SliceMap が PooledBuffer を直接保持する設計に変更。SliceMap<T> を IDisposable にし、Entry[] を ArrayPool 管理にする。AstArena の Dispose 時に一括返却 |
+| B-2 | `Workflow`, `Job`, `Step` | `new Workflow()`, `new Job()`, `new Step()` — class instance | 大（各 AST ノード） | struct 化は参照サイクルとサイズの問題で困難。代替: AstArena にオブジェクトプールを追加し、Reset で再利用 |
+| B-3 | `WorkflowParser.ParseCore` L533 | `new Workflow { ... }` | 中（per parse） | B-2 と連動 |
+| B-4 | `ActionMetadata` | `new ActionMetadata { ... }` | 小（action metadata のみ） | B-2 と連動 |
+| B-5 | `ExpressionSemanticAnalyzer.ConvertJsonType` L924-927 | `new Dictionary` + `Encoding.UTF8.GetBytes` per prop | 小（fromJSON リテラルのみ） | 条件パスのため低優先 |
+
+### 11.4 優先度 C（低）: Playground 固有パス
+
+`PlaygroundLintRunner.RunToJson` 内の JSON シリアライズ周辺。
+
+| # | 箇所 | アロケーション | 推定影響 | 対策 |
+|---|------|-------------|---------|------|
+| C-1 | `PlaygroundLintRunner` L57 | `Encoding.UTF8.GetBytes(yamlSource)` | 大（入力全体コピー） | JS 側で TextEncoder を使い、SharedArrayBuffer 経由で byte[] を渡す。C# 側で string → byte[] 変換を廃止 |
+| C-2 | `PlaygroundLintRunner` L64 | `new List<PlaygroundDiagnosticDto>()` | 小 | フィールド化して Clear + 再利用 |
+| C-3 | `PlaygroundLintRunner` L74 | `d.Severity.ToString()` per diagnostic | 小 | static readonly string[] ルックアップテーブルに変更 |
+| C-4 | `PlaygroundLintRunner` L87 | `JsonSerializer.Serialize(list, ...)` | 中 | `Utf8JsonWriter` + `IBufferWriter<byte>` ベースに変更し、中間 string 生成を排除。JS に byte[] を渡して TextDecoder で変換 |
+| C-5 | `FixEngine.Apply` L175-232 | `new List<>`, `.ToArray()`, `Encoding.UTF8.GetBytes`, `new byte[][]`, `new byte[]` | 中（fix 適用時） | fix 適用は頻度が低いため低優先 |
+
+### 11.5 優先度 D（根本的変更）: ParseResult/Diagnostic の所有権モデル
+
+現在の設計: `ParseResult` と `LintResult` は `Diagnostic[]` を所有する `readonly record struct`。配列は毎回新規コピー。
+
+| # | 変更 | 概要 | 影響範囲 |
+|---|------|------|---------|
+| D-1 | **ParseResult を PooledBuffer 所有に変更** | `Diagnostic[]` → `PooledBuffer<Diagnostic>` を内部保持、外部には `ReadOnlySpan<Diagnostic>` を返す。ParseResult を IDisposable にして PooledBuffer を返却 | ParseResult の全消費者、テスト |
+| D-2 | **LintResult を PooledBuffer 所有に変更** | 同上。`_resultDiagnostics` の two-buffer swap パターンを廃止し、PooledBuffer の所有権移転に一本化 | LintResult の全消費者、CLI Output, Playground |
+| D-3 | **Diagnostic.Message を Utf8String 化** | `string Message` → `Utf8String Message`。表示時のみ UTF-8 → string 変換。全ルールの診断メッセージ生成が zero-copy に | 全ルール、CLI 出力、Playground DTO、テスト |
+| D-4 | **SliceMap を ArrayPool-backed に** | `Entry[]` を ArrayPool から取得し、AstArena 経由で一括管理。PooledBuffer.ToArray() を廃止 | WorkflowParser 全体、全 SliceMap 消費者 |
+
+### 11.6 推奨実装順序
+
+**Phase 1: 低リスク・高効果（S-1 〜 S-6, A-7, A-8）**
+- WorkflowParser の tuple buf を stackalloc/static 化
+- ParseCore の `List<Diagnostic>` → PooledBuffer
+- BuildKnownJobIdSlices のフィールド化
+- RunContextDirectUseAnalyzer.IsPowerShell の UTF-8 span 化
+- NormalizeExclusions のフィールド化
+- 推定削減: 毎回の Check() で 3-8 個のコレクション/配列新規生成を排除
+
+**Phase 2: 中リスク・高効果（S-7, S-8, S-9, A-1）**
+- ExpressionSemanticAnalyzer の List → PooledBuffer/共有バッファ
+- ValidateFunctionCall の ExprType[] stackalloc 化
+- DynamicContextTypeBuilder の Dictionary 再利用
+- 推定削減: 式が多い大規模ワークフローで数十〜数百個のコレクション/配列生成を排除
+
+**Phase 3: 中リスク・中効果（A-2 〜 A-6, C-2, C-3）**
+- ExprUndefinedVarRule の 1/2 要素配列フィールド化
+- Decode() の遅延化（ルール個別）
+- Playground DTO の小最適化
+- 推定削減: ルールごとの per-step 文字列変換を削減
+
+**Phase 4: 高リスク・大効果（D-1 〜 D-4, B-1, B-2）**
+- ParseResult/LintResult の所有権モデル変更
+- Diagnostic.Message の Utf8String 化
+- SliceMap の ArrayPool 化
+- AST ノードプール化
+- 推定削減: 根本的に配列コピーと文字列変換を排除。最大の効果だが影響範囲も最大
+
+**Phase 5: Playground 固有（C-1, C-4）**
+- JS interop 層の byte[] 直接受け渡し
+- Utf8JsonWriter ベースのシリアライズ
+- 推定削減: Playground の RunToJson 呼び出しごとの大規模文字列生成を排除
