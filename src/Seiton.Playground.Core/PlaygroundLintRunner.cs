@@ -38,6 +38,8 @@ public static class PlaygroundLintRunner
     private static readonly LintConfig LintWithFixMetadata = new()
     {
         Fix = new FixConfig { Enabled = true },
+        Network = new NetworkConfig(),
+        Output = new OutputConfig(),
     };
 
     /// <summary>
