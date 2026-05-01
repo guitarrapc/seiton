@@ -1,6 +1,8 @@
 ﻿using System.Text;
+using System.Threading;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
+using Seiton.Core.Linting.PinRemediation;
 
 namespace Seiton.Core.Tests;
 
@@ -295,6 +297,71 @@ public sealed class OnlineAuditEngineTests
             // org/repo (workflow call) + actions/checkout = 2 remote targets
             await Assert.That(rule.CollectedTargets.Count).IsEqualTo(2);
         }
+    }
+
+    [Test]
+    public async Task AuditAsync_MatchingIgnoreActions_Skips_DoesNotCallProviders()
+    {
+        var engine = new LintEngine();
+        var source = Encoding.UTF8.GetBytes(
+            """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+            """);
+        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+
+        var advisoryThrows = new DelegateActionAdvisoryProvider((_, _, _, _) =>
+            throw new InvalidOperationException("advisory"));
+        var refThrows = new DelegateActionRefResolver((_, _, _, _) =>
+            throw new InvalidOperationException("resolver"));
+
+        var auditEngine = new OnlineAuditEngine(
+            advisoryThrows,
+            refThrows,
+            new NetworkConfig(),
+            [new IgnoreActionEntry("^actions/.*$", "^v4$")]);
+
+        var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
+
+        await Assert.That(result.SkippedCount).IsEqualTo(1);
+        await Assert.That(result.FailedCount).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task AuditAsync_IgnoreRegex_TimeoutTreatsAsNotIgnored_AdvisoryRuns()
+    {
+        var engine = new LintEngine();
+        var evilRef = new string('a', 29) + "b";
+        var source = Encoding.UTF8.GetBytes($"""
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@{evilRef}
+            """);
+
+        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+
+        var calls = 0;
+
+        var auditEngine = new OnlineAuditEngine(
+            new DelegateActionAdvisoryProvider((_, _, _, _) =>
+            {
+                Interlocked.Increment(ref calls);
+                return Task.FromResult<ActionAdvisory?>(null);
+            }),
+            new DelegateActionRefResolver((_, _, _, _) =>
+                Task.FromResult(new ActionRefResolution())),
+            new NetworkConfig(),
+            [new IgnoreActionEntry("^actions/.*$", "(a+)+$")]);
+
+        var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
+
+        await Assert.That(result.SkippedCount).IsEqualTo(0);
+        await Assert.That(calls).IsEqualTo(1);
     }
 
     private sealed class DelegateActionAdvisoryProvider(

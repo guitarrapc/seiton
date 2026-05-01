@@ -140,8 +140,11 @@
 
 | 項 | 内容 |
 |---|---|
-| **ReDoS** | `ignore-actions` の **`uses`/`ref`** は Regex（`MatchTimeout` 約 2s）。**1 試行ごとには**上限があるが、`ShouldSkip` 等が **`unpinned` 診断単位や参照単位で繰り返し**呼ばれると、ワーストケースでは **処理時間・ジッタ**が増え得る。 |
-| **`exclude-branches`** | **`Regex.Escape`** 済みだが、`IsMatch` に同じく **MatchTimeout** を課している（防御的深度）。 |
+| **ReDoS（`fix.pinning.ignore-actions`）** | `GitHubActionShaResolver` は `IgnoreActionRegexPatterns` 経由で **`MatchTimeout` ≈ 2s**（`LintConfigResourceLimits.IgnoreActionRegexMatchTimeout`）。タイムアウト時は **ピン解決のスキップに使わない**扱い（`RegexMatchTimeoutException`）。 |
+| **`OnlineAuditEngine`** | 同じ **`IgnoreActionEntry`** を第 4 引数で渡した場合、**同一コンパイル**を使い、`ShouldIgnore` で **`RegexMatchTimeoutException` は「無視しない」**（監査を進める）。無名引数省略時はリスト空。 |
+| **CLI `--ignore`** | 診断メッセージ用 Regex にも **同じタイムアウト**。**タイムアウト時はフィルタしない**（診断は残る）。 |
+| **累積** | **1 試行**は上で有界でも、多数の参照 × 無視エントリでの **合計遅延・ジッタ**は残り得る。 |
+| **`exclude-branches`** | **`Regex.Escape`** 済み＋ **`MatchTimeout`**（`ExcludeBranchRegexMatchTimeout`）。 |
 
 ### 5.3 リソース・パース・グロブ
 
@@ -174,3 +177,5 @@
 | 2026-05-01 | P2（上流）: `SEITON_CONFIG`/CI の信頼境界ドキュメント、CLI `--verbose` の `config:` ログ、`LintConfigYamlParser` の冗長 **`byte[]`** コピー削減。 |
 | 2026-05-01 | P2 の範囲修正: **`CODEOWNERS` は Seiton を導入した利用者リポジトリの運用**。上流 `.github/CODEOWNERS` を削除し計画書・ユーザー向けドキュメントでスコープを明確化。 |
 | 2026-05-01 | §1.1 を対策**前**として明記。**§1.2** と **§5** に対策後の要約・残存攻撃ベクターを追記。 |
+| 2026-05-01 | **§5.2 実装**: `OnlineAuditEngine` の ignore 用 Regex を `MatchTimeout` 化＋タイムアウト時は監査継続。**`fix.pinning.ignore-actions`** を第 4 引数で適用可能に。CLI `--ignore` に同タイムアウト。共通化 `IgnoreActionRegexPatterns`。 |
+

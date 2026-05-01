@@ -542,8 +542,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     /// <summary>Compiles ignore-action regex with bounded match time — exposed for invariant tests (<see cref="LintConfigResourceLimits.IgnoreActionRegexMatchTimeout"/>).</summary>
     internal static Regex CompileUserIgnoreRegexForTests(string pattern) => CompileUserIgnoreRegex(pattern);
 
-    private static Regex CompileUserIgnoreRegex(string pattern) =>
-        new(pattern, RegexOptions.CultureInvariant | RegexOptions.Compiled, LintConfigResourceLimits.IgnoreActionRegexMatchTimeout);
+    private static Regex CompileUserIgnoreRegex(string pattern) => IgnoreActionRegexPatterns.Compile(pattern);
 
     private static InvalidOperationException CreateResolutionException(
         string owner,

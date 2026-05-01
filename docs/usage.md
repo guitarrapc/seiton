@@ -122,7 +122,8 @@ seiton version
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ignore` | `string[]` | (none) | Regex patterns to suppress diagnostics by message. Repeatable. |
+| `--ignore` | `string[]` | (none) | Regex patterns to suppress diagnostics by message. **`MatchTimeout`** = **2 s** per pattern (same cap as config `ignore-actions`); on timeout the diagnostic is **not** suppressed. Repeatable. |
+
 | `--min-severity` | `error\|warning\|info` | (none) | Suppress diagnostics below this severity. |
 | `--fix` | `bool` | `false` | Run in fix mode (equivalent to `seiton fix`). |
 
