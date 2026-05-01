@@ -167,21 +167,19 @@ ICU データだけで数 MB を消費する。Debug でも有効にすること
 </PropertyGroup>
 ```
 
-### 4.3 [推奨] EmccMaximumHeapSize の明示設定
+### 4.3 [推奨] EmccMaximumHeapSize の明示設定 ✅ 実装済み
 
-既定の 2GB はブラウザ側で実際に確保できないケースがある。512MB を明示設定し、起動時にランタイムが必要なメモリを予約できるようにする:
+512MB では Debug ビルドのメモリ圧迫でちょうど上限に到達して OOM が発生した。
+初期ヒープ 64MB + 最大 1GB に変更:
 
 ```xml
 <PropertyGroup>
-    <EmccMaximumHeapSize>536870912</EmccMaximumHeapSize> <!-- 512MB -->
+    <EmccInitialHeapSize>67108864</EmccInitialHeapSize>  <!-- 64MB initial -->
+    <EmccMaximumHeapSize>1073741824</EmccMaximumHeapSize> <!-- 1GB max -->
 </PropertyGroup>
 ```
 
-あるいはより保守的に:
-```xml
-<EmccInitialHeapSize>67108864</EmccInitialHeapSize> <!-- 64MB initial -->
-<EmccMaximumHeapSize>268435456</EmccMaximumHeapSize> <!-- 256MB max -->
-```
+**教訓**: 512MB は Debug ビルド（非 trim + 非 AOT + ICU）ではギリギリ不足する。1GB なら十分なマージンがある。
 
 ### 4.4 [推奨] lint 呼び出し前に GC.Collect を検討
 
@@ -221,8 +219,8 @@ VYaml 内部の ThreadStatic バッファは shrink しない設計。長期的�
 | # | 施策 | 難易度 | メモリ削減効果 | リスク |
 |---|------|--------|--------------|--------|
 | 1 | AstArena の明示的 Dispose | 低 | **大** | 低（dispose 後に Arena 参照しないことを確認済み） |
-| 2 | InvariantGlobalization を全構成で有効化 | 低 | **大** | なし（lint に文化依存処理不要） |
-| 3 | EmccMaximumHeapSize / EmccInitialHeapSize 設定 | 低 | 中（断片化耐性向上） | 低 |
+| 2 | InvariantGlobalization を全構成で有効化 | 低 | **大** | なし（lint に文化依存処理不要） | ✅ |
+| 3 | EmccMaximumHeapSize / EmccInitialHeapSize 設定 | 低 | 中（断片化耐性向上） | 低 | ✅ (64MB init / 1GB max) |
 | 4 | PlaygroundLintRunner stateless 化 | 中 | 中 | 毎回の初期化コスト増 | ✅ |
 | 5 | GC.Collect 検討 | 低 | 小 | full GC 自体の OOM リスク |
 | 6 | VYaml パッチ | 高 | 小 | 上流変更管理 |
@@ -231,8 +229,8 @@ VYaml 内部の ThreadStatic バッファは shrink しない設計。長期的�
 
 ## 6. 推奨実装順序
 
-1. **4.1 + 4.2 + 4.3 を同時に実装**（数分で完了、最大効果）— 4.1 は実装済み
-2. 改善後に再テスト
+1. ~~**4.1 + 4.2 + 4.3 を同時に実装**~~ → 全て実装済み（4.1 Arena Dispose, 4.2 InvariantGlobalization, 4.3 EmccHeapSize 1GB）
+2. ~~改善後に再テスト~~ → 512MB で OOM 再発を確認、1GB に引き上げ済み
 3. ~~それでも OOM が発生する場合は 4.5 を検討~~ → 4.5 も実装済み
 4. 4.4 は最終手段
 

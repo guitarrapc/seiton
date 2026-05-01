@@ -12,8 +12,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- Reserve required memory explicitly: 512MB -->
-    <EmccMaximumHeapSize>536870912</EmccMaximumHeapSize>
+    <!-- Pre-allocate 64MB at startup to reduce early memory.grow fragmentation -->
+    <EmccInitialHeapSize>67108864</EmccInitialHeapSize>
+    <!-- Allow up to 1GB; Debug builds (no trim, no AOT, full ICU) can easily exceed 512MB -->
+    <EmccMaximumHeapSize>1073741824</EmccMaximumHeapSize>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
