@@ -30,6 +30,17 @@ export SEITON_CONFIG=path/to/seiton.yaml
 seiton
 ```
 
+### Trust, `SEITON_CONFIG`, and CI
+
+- **Prefer** a committed file (`.github/seiton.yaml` or discovery) so policy changes go through normal review.
+- **`SEITON_CONFIG`** and **`--config`** select **any** path on disk. On **shared runners**, only set them to paths you trust (typically under the checked-out repository). Do not pass PR-provided or untrusted strings as the path.
+- **Fork pull request** jobs often run with an untrusted merge ref. Avoid `SEITON_CONFIG` pointing at a path writable by that ref; rely on discovery from the base branch checkout or omit a config file to use defaults.
+- **Observation**: with **`seiton check --verbose`** or **`seiton fix --verbose`**, Seiton prints **`config: …`** (absolute resolved path) or **`config: (none, using defaults)`** to stderr immediately after loading the config.
+
+**Governance in *your* repository** (when you adopt Seiton): treat `seiton.yaml` like security policy — wide `exclusions` or disabling online rules can blunt detection. Teams often add rules under **CODEOWNERS** plus branch protection (**require review from Code Owners**) for paths such as `.github/seiton.yaml` and root `seiton.yaml`. See GitHub’s [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
+
+This is guidance for **consumer** repos; Seiton itself does not ship a CODEOWNERS file for adopters — you configure that in **your** project.
+
 ---
 
 ## Generating a Starter Config
@@ -53,6 +64,15 @@ $EDITOR .github/seiton.yaml
 The config file is YAML. All top-level sections are optional. An empty file is valid and behaves identically to running without a config.
 
 Unknown top-level keys and unknown rule IDs are reported as configuration errors.
+
+### Loader resource limits
+
+To limit denial-of-service from maliciously large configuration inputs, validation enforces:
+
+- **Maximum UTF‑8 payload size**: `1 048 576` bytes for both `--config` / `ValidateFile` on-disk reads and `LintConfigLibrary.Validate`.
+- **Maximum YAML DOM depth**: **`64`** nested mappings/sequences when building the config parse tree (`lint config YAML exceeds maximum nesting depth`).
+- **Maximum DOM structural units**: **`50 000`** scalar keys/scalar leaves/compound containers while building the DOM (`lint config YAML exceeds maximum structural size`).
+- **`fix.pinning.ignore-actions`** uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk. **`fix.pinning.exclude-branches`** uses exact string equality (`string.Equals`, ordinal).
 
 ### Annotated Example
 
@@ -95,10 +115,6 @@ rules:
         - registry.example.com
         - mirror.example.net:5000
 
-  # Set the default timeout used by the job-timeout-minutes-required auto-fix.
-  # Remove or set to null to disable auto-fix attachment.
-  job-timeout-minutes-required:
-    default-timeout-minutes: 15
 
   # Extend the trigger set that cache-poisoning considers untrusted.
   cache-poisoning:
@@ -122,14 +138,12 @@ rules:
 # ─── Exclusions ──────────────────────────────────────────────────────────────
 exclusions:
   # Suppress specific rules for all files matching a path glob.
-  - files:
-      - ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - unpinned-uses
 
   # Suppress specific rules in a specific job within a file.
-  - files:
-      - ".github/workflows/publish.yml"
+  - file: ".github/workflows/publish.yml"
     jobs:
       - publish
     rules:
@@ -146,9 +160,9 @@ fix:
     exclude-branches:          # Skip SHA pinning for these branch refs.
       - main
       - master
-    ignore-actions:            # Skip pinning for actions matching these patterns.
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+    ignore-actions:            # Skip pinning for actions matching these wildcard patterns.
+      - uses: "slsa-framework/*"
+        ref: "*"
 
   images:
     enable-network: false      # Set true to allow network-assisted digest pinning.
@@ -163,9 +177,9 @@ fix:
 network:
   on-error: skip               # skip | fail. How to handle network errors from online rules.
   timeout-seconds: 30          # Per-request timeout for GitHub API calls.
-  max-concurrency: 4           # Maximum concurrent network requests.
+  max-concurrency: 4           # Optional. Omitted default: min(4, logical CPUs). Max: logical CPU count.
   github:
-    ghes-api-url: ""           # GitHub Enterprise Server API URL (empty = github.com).
+    ghes-api-url: ""           # GHES REST API URL (empty = github.com). Must be https; userinfo prohibited.
     ghes-fallback: false       # Fall back to github.com if GHES request fails.
 
 # ─── Output settings ──────────────────────────────────────────────────────────
@@ -221,22 +235,35 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
 | `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
-| `job-timeout-minutes-required` | `default-timeout-minutes` | Default `timeout-minutes` value added by auto-fix (unset = no auto-fix). |
+| `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
 
 ---
 
 ## Exclusions
 
-Exclusions suppress diagnostics for specific files, jobs, or rule combinations.
+Exclusions suppress **rule diagnostics** for specific files, jobs, or rule combinations. Parser errors and configuration errors are never suppressed by exclusions. Fields are additive (progressive narrowing):
 
-### File-Level Exclusion
+- **`file` only** → suppress all rule diagnostics for the entire file
+- **`file` + `jobs`** → suppress all rule diagnostics for specified jobs only
+- **`file` + `rules`** → suppress specified rule diagnostics for the whole file
+- **`file` + `jobs` + `rules`** → suppress specified rule diagnostics for specified jobs
+
+### File-Level Exclusion (all rules)
+
+Suppress all rule diagnostics for a file:
+
+```yaml
+exclusions:
+  - file: ".github/workflows/generated.yml"
+```
+
+### File-Level Exclusion (specific rules)
 
 Suppress one or more rules for all files matching a glob pattern:
 
 ```yaml
 exclusions:
-  - files:
-      - ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - unpinned-uses
       - runner-no-latest
@@ -250,8 +277,7 @@ Suppress rules for a specific job ID within a file:
 
 ```yaml
 exclusions:
-  - files:
-      - ".github/workflows/publish.yml"
+  - file: ".github/workflows/publish.yml"
     jobs:
       - publish
     rules:
@@ -336,9 +362,9 @@ fix:
     exclude-branches:          # Do not replace branch-style refs.
       - main
       - master
-    ignore-actions:            # Skip pinning for actions matching these patterns.
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+    ignore-actions:            # Skip pinning for actions matching these wildcard patterns.
+      - uses: "slsa-framework/*"
+        ref: "*"
 ```
 
 ### Network-Assisted Image Digest Pinning
@@ -380,7 +406,7 @@ Used by online audit rules and network-assisted fix operations.
 network:
   on-error: skip           # skip | fail
   timeout-seconds: 30
-  max-concurrency: 4
+  max-concurrency: 4       # optional; omit uses min(4, logical CPUs)
   github:
     ghes-api-url: ""       # Leave empty for github.com
     ghes-fallback: false
@@ -389,10 +415,12 @@ network:
 | Key | Default | Description |
 |---|---|---|
 | `on-error` | `skip` | `skip` silently ignores network failures. `fail` treats them as errors. |
-| `timeout-seconds` | `30` | Per-request timeout for GitHub API calls. |
-| `max-concurrency` | `4` | Maximum number of concurrent GitHub API requests. |
-| `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com. |
+| `timeout-seconds` | `30` | Per-request GitHub REST timeout (**`0`**–**`300`** seconds; larger values emit an error diagnostic and clamp to **`300`**). |
+| `max-concurrency` | `min(4, ProcessorCount)` | Concurrent GitHub requests. When omitted, effective default is **`min(4, N)`**, where **N** = `Environment.ProcessorCount`, minimum **`1`** (never exceeds **N**). When set explicitly: **`1`**–**N**; larger values emit an error diagnostic and clamp to **N**. |
+| `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com only. Must be an absolute **`https`** URL (non-HTTPS schemes and embedded user credentials are rejected during config validation). |
 | `github.ghes-fallback` | `false` | Fall back to github.com if GHES request fails. |
+
+Outbound GitHub/GitHub Enterprise HTTP clients used by network-assisted pinning and GitHub-hosted online rules **`AllowAutoRedirect` is disabled** at the socket layer and follow **same-origin redirects only**. If the API returns `3xx` to a different scheme/host/port than the preceding request URL, Seiton surfaces the redirect response and does **not** issue a second request carrying the Bearer token — this limits token replay to other origins after hostile redirects.
 
 ### GitHub API Token
 
@@ -448,8 +476,8 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `fix.images.exclude-images` | `scratch` |
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
-| `network.timeout-seconds` | `30` |
-| `network.max-concurrency` | `4` |
+| `network.timeout-seconds` | `30` (`0`–`300` enforced; excess rejected + clamped) |
+| `network.max-concurrency` | `min(4, logical processors)` | Same rules as **`max-concurrency`** above (**`1`**–logical processor count for explicit values; excess rejected + clamped). |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |

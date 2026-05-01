@@ -58,7 +58,7 @@ public sealed class PinResolutionConfigTests
 
         await Assert.That(config.OnError).IsEqualTo(NetworkErrorMode.Skip);
         await Assert.That(config.TimeoutSeconds).IsEqualTo(30);
-        await Assert.That(config.MaxConcurrency).IsEqualTo(4);
+        await Assert.That(config.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -83,10 +83,10 @@ public sealed class PinResolutionConfigTests
     public async Task IgnoreActionEntry_StoresNameAndRefPattern()
     {
         var entry = new IgnoreActionEntry(
-            @"slsa-framework/slsa-github-generator/.*",
-            @".*");
+            "slsa-framework/slsa-github-generator/*",
+            "*");
 
-        await Assert.That(entry.NamePattern).IsEqualTo(@"slsa-framework/slsa-github-generator/.*");
-        await Assert.That(entry.RefPattern).IsEqualTo(@".*");
+        await Assert.That(entry.NamePattern).IsEqualTo("slsa-framework/slsa-github-generator/*");
+        await Assert.That(entry.RefPattern).IsEqualTo("*");
     }
 }

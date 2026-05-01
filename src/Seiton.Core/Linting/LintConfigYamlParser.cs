@@ -1,4 +1,6 @@
-﻿using System.Globalization;
+﻿using System.Buffers;
+using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
@@ -16,6 +18,36 @@ internal static class LintConfigYamlParser
 
     private static readonly FixConfig DefaultFix = new();
     private static readonly NetworkConfig DefaultNetwork = new();
+
+    private sealed class YamlDomParseLimiter
+    {
+        private int _depth;
+        private int _units;
+
+        public void EnterCompound()
+        {
+            if (++_depth > LintConfigResourceLimits.MaxYamlNestDepth)
+            {
+                throw new InvalidOperationException(
+                    $"lint config YAML exceeds maximum nesting depth ({LintConfigResourceLimits.MaxYamlNestDepth})");
+            }
+
+            RecordStructuralUnit();
+        }
+
+        public void LeaveCompound() => _depth--;
+
+        public void RecordLeaf() => RecordStructuralUnit();
+
+        private void RecordStructuralUnit()
+        {
+            if (++_units > LintConfigResourceLimits.MaxYamlDomUnits)
+            {
+                throw new InvalidOperationException(
+                    $"lint config YAML exceeds maximum structural size ({LintConfigResourceLimits.MaxYamlDomUnits} units)");
+            }
+        }
+    }
 
     /// <summary>
     /// Single source of truth for flag↔YAML key name mapping.
@@ -68,85 +100,137 @@ internal static class LintConfigYamlParser
     /// </summary>
     private static Dictionary<string, object?>? ParseYamlDom(ReadOnlyMemory<byte> utf8Yaml)
     {
-        // YamlParser.FromBytes requires Memory<byte>; copy if needed.
-        var mutable = new byte[utf8Yaml.Length];
-        utf8Yaml.Span.CopyTo(mutable);
-        var parser = YamlParser.FromBytes(mutable.AsMemory());
-
-        // VYaml event sequence: StreamStart → DocumentStart → content → DocumentEnd → StreamEnd
-        // Advance past StreamStart
-        if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+        // YamlParser.FromBytes requires Memory<byte>. When callers pass array-backed ReadOnlyMemory
+        // from LintConfigLibrary (same backing array as LintConfig.Utf8Yaml), parse in-place —
+        // VYaml does not mutate the UTF-8 source (same invariant as workflow VYamlStreamAdapter).
+        Memory<byte> parserMemory;
+        byte[]? poolBuffer = null;
+        if (MemoryMarshal.TryGetArray(utf8Yaml, out var segment) && segment.Array is not null)
         {
-            return null;
+            parserMemory = segment.Array.AsMemory(segment.Offset, segment.Count);
+        }
+        else
+        {
+            poolBuffer = ArrayPool<byte>.Shared.Rent(utf8Yaml.Length);
+            utf8Yaml.Span.CopyTo(poolBuffer.AsSpan(0, utf8Yaml.Length));
+            parserMemory = poolBuffer.AsMemory(0, utf8Yaml.Length);
         }
 
-        // Advance past DocumentStart
-        if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+        YamlParser parser;
+        try
         {
-            return null;
+            parser = YamlParser.FromBytes(parserMemory);
+        }
+        catch
+        {
+            if (poolBuffer is not null)
+            {
+                ArrayPool<byte>.Shared.Return(poolBuffer);
+            }
+
+            throw;
         }
 
-        // Advance to first content event (MappingStart, SequenceStart, or Scalar)
-        if (!parser.Read() || parser.CurrentEventType is ParseEventType.DocumentEnd or ParseEventType.StreamEnd)
+        try
         {
-            return null;
-        }
+            // VYaml event sequence: StreamStart → DocumentStart → content → DocumentEnd → StreamEnd
+            // Advance past StreamStart
+            if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+            {
+                return null;
+            }
 
-        var result = ReadValue(ref parser);
-        return result as Dictionary<string, object?>;
+            // Advance past DocumentStart
+            if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
+            {
+                return null;
+            }
+
+            // Advance to first content event (MappingStart, SequenceStart, or Scalar)
+            if (!parser.Read() || parser.CurrentEventType is ParseEventType.DocumentEnd or ParseEventType.StreamEnd)
+            {
+                return null;
+            }
+
+            var limiter = new YamlDomParseLimiter();
+            var result = ReadValue(ref parser, limiter);
+            return result as Dictionary<string, object?>;
+        }
+        finally
+        {
+            if (poolBuffer is not null)
+            {
+                ArrayPool<byte>.Shared.Return(poolBuffer);
+            }
+        }
     }
 
-    private static object? ReadValue(ref YamlParser parser)
+    private static object? ReadValue(ref YamlParser parser, YamlDomParseLimiter limiter)
     {
         return parser.CurrentEventType switch
         {
-            ParseEventType.MappingStart => ReadMapping(ref parser),
-            ParseEventType.SequenceStart => ReadSequence(ref parser),
-            ParseEventType.Scalar => ReadScalar(ref parser),
+            ParseEventType.MappingStart => ReadMapping(ref parser, limiter),
+            ParseEventType.SequenceStart => ReadSequence(ref parser, limiter),
+            ParseEventType.Scalar => ReadScalar(ref parser, limiter),
             _ => null,
         };
     }
 
-    private static Dictionary<string, object?> ReadMapping(ref YamlParser parser)
+    private static Dictionary<string, object?> ReadMapping(ref YamlParser parser, YamlDomParseLimiter limiter)
     {
         // Skip MappingStart
         parser.Read();
-
-        var map = new Dictionary<string, object?>(StringComparer.Ordinal);
-        while (parser.CurrentEventType != ParseEventType.MappingEnd)
+        limiter.EnterCompound();
+        try
         {
-            var key = ReadScalarAsString(ref parser);
-            parser.Read();
-            var value = ReadValue(ref parser);
-            if (key is not null)
+            var map = new Dictionary<string, object?>(StringComparer.Ordinal);
+            while (parser.CurrentEventType != ParseEventType.MappingEnd)
             {
-                map[key] = value;
+                var key = ReadMappingKeyScalar(ref parser, limiter);
+                parser.Read();
+                var value = ReadValue(ref parser, limiter);
+                if (key is not null)
+                {
+                    map[key] = value;
+                }
             }
-        }
 
-        // Skip MappingEnd
-        parser.Read();
-        return map;
+            // Skip MappingEnd
+            parser.Read();
+            return map;
+        }
+        finally
+        {
+            limiter.LeaveCompound();
+        }
     }
 
-    private static List<object?> ReadSequence(ref YamlParser parser)
+    private static List<object?> ReadSequence(ref YamlParser parser, YamlDomParseLimiter limiter)
     {
         // Skip SequenceStart
         parser.Read();
-
-        var list = new List<object?>();
-        while (parser.CurrentEventType != ParseEventType.SequenceEnd)
+        limiter.EnterCompound();
+        try
         {
-            list.Add(ReadValue(ref parser));
-        }
+            var list = new List<object?>();
+            while (parser.CurrentEventType != ParseEventType.SequenceEnd)
+            {
+                list.Add(ReadValue(ref parser, limiter));
+            }
 
-        // Skip SequenceEnd
-        parser.Read();
-        return list;
+            // Skip SequenceEnd
+            parser.Read();
+            return list;
+        }
+        finally
+        {
+            limiter.LeaveCompound();
+        }
     }
 
-    private static object? ReadScalar(ref YamlParser parser)
+    private static object? ReadScalar(ref YamlParser parser, YamlDomParseLimiter limiter)
     {
+        limiter.RecordLeaf();
         var result = ReadScalarValue(ref parser);
         parser.Read();
         return result;
@@ -179,18 +263,24 @@ internal static class LintConfigYamlParser
             return doubleValue;
         }
 
-        return ReadScalarAsString(ref parser);
+        return DecodeScalarStringUtf8(ref parser);
     }
 
-    private static string? ReadScalarAsString(ref YamlParser parser)
+    private static string DecodeScalarStringUtf8(ref YamlParser parser)
     {
+        var utf8 = parser.GetScalarAsUtf8();
+        return Encoding.UTF8.GetString(utf8);
+    }
+
+    private static string? ReadMappingKeyScalar(ref YamlParser parser, YamlDomParseLimiter limiter)
+    {
+        limiter.RecordLeaf();
         if (parser.IsNullScalar())
         {
             return null;
         }
 
-        var utf8 = parser.GetScalarAsUtf8();
-        return Encoding.UTF8.GetString(utf8);
+        return DecodeScalarStringUtf8(ref parser);
     }
 
     private static LintConfigParseResult Convert(Dictionary<string, object?> root, string filePath)
@@ -754,7 +844,7 @@ internal static class LintConfigYamlParser
     {
         var onError = NetworkErrorMode.Skip;
         var timeoutSeconds = 30;
-        var maxConcurrency = 4;
+        var maxConcurrency = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
         var github = new GitHubNetworkConfig();
 
         foreach (var (key, value) in map)
@@ -896,18 +986,20 @@ internal static class LintConfigYamlParser
             return;
         }
 
-        string? files = null;
-        IReadOnlyList<string> rulesList = [];
+        string? file = null;
+        IReadOnlyList<string>? rulesList = null;
+        bool rulesKeyPresent = false;
         IReadOnlyList<string> jobsList = [];
 
         foreach (var (key, value) in item)
         {
-            if (key == "files")
+            if (key == "file")
             {
-                files = Unquote(ScalarToString(value));
+                file = Unquote(ScalarToString(value));
             }
             else if (key == "rules")
             {
+                rulesKeyPresent = true;
                 rulesList = ParseStringList(value, "rules", diagnostics, filePath);
             }
             else if (key == "jobs")
@@ -920,19 +1012,15 @@ internal static class LintConfigYamlParser
             }
         }
 
-        if (string.IsNullOrWhiteSpace(files))
+        if (string.IsNullOrWhiteSpace(file))
         {
-            diagnostics.Add(Diag("exclusion files is required", DomLine, 3, 1, filePath));
+            diagnostics.Add(Diag("exclusion file is required", DomLine, 3, 1, filePath));
             return;
         }
 
-        if (rulesList.Count == 0)
-        {
-            diagnostics.Add(Diag("exclusion rules is required", DomLine, 3, 1, filePath));
-            return;
-        }
-
-        exclusions.Add(new LintExclusion(files, rulesList, jobsList.Count > 0 ? jobsList : null));
+        // rules omitted → null (all rules); rules: [] → empty list (no-op, handled by normalizer)
+        IReadOnlyList<string>? finalRules = rulesKeyPresent ? (rulesList ?? []) : null;
+        exclusions.Add(new LintExclusion(file, finalRules, jobsList.Count > 0 ? jobsList : null));
     }
 
     private static Dictionary<string, object?>? AsMap(object? o)

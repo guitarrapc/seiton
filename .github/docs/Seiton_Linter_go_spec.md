@@ -541,7 +541,7 @@ type IgnoreActionEntry struct {
 type NetworkConfig struct {
     OnError        NetworkErrorMode // default: Skip
     TimeoutSeconds int              // default: 30
-    MaxConcurrency int              // default: 4
+    MaxConcurrency int              // default: min(4, max(1, logical CPUs))
     GitHub         GitHubNetworkConfig
 }
 

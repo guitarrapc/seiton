@@ -316,7 +316,7 @@ Default values (current C# runtime):
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
 | `network.timeout-seconds` | `30` |
-| `network.max-concurrency` | `4` |
+| `network.max-concurrency` | `min(4, logical processor count)` (at least **`1`**) |
 | `network.github.ghes-api-url` | empty (github.com only) |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |
@@ -578,12 +578,12 @@ rules:
     enabled: true
 
 exclusions:
-  - files: ".github/workflows/legacy/*.yml"
+  - file: ".github/workflows/legacy/*.yml"
     rules:
       - dangerous-triggers
       - job-permissions-required
 
-  - files: ".github/workflows/release.yml"
+  - file: ".github/workflows/release.yml"
     jobs:
       - publish
     rules:
@@ -635,7 +635,7 @@ Interpretation notes:
 - `fix.images` configures network-assisted digest pin remediation for `unpinned-image`.
 - `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
 - `output.sort-order` controls diagnostic output ordering: `location` (default) sorts by source position for file-reading order; `rule` sorts by rule priority for batch-fixing.
-- `exclusions[].files` and optional `exclusions[].jobs` define config-based suppression scope.
+- `exclusions[].file` and optional `exclusions[].jobs` define config-based suppression scope.
 - `exclusions[].rules` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
 - Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable.
@@ -724,7 +724,7 @@ Active rules: same as Profile 1 minus `action-shell-is-required`
 
 ```yaml
 exclusions:
-  - files: ".github/workflows/legacy-release.yml"
+  - file: ".github/workflows/legacy-release.yml"
     rules:
       - runner-no-latest
       - job-permissions-required
@@ -879,11 +879,11 @@ rules:
     enabled: true
 
 exclusions:
-  - files: ".github/workflows/legacy-*.yml"
+  - file: ".github/workflows/legacy-*.yml"
     rules:
       - runner-no-latest
       - job-permissions-required
-  - files: ".github/workflows/release.yml"
+  - file: ".github/workflows/release.yml"
     jobs:
       - publish
     rules:
@@ -977,7 +977,7 @@ fix:
 - `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via `PinRemediationEngine`. Default: `false`.
 - `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
 - `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
-- `fix.pinning.ignore-actions`: list of `{uses, ref}` regex patterns to skip during SHA resolution.
+- `fix.pinning.ignore-actions`: list of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during SHA resolution. No regex.
 - `fix.images.enable-network`: when `true`, `unpinned-image` diagnostics may receive network-resolved digest fix payloads. Default: `false`.
 - `fix.images.exclude-images`: image names to skip. `scratch` is always enforced regardless of config.
 - `fix.images.exclude-tags`: tag names to skip. Default: `["latest"]`.
@@ -1000,16 +1000,29 @@ network:
 - `network.on-error`: controls behavior when network operations fail.
   - `skip` (default): resolution failures leave the diagnostic without fix and continue processing.
   - `fail`: any resolution failure causes the operation to return an error immediately.
-- `network.timeout-seconds`: HTTP request timeout in seconds. Default: `30`.
-- `network.max-concurrency`: maximum concurrent network operations. Default: `4`.
-- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only.
+- `network.timeout-seconds`: HTTP request timeout in seconds. Default: **`30`**. Accepted range after validation: **`0`–`300`**; larger values emit an error diagnostic and normalize to **`300`**.
+- `network.max-concurrency`: maximum concurrent network operations. When omitted, the effective default is **`min(4, Environment.ProcessorCount)`** (logical processors, minimum **`1`**), so the implicit default never exceeds the cap. Accepted range after validation when set: **`1`**–**`Environment.ProcessorCount`**; larger values emit an error diagnostic and normalize to that cap.
+- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized via `Uri.AbsoluteUri`.
 - `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
+
+HTTP clients that send the GitHub Bearer token use `AllowAutoRedirect = false` at the transport layer and manually follow **same-origin** `3xx` responses only; cross-origin redirects are not followed, so the token is not automatically replayed against a different scheme/host/port after a redirect response.
 
 Token resolution:
 
 - GitHub API token is resolved from environment variables in hardcoded order: `SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`.
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
+
+Additionally, **`LintConfigLibrary` / `LintConfigYamlParser`** enforce resource caps on YAML configuration payloads: **`1 048 576`** UTF‑8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units (mapping keys + scalar reads + compounds). Oversized payloads fail validation with deterministic error messages (`seiton configuration … maximum size …` / `lint config YAML exceeds maximum …`). **`fix.pinning.ignore-actions`** compiles **`Regex`** with **`MatchTimeout`** = **`2`** s, and regex-timeouts during branch/ignore evaluations are handled as non-matches/non-exclusions so pinning does not wedge the process. For **`LintConfigYamlParser`** array-backed payloads (normal `Validate` / `ValidateFile` path), the implementation parses from the same **`byte[]`** as **`LintConfig.Utf8Yaml`** without allocating a redundant full-length copy — **fallback** allocates only when **`ReadOnlyMemory<byte>`** is not array-backed.
+
+**Governance and observability (configuration path):**
+
+- Prefer **committed** config paths (discovery or `--config` relative to the checkout) so changes are reviewed like application code.
+- **`SEITON_CONFIG` / `--config`** can name **any** absolute path; on shared CI runners, set them only to **trusted** locations (e.g. under the repository root you control). Do not derive the path from untrusted **fork PR** inputs.
+- **Fork pull request** workflows: avoid pointing `SEITON_CONFIG` at a file the PR branch can overwrite; use default discovery (config on the merge target) or no config (defaults).
+- **Consumer repositories** (projects that adopt Seiton, not this Seiton codebase): teams may use **CODEOWNERS** plus branch protection **in their own repo** on `seiton.yaml` paths so broad `exclusions` or disabled security rules require explicit owner review ([About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)).
+- CLI **`--verbose`**: after a successful config load, Seiton prints **`config: <absolute path>`** or **`config: (none, using defaults)`** on **stderr**.
+
 
 ### 5.14 `output` Section Specification
 
@@ -1341,7 +1354,7 @@ Comparison of reference tools:
 | GHES support | Yes (`ghes.api_url`, `ghes.fallback`) | No | No |
 | Age filtering for updates | `--min-age` / `PINACT_MIN_AGE` (default 0; update target candidate filtering) | — | — |
 | OCI auth | — | `authn.DefaultKeychain` (`~/.docker/config.json`) | `authn.DefaultKeychain` |
-| Default excludes | `ignore_actions` (regex) | `ignore-images` (glob, negation) | `exclude_branches: [main, master]`; `scratch` always; `latest` by default |
+| Default excludes | `ignore_actions` (wildcard) | `ignore-images` (glob, negation) | `exclude_branches: [main, master]`; `scratch` always; `latest` by default |
 | Separate command | `pinact run` | `dockerfile-pin run` | `frizbee actions` / `frizbee image` |
 | Skip sentinel | — | — | `ErrReferenceSkipped` |
 
@@ -1465,13 +1478,17 @@ This order is not configurable via the config file. Rationale: exposing token en
 
 Optional support for GitHub Enterprise Server. When `ghes-api-url` is set, the resolver first queries the GHES instance. If `ghes-fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
 
+Schema validation rejects non-HTTPS absolute URLs (`http`, `ftp`, etc.), relative-looking strings that do not parse as an absolute HTTPS URI, and URLs with embedded `userinfo`. The accepted value is stored as `Uri.AbsoluteUri`.
+
+HTTP clients carrying the GitHub Bearer token are built without automatic redirect follow at the socket layer; the handler follows `3xx` only when `Location` resolves to the same origin (scheme + host + port) as the request URL being redirected. Cross-origin redirects are not followed, so credentials are not automatically sent to another origin in response to a redirect.
+
 #### 12.3.4 `fix.pinning.ignore-actions`
 
-List of `{uses, ref}` patterns (regex) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA.
+List of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA. No regex — wildcard matching only, eliminating ReDoS risk.
 
 #### 12.3.5 `fix.pinning.exclude-branches`
 
-Branch names (exact or regex) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
+Branch names (exact string match, ordinal) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
 #### 12.3.6 `fix.pinning.min-age-days`
 

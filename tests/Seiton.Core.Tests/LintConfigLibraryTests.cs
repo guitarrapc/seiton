@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Linting;
+﻿using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -36,6 +37,23 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Utf8YamlBytesMatchInputUtf8Encoding()
+    {
+        var yaml = """
+        rules:
+          dangerous-triggers:
+            enabled: false
+        """;
+
+        var expectedUtf8 = Encoding.UTF8.GetBytes(yaml);
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Utf8Yaml.AsSpan().SequenceEqual(expectedUtf8)).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_ValidConfig_NormalizesAndReturnsConfig()
     {
         var yaml = """
@@ -65,7 +83,7 @@ public sealed class LintConfigLibraryTests
                 - tee
         exclusions:
           -
-            files: .github/workflows/legacy-*.yml
+            file: .github/workflows/legacy-*.yml
             rules:
               - runner-label
         """;
@@ -167,8 +185,8 @@ public sealed class LintConfigLibraryTests
             exclude-branches:
               - release
             ignore-actions:
-              - uses: "slsa-framework/.*"
-                ref: ".*"
+              - uses: "slsa-framework/*"
+                ref: "*"
           images:
             enable-network: true
             exclude-images:
@@ -190,8 +208,8 @@ public sealed class LintConfigLibraryTests
         await Assert.That(fix.Pinning.MinAgeDays).IsEqualTo(30);
         await Assert.That(fix.Pinning.ExcludeBranches).Contains("release");
         await Assert.That(fix.Pinning.IgnoreActions.Count).IsEqualTo(1);
-        await Assert.That(fix.Pinning.IgnoreActions[0].NamePattern).IsEqualTo("slsa-framework/.*");
-        await Assert.That(fix.Pinning.IgnoreActions[0].RefPattern).IsEqualTo(".*");
+        await Assert.That(fix.Pinning.IgnoreActions[0].NamePattern).IsEqualTo("slsa-framework/*");
+        await Assert.That(fix.Pinning.IgnoreActions[0].RefPattern).IsEqualTo("*");
 
         await Assert.That(fix.Images.EnableNetwork).IsTrue();
         await Assert.That(fix.Images.ExcludeImages).Contains("alpine");
@@ -242,6 +260,61 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Network_GhesApiUrl_Http_ReturnsError_AndClearsUrl()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: http://ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("https scheme", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Network_GhesApiUrl_WithUserInfo_ReturnsError()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: https://user:pass@ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("credentials", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Network_GhesApiUrl_NonAbsolute_ReturnsError()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("absolute https URL", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_Network_InvalidTimeoutSeconds_ReturnsError()
     {
         var yaml = """
@@ -267,6 +340,7 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("max-concurrency must be > 0", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -306,7 +380,7 @@ public sealed class LintConfigLibraryTests
         var yaml = """
         exclusions:
           -
-            files: .github/workflows/release.yml
+            file: .github/workflows/release.yml
             rules:
               - credentials
             jobs:
@@ -321,7 +395,7 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config!.Exclusions).Count().IsEqualTo(1);
 
         var excl = result.Config.Exclusions![0];
-        await Assert.That(excl.Files).IsEqualTo(".github/workflows/release.yml");
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/release.yml");
         await Assert.That(excl.Rules).Contains("credentials");
         await Assert.That(excl.Jobs).IsNotNull();
         await Assert.That(excl.Jobs!.Count).IsEqualTo(2);
@@ -334,11 +408,11 @@ public sealed class LintConfigLibraryTests
     {
         var yaml = """
         exclusions:
-          - files: ".github/workflows/legacy-*.yml"
+          - file: ".github/workflows/legacy-*.yml"
             rules:
               - runner-no-latest
               - job-permissions-required
-          - files: ".github/workflows/release.yml"
+          - file: ".github/workflows/release.yml"
             jobs:
               - publish
             rules:
@@ -352,15 +426,93 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(2);
 
         var excl0 = result.Config.Exclusions![0];
-        await Assert.That(excl0.Files).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl0.File).IsEqualTo(".github/workflows/legacy-*.yml");
         await Assert.That(excl0.Rules).Contains("runner-no-latest");
         await Assert.That(excl0.Rules).Contains("job-permissions-required");
 
         var excl1 = result.Config.Exclusions![1];
-        await Assert.That(excl1.Files).IsEqualTo(".github/workflows/release.yml");
+        await Assert.That(excl1.File).IsEqualTo(".github/workflows/release.yml");
         await Assert.That(excl1.Rules).Contains("credentials");
         await Assert.That(excl1.Jobs).IsNotNull();
         await Assert.That(excl1.Jobs![0]).IsEqualTo("publish");
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_FileKey_Singular_ParsesCorrectly()
+    {
+        var yaml = """
+        exclusions:
+          - file: ".github/workflows/legacy-*.yml"
+            rules:
+              - runner-no-latest
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        await Assert.That(result.Config.Exclusions![0].File).IsEqualTo(".github/workflows/legacy-*.yml");
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_FileOnly_NoRules_ExcludesAllRules()
+    {
+        // When only 'file:' is specified without 'rules:', the exclusion applies to all rules (file-level exclusion)
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/legacy-*.yml
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        var excl = result.Config.Exclusions![0];
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl.Rules).IsNull(); // null = all rules
+        await Assert.That(excl.Jobs).IsNull();
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_FileAndJobs_NoRules_ExcludesAllRulesForJobs()
+    {
+        // file + jobs without rules → exclude all rules for those jobs
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/legacy-*.yml
+            jobs:
+              - build
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        var excl = result.Config.Exclusions![0];
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl.Rules).IsNull(); // null = all rules
+        await Assert.That(excl.Jobs).IsNotNull();
+        await Assert.That(excl.Jobs![0]).IsEqualTo("build");
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_EmptyRulesList_ExcludesNothing()
+    {
+        // Explicit empty rules list is a no-op (distinct from omitted)
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/legacy-*.yml
+            rules: []
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(0);
     }
 
     [Test]
@@ -468,11 +620,11 @@ public sealed class LintConfigLibraryTests
             enabled: true
 
         exclusions:
-          - files: ".github/workflows/legacy-*.yml"
+          - file: ".github/workflows/legacy-*.yml"
             rules:
               - runner-no-latest
               - job-permissions-required
-          - files: ".github/workflows/release.yml"
+          - file: ".github/workflows/release.yml"
             jobs:
               - publish
             rules:
@@ -488,8 +640,8 @@ public sealed class LintConfigLibraryTests
               - main
               - master
             ignore-actions:
-              - uses: "slsa-framework/.*"
-                ref: ".*"
+              - uses: "slsa-framework/*"
+                ref: "*"
           images:
             enable-network: true
             exclude-images:
@@ -500,7 +652,6 @@ public sealed class LintConfigLibraryTests
         network:
           on-error: skip
           timeout-seconds: 30
-          max-concurrency: 4
           github:
             ghes-api-url: ""
             ghes-fallback: false
@@ -526,7 +677,7 @@ public sealed class LintConfigLibraryTests
 
         // exclusions (inline format)
         await Assert.That(result.Config.Exclusions!.Count).IsEqualTo(2);
-        await Assert.That(result.Config.Exclusions[0].Files).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(result.Config.Exclusions[0].File).IsEqualTo(".github/workflows/legacy-*.yml");
         await Assert.That(result.Config.Exclusions[1].Jobs![0]).IsEqualTo("publish");
 
         // fix
@@ -538,7 +689,7 @@ public sealed class LintConfigLibraryTests
         // network
         await Assert.That(result.Config.Network.OnError).IsEqualTo(NetworkErrorMode.Skip);
         await Assert.That(result.Config.Network.TimeoutSeconds).IsEqualTo(30);
-        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(4);
+        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -605,5 +756,196 @@ public sealed class LintConfigLibraryTests
         await Assert.That(forbidden.Allow![0]).IsEqualTo("actions/*");
         await Assert.That(forbidden.Deny).IsNotNull();
         await Assert.That(forbidden.Deny![0]).IsEqualTo("bad-org/*");
+    }
+
+    [Test]
+    public async Task Validate_MinYaml_OmittedNetwork_MaxConcurrency_NoNormalizationErrorAndMatchesDefault()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            severity: warning
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.Diagnostics.All(d =>
+            !d.Message.Contains("max-concurrency", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
+    }
+
+    [Test]
+    public async Task Validate_Network_TimeoutSeconds_OverMaximum_ReturnsError_AndCaps()
+    {
+        var yaml = """
+        network:
+          timeout-seconds: 301
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x =>
+                x.Message.Contains("timeout-seconds must be <= ", StringComparison.Ordinal)))
+            .IsTrue();
+        await Assert.That(result.Config!.Network.TimeoutSeconds).IsEqualTo(LintConfigResourceLimits.MaxNetworkTimeoutSeconds);
+    }
+
+    [Test]
+    public async Task Validate_Network_MaxConcurrency_OverMaximum_ReturnsError_AndCaps()
+    {
+        var yaml = """
+        network:
+          max-concurrency: 200
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        var cap = LintConfigResourceLimits.MaxNetworkConcurrencyCap;
+        await Assert.That(result.Diagnostics.Any(x =>
+                x.Message.Contains($"max-concurrency must be <= {cap}", StringComparison.Ordinal)))
+            .IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(cap);
+    }
+
+    [Test]
+    public async Task Validate_Utf8TextOverMaximum_ReturnsError()
+    {
+        var payload = new string('x', LintConfigResourceLimits.MaxConfigUtf8Bytes + 1);
+
+        var result = LintConfigLibrary.Validate(payload, "big.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config).IsNull();
+        await Assert.That(result.Diagnostics.Single().Message.Contains("maximum size", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateFile_OnDiskOverMaximum_ReturnsError()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seiton-p1-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var path = Path.Combine(tempDir, "seiton.yaml");
+        try
+        {
+            var bytes = new byte[LintConfigResourceLimits.MaxConfigUtf8Bytes + 1];
+            Array.Fill(bytes, (byte)' ');
+            bytes[^1] = (byte)'\n';
+            await File.WriteAllBytesAsync(path, bytes);
+
+            var result = LintConfigLibrary.ValidateFile(path);
+
+            await Assert.That(result.IsValid).IsFalse();
+            await Assert.That(result.Config).IsNull();
+            await Assert.That(result.Diagnostics.Single().Message.Contains("maximum size", StringComparison.Ordinal)).IsTrue();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
+    }
+
+    [Test]
+    public async Task Validate_YamlNesting_OverMaximumDepth_ReturnsError()
+    {
+        var yaml = BuildDeepMappingYaml(64);
+
+        var result = LintConfigLibrary.Validate(yaml, "nested.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("maximum nesting depth", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_YamlStructuralUnits_OverMaximum_ReturnsError()
+    {
+        var yaml = BuildLargeExtendListYaml(52_000);
+
+        var result = LintConfigLibrary.Validate(yaml, "units.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("structural size", StringComparison.Ordinal))).IsTrue();
+    }
+
+    private static string BuildDeepMappingYaml(int descendantMappingCount)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("root:");
+        var indent = new string(' ', 2);
+        for (var i = 0; i < descendantMappingCount; i++)
+        {
+            sb.Append(indent).Append('k').Append(i).AppendLine(":");
+            indent += "  ";
+        }
+
+        return sb.ToString();
+    }
+
+    private static string BuildLargeExtendListYaml(int itemCount)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("""
+rules:
+  credentials:
+    public-registries:
+      extend:
+""");
+        sb.Append(Environment.NewLine);
+        var linePrefix = Environment.NewLine + "        - ";
+        for (var i = 0; i < itemCount; i++)
+        {
+            sb.Append(linePrefix).Append('z');
+        }
+
+        sb.Append(Environment.NewLine);
+        return sb.ToString();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_AsIs_IsValidConfig()
+    {
+        // The template with all lines commented out should parse as a valid (empty) config
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_Uncommented_IsValidConfig()
+    {
+        // Uncomment only config-example lines (indented, not prose) and verify it parses without errors
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+        var lines = yaml.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var uncommented = string.Join('\n', lines.Select(line =>
+        {
+            var trimmed = line.TrimStart();
+            // Only uncomment lines that are indented (inside a section) and whose
+            // content after "# " looks like YAML config (starts with '- ' or 'word[-word]*:')
+            if (trimmed.StartsWith("# ", StringComparison.Ordinal))
+            {
+                var indent = line.Length - trimmed.Length;
+                if (indent == 0) return line; // header comments
+                var content = trimmed[2..];
+                if (content.Length > 0 && char.IsUpper(content[0])) return line; // English prose
+                if (content.Contains("(omit", StringComparison.Ordinal)) return line; // documentation hint
+                return new string(' ', indent) + content;
+            }
+            return line;
+        }));
+
+        var result = LintConfigLibrary.Validate(uncommented, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue()
+            .Because($"Template uncommented should be valid, but got: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}");
     }
 }

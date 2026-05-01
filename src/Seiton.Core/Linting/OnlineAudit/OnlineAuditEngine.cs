@@ -1,5 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
@@ -10,15 +9,21 @@ namespace Seiton.Core.Linting.OnlineAudit;
 /// Performs post-traversal async resolution for <see cref="IOnlineRule"/> instances
 /// whose targets were collected during <see cref="WorkflowVisitor"/> traversal.
 /// </summary>
+/// <param name="ignorePinningActions">
+/// Optional <c>fix.pinning.ignore-actions</c> list (same semantics as pin remediation). Patterns use
+/// wildcard matching (<c>*</c> / <c>?</c>); no regex or backtracking risk.
+/// </param>
 public sealed class OnlineAuditEngine(
     IActionAdvisoryProvider? actionAdvisoryProvider,
     IActionRefResolver? actionRefResolver,
-    NetworkConfig networkConfig)
+    NetworkConfig networkConfig,
+    IReadOnlyList<IgnoreActionEntry>? ignorePinningActions = null)
 {
     private readonly IActionAdvisoryProvider? advisoryProvider = actionAdvisoryProvider;
     private readonly IActionRefResolver? refResolver = actionRefResolver;
     private readonly NetworkConfig networkConfig = networkConfig ?? new NetworkConfig();
-    private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions = [];
+    private readonly CompiledIgnoreActionEntry[] compiledIgnoreActions =
+        CompileIgnoreActions(ignorePinningActions ?? Array.Empty<IgnoreActionEntry>());
 
     /// <summary>
     /// Resolve targets collected by <paramref name="onlineRules"/> during visitor traversal,
@@ -185,7 +190,7 @@ public sealed class OnlineAuditEngine(
         for (var i = 0; i < compiledIgnoreActions.Length; i++)
         {
             var entry = compiledIgnoreActions[i];
-            if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(target.Reference))
+            if (ActionRefHelpers.WildcardMatch(name, entry.NamePattern) && ActionRefHelpers.WildcardMatch(target.Reference, entry.RefPattern))
             {
                 return true;
             }
@@ -204,16 +209,15 @@ public sealed class OnlineAuditEngine(
         var compiled = new CompiledIgnoreActionEntry[entries.Count];
         for (var i = 0; i < entries.Count; i++)
         {
-            compiled[i] = new CompiledIgnoreActionEntry(
-                new Regex(entries[i].NamePattern, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase),
-                new Regex(entries[i].RefPattern, RegexOptions.CultureInvariant));
+            var entry = entries[i];
+            compiled[i] = new CompiledIgnoreActionEntry(entry.NamePattern, entry.RefPattern);
         }
 
         return compiled;
     }
 
     private readonly record struct TargetResolution(ActionAdvisory? Advisory, ActionRefResolution? RefResolution, bool Skipped, bool Failed);
-    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct CompiledIgnoreActionEntry(string NamePattern, string RefPattern);
 }
 
 /// <summary>An action reference identified for online audit during AST traversal.</summary>
@@ -229,7 +233,7 @@ public readonly record struct ActionAuditTarget(
     public bool IsCommitSha => IsFullCommitSha(Reference);
 }
 
-/// <summary>Aggregated result of an online audit pass: diagnostics, skip/fail counts.</summary>
+/// <summary>Aggregated result from an online audit pass: diagnostics, skip/fail counts.</summary>
 public readonly record struct OnlineAuditResult(
     Diagnostic[] Diagnostics,
     int AddedCount,

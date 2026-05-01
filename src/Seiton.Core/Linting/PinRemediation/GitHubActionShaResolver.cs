@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
+using Seiton.Core.Linting;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Seiton.Core.Linting.PinRemediation;
 
@@ -16,7 +16,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly FixPinningConfig _pinningConfig = pinningConfig;
     private readonly GitHubNetworkConfig _githubConfig = githubConfig;
     private readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
-    private readonly Regex[] _compiledExcludeBranches = CompileLiteralBranchPatterns(pinningConfig.ExcludeBranches);
+    private readonly string[] _excludeBranches = ToExcludeBranchArray(pinningConfig.ExcludeBranches);
     private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
     public async Task<(string? Sha, string? TagComment)> ResolveAsync(
@@ -305,7 +305,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         for (var i = 0; i < _compiledIgnoreActions.Length; i++)
         {
             var entry = _compiledIgnoreActions[i];
-            if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(refStr))
+            if (ActionRefHelpers.WildcardMatch(name, entry.NamePattern) && ActionRefHelpers.WildcardMatch(refStr, entry.RefPattern))
             {
                 return true;
             }
@@ -316,9 +316,9 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private bool MatchesExcludedBranch(string refStr)
     {
-        for (var i = 0; i < _compiledExcludeBranches.Length; i++)
+        for (var i = 0; i < _excludeBranches.Length; i++)
         {
-            if (_compiledExcludeBranches[i].IsMatch(refStr))
+            if (string.Equals(_excludeBranches[i], refStr, StringComparison.Ordinal))
             {
                 return true;
             }
@@ -484,32 +484,22 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
-    private static Uri NormalizeApiBaseUri(string apiUrl)
-    {
-        var baseUri = new Uri(apiUrl, UriKind.Absolute);
-        var builder = new UriBuilder(baseUri);
-        if (!builder.Path.EndsWith("/", StringComparison.Ordinal))
-        {
-            builder.Path += "/";
-        }
+    private static Uri NormalizeApiBaseUri(string apiUrl) => GitHubEnterpriseApiBase.ToRequestBaseUri(apiUrl);
 
-        return builder.Uri;
-    }
-
-    private static Regex[] CompileLiteralBranchPatterns(IReadOnlyList<string> branches)
+    private static string[] ToExcludeBranchArray(IReadOnlyList<string> branches)
     {
         if (branches.Count == 0)
         {
             return [];
         }
 
-        var compiled = new Regex[branches.Count];
+        var result = new string[branches.Count];
         for (var i = 0; i < branches.Count; i++)
         {
-            compiled[i] = new Regex("^" + Regex.Escape(branches[i]) + "$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            result[i] = branches[i];
         }
 
-        return compiled;
+        return result;
     }
 
     private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
@@ -523,9 +513,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         for (var i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            compiled[i] = new CompiledIgnoreActionEntry(
-                new Regex(entry.NamePattern, RegexOptions.CultureInvariant | RegexOptions.Compiled),
-                new Regex(entry.RefPattern, RegexOptions.CultureInvariant | RegexOptions.Compiled));
+            compiled[i] = new CompiledIgnoreActionEntry(entry.NamePattern, entry.RefPattern);
         }
 
         return compiled;
@@ -674,5 +662,5 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
 
-    private readonly record struct CompiledIgnoreActionEntry(Regex NameRegex, Regex RefRegex);
+    private readonly record struct CompiledIgnoreActionEntry(string NamePattern, string RefPattern);
 }

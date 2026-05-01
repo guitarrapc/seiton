@@ -104,7 +104,7 @@ public sealed class GitHubActionShaResolverTests
             new FixPinningConfig
             {
                 ExcludeBranches = ["main"],
-                IgnoreActions = [new IgnoreActionEntry("actions/checkout", ".*")],
+                IgnoreActions = [new IgnoreActionEntry("actions/checkout", "*")],
             });
 
         var skippedBranch = await resolver.ResolveAsync("actions", "checkout", "main");

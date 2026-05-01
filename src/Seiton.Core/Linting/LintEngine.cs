@@ -505,12 +505,13 @@ public sealed class LintEngine
         for (var i = 0; i < normalizedExclusions.Count; i++)
         {
             var exclusion = normalizedExclusions[i];
-            if (!GlobMatch(exclusion.Files, normalizedFilePath))
+            if (!GlobMatch(exclusion.File, normalizedFilePath))
             {
                 continue;
             }
 
-            if (!exclusion.Rules.Contains(diagnostic.RuleId))
+            // Rules == null means all rules are suppressed
+            if (exclusion.Rules is not null && !exclusion.Rules.Contains(diagnostic.RuleId))
             {
                 continue;
             }
@@ -1027,22 +1028,33 @@ public sealed class LintEngine
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
-            if (string.IsNullOrWhiteSpace(exclusion.Files))
+            if (string.IsNullOrWhiteSpace(exclusion.File))
             {
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    "exclusion files pattern must not be empty",
+                    "exclusion file pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
                     FilePath: filePath));
                 continue;
             }
 
-            var normalizedRuleIds = new HashSet<string>(StringComparer.Ordinal);
-            ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, normalizedRuleIds);
-
-            if (normalizedRuleIds.Count == 0)
+            IReadOnlySet<string>? normalizedRuleIds;
+            if (exclusion.Rules is null)
             {
-                continue;
+                // rules omitted → all rules
+                normalizedRuleIds = null;
+            }
+            else
+            {
+                var ruleIds = new HashSet<string>(StringComparer.Ordinal);
+                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, ruleIds);
+
+                if (ruleIds.Count == 0)
+                {
+                    continue;
+                }
+
+                normalizedRuleIds = ruleIds;
             }
 
             if (exclusion.Jobs is not null)
@@ -1061,7 +1073,7 @@ public sealed class LintEngine
                 }
             }
 
-            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.Files), normalizedRuleIds, exclusion.Jobs));
+            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
         }
 
         return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
@@ -1243,7 +1255,7 @@ public sealed class LintEngine
     }
 
     private readonly record struct NormalizedExclusion(
-        string Files,
-        IReadOnlySet<string> Rules,
+        string File,
+        IReadOnlySet<string>? Rules,
         IReadOnlyList<string>? Jobs);
 }

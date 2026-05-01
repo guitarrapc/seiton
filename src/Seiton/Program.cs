@@ -19,7 +19,7 @@ internal class SeitonCli
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
-    /// <param name="ignore">Regex patterns for messages to ignore.</param>
+    /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
     /// <param name="format">Output format: text | json | sarif.</param>
     /// <param name="oneline">Print each diagnostic on a single line.</param>
@@ -69,7 +69,7 @@ internal class SeitonCli
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
-    /// <param name="ignore">Regex patterns for messages to ignore.</param>
+    /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
     /// <param name="format">Output format: text | json | sarif.</param>
     /// <param name="oneline">Print each diagnostic on a single line.</param>

@@ -189,9 +189,13 @@ public sealed record RuleConfig
 public sealed record ExtendableList(IReadOnlyList<string> Extend);
 
 /// <summary>An exclusion entry that suppresses rules for matching files/jobs.</summary>
+/// <remarks>
+/// <para><c>Rules</c> = <c>null</c>: all rules are suppressed (file/job-level exclusion).</para>
+/// <para><c>Rules</c> = non-null list: only those rules are suppressed.</para>
+/// </remarks>
 public sealed record LintExclusion(
-    string Files,
-    IReadOnlyList<string> Rules,
+    string File,
+    IReadOnlyList<string>? Rules,
     IReadOnlyList<string>? Jobs = null);
 
 /// <summary>Configuration for the <c>fix:</c> section controlling auto-fix behavior.</summary>
@@ -271,7 +275,7 @@ public sealed record NetworkConfig
     /// <summary>Gets the timeout in seconds for network requests.</summary>
     public int TimeoutSeconds { get; init; } = 30;
     /// <summary>Gets the maximum number of concurrent network requests.</summary>
-    public int MaxConcurrency { get; init; } = 4;
+    public int MaxConcurrency { get; init; } = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
     /// <summary>Gets the GitHub-specific network configuration.</summary>
     public GitHubNetworkConfig GitHub { get; init; } = new();
 }

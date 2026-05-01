@@ -11414,6 +11414,72 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ConfigExclusion_NullRules_SuppressesAllDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+
+        // All diagnostics should be suppressed (file-level exclusion with no rule filter)
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(2);
+        await Assert.That(result.SuppressionSummary.Records.All(x => x.Source == SuppressionSource.ConfigFile)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_NullRules_JobScope_SuppressesOnlyTargetJob()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo two
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null, Jobs: ["build"]),
+            ],
+        };
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+
+        // 'build' job diagnostics should be suppressed, 'test' job diagnostics should remain
+        var remaining = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
+        await Assert.That(remaining.Length).IsEqualTo(1);
+        await Assert.That(remaining[0].Location.StartLine).IsEqualTo(7); // 'test' job
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(1);
+        await Assert.That(result.SuppressionSummary.Records.All(x => x.Source == SuppressionSource.ConfigJob)).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_ConfigExclusion_JobScope_SuppressesTargetJobOnly()
     {
         var yaml = """

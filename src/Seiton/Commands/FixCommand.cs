@@ -45,6 +45,8 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
+        CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
+
         // Resolve input files
         string[] resolvedFiles;
         try
@@ -64,21 +66,24 @@ internal static class FixCommand
         }
 
         // Build pin remediation engine if network pin/image resolution is enabled.
-        // A single HttpClient is reused across all resolver calls for connection pooling.
+        // GitHub and OCI use separate HttpClients: GitHub bearer calls only follow same-origin redirects;
+        // registry clients may rely on cross-origin redirects (e.g. auth challenges).
         PinRemediationEngine? pinRemediation = null;
-        HttpClient? sharedHttpClient = null;
+        HttpClient? githubHttpClient = null;
+        HttpClient? ociHttpClient = null;
         if (enablePinNetwork || enableImageNetwork)
         {
-            sharedHttpClient = new HttpClient();
+            githubHttpClient = enablePinNetwork ? GitHubApiHttpClientFactory.CreateForGitHubApi() : null;
+            ociHttpClient = enableImageNetwork ? new HttpClient() : null;
             var networkConfig = lintConfig?.Network ?? new NetworkConfig();
             var pinningConfig = lintConfig?.Fix.Pinning ?? new FixPinningConfig();
             var imagesConfig = lintConfig?.Fix.Images ?? new FixImagesConfig();
 
             IActionShaResolver? shaResolver = enablePinNetwork
-                ? new GitHubActionShaResolver(sharedHttpClient, pinningConfig, networkConfig.GitHub)
+                ? new GitHubActionShaResolver(githubHttpClient!, pinningConfig, networkConfig.GitHub)
                 : null;
             IImageDigestResolver? imageResolver = enableImageNetwork
-                ? new OciImageDigestResolver(sharedHttpClient, imagesConfig)
+                ? new OciImageDigestResolver(ociHttpClient!, imagesConfig)
                 : null;
 
             pinRemediation = new PinRemediationEngine(
@@ -206,19 +211,7 @@ internal static class FixCommand
             // Apply ignore patterns
             if (ignore.Length > 0)
             {
-                var patterns = new System.Text.RegularExpressions.Regex[ignore.Length];
-                for (var i = 0; i < ignore.Length; i++)
-                    patterns[i] = new System.Text.RegularExpressions.Regex(ignore[i], System.Text.RegularExpressions.RegexOptions.Compiled);
-
-                allDiagnostics.RemoveAll(d =>
-                {
-                    for (var i = 0; i < patterns.Length; i++)
-                    {
-                        if (patterns[i].IsMatch(d.Message))
-                            return true;
-                    }
-                    return false;
-                });
+                allDiagnostics.RemoveAll(d => DiagnosticsIgnoreFilter.IsMessageIgnored(ignore, d.Message));
             }
 
             // Apply min-severity filter
@@ -248,7 +241,8 @@ internal static class FixCommand
         }
         finally
         {
-            sharedHttpClient?.Dispose();
+            githubHttpClient?.Dispose();
+            ociHttpClient?.Dispose();
         }
     }
 }

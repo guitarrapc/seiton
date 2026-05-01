@@ -261,7 +261,7 @@ Scope notes:
 - Parser diagnostics remain primary for YAML shape and required-key errors.
 - Rule diagnostics add policy and metadata checks over parsed AST.
 - `LintEngine` defaults to `RuleCatalog.CreateDefaultRules()` for local rules and `RuleCatalog.CreateOnlineRules()` for network-assisted rules, applies priority sort, then deduplicates identical diagnostics.
-- Network-assisted rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are registered in `RuleCatalog` with `IOnlineRule` factories. They extend `OnlineRuleBase` (which extends `RuleBase`) and participate in `WorkflowVisitor` traversal to collect `ActionAuditTarget` references. Post-traversal, `OnlineAuditEngine.AuditAsync` resolves targets asynchronously and calls `EvaluateTarget` on each rule. These rules are opt-in (disabled by default; enabled via `rules.<rule-id>.enabled: true`).
+- Network-assisted rule IDs (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are registered in `RuleCatalog` with `IOnlineRule` factories. They extend `OnlineRuleBase` (which extends `RuleBase`) and participate in `WorkflowVisitor` traversal to collect `ActionAuditTarget` references. Post-traversal, `OnlineAuditEngine.AuditAsync` resolves targets asynchronously and calls `EvaluateTarget` on each rule. These rules are opt-in (disabled by default; enabled via `rules.<rule-id>.enabled: true`). **`OnlineAuditEngine`** accepts **optional** `fix.pinning.ignore-actions` entries (`IReadOnlyList<IgnoreActionEntry>`): patterns use **wildcard matching** (`*` / `?`), not regex. No ReDoS risk. Same semantics as `GitHubActionShaResolver.ShouldSkip`.
 - Rule ID stability and compatibility policy follow `Seiton_Linter_spec.md` §4.4.
 
 ### 3.5 Phase 14 Catalog Additions
@@ -651,7 +651,7 @@ public sealed record NetworkConfig
 {
     public NetworkErrorMode OnError { get; init; } = NetworkErrorMode.Skip;
     public int TimeoutSeconds { get; init; } = 30;
-    public int MaxConcurrency { get; init; } = 4;
+    public int MaxConcurrency { get; init; } = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
     public GitHubNetworkConfig GitHub { get; init; } = new();
 }
 
@@ -668,6 +668,8 @@ public sealed record GitHubNetworkConfig
 
 Safety invariants:
 
+- `NormalizeNetwork` caps `NetworkConfig.MaxConcurrency` at `Environment.ProcessorCount` (minimum `1`). Values greater than this emit an error and clamp (see `.github/docs/Seiton_Linter_spec.md` § network). Omitted `max-concurrency` defaults to **`LintConfigResourceLimits.DefaultNetworkMaxConcurrency`**, i.e. **`min(4, max(1, Environment.ProcessorCount))`**, so implicit defaults never exceed the cap.
+- `LintConfigYamlParser` builds the config DOM from VYaml’s pull parser. For the normal `LintConfigLibrary.Validate` path, DOM parsing uses the **same** `byte[]` as `LintConfig.Utf8Yaml` (no redundant full-size copy). Non–array-backed `ReadOnlyMemory<byte>` inputs fall back to an `ArrayPool<byte>` copy.
 - `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.8).
 - `EnableNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `EnableNetwork: false` must not make any network calls even if resolver implementations are injected.
 - Token resolution order is hardcoded as a code-internal constant: `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`. This value is not exposed in config to prevent config-injection attacks.
