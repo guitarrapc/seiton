@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Seiton.Core.Linting;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -484,17 +485,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
-    private static Uri NormalizeApiBaseUri(string apiUrl)
-    {
-        var baseUri = new Uri(apiUrl, UriKind.Absolute);
-        var builder = new UriBuilder(baseUri);
-        if (!builder.Path.EndsWith("/", StringComparison.Ordinal))
-        {
-            builder.Path += "/";
-        }
-
-        return builder.Uri;
-    }
+    private static Uri NormalizeApiBaseUri(string apiUrl) => GitHubEnterpriseApiBase.ToRequestBaseUri(apiUrl);
 
     private static Regex[] CompileLiteralBranchPatterns(IReadOnlyList<string> branches)
     {

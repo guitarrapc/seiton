@@ -165,7 +165,7 @@ network:
   timeout-seconds: 30          # Per-request timeout for GitHub API calls.
   max-concurrency: 4           # Maximum concurrent network requests.
   github:
-    ghes-api-url: ""           # GitHub Enterprise Server API URL (empty = github.com).
+    ghes-api-url: ""           # GHES REST API URL (empty = github.com). Must be https; userinfo prohibited.
     ghes-fallback: false       # Fall back to github.com if GHES request fails.
 
 # ─── Output settings ──────────────────────────────────────────────────────────
@@ -391,8 +391,10 @@ network:
 | `on-error` | `skip` | `skip` silently ignores network failures. `fail` treats them as errors. |
 | `timeout-seconds` | `30` | Per-request timeout for GitHub API calls. |
 | `max-concurrency` | `4` | Maximum number of concurrent GitHub API requests. |
-| `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com. |
+| `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com only. Must be an absolute **`https`** URL (non-HTTPS schemes and embedded user credentials are rejected during config validation). |
 | `github.ghes-fallback` | `false` | Fall back to github.com if GHES request fails. |
+
+Outbound GitHub/GitHub Enterprise HTTP clients used by network-assisted pinning and GitHub-hosted online rules **`AllowAutoRedirect` is disabled** at the socket layer and follow **same-origin redirects only**. If the API returns `3xx` to a different scheme/host/port than the preceding request URL, Seiton surfaces the redirect response and does **not** issue a second request carrying the Bearer token — this limits token replay to other origins after hostile redirects.
 
 ### GitHub API Token
 

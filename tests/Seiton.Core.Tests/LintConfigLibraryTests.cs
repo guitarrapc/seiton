@@ -242,6 +242,61 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Network_GhesApiUrl_Http_ReturnsError_AndClearsUrl()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: http://ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("https scheme", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Network_GhesApiUrl_WithUserInfo_ReturnsError()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: https://user:pass@ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("credentials", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Network_GhesApiUrl_NonAbsolute_ReturnsError()
+    {
+        var yaml = """
+        network:
+          github:
+            ghes-api-url: ghes.example.com/api/v3
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Config!.Network.GitHub.GhesApiUrl).IsNull();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Severity == DiagnosticSeverity.Error
+            && x.Message.Contains("absolute https URL", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_Network_InvalidTimeoutSeconds_ReturnsError()
     {
         var yaml = """

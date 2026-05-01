@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Seiton.Core.Linting;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
 
@@ -263,14 +264,5 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         return string.Empty;
     }
 
-    private static Uri NormalizeApiBaseUri(string apiBaseUrl)
-    {
-        var normalized = apiBaseUrl.Trim();
-        if (!normalized.EndsWith("/", StringComparison.Ordinal))
-        {
-            normalized += "/";
-        }
-
-        return new Uri(normalized, UriKind.Absolute);
-    }
+    private static Uri NormalizeApiBaseUri(string apiBaseUrl) => GitHubEnterpriseApiBase.ToRequestBaseUri(apiBaseUrl);
 }

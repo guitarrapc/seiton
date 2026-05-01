@@ -326,6 +326,19 @@ public static class LintConfigLibrary
         {
             ghesApiUrl = null;
         }
+        else if (!GitHubEnterpriseApiBase.TryValidateForConfig(ghesApiUrl, out var canonicalGhes, out var ghesDiagnostic))
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                ghesDiagnostic,
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            ghesApiUrl = null;
+        }
+        else
+        {
+            ghesApiUrl = canonicalGhes;
+        }
 
         var normalizedNetwork = network with
         {

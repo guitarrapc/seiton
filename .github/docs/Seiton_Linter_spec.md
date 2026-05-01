@@ -1002,8 +1002,10 @@ network:
   - `fail`: any resolution failure causes the operation to return an error immediately.
 - `network.timeout-seconds`: HTTP request timeout in seconds. Default: `30`.
 - `network.max-concurrency`: maximum concurrent network operations. Default: `4`.
-- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only.
+- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized via `Uri.AbsoluteUri`.
 - `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
+
+HTTP clients that send the GitHub Bearer token use `AllowAutoRedirect = false` at the transport layer and manually follow **same-origin** `3xx` responses only; cross-origin redirects are not followed, so the token is not automatically replayed against a different scheme/host/port after a redirect response.
 
 Token resolution:
 
@@ -1464,6 +1466,10 @@ This order is not configurable via the config file. Rationale: exposing token en
 #### 12.3.3 `network.github.ghes-api-url` and `network.github.ghes-fallback`
 
 Optional support for GitHub Enterprise Server. When `ghes-api-url` is set, the resolver first queries the GHES instance. If `ghes-fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
+
+Schema validation rejects non-HTTPS absolute URLs (`http`, `ftp`, etc.), relative-looking strings that do not parse as an absolute HTTPS URI, and URLs with embedded `userinfo`. The accepted value is stored as `Uri.AbsoluteUri`.
+
+HTTP clients carrying the GitHub Bearer token are built without automatic redirect follow at the socket layer; the handler follows `3xx` only when `Location` resolves to the same origin (scheme + host + port) as the request URL being redirected. Cross-origin redirects are not followed, so credentials are not automatically sent to another origin in response to a redirect.
 
 #### 12.3.4 `fix.pinning.ignore-actions`
 
