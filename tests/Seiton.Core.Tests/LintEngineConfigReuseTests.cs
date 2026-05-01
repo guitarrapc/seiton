@@ -69,18 +69,24 @@ public sealed class LintEngineConfigReuseTests
         var engine = new LintEngine();
         var yaml = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
 
+        // Snapshot each result before the next Check() invalidates the backing array (two-buffer swap).
         var result1 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var snap1 = result1.Diagnostics.Select(d => (d.Message, d.Location.StartLine)).ToArray();
+
         var result2 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var snap2 = result2.Diagnostics.Select(d => (d.Message, d.Location.StartLine)).ToArray();
+
         var result3 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var snap3 = result3.Diagnostics.Select(d => (d.Message, d.Location.StartLine)).ToArray();
 
-        await Assert.That(result1.Diagnostics.Length).IsEqualTo(result2.Diagnostics.Length);
-        await Assert.That(result2.Diagnostics.Length).IsEqualTo(result3.Diagnostics.Length);
+        await Assert.That(snap1.Length).IsEqualTo(snap2.Length);
+        await Assert.That(snap2.Length).IsEqualTo(snap3.Length);
 
-        for (var i = 0; i < result1.Diagnostics.Length; i++)
+        for (var i = 0; i < snap1.Length; i++)
         {
-            await Assert.That(result1.Diagnostics[i].Message).IsEqualTo(result2.Diagnostics[i].Message);
-            await Assert.That(result2.Diagnostics[i].Message).IsEqualTo(result3.Diagnostics[i].Message);
-            await Assert.That(result1.Diagnostics[i].Location.StartLine).IsEqualTo(result2.Diagnostics[i].Location.StartLine);
+            await Assert.That(snap1[i].Message).IsEqualTo(snap2[i].Message);
+            await Assert.That(snap2[i].Message).IsEqualTo(snap3[i].Message);
+            await Assert.That(snap1[i].StartLine).IsEqualTo(snap2[i].StartLine);
         }
     }
 
@@ -96,16 +102,19 @@ public sealed class LintEngineConfigReuseTests
         // Different source with the same expression at a different offset
         var yaml2 = Encoding.UTF8.GetBytes("on:\n  pull_request:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ github.sha }}\n");
 
+        // Snapshot result1 before subsequent Check() calls invalidate its backing array (two-buffer swap).
         var result1 = engine.Check(yaml1, ".github/workflows/a.yml");
+        var snap1 = result1.Diagnostics.Select(d => d.Message).ToArray();
+
         var result2 = engine.Check(yaml2, ".github/workflows/b.yml");
         var result3 = engine.Check(yaml1, ".github/workflows/a.yml");
 
         // All calls should succeed without exceptions (no stale offset access)
         // and produce consistent results when re-checking the same source
-        await Assert.That(result1.Diagnostics.Length).IsEqualTo(result3.Diagnostics.Length);
-        for (var i = 0; i < result1.Diagnostics.Length; i++)
+        await Assert.That(snap1.Length).IsEqualTo(result3.Diagnostics.Length);
+        for (var i = 0; i < snap1.Length; i++)
         {
-            await Assert.That(result1.Diagnostics[i].Message).IsEqualTo(result3.Diagnostics[i].Message);
+            await Assert.That(snap1[i]).IsEqualTo(result3.Diagnostics[i].Message);
         }
     }
 

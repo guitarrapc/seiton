@@ -805,7 +805,8 @@ function runLint() {
     }
 
     // If content changed while we were executing, schedule a re-lint after debounce.
-    if (lintPendingRetry) {
+    // Skip if runtime died during the try/catch — handleRuntimeDeath() already stopped scheduling.
+    if (lintPendingRetry && runtimeAlive) {
         lintPendingRetry = false;
         if (debounceId !== null) {
             clearTimeout(debounceId);
