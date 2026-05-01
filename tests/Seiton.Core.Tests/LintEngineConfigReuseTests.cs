@@ -152,11 +152,22 @@ public sealed class LintEngineConfigReuseTests
 
         await Assert.That(actualLocationOrder).IsEqualTo(expectedLocationOrder);
 
-        // Rule sort uses RuleCatalog.GetPriority (internal), so we can't replicate the
-        // exact comparator in the test. Instead, verify the two sort orders actually differ,
-        // proving that the SortOrder config is effective between calls.
-        var ruleOrderSignature = string.Join(",", result2.Diagnostics.Select(Signature));
-        await Assert.That(ruleOrderSignature).IsNotEqualTo(actualLocationOrder);
+        // Rule sort: priority → severity → line → column → message
+        // (matches CompareDiagnosticsByRulePriority; RuleCatalog.GetPriority is accessible via InternalsVisibleTo)
+        var actualRuleOrder = string.Join(",", result2.Diagnostics.Select(Signature));
+        var expectedRuleOrder = string.Join(",",
+            result2.Diagnostics
+                .OrderBy(d => RuleCatalog.GetPriority(d.RuleId))
+                .ThenBy(d => d.Severity)
+                .ThenBy(d => d.Location.StartLine)
+                .ThenBy(d => d.Location.StartColumn)
+                .ThenBy(d => d.Message, StringComparer.Ordinal)
+                .Select(Signature));
+
+        await Assert.That(actualRuleOrder).IsEqualTo(expectedRuleOrder);
+
+        // Verify that rule-order differs from location-order, proving SortOrder config takes effect.
+        await Assert.That(actualRuleOrder).IsNotEqualTo(actualLocationOrder);
     }
 
     [Test]

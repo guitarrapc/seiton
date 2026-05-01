@@ -55,34 +55,37 @@ public static class PlaygroundLintRunner
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
-        LintResult result;
+        // Hold the lock while reading result.Diagnostics — the engine's two-buffer
+        // swap means the backing array is owned by the engine and a concurrent Check()
+        // would overwrite it. Copy all data under the lock, then serialize outside.
+        List<PlaygroundDiagnosticDto> list;
         lock (EngineGate)
         {
-            result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-        }
+            var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
 
-        var list = new List<PlaygroundDiagnosticDto>(result.Diagnostics.Length);
-        for (var i = 0; i < result.Diagnostics.Length; i++)
-        {
-            var d = result.Diagnostics[i];
-            var loc = d.Location;
-            list.Add(new PlaygroundDiagnosticDto
+            list = new List<PlaygroundDiagnosticDto>(result.Diagnostics.Length);
+            for (var i = 0; i < result.Diagnostics.Length; i++)
             {
-                Message = d.Message,
-                Line = loc.StartLine,
-                Column = loc.StartColumn,
-                Severity = d.Severity.ToString(),
-                RuleId = d.RuleId,
-                Fixable = d.Fix is not null,
-                FixDescription = d.Fix?.Description,
-            });
-        }
+                var d = result.Diagnostics[i];
+                var loc = d.Location;
+                list.Add(new PlaygroundDiagnosticDto
+                {
+                    Message = d.Message,
+                    Line = loc.StartLine,
+                    Column = loc.StartColumn,
+                    Severity = d.Severity.ToString(),
+                    RuleId = d.RuleId,
+                    Fixable = d.Fix is not null,
+                    FixDescription = d.Fix?.Description,
+                });
+            }
 
-        // Return the AstArena to the ThreadStatic cache immediately so the next
-        // Rent() reuses it instead of allocating a new one. Without this, the arena
-        // stays alive until GC collects the LintResult, doubling memory pressure
-        // in the constrained WASM heap and causing OOM crashes.
-        result.ParseResult.Arena?.Dispose();
+            // Return the AstArena to the ThreadStatic cache immediately so the next
+            // Rent() reuses it instead of allocating a new one. Without this, the arena
+            // stays alive until GC collects the LintResult, doubling memory pressure
+            // in the constrained WASM heap and causing OOM crashes.
+            result.ParseResult.Arena?.Dispose();
+        }
 
         return JsonSerializer.Serialize(list, PlaygroundJsonSerializerContext.Default.ListPlaygroundDiagnosticDto);
     }
