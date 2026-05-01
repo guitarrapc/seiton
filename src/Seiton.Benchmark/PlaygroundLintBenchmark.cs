@@ -51,7 +51,7 @@ public partial class PlaygroundLintBenchmark
 
         // Warm up both paths
         PlaygroundLintRunner.RunToJson(_yamlSource, FilePath);
-        RunToJsonOld(_engine, _yamlBytes, FilePath);
+        RunToJsonOld(_engine, _yamlSource, FilePath);
     }
 
     [Benchmark(Baseline = true, Description = "RunToJson NEW (Utf8JsonWriter)")]
@@ -72,15 +72,16 @@ public partial class PlaygroundLintBenchmark
         var totalLength = 0;
         for (var i = 0; i < 100; i++)
         {
-            totalLength += RunToJsonOld(_engine, _yamlBytes, FilePath).Length;
+            totalLength += RunToJsonOld(_engine, _yamlSource, FilePath).Length;
         }
 
         return totalLength;
     }
 
     /// <summary>Replicates the old RunToJson path: List&lt;DTO&gt; + JsonSerializer.Serialize.</summary>
-    private static string RunToJsonOld(LintEngine engine, byte[] utf8Yaml, string filePath)
+    private static string RunToJsonOld(LintEngine engine, string yamlSource, string filePath)
     {
+        var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
         var result = engine.Check(utf8Yaml, filePath, BenchConfig);
 
         var list = new List<OldDto>(result.Diagnostics.Length);

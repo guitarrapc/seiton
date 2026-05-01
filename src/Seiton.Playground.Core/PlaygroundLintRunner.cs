@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Buffers;
+using System.Text;
 using System.Text.Json;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
@@ -43,6 +44,14 @@ public static class PlaygroundLintRunner
         SkipSuppressionSummary = true,
     };
 
+    /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
+    private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
+
+    /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
+    private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
+
+    private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> as UTF-8 and returns a JSON array of diagnostics.
     /// </summary>
@@ -57,27 +66,37 @@ public static class PlaygroundLintRunner
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
         // Hold the lock while reading result.Diagnostics — the engine's two-buffer
         // swap means the backing array is owned by the engine and a concurrent Check()
-        // would overwrite it. Copy all data under the lock, then serialize outside.
-        List<PlaygroundDiagnosticDto> list;
+        // would overwrite it. Write JSON directly under the lock, then convert to string.
         lock (EngineGate)
         {
             var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
 
-            list = new List<PlaygroundDiagnosticDto>(result.Diagnostics.Length);
-            for (var i = 0; i < result.Diagnostics.Length; i++)
+            JsonBuffer.Clear();
+            using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
             {
-                var d = result.Diagnostics[i];
-                var loc = d.Location;
-                list.Add(new PlaygroundDiagnosticDto
+                writer.WriteStartArray();
+                for (var i = 0; i < result.Diagnostics.Length; i++)
                 {
-                    Message = d.Message,
-                    Line = loc.StartLine,
-                    Column = loc.StartColumn,
-                    Severity = d.Severity.ToString(),
-                    RuleId = d.RuleId,
-                    Fixable = d.Fix is not null,
-                    FixDescription = d.Fix?.Description,
-                });
+                    var d = result.Diagnostics[i];
+                    var loc = d.Location;
+
+                    writer.WriteStartObject();
+                    writer.WriteString("message", d.Message);
+                    writer.WriteNumber("line", loc.StartLine);
+                    writer.WriteNumber("column", loc.StartColumn);
+                    writer.WriteString("severity", SeverityString(d.Severity));
+                    if (d.RuleId is not null)
+                        writer.WriteString("ruleId", d.RuleId);
+                    else
+                        writer.WriteNull("ruleId");
+                    writer.WriteBoolean("fixable", d.Fix is not null);
+                    if (d.Fix?.Description is { } fixDesc)
+                        writer.WriteString("fixDescription", fixDesc);
+                    else
+                        writer.WriteNull("fixDescription");
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
             }
 
             // Return the AstArena to the ThreadStatic cache immediately so the next
@@ -85,9 +104,15 @@ public static class PlaygroundLintRunner
             // stays alive until GC collects the LintResult, doubling memory pressure
             // in the constrained WASM heap and causing OOM crashes.
             result.ParseResult.Arena?.Dispose();
-        }
 
-        return JsonSerializer.Serialize(list, PlaygroundJsonSerializerContext.Default.ListPlaygroundDiagnosticDto);
+            return Encoding.UTF8.GetString(JsonBuffer.WrittenSpan);
+        }
+    }
+
+    private static string SeverityString(DiagnosticSeverity severity)
+    {
+        var index = (int)severity;
+        return (uint)index < (uint)SeverityStrings.Length ? SeverityStrings[index] : severity.ToString();
     }
 
     /// <summary>
