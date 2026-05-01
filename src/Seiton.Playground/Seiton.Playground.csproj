@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+﻿<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,20 +9,18 @@
 
     <InvariantGlobalization>true</InvariantGlobalization>
     <InvariantTimezone>true</InvariantTimezone>
+
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <RunAOTCompilation>true</RunAOTCompilation>
+    <WasmEnableWebcil>true</WasmEnableWebcil>
   </PropertyGroup>
 
   <PropertyGroup>
     <!-- Pre-allocate 64MB at startup to reduce early memory.grow fragmentation -->
     <EmccInitialHeapSize>67108864</EmccInitialHeapSize>
-    <!-- Allow up to 1GB; Debug builds (no trim, no AOT, full ICU) can easily exceed 512MB -->
-    <EmccMaximumHeapSize>1073741824</EmccMaximumHeapSize>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Release'">
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>full</TrimMode>
-    <RunAOTCompilation>true</RunAOTCompilation>
-    <WasmEnableWebcil>true</WasmEnableWebcil>
+    <!-- Allow up to 512MB -->
+    <EmccMaximumHeapSize>536870912</EmccMaximumHeapSize>
   </PropertyGroup>
 
   <!--
