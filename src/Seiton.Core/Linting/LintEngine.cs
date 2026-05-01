@@ -282,6 +282,11 @@ public sealed class LintEngine
             _diagnostics.Sort(static (x, y) => CompareDiagnosticsByLocation(x, y));
         }
 
+        if (config?.SkipSuppressionSummary == true)
+        {
+            return BuildLintResult(parseResult);
+        }
+
         return BuildLintResultWithSuppression(parseResult);
     }
 

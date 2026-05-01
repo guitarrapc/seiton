@@ -295,4 +295,33 @@ public sealed class LintEngineConfigReuseTests
         await Assert.That(suppressed1).IsTrue();
         await Assert.That(hasUnpinned2).IsTrue();
     }
+
+    [Test]
+    public async Task Check_SkipSuppressionSummary_ReturnsSummaryEmpty()
+    {
+        // When SkipSuppressionSummary is true, suppression filtering still happens
+        // (diagnostics are removed) but SuppressionSummary is Empty.
+        var engine = new LintEngine();
+
+        // Source with inline suppression for unpinned-uses
+        var yaml = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      # seiton: disable-next-line unpinned-uses\n      - uses: actions/checkout@v4\n");
+
+        // Without skip: summary should have suppression data
+        var resultFull = engine.Check(yaml, ".github/workflows/ci.yml");
+        await Assert.That(resultFull.SuppressionSummary.TotalSuppressed).IsGreaterThan(0);
+
+        // With skip: summary should be empty, but diagnostics should still be filtered
+        var configSkip = new LintConfig { SkipSuppressionSummary = true };
+        var resultSkip = engine.Check(yaml, ".github/workflows/ci.yml", configSkip);
+        await Assert.That(resultSkip.SuppressionSummary.TotalSuppressed).IsEqualTo(0);
+        await Assert.That(resultSkip.SuppressionSummary.Records).IsEmpty();
+
+        // Suppressed diagnostics must NOT appear (suppression filtering still works)
+        var hasUnpinned = resultSkip.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
+        await Assert.That(hasUnpinned).IsFalse();
+
+        // Same diagnostic count as the full result (both filter the suppressed diagnostic)
+        await Assert.That(resultSkip.Diagnostics.Length).IsEqualTo(resultFull.Diagnostics.Length);
+    }
 }

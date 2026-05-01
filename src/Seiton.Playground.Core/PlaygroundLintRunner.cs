@@ -40,6 +40,7 @@ public static class PlaygroundLintRunner
         Fix = new FixConfig { Enabled = true },
         Network = new NetworkConfig(),
         Output = new OutputConfig(),
+        SkipSuppressionSummary = true,
     };
 
     /// <summary>

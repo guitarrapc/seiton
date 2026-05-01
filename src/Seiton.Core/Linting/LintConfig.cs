@@ -99,6 +99,16 @@ public sealed class LintConfig
     /// <summary>Gets the output configuration section.</summary>
     public OutputConfig Output { get; set; } = new();
 
+    /// <summary>
+    /// When <c>true</c>, the <see cref="LintResult.SuppressionSummary"/> is set to
+    /// <see cref="SuppressionSummary.Empty"/> even when diagnostics are suppressed.
+    /// Suppression filtering still occurs (suppressed diagnostics are removed), but
+    /// the per-rule breakdown and record array are not materialized.
+    /// Use this in memory-constrained environments (e.g. WASM Playground) where the
+    /// suppression summary is never consumed.
+    /// </summary>
+    public bool SkipSuppressionSummary { get; init; }
+
     private static readonly FixConfig DefaultFix = new();
     private static readonly NetworkConfig DefaultNetwork = new();
     private static readonly OutputConfig DefaultOutput = new();
