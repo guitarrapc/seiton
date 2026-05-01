@@ -11,6 +11,11 @@
     <InvariantTimezone>true</InvariantTimezone>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- Reserve required memory explicitly: 512MB -->
+    <EmccMaximumHeapSize>536870912</EmccMaximumHeapSize>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>full</TrimMode>
