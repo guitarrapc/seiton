@@ -297,3 +297,129 @@ Release ビルドでは:
 - `PublishTrimmed=true` + `TrimMode=full` → 不要なアセンブリ除去
 - `RunAOTCompilation=true` → IL インタプリタのメタデータ展開不要
 - 推定ベースライン: 50-100 MB（Debug の 1/10 以下）
+
+---
+
+## 9. per-call ヒープアロケーション詳細分析
+
+### 9.1 分析対象パス
+
+```
+PlaygroundLintRunner.RunToJson()
+  → Encoding.UTF8.GetBytes()
+  → LintEngine.Check()
+    → WorkflowParser.ParseClassified()
+      → VYamlStreamAdapter (hint pass)
+      → VYamlStreamAdapter (full parse)
+      → AstArena.Rent()
+      → PooledBuffer<Diagnostic>.ToArray()
+    → NormalizeRules()
+    → ParseInlineSuppression()
+    → NormalizeExclusions()
+    → new LintConfig { ... }
+    → WorkflowVisitor.Visit()
+    → _diagnostics.ToArray()
+    → new SuppressionSummary(...)
+  → new List<PlaygroundDiagnosticDto>(...)
+  → JsonSerializer.Serialize()
+  → Arena.Dispose()
+```
+
+### 9.2 Tier 1: 毎回必ず発生、影響大
+
+| # | 箇所 | アロケーション | 推定サイズ |
+|---|------|-------------|----------|
+| 1 | `LintEngine.Check` L118 | **`new LintConfig { Fix = ..., Network = ..., Output = ... }`** | LintConfig 本体 + `new FixConfig()` + `new FixDefaultsConfig()` + `new FixPinningConfig()` (内部に `string[]` 2本: ExcludeBranches, IgnoreActions) + `new FixImagesConfig()` (内部に `string[]` 2本: ExcludeImages, ExcludeTags) + `new NetworkConfig()` + `new GitHubNetworkConfig()` + `new OutputConfig()` — 合計 **9–10 オブジェクト per call** |
+| 2 | `LintEngine.Check` L274 | **`_diagnostics.ToArray()`** | `Diagnostic[]` — 診断数分のコピー |
+| 3 | `LintEngine.Check` L276 | **`new Dictionary<string,int>(_suppressedByRule)` + `_suppressionRecords.ToArray()`** | Dictionary スナップショット + 配列コピー |
+| 4 | `PlaygroundLintRunner` L54 | **`Encoding.UTF8.GetBytes(yamlSource)`** | 入力全体の `byte[]` コピー |
+| 5 | `PlaygroundLintRunner` L84 | **`JsonSerializer.Serialize(list, ...)`** | JSON `string` 全体 |
+| 6 | `PlaygroundLintRunner` L68 | **`new List<PlaygroundDiagnosticDto>(...)`** + 各 DTO | List + N 個の DTO オブジェクト |
+
+### 9.3 Tier 2: 毎回必ず発生、影響中
+
+| # | 箇所 | アロケーション |
+|---|------|-------------|
+| 7 | `WorkflowParser.ParseClassified` | `PooledBuffer<Diagnostic>.ToArray()` — パーサー診断の配列コピー |
+| 8 | `WorkflowParser.ParseCore` | `new List<Diagnostic>(16)` + `.ToArray()` |
+| 9 | `LintEngine.NormalizeRules` | `new Dictionary<string, RuleConfig>()` + `new List<Diagnostic>()` + `.ToArray()` |
+| 10 | `LintEngine.ParseInlineSuppression` | 3 つの `new Dictionary<>()` + `new List<Diagnostic>()` + `.ToArray()` |
+| 11 | `LintConfig.GetLineStarts()` | `int[]` (行数分) — LintConfig が毎回新規なのでキャッシュが効かない |
+| 12 | `LintConfig._expressionCache` | `new Dictionary<long, ExpressionCacheEntry>()` — 同上 |
+
+### 9.4 核心的な問題: LintConfig が per-call 新規作成
+
+`LintEngine.Check()` L118 で毎回 `new LintConfig { ... }` を生成するため:
+
+1. LintConfig 本体 + 6-8 個のネストした config record が**毎回新規生成**される
+2. `GetLineStarts()` の `int[]` キャッシュが毎回破棄される（前回 Check の LintConfig が GC 対象）
+3. `_expressionCache` の Dictionary が毎回破棄される
+4. 式パース結果のキャッシュが一切 cross-call で再利用されない
+
+LintConfig の init-only property のデフォルト値が eager にサブオブジェクトを生成する設計:
+```csharp
+public FixConfig Fix { get; init; } = new();          // → new FixDefaultsConfig() + new FixPinningConfig(string[2]) + new FixImagesConfig(string[2])
+public NetworkConfig Network { get; init; } = new();    // → new GitHubNetworkConfig()
+public OutputConfig Output { get; init; } = new();
+```
+
+LintEngine.Check 内で `config?.Fix ?? new FixConfig()` とフォールバックしているため、Playground の `LintWithFixMetadata` から渡された Fix は使われるが、Network と Output は毎回 new される。
+
+---
+
+## 10. 対策候補（優先度別）
+
+### P0: LintEngine にフィールド LintConfig を保持し再利用
+
+**概要**: `LintEngine` にインスタンスフィールドとして `_effectiveConfig` を持ち、Check() で property を書き換えて再利用。`_expressionCache` と `_lineStarts` が cross-call でキャッシュされるようになる。
+
+**削減効果**: 毎回 9-10 オブジェクト + expression cache Dictionary + lineStarts `int[]` の新規生成を排除。
+
+**難易度**: 中 — LintConfig を `init` property から mutable `set` に変更するか、別途 mutable な "effective config context" を導入。API 変更を伴うが、LintConfig は internal 利用のみなので影響範囲は限定的。
+
+**注意**: `_expressionCache` は `Utf8Yaml` (ソースバイト列) に依存するため、ソースが変わったらキャッシュをクリアする必要がある。ソース同一性チェック（参照比較 or ハッシュ）が必要。
+
+### P1: `_diagnostics.ToArray()` の排除
+
+**概要**: LintResult が `Diagnostic[]` の所有権を取る設計を改め、`ReadOnlySpan<Diagnostic>` ベースにするか、pooled array を返す。
+
+**削減効果**: 診断数 × `Diagnostic` サイズ分の配列コピーを毎回削除。
+
+**難易度**: 中 — LintResult の API 変更、下流の消費コード修正。`.ToArray()` を `.AsSpan()` に置き換え、LintResult が内部リストへの参照を保持する形に。
+
+### P2: NormalizeRules / ParseInlineSuppression の Dictionary をフィールド化
+
+**概要**: `LintEngine` のインスタンスフィールドとして Dictionary/List を保持し、Check() で `.Clear()` + 再利用。
+
+**削減効果**: 毎回 5-6 個のコレクションオブジェクト新規生成を排除。
+
+**難易度**: 中 — NormalizeRules/ParseInlineSuppression の戻り値を struct + フィールド参照に変更。
+
+### P3: Playground 固有 — LintConfig のサブオブジェクト生成回避
+
+**概要**: `PlaygroundLintRunner` が渡す `LintWithFixMetadata` に Network/Output も含めた完全な設定を保持し、LintEngine.Check 内の `config?.Fix ?? new FixConfig()` フォールバックで new が走らないようにする。
+
+**削減効果**: 毎回 3-4 個のサブ config オブジェクト新規生成を排除。
+
+**難易度**: **低** — `LintWithFixMetadata` の定義を拡張するだけ。LintEngine 側の変更不要。
+
+```csharp
+private static readonly LintConfig LintWithFixMetadata = new()
+{
+    Fix = new FixConfig { Enabled = true },
+    Network = new NetworkConfig(),    // ← 追加: Check 内での new を回避
+    Output = new OutputConfig(),      // ← 追加: Check 内での new を回避
+};
+```
+
+### P4: SuppressionSummary の生成スキップ（Playground 用）
+
+**概要**: Playground では suppression 機能を使わないため、SuppressionSummary の Dictionary/配列スナップショットを生成しない。LintConfig に「summary 不要」フラグを追加。
+
+**削減効果**: 毎回の `new Dictionary<string,int>(...)` + `_suppressionRecords.ToArray()` を排除。
+
+**難易度**: 低 — フラグ 1 つと条件分岐。
+
+### P5: AstArena バッキング配列を ArrayPool 化 ✅ 実装済み
+
+全 `new T[]` を `ArrayPool<T>.Shared.Rent/Return` に置換済み。Grow/Shrink 時の旧配列が GC ゴミにならず ArrayPool に返却される。
