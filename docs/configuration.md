@@ -241,9 +241,23 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 
 ## Exclusions
 
-Exclusions suppress diagnostics for specific files, jobs, or rule combinations.
+Exclusions suppress diagnostics for specific files, jobs, or rule combinations. Fields are additive (progressive narrowing):
 
-### File-Level Exclusion
+- **`file` only** → exclude the entire file from all checks
+- **`file` + `jobs`** → exclude specified jobs from all checks
+- **`file` + `rules`** → suppress specified rules for the whole file
+- **`file` + `jobs` + `rules`** → suppress specified rules for specified jobs
+
+### File-Level Exclusion (all rules)
+
+Exclude a file entirely from linting:
+
+```yaml
+exclusions:
+  - file: ".github/workflows/generated.yml"
+```
+
+### File-Level Exclusion (specific rules)
 
 Suppress one or more rules for all files matching a glob pattern:
 

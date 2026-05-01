@@ -84,6 +84,8 @@ public static class LintConfigLibrary
           #     - runner-no-latest
           #   jobs:
           #     - legacy
+          # File-only exclusion (excludes entire file from all checks):
+          # - file: .github/workflows/generated.yml
 
         fix:
           defaults:
@@ -286,12 +288,28 @@ public static class LintConfigLibrary
                 continue;
             }
 
-            var ruleIds = new HashSet<string>(StringComparer.Ordinal);
-            ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, ruleIds);
-
-            if (ruleIds.Count == 0)
+            IReadOnlyList<string>? resolvedRules;
+            if (exclusion.Rules is null)
             {
+                // rules omitted → all rules (file/job-level exclusion)
+                resolvedRules = null;
+            }
+            else if (exclusion.Rules.Count == 0)
+            {
+                // rules: [] → explicit empty, no-op
                 continue;
+            }
+            else
+            {
+                var ruleIds = new HashSet<string>(StringComparer.Ordinal);
+                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, ruleIds);
+
+                if (ruleIds.Count == 0)
+                {
+                    continue;
+                }
+
+                resolvedRules = [.. ruleIds];
             }
 
             IReadOnlyList<string> jobs = [];
@@ -310,7 +328,7 @@ public static class LintConfigLibrary
                 jobs = normalizedJobs;
             }
 
-            normalized.Add(new LintExclusion(exclusion.File.Trim(), [.. ruleIds], jobs.Count > 0 ? jobs : null));
+            normalized.Add(new LintExclusion(exclusion.File.Trim(), resolvedRules, jobs.Count > 0 ? jobs : null));
         }
 
         return new NormalizedExclusions(normalized, diagnostics.ToArray());

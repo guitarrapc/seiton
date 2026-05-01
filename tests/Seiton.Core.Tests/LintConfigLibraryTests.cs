@@ -456,6 +456,65 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Exclusions_FileOnly_NoRules_ExcludesAllRules()
+    {
+        // When only 'file:' is specified without 'rules:', the exclusion applies to all rules (file-level exclusion)
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/legacy-*.yml
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        var excl = result.Config.Exclusions![0];
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl.Rules).IsNull(); // null = all rules
+        await Assert.That(excl.Jobs).IsNull();
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_FileAndJobs_NoRules_ExcludesAllRulesForJobs()
+    {
+        // file + jobs without rules → exclude all rules for those jobs
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/legacy-*.yml
+            jobs:
+              - build
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        var excl = result.Config.Exclusions![0];
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/legacy-*.yml");
+        await Assert.That(excl.Rules).IsNull(); // null = all rules
+        await Assert.That(excl.Jobs).IsNotNull();
+        await Assert.That(excl.Jobs![0]).IsEqualTo("build");
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_EmptyRulesList_ExcludesNothing()
+    {
+        // Explicit empty rules list is a no-op (distinct from omitted)
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/legacy-*.yml
+            rules: []
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task Validate_RuleSpecificKey_WrongRule_ReturnsError()
     {
         var yaml = """
