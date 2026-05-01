@@ -108,7 +108,7 @@ public static class LintConfigLibrary
         network:
           # on-error: skip
           # timeout-seconds: 30
-          # max-concurrency: 4
+          # max-concurrency: (omit; default is min(4, logical CPUs))
           # github:
           #   ghes-api-url: ""
           #   ghes-fallback: false
@@ -386,7 +386,7 @@ public static class LintConfigLibrary
                 "network.max-concurrency must be > 0",
                 new TextRange(0, 1, 1, 1, 1, 2),
                 FilePath: filePath));
-            maxConcurrency = 4;
+            maxConcurrency = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
         }
         else if (maxConcurrency > LintConfigResourceLimits.MaxNetworkConcurrencyCap)
         {

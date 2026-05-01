@@ -844,7 +844,7 @@ internal static class LintConfigYamlParser
     {
         var onError = NetworkErrorMode.Skip;
         var timeoutSeconds = 30;
-        var maxConcurrency = 4;
+        var maxConcurrency = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
         var github = new GitHubNetworkConfig();
 
         foreach (var (key, value) in map)

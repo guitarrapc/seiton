@@ -316,7 +316,7 @@ Default values (current C# runtime):
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
 | `network.timeout-seconds` | `30` |
-| `network.max-concurrency` | `4` |
+| `network.max-concurrency` | `min(4, logical processor count)` (at least **`1`**) |
 | `network.github.ghes-api-url` | empty (github.com only) |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |
@@ -1001,7 +1001,7 @@ network:
   - `skip` (default): resolution failures leave the diagnostic without fix and continue processing.
   - `fail`: any resolution failure causes the operation to return an error immediately.
 - `network.timeout-seconds`: HTTP request timeout in seconds. Default: **`30`**. Accepted range after validation: **`0`–`300`**; larger values emit an error diagnostic and normalize to **`300`**.
-- `network.max-concurrency`: maximum concurrent network operations. Default: **`4`**. Accepted range after validation: **`1`**–**`Environment.ProcessorCount`** (logical processors, minimum **`1`**); larger values emit an error diagnostic and normalize to that cap.
+- `network.max-concurrency`: maximum concurrent network operations. When omitted, the effective default is **`min(4, Environment.ProcessorCount)`** (logical processors, minimum **`1`**), so the implicit default never exceeds the cap. Accepted range after validation when set: **`1`**–**`Environment.ProcessorCount`**; larger values emit an error diagnostic and normalize to that cap.
 - `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized via `Uri.AbsoluteUri`.
 - `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
 

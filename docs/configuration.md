@@ -183,7 +183,7 @@ fix:
 network:
   on-error: skip               # skip | fail. How to handle network errors from online rules.
   timeout-seconds: 30          # Per-request timeout for GitHub API calls.
-  max-concurrency: 4           # Maximum concurrent network requests.
+  max-concurrency: 4           # Optional. Omitted default: min(4, logical CPUs). Max: logical CPU count.
   github:
     ghes-api-url: ""           # GHES REST API URL (empty = github.com). Must be https; userinfo prohibited.
     ghes-fallback: false       # Fall back to github.com if GHES request fails.
@@ -400,7 +400,7 @@ Used by online audit rules and network-assisted fix operations.
 network:
   on-error: skip           # skip | fail
   timeout-seconds: 30
-  max-concurrency: 4
+  max-concurrency: 4       # optional; omit uses min(4, logical CPUs)
   github:
     ghes-api-url: ""       # Leave empty for github.com
     ghes-fallback: false
@@ -410,7 +410,7 @@ network:
 |---|---|---|
 | `on-error` | `skip` | `skip` silently ignores network failures. `fail` treats them as errors. |
 | `timeout-seconds` | `30` | Per-request GitHub REST timeout (**`0`**–**`300`** seconds; larger values emit an error diagnostic and clamp to **`300`**). |
-| `max-concurrency` | `4` | Concurrent GitHub requests (**1**–**N**, where **N** is `Environment.ProcessorCount`, minimum **1**; larger values emit an error diagnostic and clamp to **N**). |
+| `max-concurrency` | `min(4, ProcessorCount)` | Concurrent GitHub requests. When omitted, effective default is **`min(4, N)`**, where **N** = `Environment.ProcessorCount`, minimum **`1`** (never exceeds **N**). When set explicitly: **`1`**–**N**; larger values emit an error diagnostic and clamp to **N**. |
 | `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com only. Must be an absolute **`https`** URL (non-HTTPS schemes and embedded user credentials are rejected during config validation). |
 | `github.ghes-fallback` | `false` | Fall back to github.com if GHES request fails. |
 
@@ -471,7 +471,7 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
 | `network.timeout-seconds` | `30` (`0`–`300` enforced; excess rejected + clamped) |
-| `network.max-concurrency` | `4` (`1`–logical processor count; excess rejected + clamped) |
+| `network.max-concurrency` | `min(4, logical processors)` | Same rules as **`max-concurrency`** above (**`1`**–logical processor count for explicit values; excess rejected + clamped). |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |

@@ -340,6 +340,7 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("max-concurrency must be > 0", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -573,7 +574,6 @@ public sealed class LintConfigLibraryTests
         network:
           on-error: skip
           timeout-seconds: 30
-          max-concurrency: 4
           github:
             ghes-api-url: ""
             ghes-fallback: false
@@ -611,7 +611,7 @@ public sealed class LintConfigLibraryTests
         // network
         await Assert.That(result.Config.Network.OnError).IsEqualTo(NetworkErrorMode.Skip);
         await Assert.That(result.Config.Network.TimeoutSeconds).IsEqualTo(30);
-        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(4);
+        await Assert.That(result.Config.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]
@@ -678,6 +678,22 @@ public sealed class LintConfigLibraryTests
         await Assert.That(forbidden.Allow![0]).IsEqualTo("actions/*");
         await Assert.That(forbidden.Deny).IsNotNull();
         await Assert.That(forbidden.Deny![0]).IsEqualTo("bad-org/*");
+    }
+
+    [Test]
+    public async Task Validate_MinYaml_OmittedNetwork_MaxConcurrency_NoNormalizationErrorAndMatchesDefault()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            severity: warning
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.Diagnostics.All(d =>
+            !d.Message.Contains("max-concurrency", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Config!.Network.MaxConcurrency).IsEqualTo(LintConfigResourceLimits.DefaultNetworkMaxConcurrency);
     }
 
     [Test]

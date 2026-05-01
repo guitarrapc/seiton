@@ -17,6 +17,12 @@ public static class LintConfigResourceLimits
     /// <summary>Upper bound for <c>network.max-concurrency</c> after normalization: logical processor count, at least <c>1</c>.</summary>
     public static int MaxNetworkConcurrencyCap => Math.Max(1, Environment.ProcessorCount);
 
+    /// <summary>
+    /// Default for <c>network.max-concurrency</c> when omitted: bounded by logical processor count
+    /// so omitted values never exceed the validation cap (<see cref="MaxNetworkConcurrencyCap"/>).
+    /// </summary>
+    public static int DefaultNetworkMaxConcurrency => Math.Min(4, MaxNetworkConcurrencyCap);
+
     /// <summary>Upper bound for <c>network.timeout-seconds</c> after normalization.</summary>
     public const int MaxNetworkTimeoutSeconds = 300;
 

@@ -651,7 +651,7 @@ public sealed record NetworkConfig
 {
     public NetworkErrorMode OnError { get; init; } = NetworkErrorMode.Skip;
     public int TimeoutSeconds { get; init; } = 30;
-    public int MaxConcurrency { get; init; } = 4;
+    public int MaxConcurrency { get; init; } = LintConfigResourceLimits.DefaultNetworkMaxConcurrency;
     public GitHubNetworkConfig GitHub { get; init; } = new();
 }
 
@@ -668,7 +668,7 @@ public sealed record GitHubNetworkConfig
 
 Safety invariants:
 
-- `NormalizeNetwork` caps `NetworkConfig.MaxConcurrency` at `Environment.ProcessorCount` (minimum `1`). Values greater than this emit an error and clamp (see `.github/docs/Seiton_Linter_spec.md` § network).
+- `NormalizeNetwork` caps `NetworkConfig.MaxConcurrency` at `Environment.ProcessorCount` (minimum `1`). Values greater than this emit an error and clamp (see `.github/docs/Seiton_Linter_spec.md` § network). Omitted `max-concurrency` defaults to **`LintConfigResourceLimits.DefaultNetworkMaxConcurrency`**, i.e. **`min(4, max(1, Environment.ProcessorCount))`**, so implicit defaults never exceed the cap.
 - `LintConfigYamlParser` builds the config DOM from VYaml’s pull parser. For the normal `LintConfigLibrary.Validate` path, DOM parsing uses the **same** `byte[]` as `LintConfig.Utf8Yaml` (no redundant full-size copy). Non–array-backed `ReadOnlyMemory<byte>` inputs fall back to an `ArrayPool<byte>` copy.
 - `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.8).
 - `EnableNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `EnableNetwork: false` must not make any network calls even if resolver implementations are injected.
