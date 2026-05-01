@@ -62,6 +62,12 @@ public static class PlaygroundLintRunner
             });
         }
 
+        // Return the AstArena to the ThreadStatic cache immediately so the next
+        // Rent() reuses it instead of allocating a new one. Without this, the arena
+        // stays alive until GC collects the LintResult, doubling memory pressure
+        // in the constrained WASM heap and causing OOM crashes.
+        result.ParseResult.Arena?.Dispose();
+
         return JsonSerializer.Serialize(list, PlaygroundJsonSerializerContext.Default.ListPlaygroundDiagnosticDto);
     }
 
@@ -82,6 +88,7 @@ public static class PlaygroundLintRunner
                 var result = Engine.Check(current, filePath, LintWithFixMetadata);
                 if (!result.HasFixableDiagnostics)
                 {
+                    result.ParseResult.Arena?.Dispose();
                     return Encoding.UTF8.GetString(current);
                 }
 
@@ -89,11 +96,15 @@ public static class PlaygroundLintRunner
                 if (filtered.Length == 0)
                 {
                     // Still has diagnostics with fixes attached, but none we auto-apply here (see CollectAutoApplicableFixes).
+                    result.ParseResult.Arena?.Dispose();
                     return Encoding.UTF8.GetString(current);
                 }
 
                 var diag = PickNextDiagnosticToApply(filtered);
                 current = FixEngine.Apply(current, new[] { diag });
+
+                // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
+                result.ParseResult.Arena?.Dispose();
             }
         }
 
