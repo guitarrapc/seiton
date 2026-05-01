@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.PinRemediation;
 
@@ -7,6 +8,14 @@ namespace Seiton.Core.Tests;
 
 public sealed class GitHubActionShaResolverTests
 {
+    [Test]
+    public async Task CompileUserIgnoreRegexForTests_Throws_OnCatastrophicBacktrackingWithinTimeout()
+    {
+        var re = GitHubActionShaResolver.CompileUserIgnoreRegexForTests("(a+)+$");
+
+        await Assert.That(() => re.IsMatch(new string('a', 29) + "b")).Throws<RegexMatchTimeoutException>();
+    }
+
     [Test]
     public async Task ResolveAsync_ReturnsCommitSha_ForDirectTagReference()
     {

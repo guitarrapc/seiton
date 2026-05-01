@@ -54,6 +54,15 @@ The config file is YAML. All top-level sections are optional. An empty file is v
 
 Unknown top-level keys and unknown rule IDs are reported as configuration errors.
 
+### Loader resource limits
+
+To limit denial-of-service from maliciously large configuration inputs, validation enforces:
+
+- **Maximum UTF‑8 payload size**: `1 048 576` bytes for both `--config` / `ValidateFile` on-disk reads and `LintConfigLibrary.Validate`.
+- **Maximum YAML DOM depth**: **`64`** nested mappings/sequences when building the config parse tree (`lint config YAML exceeds maximum nesting depth`).
+- **Maximum DOM structural units**: **`50 000`** scalar keys/scalar leaves/compound containers while building the DOM (`lint config YAML exceeds maximum structural size`).
+- **`fix.pinning.ignore-actions`** patterns compile as **`Regex`** with **`MatchTimeout` = **`2`** seconds; if a timeout occurs during skip evaluation, matching is treated as failed (pinning/remediation proceeds). **`fix.pinning.exclude-branches`** uses the same timeout for **`IsMatch`** (defense-in-depth on escaped literals).
+
 ### Annotated Example
 
 ```yaml
@@ -389,8 +398,8 @@ network:
 | Key | Default | Description |
 |---|---|---|
 | `on-error` | `skip` | `skip` silently ignores network failures. `fail` treats them as errors. |
-| `timeout-seconds` | `30` | Per-request timeout for GitHub API calls. |
-| `max-concurrency` | `4` | Maximum number of concurrent GitHub API requests. |
+| `timeout-seconds` | `30` | Per-request GitHub REST timeout (**`0`**–**`300`** seconds; larger values emit an error diagnostic and clamp to **`300`**). |
+| `max-concurrency` | `4` | Concurrent GitHub requests (**1**–**N**, where **N** is `Environment.ProcessorCount`, minimum **1**; larger values emit an error diagnostic and clamp to **N**). |
 | `github.ghes-api-url` | `""` | GitHub Enterprise Server API base URL. Empty = github.com only. Must be an absolute **`https`** URL (non-HTTPS schemes and embedded user credentials are rejected during config validation). |
 | `github.ghes-fallback` | `false` | Fall back to github.com if GHES request fails. |
 
@@ -450,8 +459,8 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `fix.images.exclude-images` | `scratch` |
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
-| `network.timeout-seconds` | `30` |
-| `network.max-concurrency` | `4` |
+| `network.timeout-seconds` | `30` (`0`–`300` enforced; excess rejected + clamped) |
+| `network.max-concurrency` | `4` (`1`–logical processor count; excess rejected + clamped) |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |

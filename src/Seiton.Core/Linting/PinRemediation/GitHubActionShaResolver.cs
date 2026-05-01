@@ -306,9 +306,16 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         for (var i = 0; i < _compiledIgnoreActions.Length; i++)
         {
             var entry = _compiledIgnoreActions[i];
-            if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(refStr))
+            try
             {
-                return true;
+                if (entry.NameRegex.IsMatch(name) && entry.RefRegex.IsMatch(refStr))
+                {
+                    return true;
+                }
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Treat as non-match — do not suppress pinning/remediation due to catastrophic backtracking.
             }
         }
 
@@ -319,9 +326,16 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     {
         for (var i = 0; i < _compiledExcludeBranches.Length; i++)
         {
-            if (_compiledExcludeBranches[i].IsMatch(refStr))
+            try
             {
-                return true;
+                if (_compiledExcludeBranches[i].IsMatch(refStr))
+                {
+                    return true;
+                }
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Treat as non-excluded — proceed with pinning.
             }
         }
 
@@ -497,7 +511,10 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         var compiled = new Regex[branches.Count];
         for (var i = 0; i < branches.Count; i++)
         {
-            compiled[i] = new Regex("^" + Regex.Escape(branches[i]) + "$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+            compiled[i] = new Regex(
+                "^" + Regex.Escape(branches[i]) + "$",
+                RegexOptions.CultureInvariant | RegexOptions.Compiled,
+                LintConfigResourceLimits.ExcludeBranchRegexMatchTimeout);
         }
 
         return compiled;
@@ -515,12 +532,18 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         {
             var entry = entries[i];
             compiled[i] = new CompiledIgnoreActionEntry(
-                new Regex(entry.NamePattern, RegexOptions.CultureInvariant | RegexOptions.Compiled),
-                new Regex(entry.RefPattern, RegexOptions.CultureInvariant | RegexOptions.Compiled));
+                CompileUserIgnoreRegex(entry.NamePattern),
+                CompileUserIgnoreRegex(entry.RefPattern));
         }
 
         return compiled;
     }
+
+    /// <summary>Compiles ignore-action regex with bounded match time — exposed for invariant tests (<see cref="LintConfigResourceLimits.IgnoreActionRegexMatchTimeout"/>).</summary>
+    internal static Regex CompileUserIgnoreRegexForTests(string pattern) => CompileUserIgnoreRegex(pattern);
+
+    private static Regex CompileUserIgnoreRegex(string pattern) =>
+        new(pattern, RegexOptions.CultureInvariant | RegexOptions.Compiled, LintConfigResourceLimits.IgnoreActionRegexMatchTimeout);
 
     private static InvalidOperationException CreateResolutionException(
         string owner,

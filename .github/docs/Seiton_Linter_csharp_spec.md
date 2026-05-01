@@ -668,6 +668,7 @@ public sealed record GitHubNetworkConfig
 
 Safety invariants:
 
+- `NormalizeNetwork` caps `NetworkConfig.MaxConcurrency` at `Environment.ProcessorCount` (minimum `1`). Values greater than this emit an error and clamp (see `.github/docs/Seiton_Linter_spec.md` § network).
 - `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.8).
 - `EnableNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `EnableNetwork: false` must not make any network calls even if resolver implementations are injected.
 - Token resolution order is hardcoded as a code-internal constant: `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`. This value is not exposed in config to prevent config-injection attacks.

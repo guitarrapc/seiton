@@ -149,15 +149,53 @@ public static class LintConfigLibrary
             return new LintConfigValidationResult(null, [missing]);
         }
 
+        long fileLengthBytes;
+        try
+        {
+            fileLengthBytes = new FileInfo(configPath).Length;
+        }
+        catch (IOException ex)
+        {
+            var io = new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"config file '{configPath}' could not be read: {ex.Message}",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: configPath);
+            return new LintConfigValidationResult(null, [io]);
+        }
+
+        if (IsConfigFileOverSizeBytes(fileLengthBytes))
+        {
+            var tooLarge = new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"seiton configuration file exceeds maximum size ({LintConfigResourceLimits.MaxConfigUtf8Bytes} bytes): '{configPath}'",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: configPath);
+            return new LintConfigValidationResult(null, [tooLarge]);
+        }
+
         var yamlText = File.ReadAllText(configPath);
         return Validate(yamlText, configPath);
     }
+
+    private static bool IsConfigFileOverSizeBytes(long length) =>
+        length > LintConfigResourceLimits.MaxConfigUtf8Bytes;
 
     /// <summary>Parses and validates the given YAML text as a seiton configuration.</summary>
     public static LintConfigValidationResult Validate(string yamlText, string filePath)
     {
         ArgumentNullException.ThrowIfNull(yamlText);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        if (Encoding.UTF8.GetByteCount(yamlText) > LintConfigResourceLimits.MaxConfigUtf8Bytes)
+        {
+            var tooLarge = new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"seiton configuration exceeds maximum size ({LintConfigResourceLimits.MaxConfigUtf8Bytes} UTF-8 bytes)",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath);
+            return new LintConfigValidationResult(null, [tooLarge]);
+        }
 
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlText);
         var parseResult = LintConfigYamlParser.Parse(utf8Yaml.AsMemory(), filePath);
@@ -309,6 +347,15 @@ public static class LintConfigLibrary
                 FilePath: filePath));
             timeout = 30;
         }
+        else if (timeout > LintConfigResourceLimits.MaxNetworkTimeoutSeconds)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"network.timeout-seconds must be <= {LintConfigResourceLimits.MaxNetworkTimeoutSeconds}",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            timeout = LintConfigResourceLimits.MaxNetworkTimeoutSeconds;
+        }
 
         var maxConcurrency = network.MaxConcurrency;
         if (maxConcurrency <= 0)
@@ -319,6 +366,16 @@ public static class LintConfigLibrary
                 new TextRange(0, 1, 1, 1, 1, 2),
                 FilePath: filePath));
             maxConcurrency = 4;
+        }
+        else if (maxConcurrency > LintConfigResourceLimits.MaxNetworkConcurrencyCap)
+        {
+            var cap = LintConfigResourceLimits.MaxNetworkConcurrencyCap;
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Error,
+                $"network.max-concurrency must be <= {cap} (logical processor count)",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
+            maxConcurrency = cap;
         }
 
         var ghesApiUrl = network.GitHub.GhesApiUrl?.Trim();

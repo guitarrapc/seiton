@@ -1000,8 +1000,8 @@ network:
 - `network.on-error`: controls behavior when network operations fail.
   - `skip` (default): resolution failures leave the diagnostic without fix and continue processing.
   - `fail`: any resolution failure causes the operation to return an error immediately.
-- `network.timeout-seconds`: HTTP request timeout in seconds. Default: `30`.
-- `network.max-concurrency`: maximum concurrent network operations. Default: `4`.
+- `network.timeout-seconds`: HTTP request timeout in seconds. Default: **`30`**. Accepted range after validation: **`0`–`300`**; larger values emit an error diagnostic and normalize to **`300`**.
+- `network.max-concurrency`: maximum concurrent network operations. Default: **`4`**. Accepted range after validation: **`1`**–**`Environment.ProcessorCount`** (logical processors, minimum **`1`**); larger values emit an error diagnostic and normalize to that cap.
 - `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized via `Uri.AbsoluteUri`.
 - `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
 
@@ -1012,6 +1012,9 @@ Token resolution:
 - GitHub API token is resolved from environment variables in hardcoded order: `SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`.
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
+
+Additionally, **`LintConfigLibrary` / `LintConfigYamlParser`** enforce resource caps on YAML configuration payloads: **`1 048 576`** UTF‑8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units (mapping keys + scalar reads + compounds). Oversized payloads fail validation with deterministic error messages (`seiton configuration … maximum size …` / `lint config YAML exceeds maximum …`). **`fix.pinning.ignore-actions`** compiles **`Regex`** with **`MatchTimeout` = **`2`** **s**, and regex-timeouts during branch/ignore evaluations are handled as non-matches/non-exclusions so pinning does not wedge the process.
+
 
 ### 5.14 `output` Section Specification
 
