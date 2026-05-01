@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -154,10 +155,10 @@ public sealed class AstArena : IDisposable
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
-        _strings = new StringNodeData[stringCapacity];
-        _bools = new BoolNodeData[boolCapacity];
-        _ints = new IntNodeData[intCapacity];
-        _floats = new FloatNodeData[floatCapacity];
+        _strings = ArrayPool<StringNodeData>.Shared.Rent(stringCapacity);
+        _bools = ArrayPool<BoolNodeData>.Shared.Rent(boolCapacity);
+        _ints = ArrayPool<IntNodeData>.Shared.Rent(intCapacity);
+        _floats = ArrayPool<FloatNodeData>.Shared.Rent(floatCapacity);
     }
 
     /// <summary>
@@ -213,7 +214,8 @@ public sealed class AstArena : IDisposable
     {
         if (array.Length > maxRetainedCapacity)
         {
-            array = new T[maxRetainedCapacity];
+            ArrayPool<T>.Shared.Return(array);
+            array = ArrayPool<T>.Shared.Rent(maxRetainedCapacity);
         }
     }
 
@@ -442,16 +444,18 @@ public sealed class AstArena : IDisposable
 
     private static void Grow<T>(ref T[] array)
     {
-        var newArray = new T[array.Length * 2];
-        Array.Copy(array, newArray, array.Length);
-        array = newArray;
+        var old = array;
+        array = ArrayPool<T>.Shared.Rent(old.Length * 2);
+        Array.Copy(old, array, old.Length);
+        ArrayPool<T>.Shared.Return(old);
     }
 
     private static void EnsureMinCapacity<T>(ref T[] array, int minCapacity)
     {
         if (array.Length < minCapacity)
         {
-            array = new T[minCapacity];
+            ArrayPool<T>.Shared.Return(array);
+            array = ArrayPool<T>.Shared.Rent(minCapacity);
         }
     }
 
