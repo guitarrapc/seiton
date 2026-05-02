@@ -29,6 +29,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // Per-job state for incremental step override building
     private IReadOnlyList<Step>? _currentJobSteps;
     private int _currentStepIndex;
+    // Reusable dictionary for BuildStepsOverrideInto (avoids per-step allocation)
+    private readonly Dictionary<Utf8String, ExprType> _stepsOverrideProps = new();
     // Local action output resolver for building strict step output types
     private LocalActionOutputResolver? _localActionOutputResolver;
     private Func<ReadOnlyMemory<byte>, string[]?>? _localActionOutputResolverFunc;
@@ -239,7 +241,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _jobScopeOverrides[3] = _secretsOverride;
         _jobScopeOverrides[4] = _githubOverride;
         // step scope: initialize with empty steps (will be rebuilt per-step in VisitStep)
-        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(job.Steps, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
+        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(_stepsOverrideProps, job.Steps, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
@@ -366,8 +368,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         // Rebuild steps override to include only steps defined before the current one
         if (_hasOverrides && _currentJobSteps is not null)
         {
-            _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverride(
-                _currentJobSteps, Arena, Config.Utf8Yaml, maxStepIndex: _currentStepIndex, _localActionOutputResolverFunc);
+            _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
+                _stepsOverrideProps, _currentJobSteps, Arena, Config.Utf8Yaml, maxStepIndex: _currentStepIndex, _localActionOutputResolverFunc);
             _currentStepIndex++;
         }
 

@@ -423,6 +423,7 @@ if (themeCycleBtn) {
 updateThemeCycleButton();
 
 const DEBOUNCE_MS = 300;
+const utf8Decoder = new TextDecoder();
 let debounceId = null;
 /** Coalesce refreshes while typing so measurements track height for layout (page scroll). */
 let sizingRaf = null;
@@ -807,7 +808,8 @@ function runLint() {
     lintPendingRetry = false;
 
     try {
-        const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
+        const utf8Bytes = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
+        const json = utf8Decoder.decode(utf8Bytes);
         const diagnostics = JSON.parse(json);
         // Do not treat an internal-error fallback as a successful lint: if we cached
         // the staleness key here a transient C# exception would permanently block retries

@@ -25,6 +25,7 @@ public sealed class LintConfig
 
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
+    private long _sourceContentHash;
 
     /// <summary>
     /// Parses an expression with content-based deduplication. Expressions with identical
@@ -119,8 +120,9 @@ public sealed class LintConfig
 
     /// <summary>
     /// Resets per-call state and updates properties for a new lint run.
-    /// Clears caches that depend on the source bytes (expression cache, line starts).
-    /// Reuses the dictionary allocation for expression cache across calls.
+    /// Preserves expression cache and line starts when the source content is unchanged
+    /// (detected via XXH64 hash + length + full byte comparison to eliminate collision risk).
+    /// Safe even when the same byte[] is reused with different content.
     /// </summary>
     internal void PrepareForRun(
         byte[] utf8Yaml,
@@ -131,6 +133,12 @@ public sealed class LintConfig
         NetworkConfig? network,
         OutputConfig? output)
     {
+        var contentHash = ComputeContentHash(utf8Yaml);
+        var sameContent = contentHash == _sourceContentHash
+            && Utf8Yaml is not null
+            && Utf8Yaml.Length == utf8Yaml.Length
+            && Utf8Yaml.AsSpan().SequenceEqual(utf8Yaml);
+        _sourceContentHash = contentHash;
         Utf8Yaml = utf8Yaml;
         Arena = arena;
         FilePath = filePath;
@@ -138,10 +146,13 @@ public sealed class LintConfig
         _fix = fix ?? DefaultFix;
         _network = network ?? DefaultNetwork;
         _output = output ?? DefaultOutput;
-        _lineStarts = null;
-        if (_expressionCache is not null)
+        if (!sameContent)
         {
-            _expressionCache.Clear();
+            _lineStarts = null;
+            if (_expressionCache is not null)
+            {
+                _expressionCache.Clear();
+            }
         }
     }
 
