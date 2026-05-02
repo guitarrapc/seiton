@@ -240,6 +240,19 @@ public sealed class AstArena : IDisposable
     }
 
     /// <summary>
+    /// Returns the parse diagnostics buffer to the pool without disposing the arena.
+    /// Call this before retaining an arena whose parse diagnostics have already been consumed.
+    /// </summary>
+    internal void ReleaseDiagnosticsBuffer()
+    {
+        if (_diagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer);
+            _diagnosticsBuffer = null;
+        }
+    }
+
+    /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
     /// Backing arrays that have grown beyond their default capacity are returned to
