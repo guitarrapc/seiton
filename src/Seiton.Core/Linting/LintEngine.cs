@@ -105,6 +105,24 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
         var parseResult = classifiedParseResult.ParseResult;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, classifiedParseResult.Classification.FinalKind);
+    }
+
+    /// <summary>
+    /// Lints a pre-parsed <see cref="ParseResult"/> without re-parsing.
+    /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
+    /// Assumes the document is a workflow (DocumentKind.Workflow).
+    /// </summary>
+    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        return CheckCore(utf8Yaml, filePath, config, parseResult, DocumentKind.Workflow);
+    }
+
+    private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, DocumentKind documentKind)
+    {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
             return new LintResult(parseResult, parseResult.Diagnostics)
@@ -158,7 +176,7 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (!rule.SupportsDocumentKind(classifiedParseResult.Classification.FinalKind))
+            if (!rule.SupportsDocumentKind(documentKind))
             {
                 continue;
             }
@@ -178,7 +196,7 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (!onlineRule.SupportsDocumentKind(classifiedParseResult.Classification.FinalKind))
+            if (!onlineRule.SupportsDocumentKind(documentKind))
             {
                 continue;
             }

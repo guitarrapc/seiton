@@ -1,6 +1,5 @@
 ﻿using System.Text;
 using Seiton.Core.Linting;
-using Seiton.Core.Parsing;
 using Seiton.Playground;
 
 namespace Seiton.Benchmark;

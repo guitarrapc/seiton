@@ -607,6 +607,61 @@ public sealed class AstArena : IDisposable
         return obj;
     }
 
+    // Incremental parse support
+
+    /// <summary>
+    /// Copies node entries (strings, bools, ints, floats) from <paramref name="source"/> into this arena,
+    /// limited to the specified counts. After this call, handles from the source arena in the imported
+    /// range resolve correctly against this arena. New entries added after this call receive indices
+    /// beyond the imported range.
+    /// </summary>
+    internal void BulkImportFrom(AstArena source, int stringLimit, int boolLimit, int intLimit, int floatLimit)
+    {
+        var sc = Math.Min(source._stringCount, stringLimit);
+        if (sc > 0)
+        {
+            EnsureMinCapacity(ref _strings, sc);
+            Array.Copy(source._strings, 0, _strings, 0, sc);
+            _stringCount = sc;
+        }
+
+        var bc = Math.Min(source._boolCount, boolLimit);
+        if (bc > 0)
+        {
+            EnsureMinCapacity(ref _bools, bc);
+            Array.Copy(source._bools, 0, _bools, 0, bc);
+            _boolCount = bc;
+        }
+
+        var ic = Math.Min(source._intCount, intLimit);
+        if (ic > 0)
+        {
+            EnsureMinCapacity(ref _ints, ic);
+            Array.Copy(source._ints, 0, _ints, 0, ic);
+            _intCount = ic;
+        }
+
+        var fc = Math.Min(source._floatCount, floatLimit);
+        if (fc > 0)
+        {
+            EnsureMinCapacity(ref _floats, fc);
+            Array.Copy(source._floats, 0, _floats, 0, fc);
+            _floatCount = fc;
+        }
+    }
+
+    /// <summary>Gets the current number of string entries in the arena.</summary>
+    internal int StringCount => _stringCount;
+
+    /// <summary>Gets the current number of bool entries in the arena.</summary>
+    internal int BoolCount => _boolCount;
+
+    /// <summary>Gets the current number of int entries in the arena.</summary>
+    internal int IntCount => _intCount;
+
+    /// <summary>Gets the current number of float entries in the arena.</summary>
+    internal int FloatCount => _floatCount;
+
     // Debug helpers (§6.2 debugging experience)
 
     /// <summary>

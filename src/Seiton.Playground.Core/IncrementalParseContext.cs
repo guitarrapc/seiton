@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Playground;
 
@@ -136,22 +137,93 @@ public readonly struct EditRegion
 
 /// <summary>
 /// Playground-specific incremental parse context. Records section byte ranges and hashes
-/// after each parse to enable future incremental parsing (D-5b/c).
-/// <para>
-/// In D-5a this is infrastructure only: records the registry and provides edit-region
-/// detection, but does not yet skip any parsing.
-/// </para>
+/// after each parse, and provides incremental parsing that skips unchanged root sections (D-5b).
 /// </summary>
 public sealed class IncrementalParseContext
 {
     private byte[]? _previousSource;
+    private int _previousSourceLength;
     private SectionRegistry _registry;
+
+    // D-5b: stored previous Workflow and Arena for section reuse
+    private Workflow? _previousWorkflow;
+    private AstArena? _previousArena;
+
+    // Base entry counts from the last full parse (cap for BulkImport to prevent growth)
+    private int _baseStringCount;
+    private int _baseBoolCount;
+    private int _baseIntCount;
+    private int _baseFloatCount;
 
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
     /// <summary>The current section registry (valid only when <see cref="HasPrevious"/> is true).</summary>
     public ref readonly SectionRegistry Registry => ref _registry;
+
+    /// <summary>
+    /// Parses the given YAML incrementally, skipping unchanged root sections and reusing
+    /// previous AST nodes for them. On first call (no previous data), performs a full parse.
+    /// The returned <see cref="ParseResult"/> is owned by this context — callers must NOT
+    /// dispose the Arena (the context manages arena lifecycle).
+    /// </summary>
+    public ParseResult ParseIncrementally(byte[] utf8Yaml, string filePath)
+    {
+        if (_previousSource is null || _previousWorkflow is null || _previousArena is null)
+        {
+            // First call: full parse, store results
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
+        // Quick identity check: if source length changed, it's a different document (not an edit).
+        // This prevents cross-document contamination when the same IncrementalCtx is used
+        // with different documents (e.g. in tests or multi-tab scenarios).
+        if (_previousSourceLength != utf8Yaml.Length)
+        {
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
+        // Determine which root sections are unchanged at the same byte offsets.
+        // Returns 0 if ANY existing root section changed (forces full parse to avoid
+        // arena entry growth from partial imports).
+        var skipMask = ComputeSkipMask(utf8Yaml);
+
+        if (skipMask == 0)
+        {
+            // Nothing to skip or a section changed — full parse (resets base counts)
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
+        // Incremental parse: import base entries only (capped to prevent growth),
+        // parse with skip, patch results
+        var arena = AstArena.Rent(utf8Yaml);
+        arena.BulkImportFrom(_previousArena, _baseStringCount, _baseBoolCount, _baseIntCount, _baseFloatCount);
+
+        var parseResult = WorkflowParser.ParseIncremental(utf8Yaml, filePath, arena, skipMask);
+
+        if (parseResult.HasFatalError || parseResult.Workflow is null)
+        {
+            // Incremental parse failed — discard and do full parse
+            arena.Dispose();
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
+        // Patch skipped sections from previous Workflow
+        PatchSkippedSections(parseResult.Workflow, skipMask);
+
+        // Update stored state (base counts stay the same — they only reset on full parse)
+        var oldArena = _previousArena;
+        _previousSource = utf8Yaml;
+        _previousSourceLength = utf8Yaml.Length;
+        _previousWorkflow = parseResult.Workflow;
+        _previousArena = arena;
+        BuildRegistryFromSource(utf8Yaml);
+
+        // Dispose old arena (its base entries are now copied into the new arena)
+        oldArena.Dispose();
+
+        return parseResult;
+    }
 
     /// <summary>
     /// Records section byte ranges and hashes from the given parsed source.
@@ -220,6 +292,116 @@ public sealed class IncrementalParseContext
         if (jobsEntry.IsValid)
         {
             ScanJobSections(source, jobsEntry.StartOffset, jobsEntry.EndOffset, ref _registry);
+        }
+    }
+
+    /// <summary>Builds registry from source bytes only (no parse needed). Used after incremental parse.</summary>
+    private void BuildRegistryFromSource(byte[] source)
+    {
+        _registry = default;
+        ScanRootSections(source, ref _registry);
+        var jobsEntry = _registry.GetRootSection(RootSectionKind.Jobs);
+        if (jobsEntry.IsValid)
+        {
+            ScanJobSections(source, jobsEntry.StartOffset, jobsEntry.EndOffset, ref _registry);
+        }
+    }
+
+    /// <summary>Performs a full parse and stores the result for future incremental use.</summary>
+    private ParseResult FullParseAndStore(byte[] utf8Yaml, string filePath)
+    {
+        var oldArena = _previousArena;
+        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
+        var parseResult = classifiedResult.ParseResult;
+
+        _previousSource = utf8Yaml;
+        _previousSourceLength = utf8Yaml.Length;
+        _previousWorkflow = parseResult.Workflow;
+        _previousArena = parseResult.Arena;
+        BuildRegistryFromSource(utf8Yaml);
+
+        // Record base entry counts (the full parse's arena defines the import cap)
+        if (parseResult.Arena is not null)
+        {
+            _baseStringCount = parseResult.Arena.StringCount;
+            _baseBoolCount = parseResult.Arena.BoolCount;
+            _baseIntCount = parseResult.Arena.IntCount;
+            _baseFloatCount = parseResult.Arena.FloatCount;
+        }
+
+        // Dispose the old arena (if any) now that we've stored the new one
+        oldArena?.Dispose();
+
+        return parseResult;
+    }
+
+    /// <summary>
+    /// Computes a bitmask of root sections that can be skipped.
+    /// Returns 0 if ANY existing root section has changed (forces full parse to
+    /// prevent arena entry growth from partial skip/import scenarios).
+    /// Jobs are never skipped (D-5b scope: root sections only).
+    /// </summary>
+    private byte ComputeSkipMask(byte[] newSource)
+    {
+        byte mask = 0;
+        var anyChanged = false;
+
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.On, newSource);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Env, newSource);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Permissions, newSource);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Defaults, newSource);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Concurrency, newSource);
+
+        // If any existing root section changed, fall back to full parse
+        // to avoid arena entry growth from partial imports
+        return anyChanged ? (byte)0 : mask;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void TryAddToMask(ref byte mask, ref bool anyChanged, RootSectionKind kind, byte[] newSource)
+    {
+        var entry = _registry.GetRootSection(kind);
+        if (!entry.IsValid) return; // section doesn't exist in previous source
+        if (IsSectionUnchanged(entry, newSource))
+        {
+            mask |= (byte)(1 << (int)kind);
+        }
+        else
+        {
+            anyChanged = true;
+        }
+    }
+
+    /// <summary>
+    /// Patches the skipped root section fields in the Workflow from the previous parse result.
+    /// </summary>
+    private void PatchSkippedSections(Workflow workflow, byte skipMask)
+    {
+        var prev = _previousWorkflow!;
+
+        if ((skipMask & (1 << (int)RootSectionKind.On)) != 0)
+        {
+            workflow.On = prev.On;
+        }
+
+        if ((skipMask & (1 << (int)RootSectionKind.Env)) != 0)
+        {
+            workflow.Env = prev.Env;
+        }
+
+        if ((skipMask & (1 << (int)RootSectionKind.Permissions)) != 0)
+        {
+            workflow.Permissions = prev.Permissions;
+        }
+
+        if ((skipMask & (1 << (int)RootSectionKind.Defaults)) != 0)
+        {
+            workflow.Defaults = prev.Defaults;
+        }
+
+        if ((skipMask & (1 << (int)RootSectionKind.Concurrency)) != 0)
+        {
+            workflow.Concurrency = prev.Concurrency;
         }
     }
 

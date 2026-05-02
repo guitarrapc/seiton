@@ -55,9 +55,12 @@ public static class PlaygroundLintRunner
 
     private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
+    private static readonly IncrementalParseContext IncrementalCtx = new();
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
+    /// Uses incremental parsing (D-5b) to skip unchanged root sections when possible.
     /// Suitable for WASM interop where JavaScript can decode with TextDecoder, or for
     /// scenarios where the result is written directly to a stream.
     /// </summary>
@@ -69,21 +72,21 @@ public static class PlaygroundLintRunner
         lock (EngineGate)
         {
             var utf8Yaml = RentUtf8Buffer(yamlSource);
-            var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-            try
-            {
-                JsonBuffer.Clear();
-                using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
-                {
-                    WriteDiagnosticsArray(writer, result.Diagnostics);
-                }
 
-                return JsonBuffer.WrittenSpan.ToArray();
-            }
-            finally
+            // D-5b: Use incremental parse to skip unchanged root sections
+            var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
+
+            // Lint the (possibly incrementally-parsed) result
+            var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult);
+
+            JsonBuffer.Clear();
+            using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
             {
-                result.ParseResult.Arena?.Dispose();
+                WriteDiagnosticsArray(writer, lintResult.Diagnostics);
             }
+
+            // NOTE: Arena is NOT disposed here — IncrementalParseContext owns it for reuse
+            return JsonBuffer.WrittenSpan.ToArray();
         }
     }
 

@@ -253,7 +253,7 @@ public static partial class WorkflowParser
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {
-            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics);
+            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
         }
         finally
         {
@@ -261,7 +261,69 @@ public static partial class WorkflowParser
         }
     }
 
-    private static ParseResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics)
+    /// <summary>
+    /// Parses a workflow with a root section skip mask for incremental parsing (D-5b).
+    /// Sections whose bit is set in <paramref name="rootSkipMask"/> are skipped via SkipCurrentNode().
+    /// The caller must patch in previous AST nodes for skipped sections.
+    /// </summary>
+    internal static ParseResult ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask)
+    {
+        var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+        var diagnostics = new PooledBuffer<Diagnostic>(16);
+        try
+        {
+            var result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask);
+
+            // Check for unused anchors and recursive aliases (same as ParseClassified)
+            var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
+            var unusedAnchors = reader.GetUnusedAnchors(unusedBuf);
+            var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+            var recursiveAliases = reader.GetRecursiveAliases(recursiveBuf);
+
+            // Build final diagnostics array including anchor/alias warnings
+            var finalDiags = new PooledBuffer<Diagnostic>(result.Diagnostics.Length + unusedAnchors.Length + recursiveAliases.Length);
+            try
+            {
+                for (var i = 0; i < result.Diagnostics.Length; i++)
+                    finalDiags.Add(result.Diagnostics[i]);
+
+                for (var i = 0; i < unusedAnchors.Length; i++)
+                {
+                    var (name, pos) = unusedAnchors[i];
+                    AddWarning(ref finalDiags, $"anchor \"{name}\" is defined but not used", pos);
+                }
+
+                for (var i = 0; i < recursiveAliases.Length; i++)
+                {
+                    var (name, pos, anchorPos) = recursiveAliases[i];
+                    var message = anchorPos.Line > 0
+                        ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
+                        : $"recursive alias \"{name}\" is found";
+                    AddError(ref finalDiags, message, pos);
+                }
+
+                // Stamp file path on all diagnostics
+                var allDiags = finalDiags.ToArray();
+                if (!string.IsNullOrEmpty(filePath))
+                {
+                    for (var i = 0; i < allDiags.Length; i++)
+                        allDiags[i] = allDiags[i] with { FilePath = filePath };
+                }
+
+                return new ParseResult(result.Workflow, result.ActionMetadata, allDiags, result.HasFatalError, result.Arena);
+            }
+            finally
+            {
+                finalDiags.Dispose();
+            }
+        }
+        finally
+        {
+            diagnostics.Dispose();
+        }
+    }
+
+    private static ParseResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics, byte rootSkipMask = 0)
         where TReader : IYamlStreamReader, allows ref struct
     {
         reader.SkipHeader();
@@ -331,6 +393,16 @@ public static partial class WorkflowParser
                         reader.SkipCurrentNode();
                     }
 
+                    continue;
+                }
+
+                // D-5b: Skip unchanged root sections (incremental parse).
+                // The caller will patch in previous AST nodes for skipped sections.
+                if (rootSkipMask != 0 && (rootSkipMask & (1 << workflowKeyOrdinal)) != 0)
+                {
+                    if (wk == WorkflowRootMappingKey.On) hasOn = true;
+                    else if (wk == WorkflowRootMappingKey.Jobs) hasJobs = true;
+                    if (!reader.End) reader.SkipCurrentNode();
                     continue;
                 }
 
