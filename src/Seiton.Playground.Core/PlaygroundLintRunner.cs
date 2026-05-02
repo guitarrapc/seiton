@@ -70,42 +70,46 @@ public static class PlaygroundLintRunner
         lock (EngineGate)
         {
             var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-
-            JsonBuffer.Clear();
-            using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
+            try
             {
-                writer.WriteStartArray();
-                for (var i = 0; i < result.Diagnostics.Length; i++)
+                JsonBuffer.Clear();
+                using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
                 {
-                    var d = result.Diagnostics[i];
-                    var loc = d.Location;
+                    writer.WriteStartArray();
+                    for (var i = 0; i < result.Diagnostics.Length; i++)
+                    {
+                        var d = result.Diagnostics[i];
+                        var loc = d.Location;
 
-                    writer.WriteStartObject();
-                    writer.WriteString("message", d.Message);
-                    writer.WriteNumber("line", loc.StartLine);
-                    writer.WriteNumber("column", loc.StartColumn);
-                    writer.WriteString("severity", SeverityString(d.Severity));
-                    if (d.RuleId is not null)
-                        writer.WriteString("ruleId", d.RuleId);
-                    else
-                        writer.WriteNull("ruleId");
-                    writer.WriteBoolean("fixable", d.Fix is not null);
-                    if (d.Fix?.Description is { } fixDesc)
-                        writer.WriteString("fixDescription", fixDesc);
-                    else
-                        writer.WriteNull("fixDescription");
-                    writer.WriteEndObject();
+                        writer.WriteStartObject();
+                        writer.WriteString("message", d.Message);
+                        writer.WriteNumber("line", loc.StartLine);
+                        writer.WriteNumber("column", loc.StartColumn);
+                        writer.WriteString("severity", SeverityString(d.Severity));
+                        if (d.RuleId is not null)
+                            writer.WriteString("ruleId", d.RuleId);
+                        else
+                            writer.WriteNull("ruleId");
+                        writer.WriteBoolean("fixable", d.Fix is not null);
+                        if (d.Fix?.Description is { } fixDesc)
+                            writer.WriteString("fixDescription", fixDesc);
+                        else
+                            writer.WriteNull("fixDescription");
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndArray();
                 }
-                writer.WriteEndArray();
+
+                return Encoding.UTF8.GetString(JsonBuffer.WrittenSpan);
             }
-
-            // Return the AstArena to the ThreadStatic cache immediately so the next
-            // Rent() reuses it instead of allocating a new one. Without this, the arena
-            // stays alive until GC collects the LintResult, doubling memory pressure
-            // in the constrained WASM heap and causing OOM crashes.
-            result.ParseResult.Arena?.Dispose();
-
-            return Encoding.UTF8.GetString(JsonBuffer.WrittenSpan);
+            finally
+            {
+                // Return the AstArena to the ThreadStatic cache immediately so the next
+                // Rent() reuses it instead of allocating a new one. Without this, the arena
+                // stays alive until GC collects the LintResult, doubling memory pressure
+                // in the constrained WASM heap and causing OOM crashes.
+                result.ParseResult.Arena?.Dispose();
+            }
         }
     }
 

@@ -573,7 +573,7 @@ applyFixesBtn.addEventListener('click', () => {
         if (yaml === original) {
             // Fix pass returned unchanged YAML — either an error occurred
             // (logged to console.error by C#) or no fixes were applicable.
-            showToast('No fixes could be applied.', 'warning');
+            showToast('No changes were made. Either no auto-applicable fixes were available or fix application failed (see browser console).', 'info');
             return;
         }
         editor.setValue(yaml);
