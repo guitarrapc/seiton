@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
@@ -722,6 +723,11 @@ public sealed class IncrementalParseContext
         SkipSuppressionSummary = true,
     };
 
+    // Reusable buffers for LintIncrementally (avoids per-call allocations)
+    private bool[]? _skipJobsBuf;
+    private List<Diagnostic>? _mergedDiagnostics;
+    private ArrayBufferWriter<byte>? _jsonBuffer;
+
     /// <summary>
     /// Parses and lints incrementally. Unchanged jobs reuse cached diagnostics from
     /// the previous lint run (D-5d). Returns parsed JSON diagnostic elements.
@@ -738,13 +744,26 @@ public sealed class IncrementalParseContext
         if (_lastReusedJobs is not null && _cachedJobDiagnostics is not null)
         {
             var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-            for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
+            if (jobCount > 0)
             {
-                if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
+                // Reuse buffer, grow only when needed
+                if (_skipJobsBuf is null || _skipJobsBuf.Length < jobCount)
+                    _skipJobsBuf = new bool[jobCount];
+                else
+                    Array.Clear(_skipJobsBuf, 0, jobCount);
+
+                var anySkippable = false;
+                for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
                 {
-                    skipJobs ??= new bool[jobCount];
-                    skipJobs[i] = true;
+                    if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
+                    {
+                        _skipJobsBuf[i] = true;
+                        anySkippable = true;
+                    }
                 }
+
+                if (anySkippable)
+                    skipJobs = _skipJobsBuf;
             }
         }
 
@@ -755,14 +774,21 @@ public sealed class IncrementalParseContext
         Diagnostic[] finalDiagnostics;
         if (skipJobs is not null)
         {
-            var merged = new List<Diagnostic>(lintResult.Diagnostics.Length + 16);
-            merged.AddRange(lintResult.Diagnostics);
+            var merged = _mergedDiagnostics ??= new(32);
+            merged.Clear();
 
+            // Add fresh diagnostics from the linter
+            var lintDiags = lintResult.Diagnostics;
+            for (var i = 0; i < lintDiags.Length; i++)
+                merged.Add(lintDiags[i]);
+
+            // Add cached diagnostics for skipped jobs
             for (var i = 0; i < skipJobs.Length; i++)
             {
                 if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
                 {
-                    merged.AddRange(cached);
+                    for (var c = 0; c < cached.Length; c++)
+                        merged.Add(cached[c]);
                 }
             }
 
@@ -780,7 +806,7 @@ public sealed class IncrementalParseContext
         }
 
         // Cache per-job diagnostics for next call
-        CacheJobDiagnostics(finalDiagnostics, utf8Yaml);
+        CacheJobDiagnostics(finalDiagnostics);
 
         // Serialize to JSON and parse into elements (matching PlaygroundLintRunner format)
         return SerializeDiagnosticsToJson(finalDiagnostics);
@@ -790,7 +816,7 @@ public sealed class IncrementalParseContext
     /// Partitions diagnostics by job byte range and stores them in the per-job cache.
     /// Diagnostics not within any job's range (workflow-level) are not cached.
     /// </summary>
-    private void CacheJobDiagnostics(Diagnostic[] diagnostics, byte[] source)
+    private void CacheJobDiagnostics(Diagnostic[] diagnostics)
     {
         var jobCount = _registry.JobCount;
         if (jobCount == 0)
@@ -806,40 +832,55 @@ public sealed class IncrementalParseContext
         for (var i = 0; i < jobCount; i++)
             _cachedJobDiagnostics[i] = null;
 
-        // Partition: for each diagnostic, find which job it belongs to (by offset range)
-        // Use a temporary list per job
-        List<Diagnostic>?[]? perJobLists = null;
+        // Count diagnostics per job first (avoids List<> per job)
+        Span<int> counts = jobCount <= 64 ? stackalloc int[jobCount] : new int[jobCount];
+        counts.Clear();
 
         for (var d = 0; d < diagnostics.Length; d++)
         {
-            var diag = diagnostics[d];
-            var offset = diag.Location.Start;
-
+            var offset = diagnostics[d].Location.Start;
             for (var j = 0; j < jobCount; j++)
             {
                 var entry = _registry.GetJobEntry(j);
                 if (entry.IsValid && offset >= entry.StartOffset && offset < entry.EndOffset)
                 {
-                    perJobLists ??= new List<Diagnostic>?[jobCount];
-                    (perJobLists[j] ??= new(4)).Add(diag);
+                    counts[j]++;
                     break;
                 }
             }
         }
 
-        if (perJobLists is not null)
+        // Allocate per-job arrays based on counted sizes
+        for (var j = 0; j < jobCount; j++)
         {
+            if (counts[j] > 0)
+                _cachedJobDiagnostics[j] = new Diagnostic[counts[j]];
+        }
+
+        // Fill arrays (reset counts as write indices)
+        counts.Clear();
+        for (var d = 0; d < diagnostics.Length; d++)
+        {
+            var diag = diagnostics[d];
+            var offset = diag.Location.Start;
             for (var j = 0; j < jobCount; j++)
             {
-                _cachedJobDiagnostics[j] = perJobLists[j]?.ToArray();
+                var entry = _registry.GetJobEntry(j);
+                if (entry.IsValid && offset >= entry.StartOffset && offset < entry.EndOffset)
+                {
+                    _cachedJobDiagnostics[j]![counts[j]++] = diag;
+                    break;
+                }
             }
         }
     }
 
-    private static JsonElement[] SerializeDiagnosticsToJson(Diagnostic[] diagnostics)
+    private JsonElement[] SerializeDiagnosticsToJson(Diagnostic[] diagnostics)
     {
-        using var stream = new System.IO.MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        var buffer = _jsonBuffer ??= new ArrayBufferWriter<byte>(4096);
+        buffer.Clear();
+
+        using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartArray();
             for (var i = 0; i < diagnostics.Length; i++)
@@ -863,8 +904,11 @@ public sealed class IncrementalParseContext
             writer.WriteEndArray();
         }
 
-        stream.Position = 0;
-        using var doc = JsonDocument.Parse(stream);
-        return doc.RootElement.EnumerateArray().Select(e => e.Clone()).ToArray();
+        using var doc = JsonDocument.Parse(buffer.WrittenMemory);
+        var arr = new JsonElement[diagnostics.Length];
+        var idx = 0;
+        foreach (var elem in doc.RootElement.EnumerateArray())
+            arr[idx++] = elem.Clone();
+        return arr;
     }
 }
