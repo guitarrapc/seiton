@@ -118,6 +118,12 @@ public static class ExpressionParser
             {
                 diagnostics.Add(tempList[i]);
             }
+
+            // Cap retained capacity to prevent unbounded growth from pathological expressions
+            if (tempList.Capacity > 64)
+            {
+                t_validateDiagnostics = new List<Diagnostic>(16);
+            }
         }
     }
 

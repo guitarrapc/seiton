@@ -20,6 +20,7 @@ public sealed class ScalarHelpersTests
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(arena.GetStringValue(node).Length).IsEqualTo(5);
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -38,6 +39,7 @@ public sealed class ScalarHelpersTests
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(arena.GetBoolValue(node)).IsTrue();
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -56,6 +58,7 @@ public sealed class ScalarHelpersTests
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(arena.GetIntValue(node)).IsEqualTo(123);
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -74,6 +77,7 @@ public sealed class ScalarHelpersTests
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(arena.GetFloatValue(node)).IsEqualTo(1.5d);
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -91,6 +95,7 @@ public sealed class ScalarHelpersTests
 
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -108,6 +113,7 @@ public sealed class ScalarHelpersTests
 
         await Assert.That(node.HasValue).IsTrue();
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -128,6 +134,7 @@ public sealed class ScalarHelpersTests
 
         await Assert.That(nodes.Length).IsEqualTo(2);
         await Assert.That(diagnostics.Count).IsEqualTo(0);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -154,6 +161,7 @@ public sealed class ScalarHelpersTests
         await Assert.That(nodes.Length).IsEqualTo(2);
         await Assert.That(diagnostics.Count).IsEqualTo(1);
         await Assert.That(diagnostics.AsSpan()[0].Message).IsEqualTo("expected sequence");
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -179,6 +187,7 @@ public sealed class ScalarHelpersTests
         await Assert.That(diagnostics.Count).IsEqualTo(1);
         // Valid entry after errors must be collected
         await Assert.That(nodes.Length).IsEqualTo(1);
+        diagnostics.Dispose();
     }
 
     [Test]
@@ -196,6 +205,7 @@ public sealed class ScalarHelpersTests
 
         await Assert.That(node.HasValue).IsFalse();
         await Assert.That(diagnostics.Count).IsEqualTo(1);
+        diagnostics.Dispose();
     }
 
     private static FakeYamlStreamReader CreateReader(ReadOnlySpan<byte> source, FakeYamlStreamReader.FakeEvent[] events)
