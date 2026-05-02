@@ -5,7 +5,7 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static Services? ParseServices<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Services? ParseServices<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.17: expression form is accepted as Services { Expression }
@@ -13,19 +13,19 @@ public static partial class WorkflowParser
         {
             var scalarMark = reader.CurrentStart;
             var expression = ParseStringAndValidateExpression(
-                ref reader, arena, diagnostics,
+                ref reader, arena, ref diagnostics,
                 ExpressionValidationContext.JobServices,
                 out var svcErr,
                 out var svcMark,
                 parseWholeValueIfNoEmbedded: false);
             if (svcErr)
             {
-                AddError(diagnostics, "\"services\" section is scalar node but mapping node is expected", svcMark);
+                AddError(ref diagnostics, "\"services\" section is scalar node but mapping node is expected", svcMark);
             }
             else if (expression.HasValue && !ExpressionScanHelpers.ContainsExpressionMarker(expression, arena))
             {
                 // Plain scalar without expression → not a valid services value
-                AddError(diagnostics, "\"services\" section is scalar node but mapping node is expected", scalarMark);
+                AddError(ref diagnostics, "\"services\" section is scalar node but mapping node is expected", scalarMark);
                 return null;
             }
             return !expression.HasValue
@@ -35,7 +35,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services must be object or expression", reader.CurrentStart);
+            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services must be object or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -53,7 +53,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services key must be string", reader.CurrentStart);
+                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -71,7 +71,7 @@ public static partial class WorkflowParser
                     serviceName.Offset,
                     serviceName.Length,
                     serviceMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -93,7 +93,7 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                var container = ParseContainerLike(ref reader, arena, diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceMark);
+                var container = ParseContainerLike(ref reader, arena, ref diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceMark);
                 if (container is not null)
                 {
                     map.Add(new SliceMap<Service>.Entry(serviceName, new Service
@@ -120,7 +120,7 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static Container? ParseContainerLike<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage, TextPosition sectionKeyStart)
+    private static Container? ParseContainerLike<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage, TextPosition sectionKeyStart)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -132,7 +132,7 @@ public static partial class WorkflowParser
                 if (!reader.IsExplicitNull())
                 {
                     var emptyContainerName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
-                    AddError(diagnostics, $"{emptyContainerName} image should not be empty", reader.CurrentStart);
+                    AddError(ref diagnostics, $"{emptyContainerName} image should not be empty", reader.CurrentStart);
                 }
                 reader.Read();
                 return default;
@@ -144,10 +144,10 @@ public static partial class WorkflowParser
                 if (scalarImage.HasValue)
                 {
                     var emptyContainerName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
-                    AddError(diagnostics, $"{emptyContainerName} image should not be empty", ctrMark);
+                    AddError(ref diagnostics, $"{emptyContainerName} image should not be empty", ctrMark);
                 }
                 else
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", ctrMark);
+                    AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", ctrMark);
             }
             if (!scalarImage.HasValue)
             {
@@ -163,7 +163,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", reader.CurrentStart);
+            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} must be string or object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -186,7 +186,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -197,7 +197,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, FormatContainerSectionName(source, jobId, serviceName, isService)))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, FormatContainerSectionName(source, jobId, serviceName, isService)))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -210,7 +210,7 @@ public static partial class WorkflowParser
                 var ck = (ContainerMappingKey)containerKeyOrdinal;
                 if (!TrySetBit(ref seen, containerKeyOrdinal))
                 {
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyMark);
+                    AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} contains duplicate key: {ContainerDuplicateSubKey(ck)}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -230,7 +230,7 @@ public static partial class WorkflowParser
                         hasImage = true;
                         if (reader.CurrentKind != YamlEventKind.Scalar)
                         {
-                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", reader.CurrentStart);
+                            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", reader.CurrentStart);
                         }
 
                         image = ParseString(ref reader, arena, out var imgErr, out var imgMark);
@@ -239,18 +239,18 @@ public static partial class WorkflowParser
                             if (image.HasValue)
                             {
                                 var emptyImgName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
-                                AddError(diagnostics, $"{emptyImgName} image should not be empty", imgMark);
+                                AddError(ref diagnostics, $"{emptyImgName} image should not be empty", imgMark);
                             }
                             else
-                                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", imgMark);
+                                AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.image must be string", imgMark);
                         }
                         continue;
                     case ContainerMappingKey.Credentials:
-                        credentials = ParseCredentials(ref reader, arena, diagnostics, source, jobId, serviceName, isService, keyMark);
+                        credentials = ParseCredentials(ref reader, arena, ref diagnostics, source, jobId, serviceName, isService, keyMark);
                         continue;
                     case ContainerMappingKey.Env:
                         env = ParseEnvNode(
-                            ref reader, arena, diagnostics,
+                            ref reader, arena, ref diagnostics,
                             source,
                             $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.env must be object or expression",
                             isService ? ExpressionValidationContext.JobServicesEnv : ExpressionValidationContext.JobContainerEnv,
@@ -265,15 +265,15 @@ public static partial class WorkflowParser
                                 // Ports/volumes require sequence, not scalar
                                 var pvTag = reader.GetScalarTag();
                                 var pvTagStr = pvTag == ScalarTag.Int ? "!!int" : "!!str";
-                                AddError(diagnostics, $"\"{pvKey}\" section must be sequence node but got scalar node with \"{pvTagStr}\" tag", reader.CurrentStart);
+                                AddError(ref diagnostics, $"\"{pvKey}\" section must be sequence node but got scalar node with \"{pvTagStr}\" tag", reader.CurrentStart);
                                 reader.Read();
                             }
                             else
                             {
-                                var pvValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pvErr, out var pvMark, allowElemEmpty: true, emptyElementMessage: $"\"container\" {pvKey} element should not be empty");
+                                var pvValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var pvErr, out var pvMark, allowElemEmpty: true, emptyElementMessage: $"\"container\" {pvKey} element should not be empty");
                                 if (pvErr)
                                 {
-                                    AddError(diagnostics, $"\"container\" {pvKey} element must be a string", pvMark);
+                                    AddError(ref diagnostics, $"\"container\" {pvKey} element must be a string", pvMark);
                                 }
                                 if (ck == ContainerMappingKey.Ports)
                                 {
@@ -289,11 +289,11 @@ public static partial class WorkflowParser
                     case ContainerMappingKey.Options:
                         if (reader.CurrentKind != YamlEventKind.Scalar)
                         {
-                            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be string", reader.CurrentStart);
+                            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be string", reader.CurrentStart);
                         }
 
                         options = ParseString(ref reader, arena, out var optErr, out var optMark);
-                        if (optErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be string", optMark);
+                        if (optErr) AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.options must be string", optMark);
                         continue;
                     case ContainerMappingKey.Entrypoint:
                     case ContainerMappingKey.Command:
@@ -303,11 +303,11 @@ public static partial class WorkflowParser
                                 ? ExpressionValidationContext.JobServicesEntrypoint
                                 : ExpressionValidationContext.JobServicesCommand;
                             var svcField = ParseStringAndValidateExpression(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 svcFieldContext,
                                 out var svcFieldErr, out var svcFieldMark,
                                 parseWholeValueIfNoEmbedded: false);
-                            if (svcFieldErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{ContainerDuplicateSubKey(ck)} must be string", svcFieldMark);
+                            if (svcFieldErr) AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.{ContainerDuplicateSubKey(ck)} must be string", svcFieldMark);
                             if (ck == ContainerMappingKey.Entrypoint)
                                 entrypoint = svcField;
                             else
@@ -315,7 +315,7 @@ public static partial class WorkflowParser
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
-                        AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
+                        AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
                         if (!reader.End) reader.SkipCurrentNode();
                         continue;
                     default:
@@ -330,7 +330,7 @@ public static partial class WorkflowParser
             var expectedKeys = isService
                 ? Generated.ExpectedKeys.ServiceKeys
                 : Generated.ExpectedKeys.ContainerKeys;
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
+            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -343,14 +343,14 @@ public static partial class WorkflowParser
         if (seen == 0)
         {
             var sectionName = isService ? $"\"{DecodeUtf8(source, serviceName)}\" service" : "\"container\"";
-            AddError(diagnostics, $"{sectionName} section should not be empty. please remove this section if it's unnecessary", mappingStart);
+            AddError(ref diagnostics, $"{sectionName} section should not be empty. please remove this section if it's unnecessary", mappingStart);
         }
 
         // spec §3.16 / §12: container mapping form requires `image`
         if (requireImage && !hasImage)
         {
             var sectionType = isService ? "\"services\"" : "\"container\"";
-            AddError(diagnostics, $"\"image\" is missing in {sectionType} section", sectionKeyStart);
+            AddError(ref diagnostics, $"\"image\" is missing in {sectionType} section", sectionKeyStart);
         }
 
         return new Container
@@ -367,7 +367,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
+    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.18: expression form is accepted as Credentials { Expression }
@@ -376,8 +376,8 @@ public static partial class WorkflowParser
         {
             if (reader.GetScalarUtf8().Length == 0)
             {
-                AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
-                AddError(diagnostics, "\"credentials\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
+                AddError(ref diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
+                AddError(ref diagnostics, "\"credentials\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
                 reader.Read();
                 return default;
             }
@@ -386,19 +386,19 @@ public static partial class WorkflowParser
             if (!ContainsExpression(reader.GetScalarUtf8()))
             {
                 var scalarCredMark = reader.CurrentStart;
-                AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
-                AddError(diagnostics, "\"credentials\" section is scalar node but mapping node is expected", scalarCredMark);
+                AddError(ref diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
+                AddError(ref diagnostics, "\"credentials\" section is scalar node but mapping node is expected", scalarCredMark);
                 reader.Read();
                 return default;
             }
 
             var expression = ParseStringAndValidateExpression(
-                ref reader, arena, diagnostics,
+                ref reader, arena, ref diagnostics,
                 credentialsContext,
                 out var crExprErr,
                 out var crExprMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (crExprErr) AddError(diagnostics, $"\"credentials\" section is scalar node but mapping node is expected", crExprMark);
+            if (crExprErr) AddError(ref diagnostics, $"\"credentials\" section is scalar node but mapping node is expected", crExprMark);
             return !expression.HasValue
                 ? null
                 : new Credentials { Expression = expression, Range = arena.GetStringRange(expression) };
@@ -406,7 +406,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be object or expression", reader.CurrentStart);
+            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials must be object or expression", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -423,7 +423,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -434,7 +434,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -448,7 +448,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, credKeyOrdinal))
                 {
                     var dupName = crk == CredentialsMappingKey.Username ? "username" : "password";
-                    AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -462,22 +462,22 @@ public static partial class WorkflowParser
                     case CredentialsMappingKey.Username:
                         hasUsername = true;
                         username = ParseStringAndValidateExpression(
-                            ref reader, arena, diagnostics,
+                            ref reader, arena, ref diagnostics,
                             credentialsContext,
                             out var unErr,
                             out var unMark,
                             parseWholeValueIfNoEmbedded: false);
-                        if (unErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be string", unMark);
+                        if (unErr) AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.username must be string", unMark);
                         continue;
                     case CredentialsMappingKey.Password:
                         hasPassword = true;
                         password = ParseStringAndValidateExpression(
-                            ref reader, arena, diagnostics,
+                            ref reader, arena, ref diagnostics,
                             credentialsContext,
                             out var pwErr,
                             out var pwMark,
                             parseWholeValueIfNoEmbedded: false);
-                        if (pwErr) AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be string", pwMark);
+                        if (pwErr) AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials.password must be string", pwMark);
                         continue;
                     default:
                         if (!reader.End)
@@ -491,7 +491,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}", keyMark);
+            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -504,7 +504,7 @@ public static partial class WorkflowParser
         // spec §3.18 / §12: credentials mapping form requires both `username` and `password`
         if (!hasUsername || !hasPassword)
         {
-            AddError(diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
+            AddError(ref diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
         }
 
         return new Credentials
@@ -515,12 +515,12 @@ public static partial class WorkflowParser
         };
     }
 
-    private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)
+    private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, error, reader.CurrentStart);
+            AddError(ref diagnostics, error, reader.CurrentStart);
             reader.SkipCurrentNode();
             return;
         }
@@ -532,7 +532,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, error, reader.CurrentStart);
+                AddError(ref diagnostics, error, reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -550,7 +550,7 @@ public static partial class WorkflowParser
                 keySlice.Offset,
                 keySlice.Length,
                 keyMark,
-                diagnostics,
+                ref diagnostics,
                 keyStore,
                 ref keyCount,
                 caseSensitive: true,
@@ -573,7 +573,7 @@ public static partial class WorkflowParser
 
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, error, reader.CurrentStart);
+                AddError(ref diagnostics, error, reader.CurrentStart);
                 reader.SkipCurrentNode();
                 continue;
             }
@@ -586,7 +586,7 @@ public static partial class WorkflowParser
                     valueUtf8,
                     BuildScalarLocation(valueMark, valueUtf8.Length),
                     expressionContext.Value,
-                    diagnostics,
+                    ref diagnostics,
                     parseWholeValueIfNoEmbedded: false);
                 reader.Read();
                 continue;

@@ -97,14 +97,17 @@ public static class ExpressionExtractor
                     occurrence.Location));
             }
 
-            var semanticDiagnostics = ExpressionSemanticAnalyzer.Validate(
-                parseResult,
-                expression,
-                occurrence.Location,
-                context);
-            for (var i = 0; i < semanticDiagnostics.Length; i++)
+            // S-7: Use ValidateInline to avoid List + ToArray allocation in Validate()
+            if (parseResult.HasRoot)
             {
-                diagnostics.Add(semanticDiagnostics[i]);
+                ExpressionSemanticAnalyzer.ValidateInline(
+                    parseResult.RootNode,
+                    parseResult.Nodes,
+                    parseResult.Arguments,
+                    expression,
+                    occurrence.Location,
+                    context,
+                    diagnostics);
             }
         }
 

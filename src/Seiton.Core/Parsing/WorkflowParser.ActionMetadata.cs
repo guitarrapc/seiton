@@ -67,12 +67,12 @@ public static partial class WorkflowParser
         "zoom-in", "zoom-out",
     ], StringComparer.OrdinalIgnoreCase);
 
-    private static SliceMap<ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action inputs must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "action inputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -87,7 +87,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "action inputs key must be string", reader.CurrentStart);
+                    AddError(ref diagnostics, "action inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -106,7 +106,7 @@ public static partial class WorkflowParser
                     idSlice.Offset,
                     idSlice.Length,
                     idMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -123,7 +123,7 @@ public static partial class WorkflowParser
 
                 var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
                 reader.Read();
-                map.Add(new SliceMap<ActionMetadataInput>.Entry(idSlice, ParseActionMetadataInput(ref reader, arena, diagnostics, nameNode)));
+                map.Add(new SliceMap<ActionMetadataInput>.Entry(idSlice, ParseActionMetadataInput(ref reader, arena, ref diagnostics, nameNode)));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -136,7 +136,7 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static ActionMetadataInput ParseActionMetadataInput<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static ActionMetadataInput ParseActionMetadataInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -147,7 +147,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action input must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "action input must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ActionMetadataInput
             {
@@ -165,7 +165,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action input option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "action input option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -177,7 +177,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "action input"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "action input"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -202,7 +202,7 @@ public static partial class WorkflowParser
                         ActionMetadataInputOptionKey.DeprecationMessage => "deprecationMessage",
                         _ => "option",
                     };
-                    AddError(diagnostics, $"action input contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"action input contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -214,16 +214,16 @@ public static partial class WorkflowParser
                 switch (iok)
                 {
                     case ActionMetadataInputOptionKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "action input description must be string");
+                        description = ParseString(ref reader, arena, ref diagnostics, "action input description must be string");
                         continue;
                     case ActionMetadataInputOptionKey.Required:
-                        required = ParseBoolNode(ref reader, arena, diagnostics, "action input required must be bool");
+                        required = ParseBoolNode(ref reader, arena, ref diagnostics, "action input required must be bool");
                         continue;
                     case ActionMetadataInputOptionKey.Default:
-                        defaultValue = ParseString(ref reader, arena, diagnostics, "action input default must be string", allowEmpty: true);
+                        defaultValue = ParseString(ref reader, arena, ref diagnostics, "action input default must be string", allowEmpty: true);
                         continue;
                     case ActionMetadataInputOptionKey.DeprecationMessage:
-                        deprecationMessage = ParseString(ref reader, arena, diagnostics, "action input deprecationMessage must be string");
+                        deprecationMessage = ParseString(ref reader, arena, ref diagnostics, "action input deprecationMessage must be string");
                         continue;
                     default:
                         if (!reader.End)
@@ -237,7 +237,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected action input option: {unknown}", keyMark);
+            AddError(ref diagnostics, $"unexpected action input option: {unknown}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -260,12 +260,12 @@ public static partial class WorkflowParser
         };
     }
 
-    private static SliceMap<ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action outputs must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "action outputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -280,7 +280,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "action outputs key must be string", reader.CurrentStart);
+                    AddError(ref diagnostics, "action outputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -299,7 +299,7 @@ public static partial class WorkflowParser
                     idSlice.Offset,
                     idSlice.Length,
                     idMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -316,7 +316,7 @@ public static partial class WorkflowParser
 
                 var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
                 reader.Read();
-                map.Add(new SliceMap<ActionMetadataOutput>.Entry(idSlice, ParseActionMetadataOutput(ref reader, arena, diagnostics, nameNode)));
+                map.Add(new SliceMap<ActionMetadataOutput>.Entry(idSlice, ParseActionMetadataOutput(ref reader, arena, ref diagnostics, nameNode)));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -329,7 +329,7 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static ActionMetadataOutput ParseActionMetadataOutput<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static ActionMetadataOutput ParseActionMetadataOutput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -338,7 +338,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action output must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "action output must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ActionMetadataOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
@@ -348,7 +348,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action output option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "action output option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -360,7 +360,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "action output"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "action output"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -378,7 +378,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, outputOptOrdinal))
                 {
                     var dupName = ook == ActionMetadataOutputOptionKey.Description ? "description" : "value";
-                    AddError(diagnostics, $"action output contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"action output contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -390,11 +390,11 @@ public static partial class WorkflowParser
                 switch (ook)
                 {
                     case ActionMetadataOutputOptionKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "action output description must be string");
+                        description = ParseString(ref reader, arena, ref diagnostics, "action output description must be string");
                         continue;
                     case ActionMetadataOutputOptionKey.Value:
                         value = ParseStringAndValidateExpression(
-                            ref reader, arena, diagnostics,
+                            ref reader, arena, ref diagnostics,
                             ExpressionValidationContext.StepRun,
                             "action output value must be string",
                             parseWholeValueIfNoEmbedded: false);
@@ -411,7 +411,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected action output option: {unknown}", keyMark);
+            AddError(ref diagnostics, $"unexpected action output option: {unknown}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -432,12 +432,12 @@ public static partial class WorkflowParser
         };
     }
 
-    private static ActionMetadataBranding? ParseActionMetadataBranding<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics)
+    private static ActionMetadataBranding? ParseActionMetadataBranding<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action branding must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "action branding must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -451,7 +451,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action branding key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "action branding key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -463,7 +463,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "action branding"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "action branding"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -481,7 +481,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, brandingOrdinal))
                 {
                     var dupName = bk == ActionMetadataBrandingKey.Icon ? "icon" : "color";
-                    AddError(diagnostics, $"action branding contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"action branding contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -493,10 +493,10 @@ public static partial class WorkflowParser
                 switch (bk)
                 {
                     case ActionMetadataBrandingKey.Icon:
-                        icon = ParseString(ref reader, arena, diagnostics, "action branding icon must be string");
+                        icon = ParseString(ref reader, arena, ref diagnostics, "action branding icon must be string");
                         continue;
                     case ActionMetadataBrandingKey.Color:
-                        color = ParseString(ref reader, arena, diagnostics, "action branding color must be string");
+                        color = ParseString(ref reader, arena, ref diagnostics, "action branding color must be string");
                         continue;
                     default:
                         if (!reader.End)
@@ -510,7 +510,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected action branding key: {unknown}", keyMark);
+            AddError(ref diagnostics, $"unexpected action branding key: {unknown}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -531,7 +531,7 @@ public static partial class WorkflowParser
             if (!ValidBrandingColors.Contains(colorValue))
             {
                 var colorRange = arena.GetStringRange(color);
-                AddError(diagnostics, $"invalid branding color \"{colorValue}\"; expected one of: white, black, yellow, blue, green, orange, red, purple, gray-dark", new TextPosition(colorRange.Start, colorRange.StartLine, colorRange.StartColumn));
+                AddError(ref diagnostics, $"invalid branding color \"{colorValue}\"; expected one of: white, black, yellow, blue, green, orange, red, purple, gray-dark", new TextPosition(colorRange.Start, colorRange.StartLine, colorRange.StartColumn));
             }
         }
 
@@ -542,7 +542,7 @@ public static partial class WorkflowParser
             if (!ValidBrandingIcons.Contains(iconValue))
             {
                 var iconRange = arena.GetStringRange(icon);
-                AddError(diagnostics, $"invalid branding icon \"{iconValue}\"; see https://feathericons.com for valid icon names", new TextPosition(iconRange.Start, iconRange.StartLine, iconRange.StartColumn));
+                AddError(ref diagnostics, $"invalid branding icon \"{iconValue}\"; see https://feathericons.com for valid icon names", new TextPosition(iconRange.Start, iconRange.StartLine, iconRange.StartColumn));
             }
         }
 
@@ -554,12 +554,12 @@ public static partial class WorkflowParser
         };
     }
 
-    private static ActionMetadataRuns? ParseActionMetadataRuns<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static ActionMetadataRuns? ParseActionMetadataRuns<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "action runs must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "action runs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -582,7 +582,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "action runs key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "action runs key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -594,7 +594,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "action runs"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "action runs"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -611,7 +611,7 @@ public static partial class WorkflowParser
                 var rk = (ActionMetadataRunsMappingKey)runsKeyOrdinal;
                 if (!TrySetBit(ref seen, runsKeyOrdinal))
                 {
-                    AddError(diagnostics, $"action runs contains duplicate key: {ActionMetadataRunsDuplicateKeyName(rk)}", keyMark);
+                    AddError(ref diagnostics, $"action runs contains duplicate key: {ActionMetadataRunsDuplicateKeyName(rk)}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -623,41 +623,41 @@ public static partial class WorkflowParser
                 switch (rk)
                 {
                     case ActionMetadataRunsMappingKey.Using:
-                        usingNode = ParseString(ref reader, arena, diagnostics, "action runs using must be string");
+                        usingNode = ParseString(ref reader, arena, ref diagnostics, "action runs using must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Main:
-                        main = ParseString(ref reader, arena, diagnostics, "action runs main must be string");
+                        main = ParseString(ref reader, arena, ref diagnostics, "action runs main must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Pre:
-                        pre = ParseString(ref reader, arena, diagnostics, "action runs pre must be string");
+                        pre = ParseString(ref reader, arena, ref diagnostics, "action runs pre must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Post:
-                        post = ParseString(ref reader, arena, diagnostics, "action runs post must be string");
+                        post = ParseString(ref reader, arena, ref diagnostics, "action runs post must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.PreIf:
                         preIf = ParseStringAndValidateExpression(
-                            ref reader, arena, diagnostics,
+                            ref reader, arena, ref diagnostics,
                             ExpressionValidationContext.StepIf,
                             "action runs pre-if must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     case ActionMetadataRunsMappingKey.PostIf:
                         postIf = ParseStringAndValidateExpression(
-                            ref reader, arena, diagnostics,
+                            ref reader, arena, ref diagnostics,
                             ExpressionValidationContext.StepIf,
                             "action runs post-if must be string",
                             parseWholeValueIfNoEmbedded: false);
                         continue;
                     case ActionMetadataRunsMappingKey.Image:
-                        image = ParseString(ref reader, arena, diagnostics, "action runs image must be string");
+                        image = ParseString(ref reader, arena, ref diagnostics, "action runs image must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Entrypoint:
-                        entrypoint = ParseString(ref reader, arena, diagnostics, "action runs entrypoint must be string");
+                        entrypoint = ParseString(ref reader, arena, ref diagnostics, "action runs entrypoint must be string");
                         continue;
                     case ActionMetadataRunsMappingKey.Args:
                         if (!reader.End)
                         {
-                            args = ParseActionRunsArgs(ref reader, arena, diagnostics);
+                            args = ParseActionRunsArgs(ref reader, arena, ref diagnostics);
                         }
 
                         continue;
@@ -665,7 +665,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             env = ParseEnvNode(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 source,
                                 "action runs env must be object",
                                 ExpressionValidationContext.StepEnv,
@@ -678,13 +678,13 @@ public static partial class WorkflowParser
                         {
                             if (reader.CurrentKind != YamlEventKind.SequenceStart)
                             {
-                                AddError(diagnostics, "action runs steps must be array", reader.CurrentStart);
+                                AddError(ref diagnostics, "action runs steps must be array", reader.CurrentStart);
                                 reader.SkipCurrentNode();
                             }
                             else
                             {
                                 Utf8Slice emptyJobId = default;
-                                steps = ParseSteps(ref reader, arena, diagnostics, source, emptyJobId);
+                                steps = ParseSteps(ref reader, arena, ref diagnostics, source, emptyJobId);
                             }
                         }
 
@@ -701,7 +701,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected action runs key: {unknown}", keyMark);
+            AddError(ref diagnostics, $"unexpected action runs key: {unknown}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -732,7 +732,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static StringNodeId[]? ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics)
+    private static StringNodeId[]? ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
@@ -743,7 +743,7 @@ public static partial class WorkflowParser
                 reader.Read();
                 while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
                 {
-                    var s = ParseString(ref reader, arena, diagnostics, "action runs args entry must be string");
+                    var s = ParseString(ref reader, arena, ref diagnostics, "action runs args entry must be string");
                     if (s.HasValue)
                     {
                         list.Add(s);
@@ -762,11 +762,11 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var single = ParseString(ref reader, arena, diagnostics, "action runs args must be string or array");
+            var single = ParseString(ref reader, arena, ref diagnostics, "action runs args must be string or array");
             return !single.HasValue ? null : [single];
         }
 
-        AddError(diagnostics, "action runs args must be string or array", reader.CurrentStart);
+        AddError(ref diagnostics, "action runs args must be string or array", reader.CurrentStart);
         reader.SkipCurrentNode();
         return default;
     }

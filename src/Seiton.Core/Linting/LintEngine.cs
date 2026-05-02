@@ -40,6 +40,9 @@ public sealed class LintEngine
     private readonly List<Diagnostic> _suppressionDiagnostics = new();
     private readonly List<JobScope> _jobScopes = new();
 
+    // S-6: Reusable buffer for BuildKnownJobIdSlices (avoids per-call allocation)
+    private Utf8Slice[] _knownJobIdSlices = new Utf8Slice[8];
+
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
     /// Pass to <see cref="OnlineAudit.OnlineAuditEngine.AuditAsync"/> for post-traversal async resolution.
@@ -827,7 +830,7 @@ public sealed class LintEngine
             FilePath: filePath);
     }
 
-    private static Utf8Slice[] BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow, AstArena arena)
+    private ReadOnlySpan<Utf8Slice> BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow, AstArena arena)
     {
         var count = 0;
         foreach (var pair in workflow.Jobs)
@@ -839,16 +842,20 @@ public sealed class LintEngine
         if (count == 0)
             return [];
 
-        var result = new Utf8Slice[count];
+        if (_knownJobIdSlices.Length < count)
+        {
+            _knownJobIdSlices = new Utf8Slice[count];
+        }
+
         var i = 0;
         foreach (var pair in workflow.Jobs)
         {
             var slice = arena.GetStringSlice(pair.Value.Id);
             if (!slice.IsEmpty)
-                result[i++] = slice;
+                _knownJobIdSlices[i++] = slice;
         }
 
-        return result;
+        return _knownJobIdSlices.AsSpan(0, count);
     }
 
     private void BuildJobScopes(Parsing.Ast.Workflow workflow, AstArena arena)
@@ -947,7 +954,7 @@ public sealed class LintEngine
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool ContainsJobIdOrdinalIgnoreCase(Utf8Slice[] slices, byte[] source, string configJobId)
+    private static bool ContainsJobIdOrdinalIgnoreCase(ReadOnlySpan<Utf8Slice> slices, byte[] source, string configJobId)
     {
         for (var k = 0; k < slices.Length; k++)
         {
@@ -1012,7 +1019,7 @@ public sealed class LintEngine
         return new RulesNormalization(_normalizedRulesDict, _ruleNormDiagnostics);
     }
 
-    private static ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
+    private ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
     {
         var normalizedFilePath = NormalizePath(filePath);
         if (exclusions is null || exclusions.Count == 0)

@@ -7,11 +7,11 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    internal static BoolNodeId ParseBool<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
+    internal static BoolNodeId ParseBool<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var node = ParseBool(ref reader, arena, out var needsError, out var errorMark);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
@@ -53,11 +53,11 @@ public static partial class WorkflowParser
         return node;
     }
 
-    internal static StringNodeId ParseString<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
+    internal static StringNodeId ParseString<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var node = ParseString(ref reader, arena, out var needsError, out var errorMark, allowEmpty);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
@@ -103,15 +103,15 @@ public static partial class WorkflowParser
         return node;
     }
 
-    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var nodes = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var needsError, out var errorMark, allowEmpty, allowElemEmpty);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        var nodes = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var needsError, out var errorMark, allowEmpty, allowElemEmpty);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return nodes;
     }
 
-    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
+    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -160,7 +160,7 @@ public static partial class WorkflowParser
                     if (emptyElementMessage is not null && allowElemEmpty && arena.GetStringValue(node).Length == 0)
                     {
                         var range = arena.GetStringRange(node);
-                        AddError(diagnostics, emptyElementMessage, new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                        AddError(ref diagnostics, emptyElementMessage, new TextPosition(range.Start, range.StartLine, range.StartColumn));
                     }
                     list.Add(node);
                 }
@@ -176,11 +176,11 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    internal static FloatNodeId ParseFloat<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
+    internal static FloatNodeId ParseFloat<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var node = ParseFloat(ref reader, arena, out var needsError, out var errorMark);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
@@ -222,11 +222,11 @@ public static partial class WorkflowParser
         return node;
     }
 
-    internal static IntNodeId ParseInt<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
+    internal static IntNodeId ParseInt<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var node = ParseInt(ref reader, arena, out var needsError, out var errorMark);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
@@ -405,10 +405,10 @@ public static partial class WorkflowParser
     /// VYaml's CurrentMark for the '&lt;&lt;' key points past the key text (at the ':'),
     /// so we adjust the position back by the key length to report the correct column.
     /// </summary>
-    private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, List<Diagnostic> diagnostics, string mappingName)
+    private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, ref PooledBuffer<Diagnostic> diagnostics, string mappingName)
     {
         if (!keyUtf8.SequenceEqual("<<"u8)) return false;
-        AddError(diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
+        AddError(ref diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
         return true;
     }
 
@@ -423,7 +423,7 @@ public static partial class WorkflowParser
         int keyOffset,
         int keyLength,
         TextPosition keyMark,
-        List<Diagnostic> diagnostics,
+        ref PooledBuffer<Diagnostic> diagnostics,
         Span<long> keyStore,
         ref int keyCount,
         bool caseSensitive,
@@ -431,7 +431,7 @@ public static partial class WorkflowParser
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
-            AddError(diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
+            AddError(ref diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
             return false;
         }
 
@@ -449,7 +449,7 @@ public static partial class WorkflowParser
                 var sectionName = ExtractSectionDisplayName(mappingName);
                 var (prevLine, prevCol) = ComputeLineColumn(source, prevOffset);
                 var caseNote = caseSensitive ? "" : ". note that this key is case insensitive";
-                AddError(diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}{caseNote}", keyMark);
+                AddError(ref diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}{caseNote}", keyMark);
                 return false;
             }
         }
@@ -489,32 +489,6 @@ public static partial class WorkflowParser
         return $"jobs.'{jobIdText}'.services.'{DecodeUtf8(source, serviceName)}'";
     }
 
-    private static void AddError(List<Diagnostic> diagnostics, string message, TextPosition mark)
-    {
-        var location = new TextRange(
-            Start: mark.Position,
-            Length: 0,
-            StartLine: mark.Line,
-            StartColumn: mark.Col,
-            EndLine: mark.Line,
-            EndColumn: mark.Col);
-
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
-    }
-
-    private static void AddError(List<Diagnostic> diagnostics, string message, TextPosition mark, DiagnosticFix? fix)
-    {
-        var location = new TextRange(
-            Start: mark.Position,
-            Length: 0,
-            StartLine: mark.Line,
-            StartColumn: mark.Col,
-            EndLine: mark.Line,
-            EndColumn: mark.Col);
-
-        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location, Fix: fix));
-    }
-
     private static void AddError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark)
     {
         var location = new TextRange(
@@ -526,6 +500,19 @@ public static partial class WorkflowParser
             EndColumn: mark.Col);
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
+    }
+
+    private static void AddError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, DiagnosticFix? fix)
+    {
+        var location = new TextRange(
+            Start: mark.Position,
+            Length: 0,
+            StartLine: mark.Line,
+            StartColumn: mark.Col,
+            EndLine: mark.Line,
+            EndColumn: mark.Col);
+
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location, Fix: fix));
     }
 
     private static void AddWarning(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark)
@@ -542,7 +529,7 @@ public static partial class WorkflowParser
     }
 
     /// <summary>Parses a YAML bool scalar into <see cref="BoolNodeId"/> (used by <c>on.*</c> metadata and action metadata).</summary>
-    private static BoolNodeId ParseBoolNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage)
+    private static BoolNodeId ParseBoolNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -552,7 +539,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            AddError(ref diagnostics, errorMessage, reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -565,7 +552,7 @@ public static partial class WorkflowParser
             : reader.CurrentStart;
         if (!TryParseBool(valueUtf8, tag, out var value))
         {
-            AddError(diagnostics, errorMessage, mark);
+            AddError(ref diagnostics, errorMessage, mark);
             reader.Read();
             return default;
         }

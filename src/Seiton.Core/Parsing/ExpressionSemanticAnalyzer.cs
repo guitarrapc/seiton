@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Buffers;
+using System.Text;
 using System.Text.Json;
 using Seiton.Core.Generated;
 
@@ -465,7 +466,8 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
-        var argTypes = new ExprType[argCount];
+        var argTypesRented = ArrayPool<ExprType>.Shared.Rent(argCount);
+        var argTypes = argTypesRented.AsSpan(0, argCount);
         for (var i = 0; i < argCount; i++)
         {
             var argIndex = node.ArgStart + i;
@@ -497,6 +499,7 @@ public static class ExpressionSemanticAnalyzer
 
         if (typeMatched)
         {
+            ArrayPool<ExprType>.Shared.Return(argTypesRented, clearArray: true);
             ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
             ValidateFromJsonLiteral(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
             return;
@@ -512,9 +515,11 @@ public static class ExpressionSemanticAnalyzer
 
             if (TryValidateAgainstOverload(overload, argTypes, out var errorArgIndex, out var expectedType, out var actualType))
             {
+                ArrayPool<ExprType>.Shared.Return(argTypesRented, clearArray: true);
                 return;
             }
 
+            ArrayPool<ExprType>.Shared.Return(argTypesRented, clearArray: true);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"argument {errorArgIndex + 1} should be {expectedType.TypeName}, but got {actualType.TypeName}",
@@ -522,6 +527,7 @@ public static class ExpressionSemanticAnalyzer
             return;
         }
 
+        ArrayPool<ExprType>.Shared.Return(argTypesRented, clearArray: true);
         ValidateFormatPlaceholders(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
         ValidateFromJsonLiteral(node, nameUtf8, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
     }
@@ -682,7 +688,7 @@ public static class ExpressionSemanticAnalyzer
         }
     }
 
-    private static bool TryValidateAgainstOverload(FuncOverload overload, ExprType[] argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
+    private static bool TryValidateAgainstOverload(FuncOverload overload, ReadOnlySpan<ExprType> argTypes, out int errorArgIndex, out ExprType expected, out ExprType actual)
     {
         for (var i = 0; i < argTypes.Length; i++)
         {

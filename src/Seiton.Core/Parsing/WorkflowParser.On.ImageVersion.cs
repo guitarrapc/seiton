@@ -9,12 +9,12 @@ public static partial class WorkflowParser
 {
     private static readonly string[] ImageVersionOptionNames = ["names", "versions"];
 
-    private static ImageVersionEvent ParseImageVersionEvent<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static ImageVersionEvent ParseImageVersionEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.image_version must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "on.image_version must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ImageVersionEvent { EventName = nameNode, Names = null, Versions = null, Range = arena.GetStringRange(nameNode) };
         }
@@ -27,7 +27,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.image_version option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "on.image_version option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -40,7 +40,7 @@ public static partial class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "on.image_version"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "on.image_version"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -54,7 +54,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, ivOrdinal))
                 {
                     var dupName = ivk == OnImageVersionMappingKey.Names ? "names" : "versions";
-                    AddError(diagnostics, $"on.image_version contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"on.image_version contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -66,10 +66,10 @@ public static partial class WorkflowParser
                 switch (ivk)
                 {
                     case OnImageVersionMappingKey.Names:
-                        names = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.names must be array of strings", emptyMessage: "on.image_version.names should not be empty", emptyElementMessage: "\"names\" filter value should not be empty");
+                        names = ParseStringSequence(ref reader, arena, ref diagnostics, "on.image_version.names must be array of strings", emptyMessage: "on.image_version.names should not be empty", emptyElementMessage: "\"names\" filter value should not be empty");
                         continue;
                     case OnImageVersionMappingKey.Versions:
-                        versions = ParseStringSequence(ref reader, arena, diagnostics, "on.image_version.versions must be array of strings", emptyMessage: "on.image_version.versions should not be empty", emptyElementMessage: "\"versions\" filter value should not be empty");
+                        versions = ParseStringSequence(ref reader, arena, ref diagnostics, "on.image_version.versions must be array of strings", emptyMessage: "on.image_version.versions should not be empty", emptyElementMessage: "\"versions\" filter value should not be empty");
                         continue;
                     default:
                         if (!reader.End)
@@ -90,7 +90,7 @@ public static partial class WorkflowParser
             var fix = suggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                 : (DiagnosticFix?)null;
-            AddError(diagnostics, message, keyMark, fix);
+            AddError(ref diagnostics, message, keyMark, fix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

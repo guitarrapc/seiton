@@ -7,12 +7,12 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static WorkflowDispatchEvent ParseWorkflowDispatchEvent<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, StringNodeId nameNode)
+    private static WorkflowDispatchEvent ParseWorkflowDispatchEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_dispatch must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "on.workflow_dispatch must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new WorkflowDispatchEvent { EventName = nameNode, Inputs = null, Range = arena.GetStringRange(nameNode) };
         }
@@ -24,7 +24,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_dispatch option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "on.workflow_dispatch option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -35,7 +35,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "on.workflow_dispatch"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "on.workflow_dispatch"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -45,14 +45,14 @@ public static partial class WorkflowParser
             if (Utf8MappingDispatch.TryMatchFirstOrdered<OnWorkflowDispatchTopKeyTable>(keyUtf8, out _))
             {
                 reader.Read();
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, "on.workflow_dispatch contains duplicate key: inputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
-                inputs = ParseWorkflowDispatchInputs(ref reader, arena, diagnostics, source);
+                if (!TrySetBit(ref seen, 0)) { AddError(ref diagnostics, "on.workflow_dispatch contains duplicate key: inputs", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                inputs = ParseWorkflowDispatchInputs(ref reader, arena, ref diagnostics, source);
                 continue;
             }
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"expected \"inputs\" key for \"workflow_dispatch\" section but got \"{unknown}\"", keyMark);
+            AddError(ref diagnostics, $"expected \"inputs\" key for \"workflow_dispatch\" section but got \"{unknown}\"", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -67,12 +67,12 @@ public static partial class WorkflowParser
         return new WorkflowDispatchEvent { EventName = nameNode, Inputs = inputs, Range = arena.GetStringRange(nameNode) };
     }
 
-    private static SliceMap<DispatchInput>? ParseWorkflowDispatchInputs<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static SliceMap<DispatchInput>? ParseWorkflowDispatchInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_dispatch.inputs must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "on.workflow_dispatch.inputs must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -87,7 +87,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, "on.workflow_dispatch.inputs key must be string", reader.CurrentStart);
+                    AddError(ref diagnostics, "on.workflow_dispatch.inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -105,7 +105,7 @@ public static partial class WorkflowParser
                     idSlice.Offset,
                     idSlice.Length,
                     idMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -124,7 +124,7 @@ public static partial class WorkflowParser
                 var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), idRange);
                 reader.Read(); // consume input id
 
-                var input = ParseWorkflowDispatchInput(ref reader, arena, diagnostics, nameNode);
+                var input = ParseWorkflowDispatchInput(ref reader, arena, ref diagnostics, nameNode);
                 map.Add(new SliceMap<DispatchInput>.Entry(idSlice, input));
             }
 
@@ -138,7 +138,7 @@ public static partial class WorkflowParser
         finally { map.Dispose(); }
     }
 
-    private static DispatchInput ParseWorkflowDispatchInput<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static DispatchInput ParseWorkflowDispatchInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -150,7 +150,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "on.workflow_dispatch input must be object", reader.CurrentStart);
+            AddError(ref diagnostics, "on.workflow_dispatch input must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new DispatchInput { Name = nameNode, Description = description, Required = required, Default = defaultValue, Type = type, Options = options, Range = arena.GetStringRange(nameNode) };
         }
@@ -160,7 +160,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.workflow_dispatch input option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "on.workflow_dispatch input option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -171,7 +171,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "on.workflow_dispatch input"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "on.workflow_dispatch input"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -193,7 +193,7 @@ public static partial class WorkflowParser
                         WorkflowDispatchInputFieldKey.Options => "options",
                         _ => "option",
                     };
-                    AddError(diagnostics, $"on.workflow_dispatch input contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"on.workflow_dispatch input contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -205,26 +205,26 @@ public static partial class WorkflowParser
                 switch (fk)
                 {
                     case WorkflowDispatchInputFieldKey.Description:
-                        description = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input description must be string");
+                        description = ParseString(ref reader, arena, ref diagnostics, "on.workflow_dispatch input description must be string");
                         continue;
                     case WorkflowDispatchInputFieldKey.Required:
-                        required = ParseBoolNode(ref reader, arena, diagnostics, "on.workflow_dispatch input required must be bool");
+                        required = ParseBoolNode(ref reader, arena, ref diagnostics, "on.workflow_dispatch input required must be bool");
                         continue;
                     case WorkflowDispatchInputFieldKey.Default:
-                        defaultValue = ParseString(ref reader, arena, diagnostics, "on.workflow_dispatch input default must be string", allowEmpty: true);
+                        defaultValue = ParseString(ref reader, arena, ref diagnostics, "on.workflow_dispatch input default must be string", allowEmpty: true);
                         continue;
                     case WorkflowDispatchInputFieldKey.Type:
-                        type = ParseDispatchInputType(ref reader, arena, diagnostics);
+                        type = ParseDispatchInputType(ref reader, arena, ref diagnostics);
                         continue;
                     case WorkflowDispatchInputFieldKey.Options:
                         {
                             var optSeqMark = reader.CurrentStart;
                             var inputName = Encoding.UTF8.GetString(arena.GetStringValue(nameNode));
-                            options = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
+                            options = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
                             if (optErr)
-                                AddError(diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
+                                AddError(ref diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
                             else if (options is { Length: 0 })
-                                AddError(diagnostics, "\"options\" section should not be empty", optSeqMark);
+                                AddError(ref diagnostics, "\"options\" section should not be empty", optSeqMark);
                             continue;
                         }
                     default:
@@ -239,7 +239,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}", keyMark);
+            AddError(ref diagnostics, $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -263,12 +263,12 @@ public static partial class WorkflowParser
         };
     }
 
-    private static DispatchInputType ParseDispatchInputType<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics)
+    private static DispatchInputType ParseDispatchInputType<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.Scalar)
         {
-            AddError(diagnostics, "on.workflow_dispatch input type must be string", reader.CurrentStart);
+            AddError(ref diagnostics, "on.workflow_dispatch input type must be string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return DispatchInputType.None;
         }
@@ -295,7 +295,7 @@ public static partial class WorkflowParser
         if (type == DispatchInputType.None)
         {
             var valueText = Encoding.UTF8.GetString(valueUtf8);
-            AddError(diagnostics, $"on.workflow_dispatch input type '{valueText}' is invalid; must be one of string, number, boolean, choice, environment", reader.CurrentStart);
+            AddError(ref diagnostics, $"on.workflow_dispatch input type '{valueText}' is invalid; must be one of string, number, boolean, choice, environment", reader.CurrentStart);
         }
 
         reader.Read();
