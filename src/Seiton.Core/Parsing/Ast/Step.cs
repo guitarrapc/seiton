@@ -3,31 +3,44 @@
 /// <summary>AST node representing a single step within a job.</summary>
 public sealed class Step
 {
-    public StringNodeId Id { get; init; }
+    public StringNodeId Id { get; set; }
 
-    public StringNodeId If { get; init; }
+    public StringNodeId If { get; set; }
 
-    public TextRange? IfKeyRange { get; init; }
+    public TextRange? IfKeyRange { get; set; }
 
-    public StringNodeId Name { get; init; }
+    public StringNodeId Name { get; set; }
 
-    public StepExec Exec { get; init; } = null!;
+    public StepExec Exec { get; set; } = null!;
 
-    public Env? Env { get; init; }
+    public Env? Env { get; set; }
 
-    public BoolNodeId ContinueOnError { get; init; }
+    public BoolNodeId ContinueOnError { get; set; }
 
-    public FloatNodeId TimeoutMinutes { get; init; }
+    public FloatNodeId TimeoutMinutes { get; set; }
 
-    public TextRange Range { get; init; }
+    public TextRange Range { get; set; }
+
+    internal void Reset()
+    {
+        Id = default;
+        If = default;
+        IfKeyRange = null;
+        Name = default;
+        Exec = null!;
+        Env = null;
+        ContinueOnError = default;
+        TimeoutMinutes = default;
+        Range = default;
+    }
 }
 
 /// <summary>Base class for step execution payloads (<c>run:</c> or <c>uses:</c>).</summary>
 public abstract class StepExec
 {
-    public StepExecKind Kind { get; init; }
+    public StepExecKind Kind { get; set; }
 
-    public TextRange Range { get; init; }
+    public TextRange Range { get; set; }
 }
 
 /// <summary>Discriminator for step execution kind.</summary>
@@ -40,23 +53,43 @@ public enum StepExecKind
 /// <summary>Execution payload for a <c>run:</c> step.</summary>
 public sealed class ExecRun : StepExec
 {
-    public StringNodeId Run { get; init; }
+    public StringNodeId Run { get; set; }
 
-    public StringNodeId Shell { get; init; }
+    public StringNodeId Shell { get; set; }
 
-    public StringNodeId WorkingDirectory { get; init; }
+    public StringNodeId WorkingDirectory { get; set; }
+
+    internal void Reset()
+    {
+        Kind = StepExecKind.Run;
+        Run = default;
+        Shell = default;
+        WorkingDirectory = default;
+        Range = default;
+    }
 }
 
 /// <summary>Execution payload for a <c>uses:</c> step (action invocation).</summary>
 public sealed class ExecAction : StepExec
 {
-    public StringNodeId Uses { get; init; }
+    public StringNodeId Uses { get; set; }
 
-    public TextRange? UsesKeyRange { get; init; }
+    public TextRange? UsesKeyRange { get; set; }
 
-    public SliceMap<StringNodeId>? Inputs { get; init; }
+    public SliceMap<StringNodeId>? Inputs { get; set; }
 
-    public StringNodeId Entrypoint { get; init; }
+    public StringNodeId Entrypoint { get; set; }
 
-    public StringNodeId Args { get; init; }
+    public StringNodeId Args { get; set; }
+
+    internal void Reset()
+    {
+        Kind = StepExecKind.Action;
+        Uses = default;
+        UsesKeyRange = null;
+        Inputs = null;
+        Entrypoint = default;
+        Args = default;
+        Range = default;
+    }
 }

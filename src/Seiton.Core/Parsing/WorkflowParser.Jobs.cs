@@ -152,7 +152,10 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}' must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new Job { Id = jobIdNode, Range = arena.GetStringRange(jobIdNode) };
+            var earlyJob = arena.AllocJob();
+            earlyJob.Id = jobIdNode;
+            earlyJob.Range = arena.GetStringRange(jobIdNode);
+            return earlyJob;
         }
 
         ulong seen = 0;
@@ -557,32 +560,31 @@ public static partial class WorkflowParser
             }
         }
 
-        return new Job
-        {
-            Id = jobIdNode,
-            Name = nameNode,
-            Needs = needsNode,
-            RunsOn = runsOnNode,
-            RunsOnKeyRange = runsOnNode is not null ? BuildScalarLocation(runsOnKeyPos, 7) : null,
-            Permissions = permissionsNode,
-            Environment = environmentNode,
-            Concurrency = concurrencyNode,
-            Outputs = outputsNode,
-            Env = envNode,
-            Defaults = defaultsNode,
-            If = ifNode,
-            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
-            Steps = stepsNode,
-            StepsKeyRange = stepsNode is not null ? BuildScalarLocation(stepsKeyPos, 5) : null,
-            TimeoutMinutes = timeoutMinutesNode,
-            Strategy = strategyNode,
-            ContinueOnError = continueOnErrorNode,
-            Container = containerNode,
-            Services = servicesNode,
-            WorkflowCall = workflowCallNode,
-            Snapshot = snapshotNode,
-            Range = arena.GetStringRange(jobIdNode),
-        };
+        var job = arena.AllocJob();
+        job.Id = jobIdNode;
+        job.Name = nameNode;
+        job.Needs = needsNode;
+        job.RunsOn = runsOnNode;
+        job.RunsOnKeyRange = runsOnNode is not null ? BuildScalarLocation(runsOnKeyPos, 7) : null;
+        job.Permissions = permissionsNode;
+        job.Environment = environmentNode;
+        job.Concurrency = concurrencyNode;
+        job.Outputs = outputsNode;
+        job.Env = envNode;
+        job.Defaults = defaultsNode;
+        job.If = ifNode;
+        job.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
+        job.Steps = stepsNode;
+        job.StepsKeyRange = stepsNode is not null ? BuildScalarLocation(stepsKeyPos, 5) : null;
+        job.TimeoutMinutes = timeoutMinutesNode;
+        job.Strategy = strategyNode;
+        job.ContinueOnError = continueOnErrorNode;
+        job.Container = containerNode;
+        job.Services = servicesNode;
+        job.WorkflowCall = workflowCallNode;
+        job.Snapshot = snapshotNode;
+        job.Range = arena.GetStringRange(jobIdNode);
+        return job;
     }
 
 
