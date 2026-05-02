@@ -1,4 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -159,6 +161,10 @@ public sealed class IncrementalParseContext
     private int _baseIntCount;
     private int _baseFloatCount;
 
+    // D-5d: per-job diagnostic cache from previous lint run
+    private Diagnostic[]?[]? _cachedJobDiagnostics;
+    private bool[]? _lastReusedJobs;
+
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
@@ -201,6 +207,7 @@ public sealed class IncrementalParseContext
         if (skipMask == 0 && jobSkipEntries is null)
         {
             // Nothing to skip — full parse (resets base counts)
+            _lastReusedJobs = null;
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
@@ -237,9 +244,19 @@ public sealed class IncrementalParseContext
             // Retain old arena — reused jobs reference its pooled Job/Step objects.
             // Will be disposed on next full parse.
             (_retainedArenas ??= new(2)).Add(oldArena!);
+
+            // D-5d: record which jobs were reused for lint cache
+            var jobCount = parseResult.Workflow!.Jobs.Count;
+            if (_lastReusedJobs is null || _lastReusedJobs.Length < jobCount)
+                _lastReusedJobs = new bool[jobCount];
+            else
+                Array.Clear(_lastReusedJobs, 0, _lastReusedJobs.Length);
+            for (var i = 0; i < jobSkipEntries.Length && i < jobCount; i++)
+                _lastReusedJobs[i] = jobSkipEntries[i].Job is not null;
         }
         else
         {
+            _lastReusedJobs = null;
             // No job reuse — safe to dispose old arena immediately
             oldArena?.Dispose();
         }
@@ -358,6 +375,9 @@ public sealed class IncrementalParseContext
                 retained.Dispose();
             _retainedArenas.Clear();
         }
+
+        // Full parse invalidates job cache — all diagnostics will be fresh
+        _lastReusedJobs = null;
 
         // Dispose the old arena (if any) now that we've stored the new one
         oldArena?.Dispose();
@@ -684,5 +704,167 @@ public sealed class IncrementalParseContext
     private static long ComputeHash(ReadOnlySpan<byte> data)
     {
         return (long)XxHash64.Hash(data);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // D-5d: Lint result cache — per-job diagnostic caching
+    // ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>Shared lint engine for <see cref="LintIncrementally"/>. Guarded by external lock.</summary>
+    private LintEngine? _lintEngine;
+
+    /// <summary>Lint config for incremental lint.</summary>
+    private static readonly LintConfig LintConfig = new()
+    {
+        Fix = new FixConfig { Enabled = true },
+        Network = new NetworkConfig(),
+        Output = new OutputConfig(),
+        SkipSuppressionSummary = true,
+    };
+
+    /// <summary>
+    /// Parses and lints incrementally. Unchanged jobs reuse cached diagnostics from
+    /// the previous lint run (D-5d). Returns parsed JSON diagnostic elements.
+    /// </summary>
+    public JsonElement[] LintIncrementally(byte[] utf8Yaml, string filePath)
+    {
+        _lintEngine ??= new LintEngine();
+
+        // Parse incrementally (D-5b/5c)
+        var parseResult = ParseIncrementally(utf8Yaml, filePath);
+
+        // Determine which jobs to skip linting (reused and have cached diagnostics)
+        bool[]? skipJobs = null;
+        if (_lastReusedJobs is not null && _cachedJobDiagnostics is not null)
+        {
+            var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
+            for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
+            {
+                if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
+                {
+                    skipJobs ??= new bool[jobCount];
+                    skipJobs[i] = true;
+                }
+            }
+        }
+
+        // Lint with optional job skipping
+        var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, skipJobs);
+
+        // Merge cached diagnostics for skipped jobs
+        Diagnostic[] finalDiagnostics;
+        if (skipJobs is not null)
+        {
+            var merged = new List<Diagnostic>(lintResult.Diagnostics.Length + 16);
+            merged.AddRange(lintResult.Diagnostics);
+
+            for (var i = 0; i < skipJobs.Length; i++)
+            {
+                if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
+                {
+                    merged.AddRange(cached);
+                }
+            }
+
+            // Sort by offset for consistent output
+            merged.Sort(static (a, b) =>
+            {
+                var cmp = a.Location.Start.CompareTo(b.Location.Start);
+                return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
+            });
+            finalDiagnostics = merged.ToArray();
+        }
+        else
+        {
+            finalDiagnostics = lintResult.Diagnostics;
+        }
+
+        // Cache per-job diagnostics for next call
+        CacheJobDiagnostics(finalDiagnostics, utf8Yaml);
+
+        // Serialize to JSON and parse into elements (matching PlaygroundLintRunner format)
+        return SerializeDiagnosticsToJson(finalDiagnostics);
+    }
+
+    /// <summary>
+    /// Partitions diagnostics by job byte range and stores them in the per-job cache.
+    /// Diagnostics not within any job's range (workflow-level) are not cached.
+    /// </summary>
+    private void CacheJobDiagnostics(Diagnostic[] diagnostics, byte[] source)
+    {
+        var jobCount = _registry.JobCount;
+        if (jobCount == 0)
+        {
+            _cachedJobDiagnostics = null;
+            return;
+        }
+
+        if (_cachedJobDiagnostics is null || _cachedJobDiagnostics.Length < jobCount)
+            _cachedJobDiagnostics = new Diagnostic[jobCount][];
+
+        // Clear existing cache entries
+        for (var i = 0; i < jobCount; i++)
+            _cachedJobDiagnostics[i] = null;
+
+        // Partition: for each diagnostic, find which job it belongs to (by offset range)
+        // Use a temporary list per job
+        List<Diagnostic>?[]? perJobLists = null;
+
+        for (var d = 0; d < diagnostics.Length; d++)
+        {
+            var diag = diagnostics[d];
+            var offset = diag.Location.Start;
+
+            for (var j = 0; j < jobCount; j++)
+            {
+                var entry = _registry.GetJobEntry(j);
+                if (entry.IsValid && offset >= entry.StartOffset && offset < entry.EndOffset)
+                {
+                    perJobLists ??= new List<Diagnostic>?[jobCount];
+                    (perJobLists[j] ??= new(4)).Add(diag);
+                    break;
+                }
+            }
+        }
+
+        if (perJobLists is not null)
+        {
+            for (var j = 0; j < jobCount; j++)
+            {
+                _cachedJobDiagnostics[j] = perJobLists[j]?.ToArray();
+            }
+        }
+    }
+
+    private static JsonElement[] SerializeDiagnosticsToJson(Diagnostic[] diagnostics)
+    {
+        using var stream = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartArray();
+            for (var i = 0; i < diagnostics.Length; i++)
+            {
+                var d = diagnostics[i];
+                writer.WriteStartObject();
+                writer.WriteString("message", d.Message);
+                writer.WriteNumber("line", d.Location.StartLine);
+                writer.WriteNumber("column", d.Location.StartColumn);
+                writer.WriteString("severity", d.Severity switch
+                {
+                    DiagnosticSeverity.Error => "Error",
+                    DiagnosticSeverity.Warning => "Warning",
+                    _ => "Info"
+                });
+                writer.WriteString("ruleId", d.RuleId);
+                writer.WriteBoolean("fixable", d.Fix is not null);
+                writer.WriteString("fixDescription", d.Fix?.Description);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+
+        stream.Position = 0;
+        using var doc = JsonDocument.Parse(stream);
+        return doc.RootElement.EnumerateArray().Select(e => e.Clone()).ToArray();
     }
 }

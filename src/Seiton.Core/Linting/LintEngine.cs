@@ -121,7 +121,20 @@ public sealed class LintEngine
         return CheckCore(utf8Yaml, filePath, config, parseResult, DocumentKind.Workflow);
     }
 
-    private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, DocumentKind documentKind)
+    /// <summary>
+    /// Lints a pre-parsed <see cref="ParseResult"/> with optional job skipping (D-5d).
+    /// When <paramref name="skipJobs"/>[i] is true, lint rules are not run on that job
+    /// (its diagnostics are expected to be supplied from a cache by the caller).
+    /// </summary>
+    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, bool[]? skipJobs)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        return CheckCore(utf8Yaml, filePath, config, parseResult, DocumentKind.Workflow, skipJobs);
+    }
+
+    private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, DocumentKind documentKind, bool[]? skipJobs = null)
     {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
@@ -213,7 +226,7 @@ public sealed class LintEngine
 
         if (parseResult.Workflow is not null)
         {
-            _visitor.Visit(parseResult.Workflow);
+            _visitor.Visit(parseResult.Workflow, skipJobs);
         }
         else if (parseResult.ActionMetadata is not null)
         {
