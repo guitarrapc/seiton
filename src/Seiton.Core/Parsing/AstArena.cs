@@ -585,7 +585,10 @@ public sealed class AstArena : IDisposable
             obj = new ExecRun();
             _execRuns[_execRunCount] = obj;
         }
-        obj.Reset();
+        else
+        {
+            obj.Reset();
+        }
         _execRunCount++;
         return obj;
     }
