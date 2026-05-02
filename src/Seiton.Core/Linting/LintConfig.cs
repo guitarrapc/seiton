@@ -119,8 +119,8 @@ public sealed class LintConfig
 
     /// <summary>
     /// Resets per-call state and updates properties for a new lint run.
-    /// Clears caches that depend on the source bytes (expression cache, line starts).
-    /// Reuses the dictionary allocation for expression cache across calls.
+    /// Preserves expression cache and line starts when the same source byte[] reference is passed
+    /// (common in Playground where repeated linting of unchanged content occurs).
     /// </summary>
     internal void PrepareForRun(
         byte[] utf8Yaml,
@@ -131,6 +131,7 @@ public sealed class LintConfig
         NetworkConfig? network,
         OutputConfig? output)
     {
+        var sameSource = ReferenceEquals(Utf8Yaml, utf8Yaml);
         Utf8Yaml = utf8Yaml;
         Arena = arena;
         FilePath = filePath;
@@ -138,10 +139,13 @@ public sealed class LintConfig
         _fix = fix ?? DefaultFix;
         _network = network ?? DefaultNetwork;
         _output = output ?? DefaultOutput;
-        _lineStarts = null;
-        if (_expressionCache is not null)
+        if (!sameSource)
         {
-            _expressionCache.Clear();
+            _lineStarts = null;
+            if (_expressionCache is not null)
+            {
+                _expressionCache.Clear();
+            }
         }
     }
 

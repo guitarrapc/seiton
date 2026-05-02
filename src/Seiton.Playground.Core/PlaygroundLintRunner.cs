@@ -47,6 +47,9 @@ public static class PlaygroundLintRunner
     /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
 
+    /// <summary>Reusable UTF-8 byte buffer for YAML source. Guarded by <see cref="EngineGate"/>.</summary>
+    private static byte[] _utf8Buffer = new byte[4096];
+
     /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
     private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
 
@@ -63,41 +66,19 @@ public static class PlaygroundLintRunner
         ArgumentNullException.ThrowIfNull(yamlSource);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
         // Hold the lock while reading result.Diagnostics — the engine's two-buffer
         // swap means the backing array is owned by the engine and a concurrent Check()
         // would overwrite it. Write JSON directly under the lock, then convert to string.
         lock (EngineGate)
         {
+            var utf8Yaml = RentUtf8Buffer(yamlSource);
             var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
             try
             {
                 JsonBuffer.Clear();
                 using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
                 {
-                    writer.WriteStartArray();
-                    for (var i = 0; i < result.Diagnostics.Length; i++)
-                    {
-                        var d = result.Diagnostics[i];
-                        var loc = d.Location;
-
-                        writer.WriteStartObject();
-                        writer.WriteString("message", d.Message);
-                        writer.WriteNumber("line", loc.StartLine);
-                        writer.WriteNumber("column", loc.StartColumn);
-                        writer.WriteString("severity", SeverityString(d.Severity));
-                        if (d.RuleId is not null)
-                            writer.WriteString("ruleId", d.RuleId);
-                        else
-                            writer.WriteNull("ruleId");
-                        writer.WriteBoolean("fixable", d.Fix is not null);
-                        if (d.Fix?.Description is { } fixDesc)
-                            writer.WriteString("fixDescription", fixDesc);
-                        else
-                            writer.WriteNull("fixDescription");
-                        writer.WriteEndObject();
-                    }
-                    writer.WriteEndArray();
+                    WriteDiagnosticsArray(writer, result.Diagnostics);
                 }
 
                 return Encoding.UTF8.GetString(JsonBuffer.WrittenSpan);
@@ -111,6 +92,65 @@ public static class PlaygroundLintRunner
                 result.ParseResult.Arena?.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
+    /// Avoids the ~48 KB string allocation of <see cref="RunToJson"/> by returning raw bytes.
+    /// Suitable for WASM interop where JavaScript can decode with TextDecoder, or for
+    /// scenarios where the result is written directly to a stream.
+    /// </summary>
+    public static byte[] RunToJsonUtf8(string yamlSource, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(yamlSource);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        lock (EngineGate)
+        {
+            var utf8Yaml = RentUtf8Buffer(yamlSource);
+            var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
+            try
+            {
+                JsonBuffer.Clear();
+                using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
+                {
+                    WriteDiagnosticsArray(writer, result.Diagnostics);
+                }
+
+                return JsonBuffer.WrittenSpan.ToArray();
+            }
+            finally
+            {
+                result.ParseResult.Arena?.Dispose();
+            }
+        }
+    }
+
+    private static void WriteDiagnosticsArray(Utf8JsonWriter writer, ReadOnlySpan<Diagnostic> diagnostics)
+    {
+        writer.WriteStartArray();
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            var d = diagnostics[i];
+            var loc = d.Location;
+
+            writer.WriteStartObject();
+            writer.WriteString("message", d.Message);
+            writer.WriteNumber("line", loc.StartLine);
+            writer.WriteNumber("column", loc.StartColumn);
+            writer.WriteString("severity", SeverityString(d.Severity));
+            if (d.RuleId is not null)
+                writer.WriteString("ruleId", d.RuleId);
+            else
+                writer.WriteNull("ruleId");
+            writer.WriteBoolean("fixable", d.Fix is not null);
+            if (d.Fix?.Description is { } fixDesc)
+                writer.WriteString("fixDescription", fixDesc);
+            else
+                writer.WriteNull("fixDescription");
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
     }
 
     private static string SeverityString(DiagnosticSeverity severity)
@@ -202,5 +242,22 @@ public static class PlaygroundLintRunner
         }
 
         return fixables[0];
+    }
+
+    /// <summary>
+    /// Returns an exact-sized UTF-8 byte[] for the given string, reusing the static buffer
+    /// when the byte length matches exactly. Must be called under <see cref="EngineGate"/>.
+    /// The parser requires exact-length arrays because VYaml reads utf8Yaml.AsMemory() fully.
+    /// </summary>
+    private static byte[] RentUtf8Buffer(string source)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(source);
+        if (_utf8Buffer.Length != byteCount)
+        {
+            _utf8Buffer = new byte[byteCount];
+        }
+
+        Encoding.UTF8.GetBytes(source, _utf8Buffer);
+        return _utf8Buffer;
     }
 }

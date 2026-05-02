@@ -54,6 +54,40 @@ internal static class DynamicContextTypeBuilder
         }
 
         var props = new Dictionary<Utf8String, ExprType>();
+        return BuildStepsOverrideCore(props, steps, arena, utf8Yaml, maxStepIndex, localActionOutputResolver);
+    }
+
+    /// <summary>
+    /// Same as <see cref="BuildStepsOverride"/> but reuses <paramref name="reusableProps"/> to avoid
+    /// per-call dictionary allocation. The dictionary is cleared before use.
+    /// Caller must not access the previous <see cref="ObjectExprType"/> that referenced this dictionary
+    /// after this call (it will see the new content).
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildStepsOverrideInto(
+        Dictionary<Utf8String, ExprType> reusableProps,
+        IReadOnlyList<Step>? steps,
+        AstArena arena,
+        byte[] utf8Yaml,
+        int maxStepIndex,
+        Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver = null)
+    {
+        if (steps is null || steps.Count == 0)
+        {
+            return (StepsKeyUtf8, looseDynamic);
+        }
+
+        reusableProps.Clear();
+        return BuildStepsOverrideCore(reusableProps, steps, arena, utf8Yaml, maxStepIndex, localActionOutputResolver);
+    }
+
+    private static (byte[] NameUtf8, ExprType Type) BuildStepsOverrideCore(
+        Dictionary<Utf8String, ExprType> props,
+        IReadOnlyList<Step> steps,
+        AstArena arena,
+        byte[] utf8Yaml,
+        int maxStepIndex,
+        Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver)
+    {
         var limit = maxStepIndex >= 0 ? Math.Min(maxStepIndex, steps.Count) : steps.Count;
         for (var i = 0; i < limit; i++)
         {

@@ -75,4 +75,16 @@ public partial class PlaygroundLintBenchmark
 
         return totalLength;
     }
+
+    [Benchmark]
+    public int RunToJsonUtf8_100()
+    {
+        var totalLength = 0;
+        for (var i = 0; i < 100; i++)
+        {
+            totalLength += PlaygroundLintRunner.RunToJsonUtf8(_yamlSource, FilePath).Length;
+        }
+
+        return totalLength;
+    }
 }
