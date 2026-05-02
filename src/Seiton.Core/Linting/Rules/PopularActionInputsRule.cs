@@ -8,6 +8,10 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates input names for well-known popular actions against their declared schemas.</summary>
 public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInputs)
 {
+    // Cache last-decoded action name to avoid repeated Decode for the same uses slice
+    private Utf8Slice _lastUsesSlice;
+    private string? _lastActionName;
+
     public override string Name => "Popular Action Inputs Rule";
 
     public override void VisitStep(Step step)
@@ -28,7 +32,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
             return;
         }
 
-        var actionName = Decode(Arena.GetStringSlice(actionExec.Uses));
+        var actionName = GetCachedActionName(Arena.GetStringSlice(actionExec.Uses));
 
         // Check unknown inputs
         if (actionExec.Inputs is { Count: > 0 } inputs)
@@ -112,6 +116,23 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         }
 
         return false;
+    }
+
+    private string GetCachedActionName(Utf8Slice usesSlice)
+    {
+        if (_lastActionName is not null
+            && usesSlice.Length == _lastUsesSlice.Length
+            && Config.Utf8Yaml is not null
+            && usesSlice.AsSpan(Config.Utf8Yaml).SequenceEqual(_lastUsesSlice.AsSpan(Config.Utf8Yaml)))
+        {
+            _lastUsesSlice = usesSlice;
+            return _lastActionName;
+        }
+
+        var name = Decode(usesSlice);
+        _lastUsesSlice = usesSlice;
+        _lastActionName = name;
+        return name;
     }
 
     private static string? FindClosestInput(string unknownInput, string[] inputNames)
