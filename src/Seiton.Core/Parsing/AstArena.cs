@@ -166,6 +166,10 @@ public sealed class AstArena : IDisposable
     private ExecAction[] _execActions;
     private int _execActionCount;
 
+    // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
+    // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
+    private Diagnostic[]? _diagnosticsBuffer;
+
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
@@ -197,6 +201,12 @@ public sealed class AstArena : IDisposable
     }
 
     /// <summary>
+    /// Registers a pooled diagnostics array with this arena. The array will be returned
+    /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
+    /// </summary>
+    internal void RegisterDiagnosticsBuffer(Diagnostic[] buffer) => _diagnosticsBuffer = buffer;
+
+    /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
     /// Backing arrays that have grown beyond their default capacity are returned to
@@ -206,6 +216,13 @@ public sealed class AstArena : IDisposable
     /// </summary>
     public void Dispose()
     {
+        // Return pooled diagnostics buffer if registered
+        if (_diagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer);
+            _diagnosticsBuffer = null;
+        }
+
         // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)
         // This prevents memory retention across parse calls, which is critical in WASM.
         for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();

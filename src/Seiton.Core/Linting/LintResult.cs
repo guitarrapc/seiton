@@ -34,7 +34,7 @@ public readonly record struct LintResult(
     public bool HasFatalError => ParseResult.HasFatalError;
 
     /// <summary>Gets the diagnostics produced during the parsing phase.</summary>
-    public Diagnostic[] ParseDiagnostics => ParseResult.Diagnostics;
+    public DiagnosticList ParseDiagnostics => ParseResult.Diagnostics;
 
     /// <summary>Gets whether any diagnostics have an associated auto-fix.</summary>
     public bool HasFixableDiagnostics => FixableDiagnosticCount > 0;

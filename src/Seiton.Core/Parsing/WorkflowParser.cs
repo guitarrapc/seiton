@@ -79,21 +79,16 @@ public static partial class WorkflowParser
             var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
             var arena = AstArena.Rent(utf8Yaml);
-            var parseResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode);
-
-            // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
-            var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
-            var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
-            var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
-            var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
-
-            var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2 + unusedAnchors.Length + recursiveAliases.Length);
+            var diagnostics = new PooledBuffer<Diagnostic>(16);
             try
             {
-                for (var i = 0; i < parseResult.Diagnostics.Length; i++)
-                {
-                    diagnostics.Add(parseResult.Diagnostics[i]);
-                }
+                var coreResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode, ref diagnostics);
+
+                // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
+                var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
+                var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
+                var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+                var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
 
                 for (var i = 0; i < unusedAnchors.Length; i++)
                 {
@@ -129,13 +124,23 @@ public static partial class WorkflowParser
                     }
                 }
 
-                parseResult = parseResult with { Diagnostics = diagnostics.ToArray() };
+                // Transfer the pooled array directly to ParseResult (no .ToArray() copy)
+                var (diagArray, diagCount) = diagnostics.DetachArray();
+                var parseResult = new ParseResult(
+                    coreResult.Workflow,
+                    coreResult.ActionMetadata,
+                    new DiagnosticList(diagArray, diagCount),
+                    coreResult.HasFatalError,
+                    coreResult.Arena);
+
+                // Register the pooled diagnostics array with the arena for lifecycle management
+                arena.RegisterDiagnosticsBuffer(diagArray);
+
+                return new ClassifiedParseResult(
+                    parseResult,
+                    new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
             }
             finally { diagnostics.Dispose(); }
-
-            return new ClassifiedParseResult(
-                parseResult,
-                new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
         }
         catch (Exception ex)
         {
@@ -152,7 +157,7 @@ public static partial class WorkflowParser
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
-            var parseResult = new ParseResult(default, default, [diagnostic], HasFatalError: true);
+            var parseResult = new ParseResult(default, default, new DiagnosticList([diagnostic]), HasFatalError: true);
             return new ClassifiedParseResult(
                 parseResult,
                 new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
@@ -208,7 +213,18 @@ public static partial class WorkflowParser
     internal static ParseResult ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        return ParseCore(ref reader, arena, source, ParseMode.Workflow);
+        var diagnostics = new PooledBuffer<Diagnostic>(16);
+        try
+        {
+            var result = ParseCore(ref reader, arena, source, ParseMode.Workflow, ref diagnostics);
+            var (diagArray, diagCount) = diagnostics.DetachArray();
+            arena.RegisterDiagnosticsBuffer(diagArray);
+            return new ParseResult(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError, result.Arena);
+        }
+        finally
+        {
+            diagnostics.Dispose();
+        }
     }
 
     private static bool TryReadRootStructuralHints<TReader>(ref TReader reader, out bool hasJobs, out bool hasRuns)
@@ -260,18 +276,10 @@ public static partial class WorkflowParser
         return true;
     }
 
-    private static ParseResult ParseCore<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode)
+    private static ParseCoreResult ParseCore<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var diagnostics = new PooledBuffer<Diagnostic>(16);
-        try
-        {
-            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
-        }
-        finally
-        {
-            diagnostics.Dispose();
-        }
+        return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
     }
 
     /// <summary>
@@ -293,42 +301,36 @@ public static partial class WorkflowParser
             var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
             var recursiveAliases = reader.GetRecursiveAliases(recursiveBuf);
 
-            // Build final diagnostics array including anchor/alias warnings
-            var finalDiags = new PooledBuffer<Diagnostic>(result.Diagnostics.Length + unusedAnchors.Length + recursiveAliases.Length);
-            try
+            for (var i = 0; i < unusedAnchors.Length; i++)
             {
-                for (var i = 0; i < result.Diagnostics.Length; i++)
-                    finalDiags.Add(result.Diagnostics[i]);
-
-                for (var i = 0; i < unusedAnchors.Length; i++)
-                {
-                    var (name, pos) = unusedAnchors[i];
-                    AddWarning(ref finalDiags, $"anchor \"{name}\" is defined but not used", pos);
-                }
-
-                for (var i = 0; i < recursiveAliases.Length; i++)
-                {
-                    var (name, pos, anchorPos) = recursiveAliases[i];
-                    var message = anchorPos.Line > 0
-                        ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
-                        : $"recursive alias \"{name}\" is found";
-                    AddError(ref finalDiags, message, pos);
-                }
-
-                // Stamp file path on all diagnostics
-                var allDiags = finalDiags.ToArray();
-                if (!string.IsNullOrEmpty(filePath))
-                {
-                    for (var i = 0; i < allDiags.Length; i++)
-                        allDiags[i] = allDiags[i] with { FilePath = filePath };
-                }
-
-                return new ParseResult(result.Workflow, result.ActionMetadata, allDiags, result.HasFatalError, result.Arena);
+                var (name, pos) = unusedAnchors[i];
+                AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
             }
-            finally
+
+            for (var i = 0; i < recursiveAliases.Length; i++)
             {
-                finalDiags.Dispose();
+                var (name, pos, anchorPos) = recursiveAliases[i];
+                var message = anchorPos.Line > 0
+                    ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
+                    : $"recursive alias \"{name}\" is found";
+                AddError(ref diagnostics, message, pos);
             }
+
+            // Stamp file path on all diagnostics
+            if (!string.IsNullOrEmpty(filePath) && diagnostics.Count > 0)
+            {
+                var span = diagnostics.AsSpan();
+                for (var i = 0; i < span.Length; i++)
+                {
+                    diagnostics.Replace(i, span[i] with { FilePath = filePath });
+                }
+            }
+
+            // Transfer pooled array directly (no .ToArray() copy)
+            var (diagArray, diagCount) = diagnostics.DetachArray();
+            arena.RegisterDiagnosticsBuffer(diagArray);
+
+            return new ParseResult(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError, result.Arena);
         }
         finally
         {
@@ -336,7 +338,16 @@ public static partial class WorkflowParser
         }
     }
 
-    private static ParseResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics, byte rootSkipMask = 0, JobSkipEntry[]? jobSkipEntries = null)
+    /// <summary>Lightweight result from ParseCoreInner — diagnostics stay in the caller's PooledBuffer.</summary>
+    private readonly struct ParseCoreResult(Workflow? workflow, ActionMetadata? actionMetadata, bool hasFatalError, AstArena? arena)
+    {
+        public readonly Workflow? Workflow = workflow;
+        public readonly ActionMetadata? ActionMetadata = actionMetadata;
+        public readonly bool HasFatalError = hasFatalError;
+        public readonly AstArena? Arena = arena;
+    }
+
+    private static ParseCoreResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics, byte rootSkipMask = 0, JobSkipEntry[]? jobSkipEntries = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         reader.SkipHeader();
@@ -344,7 +355,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(ref diagnostics, "workflow root must be object", reader.CurrentStart);
-            return new ParseResult(default, default, diagnostics.ToArray(), HasFatalError: true);
+            return new ParseCoreResult(default, default, hasFatalError: true, arena);
         }
 
         var workflowStart = reader.CurrentStart;
@@ -632,7 +643,7 @@ public static partial class WorkflowParser
                 Branding = actionBranding,
                 Range = workflowRange,
             };
-            return new ParseResult(null, actionMetadata, diagnostics.ToArray(), HasFatalError: false, arena);
+            return new ParseCoreResult(null, actionMetadata, hasFatalError: false, arena);
         }
 
         var workflow = new Workflow
@@ -648,7 +659,7 @@ public static partial class WorkflowParser
             Range = workflowRange,
         };
 
-        return new ParseResult(workflow, null, diagnostics.ToArray(), HasFatalError: false, arena);
+        return new ParseCoreResult(workflow, null, hasFatalError: false, arena);
     }
 
     private static Permissions? ParsePermissionsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)

@@ -138,7 +138,7 @@ public sealed class LintEngine
     {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
-            return new LintResult(parseResult, parseResult.Diagnostics)
+            return new LintResult(parseResult, parseResult.Diagnostics.AsSpan().ToArray())
             {
                 SuppressionSummary = SuppressionSummary.Empty,
             };
