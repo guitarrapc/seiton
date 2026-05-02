@@ -13,8 +13,8 @@ public static partial class WorkflowParser
     private delegate string? Utf8ScalarValidator(ReadOnlySpan<byte> valueUtf8);
 
     // S-1/S-2: Reusable buffers for anchor/alias diagnostics (avoids per-parse allocation).
-    [ThreadStatic] private static (string Name, TextPosition Position)[]? t_unusedAnchorBuf;
-    [ThreadStatic] private static (string Name, TextPosition Position, TextPosition AnchorPosition)[]? t_recursiveAliasBuf;
+    [ThreadStatic] private static (string Name, TextPosition Position)[]? threadstaticUnusedAnchorBuf;
+    [ThreadStatic] private static (string Name, TextPosition Position, TextPosition AnchorPosition)[]? threadstaticRecursiveAliasBuf;
 
     private enum ParseMode
     {
@@ -69,9 +69,9 @@ public static partial class WorkflowParser
             var parseResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode);
 
             // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
-            var unusedBuf = t_unusedAnchorBuf ??= new (string, TextPosition)[32];
+            var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
             var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
-            var recursiveBuf = t_recursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+            var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
             var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
 
             var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2 + unusedAnchors.Length + recursiveAliases.Length);

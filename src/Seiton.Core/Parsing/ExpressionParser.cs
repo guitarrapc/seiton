@@ -103,7 +103,7 @@ public static class ExpressionParser
         // Validate with spans — no array allocation (uses List-based ValidateInline internally)
         if (root >= 0)
         {
-            var tempList = t_validateDiagnostics ??= new List<Diagnostic>();
+            var tempList = threadstaticValidateDiagnostics ??= new List<Diagnostic>();
             tempList.Clear();
             ExpressionSemanticAnalyzer.ValidateInline(
                 root,
@@ -122,12 +122,12 @@ public static class ExpressionParser
             // Cap retained capacity to prevent unbounded growth from pathological expressions
             if (tempList.Capacity > 64)
             {
-                t_validateDiagnostics = new List<Diagnostic>(16);
+                threadstaticValidateDiagnostics = new List<Diagnostic>(16);
             }
         }
     }
 
-    [ThreadStatic] private static List<Diagnostic>? t_validateDiagnostics;
+    [ThreadStatic] private static List<Diagnostic>? threadstaticValidateDiagnostics;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static TextRange ShiftExpressionLocation(TextRange baseLocation, int relativeOffset, int length)
