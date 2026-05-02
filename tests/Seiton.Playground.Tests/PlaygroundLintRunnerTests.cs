@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
 
 namespace Seiton.Playground.Tests;
 
@@ -22,12 +23,12 @@ public sealed class PlaygroundLintRunnerTests
                   - run: echo ok
             """;
 
-        string? firstJson = null;
+        byte[]? firstJson = null;
         for (var i = 0; i < 10; i++)
         {
-            var json = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+            var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
             firstJson ??= json;
-            await Assert.That(json).IsEqualTo(firstJson);
+            await Assert.That(json).IsEquivalentTo(firstJson);
         }
     }
     /// <summary>
@@ -49,19 +50,19 @@ public sealed class PlaygroundLintRunnerTests
             """;
 
         // Obtain a reference result from a single-threaded call.
-        var expected = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+        var expected = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
 
         const int parallelism = 8;
-        var tasks = new Task<string>[parallelism];
+        var tasks = new Task<byte[]>[parallelism];
         for (var i = 0; i < parallelism; i++)
         {
-            tasks[i] = Task.Run(() => PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml"));
+            tasks[i] = Task.Run(() => PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml"));
         }
 
         var results = await Task.WhenAll(tasks);
         foreach (var json in results)
         {
-            await Assert.That(json).IsEqualTo(expected);
+            await Assert.That(json).IsEquivalentTo(expected);
         }
     }
 
@@ -77,7 +78,7 @@ public sealed class PlaygroundLintRunnerTests
                   - run: echo ok
             """;
 
-        var json = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+        var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
         using var doc = JsonDocument.Parse(json);
         await Assert.That(doc.RootElement.ValueKind).IsEqualTo(JsonValueKind.Array);
     }
@@ -85,7 +86,7 @@ public sealed class PlaygroundLintRunnerTests
     [Test]
     public async Task RunToJson_InvalidYaml_ContainsParserDiagnosticWithLineAndMessage()
     {
-        var json = PlaygroundLintRunner.RunToJson("not: @@@", ".github/workflows/test.yml");
+        var json = PlaygroundLintRunner.RunToJsonUtf8("not: @@@", ".github/workflows/test.yml");
         using var doc = JsonDocument.Parse(json);
         var arr = doc.RootElement;
         await Assert.That(arr.GetArrayLength()).IsGreaterThan(0);
@@ -101,7 +102,8 @@ public sealed class PlaygroundLintRunnerTests
     [Test]
     public async Task RunToJson_UsesCamelCasePropertyNames()
     {
-        var json = PlaygroundLintRunner.RunToJson("x", ".github/workflows/w.yml");
+        var jsonBytes = PlaygroundLintRunner.RunToJsonUtf8("x", ".github/workflows/w.yml");
+        var json = Encoding.UTF8.GetString(jsonBytes);
         await Assert.That(json).Contains("\"message\"");
         await Assert.That(json).Contains("\"ruleId\"");
     }
@@ -121,7 +123,7 @@ public sealed class PlaygroundLintRunnerTests
                   - run: echo ok
             """;
 
-        var json = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+        var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
         using var doc = JsonDocument.Parse(json);
         var found = false;
         foreach (var el in doc.RootElement.EnumerateArray())
@@ -155,7 +157,7 @@ public sealed class PlaygroundLintRunnerTests
 
         var fixedYaml = PlaygroundLintRunner.ApplyAllFixes(yaml, ".github/workflows/ci.yml");
         await Assert.That(fixedYaml.Contains("write-all", StringComparison.Ordinal)).IsFalse();
-        var afterJson = PlaygroundLintRunner.RunToJson(fixedYaml, ".github/workflows/ci.yml");
+        var afterJson = PlaygroundLintRunner.RunToJsonUtf8(fixedYaml, ".github/workflows/ci.yml");
         using var doc = JsonDocument.Parse(afterJson);
         var stillBad = false;
         foreach (var el in doc.RootElement.EnumerateArray())

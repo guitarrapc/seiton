@@ -55,48 +55,9 @@ public static class PlaygroundLintRunner
 
     private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    /// <summary>
-    /// Parses and lints <paramref name="yamlSource"/> as UTF-8 and returns a JSON array of diagnostics.
-    /// </summary>
-    /// <param name="yamlSource">Full YAML document text.</param>
-    /// <param name="filePath">Virtual path used for document classification (e.g. workflow vs action).</param>
-    /// <returns>UTF-8 JSON array of camelCase diagnostic objects.</returns>
-    public static string RunToJson(string yamlSource, string filePath)
-    {
-        ArgumentNullException.ThrowIfNull(yamlSource);
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
-
-        // Hold the lock while reading result.Diagnostics — the engine's two-buffer
-        // swap means the backing array is owned by the engine and a concurrent Check()
-        // would overwrite it. Write JSON directly under the lock, then convert to string.
-        lock (EngineGate)
-        {
-            var utf8Yaml = RentUtf8Buffer(yamlSource);
-            var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-            try
-            {
-                JsonBuffer.Clear();
-                using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
-                {
-                    WriteDiagnosticsArray(writer, result.Diagnostics);
-                }
-
-                return Encoding.UTF8.GetString(JsonBuffer.WrittenSpan);
-            }
-            finally
-            {
-                // Return the AstArena to the ThreadStatic cache immediately so the next
-                // Rent() reuses it instead of allocating a new one. Without this, the arena
-                // stays alive until GC collects the LintResult, doubling memory pressure
-                // in the constrained WASM heap and causing OOM crashes.
-                result.ParseResult.Arena?.Dispose();
-            }
-        }
-    }
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
-    /// Avoids the ~48 KB string allocation of <see cref="RunToJson"/> by returning raw bytes.
     /// Suitable for WASM interop where JavaScript can decode with TextDecoder, or for
     /// scenarios where the result is written directly to a stream.
     /// </summary>

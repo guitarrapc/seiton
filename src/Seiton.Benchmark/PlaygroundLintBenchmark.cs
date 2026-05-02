@@ -1,12 +1,10 @@
-﻿using System.Text;
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 using Seiton.Playground;
 
 namespace Seiton.Benchmark;
 
 /// <summary>
-/// Measures per-call allocation of <see cref="PlaygroundLintRunner.RunToJson"/> (Utf8JsonWriter path)
-/// vs the old List&lt;DTO&gt; + JsonSerializer.Serialize path.
+/// Measures per-call allocation of <see cref="PlaygroundLintRunner.RunToJsonUtf8"/> (Utf8JsonWriter path)
 /// </summary>
 [MemoryDiagnoser]
 [RankColumn]
