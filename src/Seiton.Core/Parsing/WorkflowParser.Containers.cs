@@ -111,9 +111,10 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            var (serviceEntries, serviceCount) = map.DetachBuffer();
             return new Services
             {
-                ServiceMap = new SliceMap<Service>(map.ToArray(), caseSensitive: false),
+                ServiceMap = new SliceMap<Service>(serviceEntries, serviceCount, caseSensitive: false),
                 Range = range,
             };
         }

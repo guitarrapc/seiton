@@ -330,11 +330,18 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            SliceMap<MatrixRow>? rows = null;
+            if (rowBuffer.Count > 0)
+            {
+                var (rowEntries, rowCount) = rowBuffer.DetachBuffer();
+                rows = new SliceMap<MatrixRow>(rowEntries, rowCount, caseSensitive: false);
+            }
+
             return new Matrix
             {
                 Include = include,
                 Exclude = exclude,
-                Rows = rowBuffer.Count > 0 ? new SliceMap<MatrixRow>(rowBuffer.ToArray(), caseSensitive: false) : null,
+                Rows = rows,
                 Range = range,
             };
         }
@@ -534,7 +541,8 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<RawYamlValue>(map.ToArray(), caseSensitive: false);
+            var (rawEntries, rawCount) = map.DetachBuffer();
+            return new SliceMap<RawYamlValue>(rawEntries, rawCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

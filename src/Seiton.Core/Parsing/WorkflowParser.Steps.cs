@@ -549,7 +549,8 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<StringNodeId>(map.ToArray(), caseSensitive: false);
+            var (stepMapEntries, stepMapCount) = map.DetachBuffer();
+            return new SliceMap<StringNodeId>(stepMapEntries, stepMapCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

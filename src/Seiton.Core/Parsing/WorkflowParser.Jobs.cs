@@ -1123,7 +1123,8 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<StringNodeId>(outputs.ToArray(), caseSensitive: false);
+            var (outputEntries, outputCount) = outputs.DetachBuffer();
+            return new SliceMap<StringNodeId>(outputEntries, outputCount, caseSensitive: false);
         }
         finally { outputs.Dispose(); }
     }
@@ -1202,7 +1203,8 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<WorkflowCallInput>(map.ToArray(), caseSensitive: false);
+            var (inputEntries, inputCount) = map.DetachBuffer();
+            return new SliceMap<WorkflowCallInput>(inputEntries, inputCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }
@@ -1294,7 +1296,8 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<WorkflowCallSecret>(map.ToArray(), caseSensitive: false);
+            var (secretEntries, secretCount) = map.DetachBuffer();
+            return new SliceMap<WorkflowCallSecret>(secretEntries, secretCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

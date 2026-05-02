@@ -253,7 +253,7 @@ public static partial class WorkflowParser
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {
-        return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics);
+            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics);
         }
         finally
         {
@@ -669,9 +669,10 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            var (scopeEntries, scopeCount) = scopes.DetachBuffer();
             return new Permissions
             {
-                Scopes = new SliceMap<PermissionScope>(scopes.ToArray(), caseSensitive: true),
+                Scopes = new SliceMap<PermissionScope>(scopeEntries, scopeCount, caseSensitive: true),
                 Range = range,
             };
         }
@@ -781,9 +782,10 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            var (varEntries, varCount) = vars.DetachBuffer();
             return new Env
             {
-                Vars = new SliceMap<EnvVar>(vars.ToArray(), caseSensitive: true),
+                Vars = new SliceMap<EnvVar>(varEntries, varCount, caseSensitive: true),
                 Range = range,
             };
         }
@@ -1207,7 +1209,8 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<Job>(jobs.ToArray(), caseSensitive: false);
+            var (jobEntries, jobCount) = jobs.DetachBuffer();
+            return new SliceMap<Job>(jobEntries, jobCount, caseSensitive: false);
         }
         finally { jobs.Dispose(); }
     }

@@ -25,11 +25,25 @@ public readonly struct SliceMap<TValue>
     }
 
     private readonly Entry[]? _entries;
+    private readonly int _count;
     private readonly bool _caseSensitive;
 
     public SliceMap(Entry[] entries, bool caseSensitive)
     {
         _entries = entries;
+        _count = entries.Length;
+        _caseSensitive = caseSensitive;
+    }
+
+    /// <summary>
+    /// Constructs a SliceMap from a potentially oversized array with an explicit element count.
+    /// Used when the backing array comes directly from a <see cref="PooledBuffer{T}"/> via
+    /// <c>DetachBuffer()</c> to avoid an intermediate <c>ToArray()</c> copy.
+    /// </summary>
+    public SliceMap(Entry[] entries, int count, bool caseSensitive)
+    {
+        _entries = entries;
+        _count = count;
         _caseSensitive = caseSensitive;
     }
 
@@ -37,7 +51,7 @@ public readonly struct SliceMap<TValue>
     public int Count
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _entries?.Length ?? 0;
+        get => _count;
     }
 
     /// <summary>Looks up a value by raw UTF-8 key bytes against the YAML <paramref name="source"/>.</summary>
@@ -46,7 +60,8 @@ public readonly struct SliceMap<TValue>
     {
         if (_entries is not null)
         {
-            for (var i = 0; i < _entries.Length; i++)
+            var len = _count;
+            for (var i = 0; i < len; i++)
             {
                 if (KeyEquals(source, _entries[i].Key, key))
                 {
@@ -77,7 +92,8 @@ public readonly struct SliceMap<TValue>
     {
         if (_entries is not null)
         {
-            for (var i = 0; i < _entries.Length; i++)
+            var len = _count;
+            for (var i = 0; i < len; i++)
             {
                 if (KeyEquals(source, _entries[i].Key, key))
                 {
@@ -92,26 +108,28 @@ public readonly struct SliceMap<TValue>
     }
 
     /// <summary>Returns the entries as a span for iteration.</summary>
-    public ReadOnlySpan<Entry> Entries => _entries ?? [];
+    public ReadOnlySpan<Entry> Entries => _entries is null ? [] : _entries.AsSpan(0, _count);
 
     /// <summary>Returns an enumerator over all entries.</summary>
-    public Enumerator GetEnumerator() => new(_entries);
+    public Enumerator GetEnumerator() => new(_entries, _count);
 
     /// <summary>Forward-only enumerator over <see cref="SliceMap{TValue}"/> entries.</summary>
     public struct Enumerator
     {
         private readonly Entry[]? _entries;
+        private readonly int _count;
         private int _index;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Enumerator(Entry[]? entries)
+        internal Enumerator(Entry[]? entries, int count)
         {
             _entries = entries;
+            _count = count;
             _index = -1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext() => ++_index < (_entries?.Length ?? 0);
+        public bool MoveNext() => ++_index < _count;
 
         public readonly ref readonly Entry Current
         {
