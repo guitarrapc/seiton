@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using System.Threading;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
 using Seiton.Core.Linting.PinRemediation;

@@ -1,4 +1,4 @@
-using Seiton.Core.Linting.Http;
+﻿using Seiton.Core.Linting.Http;
 
 namespace Seiton.Core.Linting;
 

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Seiton.Core.Linting;
+﻿namespace Seiton.Core.Linting;
 
 /// <summary>Central limits for seiton configuration loading and related network behavior.</summary>
 public static class LintConfigResourceLimits

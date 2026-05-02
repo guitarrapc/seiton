@@ -1,4 +1,4 @@
-namespace Seiton.Core.Linting;
+﻿namespace Seiton.Core.Linting;
 
 /// <summary>
 /// Validates and normalizes <c>network.github.ghes-api-url</c>. GitHub API clients attach bearer tokens,
