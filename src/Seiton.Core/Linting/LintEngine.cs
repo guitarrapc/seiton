@@ -28,10 +28,6 @@ public sealed class LintEngine
     private readonly LintConfig _effectiveConfig = new();
     private Diagnostic[] _resultDiagnostics = new Diagnostic[16];
     private Diagnostic[] _resultDiagnosticsSwap = new Diagnostic[16];
-    private SuppressionRecord[] _resultSuppressionRecords = [];
-    private SuppressionRecord[] _resultSuppressionRecordsSwap = [];
-    private Dictionary<string, int>? _resultSuppressedByRule;
-    private Dictionary<string, int>? _resultSuppressedByRuleSwap;
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
@@ -347,33 +343,26 @@ public sealed class LintEngine
             _resultDiagnostics[i] = _diagnostics[i];
         }
 
-        // Swap suppression record arrays
+        // Create caller-owned snapshots for suppression summary.
+        // Unlike diagnostics (two-buffer swap, documented as engine-owned),
+        // suppression data uses snapshot semantics so callers can safely
+        // retain SuppressionSummary across subsequent Check() calls.
         var suppressionCount = _suppressionRecords.Count;
-
-        (_resultSuppressionRecords, _resultSuppressionRecordsSwap) = (_resultSuppressionRecordsSwap, _resultSuppressionRecords);
-
-        if (_resultSuppressionRecords.Length != suppressionCount)
-        {
-            _resultSuppressionRecords = new SuppressionRecord[suppressionCount];
-        }
-
+        var suppressionRecordsSnapshot = new SuppressionRecord[suppressionCount];
         for (var i = 0; i < suppressionCount; i++)
         {
-            _resultSuppressionRecords[i] = _suppressionRecords[i];
+            suppressionRecordsSnapshot[i] = _suppressionRecords[i];
         }
 
-        // Swap suppressed-by-rule dictionaries
-        (_resultSuppressedByRule, _resultSuppressedByRuleSwap) = (_resultSuppressedByRuleSwap, _resultSuppressedByRule);
-        _resultSuppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
-        _resultSuppressedByRule.Clear();
+        var suppressedByRuleSnapshot = new Dictionary<string, int>(_suppressedByRule.Count, StringComparer.Ordinal);
         foreach (var pair in _suppressedByRule)
         {
-            _resultSuppressedByRule[pair.Key] = pair.Value;
+            suppressedByRuleSnapshot[pair.Key] = pair.Value;
         }
 
         return new LintResult(parseResult, _resultDiagnostics)
         {
-            SuppressionSummary = new SuppressionSummary(suppressionCount, _resultSuppressedByRule, _resultSuppressionRecords),
+            SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
         };
     }
 

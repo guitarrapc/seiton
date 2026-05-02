@@ -147,7 +147,7 @@ public sealed class LintEngineConfigReuseTests
         await Assert.That(result1.Diagnostics.Length).IsGreaterThan(1);
 
         static string Signature(Diagnostic d) =>
-            $"{d.RuleId}:{d.Location.StartLine}:{d.Location.StartColumn}";
+            $"{d.RuleId}:{d.Location.StartLine}:{d.Location.StartColumn}:{Convert.ToBase64String(Encoding.UTF8.GetBytes(d.Message))}";
 
         // Location sort: line → column → ruleId → message (matches CompareDiagnosticsByLocation)
         var actualLocationOrder = string.Join(",", result1.Diagnostics.Select(Signature));
@@ -329,6 +329,44 @@ public sealed class LintEngineConfigReuseTests
 
         await Assert.That(suppressed1).IsTrue();
         await Assert.That(hasUnpinned2).IsTrue();
+    }
+
+    [Test]
+    public async Task Check_SuppressionSummary_StableAcrossSubsequentCalls()
+    {
+        // SuppressionSummary must be caller-owned (snapshot semantics).
+        // A subsequent Check() must not mutate an earlier result's suppression data.
+        var engine = new LintEngine();
+
+        var yamlWithSuppression = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      # seiton: disable-next-line unpinned-uses\n      - uses: actions/checkout@v4\n");
+        var yamlWithout = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
+
+        // Result 1: has suppression
+        var result1 = engine.Check(yamlWithSuppression, ".github/workflows/ci.yml");
+        var totalSuppressed1 = result1.SuppressionSummary.TotalSuppressed;
+        var hasByRule1 = result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
+        var recordCount1 = result1.SuppressionSummary.RecordCount;
+
+        // Snapshot values before next call
+        await Assert.That(totalSuppressed1).IsGreaterThan(0);
+        await Assert.That(hasByRule1).IsTrue();
+        await Assert.That(recordCount1).IsGreaterThan(0);
+
+        // Result 2: no suppression — must not corrupt result1's suppression data
+        var result2 = engine.Check(yamlWithout, ".github/workflows/ci.yml");
+        await Assert.That(result2.SuppressionSummary.TotalSuppressed).IsEqualTo(0);
+
+        // Verify result1's suppression summary is unchanged (snapshot semantics)
+        await Assert.That(result1.SuppressionSummary.TotalSuppressed).IsEqualTo(totalSuppressed1);
+        await Assert.That(result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses")).IsTrue();
+        await Assert.That(result1.SuppressionSummary.RecordCount).IsEqualTo(recordCount1);
+
+        // Result 3: another call — result1 still intact
+        engine.Check(yamlWithout, ".github/workflows/ci.yml");
+        await Assert.That(result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses")).IsTrue();
+        await Assert.That(result1.SuppressionSummary.RecordCount).IsEqualTo(recordCount1);
     }
 
     [Test]

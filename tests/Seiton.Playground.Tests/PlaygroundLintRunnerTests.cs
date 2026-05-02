@@ -6,11 +6,11 @@ public sealed class PlaygroundLintRunnerTests
 {
     /// <summary>
     /// Verifies that rapid sequential lint calls produce stable results.
-    /// The shared static LintEngine properly clears state between calls,
-    /// so repeated invocations should yield identical diagnostic counts.
+    /// Asserts full diagnostic content (message, line, ruleId) — not just count —
+    /// so stale-buffer corruption from the two-buffer swap is caught.
     /// </summary>
     [Test]
-    public async Task RunToJson_RepeatedCalls_ProducesConsistentDiagnosticCount()
+    public async Task RunToJson_RepeatedCalls_ProducesConsistentDiagnostics()
     {
         const string yaml = """
             on: push
@@ -22,22 +22,21 @@ public sealed class PlaygroundLintRunnerTests
                   - run: echo ok
             """;
 
-        int? firstCount = null;
+        string? firstJson = null;
         for (var i = 0; i < 10; i++)
         {
             var json = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
-            using var doc = JsonDocument.Parse(json);
-            var count = doc.RootElement.GetArrayLength();
-            firstCount ??= count;
-            await Assert.That(count).IsEqualTo(firstCount.Value);
+            firstJson ??= json;
+            await Assert.That(json).IsEqualTo(firstJson);
         }
     }
     /// <summary>
     /// Verifies that concurrent lint calls do not corrupt shared static state
     /// (LintEngine / JsonBuffer are guarded by EngineGate).
+    /// Asserts full JSON equality so message/location corruption is caught.
     /// </summary>
     [Test]
-    public async Task RunToJson_ConcurrentCalls_ProducesValidJson()
+    public async Task RunToJson_ConcurrentCalls_ProducesIdenticalDiagnostics()
     {
         const string yaml = """
             on: push
@@ -48,6 +47,9 @@ public sealed class PlaygroundLintRunnerTests
                 steps:
                   - run: echo ok
             """;
+
+        // Obtain a reference result from a single-threaded call.
+        var expected = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
 
         const int parallelism = 8;
         var tasks = new Task<string>[parallelism];
@@ -57,14 +59,9 @@ public sealed class PlaygroundLintRunnerTests
         }
 
         var results = await Task.WhenAll(tasks);
-        int? expectedCount = null;
         foreach (var json in results)
         {
-            using var doc = JsonDocument.Parse(json);
-            await Assert.That(doc.RootElement.ValueKind).IsEqualTo(JsonValueKind.Array);
-            var count = doc.RootElement.GetArrayLength();
-            expectedCount ??= count;
-            await Assert.That(count).IsEqualTo(expectedCount.Value);
+            await Assert.That(json).IsEqualTo(expected);
         }
     }
 
