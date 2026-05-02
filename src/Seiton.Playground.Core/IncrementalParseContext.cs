@@ -245,6 +245,9 @@ public sealed class IncrementalParseContext
 
         if (jobSkipEntries is not null)
         {
+            // Lint buffer was already consumed; return it to the pool before retaining the arena.
+            oldArena?.ReleaseLintDiagnosticsBuffer();
+
             // Retain old arena — reused jobs reference its pooled Job/Step objects.
             // Will be disposed on next full parse.
             (_retainedArenas ??= new(2)).Add(oldArena!);

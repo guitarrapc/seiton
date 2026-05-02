@@ -213,8 +213,31 @@ public sealed class AstArena : IDisposable
     /// <summary>
     /// Registers a pooled lint diagnostics array with this arena. The array will be returned
     /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
+    /// If a previous lint buffer was registered, it is returned to the pool immediately
+    /// (supports repeated lint calls on the same arena, e.g. IncrementalParseContext).
     /// </summary>
-    internal void RegisterLintDiagnosticsBuffer(Diagnostic[] buffer) => _lintDiagnosticsBuffer = buffer;
+    internal void RegisterLintDiagnosticsBuffer(Diagnostic[] buffer)
+    {
+        if (_lintDiagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer);
+        }
+
+        _lintDiagnosticsBuffer = buffer;
+    }
+
+    /// <summary>
+    /// Returns the lint diagnostics buffer to the pool without disposing the arena.
+    /// Call this before retaining an arena whose lint data has already been consumed.
+    /// </summary>
+    internal void ReleaseLintDiagnosticsBuffer()
+    {
+        if (_lintDiagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer);
+            _lintDiagnosticsBuffer = null;
+        }
+    }
 
     /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
