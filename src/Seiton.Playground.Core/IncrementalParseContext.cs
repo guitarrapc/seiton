@@ -162,6 +162,9 @@ public sealed class IncrementalParseContext
     private int _baseIntCount;
     private int _baseFloatCount;
 
+    // D-5c: reusable buffer for job skip entries (avoids per-call allocation)
+    private JobSkipEntry[]? _jobSkipEntriesBuf;
+
     // D-5d: per-job diagnostic cache from previous lint run
     private Diagnostic[]?[]? _cachedJobDiagnostics;
     private bool[]? _lastReusedJobs;
@@ -397,11 +400,11 @@ public sealed class IncrementalParseContext
         byte mask = 0;
         var anyChanged = false;
 
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.On, newSource, ref newRegistry);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Env, newSource, ref newRegistry);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Permissions, newSource, ref newRegistry);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Defaults, newSource, ref newRegistry);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Concurrency, newSource, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.On, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Env, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Permissions, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Defaults, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Concurrency, ref newRegistry);
 
         // If any existing root section changed, fall back to full parse
         // to avoid arena entry growth from partial imports
@@ -409,7 +412,7 @@ public sealed class IncrementalParseContext
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void TryAddToMask(ref byte mask, ref bool anyChanged, RootSectionKind kind, byte[] newSource, ref SectionRegistry newRegistry)
+    private void TryAddToMask(ref byte mask, ref bool anyChanged, RootSectionKind kind, ref SectionRegistry newRegistry)
     {
         var oldEntry = _registry.GetRootSection(kind);
         var newEntry = newRegistry.GetRootSection(kind);
@@ -422,7 +425,12 @@ public sealed class IncrementalParseContext
         }
 
         if (!oldEntry.IsValid) return; // section doesn't exist in either source
-        if (IsSectionUnchanged(oldEntry, newSource))
+
+        // Compare offsets + hash directly (newRegistry already computed hashes from new source)
+        if (oldEntry.StartOffset == newEntry.StartOffset &&
+            oldEntry.EndOffset == newEntry.EndOffset &&
+            oldEntry.ContentHash == newEntry.ContentHash &&
+            !oldEntry.HasDiagnostics)
         {
             mask |= (byte)(1 << (int)kind);
         }
@@ -486,7 +494,12 @@ public sealed class IncrementalParseContext
         if (prevJobs.Length != prevJobCount)
             return null;
 
-        JobSkipEntry[]? entries = null;
+        // Reuse field-level buffer, grow only when needed
+        if (_jobSkipEntriesBuf is null || _jobSkipEntriesBuf.Length < newJobCount)
+            _jobSkipEntriesBuf = new JobSkipEntry[newJobCount];
+        else
+            Array.Clear(_jobSkipEntriesBuf, 0, newJobCount);
+
         var anySkippable = false;
 
         for (var i = 0; i < newJobCount; i++)
@@ -503,16 +516,12 @@ public sealed class IncrementalParseContext
                 prevEntry.ContentHash == newEntry.ContentHash)
             {
                 // This job is unchanged — mark for skip
-                if (entries is null)
-                {
-                    entries = new JobSkipEntry[newJobCount];
-                }
-                entries[i] = new JobSkipEntry(prevJobs[i].Key, prevJobs[i].Value);
+                _jobSkipEntriesBuf[i] = new JobSkipEntry(prevJobs[i].Key, prevJobs[i].Value);
                 anySkippable = true;
             }
         }
 
-        return anySkippable ? entries : null;
+        return anySkippable ? _jobSkipEntriesBuf : null;
     }
 
     /// <summary>
