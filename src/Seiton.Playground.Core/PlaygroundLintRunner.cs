@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Buffers;
+using System.Text;
 using System.Text.Json;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
@@ -8,9 +9,22 @@ namespace Seiton.Playground;
 
 /// <summary>
 /// Runs <see cref="LintEngine"/> and serializes diagnostics to a JSON array for the playground UI.
+/// <para>
+/// Reuses a single <see cref="LintEngine"/> instance across calls.
+/// <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> clears all internal lists at the top of each call, and each
+/// <see cref="Seiton.Core.Linting.RuleBase"/> clears its diagnostics in <c>VisitWorkflowPre</c> /
+/// <c>VisitActionMetadataPre</c>, so reuse is safe.
+/// Creating a <b>new</b> engine per call would allocate 50+ rule objects every keystroke,
+/// enormously increasing GC pressure in the constrained WASM heap (see plan_playground_crush.md).
+/// </para>
 /// </summary>
 public static class PlaygroundLintRunner
 {
+    /// <summary>
+    /// Shared engine. WASM is single-threaded so the lock is uncontended at runtime,
+    /// but it is required for correctness when the same static is accessed by parallel
+    /// test runners on desktop .NET.
+    /// </summary>
     private static readonly LintEngine Engine = new();
     private static readonly object EngineGate = new();
 
@@ -25,7 +39,18 @@ public static class PlaygroundLintRunner
     private static readonly LintConfig LintWithFixMetadata = new()
     {
         Fix = new FixConfig { Enabled = true },
+        Network = new NetworkConfig(),
+        Output = new OutputConfig(),
+        SkipSuppressionSummary = true,
     };
+
+    /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
+    private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
+
+    /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
+    private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
+
+    private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> as UTF-8 and returns a JSON array of diagnostics.
@@ -39,30 +64,59 @@ public static class PlaygroundLintRunner
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
-        LintResult result;
+        // Hold the lock while reading result.Diagnostics — the engine's two-buffer
+        // swap means the backing array is owned by the engine and a concurrent Check()
+        // would overwrite it. Write JSON directly under the lock, then convert to string.
         lock (EngineGate)
         {
-            result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-        }
-
-        var list = new List<PlaygroundDiagnosticDto>(result.Diagnostics.Length);
-        for (var i = 0; i < result.Diagnostics.Length; i++)
-        {
-            var d = result.Diagnostics[i];
-            var loc = d.Location;
-            list.Add(new PlaygroundDiagnosticDto
+            var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
+            try
             {
-                Message = d.Message,
-                Line = loc.StartLine,
-                Column = loc.StartColumn,
-                Severity = d.Severity.ToString(),
-                RuleId = d.RuleId,
-                Fixable = d.Fix is not null,
-                FixDescription = d.Fix?.Description,
-            });
-        }
+                JsonBuffer.Clear();
+                using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
+                {
+                    writer.WriteStartArray();
+                    for (var i = 0; i < result.Diagnostics.Length; i++)
+                    {
+                        var d = result.Diagnostics[i];
+                        var loc = d.Location;
 
-        return JsonSerializer.Serialize(list, PlaygroundJsonSerializerContext.Default.ListPlaygroundDiagnosticDto);
+                        writer.WriteStartObject();
+                        writer.WriteString("message", d.Message);
+                        writer.WriteNumber("line", loc.StartLine);
+                        writer.WriteNumber("column", loc.StartColumn);
+                        writer.WriteString("severity", SeverityString(d.Severity));
+                        if (d.RuleId is not null)
+                            writer.WriteString("ruleId", d.RuleId);
+                        else
+                            writer.WriteNull("ruleId");
+                        writer.WriteBoolean("fixable", d.Fix is not null);
+                        if (d.Fix?.Description is { } fixDesc)
+                            writer.WriteString("fixDescription", fixDesc);
+                        else
+                            writer.WriteNull("fixDescription");
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndArray();
+                }
+
+                return Encoding.UTF8.GetString(JsonBuffer.WrittenSpan);
+            }
+            finally
+            {
+                // Return the AstArena to the ThreadStatic cache immediately so the next
+                // Rent() reuses it instead of allocating a new one. Without this, the arena
+                // stays alive until GC collects the LintResult, doubling memory pressure
+                // in the constrained WASM heap and causing OOM crashes.
+                result.ParseResult.Arena?.Dispose();
+            }
+        }
+    }
+
+    private static string SeverityString(DiagnosticSeverity severity)
+    {
+        var index = (int)severity;
+        return (uint)index < (uint)SeverityStrings.Length ? SeverityStrings[index] : severity.ToString();
     }
 
     /// <summary>
@@ -82,6 +136,7 @@ public static class PlaygroundLintRunner
                 var result = Engine.Check(current, filePath, LintWithFixMetadata);
                 if (!result.HasFixableDiagnostics)
                 {
+                    result.ParseResult.Arena?.Dispose();
                     return Encoding.UTF8.GetString(current);
                 }
 
@@ -89,11 +144,21 @@ public static class PlaygroundLintRunner
                 if (filtered.Length == 0)
                 {
                     // Still has diagnostics with fixes attached, but none we auto-apply here (see CollectAutoApplicableFixes).
+                    result.ParseResult.Arena?.Dispose();
                     return Encoding.UTF8.GetString(current);
                 }
 
                 var diag = PickNextDiagnosticToApply(filtered);
-                current = FixEngine.Apply(current, new[] { diag });
+                try
+                {
+                    current = FixEngine.Apply(current, new[] { diag });
+                }
+                finally
+                {
+                    // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
+                    // Must be in finally so the arena is returned even if Apply throws.
+                    result.ParseResult.Arena?.Dispose();
+                }
             }
         }
 

@@ -4,10 +4,23 @@ using Seiton.Core.Parsing.Ast;
 namespace Seiton.Core.Linting;
 
 /// <summary>Combined parse and lint result for a single YAML document.</summary>
+/// <remarks>
+/// When returned by <see cref="LintEngine.Check(byte[], string, LintConfig?)"/>, the
+/// <see cref="Diagnostics"/> array is backed by an engine-owned buffer (two-buffer swap).
+/// Only the most recent result and the immediately preceding one are guaranteed valid.
+/// Call <see cref="CopyDiagnostics"/> to obtain a caller-owned copy that is safe to retain
+/// beyond subsequent <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> calls.
+/// </remarks>
 public readonly record struct LintResult(
     ParseResult ParseResult,
     Diagnostic[] Diagnostics)
 {
+    /// <summary>
+    /// Gets the number of diagnostics in <see cref="Diagnostics"/>.
+    /// Defaults to <see cref="Diagnostics"/>.<see cref="System.Array.Length"/>.
+    /// </summary>
+    public int DiagnosticCount { get; init; } = Diagnostics.Length;
+
     /// <summary>Gets the summary of suppressed diagnostics from inline and exclusion rules.</summary>
     public SuppressionSummary SuppressionSummary { get; init; } = SuppressionSummary.Empty;
 
@@ -32,7 +45,8 @@ public readonly record struct LintResult(
         get
         {
             var count = 0;
-            for (var i = 0; i < Diagnostics.Length; i++)
+            var len = DiagnosticCount;
+            for (var i = 0; i < len; i++)
             {
                 if (Diagnostics[i].Fix is not null)
                 {
@@ -49,14 +63,15 @@ public readonly record struct LintResult(
     {
         get
         {
-            if (Diagnostics.Length == 0)
+            if (DiagnosticCount == 0)
             {
                 return [];
             }
 
             var result = new Diagnostic[FixableDiagnosticCount];
             var index = 0;
-            for (var i = 0; i < Diagnostics.Length; i++)
+            var len = DiagnosticCount;
+            for (var i = 0; i < len; i++)
             {
                 if (Diagnostics[i].Fix is null)
                 {
@@ -75,14 +90,15 @@ public readonly record struct LintResult(
     {
         get
         {
-            if (Diagnostics.Length == 0)
+            if (DiagnosticCount == 0)
             {
                 return [];
             }
 
             var result = new DiagnosticFix[FixableDiagnosticCount];
             var index = 0;
-            for (var i = 0; i < Diagnostics.Length; i++)
+            var len = DiagnosticCount;
+            for (var i = 0; i < len; i++)
             {
                 var fix = Diagnostics[i].Fix;
                 if (fix is null)
@@ -96,6 +112,23 @@ public readonly record struct LintResult(
             return result;
         }
     }
+
+    /// <summary>
+    /// Returns a caller-owned copy of the <see cref="Diagnostics"/> array.
+    /// Use this when the result must outlive more than one subsequent
+    /// <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> call.
+    /// </summary>
+    public Diagnostic[] CopyDiagnostics()
+    {
+        if (DiagnosticCount == 0)
+        {
+            return [];
+        }
+
+        var copy = new Diagnostic[DiagnosticCount];
+        Array.Copy(Diagnostics, copy, DiagnosticCount);
+        return copy;
+    }
 }
 
 /// <summary>Aggregated counts and per-rule breakdown of suppressed diagnostics.</summary>
@@ -104,6 +137,12 @@ public readonly record struct SuppressionSummary(
     IReadOnlyDictionary<string, int> SuppressedByRule,
     SuppressionRecord[] Records)
 {
+    /// <summary>
+    /// Gets the number of valid records in <see cref="Records"/>.
+    /// The backing array may be oversized when a reusable buffer is used.
+    /// </summary>
+    public int RecordCount { get; init; } = Records.Length;
+
     /// <summary>Gets an empty suppression summary with no suppressed diagnostics.</summary>
     public static SuppressionSummary Empty { get; } = new(0, new Dictionary<string, int>(StringComparer.Ordinal), []);
 }

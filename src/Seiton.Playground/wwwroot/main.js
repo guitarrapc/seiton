@@ -6,7 +6,7 @@ import { dotnet } from './_framework/dotnet.js';
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
     default:
-`# Paste your workflow YAML to this code editor
+        `# Paste your workflow YAML to this code editor
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
       - run: npm install && npm test
 `,
     minimal:
-`on:
+        `on:
   push:
     branches: [main]
 jobs:
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
 `,
     fixPermissions:
-`on: push
+        `on: push
 permissions: write-all
 jobs:
   build:
@@ -55,7 +55,7 @@ jobs:
       - run: echo ok
 `,
     matrix:
-`on: push
+        `on: push
 jobs:
   test:
     strategy:
@@ -67,7 +67,7 @@ jobs:
       - run: echo "\${{ runner.os }}"
 `,
     actionComposite:
-`name: My composite
+        `name: My composite
 description: Demo action.yml
 runs:
   using: composite
@@ -181,6 +181,9 @@ const fetchBtn = document.getElementById('fetch-btn');
 
 /** True while <code>fetchAndLint</code> awaits network; blocks overlapping runs and input echo re-enabling the button. */
 let fetchInFlight = false;
+
+/** Set to false if the .NET WASM runtime has crashed; prevents further calls into dead runtime. */
+let runtimeAlive = true;
 
 /** @typedef {'error'|'success'|'info'} ToastVariant */
 
@@ -424,6 +427,17 @@ let debounceId = null;
 /** Coalesce refreshes while typing so measurements track height for layout (page scroll). */
 let sizingRaf = null;
 
+/**
+ * Concurrency & staleness control for lint execution.
+ * - lintInProgress: true while RunLint is executing (prevents re-entry)
+ * - lintPendingRetry: set to true if a change occurred while lint was in progress; triggers re-lint on completion
+ * - lastLintedSource / lastLintedFilePath: track previous lint inputs to skip redundant lint for identical content
+ */
+let lintInProgress = false;
+let lintPendingRetry = false;
+let lastLintedSource = '';
+let lastLintedFilePath = '';
+
 editor.on('change', (_cm, changeObj) => {
     if (sizingRaf === null) {
         sizingRaf = requestAnimationFrame(() => {
@@ -431,6 +445,13 @@ editor.on('change', (_cm, changeObj) => {
             editor.refresh();
         });
     }
+
+    // If lint is currently in progress, mark that a retry is needed after it finishes.
+    // The debounce timer is still managed so that rapid typing coalesces properly.
+    if (lintInProgress) {
+        lintPendingRetry = true;
+    }
+
     if (debounceId !== null) {
         clearTimeout(debounceId);
     }
@@ -452,6 +473,9 @@ window.addEventListener('resize', () => {
 });
 
 fileSelect.addEventListener('change', () => {
+    // filePath changed — invalidate so lint runs even if source is the same.
+    lastLintedSource = '';
+    lastLintedFilePath = '';
     runLint();
 });
 
@@ -468,6 +492,8 @@ sampleSelect.addEventListener('change', () => {
     }
     editor.setValue(text);
     editor.refresh();
+    lastLintedSource = '';
+    lastLintedFilePath = '';
     runLint();
 });
 
@@ -537,16 +563,31 @@ permalinkBtn.addEventListener('click', () => {
 });
 
 applyFixesBtn.addEventListener('click', () => {
+    if (!runtimeAlive) return;
     try {
+        const original = editor.getValue();
         const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
-            editor.getValue(),
+            original,
             getSelectedFilePath(),
         );
+        if (yaml === original) {
+            // Fix pass returned unchanged YAML — either an error occurred
+            // (logged to console.error by C#) or no fixes were applicable.
+            showToast('No changes were made. Either no auto-applicable fixes were available or fix application failed (see browser console).', 'info');
+            return;
+        }
         editor.setValue(yaml);
         editor.refresh();
         applyFixesBtn.hidden = true;
+        // Invalidate so the lint after fix application actually runs.
+        lastLintedSource = '';
+        lastLintedFilePath = '';
         runLint();
     } catch (e) {
+        if (isRuntimeDeadError(e)) {
+            handleRuntimeDeath();
+            return;
+        }
         showToast(e?.message ?? String(e), 'error');
     }
 });
@@ -609,8 +650,14 @@ async function fetchAndLint() {
         const text = await res.text();
         editor.setValue(text);
         editor.refresh();
+        lastLintedSource = '';
+        lastLintedFilePath = '';
         runLint();
-        showToast('Loaded YAML from URL.', 'success');
+        // Skip the success toast when the runtime died inside runLint() — the crash
+        // message is already visible and a "Loaded YAML" toast would be misleading.
+        if (runtimeAlive) {
+            showToast('Loaded YAML from URL.', 'success');
+        }
     } catch (e) {
         showToast(e?.message ?? String(e), 'error');
     } finally {
@@ -695,16 +742,103 @@ function appendTextLinkifyingUrls(parent, text) {
     }
 }
 
+/**
+ * Detects whether an error indicates the .NET WASM runtime has exited/crashed.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isRuntimeDeadError(err) {
+    if (!err) return false;
+    const msg = String(err?.message ?? err).toLowerCase();
+    return msg.includes('.net runtime already exited')
+        || msg.includes('runtime already exited')
+        || msg.includes('runtime has already exited');
+}
+
+/**
+ * Called once when the .NET WASM runtime is detected as dead.
+ * Stops all lint calls and shows a persistent error message.
+ */
+function handleRuntimeDeath() {
+    runtimeAlive = false;
+    if (debounceId !== null) {
+        clearTimeout(debounceId);
+        debounceId = null;
+    }
+    showToast(
+        'The WebAssembly runtime has crashed. Please reload the page to continue.',
+        'error',
+        60000,
+    );
+    // Show an inline message in the result area
+    resultBody.replaceChildren();
+    resultTable.hidden = false;
+    successMsg.style.display = 'none';
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.setAttribute('colspan', '2');
+    cell.textContent = 'Runtime crashed — please reload the page.';
+    cell.style.color = 'var(--danger, #ff5370)';
+    row.appendChild(cell);
+    resultBody.appendChild(row);
+}
+
 function runLint() {
+    if (!runtimeAlive) {
+        return;
+    }
+
+    // Re-entry guard: if lint is already in progress (shouldn't happen with sync calls,
+    // but defensive against future async changes or unexpected event ordering).
+    if (lintInProgress) {
+        lintPendingRetry = true;
+        return;
+    }
+
     const source = editor.getValue();
     const filePath = getSelectedFilePath();
+
+    // Staleness check: skip if content + filePath are identical to last successful lint.
+    if (source === lastLintedSource && filePath === lastLintedFilePath) {
+        return;
+    }
+
+    lintInProgress = true;
+    lintPendingRetry = false;
 
     try {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
+        // Do not treat an internal-error fallback as a successful lint: if we cached
+        // the staleness key here a transient C# exception would permanently block retries
+        // on the same content/path until the user edits the file.
+        const isInternalError = diagnostics.length === 1 && diagnostics[0].ruleId === 'internal-error';
+        if (!isInternalError) {
+            lastLintedSource = source;
+            lastLintedFilePath = filePath;
+        }
         renderResults(diagnostics);
     } catch (err) {
+        if (isRuntimeDeadError(err)) {
+            handleRuntimeDeath();
+            return;
+        }
         showToast(err?.message ?? String(err), 'error');
+    } finally {
+        lintInProgress = false;
+    }
+
+    // If content changed while we were executing, schedule a re-lint after debounce.
+    // Skip if runtime died during the try/catch — handleRuntimeDeath() already stopped scheduling.
+    if (lintPendingRetry && runtimeAlive) {
+        lintPendingRetry = false;
+        if (debounceId !== null) {
+            clearTimeout(debounceId);
+        }
+        debounceId = setTimeout(() => {
+            debounceId = null;
+            runLint();
+        }, DEBOUNCE_MS);
     }
 }
 

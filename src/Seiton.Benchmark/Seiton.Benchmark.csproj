@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Seiton.Core\Seiton.Core.csproj" />
+    <ProjectReference Include="..\Seiton.Playground.Core\Seiton.Playground.Core.csproj" />
   </ItemGroup>
 
 </Project>

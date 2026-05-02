@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -154,10 +155,10 @@ public sealed class AstArena : IDisposable
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
-        _strings = new StringNodeData[stringCapacity];
-        _bools = new BoolNodeData[boolCapacity];
-        _ints = new IntNodeData[intCapacity];
-        _floats = new FloatNodeData[floatCapacity];
+        _strings = ArrayPool<StringNodeData>.Shared.Rent(stringCapacity);
+        _bools = ArrayPool<BoolNodeData>.Shared.Rent(boolCapacity);
+        _ints = ArrayPool<IntNodeData>.Shared.Rent(intCapacity);
+        _floats = ArrayPool<FloatNodeData>.Shared.Rent(floatCapacity);
     }
 
     /// <summary>
@@ -180,6 +181,10 @@ public sealed class AstArena : IDisposable
     /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
+    /// Backing arrays that have grown beyond their default capacity are returned to
+    /// ArrayPool and replaced with default-sized pool arrays, preventing the ThreadStatic
+    /// cache from permanently retaining high-water-mark allocations (critical for
+    /// memory-constrained environments like WASM).
     /// </summary>
     public void Dispose()
     {
@@ -188,7 +193,48 @@ public sealed class AstArena : IDisposable
         _intCount = 0;
         _floatCount = 0;
         _source = [];
-        cached ??= this;
+
+        if (cached is null)
+        {
+            // Cap backing arrays to default sizes to prevent unbounded growth.
+            // Grow() doubles arrays but Dispose() must shrink them back so the ThreadStatic
+            // cache doesn't permanently retain peak-sized arrays.
+            // Uses ArrayPool.Rent for replacements (may return slightly oversized arrays but
+            // always from the smallest matching bucket, far below peak). All arrays stay
+            // pool-rented so EnsureMinCapacity/Return in subsequent Rent() calls are safe.
+            ShrinkIfOversized(ref _strings, DefaultStringCapacity);
+            ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
+            ShrinkIfOversized(ref _ints, DefaultIntCapacity);
+            ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
+            cached = this;
+        }
+        else
+        {
+            // Cache is already occupied — return all pool-rented arrays and discard this arena.
+            ArrayPool<StringNodeData>.Shared.Return(_strings);
+            ArrayPool<BoolNodeData>.Shared.Return(_bools);
+            ArrayPool<IntNodeData>.Shared.Return(_ints);
+            ArrayPool<FloatNodeData>.Shared.Return(_floats);
+            _strings = null!;
+            _bools = null!;
+            _ints = null!;
+            _floats = null!;
+        }
+    }
+
+    /// <summary>Default capacities used for size cap in Dispose.</summary>
+    private const int DefaultStringCapacity = 256;
+    private const int DefaultBoolCapacity = 32;
+    private const int DefaultIntCapacity = 16;
+    private const int DefaultFloatCapacity = 8;
+
+    private static void ShrinkIfOversized<T>(ref T[] array, int maxRetainedCapacity)
+    {
+        if (array.Length > maxRetainedCapacity)
+        {
+            ArrayPool<T>.Shared.Return(array);
+            array = ArrayPool<T>.Shared.Rent(maxRetainedCapacity);
+        }
     }
 
     private static AstArena CreateNew(byte[] source)
@@ -416,16 +462,18 @@ public sealed class AstArena : IDisposable
 
     private static void Grow<T>(ref T[] array)
     {
-        var newArray = new T[array.Length * 2];
-        Array.Copy(array, newArray, array.Length);
-        array = newArray;
+        var old = array;
+        array = ArrayPool<T>.Shared.Rent(old.Length * 2);
+        Array.Copy(old, array, old.Length);
+        ArrayPool<T>.Shared.Return(old);
     }
 
     private static void EnsureMinCapacity<T>(ref T[] array, int minCapacity)
     {
         if (array.Length < minCapacity)
         {
-            array = new T[minCapacity];
+            ArrayPool<T>.Shared.Return(array);
+            array = ArrayPool<T>.Shared.Rent(minCapacity);
         }
     }
 

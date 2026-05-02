@@ -4,6 +4,67 @@ namespace Seiton.Playground.Tests;
 
 public sealed class PlaygroundLintRunnerTests
 {
+    /// <summary>
+    /// Verifies that rapid sequential lint calls produce stable results.
+    /// Asserts full diagnostic content (message, line, ruleId) — not just count —
+    /// so stale-buffer corruption from the two-buffer swap is caught.
+    /// </summary>
+    [Test]
+    public async Task RunToJson_RepeatedCalls_ProducesConsistentDiagnostics()
+    {
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        string? firstJson = null;
+        for (var i = 0; i < 10; i++)
+        {
+            var json = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+            firstJson ??= json;
+            await Assert.That(json).IsEqualTo(firstJson);
+        }
+    }
+    /// <summary>
+    /// Verifies that concurrent lint calls do not corrupt shared static state
+    /// (LintEngine / JsonBuffer are guarded by EngineGate).
+    /// Asserts full JSON equality so message/location corruption is caught.
+    /// </summary>
+    [Test]
+    public async Task RunToJson_ConcurrentCalls_ProducesIdenticalDiagnostics()
+    {
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        // Obtain a reference result from a single-threaded call.
+        var expected = PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml");
+
+        const int parallelism = 8;
+        var tasks = new Task<string>[parallelism];
+        for (var i = 0; i < parallelism; i++)
+        {
+            tasks[i] = Task.Run(() => PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml"));
+        }
+
+        var results = await Task.WhenAll(tasks);
+        foreach (var json in results)
+        {
+            await Assert.That(json).IsEqualTo(expected);
+        }
+    }
+
     [Test]
     public async Task RunToJson_ValidMinimalWorkflow_ReturnsJsonArray()
     {

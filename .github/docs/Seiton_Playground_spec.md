@@ -663,7 +663,30 @@ actionlint playground を参照し、以下の機能を実装する:
 
 ## 10. Lessons Learned
 
-(実装後に追記)
+### 10.1 `[JSExport]` メソッドからの例外伝播で WASM ランタイムが死ぬ
+
+**問題**: `[JSExport]` メソッド内でハンドルされない例外が interop 境界を超えて伝播すると、Mono WASM ランタイムが exit code 1 で abort する。一度 abort すると、以降のすべての `[JSExport]` 呼び出しが `"Assert failed: .NET runtime already exited with 1"` で失敗し、ページのリロードなしには復旧不可能になる。
+
+**発生シナリオ**: ユーザーがエディタで新規行を追加しながらタイプ中に debounce が発火 → 不完全な YAML に対してパーサー/リンターが例外を送出 → ランタイム死亡 → 以降の lint 呼び出しすべてが連鎖的に失敗。
+
+**対策**:
+1. **C# 側**: すべての `[JSExport]` メソッド内に `try/catch(Exception)` を配置。例外をキャッチしてエラー JSON を返すことで、例外が interop 境界を超えないようにする。
+2. **JS 側**: `runtimeAlive` フラグを導入。"runtime already exited" パターンを検出したら以降の呼び出しを停止し、「ページをリロードしてください」メッセージを表示。
+
+**教訓**: .NET WASM (browser-wasm) の `[JSExport]` メソッドは、例外が絶対に外に漏れない設計にしなければならない。通常の .NET アプリケーションと異なり、ハンドルされない例外＝プロセス終了＝復帰不可能。
+
+### 10.2 同期 WASM 呼び出しに対する JS 側トリガー制御
+
+**問題**: `[JSExport]` は同期呼出し（メインスレッドブロック）のため、lint 実行中にユーザー入力がブラウザレベルでキューされる。lint 完了後にキューされた `change` イベントが連発 → debounce リセット → 300ms 後にまた lint → の連鎖で、高速タイプ時に不要な lint が繰り返される可能性がある。
+
+**対策** (`main.js` に以下の制御を導入):
+1. **`lintInProgress` フラグ (再入防止)**: lint 実行中に新たな `runLint()` 呼び出しが来た場合、即座に `lintPendingRetry = true` を設定して return。実行完了後に debounce 付きで再試行する。
+2. **`lintPendingRetry` フラグ (完了後リトライ)**: lint 実行中に `change` イベントが発生した場合にセットされる。lint 完了後、このフラグが立っていればさらに `DEBOUNCE_MS` 待ってから再 lint する（即時ではなく debounce を挟むことで、連打を吸収）。
+3. **`lastLintedFingerprint` (冪等性)**: `filePath + '\x00' + source` の文字列を記録し、前回と同一なら lint をスキップ。ファイル種別変更・fix 適用・fetch 読み込み時には明示的にクリアする。
+
+**設計判断**:
+- 同期呼出しであるため真の並行実行は起きないが、将来的に Web Worker 化や async 化する際のためにも再入防止は入れておく。
+- debounce (300ms) + staleness check の組み合わせで、高速タイプ時の無駄な lint を大幅に削減できる。
 
 ---
 
