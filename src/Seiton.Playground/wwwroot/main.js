@@ -807,7 +807,7 @@ function runLint() {
     lintPendingRetry = false;
 
     try {
-        const utf8Bytes = exports.Seiton.Playground.LintInterop.RunLintUtf8(source, filePath);
+        const utf8Bytes = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const json = new TextDecoder().decode(utf8Bytes);
         const diagnostics = JSON.parse(json);
         // Do not treat an internal-error fallback as a successful lint: if we cached

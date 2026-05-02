@@ -1,6 +1,5 @@
 ﻿using System.Buffers;
 using System.Runtime.InteropServices.JavaScript;
-using System.Text;
 using System.Text.Json;
 
 namespace Seiton.Playground;
@@ -34,33 +33,13 @@ public static partial class LintInterop
     }
 
     /// <summary>
-    /// Lints <paramref name="yamlSource"/> as the file at <paramref name="filePath"/> and returns a JSON array of diagnostics.
+    /// Lints <paramref name="yamlSource"/> and returns UTF-8 JSON bytes (marshaled as <c>Uint8Array</c> to JS).
+    /// JS side decodes with <c>new TextDecoder().decode(bytes)</c>.
     /// </summary>
     /// <param name="yamlSource">Full YAML text (may be empty).</param>
     /// <param name="filePath">Virtual path (e.g. <c>.github/workflows/ci.yml</c> or <c>action.yml</c>).</param>
     [JSExport]
-    public static string RunLint(string? yamlSource, string? filePath)
-    {
-        try
-        {
-            var path = string.IsNullOrWhiteSpace(filePath)
-                ? ".github/workflows/test.yml"
-                : filePath.Trim();
-            return PlaygroundLintRunner.RunToJson(yamlSource ?? string.Empty, path);
-        }
-        catch (Exception ex)
-        {
-            return SerializeInternalError(ex);
-        }
-    }
-
-    /// <summary>
-    /// Lints <paramref name="yamlSource"/> and returns UTF-8 JSON bytes (marshaled as <c>Uint8Array</c> to JS).
-    /// Avoids the ~48 KB managed string allocation of <see cref="RunLint"/> per call.
-    /// JS side decodes with <c>new TextDecoder().decode(bytes)</c>.
-    /// </summary>
-    [JSExport]
-    public static byte[] RunLintUtf8(string? yamlSource, string? filePath)
+    public static byte[] RunLint(string? yamlSource, string? filePath)
     {
         try
         {
@@ -71,7 +50,7 @@ public static partial class LintInterop
         }
         catch (Exception ex)
         {
-            return SerializeInternalErrorUtf8(ex);
+            return SerializeInternalError(ex);
         }
     }
 
@@ -119,18 +98,10 @@ public static partial class LintInterop
     private static partial void ConsoleError(string message);
 
     /// <summary>
-    /// Serializes an internal error as a JSON diagnostic array so the UI can display it
+    /// Serializes an internal error as a UTF-8 JSON diagnostic array so the UI can display it
     /// without the exception propagating to the WASM runtime boundary.
     /// </summary>
-    private static string SerializeInternalError(Exception ex)
-    {
-        return Encoding.UTF8.GetString(SerializeInternalErrorUtf8(ex));
-    }
-
-    /// <summary>
-    /// UTF-8 byte[] variant of <see cref="SerializeInternalError"/> for the <see cref="RunLintUtf8"/> path.
-    /// </summary>
-    private static byte[] SerializeInternalErrorUtf8(Exception ex)
+    private static byte[] SerializeInternalError(Exception ex)
     {
         var buffer = new ArrayBufferWriter<byte>(256);
         using (var writer = new Utf8JsonWriter(buffer))
