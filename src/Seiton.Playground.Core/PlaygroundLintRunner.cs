@@ -145,10 +145,16 @@ public static class PlaygroundLintRunner
                 }
 
                 var diag = PickNextDiagnosticToApply(filtered);
-                current = FixEngine.Apply(current, new[] { diag });
-
-                // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
-                result.ParseResult.Arena?.Dispose();
+                try
+                {
+                    current = FixEngine.Apply(current, new[] { diag });
+                }
+                finally
+                {
+                    // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
+                    // Must be in finally so the arena is returned even if Apply throws.
+                    result.ParseResult.Arena?.Dispose();
+                }
             }
         }
 

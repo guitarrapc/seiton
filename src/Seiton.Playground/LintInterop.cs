@@ -21,7 +21,17 @@ public static partial class LintInterop
     /// User-facing build version (same trimming as the seiton CLI). Exposed to the page script after WASM starts.
     /// </summary>
     [JSExport]
-    public static string GetProductVersion() => PlaygroundBuildInfo.GetDisplayVersion(typeof(LintInterop).Assembly);
+    public static string GetProductVersion()
+    {
+        try
+        {
+            return PlaygroundBuildInfo.GetDisplayVersion(typeof(LintInterop).Assembly);
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
 
     /// <summary>
     /// Lints <paramref name="yamlSource"/> as the file at <paramref name="filePath"/> and returns a JSON array of diagnostics.
@@ -59,12 +69,33 @@ public static partial class LintInterop
                 : filePath.Trim();
             return PlaygroundLintRunner.ApplyAllFixes(yamlSource ?? string.Empty, path);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Return original input so editor content is not corrupted on error.
+            // Surface the failure to the browser console so it is not a silent no-op.
+            ReportApplyAllFixesError(ex);
             return yamlSource ?? string.Empty;
         }
     }
+
+    /// <summary>
+    /// Reports an automatic-fix failure to the browser console without allowing the
+    /// exception to cross the WASM interop boundary.
+    /// </summary>
+    private static void ReportApplyAllFixesError(Exception ex)
+    {
+        try
+        {
+            ConsoleError($"[Seiton.Playground] ApplyAllFixes failed: {ex.GetType().Name}: {ex.Message}");
+        }
+        catch
+        {
+            // Never allow error-reporting failures to escape a [JSExport] call path.
+        }
+    }
+
+    [JSImport("globalThis.console.error")]
+    private static partial void ConsoleError(string message);
 
     /// <summary>
     /// Serializes an internal error as a JSON diagnostic array so the UI can display it
