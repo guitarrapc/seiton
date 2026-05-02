@@ -55,6 +55,27 @@ public static partial class LintInterop
     }
 
     /// <summary>
+    /// Lints <paramref name="yamlSource"/> and returns UTF-8 JSON bytes (marshaled as <c>Uint8Array</c> to JS).
+    /// Avoids the ~48 KB managed string allocation of <see cref="RunLint"/> per call.
+    /// JS side decodes with <c>new TextDecoder().decode(bytes)</c>.
+    /// </summary>
+    [JSExport]
+    public static byte[] RunLintUtf8(string? yamlSource, string? filePath)
+    {
+        try
+        {
+            var path = string.IsNullOrWhiteSpace(filePath)
+                ? ".github/workflows/test.yml"
+                : filePath.Trim();
+            return PlaygroundLintRunner.RunToJsonUtf8(yamlSource ?? string.Empty, path);
+        }
+        catch (Exception ex)
+        {
+            return SerializeInternalErrorUtf8(ex);
+        }
+    }
+
+    /// <summary>
     /// Applies automatic fixes sequentially. Network-dependent pinning/digest remediation is unavailable in WASM.
     /// The catalog marks <c>deny-read-all</c> non-disableable; its autofix (scalar <c>read-all</c> → empty mapping)
     /// is skipped here so it cannot undo <c>deny-write-all</c>’s <c>read-all</c> suggestion.
@@ -103,8 +124,14 @@ public static partial class LintInterop
     /// </summary>
     private static string SerializeInternalError(Exception ex)
     {
-        // Use Utf8JsonWriter to produce correctly escaped JSON without depending on
-        // reflection-based serialization (which is unavailable under NativeAOT/trimming).
+        return Encoding.UTF8.GetString(SerializeInternalErrorUtf8(ex));
+    }
+
+    /// <summary>
+    /// UTF-8 byte[] variant of <see cref="SerializeInternalError"/> for the <see cref="RunLintUtf8"/> path.
+    /// </summary>
+    private static byte[] SerializeInternalErrorUtf8(Exception ex)
+    {
         var buffer = new ArrayBufferWriter<byte>(256);
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -116,10 +143,11 @@ public static partial class LintInterop
             writer.WriteString("severity"u8, "Error");
             writer.WriteString("ruleId"u8, "internal-error");
             writer.WriteBoolean("fixable"u8, false);
+            writer.WriteNull("fixDescription"u8);
             writer.WriteEndObject();
             writer.WriteEndArray();
         }
 
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+        return buffer.WrittenSpan.ToArray();
     }
 }
