@@ -497,7 +497,251 @@ AST ノード生成とそのバッキング配列。ファイルごとに 1 回�
 | D-3 | **Diagnostic.Message を Utf8String 化** | `string Message` → `Utf8String Message`。表示時のみ UTF-8 → string 変換。全ルールの診断メッセージ生成が zero-copy に | 全ルール、CLI 出力、Playground DTO、テスト |
 | D-4 | **SliceMap を ArrayPool-backed に** | `Entry[]` を ArrayPool から取得し、AstArena 経由で一括管理。PooledBuffer.ToArray() を廃止 | WorkflowParser 全体、全 SliceMap 消費者 |
 
-### 11.6 推奨実装順序
+### 11.6 優先度 D-5（根本的変更）: インクリメンタルパース — 差分からの AST 構築
+
+#### 11.6.1 前提: Playground の利用パターン
+
+ユーザーの操作パターンを分類すると:
+
+| パターン | 頻度 | 変化量 |
+|---------|------|--------|
+| キー入力（1-3 文字追加/削除） | **99%** | 1-50 bytes |
+| 行の追加/削除（Enter, Backspace で行消去） | 80% (上記に含む) | 1-200 bytes |
+| コピペ（大きなブロックの挿入/置換） | 1% 未満 | 100-5000 bytes |
+| 全体書き換え（URL から取得/テンプレート選択） | 極稀 | 全バイト |
+
+99% のケースでは **前回パースした AST の大半が再利用可能** である。例えば 6 jobs × 8 steps のワークフローで 1 step の `run:` 値を編集した場合、残り 47 steps + 5 jobs + on/env/permissions/defaults/concurrency は全く変わっていない。
+
+#### 11.6.2 現在のアーキテクチャの制約
+
+```
+VYamlStreamAdapter → forward-only streaming parser
+  ├─ FromBytes(Memory<byte>) — 常にバイト 0 から開始
+  ├─ Read() → 次のトークンに進む（巻き戻し不可）
+  └─ SkipCurrentNode() → サブツリーを高速スキップ
+```
+
+**VYaml は任意オフセットへのシーク不可**。`YamlParser.FromBytes()` は常にバイト先頭からトークン化を開始する。YAML のインデント依存構文により、ドキュメント途中からのパースは原理的に不安全（前のインデントレベルの文脈がないとスカラーとブロックの判定ができない）。
+
+ただし、以下の既存機能はインクリメンタル化と親和性がある:
+1. **AstArena のオブジェクトプール** — Job/Step/ExecRun/ExecAction は AllocXxx() で取得、Dispose() で Reset & 返却
+2. **Utf8Slice** — ソースバイト配列への zero-copy 参照。ソースが変わればスライスのオフセットは無効化されるが、セクション単位で不変であれば再利用可能
+3. **SliceMap の線形スキャン** — Entry[] のキーがソースバイト列へのスライスなので、ソースが同一ならそのまま使える
+4. **TextRange** — 各ノードが自身のバイト範囲を保持
+
+#### 11.6.3 インクリメンタルパースのアプローチ比較
+
+| アプローチ | 概要 | VYaml 互換 | アロケーション削減 | 実装難易度 |
+|-----------|------|-----------|-----------------|-----------|
+| **A. セクション単位のバイト比較 + 選択的再パース** | ルートセクション (on/jobs/env/...) の前回バイト範囲を記録し、変更がないセクションの AST を丸ごと再利用 | ○ (全体トークン化は維持) | 大 (未変更セクションの AST 構築を全スキップ) | 中 |
+| **B. ジョブ単位の差分検出 + 部分再構築** | A の拡張。jobs マッピング内で各 job のバイト範囲を記録し、変更された job のみ再パース | ○ | 非常に大 | 中〜高 |
+| **C. Tree-sitter 式の完全インクリメンタル** | 編集操作 (offset, deleteLen, insertLen) からツリーの無効化範囲を算出し、最小サブツリーのみ再パース | × (VYaml 置換必須) | 最大 | 非常に高 |
+| **D. AST キャッシュ + コンテンツハッシュ** | 各セクションの XXH64 ハッシュを保持し、再パース後に前回 AST と比較して未変更ノードを差し替え | ○ | 中 (パースは毎回だが AST ノード割当を回避) | 低〜中 |
+
+#### 11.6.4 推奨: アプローチ A+B「セクション単位選択的再パース」
+
+**なぜ A+B か:**
+- VYaml の forward-only 制約内で実現可能
+- YAML のルートマッピングは GitHub Actions では **固定キーセット** (name, run-name, on, jobs, env, permissions, defaults, concurrency) であり、セクション境界が明確
+- jobs 内も **job ID をキーとするフラットマッピング** であり、各 job の開始/終了バイト位置は一意に特定可能
+- 99% のケースで変更は 1 job 内に閉じるため、残りの jobs + 全ルートセクションの AST を丸ごと再利用できる
+
+**アルゴリズム概要:**
+
+```
+Phase 0: 初回パース (従来通り)
+  1. VYaml で全体をトークン化 + AST 構築
+  2. 副産物として「セクションレジストリ」を構築:
+     SectionRegistry = {
+       "on":          { startOffset: 45,  endOffset: 120,  hash: 0xABC... },
+       "jobs":        { startOffset: 121, endOffset: 980,  hash: 0xDEF... },
+       "jobs/build":  { startOffset: 135, endOffset: 520,  hash: 0x123... },
+       "jobs/deploy": { startOffset: 521, endOffset: 970,  hash: 0x456... },
+       "env":         { startOffset: 30,  endOffset: 44,   hash: 0x789... },
+       ...
+     }
+  3. ParseResult + SectionRegistry + 前回ソース byte[] を保持
+
+Phase 1: 差分検出 (次回 Check 呼び出し時)
+  1. 新旧ソースの長さを比較 → 差分 delta を算出
+  2. 編集位置 (editOffset) を特定:
+     - 先頭から一致する最長プレフィックス長
+     - 末尾から一致する最長サフィックス長
+     → editRegion = [prefixLen, newLen - suffixLen)
+  3. SectionRegistry を走査し、editRegion と重なるセクションを「無効」とマーク
+  4. 重ならないセクションは「有効」(再利用可能)
+
+Phase 2: 選択的再パース
+  1. VYaml で全体をトークン化開始 (forward-only 制約のため)
+  2. ルートマッピングのキーを読むたびに:
+     - そのセクションが「有効」→ reader.SkipCurrentNode() + 前回 AST ノードを流用
+     - そのセクションが「無効」→ 通常通りパースして新 AST ノードを構築
+  3. jobs マッピング内でも同様:
+     - 各 job キーのバイト範囲が有効 → SkipCurrentNode() + 前回 Job ノードを流用
+     - 無効 → ParseJob() を実行
+
+Phase 3: オフセット補正
+  - 「有効」セクションの AST ノード内の TextRange/Utf8Slice は前回ソースの
+    オフセットを参照している
+  - 新ソースでのオフセットは delta (editRegion の挿入/削除量) だけシフトしている
+  - 対策:
+    a) 再利用ノードの全 TextRange に delta を加算する (O(node count) だが allocation-free)
+    b) または、ソースへの参照を「セクション相対オフセット」にする (大きな設計変更)
+    c) または、lint 側が「このノードは旧ソース参照」と認識し、
+       diagnostic 生成時にのみ新ソースのオフセットに変換する
+```
+
+#### 11.6.5 パフォーマンス/アロケーション観点の実現可能性分析
+
+**削減効果の定量見積もり (Large: 6 jobs × 8 steps, 1 step を編集):**
+
+| 項目 | 現在 (毎回フルパース) | インクリメンタル後 | 削減率 |
+|------|---------------------|------------------|--------|
+| Job オブジェクト構築 | 6 × AllocJob() + フィールド設定 | 1 × AllocJob() | 83% |
+| Step オブジェクト構築 | 48 × AllocStep() + ExecRun/ExecAction | 8 × AllocStep() | 83% |
+| SliceMap Entry[] コピー | ~20 個の SliceMap × ToArray() | ~3 個 (変更 job 内のみ) | 85% |
+| Diagnostic[] (パーサー) | 全体パース分 | 変更セクション分のみ | 50-90% |
+| ExpressionParser 呼出 | ~98 式 | ~12 式 (1 job 分) | 88% |
+| AstArena scalar 登録 | 全ノード分 | 変更セクション分のみ | 80-90% |
+| **合計推定** | **~113 KB/call** | **~20-30 KB/call** | **~75%** |
+
+**アロケーション面の要注意点:**
+
+1. **SectionRegistry 自体のコスト**: セクション数は固定的 (ルート 7-8 + jobs N 個)。`struct[]` フィールドで保持すれば追加アロケーションは初回のみ。
+
+2. **前回 AST ノードの保持**: 再利用のために前回の `Workflow`, `Job[]`, `Step[]` を保持する必要がある。AstArena の Dispose タイミングを変更し、「前回 Arena を次回パースまで保持」する設計に。
+   - 問題: 現在 `AstArena.Dispose()` で ThreadStatic キャッシュに返却している。前回 Arena を保持するなら 2 つの Arena が同時に存在する。
+   - 対策: Playground 専用の `IncrementalParseContext` が前回 Arena の参照を持ち、次回パース完了後に旧 Arena を Dispose する。
+
+3. **オフセット補正のコスト**: Phase 3 の補正は allocation-free だが、再利用ノード全ての TextRange を書き換える必要がある。Job は ~20 フィールドに TextRange を持つ → 6 jobs で ~120 フィールド書き換え。これは数百ナノ秒で完了し、パース時間 (~1ms) に対して無視可能。
+
+4. **Utf8Slice の無効化問題**: Utf8Slice は `(int Offset, int Length)` でソース byte[] を参照する。ソース byte[] が変わると全スライスが無効になる。
+   - 対策: 再利用セクションでは **旧ソース byte[] も保持** し、lint 時に `arena.Source` としてではなく、セクションごとに適切なソースを参照する。
+   - **これは複雑すぎる** → 代替: オフセット補正後のスライスが新ソースの同じバイト列を指すことを保証する（未変更セクションのバイト内容は同一のため、新ソース上の補正済みオフセットで正しいバイト列を指す）。
+
+5. **VYaml トークン化は全体を走る**: forward-only 制約のため、VYaml 自体は常に全バイトをトークン化する。削減されるのは **AST 構築コスト** (ノードオブジェクト + SliceMap Entry[] + scalar 登録) のみ。VYaml のトークン化コストは残る。
+   - ベンチマーク参考: ParseWorkflowFull (Large) のうち VYaml トークン化は ~30-40% を占める推定。AST 構築が 60-70%。
+   - つまりインクリメンタル化しても **パース時間は最大 60-70% 削減** で、30-40% は VYaml オーバーヘッドとして残る。
+
+#### 11.6.6 技術的リスクと課題
+
+| リスク | 深刻度 | 対策 |
+|--------|--------|------|
+| **YAML アンカー/エイリアス** がセクション境界を跨ぐ場合、再利用ノードが古いアンカー定義を参照する | 中 | GitHub Actions ではアンカーは稀。アンカー検出時はフルパースにフォールバック |
+| **インデント変更** がルートレベルで発生するとセクション境界が全てシフトする | 高 | 先頭プレフィックス一致で editRegion がルートマッピング開始前なら全セクション無効化 (フルパース) |
+| **jobs キーの追加/削除/リネーム** で SectionRegistry が無効化される | 中 | jobs マッピング自体が無効ならその中の全 job を再パース。他のルートセクションは再利用可能 |
+| **VYaml の SkipCurrentNode() が正確にセクション終端までスキップすることの保証** | 低 | 既存実装でテスト済み。MappingStart → 対応する MappingEnd まで正確にスキップする |
+| **LintEngine が新旧混在 AST を正しく処理できるか** | 中 | 再利用ノードのオフセットが補正済みであれば、lint 側は通常の AST と区別なく処理可能。ただし `arena.Source` は新ソースを指すため、再利用ノードの Utf8Slice が新ソース上で同じバイト列を指すことの検証が必要 |
+| **エラーリカバリの整合性**: 前回パースでエラーがあったセクションを「有効」として再利用すると、修正後もエラーが残り続ける | 高 | パーサー診断が 0 でないセクションは常に「無効」として再パース対象にする |
+
+#### 11.6.7 アプローチ D「AST キャッシュ + コンテンツハッシュ」も有力
+
+アプローチ A+B の代替として、よりシンプルなアプローチ:
+
+```
+1. 毎回フルパースする (VYaml トークン化 + AST 構築は従来通り)
+2. パース完了後、新旧 AST のルートセクション/Job を XXH64 で比較
+3. 一致するノードは旧 AST から参照をコピー (新 AST ノードは破棄)
+4. 不一致ノードのみ新 AST を採用
+```
+
+**利点:**
+- パーサーコードの変更が最小 (パース後の後処理のみ)
+- VYaml の制約を気にする必要なし
+- セクション境界の追跡不要
+
+**欠点:**
+- パース自体のアロケーション (PooledBuffer, SliceMap Entry[], scalar 登録) は毎回発生する
+- 削減効果は「AST ノードの保持コスト」のみ → D-5 本来の目的 (パース時のアロケーション削減) には貢献しない
+- **結論: このアプローチはアロケーション削減には不向き** (パース後にノードを捨てても、パース中のアロケーションは既に発生している)
+
+#### 11.6.8 結論と推奨
+
+**インクリメンタルパースは技術的に実現可能だが、段階的に導入すべき。**
+
+**推奨ロードマップ:**
+
+| Phase | 内容 | 削減効果 | 前提条件 |
+|-------|------|---------|---------|
+| D-5a | **SectionRegistry の記録** — 初回パース時にルートセクション + 各 job のバイト範囲と XXH64 を記録する仕組みを追加。パース動作自体は変更しない。 | なし (計測基盤) | なし |
+| D-5b | **ルートセクション選択的スキップ** — on/env/permissions/defaults/concurrency が前回と同一バイト列なら `SkipCurrentNode()` + 前回 AST ノードをそのまま再利用。jobs は毎回パース。 | ~10-15% | D-5a |
+| D-5c | **Job 単位選択的スキップ** — 各 job のバイト範囲が前回と同一なら SkipCurrentNode() + 前回 Job/Step[] を再利用。オフセット補正を実装。 | ~60-75% | D-5b + オフセット補正 |
+| D-5d | **Lint 結果キャッシュ** — 未変更 job に対する lint 診断を前回結果から再利用 (job 単位で diagnostic[] をキャッシュ) | ~80-90% (lint 含む) | D-5c + LintEngine 変更 |
+
+**現実的な初手:**
+
+D-5a + D-5b は **低リスク** で実装可能。Playground 専用パスとして `IncrementalParseContext` を導入し、CLI パスには一切影響を与えない。
+
+D-5c は **中リスク** だが最大の効果を持つ。オフセット補正の正確性を保証するテストが必要。
+
+D-5d は LintEngine の根本的な変更を伴うため Phase 4 (D-1 〜 D-4) の後に検討。
+
+#### 11.6.9 Phase D-5 に必要な設計変更サマリ
+
+```csharp
+// 新規: Playground 専用のインクリメンタルパースコンテキスト
+internal sealed class IncrementalParseContext
+{
+    // 前回パース結果
+    private byte[]? _previousSource;
+    private ParseResult _previousResult;
+    private AstArena? _previousArena;  // 前回 Arena を保持 (Dispose せず次回まで維持)
+    private SectionRegistry _registry;
+
+    // 差分検出
+    public EditRegion DetectEditRegion(byte[] newSource);
+
+    // セクション有効性判定
+    public bool IsSectionValid(SectionId id, byte[] newSource);
+}
+
+// 新規: セクションバイト範囲 + ハッシュの記録
+internal struct SectionRegistry
+{
+    // ルートセクション (固定数: 最大 8)
+    public SectionEntry On, Jobs, Env, Permissions, Defaults, Concurrency, Name, RunName;
+
+    // Job 単位 (可変長 — フィールド配列で保持)
+    public SectionEntry[] JobEntries;  // capacity は前回 job 数で固定、拡張時のみ再割当
+    public int JobCount;
+}
+
+internal readonly struct SectionEntry
+{
+    public readonly int StartOffset;
+    public readonly int EndOffset;
+    public readonly long ContentHash;  // XXH64
+    public readonly bool HasDiagnostics;  // true なら常に再パース対象
+}
+
+internal readonly struct EditRegion
+{
+    public readonly int Start;   // 変更開始バイトオフセット
+    public readonly int End;     // 変更終了バイトオフセット (旧ソース上)
+    public readonly int Delta;   // 新ソースと旧ソースの長さの差
+}
+```
+
+**アロケーション影響:**
+- `IncrementalParseContext`: Playground 専用の static フィールド。1 インスタンスのみ。
+- `SectionRegistry`: struct フィールド。JobEntries は `SectionEntry[]` で job 数が変わらない限り再利用。
+- `EditRegion`: readonly struct、スタック割当。
+- 前回 Arena の保持: 2 つの AstArena が同時存在するが、旧 Arena のスカラー配列は次回パース完了後に即 Dispose。
+
+#### 11.6.10 D-5 と D-1〜D-4 の関係
+
+D-5 (インクリメンタルパース) は D-1〜D-4 と **独立に** 実装可能:
+- D-1 (ParseResult PooledBuffer 化) は「パース結果の保持方法」の変更であり、インクリメンタル化とは直交
+- D-4 (SliceMap ArrayPool 化) はインクリメンタルで再利用する場合にも有効 (未変更 job の Entry[] をそのまま保持)
+- D-5 は **Playground 専用パス** として分離できるため、CLI/テストへの影響なし
+
+**実装順序の推奨:**
+1. D-1, D-4 (所有権モデル + SliceMap) → 全パスで恒常的にアロケーション削減
+2. D-5a, D-5b (SectionRegistry + ルートセクションスキップ) → Playground で追加削減
+3. D-5c (Job 単位スキップ) → Playground で大幅削減
+4. D-2, D-3 (LintResult + Diagnostic.Message) → 影響範囲が最大のため最後
+
+### 11.7 推奨実装順序 (改訂版)
 
 **Phase 1: 低リスク・高効果（S-1 〜 S-6, A-7, A-8）**
 - WorkflowParser の tuple buf を stackalloc/static 化
@@ -519,14 +763,22 @@ AST ノード生成とそのバッキング配列。ファイルごとに 1 回�
 - Playground DTO の小最適化
 - 推定削減: ルールごとの per-step 文字列変換を削減
 
-**Phase 4: 高リスク・大効果（D-1 〜 D-4, B-1, B-2）**
-- ParseResult/LintResult の所有権モデル変更
-- Diagnostic.Message の Utf8String 化
+**Phase 4: 高リスク・大効果（D-1, D-4）**
+- ParseResult の所有権モデル変更 (PooledBuffer 保持)
 - SliceMap の ArrayPool 化
-- AST ノードプール化
-- 推定削減: 根本的に配列コピーと文字列変換を排除。最大の効果だが影響範囲も最大
+- 推定削減: 根本的に配列コピーを排除
 
-**Phase 5: Playground 固有（C-1, C-4）**
-- JS interop 層の byte[] 直接受け渡し
-- Utf8JsonWriter ベースのシリアライズ
-- 推定削減: Playground の RunToJson 呼び出しごとの大規模文字列生成を排除
+**Phase 5: Playground 専用 — インクリメンタルパース（D-5a 〜 D-5c）**
+- SectionRegistry の記録基盤
+- ルートセクション選択的スキップ
+- Job 単位選択的スキップ + オフセット補正
+- 推定削減: Playground per-call で ~75% のアロケーション削減 (113 KB → ~30 KB)
+
+**Phase 6: 高リスク・大効果（D-2, D-3）**
+- LintResult の所有権モデル変更
+- Diagnostic.Message の Utf8String 化
+- 推定削減: 根本的に文字列変換を排除。影響範囲が最大のため最後
+
+**Phase 7: Playground 専用 — Lint 結果キャッシュ（D-5d）**
+- 未変更 job に対する lint 診断の前回結果再利用
+- 推定削減: Playground per-call で ~90% の総合削減 (lint 時間含む)
