@@ -91,20 +91,22 @@ public sealed class AstArenaObjectPoolTests
         var source = "name: test"u8.ToArray();
         using var arena = AstArena.Rent(source);
 
+        const int allocatedStepCount = 65;
+
         // Allocate more steps than the default pool capacity
-        var steps = new Step[50];
-        for (var i = 0; i < 50; i++)
+        var steps = new Step[allocatedStepCount];
+        for (var i = 0; i < allocatedStepCount; i++)
         {
             steps[i] = arena.AllocStep();
         }
 
         // All should be distinct instances (O(n) check via reference-equality set)
         var set = new HashSet<Step>(ReferenceEqualityComparer.Instance);
-        for (var i = 0; i < 50; i++)
+        for (var i = 0; i < allocatedStepCount; i++)
         {
             set.Add(steps[i]);
         }
-        await Assert.That(set.Count).IsEqualTo(50);
+        await Assert.That(set.Count).IsEqualTo(allocatedStepCount);
     }
 
     [Test]
