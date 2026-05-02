@@ -1,6 +1,4 @@
 ﻿using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Seiton.Core.Linting;
 using Seiton.Playground;
 
@@ -24,7 +22,6 @@ public partial class PlaygroundLintBenchmark
     public WorkflowSize Size { get; set; }
 
     private string _yamlSource = string.Empty;
-    private byte[] _yamlBytes = [];
     private const string FilePath = ".github/workflows/bench.yml";
 
     private LintEngine _engine = null!;
@@ -45,11 +42,10 @@ public partial class PlaygroundLintBenchmark
             WorkflowSize.Large => WorkflowYamlBuilder.Build(jobCount: 6, stepsPerJob: 8),
             _ => WorkflowYamlBuilder.Build(jobCount: 1, stepsPerJob: 3),
         };
-        _yamlBytes = Encoding.UTF8.GetBytes(_yamlSource);
         _engine = new LintEngine();
 
         // Warm up both paths
-        PlaygroundLintRunner.RunToJson(_yamlSource, FilePath);
+        PlaygroundLintRunner.RunToJsonUtf8(_yamlSource, FilePath);
     }
 
     [Benchmark]
@@ -58,26 +54,15 @@ public partial class PlaygroundLintBenchmark
         var totalLength = 0;
         for (var i = 0; i < 10; i++)
         {
-            totalLength += PlaygroundLintRunner.RunToJson(_yamlSource, FilePath).Length;
+            totalLength += PlaygroundLintRunner.RunToJsonUtf8(_yamlSource, FilePath).Length;
         }
 
         return totalLength;
     }
 
-    [Benchmark(Baseline = true)]
-    public int RunToJson_100()
-    {
-        var totalLength = 0;
-        for (var i = 0; i < 100; i++)
-        {
-            totalLength += PlaygroundLintRunner.RunToJson(_yamlSource, FilePath).Length;
-        }
-
-        return totalLength;
-    }
 
     [Benchmark]
-    public int RunToJsonUtf8_100()
+    public int RunToJson_100()
     {
         var totalLength = 0;
         for (var i = 0; i < 100; i++)
