@@ -10,10 +10,12 @@ on:
         type: choice
         options:
           - "*Benchmark*"
+          - "*ActionRefParseBenchmark*"
           - "*Core*Benchmark*"
           - "*CoreLintBenchmark*"
           - "*CoreParsingBenchmark*"
           - "*LintConfigBenchmark*"
+          - "*PlaygroundLintBenchmark*"
           - "*RuleCatalogBenchmark*"
 
 jobs:
