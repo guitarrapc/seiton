@@ -253,7 +253,7 @@ public static partial class WorkflowParser
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {
-        return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics);
+            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics);
         }
         finally
         {

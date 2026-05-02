@@ -330,11 +330,17 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            SliceMap<MatrixRow>? rows = null;
+            if (rowBuffer.Count > 0)
+            {
+                rows = new SliceMap<MatrixRow>(rowBuffer.ToArray(), caseSensitive: false);
+            }
+
             return new Matrix
             {
                 Include = include,
                 Exclude = exclude,
-                Rows = rowBuffer.Count > 0 ? new SliceMap<MatrixRow>(rowBuffer.ToArray(), caseSensitive: false) : null,
+                Rows = rows,
                 Range = range,
             };
         }
