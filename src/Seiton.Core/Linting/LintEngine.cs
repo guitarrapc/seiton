@@ -41,6 +41,10 @@ public sealed class LintEngine
     // S-6: Reusable buffer for BuildKnownJobIdSlices (avoids per-call allocation)
     private Utf8Slice[] _knownJobIdSlices = new Utf8Slice[8];
 
+    // A-8: NormalizeExclusions reusable collections
+    private readonly List<NormalizedExclusion> _normalizedExclusions = new(4);
+    private readonly List<Diagnostic> _exclusionDiagnostics = new();
+
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
     /// Pass to <see cref="OnlineAudit.OnlineAuditEngine.AuditAsync"/> for post-traversal async resolution.
@@ -1049,15 +1053,15 @@ public sealed class LintEngine
         }
 
         var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
-        var normalized = new List<NormalizedExclusion>(exclusions.Count);
-        var diagnostics = new List<Diagnostic>();
+        _normalizedExclusions.Clear();
+        _exclusionDiagnostics.Clear();
 
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
             if (string.IsNullOrWhiteSpace(exclusion.File))
             {
-                diagnostics.Add(new Diagnostic(
+                _exclusionDiagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
                     "exclusion file pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
@@ -1074,7 +1078,7 @@ public sealed class LintEngine
             else
             {
                 var ruleIds = new HashSet<string>(StringComparer.Ordinal);
-                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, ruleIds);
+                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, _exclusionDiagnostics, ruleIds);
 
                 if (ruleIds.Count == 0)
                 {
@@ -1091,7 +1095,7 @@ public sealed class LintEngine
                     var jobId = exclusion.Jobs[j];
                     if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
                     {
-                        diagnostics.Add(new Diagnostic(
+                        _exclusionDiagnostics.Add(new Diagnostic(
                             DiagnosticSeverity.Error,
                             $"unknown job-id '{jobId}' in exclusion configuration",
                             new TextRange(0, jobId.Length, 1, 1, 1, 1 + jobId.Length),
@@ -1100,10 +1104,13 @@ public sealed class LintEngine
                 }
             }
 
-            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
+            _normalizedExclusions.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
         }
 
-        return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
+        return new ExclusionsNormalization(
+            _normalizedExclusions.Count > 0 ? _normalizedExclusions.ToArray() : [],
+            normalizedFilePath,
+            _exclusionDiagnostics.Count > 0 ? _exclusionDiagnostics.ToArray() : []);
     }
     private static int CompareDiagnosticsByRulePriority(Diagnostic x, Diagnostic y)
     {
