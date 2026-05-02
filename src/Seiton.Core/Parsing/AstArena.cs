@@ -206,6 +206,13 @@ public sealed class AstArena : IDisposable
     /// </summary>
     public void Dispose()
     {
+        // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)
+        // This prevents memory retention across parse calls, which is critical in WASM.
+        for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();
+        for (var i = 0; i < _stepCount; i++) _steps[i]?.Reset();
+        for (var i = 0; i < _execRunCount; i++) _execRuns[i]?.Reset();
+        for (var i = 0; i < _execActionCount; i++) _execActions[i]?.Reset();
+
         _stringCount = 0;
         _boolCount = 0;
         _intCount = 0;
@@ -547,10 +554,7 @@ public sealed class AstArena : IDisposable
             obj = new Job();
             _jobs[_jobCount] = obj;
         }
-        else
-        {
-            obj.Reset();
-        }
+        obj.Reset();
         _jobCount++;
         return obj;
     }
@@ -566,10 +570,7 @@ public sealed class AstArena : IDisposable
             obj = new Step();
             _steps[_stepCount] = obj;
         }
-        else
-        {
-            obj.Reset();
-        }
+        obj.Reset();
         _stepCount++;
         return obj;
     }
@@ -585,10 +586,7 @@ public sealed class AstArena : IDisposable
             obj = new ExecRun();
             _execRuns[_execRunCount] = obj;
         }
-        else
-        {
-            obj.Reset();
-        }
+        obj.Reset();
         _execRunCount++;
         return obj;
     }

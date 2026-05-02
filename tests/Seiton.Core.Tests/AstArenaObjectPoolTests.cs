@@ -98,14 +98,13 @@ public sealed class AstArenaObjectPoolTests
             steps[i] = arena.AllocStep();
         }
 
-        // All should be distinct instances
+        // All should be distinct instances (O(n) check via reference-equality set)
+        var set = new HashSet<Step>(ReferenceEqualityComparer.Instance);
         for (var i = 0; i < 50; i++)
         {
-            for (var j = i + 1; j < 50; j++)
-            {
-                await Assert.That(steps[i]).IsNotSameReferenceAs(steps[j]);
-            }
+            set.Add(steps[i]);
         }
+        await Assert.That(set.Count).IsEqualTo(50);
     }
 
     [Test]
