@@ -8,10 +8,15 @@ namespace Seiton.Core.Parsing;
 /// Implements <see cref="IReadOnlyList{T}"/> for LINQ compatibility while providing
 /// <see cref="AsSpan"/> for zero-copy hot-path access.
 /// </summary>
+[CollectionBuilder(typeof(DiagnosticList), nameof(Create))]
 public readonly struct DiagnosticList : IReadOnlyList<Diagnostic>
 {
     private readonly Diagnostic[]? _array;
     private readonly int _count;
+
+    /// <summary>Creates a DiagnosticList from a span (used by collection expressions).</summary>
+    public static DiagnosticList Create(ReadOnlySpan<Diagnostic> items) =>
+        items.Length == 0 ? default : new DiagnosticList(items.ToArray());
 
     /// <summary>Creates a list from a pre-allocated array. All elements are valid.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

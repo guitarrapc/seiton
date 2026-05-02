@@ -82,7 +82,7 @@ public static class PlaygroundLintRunner
             JsonBuffer.Clear();
             using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
             {
-                WriteDiagnosticsArray(writer, lintResult.Diagnostics);
+                WriteDiagnosticsArray(writer, lintResult.Diagnostics.AsSpan());
             }
 
             // NOTE: Arena is NOT disposed here — IncrementalParseContext owns it for reuse

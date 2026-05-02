@@ -235,7 +235,7 @@ public readonly record struct ActionAuditTarget(
 
 /// <summary>Aggregated result from an online audit pass: diagnostics, skip/fail counts.</summary>
 public readonly record struct OnlineAuditResult(
-    Diagnostic[] Diagnostics,
+    DiagnosticList Diagnostics,
     int AddedCount,
     int SkippedCount,
     int FailedCount);

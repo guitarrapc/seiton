@@ -780,7 +780,7 @@ public sealed class IncrementalParseContext
         var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, skipJobs);
 
         // Merge cached diagnostics for skipped jobs
-        Diagnostic[] finalDiagnostics;
+        DiagnosticList finalDiagnostics;
         if (skipJobs is not null)
         {
             var merged = _mergedDiagnostics ??= new(32);
@@ -825,7 +825,7 @@ public sealed class IncrementalParseContext
     /// Partitions diagnostics by job byte range and stores them in the per-job cache.
     /// Diagnostics not within any job's range (workflow-level) are not cached.
     /// </summary>
-    private void CacheJobDiagnostics(Diagnostic[] diagnostics)
+    private void CacheJobDiagnostics(DiagnosticList diagnostics)
     {
         var jobCount = _registry.JobCount;
         if (jobCount == 0)
@@ -884,7 +884,7 @@ public sealed class IncrementalParseContext
         }
     }
 
-    private JsonElement[] SerializeDiagnosticsToJson(Diagnostic[] diagnostics)
+    private JsonElement[] SerializeDiagnosticsToJson(DiagnosticList diagnostics)
     {
         var buffer = _jsonBuffer ??= new ArrayBufferWriter<byte>(4096);
         buffer.Clear();

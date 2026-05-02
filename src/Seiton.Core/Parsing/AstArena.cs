@@ -170,6 +170,10 @@ public sealed class AstArena : IDisposable
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
     private Diagnostic[]? _diagnosticsBuffer;
 
+    // D-2: Pooled lint diagnostics buffer registered by LintEngine.
+    // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
+    private Diagnostic[]? _lintDiagnosticsBuffer;
+
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
@@ -207,6 +211,12 @@ public sealed class AstArena : IDisposable
     internal void RegisterDiagnosticsBuffer(Diagnostic[] buffer) => _diagnosticsBuffer = buffer;
 
     /// <summary>
+    /// Registers a pooled lint diagnostics array with this arena. The array will be returned
+    /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
+    /// </summary>
+    internal void RegisterLintDiagnosticsBuffer(Diagnostic[] buffer) => _lintDiagnosticsBuffer = buffer;
+
+    /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
     /// Backing arrays that have grown beyond their default capacity are returned to
@@ -221,6 +231,13 @@ public sealed class AstArena : IDisposable
         {
             ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer);
             _diagnosticsBuffer = null;
+        }
+
+        // Return pooled lint diagnostics buffer if registered
+        if (_lintDiagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer);
+            _lintDiagnosticsBuffer = null;
         }
 
         // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)

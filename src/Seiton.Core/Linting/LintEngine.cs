@@ -26,8 +26,6 @@ public sealed class LintEngine
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
     private readonly LintConfig _effectiveConfig = new();
-    private Diagnostic[] _resultDiagnostics = new Diagnostic[16];
-    private Diagnostic[] _resultDiagnosticsSwap = new Diagnostic[16];
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
@@ -138,7 +136,7 @@ public sealed class LintEngine
     {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
-            return new LintResult(parseResult, parseResult.Diagnostics.AsSpan().ToArray())
+            return new LintResult(parseResult, parseResult.Diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
             };
@@ -338,48 +336,40 @@ public sealed class LintEngine
     private LintResult BuildLintResult(ParseResult parseResult)
     {
         var count = _diagnostics.Count;
-
-        // Swap: the previous result's array becomes the candidate for this call
-        (_resultDiagnostics, _resultDiagnosticsSwap) = (_resultDiagnosticsSwap, _resultDiagnostics);
-
-        if (_resultDiagnostics.Length != count)
-        {
-            _resultDiagnostics = new Diagnostic[count];
-        }
-
+        var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
         for (var i = 0; i < count; i++)
         {
-            _resultDiagnostics[i] = _diagnostics[i];
+            buffer.Add(_diagnostics[i]);
         }
 
-        return new LintResult(parseResult, _resultDiagnostics)
+        var (diagArray, diagCount) = buffer.DetachArray();
+        buffer.Dispose();
+        parseResult.Arena?.RegisterLintDiagnosticsBuffer(diagArray);
+
+        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = SuppressionSummary.Empty,
         };
     }
 
     /// <summary>
-    /// Builds a <see cref="LintResult"/> with suppression summary using the two-buffer swap pattern.
+    /// Builds a <see cref="LintResult"/> with suppression summary using PooledBuffer + DetachArray.
     /// </summary>
     private LintResult BuildLintResultWithSuppression(ParseResult parseResult)
     {
         var count = _diagnostics.Count;
-
-        (_resultDiagnostics, _resultDiagnosticsSwap) = (_resultDiagnosticsSwap, _resultDiagnostics);
-
-        if (_resultDiagnostics.Length != count)
-        {
-            _resultDiagnostics = new Diagnostic[count];
-        }
-
+        var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
         for (var i = 0; i < count; i++)
         {
-            _resultDiagnostics[i] = _diagnostics[i];
+            buffer.Add(_diagnostics[i]);
         }
 
+        var (diagArray, diagCount) = buffer.DetachArray();
+        buffer.Dispose();
+        parseResult.Arena?.RegisterLintDiagnosticsBuffer(diagArray);
+
         // Create caller-owned snapshots for suppression summary.
-        // Unlike diagnostics (two-buffer swap, documented as engine-owned),
-        // suppression data uses snapshot semantics so callers can safely
+        // Suppression data uses snapshot semantics so callers can safely
         // retain SuppressionSummary across subsequent Check() calls.
         var suppressionCount = _suppressionRecords.Count;
         var suppressionRecordsSnapshot = new SuppressionRecord[suppressionCount];
@@ -394,7 +384,7 @@ public sealed class LintEngine
             suppressedByRuleSnapshot[pair.Key] = pair.Value;
         }
 
-        return new LintResult(parseResult, _resultDiagnostics)
+        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
         };
