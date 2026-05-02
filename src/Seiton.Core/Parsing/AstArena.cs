@@ -181,9 +181,10 @@ public sealed class AstArena : IDisposable
     /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
-    /// Backing arrays that have grown beyond their default capacity are replaced with
-    /// default-sized arrays to prevent the ThreadStatic cache from permanently retaining
-    /// high-water-mark allocations (critical for memory-constrained environments like WASM).
+    /// Backing arrays that have grown beyond their default capacity are returned to
+    /// ArrayPool and replaced with default-sized pool arrays, preventing the ThreadStatic
+    /// cache from permanently retaining high-water-mark allocations (critical for
+    /// memory-constrained environments like WASM).
     /// </summary>
     public void Dispose()
     {
@@ -198,8 +199,9 @@ public sealed class AstArena : IDisposable
             // Cap backing arrays to default sizes to prevent unbounded growth.
             // Grow() doubles arrays but Dispose() must shrink them back so the ThreadStatic
             // cache doesn't permanently retain peak-sized arrays.
-            // Use exact-size allocations (not ArrayPool.Rent) because Rent() may return
-            // oversized arrays that would defeat the cap.
+            // Uses ArrayPool.Rent for replacements (may return slightly oversized arrays but
+            // always from the smallest matching bucket, far below peak). All arrays stay
+            // pool-rented so EnsureMinCapacity/Return in subsequent Rent() calls are safe.
             ShrinkIfOversized(ref _strings, DefaultStringCapacity);
             ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
             ShrinkIfOversized(ref _ints, DefaultIntCapacity);
@@ -209,10 +211,10 @@ public sealed class AstArena : IDisposable
         else
         {
             // Cache is already occupied — return all pool-rented arrays and discard this arena.
-            ReturnToPool(_strings);
-            ReturnToPool(_bools);
-            ReturnToPool(_ints);
-            ReturnToPool(_floats);
+            ArrayPool<StringNodeData>.Shared.Return(_strings);
+            ArrayPool<BoolNodeData>.Shared.Return(_bools);
+            ArrayPool<IntNodeData>.Shared.Return(_ints);
+            ArrayPool<FloatNodeData>.Shared.Return(_floats);
             _strings = null!;
             _bools = null!;
             _ints = null!;
@@ -231,18 +233,8 @@ public sealed class AstArena : IDisposable
         if (array.Length > maxRetainedCapacity)
         {
             ArrayPool<T>.Shared.Return(array);
-            // Allocate an exact-size array (not from the pool) so the ThreadStatic
-            // cache never retains anything larger than the cap. ArrayPool.Rent() is
-            // allowed to return oversized arrays, which would defeat the cap.
-            // When the arena is next Rent()'d and Grow() fires, it will switch back
-            // to pool-rented arrays.
-            array = new T[maxRetainedCapacity];
+            array = ArrayPool<T>.Shared.Rent(maxRetainedCapacity);
         }
-    }
-
-    private static void ReturnToPool<T>(T[] array)
-    {
-        ArrayPool<T>.Shared.Return(array);
     }
 
     private static AstArena CreateNew(byte[] source)
