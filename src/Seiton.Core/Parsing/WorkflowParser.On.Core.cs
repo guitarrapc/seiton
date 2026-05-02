@@ -8,14 +8,14 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static Event[] ParseOnEvents<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static Event[] ParseOnEvents<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var eventMark = reader.CurrentStart;
             var eventInfo = ReadOnEventInfo(ref reader); // try-catch inside for non-UTF8 scalars
-            ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
+            ValidateKnownOnEvent(in eventInfo, eventMark, ref diagnostics);
             Utf8Slice eventSlice;
             int eventByteLen;
             try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
@@ -25,7 +25,7 @@ public static partial class WorkflowParser
             // spec §3.4.1: schedule requires mapping form; scalar form is an error
             if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
             {
-                AddError(diagnostics, "schedule event must be configured with mapping", eventMark);
+                AddError(ref diagnostics, "schedule event must be configured with mapping", eventMark);
                 return [];
             }
             return [BuildSimpleEvent(arena, in eventInfo, nameNode)];
@@ -41,14 +41,14 @@ public static partial class WorkflowParser
                 {
                     if (reader.CurrentKind != YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, "on sequence item must be string event name", reader.CurrentStart);
+                        AddError(ref diagnostics, "on sequence item must be string event name", reader.CurrentStart);
                         reader.SkipCurrentNode();
                         continue;
                     }
 
                     var eventMark = reader.CurrentStart;
                     var eventInfo = ReadOnEventInfo(ref reader);
-                    ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
+                    ValidateKnownOnEvent(in eventInfo, eventMark, ref diagnostics);
                     Utf8Slice eventSlice;
                     int eventByteLen;
                     try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
@@ -58,7 +58,7 @@ public static partial class WorkflowParser
                     // spec §3.4.1: schedule requires mapping form; scalar form is an error
                     if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
                     {
-                        AddError(diagnostics, "schedule event must be configured with mapping", eventMark);
+                        AddError(ref diagnostics, "schedule event must be configured with mapping", eventMark);
                         continue;
                     }
                     events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
@@ -82,7 +82,7 @@ public static partial class WorkflowParser
                 {
                     if (reader.CurrentKind != YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, "on mapping key must be string event name", reader.CurrentStart);
+                        AddError(ref diagnostics, "on mapping key must be string event name", reader.CurrentStart);
                         reader.SkipCurrentNode();
                         if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd) { reader.SkipCurrentNode(); }
                         continue;
@@ -97,7 +97,7 @@ public static partial class WorkflowParser
                         eventKeySlice.Offset,
                         eventKeySlice.Length,
                         eventMark,
-                        diagnostics,
+                        ref diagnostics,
                         keyStore,
                         ref keyCount,
                         caseSensitive: false,
@@ -113,7 +113,7 @@ public static partial class WorkflowParser
                     }
 
                     var eventInfo = ReadOnEventInfo(ref reader);
-                    ValidateKnownOnEvent(in eventInfo, eventMark, diagnostics);
+                    ValidateKnownOnEvent(in eventInfo, eventMark, ref diagnostics);
                     Utf8Slice eventSlice;
                     int eventByteLen;
                     try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
@@ -129,13 +129,13 @@ public static partial class WorkflowParser
 
                     if (IsSpecialOnEvent(in eventInfo))
                     {
-                        events.Add(ParseOnEventWithOptions(ref reader, arena, diagnostics, source, in eventInfo, eventMark, nameNode));
+                        events.Add(ParseOnEventWithOptions(ref reader, arena, ref diagnostics, source, in eventInfo, eventMark, nameNode));
                         continue;
                     }
 
                     if (reader.CurrentKind == YamlEventKind.MappingStart)
                     {
-                        events.Add(ParseOnEventWithOptions(ref reader, arena, diagnostics, source, in eventInfo, eventMark, nameNode));
+                        events.Add(ParseOnEventWithOptions(ref reader, arena, ref diagnostics, source, in eventInfo, eventMark, nameNode));
                         continue;
                     }
 
@@ -147,7 +147,7 @@ public static partial class WorkflowParser
                         continue;
                     }
 
-                    AddError(diagnostics, $"on.{eventInfo.Name} must be string, sequence, or mapping", reader.CurrentStart);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name} must be string, sequence, or mapping", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
                 }
@@ -158,7 +158,7 @@ public static partial class WorkflowParser
             finally { events.Dispose(); }
         }
 
-        AddError(diagnostics, "on must be string, sequence, or mapping", reader.CurrentStart);
+        AddError(ref diagnostics, "on must be string, sequence, or mapping", reader.CurrentStart);
         reader.SkipCurrentNode();
         return [];
     }
@@ -181,13 +181,13 @@ public static partial class WorkflowParser
         return new WebhookEvent { EventName = nameNode, Hook = nameNode, Range = arena.GetStringRange(nameNode) };
     }
 
-    private static Event ParseOnEventWithOptions<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
+    private static Event ParseOnEventWithOptions<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (!IsSpecialOnEvent(in eventInfo))
         {
             // Webhook event: build full AST with filters
-            return ParseWebhookEventWithOptions(ref reader, arena, diagnostics, in eventInfo, eventMark, nameNode);
+            return ParseWebhookEventWithOptions(ref reader, arena, ref diagnostics, in eventInfo, eventMark, nameNode);
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar
@@ -208,11 +208,11 @@ public static partial class WorkflowParser
             {
                 return eventInfo.Spec.Id switch
                 {
-                    WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, arena, diagnostics, nameNode),
-                    WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, arena, diagnostics, source, nameNode),
-                    WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, arena, diagnostics, source, nameNode),
-                    WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, arena, diagnostics, in eventInfo, nameNode),
-                    WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, arena, diagnostics, nameNode),
+                    WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, arena, ref diagnostics, nameNode),
+                    WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, arena, ref diagnostics, source, nameNode),
+                    WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, arena, ref diagnostics, source, nameNode),
+                    WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, arena, ref diagnostics, in eventInfo, nameNode),
+                    WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, arena, ref diagnostics, nameNode),
                     _ => BuildSimpleEvent(arena, in eventInfo, nameNode),
                 };
             }
@@ -224,11 +224,11 @@ public static partial class WorkflowParser
 
         return eventInfo.Spec.Id switch
         {
-            WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, arena, diagnostics, nameNode),
-            WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, arena, diagnostics, source, nameNode),
-            WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, arena, diagnostics, source, nameNode),
-            WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, arena, diagnostics, in eventInfo, nameNode),
-            WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, arena, diagnostics, nameNode),
+            WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, arena, ref diagnostics, nameNode),
+            WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, arena, ref diagnostics, source, nameNode),
+            WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, arena, ref diagnostics, source, nameNode),
+            WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, arena, ref diagnostics, in eventInfo, nameNode),
+            WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, arena, ref diagnostics, nameNode),
             _ => BuildSimpleEvent(arena, in eventInfo, nameNode),
         };
     }
@@ -252,11 +252,11 @@ public static partial class WorkflowParser
             || scalarUtf8.SequenceEqual("NULL"u8);
     }
 
-    private static void ValidateKnownOnEvent(in OnEventInfo eventInfo, TextPosition eventMark, List<Diagnostic> diagnostics)
+    private static void ValidateKnownOnEvent(in OnEventInfo eventInfo, TextPosition eventMark, ref PooledBuffer<Diagnostic> diagnostics)
     {
         if (!eventInfo.IsKnown)
         {
-            AddError(diagnostics, $"unknown event \"{eventInfo.Name}\". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names", eventMark);
+            AddError(ref diagnostics, $"unknown event \"{eventInfo.Name}\". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names", eventMark);
         }
     }
 

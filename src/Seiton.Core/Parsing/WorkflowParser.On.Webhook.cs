@@ -8,7 +8,7 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static WebhookEvent ParseWebhookEventWithOptions<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
+    private static WebhookEvent ParseWebhookEventWithOptions<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var hasBranches = false;
@@ -40,7 +40,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"on.{eventInfo.Name} option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, $"on.{eventInfo.Name} option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd) { reader.SkipCurrentNode(); }
                 continue;
@@ -49,7 +49,7 @@ public static partial class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, $"on.{eventInfo.Name}"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, $"on.{eventInfo.Name}"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -67,15 +67,15 @@ public static partial class WorkflowParser
 
             if (knownOption && whOpt == OnWebhookEventOptionMappingKey.Types)
             {
-                if (!TrySetBit(ref seen, 0)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: types", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                if (!TrySetBit(ref seen, 0)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: types", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                 if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeOptionSupported())
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name}.types is not supported", keyMark);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name}.types is not supported", keyMark);
                     reader.SkipCurrentNode();
                     continue;
                 }
 
-                types = ParseOnTypesNodes(ref reader, arena, diagnostics, in eventInfo);
+                types = ParseOnTypesNodes(ref reader, arena, ref diagnostics, in eventInfo);
                 continue;
             }
 
@@ -84,7 +84,7 @@ public static partial class WorkflowParser
                 var eventsForFilter = WebhookTypes.GetEventsForFilter(unknownKeyText);
                 if (eventsForFilter.Length > 0)
                 {
-                    AddError(diagnostics, $"\"{unknownKeyText}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
+                    AddError(ref diagnostics, $"\"{unknownKeyText}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
                 }
                 else
                 {
@@ -95,7 +95,7 @@ public static partial class WorkflowParser
                     var fix = suggestion is not null
                         ? new DiagnosticFix($"replace '{unknownKeyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                         : (DiagnosticFix?)null;
-                    AddError(diagnostics, message, keyMark, fix);
+                    AddError(ref diagnostics, message, keyMark, fix);
                 }
                 if (!reader.End) { reader.SkipCurrentNode(); }
                 continue;
@@ -106,67 +106,67 @@ public static partial class WorkflowParser
                 switch (whOpt)
                 {
                     case OnWebhookEventOptionMappingKey.Branches:
-                        if (!TrySetBit(ref seen, 1)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 1)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasBranches = true;
                         branchesMark = keyMark;
                         var branchesNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches"u8.Length));
                         var brSeqMark = reader.CurrentStart;
-                        var brValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var brErr, out var brMark);
-                        if (brErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings", brMark);
-                        else if (brValues.Length == 0) AddError(diagnostics, "\"branches\" section should not be empty", brSeqMark);
+                        var brValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var brErr, out var brMark);
+                        if (brErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings", brMark);
+                        else if (brValues.Length == 0) AddError(ref diagnostics, "\"branches\" section should not be empty", brSeqMark);
                         branches = new WebhookEventFilter { Name = branchesNameNode, Values = brValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.BranchesIgnore:
-                        if (!TrySetBit(ref seen, 2)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 2)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: branches-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasBranchesIgnore = true;
                         branchesIgnoreMark = keyMark;
                         var branchesIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "branches-ignore"u8.Length));
-                        var biValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var biErr, out var biMark);
-                        if (biErr) AddError(diagnostics, $"on.{eventInfo.Name}.branches-ignore must be string or array of strings", biMark);
+                        var biValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var biErr, out var biMark);
+                        if (biErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.branches-ignore must be string or array of strings", biMark);
                         branchesIgnore = new WebhookEventFilter { Name = branchesIgnoreNameNode, Values = biValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.Tags:
-                        if (!TrySetBit(ref seen, 3)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 3)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasTags = true;
                         tagsMark = keyMark;
                         var tagsNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags"u8.Length));
-                        var tValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tErr, out var tMark);
-                        if (tErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags must be string or array of strings", tMark);
+                        var tValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var tErr, out var tMark);
+                        if (tErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.tags must be string or array of strings", tMark);
                         tags = new WebhookEventFilter { Name = tagsNameNode, Values = tValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.TagsIgnore:
-                        if (!TrySetBit(ref seen, 4)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 4)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: tags-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasTagsIgnore = true;
                         tagsIgnoreMark = keyMark;
                         var tagsIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "tags-ignore"u8.Length));
-                        var tiValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var tiErr, out var tiMark);
-                        if (tiErr) AddError(diagnostics, $"on.{eventInfo.Name}.tags-ignore must be string or array of strings", tiMark);
+                        var tiValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var tiErr, out var tiMark);
+                        if (tiErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.tags-ignore must be string or array of strings", tiMark);
                         tagsIgnore = new WebhookEventFilter { Name = tagsIgnoreNameNode, Values = tiValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.Paths:
-                        if (!TrySetBit(ref seen, 5)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 5)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasPaths = true;
                         pathsMark = keyMark;
                         var pathsNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths"u8.Length));
-                        var pValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var pErr, out var pMark);
-                        if (pErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths must be string or array of strings", pMark);
+                        var pValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var pErr, out var pMark);
+                        if (pErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.paths must be string or array of strings", pMark);
                         paths = new WebhookEventFilter { Name = pathsNameNode, Values = pValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.PathsIgnore:
-                        if (!TrySetBit(ref seen, 6)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 6)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: paths-ignore", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         hasPathsIgnore = true;
                         pathsIgnoreMark = keyMark;
                         var pathsIgnoreNameNode = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, "paths-ignore"u8.Length));
-                        var piValues = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var piErr, out var piMark);
-                        if (piErr) AddError(diagnostics, $"on.{eventInfo.Name}.paths-ignore must be string or array of strings", piMark);
+                        var piValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var piErr, out var piMark);
+                        if (piErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.paths-ignore must be string or array of strings", piMark);
                         pathsIgnore = new WebhookEventFilter { Name = pathsIgnoreNameNode, Values = piValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.Workflows:
-                        if (!TrySetBit(ref seen, 7)) { AddError(diagnostics, $"on.{eventInfo.Name} contains duplicate key: workflows", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
+                        if (!TrySetBit(ref seen, 7)) { AddError(ref diagnostics, $"on.{eventInfo.Name} contains duplicate key: workflows", keyMark); if (!reader.End) reader.SkipCurrentNode(); continue; }
                         var wSeqMark = reader.CurrentStart;
-                        workflows = ParseStringOrStringSequence(ref reader, arena, diagnostics, out var wErr, out var wMark);
-                        if (wErr) AddError(diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings", wMark);
-                        else if (workflows is { Length: 0 }) AddError(diagnostics, "\"workflows\" section should not be empty", wSeqMark);
+                        workflows = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var wErr, out var wMark);
+                        if (wErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings", wMark);
+                        else if (workflows is { Length: 0 }) AddError(ref diagnostics, "\"workflows\" section should not be empty", wSeqMark);
                         continue;
                     default:
                         if (!reader.End) { reader.SkipCurrentNode(); }
@@ -174,7 +174,7 @@ public static partial class WorkflowParser
                 }
             }
 
-            AddError(diagnostics, $"unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
+            AddError(ref diagnostics, $"unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
             if (!reader.End) { reader.SkipCurrentNode(); }
         }
 
@@ -183,19 +183,19 @@ public static partial class WorkflowParser
         if (hasBranches && hasBranchesIgnore)
         {
             var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
-            AddError(diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
             var mark = tagsIgnoreMark.Offset > tagsMark.Offset ? tagsIgnoreMark : tagsMark;
-            AddError(diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
             var mark = pathsIgnoreMark.Offset > pathsMark.Offset ? pathsIgnoreMark : pathsMark;
-            AddError(diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         return new WebhookEvent
@@ -214,7 +214,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static StringNodeId[] ParseOnTypesNodes<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+    private static StringNodeId[] ParseOnTypesNodes<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -224,7 +224,7 @@ public static partial class WorkflowParser
             var valueUtf8 = reader.GetScalarUtf8();
             if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
             {
-                AddError(diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", mark);
+                AddError(ref diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", mark);
             }
 
             var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
@@ -234,7 +234,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
+            AddError(ref diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -248,7 +248,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
@@ -258,7 +258,7 @@ public static partial class WorkflowParser
                 var valueUtf8 = reader.GetScalarUtf8();
                 if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", mark);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", mark);
                 }
 
                 list.Add(arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length)));
@@ -269,7 +269,7 @@ public static partial class WorkflowParser
 
             if (list.Count == 0)
             {
-                AddError(diagnostics, "\"types\" section should not be empty", typesSeqMark);
+                AddError(ref diagnostics, "\"types\" section should not be empty", typesSeqMark);
             }
 
             return list.ToArray();
@@ -277,7 +277,7 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null, string? emptyElementMessage = null)
+    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
@@ -287,7 +287,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, errorMessage, reader.CurrentStart);
+            AddError(ref diagnostics, errorMessage, reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -300,13 +300,13 @@ public static partial class WorkflowParser
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
                 // Always accept empty elements for AST collection; emit specific error below.
-                var node = ParseString(ref reader, arena, diagnostics, errorMessage, allowEmpty: true);
+                var node = ParseString(ref reader, arena, ref diagnostics, errorMessage, allowEmpty: true);
                 if (node.HasValue)
                 {
                     if (!allowElemEmpty && arena.GetStringValue(node).Length == 0)
                     {
                         var range = arena.GetStringRange(node);
-                        AddError(diagnostics, emptyElementMessage ?? "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                        AddError(ref diagnostics, emptyElementMessage ?? "string should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
                     }
                     list.Add(node);
                 }
@@ -319,7 +319,7 @@ public static partial class WorkflowParser
 
             if (!allowEmpty && list.Count == 0)
             {
-                AddError(diagnostics, emptyMessage ?? errorMessage, seqMark);
+                AddError(ref diagnostics, emptyMessage ?? errorMessage, seqMark);
             }
 
             return list.ToArray();
@@ -327,7 +327,7 @@ public static partial class WorkflowParser
         finally { list.Dispose(); }
     }
 
-    private static void ParseOnEventOptions<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark)
+    private static void ParseOnEventOptions<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo, TextPosition eventMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var hasBranches = false;
@@ -349,7 +349,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"on.{eventInfo.Name} option key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, $"on.{eventInfo.Name} option key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -374,12 +374,12 @@ public static partial class WorkflowParser
 
                 if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeOptionSupported())
                 {
-                    AddError(diagnostics, $"on.{eventInfo.Name}.types is not supported", keyMark);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name}.types is not supported", keyMark);
                     reader.SkipCurrentNode();
                     continue;
                 }
 
-                ParseOnTypes(ref reader, arena, diagnostics, in eventInfo);
+                ParseOnTypes(ref reader, arena, ref diagnostics, in eventInfo);
                 continue;
             }
 
@@ -394,7 +394,7 @@ public static partial class WorkflowParser
                 var fix = suggestion is not null
                     ? new DiagnosticFix($"replace '{key}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                     : (DiagnosticFix?)null;
-                AddError(diagnostics, message, keyMark, fix);
+                AddError(ref diagnostics, message, keyMark, fix);
                 if (!reader.End)
                 {
                     reader.SkipCurrentNode();
@@ -418,41 +418,41 @@ public static partial class WorkflowParser
                         reader.Read();
                         hasBranches = true;
                         branchesMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.BranchesIgnore:
                         reader.Read();
                         hasBranchesIgnore = true;
                         branchesIgnoreMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.branches-ignore must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.branches-ignore must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Tags:
                         reader.Read();
                         hasTags = true;
                         tagsMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.tags must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.TagsIgnore:
                         reader.Read();
                         hasTagsIgnore = true;
                         tagsIgnoreMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.tags-ignore must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.tags-ignore must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Paths:
                         reader.Read();
                         hasPaths = true;
                         pathsMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.paths must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.PathsIgnore:
                         reader.Read();
                         hasPathsIgnore = true;
                         pathsIgnoreMark = keyMark;
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.paths-ignore must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.paths-ignore must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Workflows:
                         reader.Read();
-                        ParseScalarOrScalarSequence(ref reader, arena, diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings");
+                        ParseScalarOrScalarSequence(ref reader, arena, ref diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings");
                         continue;
                     case OnEventOptionsExtendedMappingKey.Inputs:
                     case OnEventOptionsExtendedMappingKey.Secrets:
@@ -465,7 +465,7 @@ public static partial class WorkflowParser
                                 : "outputs";
                         if (reader.CurrentKind != YamlEventKind.MappingStart)
                         {
-                            AddError(diagnostics, $"on.{eventInfo.Name}.{iosName} must be object", reader.CurrentStart);
+                            AddError(ref diagnostics, $"on.{eventInfo.Name}.{iosName} must be object", reader.CurrentStart);
                         }
 
                         reader.SkipCurrentNode();
@@ -488,7 +488,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
+            AddError(ref diagnostics, $"unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
             reader.SkipCurrentNode();
         }
 
@@ -500,23 +500,23 @@ public static partial class WorkflowParser
         if (hasBranches && hasBranchesIgnore)
         {
             var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
-            AddError(diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
             var mark = tagsIgnoreMark.Offset > tagsMark.Offset ? tagsIgnoreMark : tagsMark;
-            AddError(diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
             var mark = pathsIgnoreMark.Offset > pathsMark.Offset ? pathsIgnoreMark : pathsMark;
-            AddError(diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
     }
 
-    private static void ParseOnTypes<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+    private static void ParseOnTypes<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -524,7 +524,7 @@ public static partial class WorkflowParser
             var valueUtf8 = reader.GetScalarUtf8();
             if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
             {
-                AddError(diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentStart);
+                AddError(ref diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentStart);
             }
 
             reader.Read();
@@ -533,7 +533,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
+            AddError(ref diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
             reader.SkipCurrentNode();
             return;
         }
@@ -543,7 +543,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
+                AddError(ref diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 continue;
             }
@@ -551,7 +551,7 @@ public static partial class WorkflowParser
             var valueUtf8 = reader.GetScalarUtf8();
             if (eventInfo.IsKnown && !eventInfo.Spec.IsTypeAllowed(valueUtf8))
             {
-                AddError(diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentStart);
+                AddError(ref diagnostics, $"on.{eventInfo.Name}.types contains unsupported activity type: {Encoding.UTF8.GetString(valueUtf8)}", reader.CurrentStart);
             }
 
             reader.Read();

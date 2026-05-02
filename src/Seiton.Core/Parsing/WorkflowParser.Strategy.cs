@@ -5,12 +5,12 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static void ParseScalarOrScalarSequence<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, string error, Utf8ScalarValidator? scalarValidator = null)
+    private static void ParseScalarOrScalarSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, Utf8ScalarValidator? scalarValidator = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (scalarValidator is null)
         {
-            _ = ParseStringOrStringSequence(ref reader, arena, diagnostics, error);
+            _ = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, error);
             return;
         }
 
@@ -19,7 +19,7 @@ public static partial class WorkflowParser
             var validationError = scalarValidator(reader.GetScalarUtf8());
             if (validationError is not null)
             {
-                AddError(diagnostics, validationError, reader.CurrentStart);
+                AddError(ref diagnostics, validationError, reader.CurrentStart);
             }
 
             reader.Read();
@@ -28,7 +28,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, error, reader.CurrentStart);
+            AddError(ref diagnostics, error, reader.CurrentStart);
             reader.SkipCurrentNode();
             return;
         }
@@ -38,7 +38,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, error, reader.CurrentStart);
+                AddError(ref diagnostics, error, reader.CurrentStart);
                 reader.SkipCurrentNode();
                 continue;
             }
@@ -46,7 +46,7 @@ public static partial class WorkflowParser
             var validationError = scalarValidator(reader.GetScalarUtf8());
             if (validationError is not null)
             {
-                AddError(diagnostics, validationError, reader.CurrentStart);
+                AddError(ref diagnostics, validationError, reader.CurrentStart);
             }
 
             reader.Read();
@@ -58,7 +58,7 @@ public static partial class WorkflowParser
         }
     }
 
-    private static Strategy ParseStrategy<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Strategy ParseStrategy<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         Matrix? matrix = null;
@@ -74,7 +74,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -85,7 +85,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "strategy"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "strategy"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -99,7 +99,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, strategyKeyOrdinal))
                 {
                     var dupName = sk == StrategyMappingKey.Matrix ? "matrix" : sk == StrategyMappingKey.FailFast ? "fail-fast" : "max-parallel";
-                    AddError(diagnostics, $"strategy contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"strategy contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -116,24 +116,24 @@ public static partial class WorkflowParser
                             goto strategy_mapping_done;
                         }
 
-                        matrix = ParseMatrix(ref reader, arena, diagnostics, source, jobId);
+                        matrix = ParseMatrix(ref reader, arena, ref diagnostics, source, jobId);
                         continue;
                     case StrategyMappingKey.FailFast:
                         if (!reader.End)
                         {
-                            failFast = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobStrategy, out var ffErr, out var ffMark);
-                            if (ffErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.fail-fast must be bool or expression", ffMark);
+                            failFast = ParseBoolOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobStrategy, out var ffErr, out var ffMark);
+                            if (ffErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.fail-fast must be bool or expression", ffMark);
                         }
 
                         continue;
                     case StrategyMappingKey.MaxParallel:
                         if (!reader.End)
                         {
-                            maxParallel = ParseIntOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.JobStrategy, out var mpErr, out var mpMark);
-                            if (mpErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.max-parallel must be integer", mpMark);
+                            maxParallel = ParseIntOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobStrategy, out var mpErr, out var mpMark);
+                            if (mpErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.max-parallel must be integer", mpMark);
                             if (maxParallel.HasValue && arena.GetIntExpression(maxParallel) == default && arena.GetIntValue(maxParallel) <= 0)
                             {
-                                AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.max-parallel must be greater than 0", keyMark);
+                                AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.max-parallel must be greater than 0", keyMark);
                             }
                         }
 
@@ -150,7 +150,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read(); // consume key
-            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}", keyMark);
+            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -173,24 +173,24 @@ public static partial class WorkflowParser
         };
     }
 
-    private static Matrix? ParseMatrix<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Matrix? ParseMatrix<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var expression = ParseStringAndValidateExpression(
-                ref reader, arena, diagnostics,
+                ref reader, arena, ref diagnostics,
                 ExpressionValidationContext.JobStrategy,
                 out var mxExprErr,
                 out var mxExprMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (mxExprErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", mxExprMark);
+            if (mxExprErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", mxExprMark);
             return new Matrix { Expression = expression, Range = expression.HasValue ? arena.GetStringRange(expression) : default };
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", reader.CurrentStart);
+            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -210,7 +210,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix key must be string", reader.CurrentStart);
+                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -228,7 +228,7 @@ public static partial class WorkflowParser
                     keySlice.Offset,
                     keySlice.Length,
                     keyMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -262,13 +262,13 @@ public static partial class WorkflowParser
                     var incExcKeyText = isInclude ? "include" : "exclude";
                     if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
                     {
-                        AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{incExcKeyText} must be array or string", reader.CurrentStart);
+                        AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{incExcKeyText} must be array or string", reader.CurrentStart);
                     }
                     var incExcSeqMark = reader.CurrentStart;
-                    var combos = ParseMatrixCombinations(ref reader, arena, diagnostics, source, jobId, incExcKeyText);
+                    var combos = ParseMatrixCombinations(ref reader, arena, ref diagnostics, source, jobId, incExcKeyText);
                     if (combos.Length > 0 && combos[0].Entries is { Count: 0 } && combos[0].Expression == default)
                     {
-                        AddError(diagnostics, $"\"{incExcKeyText}\" section should not be empty", incExcSeqMark);
+                        AddError(ref diagnostics, $"\"{incExcKeyText}\" section should not be empty", incExcSeqMark);
                     }
                     if (isInclude)
                     {
@@ -284,7 +284,7 @@ public static partial class WorkflowParser
                 if (reader.CurrentKind is not YamlEventKind.SequenceStart and not YamlEventKind.Scalar)
                 {
                     var keyTextForDiagnostic = DecodeUtf8(source, keySlice);
-                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{keyTextForDiagnostic} must be array or string", reader.CurrentStart);
+                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{keyTextForDiagnostic} must be array or string", reader.CurrentStart);
                 }
 
                 var rowName = arena.AddString(keySlice, false, BuildScalarLocation(keyMark, keyUtf8.Length));
@@ -293,22 +293,22 @@ public static partial class WorkflowParser
                 if (reader.CurrentKind == YamlEventKind.Scalar)
                 {
                     var valueNode = ParseStringAndValidateExpression(
-                        ref reader, arena, diagnostics,
+                        ref reader, arena, ref diagnostics,
                         ExpressionValidationContext.JobStrategy,
                         out var rowErr,
                         out var rowMark,
                         parseWholeValueIfNoEmbedded: false);
-                    if (rowErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{DecodeUtf8(source, keySlice)} must be array or string", rowMark);
+                    if (rowErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{DecodeUtf8(source, keySlice)} must be array or string", rowMark);
                     rowExpr = valueNode;
                     rowValues = !valueNode.HasValue ? [] : [new RawYamlString { Value = valueNode }];
                 }
                 else if (reader.CurrentKind == YamlEventKind.SequenceStart)
                 {
                     var matrixRowSeqMark = reader.CurrentStart;
-                    rowValues = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length), ExpressionValidationContext.JobStrategy);
+                    rowValues = ParseRawYamlArray(ref reader, arena, ref diagnostics, source, jobId, source.Slice(keySlice.Offset, keySlice.Length), ExpressionValidationContext.JobStrategy);
                     if (rowValues.Count == 0)
                     {
-                        AddError(diagnostics, "\"matrix values\" section should not be empty", matrixRowSeqMark);
+                        AddError(ref diagnostics, "\"matrix values\" section should not be empty", matrixRowSeqMark);
                     }
                 }
                 else
@@ -341,18 +341,18 @@ public static partial class WorkflowParser
         finally { rowBuffer.Dispose(); }
     }
 
-    private static MatrixCombinations[] ParseMatrixCombinations<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
+    private static MatrixCombinations[] ParseMatrixCombinations<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var expr = ParseStringAndValidateExpression(
-                ref reader, arena, diagnostics,
+                ref reader, arena, ref diagnostics,
                 ExpressionValidationContext.JobStrategy,
                 out var mcErr,
                 out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
-            if (mcErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", mcMark);
+            if (mcErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", mcMark);
             return
             [
                 new MatrixCombinations
@@ -365,7 +365,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", reader.CurrentStart);
+            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -378,12 +378,12 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
-                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} item must be object", reader.CurrentStart);
+                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} item must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
 
-                entries.Add(ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, ExpressionValidationContext.JobStrategy));
+                entries.Add(ParseRawYamlObject(ref reader, arena, ref diagnostics, source, jobId, ExpressionValidationContext.JobStrategy));
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
@@ -402,12 +402,12 @@ public static partial class WorkflowParser
         finally { entries.Dispose(); }
     }
 
-    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8, ExpressionValidationContext exprContext)
+    private static IReadOnlyList<RawYamlValue> ParseRawYamlArray<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ReadOnlySpan<byte> rowNameUtf8, ExpressionValidationContext exprContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{Encoding.UTF8.GetString(rowNameUtf8)} must be array or string", reader.CurrentStart);
+            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{Encoding.UTF8.GetString(rowNameUtf8)} must be array or string", reader.CurrentStart);
             reader.SkipCurrentNode();
             return [];
         }
@@ -418,7 +418,7 @@ public static partial class WorkflowParser
             reader.Read();
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                values.Add(ParseRawYamlValue(ref reader, arena, diagnostics, source, jobId, exprContext));
+                values.Add(ParseRawYamlValue(ref reader, arena, ref diagnostics, source, jobId, exprContext));
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
@@ -431,13 +431,13 @@ public static partial class WorkflowParser
         finally { values.Dispose(); }
     }
 
-    private static RawYamlValue ParseRawYamlValue<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)
+    private static RawYamlValue ParseRawYamlValue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
-            var node = ParseStringAndValidateExpression(ref reader, arena, diagnostics, exprContext, out var mvErr, out var mvMark, parseWholeValueIfNoEmbedded: false);
-            if (mvErr) AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value must be string, object, or array", mvMark);
+            var node = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, exprContext, out var mvErr, out var mvMark, parseWholeValueIfNoEmbedded: false);
+            if (mvErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value must be string, object, or array", mvMark);
             if (!node.HasValue) node = arena.AddString(default, false, default);
             return new RawYamlString { Value = node };
         }
@@ -447,7 +447,7 @@ public static partial class WorkflowParser
             var startMark = reader.CurrentStart;
             return new RawYamlObject
             {
-                Properties = ParseRawYamlObject(ref reader, arena, diagnostics, source, jobId, exprContext),
+                Properties = ParseRawYamlObject(ref reader, arena, ref diagnostics, source, jobId, exprContext),
                 Range = BuildScalarLocation(startMark, 0),
             };
         }
@@ -457,24 +457,24 @@ public static partial class WorkflowParser
             var startMark = reader.CurrentStart;
             return new RawYamlArray
             {
-                Items = ParseRawYamlArray(ref reader, arena, diagnostics, source, jobId, "matrix"u8, exprContext),
+                Items = ParseRawYamlArray(ref reader, arena, ref diagnostics, source, jobId, "matrix"u8, exprContext),
                 Range = BuildScalarLocation(startMark, 0),
             };
         }
 
         if (reader.CurrentKind == YamlEventKind.Alias)
         {
-            AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix unexpected alias node in value", reader.CurrentStart);
+            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix unexpected alias node in value", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new RawYamlString { Value = arena.AddString(default, false, default) };
         }
 
-        AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value has unsupported shape", reader.CurrentStart);
+        AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value has unsupported shape", reader.CurrentStart);
         reader.SkipCurrentNode();
         return new RawYamlString { Value = arena.AddString(default, false, default) };
     }
 
-    private static SliceMap<RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)
+    private static SliceMap<RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var map = new PooledBuffer<SliceMap<RawYamlValue>.Entry>(8);
@@ -487,7 +487,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix object key must be string", reader.CurrentStart);
+                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix object key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -505,7 +505,7 @@ public static partial class WorkflowParser
                     keySlice.Offset,
                     keySlice.Length,
                     keyMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -526,7 +526,7 @@ public static partial class WorkflowParser
                     break;
                 }
 
-                map.Add(new SliceMap<RawYamlValue>.Entry(keySlice, ParseRawYamlValue(ref reader, arena, diagnostics, source, jobId, exprContext)));
+                map.Add(new SliceMap<RawYamlValue>.Entry(keySlice, ParseRawYamlValue(ref reader, arena, ref diagnostics, source, jobId, exprContext)));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)

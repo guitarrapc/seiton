@@ -6,7 +6,7 @@ public static partial class WorkflowParser
 {
     internal static StringNodeId MayParseExpression<TReader>(
         ref TReader reader, AstArena arena,
-        List<Diagnostic> diagnostics,
+        ref PooledBuffer<Diagnostic> diagnostics,
         ExpressionValidationContext context)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -30,7 +30,7 @@ public static partial class WorkflowParser
                 valueUtf8,
                 BuildScalarLocation(mark, valueUtf8.Length),
                 context,
-                diagnostics,
+                ref diagnostics,
                 parseWholeValueIfNoEmbedded: false);
         }
 
@@ -38,15 +38,15 @@ public static partial class WorkflowParser
         return hasExpression ? node : default;
     }
 
-    internal static StringNodeId ParseExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+    internal static StringNodeId ParseExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseExpression(ref reader, arena, diagnostics, context, out var needsError, out var errorMark);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        var node = ParseExpression(ref reader, arena, ref diagnostics, context, out var needsError, out var errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    internal static StringNodeId ParseExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+    internal static StringNodeId ParseExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -75,7 +75,7 @@ public static partial class WorkflowParser
             valueUtf8,
             BuildScalarLocation(mark, valueUtf8.Length),
             context,
-            diagnostics,
+            ref diagnostics,
             parseWholeValueIfNoEmbedded: true,
             allowStatusCheckFunctions: true);
 
@@ -85,15 +85,15 @@ public static partial class WorkflowParser
         return node;
     }
 
-    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage, bool parseWholeValueIfNoEmbedded)
+    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage, bool parseWholeValueIfNoEmbedded)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out var needsError, out var errorMark, parseWholeValueIfNoEmbedded);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        var node = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, context, out var needsError, out var errorMark, parseWholeValueIfNoEmbedded);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark, bool parseWholeValueIfNoEmbedded)
+    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark, bool parseWholeValueIfNoEmbedded)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -123,7 +123,7 @@ public static partial class WorkflowParser
             valueUtf8,
             range,
             context,
-            diagnostics,
+            ref diagnostics,
             parseWholeValueIfNoEmbedded);
 
         var node = arena.AddString(slice, isQuoted, range);
@@ -132,15 +132,15 @@ public static partial class WorkflowParser
         return node;
     }
 
-    private static FloatNodeId ParseFloatOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
+    private static FloatNodeId ParseFloatOrExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var node = ParseFloatOrExpression(ref reader, arena, diagnostics, context, out var needsError, out var errorMark);
-        if (needsError) AddError(diagnostics, errorMessage, errorMark);
+        var node = ParseFloatOrExpression(ref reader, arena, ref diagnostics, context, out var needsError, out var errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
         return node;
     }
 
-    private static FloatNodeId ParseFloatOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+    private static FloatNodeId ParseFloatOrExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -187,7 +187,7 @@ public static partial class WorkflowParser
             return floatNode;
         }
 
-        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
+        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
         if (!expressionNode.HasValue)
         {
             return default;
@@ -204,7 +204,7 @@ public static partial class WorkflowParser
         return arena.AddFloat(0, expressionNode, range);
     }
 
-    private static IntNodeId ParseIntOrExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
+    private static IntNodeId ParseIntOrExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, out bool needsError, out TextPosition errorMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -249,7 +249,7 @@ public static partial class WorkflowParser
             return intNode;
         }
 
-        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
+        var expressionNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, context, out needsError, out errorMark, parseWholeValueIfNoEmbedded: false);
         if (!expressionNode.HasValue)
         {
             return default;
@@ -266,13 +266,13 @@ public static partial class WorkflowParser
         return arena.AddInt(0, expressionNode, range);
     }
 
-    private static void ParseConditionalExpression<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
+    private static void ParseConditionalExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string shapeError)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        _ = ParseExpression(ref reader, arena, diagnostics, context, shapeError);
+        _ = ParseExpression(ref reader, arena, ref diagnostics, context, shapeError);
     }
 
-    private static void ValidateExpressionText(ReadOnlySpan<byte> valueUtf8, TextRange valueLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool parseWholeValueIfNoEmbedded, bool allowStatusCheckFunctions = false)
+    private static void ValidateExpressionText(ReadOnlySpan<byte> valueUtf8, TextRange valueLocation, ExpressionValidationContext context, ref PooledBuffer<Diagnostic> diagnostics, bool parseWholeValueIfNoEmbedded, bool allowStatusCheckFunctions = false)
     {
         var hasEmbedded = false;
         var i = 0;
@@ -293,7 +293,7 @@ public static partial class WorkflowParser
                 {
                     var expressionUtf8 = valueUtf8.Slice(trimmed.Offset, trimmed.Length);
                     var expressionLocation = ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length);
-                    ParseAndValidateExpression(expressionUtf8, expressionLocation, context, diagnostics, allowStatusCheckFunctions);
+                    ParseAndValidateExpression(expressionUtf8, expressionLocation, context, ref diagnostics, allowStatusCheckFunctions);
                 }
 
                 i = end + 2;
@@ -311,13 +311,13 @@ public static partial class WorkflowParser
                 return;
             }
 
-            ParseAndValidateExpression(valueUtf8.Slice(trimmed.Offset, trimmed.Length), ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length), context, diagnostics, allowStatusCheckFunctions);
+            ParseAndValidateExpression(valueUtf8.Slice(trimmed.Offset, trimmed.Length), ShiftLocation(valueLocation, trimmed.Offset, trimmed.Length), context, ref diagnostics, allowStatusCheckFunctions);
         }
     }
 
-    private static void ParseAndValidateExpression(ReadOnlySpan<byte> expressionUtf8, TextRange expressionLocation, ExpressionValidationContext context, List<Diagnostic> diagnostics, bool allowStatusCheckFunctions = false)
+    private static void ParseAndValidateExpression(ReadOnlySpan<byte> expressionUtf8, TextRange expressionLocation, ExpressionValidationContext context, ref PooledBuffer<Diagnostic> diagnostics, bool allowStatusCheckFunctions = false)
     {
-        ExpressionParser.ParseAndValidateInline(expressionUtf8, expressionLocation, context, diagnostics, allowStatusCheckFunctions);
+        ExpressionParser.ParseAndValidateInline(expressionUtf8, expressionLocation, context, ref diagnostics, allowStatusCheckFunctions);
     }
 
     private static bool ContainsExpression(ReadOnlySpan<byte> valueUtf8)

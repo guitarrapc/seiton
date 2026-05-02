@@ -52,7 +52,7 @@ public static partial class WorkflowParser
             : $"steps[{stepIndex}]";
     }
 
-    private static Step[] ParseSteps<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static Step[] ParseSteps<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var steps = new PooledBuffer<Step>(8);
@@ -64,7 +64,7 @@ public static partial class WorkflowParser
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
                 stepIndex++;
-                var step = ParseStep(ref reader, arena, diagnostics, source, jobId, stepIndex);
+                var step = ParseStep(ref reader, arena, ref diagnostics, source, jobId, stepIndex);
                 if (step is not null)
                 {
                     steps.Add(step);
@@ -81,7 +81,7 @@ public static partial class WorkflowParser
         finally { steps.Dispose(); }
     }
 
-    private static Step? ParseStep<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
+    private static Step? ParseStep<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -91,18 +91,18 @@ public static partial class WorkflowParser
             if (reader.CurrentKind == YamlEventKind.Scalar
                 && (reader.GetScalarTag() == ScalarTag.Null || reader.GetScalarUtf8().Length == 0))
             {
-                AddError(diagnostics, $"{prefix} element of \"steps\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
-                AddError(diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
+                AddError(ref diagnostics, $"{prefix} element of \"steps\" section should not be empty. please remove this section if it's unnecessary", reader.CurrentStart);
+                AddError(ref diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
             }
             else if (reader.CurrentKind == YamlEventKind.Alias)
             {
-                AddError(diagnostics, $"{prefix} element of \"steps\" section is alias node but mapping node is expected", reader.CurrentStart);
-                AddError(diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
+                AddError(ref diagnostics, $"{prefix} element of \"steps\" section is alias node but mapping node is expected", reader.CurrentStart);
+                AddError(ref diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
             }
             else
             {
-                AddError(diagnostics, $"{prefix} must be object", reader.CurrentStart);
-                AddError(diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
+                AddError(ref diagnostics, $"{prefix} must be object", reader.CurrentStart);
+                AddError(ref diagnostics, $"{prefix} must run script with \"run\" section or run action with \"uses\" section", reader.CurrentStart);
             }
             reader.SkipCurrentNode();
             return default;
@@ -144,7 +144,7 @@ public static partial class WorkflowParser
             hasAnyKey = true;
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -156,7 +156,7 @@ public static partial class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
 
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, FormatStepPrefix(source, jobId, stepIndex)))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, FormatStepPrefix(source, jobId, stepIndex)))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -172,7 +172,7 @@ public static partial class WorkflowParser
                     case StepMappingKey.Run:
                         if (stepForm == 2) // was action, now becomes run; flag previous primary (uses)
                         {
-                            AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"uses\" for step to run shell command. expected one of {RunStepExpectedKeys}", firstPrimaryMark);
+                            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"uses\" for step to run shell command. expected one of {RunStepExpectedKeys}", firstPrimaryMark);
                         }
                         firstPrimaryMark = keyMark;
                         stepForm = 1;
@@ -180,12 +180,12 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             runNode = ParseStringAndValidateExpression(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 ExpressionValidationContext.StepRun,
                                 out var runErr,
                                 out var runMark,
                                 parseWholeValueIfNoEmbedded: false);
-                            if (runErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} run must be string", runMark);
+                            if (runErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} run must be string", runMark);
                         }
 
                         break;
@@ -194,7 +194,7 @@ public static partial class WorkflowParser
                         usesKeyRange = BuildScalarLocation(keyMark, keyLen);
                         if (stepForm == 1) // was run, now becomes action; flag previous primary (run)
                         {
-                            AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"run\" for step to execute action. expected one of {ActionStepExpectedKeys}", firstPrimaryMark);
+                            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"run\" for step to execute action. expected one of {ActionStepExpectedKeys}", firstPrimaryMark);
                         }
                         firstPrimaryMark = keyMark;
                         stepForm = 2;
@@ -202,7 +202,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
-                            if (usesErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} uses must be string", usesMark);
+                            if (usesErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} uses must be string", usesMark);
                         }
 
                         break;
@@ -211,7 +211,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
-                            if (nameErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} name must be string", nameMark);
+                            if (nameErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} name must be string", nameMark);
                         }
 
                         break;
@@ -225,7 +225,7 @@ public static partial class WorkflowParser
                                 var idMsg = idNode.HasValue
                                     ? $"{FormatStepPrefix(source, jobId, stepIndex)} step id should not be empty"
                                     : $"{FormatStepPrefix(source, jobId, stepIndex)} id must be string";
-                                AddError(diagnostics, idMsg, idMark);
+                                AddError(ref diagnostics, idMsg, idMark);
                             }
                         }
 
@@ -236,11 +236,11 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 ExpressionValidationContext.StepIf,
                                 out var ifErr,
                                 out var ifMark);
-                            if (ifErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} if must be string", ifMark);
+                            if (ifErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} if must be string", ifMark);
                         }
 
                         break;
@@ -250,7 +250,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             withInputs = ParseStepWithInputsNode(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 source,
                                 jobId,
                                 stepIndex,
@@ -267,7 +267,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             shellNode = ParseString(ref reader, arena, out var shellErr, out var shellMark);
-                            if (shellErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} shell must be string", shellMark);
+                            if (shellErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} shell must be string", shellMark);
                         }
 
                         break;
@@ -277,12 +277,12 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             workingDirectoryNode = ParseStringAndValidateExpression(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 ExpressionValidationContext.StepWorkingDirectory,
                                 out var wdErr,
                                 out var wdMark,
                                 parseWholeValueIfNoEmbedded: false);
-                            if (wdErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} working-directory must be string", wdMark);
+                            if (wdErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} working-directory must be string", wdMark);
                         }
 
                         break;
@@ -290,11 +290,11 @@ public static partial class WorkflowParser
                     case StepMappingKey.TimeoutMinutes:
                         if (!reader.End)
                         {
-                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.StepTimeoutMinutes, out var tmErr, out var tmMark);
-                            if (tmErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} timeout-minutes must be number or expression", tmMark);
+                            timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.StepTimeoutMinutes, out var tmErr, out var tmMark);
+                            if (tmErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} timeout-minutes must be number or expression", tmMark);
                             if (timeoutMinutesNode.HasValue && !arena.GetFloatExpression(timeoutMinutesNode).HasValue && arena.GetFloatValue(timeoutMinutesNode) <= 0)
                             {
-                                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} timeout-minutes must be greater than 0", keyMark);
+                                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} timeout-minutes must be greater than 0", keyMark);
                             }
                         }
 
@@ -303,8 +303,8 @@ public static partial class WorkflowParser
                     case StepMappingKey.ContinueOnError:
                         if (!reader.End)
                         {
-                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, diagnostics, ExpressionValidationContext.StepContinueOnError, out var coeErr, out var coeMark);
-                            if (coeErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} continue-on-error must be bool or expression", coeMark);
+                            continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.StepContinueOnError, out var coeErr, out var coeMark);
+                            if (coeErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} continue-on-error must be bool or expression", coeMark);
                         }
 
                         break;
@@ -313,7 +313,7 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             envNode = ParseEnvNode(
-                                ref reader, arena, diagnostics,
+                                ref reader, arena, ref diagnostics,
                                 source,
                                 $"{FormatStepPrefix(source, jobId, stepIndex)} env must be object",
                                 ExpressionValidationContext.StepEnv,
@@ -343,11 +343,11 @@ public static partial class WorkflowParser
 
             if (stepForm == 2)
             {
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", keyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", keyMark);
             }
             else if (stepForm == 1)
             {
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", keyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", keyMark);
             }
             else if (deferredUnknownKey is null)
             {
@@ -370,23 +370,23 @@ public static partial class WorkflowParser
         if (deferredUnknownKey is not null && stepForm != 0)
         {
             if (stepForm == 2)
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", deferredUnknownMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", deferredUnknownMark);
             else
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", deferredUnknownMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", deferredUnknownMark);
         }
 
         // Post-mapping: report secondary key conflicts based on step form
         if (stepForm == 2) // action step: shell and working-directory are unexpected
         {
             if (shellKeyMark != default)
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"shell\" for step to execute action. expected one of {ActionStepExpectedKeys}", shellKeyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"shell\" for step to execute action. expected one of {ActionStepExpectedKeys}", shellKeyMark);
             if (wdKeyMark != default)
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"working-directory\" for step to execute action. expected one of {ActionStepExpectedKeys}", wdKeyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"working-directory\" for step to execute action. expected one of {ActionStepExpectedKeys}", wdKeyMark);
         }
         else if (stepForm == 1) // run step: with is unexpected
         {
             if (withKeyMark != default)
-                AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"with\" for step to run shell command. expected one of {RunStepExpectedKeys}", withKeyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"with\" for step to run shell command. expected one of {RunStepExpectedKeys}", withKeyMark);
         }
 
         // Empty mapping (e.g. `- {}`)
@@ -407,13 +407,13 @@ public static partial class WorkflowParser
 
         if (!hasAnyKey)
         {
-            AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} element of \"steps\" section should not be empty. please remove this section if it's unnecessary", emptyMark);
+            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} element of \"steps\" section should not be empty. please remove this section if it's unnecessary", emptyMark);
         }
 
         // spec §3.12: a step must choose one execution form: `run` or `uses`
         if (!hasRun && !hasUses)
         {
-            AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} must run script with \"run\" section or run action with \"uses\" section", hasAnyKey ? stepMark : emptyMark);
+            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} must run script with \"run\" section or run action with \"uses\" section", hasAnyKey ? stepMark : emptyMark);
         }
 
         StepExec exec;
@@ -456,7 +456,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static SliceMap<StringNodeId>? ParseStepWithInputsNode<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNodeId entrypoint, out StringNodeId args)
+    private static SliceMap<StringNodeId>? ParseStepWithInputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNodeId entrypoint, out StringNodeId args)
         where TReader : IYamlStreamReader, allows ref struct
     {
         entrypoint = default;
@@ -464,7 +464,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(diagnostics, "\"with\" section is scalar node but mapping node is expected", reader.CurrentStart);
+            AddError(ref diagnostics, "\"with\" section is scalar node but mapping node is expected", reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -479,7 +479,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} with must be object", reader.CurrentStart);
+                    AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} with must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -500,7 +500,7 @@ public static partial class WorkflowParser
                     keySlice.Offset,
                     keySlice.Length,
                     keyMark,
-                    diagnostics,
+                    ref diagnostics,
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
@@ -521,12 +521,12 @@ public static partial class WorkflowParser
                 }
 
                 var value = ParseStringAndValidateExpression(
-                    ref reader, arena, diagnostics,
+                    ref reader, arena, ref diagnostics,
                     ExpressionValidationContext.StepWith,
                     out var withErr,
                     out var withMark,
                     parseWholeValueIfNoEmbedded: false);
-                if (withErr) AddError(diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} with.{Encoding.UTF8.GetString(keyUtf8)} must be string", withMark);
+                if (withErr) AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} with.{Encoding.UTF8.GetString(keyUtf8)} must be string", withMark);
 
                 if (!value.HasValue)
                 {

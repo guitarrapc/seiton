@@ -70,6 +70,65 @@ public static class ExpressionParser
         }
     }
 
+    /// <summary>
+    /// PooledBuffer overload: same logic as above but writes to a ref PooledBuffer
+    /// for use from the parser hot path (avoids List allocation at the boundary).
+    /// </summary>
+    internal static void ParseAndValidateInline(
+        ReadOnlySpan<byte> expressionUtf8,
+        TextRange expressionLocation,
+        ExpressionValidationContext context,
+        ref PooledBuffer<Diagnostic> diagnostics,
+        bool allowStatusCheckFunctions = false)
+    {
+        using var parser = new Parser(expressionUtf8);
+        var root = parser.ParseExpression();
+        parser.SkipWhiteSpace();
+        if (!parser.End)
+        {
+            parser.AddError($"unexpected token at position {parser.Position}");
+        }
+
+        // Transfer parse diagnostics with location shifting
+        var parseDiags = parser.DiagnosticsAsSpan();
+        for (var i = 0; i < parseDiags.Length; i++)
+        {
+            var d = parseDiags[i];
+            diagnostics.Add(new Diagnostic(
+                d.Severity,
+                $"expression parse error: {d.Message}",
+                ShiftExpressionLocation(expressionLocation, d.Location.Start, d.Location.Length)));
+        }
+
+        // Validate with spans — no array allocation (uses List-based ValidateInline internally)
+        if (root >= 0)
+        {
+            var tempList = threadstaticValidateDiagnostics ??= new List<Diagnostic>();
+            tempList.Clear();
+            ExpressionSemanticAnalyzer.ValidateInline(
+                root,
+                parser.NodesAsSpan(),
+                parser.ArgsAsSpan(),
+                expressionUtf8,
+                expressionLocation,
+                context,
+                tempList,
+                allowStatusCheckFunctions);
+            for (var i = 0; i < tempList.Count; i++)
+            {
+                diagnostics.Add(tempList[i]);
+            }
+
+            // Cap retained capacity to prevent unbounded growth from pathological expressions
+            if (tempList.Capacity > 64)
+            {
+                threadstaticValidateDiagnostics = new List<Diagnostic>(16);
+            }
+        }
+    }
+
+    [ThreadStatic] private static List<Diagnostic>? threadstaticValidateDiagnostics;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static TextRange ShiftExpressionLocation(TextRange baseLocation, int relativeOffset, int length)
     {

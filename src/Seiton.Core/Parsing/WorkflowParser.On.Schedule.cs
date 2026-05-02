@@ -10,13 +10,13 @@ public static partial class WorkflowParser
     private static ScheduledEvent ParseScheduleEvent<TReader>(
         ref TReader reader,
         AstArena arena,
-        List<Diagnostic> diagnostics,
+        ref PooledBuffer<Diagnostic> diagnostics,
         StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
-            AddError(diagnostics, "on.schedule must be array", reader.CurrentStart);
+            AddError(ref diagnostics, "on.schedule must be array", reader.CurrentStart);
             reader.SkipCurrentNode();
             return new ScheduledEvent { EventName = nameNode, Schedules = [], Range = arena.GetStringRange(nameNode) };
         }
@@ -31,12 +31,12 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.MappingStart)
                 {
-                    AddError(diagnostics, "on.schedule item must be object", reader.CurrentStart);
+                    AddError(ref diagnostics, "on.schedule item must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
                     continue;
                 }
 
-                schedules.Add(ParseScheduleEntry(ref reader, arena, diagnostics));
+                schedules.Add(ParseScheduleEntry(ref reader, arena, ref diagnostics));
             }
 
             if (reader.CurrentKind == YamlEventKind.SequenceEnd)
@@ -46,7 +46,7 @@ public static partial class WorkflowParser
 
             if (schedules.Count == 0)
             {
-                AddError(diagnostics, "\"schedule\" section should not be empty", seqMark);
+                AddError(ref diagnostics, "\"schedule\" section should not be empty", seqMark);
             }
 
             return new ScheduledEvent { EventName = nameNode, Schedules = schedules.ToArray(), Range = arena.GetStringRange(nameNode) };
@@ -54,7 +54,7 @@ public static partial class WorkflowParser
         finally { schedules.Dispose(); }
     }
 
-    private static ScheduleEntry ParseScheduleEntry<TReader>(ref TReader reader, AstArena arena, List<Diagnostic> diagnostics)
+    private static ScheduleEntry ParseScheduleEntry<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         TextRange range = default;
@@ -67,7 +67,7 @@ public static partial class WorkflowParser
         {
             if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                AddError(diagnostics, "on.schedule item key must be string", reader.CurrentStart);
+                AddError(ref diagnostics, "on.schedule item key must be string", reader.CurrentStart);
                 reader.SkipCurrentNode();
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
@@ -78,7 +78,7 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, diagnostics, "on.schedule"))
+            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, "on.schedule"))
             {
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
@@ -92,7 +92,7 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, schedKeyOrdinal))
                 {
                     var dupName = sk == OnScheduleEntryMappingKey.Cron ? "cron" : "timezone";
-                    AddError(diagnostics, $"on.schedule contains duplicate key: {dupName}", keyMark);
+                    AddError(ref diagnostics, $"on.schedule contains duplicate key: {dupName}", keyMark);
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();
@@ -104,19 +104,19 @@ public static partial class WorkflowParser
                 switch (sk)
                 {
                     case OnScheduleEntryMappingKey.Cron:
-                        cron = ParseString(ref reader, arena, diagnostics, "on.schedule.cron must be string", allowEmpty: true);
+                        cron = ParseString(ref reader, arena, ref diagnostics, "on.schedule.cron must be string", allowEmpty: true);
                         if (cron.HasValue)
                         {
                             range = arena.GetStringRange(cron);
                             if (arena.GetStringValue(cron).Length == 0)
                             {
-                                AddError(diagnostics, "\"schedule\" section should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
+                                AddError(ref diagnostics, "\"schedule\" section should not be empty", new TextPosition(range.Start, range.StartLine, range.StartColumn));
                             }
                         }
 
                         continue;
                     case OnScheduleEntryMappingKey.Timezone:
-                        timezone = ParseString(ref reader, arena, diagnostics, "on.schedule.timezone must be string", allowEmpty: true);
+                        timezone = ParseString(ref reader, arena, ref diagnostics, "on.schedule.timezone must be string", allowEmpty: true);
                         continue;
                     default:
                         if (!reader.End)
@@ -130,7 +130,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(diagnostics, $"unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}", keyMark);
+            AddError(ref diagnostics, $"unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -144,7 +144,7 @@ public static partial class WorkflowParser
 
         if (!cron.HasValue)
         {
-            AddError(diagnostics, "on.schedule item requires cron", reader.CurrentStart);
+            AddError(ref diagnostics, "on.schedule item requires cron", reader.CurrentStart);
         }
 
         return new ScheduleEntry
