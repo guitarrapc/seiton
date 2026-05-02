@@ -2,10 +2,14 @@
 
 internal static class WorkflowYamlBuilder
 {
-    internal static string Build(int jobCount, int stepsPerJob)
+    /// <param name="jobCount">Number of jobs to generate.</param>
+    /// <param name="stepsPerJob">Number of steps per job.</param>
+    /// <param name="nameSuffix">Appended to workflow <c>name:</c> — changes root section hash (full-change scenario).</param>
+    /// <param name="firstJobStepSuffix">Appended to first job's step name — changes only job0 hash (partial-change scenario).</param>
+    internal static string Build(int jobCount, int stepsPerJob, string? nameSuffix = null, string? firstJobStepSuffix = null)
     {
         var sb = new System.Text.StringBuilder(capacity: 8_192);
-        sb.AppendLine("name: bench");
+        sb.Append("name: bench").AppendLine(nameSuffix ?? "");
         sb.AppendLine("run-name: Bench ${{ github.ref_name }}");
         sb.AppendLine("on:");
         sb.AppendLine("  push:");
@@ -42,11 +46,14 @@ internal static class WorkflowYamlBuilder
             sb.AppendLine("        os: [ubuntu-latest, windows-latest]");
             sb.AppendLine("    steps:");
 
+            // For partial-change scenario: modify first step name in job0 only
+            var stepSuffix = (j == 0) ? firstJobStepSuffix : null;
+
             for (var s = 0; s < stepsPerJob; s++)
             {
                 if ((s & 1) == 0)
                 {
-                    sb.AppendLine("      - name: Run");
+                    sb.Append("      - name: Run").AppendLine(s == 0 && stepSuffix is not null ? stepSuffix : "");
                     sb.AppendLine("        if: ${{ startsWith(github.ref, 'refs/heads/') && success() }}");
                     sb.AppendLine("        run: echo ${{ matrix.os }}");
                     sb.AppendLine("        env:");
