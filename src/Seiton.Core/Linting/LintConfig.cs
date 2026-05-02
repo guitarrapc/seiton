@@ -121,7 +121,8 @@ public sealed class LintConfig
     /// <summary>
     /// Resets per-call state and updates properties for a new lint run.
     /// Preserves expression cache and line starts when the source content is unchanged
-    /// (detected via XXH64 hash, safe even when the same byte[] is reused with different content).
+    /// (detected via XXH64 hash + length + full byte comparison to eliminate collision risk).
+    /// Safe even when the same byte[] is reused with different content.
     /// </summary>
     internal void PrepareForRun(
         byte[] utf8Yaml,
@@ -135,7 +136,8 @@ public sealed class LintConfig
         var contentHash = ComputeContentHash(utf8Yaml);
         var sameContent = contentHash == _sourceContentHash
             && Utf8Yaml is not null
-            && Utf8Yaml.Length == utf8Yaml.Length;
+            && Utf8Yaml.Length == utf8Yaml.Length
+            && Utf8Yaml.AsSpan().SequenceEqual(utf8Yaml);
         _sourceContentHash = contentHash;
         Utf8Yaml = utf8Yaml;
         Arena = arena;

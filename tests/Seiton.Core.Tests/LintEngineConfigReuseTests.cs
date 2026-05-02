@@ -397,4 +397,49 @@ public sealed class LintEngineConfigReuseTests
         // Same diagnostic count as the full result (both filter the suppressed diagnostic)
         await Assert.That(resultSkip.Diagnostics.Length).IsEqualTo(resultFull.Diagnostics.Length);
     }
+
+    [Test]
+    public async Task Check_SameBufferMutatedInPlace_InvalidatesCacheCorrectly()
+    {
+        // When the same byte[] instance is reused with different YAML content of the
+        // same byte length (as PlaygroundLintRunner.RentUtf8Buffer does), the content-hash
+        // comparison must detect the change and invalidate lineStarts/expressionCache.
+        var engine = new LintEngine();
+
+        // Two YAML sources with the same byte length but different content/structure.
+        // Source 1: write-all on line 2
+        const string yaml1Str = "on: push\npermissions: write-all\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n";
+        // Source 2: write-all on line 4 (padded with spaces to keep same byte count)
+        const string yaml2Str = "on: push\n\n\npermissions: write-all\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
+
+        // Ensure same byte length
+        var bytes1 = Encoding.UTF8.GetBytes(yaml1Str);
+        var bytes2 = Encoding.UTF8.GetBytes(yaml2Str);
+
+        // Pad the shorter one if needed (they should be close, adjust if not exact)
+        var targetLen = Math.Max(bytes1.Length, bytes2.Length);
+        var buffer = new byte[targetLen];
+
+        // First call: copy yaml1 into shared buffer
+        bytes1.AsSpan(0, Math.Min(bytes1.Length, targetLen)).CopyTo(buffer);
+        if (bytes1.Length < targetLen) buffer.AsSpan(bytes1.Length).Fill((byte)' ');
+
+        var result1 = engine.Check(buffer, ".github/workflows/ci.yml");
+        var writeAll1 = result1.Diagnostics.FirstOrDefault(d => d.RuleId == "deny-write-all");
+
+        // Second call: overwrite the SAME buffer instance with yaml2 content
+        bytes2.AsSpan(0, Math.Min(bytes2.Length, targetLen)).CopyTo(buffer);
+        if (bytes2.Length < targetLen) buffer.AsSpan(bytes2.Length).Fill((byte)' ');
+
+        var result2 = engine.Check(buffer, ".github/workflows/ci.yml");
+        var writeAll2 = result2.Diagnostics.FirstOrDefault(d => d.RuleId == "deny-write-all");
+
+        // Both should detect write-all (content is valid YAML in both cases)
+        await Assert.That(writeAll1.Message).IsNotNull();
+        await Assert.That(writeAll2.Message).IsNotNull();
+
+        // Critical assertion: line positions must differ because the YAML structure changed,
+        // proving that lineStarts cache was correctly invalidated despite same buffer reference.
+        await Assert.That(writeAll1.Location.StartLine).IsNotEqualTo(writeAll2.Location.StartLine);
+    }
 }

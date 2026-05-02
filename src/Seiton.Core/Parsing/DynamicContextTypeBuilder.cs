@@ -71,12 +71,11 @@ internal static class DynamicContextTypeBuilder
         int maxStepIndex,
         Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver = null)
     {
+        reusableProps.Clear();
         if (steps is null || steps.Count == 0)
         {
             return (StepsKeyUtf8, looseDynamic);
         }
-
-        reusableProps.Clear();
         return BuildStepsOverrideCore(reusableProps, steps, arena, utf8Yaml, maxStepIndex, localActionOutputResolver);
     }
 
