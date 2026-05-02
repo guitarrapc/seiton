@@ -32,6 +32,42 @@ public sealed class PlaygroundLintRunnerTests
             await Assert.That(count).IsEqualTo(firstCount.Value);
         }
     }
+    /// <summary>
+    /// Verifies that concurrent lint calls do not corrupt shared static state
+    /// (LintEngine / JsonBuffer are guarded by EngineGate).
+    /// </summary>
+    [Test]
+    public async Task RunToJson_ConcurrentCalls_ProducesValidJson()
+    {
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        const int parallelism = 8;
+        var tasks = new Task<string>[parallelism];
+        for (var i = 0; i < parallelism; i++)
+        {
+            tasks[i] = Task.Run(() => PlaygroundLintRunner.RunToJson(yaml, ".github/workflows/ci.yml"));
+        }
+
+        var results = await Task.WhenAll(tasks);
+        int? expectedCount = null;
+        foreach (var json in results)
+        {
+            using var doc = JsonDocument.Parse(json);
+            await Assert.That(doc.RootElement.ValueKind).IsEqualTo(JsonValueKind.Array);
+            var count = doc.RootElement.GetArrayLength();
+            expectedCount ??= count;
+            await Assert.That(count).IsEqualTo(expectedCount.Value);
+        }
+    }
+
     [Test]
     public async Task RunToJson_ValidMinimalWorkflow_ReturnsJsonArray()
     {

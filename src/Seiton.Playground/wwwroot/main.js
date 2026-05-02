@@ -565,10 +565,17 @@ permalinkBtn.addEventListener('click', () => {
 applyFixesBtn.addEventListener('click', () => {
     if (!runtimeAlive) return;
     try {
+        const original = editor.getValue();
         const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
-            editor.getValue(),
+            original,
             getSelectedFilePath(),
         );
+        if (yaml === original) {
+            // Fix pass returned unchanged YAML — either an error occurred
+            // (logged to console.error by C#) or no fixes were applicable.
+            showToast('No fixes could be applied.', 'warning');
+            return;
+        }
         editor.setValue(yaml);
         editor.refresh();
         applyFixesBtn.hidden = true;
@@ -738,8 +745,10 @@ function appendTextLinkifyingUrls(parent, text) {
  */
 function isRuntimeDeadError(err) {
     if (!err) return false;
-    const msg = String(err?.message ?? err);
-    return msg.includes('runtime already exited') || msg.includes('runtime has already exited');
+    const msg = String(err?.message ?? err).toLowerCase();
+    return msg.includes('.net runtime already exited')
+        || msg.includes('runtime already exited')
+        || msg.includes('runtime has already exited');
 }
 
 /**
