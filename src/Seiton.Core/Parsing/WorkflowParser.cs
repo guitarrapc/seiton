@@ -5,6 +5,19 @@ using Seiton.Core.Parsing.Ast;
 namespace Seiton.Core.Parsing;
 
 /// <summary>
+/// Entry for a job that should be skipped during incremental parsing (D-5c).
+/// The parser compares each job's positional index against this list and reuses the previous Job if matched.
+/// </summary>
+internal readonly struct JobSkipEntry(Utf8Slice key, Job job)
+{
+    /// <summary>The job ID key slice (offset+length into source).</summary>
+    public readonly Utf8Slice Key = key;
+
+    /// <summary>The previous Job AST node to reuse.</summary>
+    public readonly Job Job = job;
+}
+
+/// <summary>
 /// Hand-written pull-parser that converts UTF-8 YAML into the typed workflow/action metadata AST.
 /// Partial class split by section: Jobs, Steps, Strategy, Events, Containers, etc.
 /// </summary>
@@ -266,13 +279,13 @@ public static partial class WorkflowParser
     /// Sections whose bit is set in <paramref name="rootSkipMask"/> are skipped via SkipCurrentNode().
     /// The caller must patch in previous AST nodes for skipped sections.
     /// </summary>
-    internal static ParseResult ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask)
+    internal static ParseResult ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask, JobSkipEntry[]? jobSkipEntries = null)
     {
         var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {
-            var result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask);
+            var result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask, jobSkipEntries);
 
             // Check for unused anchors and recursive aliases (same as ParseClassified)
             var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
@@ -323,7 +336,7 @@ public static partial class WorkflowParser
         }
     }
 
-    private static ParseResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics, byte rootSkipMask = 0)
+    private static ParseResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics, byte rootSkipMask = 0, JobSkipEntry[]? jobSkipEntries = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         reader.SkipHeader();
@@ -442,6 +455,10 @@ public static partial class WorkflowParser
                             {
                                 AddError(ref diagnostics, "jobs must be object", reader.CurrentStart);
                                 reader.SkipCurrentNode();
+                            }
+                            else if (jobSkipEntries is { Length: > 0 })
+                            {
+                                jobs = ParseJobsMappingIncremental(ref reader, arena, ref diagnostics, source, jobSkipEntries);
                             }
                             else
                             {
@@ -1272,6 +1289,118 @@ public static partial class WorkflowParser
 
                 var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
                 jobs.Add(new SliceMap<Job>.Entry(jobId, job));
+            }
+
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            {
+                reader.Read();
+            }
+
+            return new SliceMap<Job>(jobs.ToArray(), caseSensitive: false);
+        }
+        finally { jobs.Dispose(); }
+    }
+
+    /// <summary>
+    /// Incremental variant of <see cref="ParseJobsMapping{TReader}"/> (D-5c).
+    /// For each job, checks whether it matches a skip entry (by positional index and key bytes).
+    /// If matched, the job subtree is skipped via <c>SkipCurrentNode()</c> and the previous Job is reused.
+    /// </summary>
+    private static SliceMap<Job> ParseJobsMappingIncremental<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, JobSkipEntry[] skipEntries)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        var jobs = new PooledBuffer<SliceMap<Job>.Entry>(8);
+        try
+        {
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            var jobIndex = 0;
+            // current is MappingStart
+            reader.Read();
+
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            {
+                if (reader.CurrentKind != YamlEventKind.Scalar)
+                {
+                    AddError(ref diagnostics, "job id must be string", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    continue;
+                }
+
+                var jobIdMark = reader.CurrentStart;
+                var jobId = reader.GetScalarSlice();
+                var jobIdUtf8 = reader.GetScalarUtf8();
+
+                // D-5c: Check if this job can be skipped (same position, same key bytes)
+                if ((uint)jobIndex < (uint)skipEntries.Length)
+                {
+                    var skipEntry = skipEntries[jobIndex];
+                    if (skipEntry.Job is not null &&
+                        skipEntry.Key.Length == jobId.Length &&
+                        source[skipEntry.Key.Offset..(skipEntry.Key.Offset + skipEntry.Key.Length)]
+                            .SequenceEqual(source[jobId.Offset..(jobId.Offset + jobId.Length)]))
+                    {
+                        // Job matches — skip its subtree and reuse previous Job
+                        // Still register the key for duplicate detection
+                        TryRegisterDynamicKey(
+                            source,
+                            jobIdUtf8,
+                            jobId.Offset,
+                            jobId.Length,
+                            jobIdMark,
+                            ref diagnostics,
+                            keyStore,
+                            ref keyCount,
+                            caseSensitive: false,
+                            "jobs");
+
+                        reader.Read(); // consume job id key
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode(); // skip job body
+                        }
+                        jobs.Add(new SliceMap<Job>.Entry(jobId, skipEntry.Job));
+                        jobIndex++;
+                        continue;
+                    }
+                }
+
+                if (!TryRegisterDynamicKey(
+                    source,
+                    jobIdUtf8,
+                    jobId.Offset,
+                    jobId.Length,
+                    jobIdMark,
+                    ref diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "jobs"))
+                {
+                    reader.Read(); // consume key
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    jobIndex++;
+                    continue;
+                }
+
+                var jobIdNode = arena.AddString(jobId, reader.IsScalarQuoted(), BuildScalarLocation(jobIdMark, jobIdUtf8.Length));
+                reader.Read(); // consume job id
+
+                if (reader.End)
+                {
+                    break;
+                }
+
+                var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
+                jobs.Add(new SliceMap<Job>.Entry(jobId, job));
+                jobIndex++;
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)

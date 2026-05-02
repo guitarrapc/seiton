@@ -149,6 +149,10 @@ public sealed class IncrementalParseContext
     private Workflow? _previousWorkflow;
     private AstArena? _previousArena;
 
+    // D-5c: arenas retained because reused jobs reference their pooled objects.
+    // Disposed only on full parse (when all jobs are freshly allocated).
+    private List<AstArena>? _retainedArenas;
+
     // Base entry counts from the last full parse (cap for BulkImport to prevent growth)
     private int _baseStringCount;
     private int _baseBoolCount;
@@ -162,8 +166,9 @@ public sealed class IncrementalParseContext
     public ref readonly SectionRegistry Registry => ref _registry;
 
     /// <summary>
-    /// Parses the given YAML incrementally, skipping unchanged root sections and reusing
-    /// previous AST nodes for them. On first call (no previous data), performs a full parse.
+    /// Parses the given YAML incrementally, skipping unchanged root sections (D-5b) and
+    /// unchanged individual jobs (D-5c), reusing previous AST nodes for them.
+    /// On first call (no previous data), performs a full parse.
     /// The returned <see cref="ParseResult"/> is owned by this context — callers must NOT
     /// dispose the Arena (the context manages arena lifecycle).
     /// </summary>
@@ -175,22 +180,27 @@ public sealed class IncrementalParseContext
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
-        // Quick identity check: if source length changed, it's a different document (not an edit).
-        // This prevents cross-document contamination when the same IncrementalCtx is used
-        // with different documents (e.g. in tests or multi-tab scenarios).
-        if (_previousSourceLength != utf8Yaml.Length)
+        // Scan new source for section boundaries
+        var newRegistry = default(SectionRegistry);
+        ScanRootSections(utf8Yaml, ref newRegistry);
+        var newJobsEntry = newRegistry.GetRootSection(RootSectionKind.Jobs);
+        if (newJobsEntry.IsValid)
         {
-            return FullParseAndStore(utf8Yaml, filePath);
+            ScanJobSections(utf8Yaml, newJobsEntry.StartOffset, newJobsEntry.EndOffset, ref newRegistry);
         }
 
-        // Determine which root sections are unchanged at the same byte offsets.
-        // Returns 0 if ANY existing root section changed (forces full parse to avoid
-        // arena entry growth from partial imports).
-        var skipMask = ComputeSkipMask(utf8Yaml);
+        // Determine which root sections are unchanged (D-5b).
+        // Returns 0 if ANY existing root section changed (forces full parse for root sections
+        // to avoid arena entry growth from partial imports).
+        var skipMask = ComputeSkipMask(utf8Yaml, ref newRegistry);
 
-        if (skipMask == 0)
+        // D-5c: Compute job skip entries (independent of root skip mask).
+        // Even if root sections changed, individual jobs that are byte-identical can be reused.
+        var jobSkipEntries = ComputeJobSkipEntries(utf8Yaml, ref newRegistry);
+
+        if (skipMask == 0 && jobSkipEntries is null)
         {
-            // Nothing to skip or a section changed — full parse (resets base counts)
+            // Nothing to skip — full parse (resets base counts)
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
@@ -199,7 +209,7 @@ public sealed class IncrementalParseContext
         var arena = AstArena.Rent(utf8Yaml);
         arena.BulkImportFrom(_previousArena, _baseStringCount, _baseBoolCount, _baseIntCount, _baseFloatCount);
 
-        var parseResult = WorkflowParser.ParseIncremental(utf8Yaml, filePath, arena, skipMask);
+        var parseResult = WorkflowParser.ParseIncremental(utf8Yaml, filePath, arena, skipMask, jobSkipEntries);
 
         if (parseResult.HasFatalError || parseResult.Workflow is null)
         {
@@ -208,8 +218,11 @@ public sealed class IncrementalParseContext
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
-        // Patch skipped sections from previous Workflow
-        PatchSkippedSections(parseResult.Workflow, skipMask);
+        // Patch skipped root sections from previous Workflow
+        if (skipMask != 0)
+        {
+            PatchSkippedSections(parseResult.Workflow, skipMask);
+        }
 
         // Update stored state (base counts stay the same — they only reset on full parse)
         var oldArena = _previousArena;
@@ -217,10 +230,19 @@ public sealed class IncrementalParseContext
         _previousSourceLength = utf8Yaml.Length;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = arena;
-        BuildRegistryFromSource(utf8Yaml);
+        _registry = newRegistry;
 
-        // Dispose old arena (its base entries are now copied into the new arena)
-        oldArena.Dispose();
+        if (jobSkipEntries is not null)
+        {
+            // Retain old arena — reused jobs reference its pooled Job/Step objects.
+            // Will be disposed on next full parse.
+            (_retainedArenas ??= new(2)).Add(oldArena!);
+        }
+        else
+        {
+            // No job reuse — safe to dispose old arena immediately
+            oldArena?.Dispose();
+        }
 
         return parseResult;
     }
@@ -329,6 +351,14 @@ public sealed class IncrementalParseContext
             _baseFloatCount = parseResult.Arena.FloatCount;
         }
 
+        // Full parse creates all-new objects — safe to dispose retained arenas
+        if (_retainedArenas is { Count: > 0 })
+        {
+            foreach (var retained in _retainedArenas)
+                retained.Dispose();
+            _retainedArenas.Clear();
+        }
+
         // Dispose the old arena (if any) now that we've stored the new one
         oldArena?.Dispose();
 
@@ -337,20 +367,20 @@ public sealed class IncrementalParseContext
 
     /// <summary>
     /// Computes a bitmask of root sections that can be skipped.
-    /// Returns 0 if ANY existing root section has changed (forces full parse to
-    /// prevent arena entry growth from partial skip/import scenarios).
+    /// Returns 0 if ANY existing root section has changed OR if the document structure
+    /// changed (new sections appeared or disappeared), to prevent cross-document contamination.
     /// Jobs are never skipped (D-5b scope: root sections only).
     /// </summary>
-    private byte ComputeSkipMask(byte[] newSource)
+    private byte ComputeSkipMask(byte[] newSource, ref SectionRegistry newRegistry)
     {
         byte mask = 0;
         var anyChanged = false;
 
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.On, newSource);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Env, newSource);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Permissions, newSource);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Defaults, newSource);
-        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Concurrency, newSource);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.On, newSource, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Env, newSource, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Permissions, newSource, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Defaults, newSource, ref newRegistry);
+        TryAddToMask(ref mask, ref anyChanged, RootSectionKind.Concurrency, newSource, ref newRegistry);
 
         // If any existing root section changed, fall back to full parse
         // to avoid arena entry growth from partial imports
@@ -358,11 +388,20 @@ public sealed class IncrementalParseContext
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void TryAddToMask(ref byte mask, ref bool anyChanged, RootSectionKind kind, byte[] newSource)
+    private void TryAddToMask(ref byte mask, ref bool anyChanged, RootSectionKind kind, byte[] newSource, ref SectionRegistry newRegistry)
     {
-        var entry = _registry.GetRootSection(kind);
-        if (!entry.IsValid) return; // section doesn't exist in previous source
-        if (IsSectionUnchanged(entry, newSource))
+        var oldEntry = _registry.GetRootSection(kind);
+        var newEntry = newRegistry.GetRootSection(kind);
+
+        // Structural change: section exists in one but not the other
+        if (oldEntry.IsValid != newEntry.IsValid)
+        {
+            anyChanged = true;
+            return;
+        }
+
+        if (!oldEntry.IsValid) return; // section doesn't exist in either source
+        if (IsSectionUnchanged(oldEntry, newSource))
         {
             mask |= (byte)(1 << (int)kind);
         }
@@ -403,6 +442,56 @@ public sealed class IncrementalParseContext
         {
             workflow.Concurrency = prev.Concurrency;
         }
+    }
+
+    /// <summary>
+    /// Computes job skip entries for D-5c incremental parsing.
+    /// Compares each job's byte range in the new source against the previous registry.
+    /// Returns null if no jobs can be skipped (job count changed, or no previous jobs).
+    /// </summary>
+    private JobSkipEntry[]? ComputeJobSkipEntries(byte[] newSource, ref SectionRegistry newRegistry)
+    {
+        var prevJobCount = _registry.JobCount;
+        var newJobCount = newRegistry.JobCount;
+
+        // If job count changed, can't match by position — skip nothing
+        if (prevJobCount == 0 || newJobCount == 0 || prevJobCount != newJobCount)
+            return null;
+
+        var prevWorkflow = _previousWorkflow!;
+        var prevJobs = prevWorkflow.Jobs.Entries;
+
+        // If previous workflow has different job count than registry, skip
+        if (prevJobs.Length != prevJobCount)
+            return null;
+
+        JobSkipEntry[]? entries = null;
+        var anySkippable = false;
+
+        for (var i = 0; i < newJobCount; i++)
+        {
+            var prevEntry = _registry.GetJobEntry(i);
+            var newEntry = newRegistry.GetJobEntry(i);
+
+            if (!prevEntry.IsValid || !newEntry.IsValid || prevEntry.HasDiagnostics)
+                continue;
+
+            // Check if bytes are at the same offset with same content
+            if (prevEntry.StartOffset == newEntry.StartOffset &&
+                prevEntry.EndOffset == newEntry.EndOffset &&
+                prevEntry.ContentHash == newEntry.ContentHash)
+            {
+                // This job is unchanged — mark for skip
+                if (entries is null)
+                {
+                    entries = new JobSkipEntry[newJobCount];
+                }
+                entries[i] = new JobSkipEntry(prevJobs[i].Key, prevJobs[i].Value);
+                anySkippable = true;
+            }
+        }
+
+        return anySkippable ? entries : null;
     }
 
     /// <summary>

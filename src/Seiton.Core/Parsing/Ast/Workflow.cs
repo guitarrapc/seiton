@@ -17,7 +17,7 @@ public sealed class Workflow
 
     public Concurrency? Concurrency { get; internal set; }
 
-    public SliceMap<Job> Jobs { get; init; }
+    public SliceMap<Job> Jobs { get; internal set; }
 
     public TextRange Range { get; init; }
 }
