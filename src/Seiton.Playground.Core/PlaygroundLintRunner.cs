@@ -58,6 +58,12 @@ public static class PlaygroundLintRunner
     /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly IncrementalParseContext IncrementalCtx = new();
 
+    /// <summary>Cached last input source string for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    private static string? _lastYamlSource;
+
+    /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    private static byte[]? _lastJsonOutput;
+
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
     /// Uses incremental parsing (D-5b) to skip unchanged root sections when possible.
@@ -71,6 +77,12 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
+            // Fast path: if source is identical to last call, return cached output (copy)
+            if (ReferenceEquals(yamlSource, _lastYamlSource) && _lastJsonOutput is not null)
+            {
+                return (byte[])_lastJsonOutput.Clone();
+            }
+
             var utf8Yaml = RentUtf8Buffer(yamlSource);
 
             // D-5b: Use incremental parse to skip unchanged root sections
@@ -86,7 +98,13 @@ public static class PlaygroundLintRunner
             }
 
             // NOTE: Arena is NOT disposed here — IncrementalParseContext owns it for reuse
-            return JsonBuffer.WrittenSpan.ToArray();
+            var result = JsonBuffer.WrittenSpan.ToArray();
+
+            // Cache for identity-based short circuit
+            _lastYamlSource = yamlSource;
+            _lastJsonOutput = result;
+
+            return result;
         }
     }
 

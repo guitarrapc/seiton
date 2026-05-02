@@ -190,6 +190,13 @@ public sealed class IncrementalParseContext
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
+        // Fast path: if source bytes are identical, return the previous parse result directly.
+        // This avoids re-parsing, arena allocation, and VYaml tokenization entirely.
+        if (IsSourceIdentical(utf8Yaml))
+        {
+            return new ParseResult(_previousWorkflow, null, default, HasFatalError: false, _previousArena);
+        }
+
         // Scan new source for section boundaries
         var newRegistry = default(SectionRegistry);
         ScanRootSections(utf8Yaml, ref newRegistry);
@@ -712,6 +719,19 @@ public sealed class IncrementalParseContext
         var delta = newLen - oldLen;
 
         return new EditRegion(editStart, editEnd, delta);
+    }
+
+    /// <summary>
+    /// Checks whether the new source is byte-identical to the previous source.
+    /// Uses reference equality first (common case: same buffer), then content comparison.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsSourceIdentical(byte[] newSource)
+    {
+        if (_previousSource is null) return false;
+        if (ReferenceEquals(_previousSource, newSource)) return true;
+        if (_previousSourceLength != newSource.Length) return false;
+        return newSource.AsSpan().SequenceEqual(_previousSource.AsSpan(0, _previousSourceLength));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
