@@ -133,8 +133,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (dispInputEntries, dispInputCount) = map.DetachBuffer();
-            return new SliceMap<DispatchInput>(dispInputEntries, dispInputCount, caseSensitive: false);
+            return new SliceMap<DispatchInput>(map.ToArray(), caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

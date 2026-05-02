@@ -435,8 +435,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (wcSecretEntries, wcSecretCount) = map.DetachBuffer();
-            return new SliceMap<WorkflowCallEventSecret>(wcSecretEntries, wcSecretCount, caseSensitive: false);
+            return new SliceMap<WorkflowCallEventSecret>(map.ToArray(), caseSensitive: false);
         }
         finally { map.Dispose(); }
     }
@@ -618,8 +617,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (wcOutputEntries, wcOutputCount) = map.DetachBuffer();
-            return new SliceMap<WorkflowCallEventOutput>(wcOutputEntries, wcOutputCount, caseSensitive: false);
+            return new SliceMap<WorkflowCallEventOutput>(map.ToArray(), caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

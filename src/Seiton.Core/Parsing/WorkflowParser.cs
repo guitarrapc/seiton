@@ -669,10 +669,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (scopeEntries, scopeCount) = scopes.DetachBuffer();
             return new Permissions
             {
-                Scopes = new SliceMap<PermissionScope>(scopeEntries, scopeCount, caseSensitive: true),
+                Scopes = new SliceMap<PermissionScope>(scopes.ToArray(), caseSensitive: true),
                 Range = range,
             };
         }
@@ -782,10 +781,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (varEntries, varCount) = vars.DetachBuffer();
             return new Env
             {
-                Vars = new SliceMap<EnvVar>(varEntries, varCount, caseSensitive: true),
+                Vars = new SliceMap<EnvVar>(vars.ToArray(), caseSensitive: true),
                 Range = range,
             };
         }
@@ -1209,8 +1207,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (jobEntries, jobCount) = jobs.DetachBuffer();
-            return new SliceMap<Job>(jobEntries, jobCount, caseSensitive: false);
+            return new SliceMap<Job>(jobs.ToArray(), caseSensitive: false);
         }
         finally { jobs.Dispose(); }
     }

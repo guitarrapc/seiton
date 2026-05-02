@@ -131,8 +131,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (metaInputEntries, metaInputCount) = map.DetachBuffer();
-            return new SliceMap<ActionMetadataInput>(metaInputEntries, metaInputCount, caseSensitive: false);
+            return new SliceMap<ActionMetadataInput>(map.ToArray(), caseSensitive: false);
         }
         finally { map.Dispose(); }
     }
@@ -325,8 +324,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (metaOutputEntries, metaOutputCount) = map.DetachBuffer();
-            return new SliceMap<ActionMetadataOutput>(metaOutputEntries, metaOutputCount, caseSensitive: false);
+            return new SliceMap<ActionMetadataOutput>(map.ToArray(), caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

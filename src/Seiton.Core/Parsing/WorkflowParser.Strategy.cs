@@ -333,8 +333,7 @@ public static partial class WorkflowParser
             SliceMap<MatrixRow>? rows = null;
             if (rowBuffer.Count > 0)
             {
-                var (rowEntries, rowCount) = rowBuffer.DetachBuffer();
-                rows = new SliceMap<MatrixRow>(rowEntries, rowCount, caseSensitive: false);
+                rows = new SliceMap<MatrixRow>(rowBuffer.ToArray(), caseSensitive: false);
             }
 
             return new Matrix
@@ -541,8 +540,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            var (rawEntries, rawCount) = map.DetachBuffer();
-            return new SliceMap<RawYamlValue>(rawEntries, rawCount, caseSensitive: false);
+            return new SliceMap<RawYamlValue>(map.ToArray(), caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

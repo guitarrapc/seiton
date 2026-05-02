@@ -75,37 +75,20 @@ public sealed class SliceMapTests
     }
 
     [Test]
-    public async Task DetachBuffer_TransfersOwnership()
+    public async Task Constructor_CountExceedsArrayLength_ThrowsArgumentOutOfRangeException()
     {
-        var buf = new PooledBuffer<SliceMap<int>.Entry>(4);
-        buf.Add(new SliceMap<int>.Entry(new Utf8Slice(0, 1), 10));
-        buf.Add(new SliceMap<int>.Entry(new Utf8Slice(1, 1), 20));
+        var entries = new SliceMap<int>.Entry[2];
 
-        var (array, count) = buf.DetachBuffer();
-
-        // Buffer should be empty after detach
-        await Assert.That(buf.Count).IsEqualTo(0);
-        // Detached array should have the entries
-        await Assert.That(count).IsEqualTo(2);
-        await Assert.That(array[0].Value).IsEqualTo(10);
-        await Assert.That(array[1].Value).IsEqualTo(20);
+        await Assert.That(() => new SliceMap<int>(entries, count: 3, caseSensitive: true))
+            .Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
-    public async Task SliceMap_FromDetachedBuffer_WorksCorrectly()
+    public async Task Constructor_NegativeCount_ThrowsArgumentOutOfRangeException()
     {
-        var source = "ab"u8.ToArray();
-        var buf = new PooledBuffer<SliceMap<int>.Entry>(4);
-        buf.Add(new SliceMap<int>.Entry(new Utf8Slice(0, 1), 10));
-        buf.Add(new SliceMap<int>.Entry(new Utf8Slice(1, 1), 20));
+        var entries = new SliceMap<int>.Entry[2];
 
-        var (entries, count) = buf.DetachBuffer();
-        var map = new SliceMap<int>(entries, count, caseSensitive: true);
-
-        await Assert.That(map.Count).IsEqualTo(2);
-        await Assert.That(map.TryGetValue(source, "a"u8, out var va)).IsTrue();
-        await Assert.That(va).IsEqualTo(10);
-        await Assert.That(map.TryGetValue(source, "b"u8, out var vb)).IsTrue();
-        await Assert.That(vb).IsEqualTo(20);
+        await Assert.That(() => new SliceMap<int>(entries, count: -1, caseSensitive: true))
+            .Throws<ArgumentOutOfRangeException>();
     }
 }
