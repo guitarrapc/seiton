@@ -9,7 +9,7 @@ on:
         default: "*Core*Benchmark*"
         type: choice
         options:
-          - "*Benchmark*"
+          - "*"
           - "*ActionRefParseBenchmark*"
           - "*Core*Benchmark*"
           - "*CoreLintBenchmark*"
