@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
 
@@ -152,6 +153,19 @@ public sealed class AstArena : IDisposable
     private FloatNodeData[] _floats;
     private int _floatCount;
 
+    // Object pools for composite AST nodes (reused across parse calls)
+    private Job[] _jobs;
+    private int _jobCount;
+
+    private Step[] _steps;
+    private int _stepCount;
+
+    private ExecRun[] _execRuns;
+    private int _execRunCount;
+
+    private ExecAction[] _execActions;
+    private int _execActionCount;
+
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
@@ -159,6 +173,10 @@ public sealed class AstArena : IDisposable
         _bools = ArrayPool<BoolNodeData>.Shared.Rent(boolCapacity);
         _ints = ArrayPool<IntNodeData>.Shared.Rent(intCapacity);
         _floats = ArrayPool<FloatNodeData>.Shared.Rent(floatCapacity);
+        _jobs = new Job[DefaultJobCapacity];
+        _steps = new Step[DefaultStepCapacity];
+        _execRuns = new ExecRun[DefaultExecRunCapacity];
+        _execActions = new ExecAction[DefaultExecActionCapacity];
     }
 
     /// <summary>
@@ -192,6 +210,10 @@ public sealed class AstArena : IDisposable
         _boolCount = 0;
         _intCount = 0;
         _floatCount = 0;
+        _jobCount = 0;
+        _stepCount = 0;
+        _execRunCount = 0;
+        _execActionCount = 0;
         _source = [];
 
         if (cached is null)
@@ -206,6 +228,10 @@ public sealed class AstArena : IDisposable
             ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
             ShrinkIfOversized(ref _ints, DefaultIntCapacity);
             ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
+            ShrinkObjectPoolIfOversized(ref _jobs, DefaultJobCapacity);
+            ShrinkObjectPoolIfOversized(ref _steps, DefaultStepCapacity);
+            ShrinkObjectPoolIfOversized(ref _execRuns, DefaultExecRunCapacity);
+            ShrinkObjectPoolIfOversized(ref _execActions, DefaultExecActionCapacity);
             cached = this;
         }
         else
@@ -219,6 +245,10 @@ public sealed class AstArena : IDisposable
             _bools = null!;
             _ints = null!;
             _floats = null!;
+            _jobs = null!;
+            _steps = null!;
+            _execRuns = null!;
+            _execActions = null!;
         }
     }
 
@@ -227,6 +257,12 @@ public sealed class AstArena : IDisposable
     private const int DefaultBoolCapacity = 32;
     private const int DefaultIntCapacity = 16;
     private const int DefaultFloatCapacity = 8;
+
+    // Object pool default capacities (retain up to these sizes across parses)
+    private const int DefaultJobCapacity = 24;
+    private const int DefaultStepCapacity = 64;
+    private const int DefaultExecRunCapacity = 64;
+    private const int DefaultExecActionCapacity = 64;
 
     private static void ShrinkIfOversized<T>(ref T[] array, int maxRetainedCapacity)
     {
@@ -252,6 +288,10 @@ public sealed class AstArena : IDisposable
         _boolCount = 0;
         _intCount = 0;
         _floatCount = 0;
+        _jobCount = 0;
+        _stepCount = 0;
+        _execRunCount = 0;
+        _execActionCount = 0;
         EnsureMinCapacity(ref _strings, Math.Max(64, source.Length / 20));
         EnsureMinCapacity(ref _bools, Math.Max(8, source.Length / 200));
         EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
@@ -475,6 +515,95 @@ public sealed class AstArena : IDisposable
             ArrayPool<T>.Shared.Return(array);
             array = ArrayPool<T>.Shared.Rent(minCapacity);
         }
+    }
+
+    private static void ShrinkObjectPoolIfOversized<T>(ref T[] array, int maxRetainedCapacity) where T : class
+    {
+        if (array.Length > maxRetainedCapacity)
+        {
+            var newArr = new T[maxRetainedCapacity];
+            Array.Copy(array, newArr, maxRetainedCapacity);
+            array = newArr;
+        }
+    }
+
+    private static void GrowObjectPool<T>(ref T[] array) where T : class
+    {
+        var newArr = new T[array.Length * 2];
+        Array.Copy(array, newArr, array.Length);
+        array = newArr;
+    }
+
+    // Object pool allocation methods
+
+    /// <summary>Returns a pooled or new Job instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Job AllocJob()
+    {
+        if (_jobCount == _jobs.Length) GrowObjectPool(ref _jobs);
+        var obj = _jobs[_jobCount];
+        if (obj is null)
+        {
+            obj = new Job();
+            _jobs[_jobCount] = obj;
+        }
+        else
+        {
+            obj.Reset();
+        }
+        _jobCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new Step instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Step AllocStep()
+    {
+        if (_stepCount == _steps.Length) GrowObjectPool(ref _steps);
+        var obj = _steps[_stepCount];
+        if (obj is null)
+        {
+            obj = new Step();
+            _steps[_stepCount] = obj;
+        }
+        else
+        {
+            obj.Reset();
+        }
+        _stepCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new ExecRun instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ExecRun AllocExecRun()
+    {
+        if (_execRunCount == _execRuns.Length) GrowObjectPool(ref _execRuns);
+        var obj = _execRuns[_execRunCount];
+        if (obj is null)
+        {
+            obj = new ExecRun();
+            _execRuns[_execRunCount] = obj;
+        }
+        obj.Reset();
+        _execRunCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new ExecAction instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ExecAction AllocExecAction()
+    {
+        if (_execActionCount == _execActions.Length) GrowObjectPool(ref _execActions);
+        var obj = _execActions[_execActionCount];
+        if (obj is null)
+        {
+            obj = new ExecAction();
+            _execActions[_execActionCount] = obj;
+        }
+        obj.Reset();
+        _execActionCount++;
+        return obj;
     }
 
     // Debug helpers (§6.2 debugging experience)

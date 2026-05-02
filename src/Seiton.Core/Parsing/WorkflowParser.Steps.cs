@@ -419,41 +419,38 @@ public static partial class WorkflowParser
         StepExec exec;
         if (hasRun)
         {
-            exec = new ExecRun
-            {
-                Kind = StepExecKind.Run,
-                Run = runNode.HasValue ? runNode : arena.AddString(default, false, default),
-                Shell = shellNode,
-                WorkingDirectory = workingDirectoryNode,
-                Range = runNode.HasValue ? arena.GetStringRange(runNode) : default,
-            };
+            var execRun = arena.AllocExecRun();
+            execRun.Kind = StepExecKind.Run;
+            execRun.Run = runNode.HasValue ? runNode : arena.AddString(default, false, default);
+            execRun.Shell = shellNode;
+            execRun.WorkingDirectory = workingDirectoryNode;
+            execRun.Range = runNode.HasValue ? arena.GetStringRange(runNode) : default;
+            exec = execRun;
         }
         else
         {
-            exec = new ExecAction
-            {
-                Kind = StepExecKind.Action,
-                Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
-                UsesKeyRange = usesKeyRange,
-                Inputs = withInputs,
-                Entrypoint = dockerEntrypoint,
-                Args = dockerArgs,
-                Range = usesNode.HasValue ? arena.GetStringRange(usesNode) : default,
-            };
+            var execAction = arena.AllocExecAction();
+            execAction.Kind = StepExecKind.Action;
+            execAction.Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default);
+            execAction.UsesKeyRange = usesKeyRange;
+            execAction.Inputs = withInputs;
+            execAction.Entrypoint = dockerEntrypoint;
+            execAction.Args = dockerArgs;
+            execAction.Range = usesNode.HasValue ? arena.GetStringRange(usesNode) : default;
+            exec = execAction;
         }
 
-        return new Step
-        {
-            Id = idNode,
-            If = ifNode,
-            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
-            Name = nameNode,
-            Exec = exec,
-            Env = envNode,
-            ContinueOnError = continueOnErrorNode,
-            TimeoutMinutes = timeoutMinutesNode,
-            Range = exec.Range,
-        };
+        var step = arena.AllocStep();
+        step.Id = idNode;
+        step.If = ifNode;
+        step.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
+        step.Name = nameNode;
+        step.Exec = exec;
+        step.Env = envNode;
+        step.ContinueOnError = continueOnErrorNode;
+        step.TimeoutMinutes = timeoutMinutesNode;
+        step.Range = exec.Range;
+        return step;
     }
 
     private static SliceMap<StringNodeId>? ParseStepWithInputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex, out StringNodeId entrypoint, out StringNodeId args)

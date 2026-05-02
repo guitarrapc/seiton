@@ -15,49 +15,76 @@ public sealed class Snapshot
 /// <summary>AST node representing a single job in a workflow.</summary>
 public sealed class Job
 {
-    public StringNodeId Id { get; init; }
+    public StringNodeId Id { get; set; }
 
-    public StringNodeId Name { get; init; }
+    public StringNodeId Name { get; set; }
 
-    public StringNodeId[]? Needs { get; init; }
+    public StringNodeId[]? Needs { get; set; }
 
-    public Runner? RunsOn { get; init; }
+    public Runner? RunsOn { get; set; }
 
-    public TextRange? RunsOnKeyRange { get; init; }
+    public TextRange? RunsOnKeyRange { get; set; }
 
-    public Permissions? Permissions { get; init; }
+    public Permissions? Permissions { get; set; }
 
-    public Environment? Environment { get; init; }
+    public Environment? Environment { get; set; }
 
-    public Concurrency? Concurrency { get; init; }
+    public Concurrency? Concurrency { get; set; }
 
-    public SliceMap<StringNodeId>? Outputs { get; init; }
+    public SliceMap<StringNodeId>? Outputs { get; set; }
 
-    public Env? Env { get; init; }
+    public Env? Env { get; set; }
 
-    public Defaults? Defaults { get; init; }
+    public Defaults? Defaults { get; set; }
 
-    public StringNodeId If { get; init; }
+    public StringNodeId If { get; set; }
 
-    public TextRange? IfKeyRange { get; init; }
+    public TextRange? IfKeyRange { get; set; }
 
-    public IReadOnlyList<Step>? Steps { get; init; }
+    public IReadOnlyList<Step>? Steps { get; set; }
 
-    public TextRange? StepsKeyRange { get; init; }
+    public TextRange? StepsKeyRange { get; set; }
 
-    public FloatNodeId TimeoutMinutes { get; init; }
+    public FloatNodeId TimeoutMinutes { get; set; }
 
-    public Strategy? Strategy { get; init; }
+    public Strategy? Strategy { get; set; }
 
-    public BoolNodeId ContinueOnError { get; init; }
+    public BoolNodeId ContinueOnError { get; set; }
 
-    public Container? Container { get; init; }
+    public Container? Container { get; set; }
 
-    public Services? Services { get; init; }
+    public Services? Services { get; set; }
 
-    public WorkflowCall? WorkflowCall { get; init; }
+    public WorkflowCall? WorkflowCall { get; set; }
 
-    public Snapshot? Snapshot { get; init; }
+    public Snapshot? Snapshot { get; set; }
 
-    public TextRange Range { get; init; }
+    public TextRange Range { get; set; }
+
+    internal void Reset()
+    {
+        Id = default;
+        Name = default;
+        Needs = null;
+        RunsOn = null;
+        RunsOnKeyRange = null;
+        Permissions = null;
+        Environment = null;
+        Concurrency = null;
+        Outputs = null;
+        Env = null;
+        Defaults = null;
+        If = default;
+        IfKeyRange = null;
+        Steps = null;
+        StepsKeyRange = null;
+        TimeoutMinutes = default;
+        Strategy = null;
+        ContinueOnError = default;
+        Container = null;
+        Services = null;
+        WorkflowCall = null;
+        Snapshot = null;
+        Range = default;
+    }
 }
