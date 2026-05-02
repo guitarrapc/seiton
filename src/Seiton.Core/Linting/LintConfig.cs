@@ -85,19 +85,23 @@ public sealed class LintConfig
     }
 
     /// <summary>Gets the rule configurations keyed by rule ID string.</summary>
-    public IReadOnlyDictionary<string, RuleConfig>? Rules { get; set; }
+    public IReadOnlyDictionary<string, RuleConfig>? Rules { get => _rules; init => _rules = value; }
+    private IReadOnlyDictionary<string, RuleConfig>? _rules;
 
     /// <summary>Gets the list of exclusion entries from the config.</summary>
-    public IReadOnlyList<LintExclusion>? Exclusions { get; set; }
+    public IReadOnlyList<LintExclusion>? Exclusions { get; init; }
 
     /// <summary>Gets the fix configuration section.</summary>
-    public FixConfig Fix { get; set; } = new();
+    public FixConfig Fix { get => _fix; init => _fix = value; }
+    private FixConfig _fix = new();
 
     /// <summary>Gets the network configuration section.</summary>
-    public NetworkConfig Network { get; set; } = new();
+    public NetworkConfig Network { get => _network; init => _network = value; }
+    private NetworkConfig _network = new();
 
     /// <summary>Gets the output configuration section.</summary>
-    public OutputConfig Output { get; set; } = new();
+    public OutputConfig Output { get => _output; init => _output = value; }
+    private OutputConfig _output = new();
 
     /// <summary>
     /// When <c>true</c>, the <see cref="LintResult.SuppressionSummary"/> is set to
@@ -130,10 +134,10 @@ public sealed class LintConfig
         Utf8Yaml = utf8Yaml;
         Arena = arena;
         FilePath = filePath;
-        Rules = rules;
-        Fix = fix ?? DefaultFix;
-        Network = network ?? DefaultNetwork;
-        Output = output ?? DefaultOutput;
+        _rules = rules;
+        _fix = fix ?? DefaultFix;
+        _network = network ?? DefaultNetwork;
+        _output = output ?? DefaultOutput;
         _lineStarts = null;
         if (_expressionCache is not null)
         {

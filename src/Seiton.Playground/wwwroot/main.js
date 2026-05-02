@@ -431,11 +431,12 @@ let sizingRaf = null;
  * Concurrency & staleness control for lint execution.
  * - lintInProgress: true while RunLint is executing (prevents re-entry)
  * - lintPendingRetry: set to true if a change occurred while lint was in progress; triggers re-lint on completion
- * - lastLintedFingerprint: tracks (source + filePath) to skip redundant lint for identical content
+ * - lastLintedSource / lastLintedFilePath: track previous lint inputs to skip redundant lint for identical content
  */
 let lintInProgress = false;
 let lintPendingRetry = false;
-let lastLintedFingerprint = '';
+let lastLintedSource = '';
+let lastLintedFilePath = '';
 
 editor.on('change', (_cm, changeObj) => {
     if (sizingRaf === null) {
@@ -472,8 +473,9 @@ window.addEventListener('resize', () => {
 });
 
 fileSelect.addEventListener('change', () => {
-    // filePath changed — invalidate fingerprint so lint runs even if source is the same.
-    lastLintedFingerprint = '';
+    // filePath changed — invalidate so lint runs even if source is the same.
+    lastLintedSource = '';
+    lastLintedFilePath = '';
     runLint();
 });
 
@@ -490,7 +492,8 @@ sampleSelect.addEventListener('change', () => {
     }
     editor.setValue(text);
     editor.refresh();
-    lastLintedFingerprint = '';
+    lastLintedSource = '';
+    lastLintedFilePath = '';
     runLint();
 });
 
@@ -569,8 +572,9 @@ applyFixesBtn.addEventListener('click', () => {
         editor.setValue(yaml);
         editor.refresh();
         applyFixesBtn.hidden = true;
-        // Invalidate fingerprint so the lint after fix application actually runs.
-        lastLintedFingerprint = '';
+        // Invalidate so the lint after fix application actually runs.
+        lastLintedSource = '';
+        lastLintedFilePath = '';
         runLint();
     } catch (e) {
         if (isRuntimeDeadError(e)) {
@@ -639,7 +643,8 @@ async function fetchAndLint() {
         const text = await res.text();
         editor.setValue(text);
         editor.refresh();
-        lastLintedFingerprint = '';
+        lastLintedSource = '';
+        lastLintedFilePath = '';
         runLint();
         showToast('Loaded YAML from URL.', 'success');
     } catch (e) {
@@ -781,8 +786,7 @@ function runLint() {
     const filePath = getSelectedFilePath();
 
     // Staleness check: skip if content + filePath are identical to last successful lint.
-    const fingerprint = filePath + '\x00' + source;
-    if (fingerprint === lastLintedFingerprint) {
+    if (source === lastLintedSource && filePath === lastLintedFilePath) {
         return;
     }
 
@@ -792,7 +796,8 @@ function runLint() {
     try {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
-        lastLintedFingerprint = fingerprint;
+        lastLintedSource = source;
+        lastLintedFilePath = filePath;
         renderResults(diagnostics);
     } catch (err) {
         if (isRuntimeDeadError(err)) {

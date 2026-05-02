@@ -96,6 +96,7 @@ public sealed class LintEngine
     /// via a two-buffer swap pattern. Only the most recent result and the immediately preceding one are
     /// guaranteed to remain valid. Callers must not retain a <see cref="LintResult"/> across more than one
     /// subsequent <see cref="Check"/> call on the same <see cref="LintEngine"/> instance.
+    /// Use <see cref="LintResult.CopyDiagnostics"/> to obtain a caller-owned snapshot that is safe to retain.
     /// </para>
     /// </remarks>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)

@@ -4,6 +4,13 @@ using Seiton.Core.Parsing.Ast;
 namespace Seiton.Core.Linting;
 
 /// <summary>Combined parse and lint result for a single YAML document.</summary>
+/// <remarks>
+/// When returned by <see cref="LintEngine.Check(byte[], string, LintConfig?)"/>, the
+/// <see cref="Diagnostics"/> array is backed by an engine-owned buffer (two-buffer swap).
+/// Only the most recent result and the immediately preceding one are guaranteed valid.
+/// Call <see cref="CopyDiagnostics"/> to obtain a caller-owned copy that is safe to retain
+/// beyond subsequent <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> calls.
+/// </remarks>
 public readonly record struct LintResult(
     ParseResult ParseResult,
     Diagnostic[] Diagnostics)
@@ -104,6 +111,23 @@ public readonly record struct LintResult(
 
             return result;
         }
+    }
+
+    /// <summary>
+    /// Returns a caller-owned copy of the <see cref="Diagnostics"/> array.
+    /// Use this when the result must outlive more than one subsequent
+    /// <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> call.
+    /// </summary>
+    public Diagnostic[] CopyDiagnostics()
+    {
+        if (DiagnosticCount == 0)
+        {
+            return [];
+        }
+
+        var copy = new Diagnostic[DiagnosticCount];
+        Array.Copy(Diagnostics, copy, DiagnosticCount);
+        return copy;
     }
 }
 
