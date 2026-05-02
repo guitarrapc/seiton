@@ -653,7 +653,11 @@ async function fetchAndLint() {
         lastLintedSource = '';
         lastLintedFilePath = '';
         runLint();
-        showToast('Loaded YAML from URL.', 'success');
+        // Skip the success toast when the runtime died inside runLint() — the crash
+        // message is already visible and a "Loaded YAML" toast would be misleading.
+        if (runtimeAlive) {
+            showToast('Loaded YAML from URL.', 'success');
+        }
     } catch (e) {
         showToast(e?.message ?? String(e), 'error');
     } finally {
@@ -805,8 +809,14 @@ function runLint() {
     try {
         const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
         const diagnostics = JSON.parse(json);
-        lastLintedSource = source;
-        lastLintedFilePath = filePath;
+        // Do not treat an internal-error fallback as a successful lint: if we cached
+        // the staleness key here a transient C# exception would permanently block retries
+        // on the same content/path until the user edits the file.
+        const isInternalError = diagnostics.length === 1 && diagnostics[0].ruleId === 'internal-error';
+        if (!isInternalError) {
+            lastLintedSource = source;
+            lastLintedFilePath = filePath;
+        }
         renderResults(diagnostics);
     } catch (err) {
         if (isRuntimeDeadError(err)) {
