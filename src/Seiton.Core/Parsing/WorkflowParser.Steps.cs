@@ -546,7 +546,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<StringNodeId>(map.ToArray(), caseSensitive: false);
+            var (withEntries, withCount) = map.DetachArray();
+            arena.RegisterSliceMapBuffer(withEntries);
+            return new SliceMap<StringNodeId>(withEntries, withCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }
