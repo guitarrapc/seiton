@@ -1363,8 +1363,8 @@ public static partial class WorkflowParser
                             .SequenceEqual(source[jobId.Offset..(jobId.Offset + jobId.Length)]))
                     {
                         // Job matches — skip its subtree and reuse previous Job
-                        // Still register the key for duplicate detection
-                        TryRegisterDynamicKey(
+                        // Register key for duplicate detection; if duplicate, skip without adding
+                        if (!TryRegisterDynamicKey(
                             source,
                             jobIdUtf8,
                             jobId.Offset,
@@ -1374,7 +1374,16 @@ public static partial class WorkflowParser
                             keyStore,
                             ref keyCount,
                             caseSensitive: false,
-                            "jobs");
+                            "jobs"))
+                        {
+                            reader.Read(); // consume key
+                            if (!reader.End)
+                            {
+                                reader.SkipCurrentNode();
+                            }
+                            jobIndex++;
+                            continue;
+                        }
 
                         reader.Read(); // consume job id key
                         if (!reader.End)

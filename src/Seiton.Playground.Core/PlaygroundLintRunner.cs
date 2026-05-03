@@ -87,11 +87,21 @@ public static class PlaygroundLintRunner
 
             var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
 
-            // D-5b: Use incremental parse to skip unchanged root sections
-            var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
+            LintResult lintResult;
 
-            // Lint the (possibly incrementally-parsed) result
-            var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult);
+            // Action metadata files (action.yml) require classified parsing — not incremental.
+            if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
+            {
+                lintResult = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
+            }
+            else
+            {
+                // D-5b: Use incremental parse to skip unchanged root sections
+                var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
+
+                // Lint the (possibly incrementally-parsed) result
+                lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult);
+            }
 
             JsonBuffer.Clear();
             using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
