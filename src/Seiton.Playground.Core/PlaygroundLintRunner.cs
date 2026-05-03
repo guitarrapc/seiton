@@ -77,12 +77,12 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
-            // Fast path: if source and filePath are identical to last call, return cached output (copy)
+            // Fast path: if source and filePath are identical to last call, return cached output
             if (ReferenceEquals(yamlSource, _lastYamlSource)
                 && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
                 && _lastJsonOutput is not null)
             {
-                return (byte[])_lastJsonOutput.Clone();
+                return _lastJsonOutput;
             }
 
             var utf8Yaml = EncodeToDoubleBuffer(yamlSource);

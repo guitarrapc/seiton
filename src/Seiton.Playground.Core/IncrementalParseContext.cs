@@ -198,6 +198,15 @@ public sealed class IncrementalParseContext
     /// The returned <see cref="ParseResult"/> is owned by this context — callers must NOT
     /// dispose the Arena (the context manages arena lifecycle).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The returned <see cref="ParseResult.Diagnostics"/> are backed by pooled arrays
+    /// that are released on the <b>next</b> call to this method. Callers must consume
+    /// diagnostics (e.g., serialize them) before calling <c>ParseIncrementally</c> again.
+    /// Retaining references to the <see cref="DiagnosticList"/> across calls leads to
+    /// use-after-return of pooled buffers.
+    /// </para>
+    /// </remarks>
     public ParseResult ParseIncrementally(byte[] utf8Yaml, string filePath)
     {
         if (_previousSource is null || _previousWorkflow is null || _previousArena is null)
