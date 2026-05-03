@@ -762,6 +762,9 @@ public sealed class AstArena : IDisposable
     /// <summary>Gets the current number of float entries in the arena.</summary>
     internal int FloatCount => _floatCount;
 
+    /// <summary>Gets the number of Job objects allocated from this arena's pool.</summary>
+    internal int JobCount => _jobCount;
+
     // Debug helpers (§6.2 debugging experience)
 
     /// <summary>

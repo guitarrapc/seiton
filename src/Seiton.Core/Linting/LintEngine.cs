@@ -113,14 +113,15 @@ public sealed class LintEngine
     /// <summary>
     /// Lints a pre-parsed <see cref="ParseResult"/> without re-parsing.
     /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
-    /// Assumes the document is a workflow (DocumentKind.Workflow).
+    /// Infers <see cref="DocumentKind"/> from the parse result content.
     /// </summary>
     internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        return CheckCore(utf8Yaml, filePath, config, parseResult, DocumentKind.Workflow);
+        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, kind);
     }
 
     /// <summary>
@@ -133,7 +134,8 @@ public sealed class LintEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        return CheckCore(utf8Yaml, filePath, config, parseResult, DocumentKind.Workflow, skipJobs);
+        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, kind, skipJobs);
     }
 
     private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, DocumentKind documentKind, bool[]? skipJobs = null)

@@ -48,7 +48,12 @@ public readonly struct DiagnosticList : IReadOnlyList<Diagnostic>
     public Diagnostic this[int index]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _array![index];
+        get
+        {
+            if ((uint)index >= (uint)_count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            return _array![index];
+        }
     }
 
     /// <summary>Returns the valid diagnostics as a span (zero-copy).</summary>

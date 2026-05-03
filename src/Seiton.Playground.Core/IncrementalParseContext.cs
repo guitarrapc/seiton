@@ -155,7 +155,9 @@ public sealed class IncrementalParseContext
     private bool _previousHasFatalError;
 
     // D-5c: arenas retained because reused jobs reference their pooled objects.
-    // Disposed only on full parse (when all jobs are freshly allocated).
+    // Disposed on full parse (when all jobs are freshly allocated).
+    // Capped to prevent unbounded growth — forces full parse when limit is reached.
+    private const int MaxRetainedArenas = 4;
     private List<AstArena>? _retainedArenas;
 
     // Base entry counts from the last full parse (cap for BulkImport to prevent growth)
@@ -225,6 +227,15 @@ public sealed class IncrementalParseContext
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
+        // Check retention cap BEFORE doing incremental work. If too many arenas
+        // have accumulated (reused jobs chain across many parses), force a full parse
+        // to release them all and prevent unbounded memory growth.
+        if (_retainedArenas is { Count: >= MaxRetainedArenas })
+        {
+            _lastReusedJobs = null;
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
         // Incremental parse: import base entries only (capped to prevent growth),
         // parse with skip, patch results
         var arena = AstArena.Rent(utf8Yaml);
@@ -245,7 +256,8 @@ public sealed class IncrementalParseContext
             PatchSkippedSections(parseResult.Workflow, skipMask);
         }
 
-        // Update stored state (base counts stay the same — they only reset on full parse)
+        // Update stored state. Update base counts to the new arena's totals so that
+        // future BulkImport copies all entries reused jobs may reference.
         var oldArena = _previousArena;
         _previousSource = utf8Yaml;
         _previousSourceLength = utf8Yaml.Length;
@@ -253,6 +265,10 @@ public sealed class IncrementalParseContext
         _previousArena = arena;
         _previousDiagnostics = parseResult.Diagnostics;
         _previousHasFatalError = parseResult.HasFatalError;
+        _baseStringCount = arena.StringCount;
+        _baseBoolCount = arena.BoolCount;
+        _baseIntCount = arena.IntCount;
+        _baseFloatCount = arena.FloatCount;
         _registry = newRegistry;
 
         if (jobSkipEntries is not null)
@@ -261,9 +277,17 @@ public sealed class IncrementalParseContext
             oldArena?.ReleaseDiagnosticsBuffer();
             oldArena?.ReleaseLintDiagnosticsBuffer();
 
-            // Retain old arena — reused jobs reference its pooled Job/Step objects.
-            // Will be disposed on next full parse.
-            (_retainedArenas ??= new(2)).Add(oldArena!);
+            // Retain old arena only if it owns Job objects that may still be referenced.
+            // Intermediate arenas (where all jobs were skipped) have JobCount == 0
+            // and can be safely disposed — their pooled Job[] is empty.
+            if (oldArena is { JobCount: > 0 })
+            {
+                (_retainedArenas ??= new(2)).Add(oldArena!);
+            }
+            else
+            {
+                oldArena?.Dispose();
+            }
 
             // D-5d: record which jobs were reused for lint cache
             var jobCount = parseResult.Workflow!.Jobs.Count;
