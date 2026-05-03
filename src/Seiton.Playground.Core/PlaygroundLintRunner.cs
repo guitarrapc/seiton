@@ -80,7 +80,7 @@ public static class PlaygroundLintRunner
                 return (byte[])_lastJsonOutput.Clone();
             }
 
-            var utf8Yaml = RentUtf8Buffer(yamlSource);
+            var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
 
             // D-5b: Use incremental parse to skip unchanged root sections
             var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
@@ -224,18 +224,32 @@ public static class PlaygroundLintRunner
     }
 
     /// <summary>
-    /// <summary>
-    /// <summary>
-    /// Returns an exact-sized UTF-8 byte[] for the given string.
-    /// Always allocates a new array because the IncrementalParseContext retains a reference
-    /// to the previous source bytes — reusing the same buffer would corrupt stored state.
-    /// Must be called under <see cref="EngineGate"/>.
+    /// Double-buffer for UTF-8 encoding. By alternating between two buffers,
+    /// the buffer that <see cref="IncrementalParseContext"/> stores as <c>_previousSource</c>
+    /// is never overwritten by the next call. Only allocates when the required exact size
+    /// differs from the existing buffer.
+    /// Guarded by <see cref="EngineGate"/>.
     /// </summary>
-    private static byte[] RentUtf8Buffer(string source)
+    private static byte[]? _utf8BufA;
+    private static byte[]? _utf8BufB;
+    private static bool _useUtf8BufA = true;
+
+    /// <summary>
+    /// Encodes <paramref name="source"/> into the inactive double-buffer and returns it.
+    /// Only allocates when the byte length changes from the last call to this buffer slot.
+    /// The returned array has <c>Length == byteCount</c> (exact size) so VYaml and the
+    /// parser see no trailing garbage. Must be called under <see cref="EngineGate"/>.
+    /// </summary>
+    private static byte[] EncodeToDoubleBuffer(string source)
     {
         var byteCount = Encoding.UTF8.GetByteCount(source);
-        var buffer = new byte[byteCount];
-        Encoding.UTF8.GetBytes(source, buffer);
-        return buffer;
+        ref var buf = ref (_useUtf8BufA ? ref _utf8BufA : ref _utf8BufB);
+        if (buf is null || buf.Length != byteCount)
+        {
+            buf = new byte[byteCount];
+        }
+        Encoding.UTF8.GetBytes(source, buf);
+        _useUtf8BufA = !_useUtf8BufA;
+        return buf;
     }
 }
