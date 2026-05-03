@@ -83,6 +83,38 @@ public sealed class ManifestSourceUrlsTests
     }
 
     [Test]
+    public async Task Resolve_WhenDuplicateDataset_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "availability",
+                    SourceUrls = ["https://raw.githubusercontent.com/a/b/c.md"],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+                new SourceManifestEntry
+                {
+                    Dataset = "availability",
+                    SourceUrls = ["https://raw.githubusercontent.com/d/e/f.md"],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task Resolve_WhenSingleUrl_ReturnsFirst()
     {
         var dir = NewTempDir();

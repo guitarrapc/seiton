@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "github-token-available-permissions-reusable",
+  "sourceUrl": "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md",
   "scopes": [
     {
       "name": "actions",

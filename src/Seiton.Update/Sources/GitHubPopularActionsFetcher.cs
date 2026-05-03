@@ -288,7 +288,20 @@ internal sealed class GitHubPopularActionsFetcher
 
             if (string.IsNullOrWhiteSpace(source.ActionRef))
             {
-                source.ActionRef = source.Uses;
+                throw new InvalidDataException($"Popular-actions target config {entryName}.actionRef is required (owner/repo@ref, e.g. actions/checkout@v6).");
+            }
+
+            var atIdx = source.ActionRef.LastIndexOf('@');
+            if (atIdx <= 0 || atIdx == source.ActionRef.Length - 1)
+            {
+                throw new InvalidDataException($"Popular-actions target config {entryName}.actionRef must include a non-empty ref after '@'.");
+            }
+
+            var actionRefPrefix = source.ActionRef[..atIdx].Trim();
+            if (!string.Equals(actionRefPrefix, source.Uses, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"Popular-actions target config {entryName}.actionRef must start with the same owner/repo as uses (expected '{source.Uses}@…', got '{source.ActionRef}').");
             }
         }
 
@@ -306,7 +319,7 @@ internal sealed class GitHubPopularActionsFetcher
 
         for (var i = 0; i < sources.Count; i++)
         {
-            EnsurePopularActionUrlMatchesTarget(sources[i].Uses, manifestUrls[i], i);
+            EnsurePopularActionUrlMatchesTarget(sources[i], manifestUrls[i], i);
             sources[i].Url = manifestUrls[i];
         }
 
@@ -314,11 +327,12 @@ internal sealed class GitHubPopularActionsFetcher
     }
 
     /// <summary>
-    /// Ensures the manifest URL points at raw.githubusercontent.com for the same owner/repo as <paramref name="uses"/>,
-    /// so a reordered or mistyped manifest cannot download another action into this target's raw file.
+    /// Ensures the manifest URL points at raw.githubusercontent.com under the same owner/repo/ref as
+    /// <see cref="PopularActionSource.ActionRef"/>, so URL edits cannot fetch a different version or subtree.
     /// </summary>
-    private static void EnsurePopularActionUrlMatchesTarget(string uses, string url, int index)
+    private static void EnsurePopularActionUrlMatchesTarget(PopularActionSource source, string url, int index)
     {
+        var uses = source.Uses;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
             !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase))
@@ -355,6 +369,15 @@ internal sealed class GitHubPopularActionsFetcher
         {
             throw new InvalidDataException(
                 $"popular-actions: manifest sourceUrls[{index}] must reference action.yml or action.yaml. url={url}");
+        }
+
+        var atIdx = source.ActionRef.LastIndexOf('@');
+        var refFromTarget = source.ActionRef[(atIdx + 1)..].Trim();
+        var pathRef = string.Join("/", segments[2..^1]);
+        if (!string.Equals(pathRef, refFromTarget, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] path ref is '{pathRef}' but targets actionRef expects ref '{refFromTarget}' (full '{source.ActionRef}'). url={url}");
         }
     }
 

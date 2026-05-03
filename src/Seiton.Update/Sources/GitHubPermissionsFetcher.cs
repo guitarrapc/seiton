@@ -79,10 +79,12 @@ internal sealed class GitHubPermissionsFetcher
         var parser = new GitHubDocsPermissionsMarkdownParser();
         var model = parser.Parse(rawText);
 
+        var sourceUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
         var snapshot = new ParsedPermissionsSnapshot
         {
             SchemaVersion = 1,
             Source = "github-token-available-permissions-reusable",
+            SourceUrl = sourceUrl,
             Scopes = model.Scopes.Select(s => new ParsedPermissionsSnapshot.ScopeEntry
             {
                 Name = s.Name,
@@ -127,9 +129,13 @@ internal sealed class GitHubPermissionsFetcher
         // Sort alphabetically
         scopes.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
 
+        var provenance = !string.IsNullOrWhiteSpace(parsed.SourceUrl)
+            ? parsed.SourceUrl.Trim()
+            : parsed.Source;
+
         var merged = new MergedPermissions
         {
-            Source = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions"),
+            Source = provenance,
             Scopes = scopes,
         };
 
@@ -168,6 +174,8 @@ internal sealed class GitHubPermissionsFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        /// <summary>Download URL frozen at parse time (from manifest); merge uses this instead of re-reading manifest.</summary>
+        public string? SourceUrl { get; set; }
         public List<ScopeEntry> Scopes { get; set; } = [];
 
         internal sealed class ScopeEntry

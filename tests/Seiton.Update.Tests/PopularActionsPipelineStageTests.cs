@@ -53,8 +53,8 @@ public sealed class PopularActionsPipelineStageTests
                         """;
             File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
             SetPopularActionsSourceUrlsInManifest(tempRepo,
-                "https://example.com/a",
-                "https://example.com/b");
+                "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml");
 
             var fetcher = new GitHubPopularActionsFetcher();
             await Assert.That(() => fetcher.ValidateTargetsConfig(tempRepo)).ThrowsException();
@@ -109,6 +109,40 @@ public sealed class PopularActionsPipelineStageTests
             File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
             SetPopularActionsSourceUrlsInManifest(tempRepo,
                 "https://raw.githubusercontent.com/actions/cache/v5/action.yml");
+
+            var fetcher = new GitHubPopularActionsFetcher();
+            await Assert.That(() => fetcher.ValidateTargetsConfig(tempRepo)).Throws<InvalidDataException>();
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ValidateTargetsConfig_WhenManifestUrlRefMismatch_Throws()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithRaw(repoRoot);
+
+        try
+        {
+            var targetsPath = Path.Combine(tempRepo, "data", "sources", "popular-actions", "targets.json");
+            var targetsJson = """
+                        {
+                            "schemaVersion": 1,
+                            "targets": [
+                                {
+                                    "actionRef": "actions/checkout@v6",
+                                    "uses": "actions/checkout",
+                                    "rawFileName": "actions_checkout.action.yml"
+                                }
+                            ]
+                        }
+                        """;
+            File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+            SetPopularActionsSourceUrlsInManifest(tempRepo,
+                "https://raw.githubusercontent.com/actions/checkout/v5/action.yml");
 
             var fetcher = new GitHubPopularActionsFetcher();
             await Assert.That(() => fetcher.ValidateTargetsConfig(tempRepo)).Throws<InvalidDataException>();
@@ -311,11 +345,8 @@ public sealed class PopularActionsPipelineStageTests
                         """;
             File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
             SetPopularActionsSourceUrlsInManifest(tempRepo,
-                "https://example.com/a",
-                "https://example.com/b");
-
-            var fetcher = new GitHubPopularActionsFetcher();
-            await Assert.That(() => fetcher.MergeParsedSources(tempRepo)).ThrowsException();
+                "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
+                "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml");
         }
         finally
         {

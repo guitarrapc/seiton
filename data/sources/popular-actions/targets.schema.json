@@ -27,6 +27,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "actionRef",
         "uses",
         "rawFileName"
       ],
@@ -34,7 +35,8 @@
         "actionRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Display/reference value. If omitted, updater treats it as same as uses."
+          "pattern": "^[^@\\s]+/[^@\\s]+@\\S+$",
+          "description": "Pinned action ref (owner/repo@tag-or-branch) for fetch validation and version checks; must match manifest download URL."
         },
         "uses": {
           "type": "string",

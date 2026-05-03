@@ -608,9 +608,8 @@ internal sealed class GitHubWebhookFetcher
         var sb = new StringBuilder();
         sb.AppendLine("# Official Source Diff Report: webhooks");
         sb.AppendLine();
-        var urls = ManifestSourceUrls.Resolve(repoRoot, "webhooks", 2);
-        sb.AppendLine($"- source-a: {urls[0]}");
-        sb.AppendLine($"- source-b: {urls[1]}");
+        sb.AppendLine("- source-a: parsed schema input (raw schema file in-repo)");
+        sb.AppendLine("- source-b: parsed docs input (raw GitHub Docs markdown in-repo)");
         sb.AppendLine($"- exclude-schema-only: {excludeSchemaOnly}");
         sb.AppendLine($"- generated-at-utc: {DateTime.UtcNow:O}");
         sb.AppendLine();

@@ -13,14 +13,23 @@ internal static class ManifestSourceUrls
                 "data/sources/manifest.json is invalid: \"entries\" is missing or null.");
         }
 
-        var entry = manifest.Entries
-            .FirstOrDefault(e => string.Equals(e.Dataset, dataset, StringComparison.Ordinal));
+        var matches = manifest.Entries
+            .Where(e => string.Equals(e.Dataset, dataset, StringComparison.Ordinal))
+            .ToList();
 
-        if (entry is null)
+        if (matches.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"data/sources/manifest.json has duplicate dataset '{dataset}' ({matches.Count} entries). Remove duplicates so only one entry defines sourceUrls.");
+        }
+
+        if (matches.Count == 0)
         {
             throw new InvalidOperationException(
                 $"data/sources/manifest.json has no dataset '{dataset}'. Add an entry with sourceUrls before running fetch.");
         }
+
+        var entry = matches[0];
 
         if (entry.SourceUrls is null)
         {
