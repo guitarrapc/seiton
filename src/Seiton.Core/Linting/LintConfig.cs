@@ -25,6 +25,7 @@ public sealed class LintConfig
 
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
+    private bool _lineStartsValid;
     private long _sourceContentHash;
 
     /// <summary>
@@ -76,13 +77,49 @@ public sealed class LintConfig
     /// </summary>
     public int[] GetLineStarts()
     {
-        if (_lineStarts is not null)
+        if (_lineStartsValid && _lineStarts is not null)
         {
             return _lineStarts;
         }
 
-        _lineStarts = Utf8Yaml is null ? [] : ExpressionScanHelpers.BuildLineStarts(Utf8Yaml);
+        if (Utf8Yaml is null)
+        {
+            _lineStarts = [];
+        }
+        else
+        {
+            _lineStarts = BuildLineStartsReuse(Utf8Yaml, _lineStarts);
+        }
+
+        _lineStartsValid = true;
         return _lineStarts;
+    }
+
+    /// <summary>
+    /// Builds line-start offsets into the existing array if it matches the required size,
+    /// otherwise allocates a new array.
+    /// </summary>
+    private static int[] BuildLineStartsReuse(byte[] source, int[]? existing)
+    {
+        // Count newlines to determine required array size
+        var count = 1;
+        for (var i = 0; i < source.Length; i++)
+        {
+            if (source[i] == (byte)'\n' && i + 1 < source.Length)
+                count++;
+        }
+
+        var result = (existing is not null && existing.Length == count) ? existing : new int[count];
+
+        result[0] = 0;
+        var idx = 1;
+        for (var i = 0; i < source.Length && idx < count; i++)
+        {
+            if (source[i] == (byte)'\n' && i + 1 < source.Length)
+                result[idx++] = i + 1;
+        }
+
+        return result;
     }
 
     /// <summary>Gets the rule configurations keyed by rule ID string.</summary>
@@ -148,7 +185,7 @@ public sealed class LintConfig
         _output = output ?? DefaultOutput;
         if (!sameContent)
         {
-            _lineStarts = null;
+            _lineStartsValid = false;
             if (_expressionCache is not null)
             {
                 _expressionCache.Clear();
