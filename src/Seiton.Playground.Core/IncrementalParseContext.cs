@@ -160,7 +160,10 @@ public sealed class IncrementalParseContext
     private const int MaxRetainedArenas = 4;
     private List<AstArena>? _retainedArenas;
 
-    // Base entry counts from the last full parse (cap for BulkImport to prevent growth)
+    // Base entry counts: initialized from the last full parse and updated after each
+    // incremental parse to track all entries that reused jobs may reference.
+    // BulkImport uses these as the cap to copy. Growth is bounded because
+    // MaxRetainedArenas forces a full parse (resetting counts) before accumulation becomes excessive.
     private int _baseStringCount;
     private int _baseBoolCount;
     private int _baseIntCount;
@@ -271,6 +274,9 @@ public sealed class IncrementalParseContext
         _baseFloatCount = arena.FloatCount;
         _registry = newRegistry;
 
+        // Mark sections that produced diagnostics so they are never skipped on next parse.
+        MarkDiagnosticSections(parseResult.Diagnostics);
+
         if (jobSkipEntries is not null)
         {
             // Diagnostics buffers were already consumed; return them to the pool before retaining the arena.
@@ -376,10 +382,13 @@ public sealed class IncrementalParseContext
         {
             ScanJobSections(source, jobsEntry.StartOffset, jobsEntry.EndOffset, ref _registry);
         }
+
+        // Mark sections/jobs that produced parse diagnostics so they are never skipped.
+        MarkDiagnosticSections(parseResult.Diagnostics);
     }
 
-    /// <summary>Builds registry from source bytes only (no parse needed). Used after incremental parse.</summary>
-    private void BuildRegistryFromSource(byte[] source)
+    /// <summary>Builds registry from source bytes only (no parse needed). Used after full/incremental parse.</summary>
+    private void BuildRegistryFromSource(byte[] source, DiagnosticList diagnostics)
     {
         _registry = default;
         ScanRootSections(source, ref _registry);
@@ -387,6 +396,47 @@ public sealed class IncrementalParseContext
         if (jobsEntry.IsValid)
         {
             ScanJobSections(source, jobsEntry.StartOffset, jobsEntry.EndOffset, ref _registry);
+        }
+
+        // Mark sections/jobs that produced parse diagnostics so they are never skipped.
+        MarkDiagnosticSections(diagnostics);
+    }
+
+    /// <summary>
+    /// Marks root sections and job entries as HasDiagnostics when any parse diagnostic's
+    /// Location.Start falls within their byte range. Prevents skipping sections that
+    /// produced diagnostics on a previous parse.
+    /// </summary>
+    private void MarkDiagnosticSections(DiagnosticList diagnostics)
+    {
+        if (diagnostics.Length == 0)
+            return;
+
+        for (var d = 0; d < diagnostics.Length; d++)
+        {
+            var offset = diagnostics[d].Location.Start;
+
+            // Check root sections
+            for (var k = 0; k < 8; k++)
+            {
+                var entry = _registry.GetRootSection((RootSectionKind)k);
+                if (entry.IsValid && offset >= entry.StartOffset && offset < entry.EndOffset && !entry.HasDiagnostics)
+                {
+                    _registry.SetRootSection((RootSectionKind)k,
+                        new SectionEntry(entry.StartOffset, entry.EndOffset, entry.ContentHash, hasDiagnostics: true));
+                }
+            }
+
+            // Check job entries
+            for (var j = 0; j < _registry.JobCount; j++)
+            {
+                var entry = _registry.GetJobEntry(j);
+                if (entry.IsValid && offset >= entry.StartOffset && offset < entry.EndOffset && !entry.HasDiagnostics)
+                {
+                    _registry.SetJobEntry(j,
+                        new SectionEntry(entry.StartOffset, entry.EndOffset, entry.ContentHash, hasDiagnostics: true));
+                }
+            }
         }
     }
 
@@ -403,7 +453,7 @@ public sealed class IncrementalParseContext
         _previousArena = parseResult.Arena;
         _previousDiagnostics = parseResult.Diagnostics;
         _previousHasFatalError = parseResult.HasFatalError;
-        BuildRegistryFromSource(utf8Yaml);
+        BuildRegistryFromSource(utf8Yaml, parseResult.Diagnostics);
 
         // Record base entry counts (the full parse's arena defines the import cap)
         if (parseResult.Arena is not null)

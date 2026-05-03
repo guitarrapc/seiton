@@ -176,7 +176,7 @@ public sealed class IncrementalParseTests
             await Assert.That(result.Workflow).IsNotNull();
             await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
 
-            var job = result.Workflow!.Jobs[0];
+            var job = result.Workflow!.Jobs.Entries[0].Value;
             // If arena lifecycle is broken, these become null after Job.Reset()
             await Assert.That(job.RunsOn)
                 .IsNotNull()
@@ -190,7 +190,7 @@ public sealed class IncrementalParseTests
 
             // Verify the arena can still resolve string data for this job
             var arena = result.Arena!;
-            var runsOnLabel = arena.GetStringValue(job.RunsOn!.Labels[0]);
+            var runsOnLabel = arena.GetStringValue(job.RunsOn!.Labels![0]);
             await Assert.That(Encoding.UTF8.GetString(runsOnLabel))
                 .IsEqualTo("ubuntu-latest")
                 .Because($"iteration {i}: RunsOn label must be resolvable from arena");
@@ -230,7 +230,7 @@ public sealed class IncrementalParseTests
                 .Because($"iteration {i}: workflow must be non-null after cap recovery");
             await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
 
-            var job = result.Workflow!.Jobs[0];
+            var job = result.Workflow!.Jobs.Entries[0].Value;
             await Assert.That(job.RunsOn).IsNotNull()
                 .Because($"iteration {i}: Job.RunsOn must survive cap-triggered full re-parse");
             await Assert.That(job.Steps).IsNotNull()

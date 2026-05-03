@@ -58,6 +58,9 @@ public static class PlaygroundLintRunner
     /// <summary>Cached last input source string for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static string? _lastYamlSource;
 
+    /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    private static string? _lastFilePath;
+
     /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static byte[]? _lastJsonOutput;
 
@@ -74,8 +77,10 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
-            // Fast path: if source is identical to last call, return cached output (copy)
-            if (ReferenceEquals(yamlSource, _lastYamlSource) && _lastJsonOutput is not null)
+            // Fast path: if source and filePath are identical to last call, return cached output (copy)
+            if (ReferenceEquals(yamlSource, _lastYamlSource)
+                && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
+                && _lastJsonOutput is not null)
             {
                 return (byte[])_lastJsonOutput.Clone();
             }
@@ -99,6 +104,7 @@ public static class PlaygroundLintRunner
 
             // Cache for identity-based short circuit
             _lastYamlSource = yamlSource;
+            _lastFilePath = filePath;
             _lastJsonOutput = result;
 
             return result;

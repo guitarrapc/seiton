@@ -242,7 +242,7 @@ public sealed class AstArena : IDisposable
     {
         if (_lintDiagnosticsBuffer is not null)
         {
-            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer);
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
         }
 
         _lintDiagnosticsBuffer = buffer;
@@ -256,7 +256,7 @@ public sealed class AstArena : IDisposable
     {
         if (_lintDiagnosticsBuffer is not null)
         {
-            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer);
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
             _lintDiagnosticsBuffer = null;
         }
     }
@@ -269,7 +269,7 @@ public sealed class AstArena : IDisposable
     {
         if (_diagnosticsBuffer is not null)
         {
-            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer);
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer, clearArray: true);
             _diagnosticsBuffer = null;
         }
     }
@@ -287,14 +287,14 @@ public sealed class AstArena : IDisposable
         // Return pooled diagnostics buffer if registered
         if (_diagnosticsBuffer is not null)
         {
-            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer);
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer, clearArray: true);
             _diagnosticsBuffer = null;
         }
 
         // Return pooled lint diagnostics buffer if registered
         if (_lintDiagnosticsBuffer is not null)
         {
-            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer);
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
             _lintDiagnosticsBuffer = null;
         }
 
@@ -818,10 +818,11 @@ public sealed class AstArena : IDisposable
 
 /// <summary>
 /// Caches a single <see cref="Action{Array}"/> delegate per type T that returns the array
-/// to <see cref="ArrayPool{T}.Shared"/>. Used by <see cref="AstArena.RegisterSliceMapBuffer{T}"/>
-/// to avoid per-call delegate allocations.
+/// to <see cref="ArrayPool{T}.Shared"/>. Uses <c>clearArray: true</c> when T contains
+/// references to prevent retaining prior AST objects in the shared pool.
 /// </summary>
 internal static class PoolReturnCache<T>
 {
-    public static readonly Action<Array> Instance = static arr => ArrayPool<T>.Shared.Return((T[])arr);
+    public static readonly Action<Array> Instance = static arr =>
+        ArrayPool<T>.Shared.Return((T[])arr, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
 }

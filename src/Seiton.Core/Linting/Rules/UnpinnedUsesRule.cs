@@ -17,6 +17,15 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
     public override string Name => "Unpinned Uses Rule";
 
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        // Clear per-source cache — slice offsets are invalid across different source bytes.
+        _lastUnpinnedStepUsesSlice = default;
+        _lastUnpinnedStepMessage = null;
+        _lastDecodedUsesText = null;
+    }
+
     public override void VisitJobPre(Job job)
     {
         var workflowCall = job.WorkflowCall;
