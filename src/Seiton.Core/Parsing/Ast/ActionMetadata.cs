@@ -3,30 +3,19 @@
 /// <summary>AST node representing an <c>action.yml</c> / <c>action.yaml</c> metadata file.</summary>
 public sealed class ActionMetadata
 {
-    public StringNodeId Name { get; set; }
+    public StringNodeId Name { get; init; }
 
-    public StringNodeId Description { get; set; }
+    public StringNodeId Description { get; init; }
 
-    public SliceMap<ActionMetadataInput>? Inputs { get; set; }
+    public SliceMap<ActionMetadataInput>? Inputs { get; init; }
 
-    public SliceMap<ActionMetadataOutput>? Outputs { get; set; }
+    public SliceMap<ActionMetadataOutput>? Outputs { get; init; }
 
-    public ActionMetadataRuns? Runs { get; set; }
+    public ActionMetadataRuns? Runs { get; init; }
 
-    public ActionMetadataBranding? Branding { get; set; }
+    public ActionMetadataBranding? Branding { get; init; }
 
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Name = default;
-        Description = default;
-        Inputs = null;
-        Outputs = null;
-        Runs = null;
-        Branding = null;
-        Range = default;
-    }
+    public TextRange Range { get; init; }
 }
 
 /// <summary>An input parameter declared in action metadata.</summary>

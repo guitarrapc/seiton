@@ -930,7 +930,7 @@ public static class ExpressionSemanticAnalyzer
                     var properties = new Dictionary<Utf8String, ExprType>();
                     foreach (var property in element.EnumerateObject())
                     {
-                        properties[new Utf8String((ReadOnlyMemory<byte>)Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
+                        properties[new Utf8String(Encoding.UTF8.GetBytes(property.Name))] = ConvertJsonType(property.Value);
                     }
 
                     return ExprType.Object(properties, strict: true);

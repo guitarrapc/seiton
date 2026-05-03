@@ -166,10 +166,6 @@ public sealed class AstArena : IDisposable
     private ExecAction[] _execActions;
     private int _execActionCount;
 
-    // Single-slot pools for root AST nodes (only 1 per parse, mutually exclusive)
-    private Workflow? _workflow;
-    private ActionMetadata? _actionMetadata;
-
     // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
     private Diagnostic[]? _diagnosticsBuffer;
@@ -316,8 +312,6 @@ public sealed class AstArena : IDisposable
         for (var i = 0; i < _stepCount; i++) _steps[i]?.Reset();
         for (var i = 0; i < _execRunCount; i++) _execRuns[i]?.Reset();
         for (var i = 0; i < _execActionCount; i++) _execActions[i]?.Reset();
-        _workflow?.Reset();
-        _actionMetadata?.Reset();
 
         _stringCount = 0;
         _boolCount = 0;
@@ -710,34 +704,6 @@ public sealed class AstArena : IDisposable
         }
         obj.Reset();
         _execActionCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new Workflow instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Workflow AllocWorkflow()
-    {
-        var obj = _workflow;
-        if (obj is null)
-        {
-            obj = new Workflow();
-            _workflow = obj;
-        }
-        obj.Reset();
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ActionMetadata instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ActionMetadata AllocActionMetadata()
-    {
-        var obj = _actionMetadata;
-        if (obj is null)
-        {
-            obj = new ActionMetadata();
-            _actionMetadata = obj;
-        }
-        obj.Reset();
         return obj;
     }
 
