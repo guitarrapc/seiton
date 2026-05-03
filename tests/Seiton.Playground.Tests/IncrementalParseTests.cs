@@ -13,17 +13,11 @@ public sealed class IncrementalParseTests
 
         var ctx = new IncrementalParseContext();
         var result = ctx.ParseIncrementally(yaml, FilePath);
-        try
-        {
-            await Assert.That(result.Workflow).IsNotNull();
-            await Assert.That(result.Workflow!.On).IsNotNull();
-            await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-            await Assert.That(result.HasFatalError).IsFalse();
-        }
-        finally
-        {
-            result.Arena?.Dispose();
-        }
+
+        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow!.On).IsNotNull();
+        await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result.HasFatalError).IsFalse();
     }
 
     [Test]
@@ -40,20 +34,14 @@ public sealed class IncrementalParseTests
         var yaml2 = "on: push\npermissions:\n  contents: read\nenv:\n  CI: true\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo world\n"u8.ToArray();
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        try
-        {
-            await Assert.That(result2.Workflow).IsNotNull();
-            // Root sections should be valid (either reused or re-parsed)
-            await Assert.That(result2.Workflow!.On.Count).IsEqualTo(1);
-            await Assert.That(result2.Workflow!.Permissions).IsNotNull();
-            await Assert.That(result2.Workflow!.Env).IsNotNull();
-            // Jobs should be freshly parsed
-            await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
-        }
-        finally
-        {
-            result2.Arena?.Dispose();
-        }
+
+        await Assert.That(result2.Workflow).IsNotNull();
+        // Root sections should be valid (either reused or re-parsed)
+        await Assert.That(result2.Workflow!.On.Count).IsEqualTo(1);
+        await Assert.That(result2.Workflow!.Permissions).IsNotNull();
+        await Assert.That(result2.Workflow!.Env).IsNotNull();
+        // Jobs should be freshly parsed
+        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
     }
 
     [Test]
@@ -68,19 +56,13 @@ public sealed class IncrementalParseTests
         var yaml2 = "on: pull_request\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n"u8.ToArray();
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        try
-        {
-            await Assert.That(result2.Workflow).IsNotNull();
-            await Assert.That(result2.Workflow!.On.Count).IsEqualTo(1);
-            // The event should be pull_request, not stale push
-            var arena = result2.Arena!;
-            var eventName = arena.GetStringValue(result2.Workflow!.On[0].EventName);
-            await Assert.That(Encoding.UTF8.GetString(eventName)).IsEqualTo("pull_request");
-        }
-        finally
-        {
-            result2.Arena?.Dispose();
-        }
+
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.Workflow!.On.Count).IsEqualTo(1);
+        // The event should be pull_request, not stale push
+        var arena = result2.Arena!;
+        var eventName = arena.GetStringValue(result2.Workflow!.On[0].EventName);
+        await Assert.That(Encoding.UTF8.GetString(eventName)).IsEqualTo("pull_request");
     }
 
     [Test]
@@ -96,24 +78,18 @@ public sealed class IncrementalParseTests
         var yaml2 = "on: push\npermissions:\n  contents: read\nconcurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo world\n"u8.ToArray();
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        try
-        {
-            await Assert.That(result2.Workflow).IsNotNull();
-            var arena = result2.Arena!;
 
-            // Permissions should resolve correctly
-            var perms = result2.Workflow!.Permissions!;
-            await Assert.That(perms.Scopes).IsNotNull();
+        await Assert.That(result2.Workflow).IsNotNull();
+        var arena = result2.Arena!;
 
-            // Concurrency should resolve correctly
-            var conc = result2.Workflow!.Concurrency!;
-            var groupValue = arena.GetStringValue(conc.Group);
-            await Assert.That(Encoding.UTF8.GetString(groupValue)).Contains("ci-");
-        }
-        finally
-        {
-            result2.Arena?.Dispose();
-        }
+        // Permissions should resolve correctly
+        var perms = result2.Workflow!.Permissions!;
+        await Assert.That(perms.Scopes).IsNotNull();
+
+        // Concurrency should resolve correctly
+        var conc = result2.Workflow!.Concurrency!;
+        var groupValue = arena.GetStringValue(conc.Group);
+        await Assert.That(Encoding.UTF8.GetString(groupValue)).Contains("ci-");
     }
 
     [Test]

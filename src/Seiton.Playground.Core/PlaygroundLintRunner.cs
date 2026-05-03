@@ -47,8 +47,10 @@ public static class PlaygroundLintRunner
     /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
 
-    /// <summary>Reusable UTF-8 byte buffer for YAML source. Guarded by <see cref="EngineGate"/>.</summary>
+    /// <summary>Two-buffer swap for UTF-8 YAML source. Guarded by <see cref="EngineGate"/>.
+    /// IncrementalParseContext stores the previous buffer reference; we must not overwrite it.</summary>
     private static byte[] _utf8Buffer = new byte[4096];
+    private static byte[] _utf8BufferPrev = new byte[4096];
 
     /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
     private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
@@ -234,6 +236,11 @@ public static class PlaygroundLintRunner
     private static byte[] RentUtf8Buffer(string source)
     {
         var byteCount = Encoding.UTF8.GetByteCount(source);
+
+        // Swap buffers: previous becomes prev, current gets (re)allocated if needed.
+        // This ensures IncrementalParseContext._previousSource is never overwritten.
+        (_utf8Buffer, _utf8BufferPrev) = (_utf8BufferPrev, _utf8Buffer);
+
         if (_utf8Buffer.Length != byteCount)
         {
             _utf8Buffer = new byte[byteCount];

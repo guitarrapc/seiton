@@ -14,6 +14,13 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
     public override string Name => "Popular Action Inputs Rule";
 
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _lastUsesSlice = default;
+        _lastActionName = null;
+    }
+
     public override void VisitStep(Step step)
     {
         if (step.Exec is not ExecAction actionExec)

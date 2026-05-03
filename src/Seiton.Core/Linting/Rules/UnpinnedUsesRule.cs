@@ -15,6 +15,14 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
     private string? _lastUnpinnedStepMessage;
     private string? _lastDecodedUsesText;
 
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _lastUnpinnedStepUsesSlice = default;
+        _lastUnpinnedStepMessage = null;
+        _lastDecodedUsesText = null;
+    }
+
     public override string Name => "Unpinned Uses Rule";
 
     public override void VisitJobPre(Job job)
