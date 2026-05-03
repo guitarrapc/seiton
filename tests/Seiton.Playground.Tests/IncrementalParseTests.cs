@@ -141,4 +141,100 @@ public sealed class IncrementalParseTests
             await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
         }
     }
+
+    /// <summary>
+    /// Regression test: verifies that reused Job objects remain valid after multiple
+    /// incremental parses. This catches the use-after-free bug where disposing a retained
+    /// arena calls Job.Reset() on objects still referenced by the current workflow.
+    ///
+    /// Scenario: only the env section changes (root section), while the job section remains
+    /// byte-identical. This forces job reuse across multiple iterations. If arena lifecycle
+    /// is incorrect (e.g., single-arena retention that disposes the job-owning arena),
+    /// Job.RunsOn and Job.Steps become null after the arena is disposed.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_ReusedJobsSurviveMultipleIncrementalParses()
+    {
+        var ctx = new IncrementalParseContext();
+
+        // Full parse (warm-up): creates arena0 with Job objects in its pool
+        var yaml0 = "on: push\nenv:\n  V: \"0\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n"u8.ToArray();
+        var result0 = ctx.ParseIncrementally(yaml0, FilePath);
+        await Assert.That(result0.Workflow).IsNotNull();
+        await Assert.That(result0.Workflow!.Jobs.Count).IsEqualTo(1);
+
+        // Perform multiple incremental parses where ONLY the env value changes.
+        // The job section bytes are identical each time → jobs are reused from arena0.
+        // With the old single-arena bug, iteration 2 would dispose arena0 (calling
+        // Job.Reset()) while the workflow still references those Job objects.
+        for (var i = 1; i <= 6; i++)
+        {
+            var yaml = Encoding.UTF8.GetBytes(
+                $"on: push\nenv:\n  V: \"{i}\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
+            var result = ctx.ParseIncrementally(yaml, FilePath);
+
+            await Assert.That(result.Workflow).IsNotNull();
+            await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
+
+            var job = result.Workflow!.Jobs[0];
+            // If arena lifecycle is broken, these become null after Job.Reset()
+            await Assert.That(job.RunsOn)
+                .IsNotNull()
+                .Because($"iteration {i}: Job.RunsOn must not be null (arena use-after-free)");
+            await Assert.That(job.Steps)
+                .IsNotNull()
+                .Because($"iteration {i}: Job.Steps must not be null (arena use-after-free)");
+            await Assert.That(job.Steps!.Count)
+                .IsEqualTo(1)
+                .Because($"iteration {i}: Job.Steps.Count must remain 1");
+
+            // Verify the arena can still resolve string data for this job
+            var arena = result.Arena!;
+            var runsOnLabel = arena.GetStringValue(job.RunsOn!.Labels[0]);
+            await Assert.That(Encoding.UTF8.GetString(runsOnLabel))
+                .IsEqualTo("ubuntu-latest")
+                .Because($"iteration {i}: RunsOn label must be resolvable from arena");
+        }
+    }
+
+    /// <summary>
+    /// Regression test: exercises the MaxRetainedArenas cap by performing more incremental
+    /// parses than the cap allows. Verifies that the cap triggers a clean full re-parse
+    /// rather than corrupting data.
+    ///
+    /// This test uses a different job on each "epoch" to force retention accumulation,
+    /// then verifies recovery after cap is hit.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_ExceedsRetentionCap_RecoversByFullReparse()
+    {
+        var ctx = new IncrementalParseContext();
+
+        // Full parse with job A
+        var yamlA = "on: push\nenv:\n  V: \"0\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo A\n"u8.ToArray();
+        ctx.ParseIncrementally(yamlA, FilePath);
+
+        // Change to job B (forces full reparse since job content changed)
+        var yamlB = "on: push\nenv:\n  V: \"1\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo B\n"u8.ToArray();
+        ctx.ParseIncrementally(yamlB, FilePath);
+
+        // Now do many incremental parses changing only env (job B stays same → reused)
+        // This accumulates retained arenas until cap triggers full re-parse
+        for (var i = 2; i <= 10; i++)
+        {
+            var yaml = Encoding.UTF8.GetBytes(
+                $"on: push\nenv:\n  V: \"{i}\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo B\n");
+            var result = ctx.ParseIncrementally(yaml, FilePath);
+
+            await Assert.That(result.Workflow).IsNotNull()
+                .Because($"iteration {i}: workflow must be non-null after cap recovery");
+            await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
+
+            var job = result.Workflow!.Jobs[0];
+            await Assert.That(job.RunsOn).IsNotNull()
+                .Because($"iteration {i}: Job.RunsOn must survive cap-triggered full re-parse");
+            await Assert.That(job.Steps).IsNotNull()
+                .Because($"iteration {i}: Job.Steps must survive cap-triggered full re-parse");
+        }
+    }
 }
