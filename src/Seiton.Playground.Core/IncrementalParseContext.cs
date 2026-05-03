@@ -146,6 +146,7 @@ public sealed class IncrementalParseContext
 {
     private byte[]? _previousSource;
     private int _previousSourceLength;
+    private string? _previousFilePath;
     private SectionRegistry _registry;
 
     // D-5b: stored previous Workflow and Arena for section reuse
@@ -168,6 +169,14 @@ public sealed class IncrementalParseContext
     private int _baseBoolCount;
     private int _baseIntCount;
     private int _baseFloatCount;
+
+    // Full-parse baseline counts: used to detect excessive growth and force full re-parse.
+    // Prevents unbounded BulkImport growth when root sections change repeatedly.
+    private const int GrowthThresholdMultiplier = 3;
+    private int _fullParseStringCount;
+    private int _fullParseBoolCount;
+    private int _fullParseIntCount;
+    private int _fullParseFloatCount;
 
     // D-5c: reusable buffer for job skip entries (avoids per-call allocation)
     private JobSkipEntry[]? _jobSkipEntriesBuf;
@@ -194,6 +203,14 @@ public sealed class IncrementalParseContext
         if (_previousSource is null || _previousWorkflow is null || _previousArena is null)
         {
             // First call: full parse, store results
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
+        // If filePath changed, force a full re-parse to avoid stale diagnostics/caches
+        // from a different file being reused.
+        if (!string.Equals(_previousFilePath, filePath, StringComparison.Ordinal))
+        {
+            _lastReusedJobs = null;
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
@@ -239,6 +256,19 @@ public sealed class IncrementalParseContext
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
+        // Check growth threshold — if arena entries have grown too much relative to
+        // the last full parse, force a full parse to reset the baseline and prevent
+        // ever-growing BulkImport copies.
+        if (_fullParseStringCount > 0 &&
+            (_baseStringCount > _fullParseStringCount * GrowthThresholdMultiplier ||
+             _baseBoolCount > _fullParseBoolCount * GrowthThresholdMultiplier ||
+             _baseIntCount > _fullParseIntCount * GrowthThresholdMultiplier ||
+             _baseFloatCount > _fullParseFloatCount * GrowthThresholdMultiplier))
+        {
+            _lastReusedJobs = null;
+            return FullParseAndStore(utf8Yaml, filePath);
+        }
+
         // Incremental parse: import base entries only (capped to prevent growth),
         // parse with skip, patch results
         var arena = AstArena.Rent(utf8Yaml);
@@ -264,6 +294,7 @@ public sealed class IncrementalParseContext
         var oldArena = _previousArena;
         _previousSource = utf8Yaml;
         _previousSourceLength = utf8Yaml.Length;
+        _previousFilePath = filePath;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = arena;
         _previousDiagnostics = parseResult.Diagnostics;
@@ -283,15 +314,39 @@ public sealed class IncrementalParseContext
             oldArena?.ReleaseDiagnosticsBuffer();
             oldArena?.ReleaseLintDiagnosticsBuffer();
 
-            // Retain old arena only if it owns Job objects that are STILL REFERENCED
-            // by the current workflow (via skip entries).
-            // - An arena with JobCount == 0 never allocated jobs → always safe to dispose.
-            // - An intermediate arena whose JobCount <= the new arena's JobCount only
-            //   owned the "changing" jobs that were just re-parsed fresh in the new arena.
-            //   Those old Job objects are no longer referenced → safe to dispose.
-            // - Only arenas with MORE jobs than were freshly parsed (e.g., the full-parse
-            //   arena that owns the reused/skipped jobs) must be retained.
-            if (oldArena is { JobCount: > 0 } && oldArena.JobCount > arena.JobCount)
+            // Retain old arena if it owns ANY Job objects, because those jobs may be
+            // the ones being reused in the current workflow (via skip entries).
+            // Use _lastReusedJobs to determine which jobs the old arena owns:
+            // - _lastReusedJobs[i] == false means job i was freshly parsed in the old arena.
+            // - jobSkipEntries[i].Job != null means job i is being reused now.
+            // - If both: old arena owns a referenced job → must retain.
+            // - An arena with JobCount == 0 never allocated jobs → safe to dispose.
+            // - MaxRetainedArenas cap prevents unbounded accumulation.
+            var mustRetain = false;
+            if (oldArena is { JobCount: > 0 })
+            {
+                if (_lastReusedJobs is null)
+                {
+                    // Previous was a full parse — all jobs owned by old arena.
+                    // Since jobSkipEntries != null, at least one job is being reused from it.
+                    mustRetain = true;
+                }
+                else
+                {
+                    // Previous was incremental — check if any job freshly parsed by old arena is now reused.
+                    var maxCheck = Math.Min(jobSkipEntries.Length, _lastReusedJobs.Length);
+                    for (var j = 0; j < maxCheck; j++)
+                    {
+                        if (!_lastReusedJobs[j] && jobSkipEntries[j].Job is not null)
+                        {
+                            mustRetain = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (mustRetain)
             {
                 (_retainedArenas ??= new(2)).Add(oldArena!);
             }
@@ -454,6 +509,7 @@ public sealed class IncrementalParseContext
 
         _previousSource = utf8Yaml;
         _previousSourceLength = utf8Yaml.Length;
+        _previousFilePath = filePath;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = parseResult.Arena;
         _previousDiagnostics = parseResult.Diagnostics;
@@ -467,6 +523,11 @@ public sealed class IncrementalParseContext
             _baseBoolCount = parseResult.Arena.BoolCount;
             _baseIntCount = parseResult.Arena.IntCount;
             _baseFloatCount = parseResult.Arena.FloatCount;
+            // Store full-parse baseline for growth threshold detection
+            _fullParseStringCount = _baseStringCount;
+            _fullParseBoolCount = _baseBoolCount;
+            _fullParseIntCount = _baseIntCount;
+            _fullParseFloatCount = _baseFloatCount;
         }
 
         // Full parse creates all-new objects — safe to dispose retained arenas
@@ -692,13 +753,16 @@ public sealed class IncrementalParseContext
     /// </summary>
     private static void ScanJobSections(byte[] source, int jobsSectionStart, int jobsSectionEnd, ref SectionRegistry registry)
     {
+        const int StackLimit = 64;
         var span = source.AsSpan();
         // Collect job key offsets (line start positions of indent-2 keys)
-        Span<int> jobKeyOffsets = stackalloc int[64]; // max 64 jobs
+        Span<int> stackBuffer = stackalloc int[StackLimit];
+        int[]? rentedBuffer = null;
+        var jobKeyOffsets = stackBuffer;
         var jobCount = 0;
 
         var i = jobsSectionStart;
-        while (i < jobsSectionEnd && jobCount < 64)
+        while (i < jobsSectionEnd)
         {
             // Find next line start
             if (i > jobsSectionStart && span[i - 1] != (byte)'\n')
@@ -719,6 +783,17 @@ public sealed class IncrementalParseContext
                 var lineSpan = span[i..Math.Min(lineEnd, jobsSectionEnd)];
                 if (lineSpan.Contains((byte)':'))
                 {
+                    // Grow buffer if needed (switch from stack to heap)
+                    if (jobCount >= jobKeyOffsets.Length)
+                    {
+                        var newSize = jobKeyOffsets.Length * 2;
+                        var newBuffer = ArrayPool<int>.Shared.Rent(newSize);
+                        jobKeyOffsets[..jobCount].CopyTo(newBuffer);
+                        if (rentedBuffer is not null)
+                            ArrayPool<int>.Shared.Return(rentedBuffer);
+                        rentedBuffer = newBuffer;
+                        jobKeyOffsets = newBuffer.AsSpan();
+                    }
                     jobKeyOffsets[jobCount++] = i;
                 }
             }
@@ -735,6 +810,9 @@ public sealed class IncrementalParseContext
             var hash = ComputeHash(sectionSpan);
             registry.SetJobEntry(j, new SectionEntry(keyOffset, endOffset, hash));
         }
+
+        if (rentedBuffer is not null)
+            ArrayPool<int>.Shared.Return(rentedBuffer);
     }
 
     private static bool TryMatchRootKey(ReadOnlySpan<byte> span, int offset, out RootSectionKind kind, out int colonEnd)

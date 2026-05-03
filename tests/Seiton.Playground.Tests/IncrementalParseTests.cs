@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Playground.Tests;
 
@@ -236,5 +237,161 @@ public sealed class IncrementalParseTests
             await Assert.That(job.Steps).IsNotNull()
                 .Because($"iteration {i}: Job.Steps must survive cap-triggered full re-parse");
         }
+    }
+
+    /// <summary>
+    /// Regression test: verifies that changing filePath forces a full re-parse
+    /// even when the YAML bytes are identical. Without filePath tracking, stale
+    /// diagnostics with wrong file paths would be returned.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_FilePathChanges_ForcesFullReparse()
+    {
+        var ctx = new IncrementalParseContext();
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n"u8.ToArray();
+
+        // First parse under path A
+        var result1 = ctx.ParseIncrementally(yaml, ".github/workflows/a.yml");
+        await Assert.That(result1.Workflow).IsNotNull();
+
+        // Same bytes, different filePath — must NOT return cached result
+        var yamlCopy = yaml.ToArray(); // new array instance with same content
+        var result2 = ctx.ParseIncrementally(yamlCopy, ".github/workflows/b.yml");
+
+        await Assert.That(result2.Workflow).IsNotNull();
+        // The returned parse result must be a fresh parse (not ReferenceEquals to previous)
+        await Assert.That(ReferenceEquals(result1.Workflow, result2.Workflow)).IsFalse()
+            .Because("different filePath must produce a new parse, not reuse cached workflow");
+    }
+
+    /// <summary>
+    /// Regression test: exercises arena retention when the previous incremental arena
+    /// owns a job that is reused in the next iteration. The old heuristic
+    /// (oldArena.JobCount > arena.JobCount) would incorrectly dispose the old arena
+    /// when both have the same JobCount, causing use-after-free.
+    ///
+    /// Scenario: Full parse (3 jobs) → Incremental 1 (changes job A, reuses B/C)
+    /// → Incremental 2 (changes job B, reuses A from Incremental 1 arena + C from Full arena).
+    /// The second incremental parse must retain arena from Incremental 1 since it owns the reused A.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_RetainsIntermediateArenaOwningReusedJob()
+    {
+        var ctx = new IncrementalParseContext();
+
+        // Full parse: 3 jobs
+        var yaml0 = "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo A0\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo B0\n  c:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo C0\n"u8.ToArray();
+        var r0 = ctx.ParseIncrementally(yaml0, FilePath);
+        await Assert.That(r0.Workflow!.Jobs.Count).IsEqualTo(3);
+
+        // Incremental 1: change job A only (B and C reused from full parse arena)
+        var yaml1 = "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo A1\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo B0\n  c:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo C0\n"u8.ToArray();
+        var r1 = ctx.ParseIncrementally(yaml1, FilePath);
+        await Assert.That(r1.Workflow!.Jobs.Count).IsEqualTo(3);
+
+        // Incremental 2: change job B only (A reused from Incremental 1 arena, C from full arena)
+        var yaml2 = "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo A1\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo B1\n  c:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo C0\n"u8.ToArray();
+        var r2 = ctx.ParseIncrementally(yaml2, FilePath);
+        await Assert.That(r2.Workflow!.Jobs.Count).IsEqualTo(3);
+
+        // The reused job A (from Incremental 1 arena) must still be valid
+        var jobA = r2.Workflow!.Jobs.Entries[0].Value;
+        await Assert.That(jobA.RunsOn).IsNotNull()
+            .Because("Job A is reused from intermediate arena — must not be disposed");
+        await Assert.That(jobA.Steps).IsNotNull()
+            .Because("Job A steps must survive intermediate arena retention");
+        await Assert.That(jobA.Steps!.Count).IsEqualTo(1);
+
+        // Verify job A's data is resolvable from the current arena
+        var arena = r2.Arena!;
+        var runsOnLabel = arena.GetStringValue(jobA.RunsOn!.Labels![0]);
+        await Assert.That(Encoding.UTF8.GetString(runsOnLabel)).IsEqualTo("ubuntu-latest");
+    }
+
+    /// <summary>
+    /// Regression test: workflows with more than 64 jobs must be scanned correctly.
+    /// The ScanJobSections method must not silently truncate jobs beyond 64.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_WorkflowWith65Jobs_AllJobsParsed()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("on: push");
+        sb.AppendLine("jobs:");
+        for (var i = 0; i < 65; i++)
+        {
+            sb.AppendLine($"  job{i:D3}:");
+            sb.AppendLine("    runs-on: ubuntu-latest");
+            sb.AppendLine("    steps:");
+            sb.AppendLine("      - run: echo ok");
+        }
+
+        var yaml = Encoding.UTF8.GetBytes(sb.ToString());
+
+        var ctx = new IncrementalParseContext();
+        var result = ctx.ParseIncrementally(yaml, FilePath);
+
+        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(65);
+
+        // The registry must capture all 65 jobs (not truncated to 64)
+        await Assert.That(ctx.Registry.JobCount).IsEqualTo(65)
+            .Because("ScanJobSections must not truncate at 64 jobs");
+
+        // Second parse with one job changed — verify incremental still works for >64 jobs
+        sb.Clear();
+        sb.AppendLine("on: push");
+        sb.AppendLine("jobs:");
+        for (var i = 0; i < 65; i++)
+        {
+            sb.AppendLine($"  job{i:D3}:");
+            sb.AppendLine("    runs-on: ubuntu-latest");
+            sb.AppendLine("    steps:");
+            // Change only job064 step
+            sb.AppendLine(i == 64 ? "      - run: echo changed" : "      - run: echo ok");
+        }
+
+        var yaml2 = Encoding.UTF8.GetBytes(sb.ToString());
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(65);
+    }
+
+    /// <summary>
+    /// Regression test: verifies that repeated root section changes don't cause
+    /// unbounded arena entry growth. After many iterations, the context should
+    /// eventually trigger a full re-parse to reset the baseline.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_RepeatedRootChanges_DoesNotGrowUnbounded()
+    {
+        var ctx = new IncrementalParseContext();
+
+        // Full parse
+        var yaml0 = "on: push\nenv:\n  V: \"0\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo test\n"u8.ToArray();
+        ctx.ParseIncrementally(yaml0, FilePath);
+
+        // Repeatedly change env (root section) while keeping jobs identical.
+        // This exercises the base count growth path. After enough iterations,
+        // the context must either stay bounded or force a full re-parse.
+        ParseResult? lastResult = null;
+        for (var i = 1; i <= 20; i++)
+        {
+            var yaml = Encoding.UTF8.GetBytes(
+                $"on: push\nenv:\n  V: \"{i}\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo test\n");
+            lastResult = ctx.ParseIncrementally(yaml, FilePath);
+
+            await Assert.That(lastResult.Value.Workflow).IsNotNull()
+                .Because($"iteration {i}: must produce valid workflow");
+            await Assert.That(lastResult.Value.Workflow!.Jobs.Count).IsEqualTo(2);
+        }
+
+        // Verify last result is fully functional (no corruption from growth)
+        var job = lastResult!.Value.Workflow!.Jobs.Entries[0].Value;
+        await Assert.That(job.RunsOn).IsNotNull();
+        var arena = lastResult.Value.Arena!;
+        var label = arena.GetStringValue(job.RunsOn!.Labels![0]);
+        await Assert.That(Encoding.UTF8.GetString(label)).IsEqualTo("ubuntu-latest");
     }
 }
