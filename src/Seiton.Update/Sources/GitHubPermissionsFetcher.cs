@@ -10,10 +10,9 @@ namespace Seiton.Update.Sources;
 internal sealed class GitHubPermissionsFetcher
 {
     /// <summary>
-    /// The reusable data file that contains the YAML permissions block with all scopes and allowed values.
-    /// <see cref="ParsedPermissionsSnapshot.SourceUrl"/> is tied to the raw markdown bytes via
-    /// <see cref="ParsedPermissionsSnapshot.SourceRawSha256"/> so re-parsing without changing the raw file does not
-    /// pick up a stale manifest URL.
+    /// Fetches and parses the reusable YAML permissions block (scopes and allowed values) from GitHub Docs.
+    /// Provenance for fetch URL and raw bytes is recorded in <c>data/sources/manifest.json</c>;
+    /// <see cref="ParsedPermissionsSnapshot.SourceUrl"/> mirrors the manifest-configured URL at parse time.
     /// </summary>
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -78,18 +77,16 @@ internal sealed class GitHubPermissionsFetcher
         UpdateLogger.Info("[parse:permissions:sources] parsing local raw source files...");
 
         var rawText = File.ReadAllText(paths.RawDocsPath);
-        var rawHash = ComputeSha256(rawText);
         var parser = new GitHubDocsPermissionsMarkdownParser();
         var model = parser.Parse(rawText);
 
-        var sourceUrl = ResolveSourceUrlForRaw(repoRoot, paths, rawHash);
+        var sourceUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
 
         var snapshot = new ParsedPermissionsSnapshot
         {
             SchemaVersion = 1,
             Source = "github-token-available-permissions-reusable",
             SourceUrl = sourceUrl,
-            SourceRawSha256 = rawHash,
             Scopes = model.Scopes.Select(s => new ParsedPermissionsSnapshot.ScopeEntry
             {
                 Name = s.Name,
@@ -150,42 +147,6 @@ internal sealed class GitHubPermissionsFetcher
         UpdateLogger.Info($"[merge:permissions:sources] wrote {paths.MergedPath} ({scopes.Count} scopes)");
     }
 
-    private static string ResolveSourceUrlForRaw(string repoRoot, PermissionsPaths paths, string rawHash)
-    {
-        if (File.Exists(paths.ParsedPath))
-        {
-            try
-            {
-                var previousText = File.ReadAllText(paths.ParsedPath);
-                var previous = JsonSerializer.Deserialize<ParsedPermissionsSnapshot>(
-                    previousText,
-                    new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                    });
-
-                if (previous is not null &&
-                    !string.IsNullOrWhiteSpace(previous.SourceRawSha256) &&
-                    string.Equals(previous.SourceRawSha256.Trim(), rawHash, StringComparison.Ordinal) &&
-                    !string.IsNullOrWhiteSpace(previous.SourceUrl))
-                {
-                    var url = previous.SourceUrl.Trim();
-                    if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-                        string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return url;
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Fall through to manifest
-            }
-        }
-
-        return ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
-    }
-
     private static PermissionsPaths Paths(string repoRoot)
     {
         var baseDir = Path.Combine(repoRoot, "data", "sources", "permissions", "github");
@@ -215,10 +176,8 @@ internal sealed class GitHubPermissionsFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
-        /// <summary>HTTPS URL that produced this snapshot when raw last changed (from manifest at that time).</summary>
+        /// <summary>HTTPS URL from manifest configuration for this dataset (same contract as Stage 1 fetch).</summary>
         public string? SourceUrl { get; set; }
-        /// <summary>SHA-256 of raw UTF-8 markdown bytes; used to preserve <see cref="SourceUrl"/> when raw is unchanged.</summary>
-        public string? SourceRawSha256 { get; set; }
         public List<ScopeEntry> Scopes { get; set; } = [];
 
         internal sealed class ScopeEntry

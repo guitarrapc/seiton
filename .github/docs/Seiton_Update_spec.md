@@ -90,6 +90,7 @@ Parse each raw file independently and emit normalized intermediate JSON artifact
 - Output: Parsed JSON files in `data/sources/{dataset}/{provider}/parsed/`
 - Network access: **no**
 - Parsing must be deterministic given the same raw inputs
+- **Provenance**: The committed raw files are the verbatim Stage 1 downloads; their URLs and `sha256` fingerprints are canonical in `data/sources/manifest.json` (see §7). If a parsed artifact includes a documented HTTPS source URL (for example `permissions` → `sourceUrl` in `permissions-scopes.json`), that URL MUST be taken from the same manifest-backed source URL configuration used for Stage 1 for that dataset, so intermediate JSON stays aligned with the repository's declared fetch sources. Stage 2 does not introduce a parallel content hash on parsed output for provenance.
 
 #### 3.1.3 Stage 3 — Merge Parsed Artifacts
 
@@ -358,6 +359,12 @@ Each entry records:
 | `rawFileHashes` | Map of raw file names to `sha256:{hash}` values |
 
 The manifest is updated atomically during Stage 1 (fetch) operations.
+
+### 7.1 Relationship to raw files and parsed JSON
+
+- **`sourceUrls` + `rawFileHashes` + `fetchedAtUtc`** describe what was downloaded in Stage 1: the HTTPS origins and the SHA-256 of each committed file under `raw/` after fetch.
+- **Raw files** (`data/sources/{dataset}/{provider}/raw/*`) are the pre-parse documents from those URLs; they are not a second source of truth for "which URL" independent of the manifest.
+- **Parsed JSON** (`parsed/`) is derived only from raw bytes plus local deterministic rules. It MUST NOT carry a separate provenance fingerprint of the raw payload (for example a `sourceRawSha256` field) unless a future spec explicitly adds such a field for a documented, dataset-specific reason. Human-readable URLs embedded in parsed artifacts MUST remain consistent with the manifest's configured fetch URLs for that dataset.
 
 ---
 
