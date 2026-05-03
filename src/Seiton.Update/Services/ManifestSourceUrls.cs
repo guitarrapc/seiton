@@ -64,6 +64,8 @@ internal static class ManifestSourceUrls
                 $"data/sources/manifest.json dataset '{dataset}' has {urls.Count} sourceUrls but this fetch expects {n}. Update the manifest or targets configuration.");
         }
 
+        ManifestDatasetUrlSemantics.EnsureDatasetUrls(dataset, urls);
+
         return urls;
     }
 

@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -13,7 +14,13 @@ internal sealed class GitHubPopularActionsFetcher
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static readonly JsonSerializerOptions TargetsFileJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
@@ -232,10 +239,18 @@ internal sealed class GitHubPopularActionsFetcher
         }
 
         var configText = File.ReadAllText(configPath);
-        var config = JsonSerializer.Deserialize<PopularActionsTargetConfig>(configText, new JsonSerializerOptions
+        PopularActionsTargetsFile config;
+        try
         {
-            PropertyNameCaseInsensitive = true,
-        }) ?? throw new InvalidDataException($"Invalid popular-actions target config: {configPath}");
+            config = JsonSerializer.Deserialize<PopularActionsTargetsFile>(configText, TargetsFileJsonOptions)
+                ?? throw new InvalidDataException($"Invalid popular-actions target config: {configPath}");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException(
+                $"Invalid popular-actions target config: {configPath}. Remove unknown properties (e.g. obsolete \"url\"); URLs are defined in manifest only. {ex.Message}",
+                ex);
+        }
 
         var sources = (config.Targets ?? [])
             .Select(static x => new PopularActionSource
@@ -397,10 +412,22 @@ internal sealed class GitHubPopularActionsFetcher
         public int MaxDeprecatedMajorVersion { get; set; }
     }
 
-    private sealed class PopularActionsTargetConfig
+    /// <summary>targets.json only — download URLs must not appear here (manifest only).</summary>
+    private sealed class PopularActionsTargetsFile
     {
+        [JsonPropertyName("$schema")]
+        public string? JsonSchema { get; set; }
+
         public int SchemaVersion { get; set; } = 1;
-        public List<PopularActionSource>? Targets { get; set; }
+        public List<PopularTargetFileEntry>? Targets { get; set; }
+    }
+
+    private sealed class PopularTargetFileEntry
+    {
+        public string? ActionRef { get; set; }
+        public string? Uses { get; set; }
+        public string? RawFileName { get; set; }
+        public int MaxDeprecatedMajorVersion { get; set; }
     }
 
     private sealed class PopularActionsPaths

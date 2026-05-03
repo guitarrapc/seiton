@@ -83,6 +83,35 @@ public sealed class ManifestSourceUrlsTests
     }
 
     [Test]
+    public async Task Resolve_WhenWebhooksUrlsMisordered_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "webhooks",
+                    SourceUrls =
+                    [
+                        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md",
+                        "https://json.schemastore.org/github-workflow.json",
+                    ],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "webhooks", 2))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task Resolve_WhenDuplicateDataset_Throws()
     {
         var dir = NewTempDir();
@@ -120,7 +149,7 @@ public sealed class ManifestSourceUrlsTests
         var dir = NewTempDir();
         try
         {
-            const string url = "https://raw.githubusercontent.com/github/docs/main/example.md";
+            const string url = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md";
             WriteManifest(dir,
             [
                 new SourceManifestEntry

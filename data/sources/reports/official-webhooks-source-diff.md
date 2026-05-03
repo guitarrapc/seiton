@@ -1,7 +1,7 @@
 # Official Source Diff Report: webhooks
 
-- source-a: https://json.schemastore.org/github-workflow.json
-- source-b: https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md
+- source-a: parsed schema input (raw schema file in-repo)
+- source-b: parsed docs input (raw GitHub Docs markdown in-repo)
 - exclude-schema-only: False
 - generated-at-utc: 2026-04-15T08:58:11.4138786Z
 
