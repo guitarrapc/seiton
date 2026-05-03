@@ -394,4 +394,42 @@ public sealed class IncrementalParseTests
         var label = arena.GetStringValue(job.RunsOn!.Labels![0]);
         await Assert.That(Encoding.UTF8.GetString(label)).IsEqualTo("ubuntu-latest");
     }
+
+    /// <summary>
+    /// Regression test: verifies that the IsSourceIdentical fast-path works correctly
+    /// when the caller reuses the same buffer (overwrites previous content).
+    /// The context must store its own copy or update the reference so that a reused
+    /// buffer doesn't cause stale results.
+    /// </summary>
+    [Test]
+    public async Task ParseIncrementally_ReusedBuffer_DoesNotReturnStaleResult()
+    {
+        var ctx = new IncrementalParseContext();
+        var yaml1Content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n";
+        var yaml2Content = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo world\n";
+
+        // Simulate double-buffer pattern: two buffers that alternate
+        var bufA = Encoding.UTF8.GetBytes(yaml1Content);
+        var bufB = new byte[bufA.Length]; // same size
+
+        // First parse with buffer A (yaml1)
+        var result1 = ctx.ParseIncrementally(bufA, FilePath);
+        await Assert.That(result1.Workflow).IsNotNull();
+
+        // Second parse with buffer B containing same content as bufA (fast path)
+        Array.Copy(bufA, bufB, bufA.Length);
+        var result2 = ctx.ParseIncrementally(bufB, FilePath);
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(ReferenceEquals(result1.Workflow, result2.Workflow)).IsTrue()
+            .Because("identical content should use fast path");
+
+        // Now overwrite buffer A with DIFFERENT content (same length)
+        Encoding.UTF8.GetBytes(yaml2Content, bufA);
+
+        // Third parse with mutated buffer A — must NOT return stale result
+        var result3 = ctx.ParseIncrementally(bufA, FilePath);
+        await Assert.That(result3.Workflow).IsNotNull();
+        await Assert.That(ReferenceEquals(result1.Workflow, result3.Workflow)).IsFalse()
+            .Because("mutated buffer must not be considered identical to previous content");
+    }
 }

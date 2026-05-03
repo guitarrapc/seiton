@@ -218,6 +218,9 @@ public sealed class IncrementalParseContext
         // This avoids re-parsing, arena allocation, and VYaml tokenization entirely.
         if (IsSourceIdentical(utf8Yaml))
         {
+            // Update stored reference so that if the caller reuses/overwrites the OLD buffer,
+            // future comparisons will use the new (current) buffer as the baseline.
+            _previousSource = utf8Yaml;
             return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError, _previousArena);
         }
 
@@ -548,10 +551,11 @@ public sealed class IncrementalParseContext
     }
 
     /// <summary>
-    /// Computes a bitmask of root sections that can be skipped.
-    /// Returns 0 if ANY existing root section has changed OR if the document structure
-    /// changed (new sections appeared or disappeared), to prevent cross-document contamination.
-    /// Jobs are never skipped (D-5b scope: root sections only).
+    /// Computes a bitmask of root sections that can be skipped (On, Env, Permissions, Defaults, Concurrency).
+    /// Returns 0 if ANY of those sections has changed OR if the document structure
+    /// changed (sections appeared or disappeared), to prevent cross-document contamination.
+    /// Name/RunName are excluded from skip detection (they don't affect lint results).
+    /// Jobs are never skipped here (D-5b scope: root sections only; job skip is D-5c).
     /// </summary>
     private byte ComputeSkipMask(byte[] newSource, ref SectionRegistry newRegistry)
     {
@@ -1030,7 +1034,10 @@ public sealed class IncrementalParseContext
             _cachedJobDiagnostics[i] = null;
 
         // Count diagnostics per job first (avoids List<> per job)
-        Span<int> counts = jobCount <= 64 ? stackalloc int[jobCount] : new int[jobCount];
+        int[]? rentedCounts = null;
+        Span<int> counts = jobCount <= 64
+            ? stackalloc int[jobCount]
+            : (rentedCounts = ArrayPool<int>.Shared.Rent(jobCount)).AsSpan(0, jobCount);
         counts.Clear();
 
         for (var d = 0; d < diagnostics.Length; d++)
@@ -1070,6 +1077,9 @@ public sealed class IncrementalParseContext
                 }
             }
         }
+
+        if (rentedCounts is not null)
+            ArrayPool<int>.Shared.Return(rentedCounts);
     }
 
     private JsonElement[] SerializeDiagnosticsToJson(DiagnosticList diagnostics)

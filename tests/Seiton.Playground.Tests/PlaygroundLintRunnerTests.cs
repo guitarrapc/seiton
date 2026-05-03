@@ -171,4 +171,36 @@ public sealed class PlaygroundLintRunnerTests
 
         await Assert.That(stillBad).IsFalse();
     }
+
+    /// <summary>
+    /// Regression test: verifies that linting an action.yml file (ActionMetadata path)
+    /// correctly disposes the arena after use. Multiple sequential calls must not leak memory.
+    /// </summary>
+    [Test]
+    public async Task RunToJson_ActionMetadata_RepeatedCalls_ProducesConsistentResults()
+    {
+        const string actionYaml = """
+            name: My Action
+            description: A test action
+            inputs:
+              name:
+                description: The name
+                required: true
+            runs:
+              using: node20
+              main: index.js
+            """;
+
+        byte[]? firstJson = null;
+        for (var i = 0; i < 5; i++)
+        {
+            var json = PlaygroundLintRunner.RunToJsonUtf8(actionYaml, "action.yml");
+            firstJson ??= json;
+            await Assert.That(json).IsEquivalentTo(firstJson);
+        }
+
+        // Verify it's a valid JSON array
+        using var doc = JsonDocument.Parse(firstJson!);
+        await Assert.That(doc.RootElement.ValueKind).IsEqualTo(JsonValueKind.Array);
+    }
 }

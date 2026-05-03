@@ -88,11 +88,13 @@ public static class PlaygroundLintRunner
             var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
 
             LintResult lintResult;
+            var ownsArena = false;
 
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
                 lintResult = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
+                ownsArena = true; // Engine.Check creates its own arena; we must dispose it
             }
             else
             {
@@ -109,7 +111,13 @@ public static class PlaygroundLintRunner
                 WriteDiagnosticsArray(writer, lintResult.Diagnostics.AsSpan());
             }
 
-            // NOTE: Arena is NOT disposed here — IncrementalParseContext owns it for reuse
+            // Dispose arena for ActionMetadata path (not owned by IncrementalParseContext)
+            if (ownsArena)
+            {
+                lintResult.ParseResult.Arena?.Dispose();
+            }
+
+            // NOTE: Incremental path arena is NOT disposed — IncrementalParseContext owns it for reuse
             var result = JsonBuffer.WrittenSpan.ToArray();
 
             // Cache for identity-based short circuit
