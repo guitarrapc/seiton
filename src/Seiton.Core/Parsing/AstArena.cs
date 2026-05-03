@@ -356,17 +356,10 @@ public sealed class AstArena : IDisposable
         _source = [];
 
         // If scalar arrays were already released (ReleaseScalarBuffers),
-        // this arena cannot be cached — just null out remaining refs and return SliceMap buffers.
+        // this arena cannot be cached — just null out remaining refs.
+        // SliceMap buffers were already returned in the D-4 loop above.
         if (_strings is null)
         {
-            // Return SliceMap Entry[] arrays that were kept alive for reused jobs
-            for (var i = 0; i < _sliceMapBufferCount; i++)
-            {
-                _sliceMapBuffers[i].Return(_sliceMapBuffers[i].Buffer);
-                _sliceMapBuffers[i] = default;
-            }
-            _sliceMapBufferCount = 0;
-
             _jobs = null!;
             _steps = null!;
             _execRuns = null!;
@@ -376,11 +369,12 @@ public sealed class AstArena : IDisposable
 
         if (cached is null)
         {
-            // Cap backing arrays to default sizes to prevent unbounded growth.
-            ShrinkIfOversized(ref _strings!, DefaultStringCapacity);
-            ShrinkIfOversized(ref _bools!, DefaultBoolCapacity);
-            ShrinkIfOversized(ref _ints!, DefaultIntCapacity);
-            ShrinkIfOversized(ref _floats!, DefaultFloatCapacity);
+            // Cap backing arrays to prevent unbounded growth (critical for WASM).
+            // Use 4× default thresholds to avoid shrink/grow churn in steady-state usage.
+            ShrinkIfOversized(ref _strings!, MaxRetainedStringCapacity);
+            ShrinkIfOversized(ref _bools!, MaxRetainedBoolCapacity);
+            ShrinkIfOversized(ref _ints!, MaxRetainedIntCapacity);
+            ShrinkIfOversized(ref _floats!, MaxRetainedFloatCapacity);
             ShrinkObjectPoolIfOversized(ref _jobs!, DefaultJobCapacity);
             ShrinkObjectPoolIfOversized(ref _steps!, DefaultStepCapacity);
             ShrinkObjectPoolIfOversized(ref _execRuns!, DefaultExecRunCapacity);
@@ -410,6 +404,13 @@ public sealed class AstArena : IDisposable
     private const int DefaultBoolCapacity = 32;
     private const int DefaultIntCapacity = 16;
     private const int DefaultFloatCapacity = 8;
+
+    // Shrink thresholds: only shrink if grossly oversized (4× default) to avoid
+    // ArrayPool churn in steady-state usage while still capping WASM memory.
+    private const int MaxRetainedStringCapacity = DefaultStringCapacity * 4;  // 1024
+    private const int MaxRetainedBoolCapacity = DefaultBoolCapacity * 4;      // 128
+    private const int MaxRetainedIntCapacity = DefaultIntCapacity * 4;        // 64
+    private const int MaxRetainedFloatCapacity = DefaultFloatCapacity * 4;    // 32
 
     // Object pool default capacities (retain up to these sizes across parses)
     private const int DefaultJobCapacity = 24;
