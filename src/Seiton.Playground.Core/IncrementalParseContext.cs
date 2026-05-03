@@ -108,14 +108,6 @@ public struct SectionRegistry
         _jobEntries![index] = entry;
     }
 
-    /// <summary>Resets counts while preserving the allocated <c>_jobEntries</c> buffer for reuse.</summary>
-    internal void Reset()
-    {
-        _rootSections = default;
-        _rootCount = 0;
-        _jobCount = 0;
-    }
-
     [InlineArray(8)]
     private struct RootSectionBuffer
     {
@@ -281,12 +273,9 @@ public sealed class IncrementalParseContext
         {
             _previousHadNoJobReuse = false;
 
-            // Release buffers no longer needed: diagnostics already consumed,
-            // scalar data already copied via BulkImportFrom.
-            // Only Job/Step objects and SliceMap Entry[] remain needed by reused jobs.
+            // Diagnostics buffers were already consumed; return them to the pool before retaining the arena.
             oldArena?.ReleaseDiagnosticsBuffer();
             oldArena?.ReleaseLintDiagnosticsBuffer();
-            oldArena?.ReleaseScalarBuffers();
 
             // Retain old arena — reused jobs reference its pooled Job/Step objects.
             // Will be disposed on next full parse.
@@ -365,7 +354,7 @@ public sealed class IncrementalParseContext
 
     private void BuildRegistry(byte[] source, ParseResult parseResult)
     {
-        _registry.Reset();
+        _registry = default;
 
         if (parseResult.Workflow is null)
             return;
@@ -385,7 +374,7 @@ public sealed class IncrementalParseContext
     /// <summary>Builds registry from source bytes only (no parse needed). Used after incremental parse.</summary>
     private void BuildRegistryFromSource(byte[] source)
     {
-        _registry.Reset();
+        _registry = default;
         ScanRootSections(source, ref _registry);
         var jobsEntry = _registry.GetRootSection(RootSectionKind.Jobs);
         if (jobsEntry.IsValid)
