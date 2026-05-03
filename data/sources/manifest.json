@@ -12,6 +12,16 @@
       }
     },
     {
+      "dataset": "context-types",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md"
+      ],
+      "fetchedAtUtc": "2026-04-15T09:21:12.5604978\u002B00:00",
+      "rawFileHashes": {
+        "contexts.docs.md": "sha256:5c6d380596d3de4a71bbb13be25f364f1f5dcf674e6f75720f305d97e5fde671"
+      }
+    },
+    {
       "dataset": "event-payload-types",
       "sourceUrls": [
         "https://docs.github.com/en/webhooks/webhook-events-and-payloads"
@@ -19,6 +29,16 @@
       "fetchedAtUtc": "2026-04-27T08:59:17.1798644\u002B00:00",
       "rawFileHashes": {
         "webhook-events-and-payloads.html": "sha256:feb6aa24c4236ba1b276b6f7e5e148c86483eefd007765e7f07cf9eecdbd3553"
+      }
+    },
+    {
+      "dataset": "expected-keys",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "fetchedAtUtc": "2026-05-04T00:00:00.0000000\u002B00:00",
+      "rawFileHashes": {
+        "workflow-syntax.md": "sha256:729711f0fd8b037b308ce1a37014891fb23773d90b3dbe74d5a912472f17c667"
       }
     },
     {

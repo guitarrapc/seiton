@@ -3,13 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class IanaTimeZonesFetcher
 {
-    private const string TzdataZiUrl = "https://data.iana.org/time-zones/tzdb/tzdata.zi";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -25,10 +24,12 @@ internal sealed class IanaTimeZonesFetcher
         var paths = Paths(repoRoot);
         var rawHash = ComputeSha256(File.ReadAllText(paths.RawTzdataZiPath));
 
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "iana-timezones", 1).ToList();
+
         return new SourceManifestEntry
         {
             Dataset = "iana-timezones",
-            SourceUrls = [TzdataZiUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -45,7 +46,8 @@ internal sealed class IanaTimeZonesFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var content = await client.GetStringAsync(TzdataZiUrl);
+        var tzUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "iana-timezones");
+        var content = await client.GetStringAsync(tzUrl);
         var hash = ComputeSha256(content);
         UpdateLogger.Info($"[fetch:iana-timezones:sources] downloaded tzdata.zi={content.Length} bytes ({hash[..16]}...)");
 

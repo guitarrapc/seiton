@@ -3,14 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubWebhookFetcher
 {
-    private const string SchemaSourceUrl = "https://json.schemastore.org/github-workflow.json";
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -26,11 +24,12 @@ internal sealed class GitHubWebhookFetcher
         var paths = Paths(repoRoot);
         var schemaHash = ComputeSha256(File.ReadAllText(paths.RawSchemaPath));
         var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "webhooks", 2).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "webhooks",
-            SourceUrls = [SchemaSourceUrl, DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -48,8 +47,9 @@ internal sealed class GitHubWebhookFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var schemaContent = await client.GetStringAsync(SchemaSourceUrl);
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var urls = ManifestSourceUrls.Resolve(repoRoot, "webhooks", 2);
+        var schemaContent = await client.GetStringAsync(urls[0]);
+        var docsContent = await client.GetStringAsync(urls[1]);
         var schemaHash = ComputeSha256(schemaContent);
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:webhooks:sources] downloaded schema={schemaContent.Length} bytes ({schemaHash[..16]}...), docs={docsContent.Length} bytes ({docsHash[..16]}...)");
@@ -608,8 +608,9 @@ internal sealed class GitHubWebhookFetcher
         var sb = new StringBuilder();
         sb.AppendLine("# Official Source Diff Report: webhooks");
         sb.AppendLine();
-        sb.AppendLine("- source-a: https://json.schemastore.org/github-workflow.json");
-        sb.AppendLine("- source-b: https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md");
+        var urls = ManifestSourceUrls.Resolve(repoRoot, "webhooks", 2);
+        sb.AppendLine($"- source-a: {urls[0]}");
+        sb.AppendLine($"- source-b: {urls[1]}");
         sb.AppendLine($"- exclude-schema-only: {excludeSchemaOnly}");
         sb.AppendLine($"- generated-at-utc: {DateTime.UtcNow:O}");
         sb.AppendLine();

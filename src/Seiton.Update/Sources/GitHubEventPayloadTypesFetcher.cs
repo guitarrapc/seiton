@@ -9,8 +9,6 @@ namespace Seiton.Update.Sources;
 
 internal sealed class GitHubEventPayloadTypesFetcher
 {
-    private const string DocsSourceUrl = "https://docs.github.com/en/webhooks/webhook-events-and-payloads";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -24,11 +22,12 @@ internal sealed class GitHubEventPayloadTypesFetcher
 
         var rawPath = Path.Combine(EventPayloadTypesSourcePathResolver.ResolveRawDir(repoRoot), "webhook-events-and-payloads.html");
         var docsHash = ComputeSha256(File.ReadAllText(rawPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "event-payload-types", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "event-payload-types",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -45,7 +44,8 @@ internal sealed class GitHubEventPayloadTypesFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var htmlContent = await client.GetStringAsync(DocsSourceUrl);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "event-payload-types");
+        var htmlContent = await client.GetStringAsync(docsUrl);
         var hash = ComputeSha256(htmlContent);
         UpdateLogger.Info($"[fetch:event-payload-types:sources] downloaded {htmlContent.Length} bytes ({hash[..16]}...)");
 

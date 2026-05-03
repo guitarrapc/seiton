@@ -382,6 +382,13 @@ public sealed class WebhookPipelineStageTests
     private static string CreateTempRepoWithRaw(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
+        var dstSources = Path.Combine(tempRepo, "data", "sources");
+        Directory.CreateDirectory(dstSources);
+        File.Copy(
+            Path.Combine(repoRoot, "data", "sources", "manifest.json"),
+            Path.Combine(dstSources, "manifest.json"),
+            overwrite: true);
+
         var srcRaw = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "raw");
         var dstRaw = Path.Combine(tempRepo, "data", "sources", "webhooks", "github", "raw");
         Directory.CreateDirectory(dstRaw);
@@ -397,6 +404,13 @@ public sealed class WebhookPipelineStageTests
     private static string CreateTempRepoWithParsed(string repoRoot)
     {
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
+        var dstSources = Path.Combine(tempRepo, "data", "sources");
+        Directory.CreateDirectory(dstSources);
+        File.Copy(
+            Path.Combine(repoRoot, "data", "sources", "manifest.json"),
+            Path.Combine(dstSources, "manifest.json"),
+            overwrite: true);
+
         var srcParsed = Path.Combine(repoRoot, "data", "sources", "webhooks", "github", "parsed");
         var dstParsed = Path.Combine(tempRepo, "data", "sources", "webhooks", "github", "parsed");
         Directory.CreateDirectory(dstParsed);

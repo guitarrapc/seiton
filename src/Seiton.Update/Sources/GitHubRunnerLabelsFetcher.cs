@@ -3,14 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubRunnerLabelsFetcher
 {
-    private const string DocsSourceUrl = "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md";
-    private const string LargerRunnersDocsUrl = "https://docs.github.com/en/actions/reference/runners/larger-runners.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -26,11 +24,12 @@ internal sealed class GitHubRunnerLabelsFetcher
         var paths = Paths(repoRoot);
         var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
         var largerHash = ComputeSha256(File.ReadAllText(paths.RawLargerRunnersPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "runner-labels", 2).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "runner-labels",
-            SourceUrls = [DocsSourceUrl, LargerRunnersDocsUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -48,11 +47,12 @@ internal sealed class GitHubRunnerLabelsFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var urls = ManifestSourceUrls.Resolve(repoRoot, "runner-labels", 2);
+        var docsContent = await client.GetStringAsync(urls[0]);
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:runner-labels:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
-        var largerContent = await client.GetStringAsync(LargerRunnersDocsUrl);
+        var largerContent = await client.GetStringAsync(urls[1]);
         var largerHash = ComputeSha256(largerContent);
         UpdateLogger.Info($"[fetch:runner-labels:sources] downloaded larger-runners={largerContent.Length} bytes ({largerHash[..16]}...)");
 

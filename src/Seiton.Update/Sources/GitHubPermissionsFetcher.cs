@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
@@ -10,9 +11,8 @@ internal sealed class GitHubPermissionsFetcher
 {
     /// <summary>
     /// The reusable data file that contains the YAML permissions block with all scopes and allowed values.
-    /// This is the same content rendered at https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
+    /// Source URL is recorded in data/sources/manifest.json (dataset permissions).
     /// </summary>
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,11 +28,12 @@ internal sealed class GitHubPermissionsFetcher
 
         var paths = Paths(repoRoot);
         var rawHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "permissions", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "permissions",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -49,7 +50,8 @@ internal sealed class GitHubPermissionsFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
+        var docsContent = await client.GetStringAsync(docsUrl);
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:permissions:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
@@ -127,7 +129,7 @@ internal sealed class GitHubPermissionsFetcher
 
         var merged = new MergedPermissions
         {
-            Source = DocsSourceUrl,
+            Source = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions"),
             Scopes = scopes,
         };
 

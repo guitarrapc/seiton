@@ -3,13 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubExpectedKeysFetcher
 {
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -24,11 +23,12 @@ internal sealed class GitHubExpectedKeysFetcher
         var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
         var rawPath = Path.Combine(rawDir, "workflow-syntax.md");
         var docsHash = ComputeSha256(File.ReadAllText(rawPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "expected-keys", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "expected-keys",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -45,7 +45,8 @@ internal sealed class GitHubExpectedKeysFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "expected-keys");
+        var docsContent = await client.GetStringAsync(docsUrl);
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:expected-keys:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 

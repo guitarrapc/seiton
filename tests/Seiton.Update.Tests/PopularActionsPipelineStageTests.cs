@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Seiton.Update.Services;
 using Seiton.Update.Sources;
 
 namespace Seiton.Update.Tests;
@@ -40,19 +41,20 @@ public sealed class PopularActionsPipelineStageTests
                                 {
                                     "actionRef": "actions/checkout@v4",
                                     "uses": "actions/checkout",
-                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
                                     "rawFileName": "dup.action.yml"
                                 },
                                 {
                                     "actionRef": "actions/setup-node@v4",
                                     "uses": "actions/setup-node",
-                                    "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
                                     "rawFileName": "dup.action.yml"
                                 }
                             ]
                         }
                         """;
             File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+            SetPopularActionsSourceUrlsInManifest(tempRepo,
+                "https://example.com/a",
+                "https://example.com/b");
 
             var fetcher = new GitHubPopularActionsFetcher();
             await Assert.That(() => fetcher.ValidateTargetsConfig(tempRepo)).ThrowsException();
@@ -99,13 +101,14 @@ public sealed class PopularActionsPipelineStageTests
                                 {
                                     "actionRef": "actions/checkout@v6",
                                     "uses": "actions/checkout",
-                                    "url": "https://raw.githubusercontent.com/actions/checkout/v6/action.yml",
                                     "rawFileName": "actions_checkout.action.yml"
                                 }
                             ]
                         }
                         """;
             File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+            SetPopularActionsSourceUrlsInManifest(tempRepo,
+                "https://raw.githubusercontent.com/actions/checkout/v6/action.yml");
 
             var fetcher = new GitHubPopularActionsFetcher();
             fetcher.ParseLocalSourceFiles(tempRepo);
@@ -139,13 +142,11 @@ public sealed class PopularActionsPipelineStageTests
                                 {
                                     "actionRef": "actions/checkout@v4",
                                     "uses": "actions/checkout",
-                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
                                     "rawFileName": "actions_checkout_v4.action.yml"
                                 },
                                 {
                                     "actionRef": "actions/checkout@v4",
                                     "uses": "actions/checkout",
-                                    "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
                                     "rawFileName": "actions_setup-node_v4.action.yml"
                                 }
                             ]
@@ -178,7 +179,6 @@ public sealed class PopularActionsPipelineStageTests
                                 {
                                     "actionRef": "actions/checkout@v4",
                                     "uses": "",
-                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
                                     "rawFileName": "actions_checkout_v4.action.yml"
                                 }
                             ]
@@ -265,19 +265,20 @@ public sealed class PopularActionsPipelineStageTests
                                 {
                                     "actionRef": "actions/checkout@v4",
                                     "uses": "actions/checkout",
-                                    "url": "https://raw.githubusercontent.com/actions/checkout/v4/action.yml",
                                     "rawFileName": "dup.action.yml"
                                 },
                                 {
                                     "actionRef": "actions/setup-node@v4",
                                     "uses": "actions/setup-node",
-                                    "url": "https://raw.githubusercontent.com/actions/setup-node/v4/action.yml",
                                     "rawFileName": "dup.action.yml"
                                 }
                             ]
                         }
                         """;
             File.WriteAllText(targetsPath, targetsJson.Replace("\r\n", "\n"));
+            SetPopularActionsSourceUrlsInManifest(tempRepo,
+                "https://example.com/a",
+                "https://example.com/b");
 
             var fetcher = new GitHubPopularActionsFetcher();
             await Assert.That(() => fetcher.MergeParsedSources(tempRepo)).ThrowsException();
@@ -378,8 +379,14 @@ public sealed class PopularActionsPipelineStageTests
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcRaw = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "raw");
         var srcTargets = Path.Combine(repoRoot, "data", "sources", "popular-actions", "targets.json");
+        var dstSourcesDir = Path.Combine(tempRepo, "data", "sources");
         var dstTargetsDir = Path.Combine(tempRepo, "data", "sources", "popular-actions");
         var dstRaw = Path.Combine(tempRepo, "data", "sources", "popular-actions", "github", "raw");
+        Directory.CreateDirectory(dstSourcesDir);
+        File.Copy(
+            Path.Combine(repoRoot, "data", "sources", "manifest.json"),
+            Path.Combine(dstSourcesDir, "manifest.json"),
+            overwrite: true);
         Directory.CreateDirectory(dstTargetsDir);
         Directory.CreateDirectory(dstRaw);
 
@@ -398,8 +405,14 @@ public sealed class PopularActionsPipelineStageTests
         var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-update-tests-" + Guid.NewGuid().ToString("N"));
         var srcParsed = Path.Combine(repoRoot, "data", "sources", "popular-actions", "github", "parsed");
         var srcTargets = Path.Combine(repoRoot, "data", "sources", "popular-actions", "targets.json");
+        var dstSourcesDir = Path.Combine(tempRepo, "data", "sources");
         var dstTargetsDir = Path.Combine(tempRepo, "data", "sources", "popular-actions");
         var dstParsed = Path.Combine(tempRepo, "data", "sources", "popular-actions", "github", "parsed");
+        Directory.CreateDirectory(dstSourcesDir);
+        File.Copy(
+            Path.Combine(repoRoot, "data", "sources", "manifest.json"),
+            Path.Combine(dstSourcesDir, "manifest.json"),
+            overwrite: true);
         Directory.CreateDirectory(dstTargetsDir);
         Directory.CreateDirectory(dstParsed);
 
@@ -428,5 +441,15 @@ public sealed class PopularActionsPipelineStageTests
         }
 
         throw new InvalidOperationException("Repository root not found from test base directory.");
+    }
+
+    private static void SetPopularActionsSourceUrlsInManifest(string tempRepo, params string[] urls)
+    {
+        var svc = new ManifestService();
+        var manifest = svc.Load(tempRepo);
+        var entry = manifest.Entries.First(static e =>
+            string.Equals(e.Dataset, "popular-actions", StringComparison.Ordinal));
+        entry.SourceUrls = urls.ToList();
+        svc.Save(tempRepo, manifest);
     }
 }

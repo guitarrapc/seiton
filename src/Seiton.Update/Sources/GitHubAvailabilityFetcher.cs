@@ -3,13 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubAvailabilityFetcher
 {
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -24,11 +23,12 @@ internal sealed class GitHubAvailabilityFetcher
 
         var paths = Paths(repoRoot);
         var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "availability", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "availability",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -45,7 +45,8 @@ internal sealed class GitHubAvailabilityFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "availability");
+        var docsContent = await client.GetStringAsync(docsUrl);
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:availability:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 

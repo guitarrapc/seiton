@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
@@ -241,7 +242,7 @@ internal sealed class GitHubPopularActionsFetcher
             {
                 ActionRef = (x.ActionRef ?? string.Empty).Trim(),
                 Uses = (x.Uses ?? string.Empty).Trim(),
-                Url = (x.Url ?? string.Empty).Trim(),
+                Url = string.Empty,
                 RawFileName = (x.RawFileName ?? string.Empty).Trim(),
                 MaxDeprecatedMajorVersion = x.MaxDeprecatedMajorVersion,
             })
@@ -263,11 +264,6 @@ internal sealed class GitHubPopularActionsFetcher
             if (string.IsNullOrWhiteSpace(source.Uses))
             {
                 throw new InvalidDataException($"Popular-actions target config {entryName}.uses is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(source.Url))
-            {
-                throw new InvalidDataException($"Popular-actions target config {entryName}.url is required.");
             }
 
             if (string.IsNullOrWhiteSpace(source.RawFileName))
@@ -296,9 +292,24 @@ internal sealed class GitHubPopularActionsFetcher
             }
         }
 
-        return sources
+        sources = sources
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToList();
+
+        var manifestUrls = ManifestSourceUrls.Resolve(repoRoot, "popular-actions", expectedCount: null);
+        if (manifestUrls.Count != sources.Count)
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest.json lists {manifestUrls.Count} sourceUrls but targets.json has {sources.Count} targets. " +
+                "Ensure each target has a matching URL in manifest sourceUrls in uses-ascending order.");
+        }
+
+        for (var i = 0; i < sources.Count; i++)
+        {
+            sources[i].Url = manifestUrls[i];
+        }
+
+        return sources;
     }
 
     private static string ComputeSha256(string content)

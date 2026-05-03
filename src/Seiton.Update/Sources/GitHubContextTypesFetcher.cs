@@ -3,13 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubContextTypesFetcher
 {
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -23,11 +22,12 @@ internal sealed class GitHubContextTypesFetcher
 
         var paths = Paths(repoRoot);
         var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "context-types", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "context-types",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -44,7 +44,8 @@ internal sealed class GitHubContextTypesFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "context-types");
+        var docsContent = await client.GetStringAsync(docsUrl);
         var docsHash = ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:context-types:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 

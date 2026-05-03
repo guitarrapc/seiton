@@ -180,7 +180,8 @@ When official GitHub sources disagree for webhook activity types:
 The set of popular actions to ingest is a repository-managed configuration, not a hard-coded list.
 
 - Target-set file: `data/sources/popular-actions/targets.json`
-- Each entry must provide: canonical `uses` name, immutable source locator (owner/repo + ref), raw artifact file name
+- Each entry must provide: canonical `uses` name, raw artifact file name, and (for version validation) `actionRef` identifying the pinned ref
+- Immutable download URLs for each target live in `data/sources/manifest.json` (dataset `popular-actions`): one URL per target, ordered to match targets sorted by `uses` (ascending)
 - Duplicate `uses` entries or duplicate raw artifact file names are invalid and must fail updater execution
 - Entries with missing required identity fields are invalid and must fail updater execution
 - Target-set modifications and resulting generated diffs must be reviewed together in one change set
