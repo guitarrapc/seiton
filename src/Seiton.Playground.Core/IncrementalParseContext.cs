@@ -250,6 +250,9 @@ public sealed class IncrementalParseContext
         _previousArena = arena;
         _registry = newRegistry;
 
+        // Mark root sections that produced parse diagnostics so they won't be skipped next time
+        MarkRootSectionsWithParseDiagnostics(parseResult.Diagnostics);
+
         if (jobSkipEntries is not null)
         {
             // Diagnostics buffers were already consumed; return them to the pool before retaining the arena.
@@ -373,6 +376,9 @@ public sealed class IncrementalParseContext
         _previousWorkflow = parseResult.Workflow;
         _previousArena = parseResult.Arena;
         BuildRegistryFromSource(utf8Yaml);
+
+        // Mark root sections that produced parse diagnostics so they won't be skipped next time
+        MarkRootSectionsWithParseDiagnostics(parseResult.Diagnostics);
 
         // Record base entry counts (the full parse's arena defines the import cap)
         if (parseResult.Arena is not null)
@@ -841,6 +847,9 @@ public sealed class IncrementalParseContext
         // Cache per-job diagnostics for next call
         CacheJobDiagnostics(finalDiagnostics);
 
+        // Mark root sections that contain diagnostics so they won't be skipped next time
+        MarkRootSectionsWithDiagnostics(finalDiagnostics);
+
         // Serialize to JSON and parse into elements (matching PlaygroundLintRunner format)
         return SerializeDiagnosticsToJson(finalDiagnostics);
     }
@@ -902,6 +911,53 @@ public sealed class IncrementalParseContext
                 if (entry.IsValid && offset >= entry.StartOffset && offset < entry.EndOffset)
                 {
                     _cachedJobDiagnostics[j]![counts[j]++] = diag;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Marks root section entries as HasDiagnostics if any parse diagnostic falls within their byte range.
+    /// Called after building/updating the registry to ensure sections with diagnostics are never skipped.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void MarkRootSectionsWithParseDiagnostics(DiagnosticList diagnostics)
+        => MarkRootSectionsWithDiagnostics(diagnostics);
+
+    /// <summary>
+    /// Marks root section entries as HasDiagnostics if any diagnostic falls within their byte range.
+    /// This prevents the section from being skipped in the next incremental parse.
+    /// </summary>
+    private void MarkRootSectionsWithDiagnostics(DiagnosticList diagnostics)
+    {
+        if (diagnostics.Length == 0)
+            return;
+
+        // Check each skippable root section kind
+        ReadOnlySpan<RootSectionKind> kinds =
+        [
+            RootSectionKind.On,
+            RootSectionKind.Env,
+            RootSectionKind.Permissions,
+            RootSectionKind.Defaults,
+            RootSectionKind.Concurrency,
+        ];
+
+        foreach (var kind in kinds)
+        {
+            var entry = _registry.GetRootSection(kind);
+            if (!entry.IsValid || entry.HasDiagnostics)
+                continue;
+
+            for (var d = 0; d < diagnostics.Length; d++)
+            {
+                var offset = diagnostics[d].Location.Start;
+                if (offset >= entry.StartOffset && offset < entry.EndOffset)
+                {
+                    // Re-record with HasDiagnostics = true
+                    _registry.SetRootSection(kind, new SectionEntry(
+                        entry.StartOffset, entry.EndOffset, entry.ContentHash, hasDiagnostics: true));
                     break;
                 }
             }
