@@ -283,10 +283,15 @@ public sealed class IncrementalParseContext
             oldArena?.ReleaseDiagnosticsBuffer();
             oldArena?.ReleaseLintDiagnosticsBuffer();
 
-            // Retain old arena only if it owns Job objects that may still be referenced.
-            // Intermediate arenas (where all jobs were skipped) have JobCount == 0
-            // and can be safely disposed — their pooled Job[] is empty.
-            if (oldArena is { JobCount: > 0 })
+            // Retain old arena only if it owns Job objects that are STILL REFERENCED
+            // by the current workflow (via skip entries).
+            // - An arena with JobCount == 0 never allocated jobs → always safe to dispose.
+            // - An intermediate arena whose JobCount <= the new arena's JobCount only
+            //   owned the "changing" jobs that were just re-parsed fresh in the new arena.
+            //   Those old Job objects are no longer referenced → safe to dispose.
+            // - Only arenas with MORE jobs than were freshly parsed (e.g., the full-parse
+            //   arena that owns the reused/skipped jobs) must be retained.
+            if (oldArena is { JobCount: > 0 } && oldArena.JobCount > arena.JobCount)
             {
                 (_retainedArenas ??= new(2)).Add(oldArena!);
             }
