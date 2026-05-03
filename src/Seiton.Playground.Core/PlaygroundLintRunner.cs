@@ -47,9 +47,6 @@ public static class PlaygroundLintRunner
     /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
 
-    /// <summary>Reusable UTF-8 byte buffer for YAML source. Guarded by <see cref="EngineGate"/>.</summary>
-    private static byte[] _utf8Buffer = new byte[4096];
-
     /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
     private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
 
@@ -227,19 +224,18 @@ public static class PlaygroundLintRunner
     }
 
     /// <summary>
-    /// Returns an exact-sized UTF-8 byte[] for the given string, reusing the static buffer
-    /// when the byte length matches exactly. Must be called under <see cref="EngineGate"/>.
-    /// The parser requires exact-length arrays because VYaml reads utf8Yaml.AsMemory() fully.
+    /// <summary>
+    /// <summary>
+    /// Returns an exact-sized UTF-8 byte[] for the given string.
+    /// Always allocates a new array because the IncrementalParseContext retains a reference
+    /// to the previous source bytes — reusing the same buffer would corrupt stored state.
+    /// Must be called under <see cref="EngineGate"/>.
     /// </summary>
     private static byte[] RentUtf8Buffer(string source)
     {
         var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_utf8Buffer.Length != byteCount)
-        {
-            _utf8Buffer = new byte[byteCount];
-        }
-
-        Encoding.UTF8.GetBytes(source, _utf8Buffer);
-        return _utf8Buffer;
+        var buffer = new byte[byteCount];
+        Encoding.UTF8.GetBytes(source, buffer);
+        return buffer;
     }
 }

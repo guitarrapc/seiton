@@ -155,15 +155,13 @@ public class DiagnosticListTests
         var engine = new LintEngine();
         var result = engine.Check(yaml, "test.yml");
 
-        // Diagnostics should be accessible
+        // Diagnostics should be accessible before dispose
         var countBefore = result.Diagnostics.Length;
-
-        // After arena dispose, the diagnostics should still be valid
-        // (since the lint diagnostics buffer is registered with the arena)
-        result.ParseResult.Arena?.Dispose();
-
-        // Note: After dispose, the backing array is returned to pool.
-        // This test verifies the pattern works without exceptions.
         await Assert.That(countBefore).IsGreaterThanOrEqualTo(0);
+
+        // After arena dispose, the backing arrays are returned to pool.
+        // Accessing diagnostics after this point is undefined behavior.
+        // This test verifies that dispose itself does not throw.
+        result.ParseResult.Arena?.Dispose();
     }
 }

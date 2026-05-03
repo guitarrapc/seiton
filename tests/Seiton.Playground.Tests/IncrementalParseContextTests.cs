@@ -115,9 +115,9 @@ public sealed class IncrementalParseContextTests
         ctx.UpdateAfterParse(yaml2, ".github/workflows/ci.yml");
         var jobsHash2 = ctx.Registry.GetRootSection(RootSectionKind.Jobs).ContentHash;
 
-        // Jobs content is logically identical, but since "on: push" → "on: pull_request" shifts
-        // byte offsets, the recorded hashes differ (they are position-dependent).
-        // IsSectionUnchanged is the correct API for cross-source comparison.
+        // Jobs content is logically identical. ContentHash is computed over the section byte
+        // range only (not including absolute offsets), so the hash stays the same even though
+        // preceding sections changed length. Use IsSectionUnchanged for cross-source comparison.
         await Assert.That(jobsHash2).IsEqualTo(jobsHash1);
     }
 
@@ -133,7 +133,8 @@ public sealed class IncrementalParseContextTests
         var edit = ctx.DetectEditRegion(yaml2);
         // The edit should be somewhere in the "echo before" → "echo after" area
         await Assert.That(edit.Start).IsGreaterThan(0);
-        await Assert.That(edit.Delta).IsNotEqualTo(0).Or.IsEqualTo(0); // length may differ
+        // "before" (6 chars) → "after" (5 chars) gives delta = -1
+        await Assert.That(edit.Delta).IsEqualTo(-1);
     }
 
     [Test]

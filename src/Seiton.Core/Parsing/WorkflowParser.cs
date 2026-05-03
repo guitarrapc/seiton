@@ -1345,6 +1345,7 @@ public static partial class WorkflowParser
                     {
                         reader.SkipCurrentNode();
                     }
+                    jobIndex++;
                     continue;
                 }
 

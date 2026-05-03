@@ -151,6 +151,8 @@ public sealed class IncrementalParseContext
     // D-5b: stored previous Workflow and Arena for section reuse
     private Workflow? _previousWorkflow;
     private AstArena? _previousArena;
+    private DiagnosticList _previousDiagnostics;
+    private bool _previousHasFatalError;
 
     // D-5c: arenas retained because reused jobs reference their pooled objects.
     // Disposed only on full parse (when all jobs are freshly allocated).
@@ -194,7 +196,7 @@ public sealed class IncrementalParseContext
         // This avoids re-parsing, arena allocation, and VYaml tokenization entirely.
         if (IsSourceIdentical(utf8Yaml))
         {
-            return new ParseResult(_previousWorkflow, null, default, HasFatalError: false, _previousArena);
+            return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError, _previousArena);
         }
 
         // Scan new source for section boundaries
@@ -215,9 +217,10 @@ public sealed class IncrementalParseContext
         // Even if root sections changed, individual jobs that are byte-identical can be reused.
         var jobSkipEntries = ComputeJobSkipEntries(utf8Yaml, ref newRegistry);
 
-        if (skipMask == 0 && jobSkipEntries is null)
+        if (jobSkipEntries is null)
         {
-            // Nothing to skip — full parse (resets base counts)
+            // No jobs can be reused — full parse to reset arena base counts cleanly.
+            // Skipping only root sections has minimal benefit and complicates arena lifecycle.
             _lastReusedJobs = null;
             return FullParseAndStore(utf8Yaml, filePath);
         }
@@ -248,6 +251,8 @@ public sealed class IncrementalParseContext
         _previousSourceLength = utf8Yaml.Length;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = arena;
+        _previousDiagnostics = parseResult.Diagnostics;
+        _previousHasFatalError = parseResult.HasFatalError;
         _registry = newRegistry;
 
         if (jobSkipEntries is not null)
@@ -372,6 +377,8 @@ public sealed class IncrementalParseContext
         _previousSourceLength = utf8Yaml.Length;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = parseResult.Arena;
+        _previousDiagnostics = parseResult.Diagnostics;
+        _previousHasFatalError = parseResult.HasFatalError;
         BuildRegistryFromSource(utf8Yaml);
 
         // Record base entry counts (the full parse's arena defines the import cap)
@@ -723,13 +730,13 @@ public sealed class IncrementalParseContext
 
     /// <summary>
     /// Checks whether the new source is byte-identical to the previous source.
-    /// Uses reference equality first (common case: same buffer), then content comparison.
+    /// Compares length first, then content. Reference equality is not used because
+    /// callers may provide a new array instance with the same content.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsSourceIdentical(byte[] newSource)
     {
         if (_previousSource is null) return false;
-        if (ReferenceEquals(_previousSource, newSource)) return true;
         if (_previousSourceLength != newSource.Length) return false;
         return newSource.AsSpan().SequenceEqual(_previousSource.AsSpan(0, _previousSourceLength));
     }
