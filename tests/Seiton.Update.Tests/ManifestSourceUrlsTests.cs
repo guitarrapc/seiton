@@ -108,6 +108,135 @@ public sealed class ManifestSourceUrlsTests
         }
     }
 
+    [Test]
+    public async Task Resolve_WhenEntriesNullInJson_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteRawManifest(dir, """
+                {
+                  "schemaVersion": 1,
+                  "entries": null
+                }
+                """);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Resolve_WhenSourceUrlsNullInJson_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteRawManifest(dir, """
+                {
+                  "schemaVersion": 1,
+                  "entries": [
+                    {
+                      "dataset": "availability",
+                      "sourceUrls": null,
+                      "fetchedAtUtc": "2026-01-01T00:00:00+00:00",
+                      "rawFileHashes": {}
+                    }
+                  ]
+                }
+                """);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Resolve_WhenSourceUrlsContainsBlankSlot_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "webhooks",
+                    SourceUrls =
+                    [
+                        "https://example.com/a",
+                        " ",
+                        "https://example.com/b",
+                    ],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "webhooks", 2))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Resolve_WhenUrlUsesHttp_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "availability",
+                    SourceUrls = ["http://raw.githubusercontent.com/github/docs/main/x.md"],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Resolve_WhenUrlNotAbsolute_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "availability",
+                    SourceUrls = ["/relative/path"],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private static string NewTempDir() =>
         Path.Combine(Path.GetTempPath(), "seiton-manifest-url-tests-" + Guid.NewGuid().ToString("N"));
 
@@ -122,5 +251,12 @@ public sealed class ManifestSourceUrlsTests
         };
         var json = JsonSerializer.Serialize(manifest, JsonOptions);
         File.WriteAllText(path, json.Replace("\r\n", "\n"));
+    }
+
+    private static void WriteRawManifest(string repoRoot, string json)
+    {
+        var path = Path.Combine(repoRoot, "data", "sources", "manifest.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, json.Trim().Replace("\r\n", "\n"));
     }
 }

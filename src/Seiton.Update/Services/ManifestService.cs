@@ -26,7 +26,7 @@ internal sealed class ManifestService
 
     public SourceManifest Upsert(SourceManifest manifest, SourceManifestEntry entry)
     {
-        manifest.Entries = manifest.Entries
+        manifest.Entries = (manifest.Entries ?? [])
             .Where(x => !string.Equals(x.Dataset, entry.Dataset, StringComparison.Ordinal))
             .Concat([entry])
             .OrderBy(static x => x.Dataset, StringComparer.Ordinal)

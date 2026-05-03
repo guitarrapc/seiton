@@ -306,10 +306,56 @@ internal sealed class GitHubPopularActionsFetcher
 
         for (var i = 0; i < sources.Count; i++)
         {
+            EnsurePopularActionUrlMatchesTarget(sources[i].Uses, manifestUrls[i], i);
             sources[i].Url = manifestUrls[i];
         }
 
         return sources;
+    }
+
+    /// <summary>
+    /// Ensures the manifest URL points at raw.githubusercontent.com for the same owner/repo as <paramref name="uses"/>,
+    /// so a reordered or mistyped manifest cannot download another action into this target's raw file.
+    /// </summary>
+    private static void EnsurePopularActionUrlMatchesTarget(string uses, string url, int index)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] must be an absolute https URL on raw.githubusercontent.com for uses '{uses}'. url={url}");
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 3)
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] path must be /owner/repo/ref/.../action metadata. uses='{uses}' url={url}");
+        }
+
+        var ownerEnd = uses.IndexOf('/');
+        if (ownerEnd <= 0 || ownerEnd == uses.Length - 1 || uses.IndexOf('/', ownerEnd + 1) >= 0)
+        {
+            throw new InvalidDataException($"popular-actions: targets uses '{uses}' must be exactly owner/repo.");
+        }
+
+        var owner = uses[..ownerEnd];
+        var repo = uses[(ownerEnd + 1)..];
+        if (!string.Equals(segments[0], owner, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(segments[1], repo, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] path starts with '{segments[0]}/{segments[1]}' but targets[{index}] uses '{uses}' after sorting. Re-order or fix manifest URLs to match uses order.");
+        }
+
+        var file = segments[^1];
+        if (!file.Equals("action.yml", StringComparison.OrdinalIgnoreCase) &&
+            !file.Equals("action.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] must reference action.yml or action.yaml. url={url}");
+        }
     }
 
     private static string ComputeSha256(string content)
