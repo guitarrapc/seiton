@@ -633,31 +633,27 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "required key 'runs' is missing in action metadata", new TextPosition(0, 1, 1));
             }
 
-            var actionMetadata = new ActionMetadata
-            {
-                Name = nameNode,
-                Description = actionDescription,
-                Inputs = actionInputs,
-                Outputs = actionOutputs,
-                Runs = actionRuns,
-                Branding = actionBranding,
-                Range = workflowRange,
-            };
+            var actionMetadata = arena.AllocActionMetadata();
+            actionMetadata.Name = nameNode;
+            actionMetadata.Description = actionDescription;
+            actionMetadata.Inputs = actionInputs;
+            actionMetadata.Outputs = actionOutputs;
+            actionMetadata.Runs = actionRuns;
+            actionMetadata.Branding = actionBranding;
+            actionMetadata.Range = workflowRange;
             return new ParseCoreResult(null, actionMetadata, hasFatalError: false, arena);
         }
 
-        var workflow = new Workflow
-        {
-            Name = nameNode,
-            RunName = runNameNode,
-            On = onEvents,
-            Permissions = permissionsNode,
-            Env = envNode,
-            Defaults = defaultsNode,
-            Concurrency = concurrencyNode,
-            Jobs = jobs,
-            Range = workflowRange,
-        };
+        var workflow = arena.AllocWorkflow();
+        workflow.Name = nameNode;
+        workflow.RunName = runNameNode;
+        workflow.On = onEvents;
+        workflow.Permissions = permissionsNode;
+        workflow.Env = envNode;
+        workflow.Defaults = defaultsNode;
+        workflow.Concurrency = concurrencyNode;
+        workflow.Jobs = jobs;
+        workflow.Range = workflowRange;
 
         return new ParseCoreResult(workflow, null, hasFatalError: false, arena);
     }

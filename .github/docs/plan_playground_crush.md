@@ -468,11 +468,11 @@ AST ノード生成とそのバッキング配列。ファイルごとに 1 回�
 
 | # | 箇所 | アロケーション | 推定影響 | 対策 |
 |---|------|-------------|---------|------|
-| B-1 | `WorkflowParser` 各所 | `PooledBuffer<SliceMap<T>.Entry>.ToArray()` — jobs, permissions, env, outputs 等のバッキング配列 | 大（全 SliceMap の Entry[] コピー） | SliceMap が PooledBuffer を直接保持する設計に変更。SliceMap<T> を IDisposable にし、Entry[] を ArrayPool 管理にする。AstArena の Dispose 時に一括返却 |
-| B-2 | `Workflow`, `Job`, `Step` | `new Workflow()`, `new Job()`, `new Step()` — class instance | 大（各 AST ノード） | struct 化は参照サイクルとサイズの問題で困難。代替: AstArena にオブジェクトプールを追加し、Reset で再利用 |
-| B-3 | `WorkflowParser.ParseCore` L533 | `new Workflow { ... }` | 中（per parse） | B-2 と連動 |
-| B-4 | `ActionMetadata` | `new ActionMetadata { ... }` | 小（action metadata のみ） | B-2 と連動 |
-| B-5 | `ExpressionSemanticAnalyzer.ConvertJsonType` L924-927 | `new Dictionary` + `Encoding.UTF8.GetBytes` per prop | 小（fromJSON リテラルのみ） | 条件パスのため低優先 |
+| B-1 | `WorkflowParser` 各所 | `PooledBuffer<SliceMap<T>.Entry>.ToArray()` — jobs, permissions, env, outputs 等のバッキング配列 | 大（全 SliceMap の Entry[] コピー） | SliceMap が PooledBuffer を直接保持する設計に変更。SliceMap<T> を IDisposable にし、Entry[] を ArrayPool 管理にする。AstArena の Dispose 時に一括返却 | ✅ D-4 で実装済み (DetachArray + RegisterSliceMapBuffer) |
+| B-2 | `Workflow`, `Job`, `Step` | `new Workflow()`, `new Job()`, `new Step()` — class instance | 大（各 AST ノード） | struct 化は参照サイクルとサイズの問題で困難。代替: AstArena にオブジェクトプールを追加し、Reset で再利用 | ✅ Workflow/ActionMetadata を AstArena でプール化 (Job/Step/ExecRun/ExecAction は既存) |
+| B-3 | `WorkflowParser.ParseCore` L533 | `new Workflow { ... }` | 中（per parse） | B-2 と連動 | ✅ arena.AllocWorkflow() に置換 |
+| B-4 | `ActionMetadata` | `new ActionMetadata { ... }` | 小（action metadata のみ） | B-2 と連動 | ✅ arena.AllocActionMetadata() に置換 |
+| B-5 | `ExpressionSemanticAnalyzer.ConvertJsonType` L924-927 | `new Dictionary` + `Encoding.UTF8.GetBytes` per prop | 小（fromJSON リテラルのみ） | 条件パスのため低優先 | ✅ ReadOnlyMemory<byte> 直接ラップで二重コピー排除 |
 
 ### 11.4 優先度 C（低）: Playground 固有パス
 

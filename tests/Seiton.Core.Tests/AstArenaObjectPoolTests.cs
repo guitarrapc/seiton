@@ -216,4 +216,82 @@ public sealed class AstArenaObjectPoolTests
         }
         arena.Dispose();
     }
+
+    [Test]
+    public async Task AllocWorkflow_ReturnsWorkflowWithDefaultFields()
+    {
+        var source = "name: test"u8.ToArray();
+        using var arena = AstArena.Rent(source);
+
+        var workflow = arena.AllocWorkflow();
+
+        await Assert.That(workflow).IsNotNull();
+        await Assert.That(workflow.Name.HasValue).IsFalse();
+        await Assert.That(workflow.RunName.HasValue).IsFalse();
+        await Assert.That(workflow.On).IsEmpty();
+        await Assert.That(workflow.Permissions).IsNull();
+        await Assert.That(workflow.Env).IsNull();
+        await Assert.That(workflow.Defaults).IsNull();
+        await Assert.That(workflow.Concurrency).IsNull();
+        await Assert.That(workflow.Jobs.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task AllocWorkflow_AfterDisposeAndRent_ReusesObjectWithResetFields()
+    {
+        var source = "name: test"u8.ToArray();
+        var arena = AstArena.Rent(source);
+        var wf1 = arena.AllocWorkflow();
+        wf1.Name = arena.AddString(new Utf8Slice(0, 4), false, default);
+        arena.Dispose();
+
+        // Re-rent (should reuse cached arena with pooled object)
+        var source2 = "x: y"u8.ToArray();
+        arena = AstArena.Rent(source2);
+        var wf2 = arena.AllocWorkflow();
+
+        await Assert.That(wf2).IsSameReferenceAs(wf1);
+        await Assert.That(wf2.Name.HasValue).IsFalse();
+        await Assert.That(wf2.On).IsEmpty();
+        await Assert.That(wf2.Permissions).IsNull();
+        arena.Dispose();
+    }
+
+    [Test]
+    public async Task AllocActionMetadata_ReturnsActionMetadataWithDefaultFields()
+    {
+        var source = "name: test"u8.ToArray();
+        using var arena = AstArena.Rent(source);
+
+        var meta = arena.AllocActionMetadata();
+
+        await Assert.That(meta).IsNotNull();
+        await Assert.That(meta.Name.HasValue).IsFalse();
+        await Assert.That(meta.Description.HasValue).IsFalse();
+        await Assert.That(meta.Inputs).IsNull();
+        await Assert.That(meta.Outputs).IsNull();
+        await Assert.That(meta.Runs).IsNull();
+        await Assert.That(meta.Branding).IsNull();
+    }
+
+    [Test]
+    public async Task AllocActionMetadata_AfterDisposeAndRent_ReusesObjectWithResetFields()
+    {
+        var source = "name: test"u8.ToArray();
+        var arena = AstArena.Rent(source);
+        var meta1 = arena.AllocActionMetadata();
+        meta1.Name = arena.AddString(new Utf8Slice(0, 4), false, default);
+        arena.Dispose();
+
+        // Re-rent (should reuse cached arena with pooled object)
+        var source2 = "x: y"u8.ToArray();
+        arena = AstArena.Rent(source2);
+        var meta2 = arena.AllocActionMetadata();
+
+        await Assert.That(meta2).IsSameReferenceAs(meta1);
+        await Assert.That(meta2.Name.HasValue).IsFalse();
+        await Assert.That(meta2.Inputs).IsNull();
+        await Assert.That(meta2.Outputs).IsNull();
+        arena.Dispose();
+    }
 }
