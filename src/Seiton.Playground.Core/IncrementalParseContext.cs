@@ -155,7 +155,6 @@ public sealed class IncrementalParseContext
     private byte[]? _previousSource;
     private int _previousSourceLength;
     private SectionRegistry _registry;
-    private SectionRegistry _scanRegistry;
 
     // D-5b: stored previous Workflow and Arena for section reuse
     private Workflow? _previousWorkflow;
@@ -212,22 +211,22 @@ public sealed class IncrementalParseContext
         }
 
         // Scan new source for section boundaries
-        _scanRegistry.Reset();
-        ScanRootSections(utf8Yaml, ref _scanRegistry);
-        var newJobsEntry = _scanRegistry.GetRootSection(RootSectionKind.Jobs);
+        var newRegistry = default(SectionRegistry);
+        ScanRootSections(utf8Yaml, ref newRegistry);
+        var newJobsEntry = newRegistry.GetRootSection(RootSectionKind.Jobs);
         if (newJobsEntry.IsValid)
         {
-            ScanJobSections(utf8Yaml, newJobsEntry.StartOffset, newJobsEntry.EndOffset, ref _scanRegistry);
+            ScanJobSections(utf8Yaml, newJobsEntry.StartOffset, newJobsEntry.EndOffset, ref newRegistry);
         }
 
         // Determine which root sections are unchanged (D-5b).
         // Returns 0 if ANY existing root section changed (forces full parse for root sections
         // to avoid arena entry growth from partial imports).
-        var skipMask = ComputeSkipMask(utf8Yaml, ref _scanRegistry);
+        var skipMask = ComputeSkipMask(utf8Yaml, ref newRegistry);
 
         // D-5c: Compute job skip entries (independent of root skip mask).
         // Even if root sections changed, individual jobs that are byte-identical can be reused.
-        var jobSkipEntries = ComputeJobSkipEntries(utf8Yaml, ref _scanRegistry);
+        var jobSkipEntries = ComputeJobSkipEntries(utf8Yaml, ref newRegistry);
 
         if (skipMask == 0 && jobSkipEntries is null)
         {
@@ -273,7 +272,7 @@ public sealed class IncrementalParseContext
         _previousSourceLength = utf8Yaml.Length;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = arena;
-        (_registry, _scanRegistry) = (_scanRegistry, _registry);
+        _registry = newRegistry;
 
         // Mark root sections that produced parse diagnostics so they won't be skipped next time
         MarkRootSectionsWithParseDiagnostics(parseResult.Diagnostics);
@@ -284,12 +283,13 @@ public sealed class IncrementalParseContext
 
             // Release buffers no longer needed: diagnostics already consumed,
             // scalar data already copied via BulkImportFrom.
+            // Only Job/Step objects and SliceMap Entry[] remain needed by reused jobs.
             oldArena?.ReleaseDiagnosticsBuffer();
             oldArena?.ReleaseLintDiagnosticsBuffer();
             oldArena?.ReleaseScalarBuffers();
 
-            // Retain old arena — reused jobs reference its pooled Job/Step objects
-            // and SliceMap Entry[] arrays. Will be disposed on next full parse.
+            // Retain old arena — reused jobs reference its pooled Job/Step objects.
+            // Will be disposed on next full parse.
             (_retainedArenas ??= new(2)).Add(oldArena!);
 
             // D-5d: record which jobs were reused for lint cache

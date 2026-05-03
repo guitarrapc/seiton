@@ -57,9 +57,6 @@ public static class PlaygroundLintRunner
 
     private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    /// <summary>Reusable JSON writer. Guarded by <see cref="EngineGate"/>.</summary>
-    private static readonly Utf8JsonWriter JsonWriter = new(JsonBuffer, CamelCaseWriterOptions);
-
     /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly IncrementalParseContext IncrementalCtx = new();
 
@@ -97,9 +94,10 @@ public static class PlaygroundLintRunner
             var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult);
 
             JsonBuffer.Clear();
-            JsonWriter.Reset(JsonBuffer);
-            WriteDiagnosticsArray(JsonWriter, lintResult.Diagnostics.AsSpan());
-            JsonWriter.Flush();
+            using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
+            {
+                WriteDiagnosticsArray(writer, lintResult.Diagnostics.AsSpan());
+            }
 
             // NOTE: Arena is NOT disposed here — IncrementalParseContext owns it for reuse
             var result = JsonBuffer.WrittenSpan.ToArray();
