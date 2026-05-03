@@ -45,11 +45,6 @@ public sealed class LintEngine
     private readonly List<NormalizedExclusion> _normalizedExclusions = new(4);
     private readonly List<Diagnostic> _exclusionDiagnostics = new();
 
-    // Arena lifecycle: two-slot rotation to honour the "most recent + preceding" validity guarantee.
-    // _arenaToDispose holds N-2 (disposed on next Check), _previousArena holds N-1 (still valid).
-    private AstArena? _arenaToDispose;
-    private AstArena? _previousArena;
-
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
     /// Pass to <see cref="OnlineAudit.OnlineAuditEngine.AuditAsync"/> for post-traversal async resolution.
@@ -110,15 +105,8 @@ public sealed class LintEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        // Arena lifecycle: dispose N-2, rotate N-1 → N-2, then parse (Rent reuses from cache).
-        _arenaToDispose?.Dispose();
-        _arenaToDispose = _previousArena;
-
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
         var parseResult = classifiedParseResult.ParseResult;
-
-        _previousArena = parseResult.Arena;
-
         return CheckCore(utf8Yaml, filePath, config, parseResult, classifiedParseResult.Classification.FinalKind);
     }
 
