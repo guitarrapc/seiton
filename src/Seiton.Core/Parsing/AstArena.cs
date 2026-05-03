@@ -275,38 +275,6 @@ public sealed class AstArena : IDisposable
     }
 
     /// <summary>
-    /// Releases scalar storage arrays and SliceMap buffers back to ArrayPool without
-    /// resetting pooled Job/Step/ExecRun/ExecAction objects. Use this on retained arenas
-    /// whose Job objects are still referenced by a reused workflow, but whose scalar
-    /// and diagnostic arrays are no longer needed.
-    /// After calling this, the arena must NOT be used for resolving scalar handles.
-    /// </summary>
-    internal void ReleaseScalarBuffers()
-    {
-        // Return scalar arrays to pool
-        if (_strings is not null)
-        {
-            ArrayPool<StringNodeData>.Shared.Return(_strings);
-            _strings = null!;
-        }
-        if (_bools is not null)
-        {
-            ArrayPool<BoolNodeData>.Shared.Return(_bools);
-            _bools = null!;
-        }
-        if (_ints is not null)
-        {
-            ArrayPool<IntNodeData>.Shared.Return(_ints);
-            _ints = null!;
-        }
-        if (_floats is not null)
-        {
-            ArrayPool<FloatNodeData>.Shared.Return(_floats);
-            _floats = null!;
-        }
-    }
-
-    /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
     /// Backing arrays that have grown beyond their default capacity are returned to
@@ -340,10 +308,10 @@ public sealed class AstArena : IDisposable
 
         // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)
         // This prevents memory retention across parse calls, which is critical in WASM.
-        if (_jobs is not null) for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();
-        if (_steps is not null) for (var i = 0; i < _stepCount; i++) _steps[i]?.Reset();
-        if (_execRuns is not null) for (var i = 0; i < _execRunCount; i++) _execRuns[i]?.Reset();
-        if (_execActions is not null) for (var i = 0; i < _execActionCount; i++) _execActions[i]?.Reset();
+        for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();
+        for (var i = 0; i < _stepCount; i++) _steps[i]?.Reset();
+        for (var i = 0; i < _execRunCount; i++) _execRuns[i]?.Reset();
+        for (var i = 0; i < _execActionCount; i++) _execActions[i]?.Reset();
 
         _stringCount = 0;
         _boolCount = 0;
@@ -355,45 +323,31 @@ public sealed class AstArena : IDisposable
         _execActionCount = 0;
         _source = [];
 
-        // If scalar arrays were already released (ReleaseScalarBuffers),
-        // this arena cannot be cached — just null out remaining refs and return SliceMap buffers.
-        if (_strings is null)
-        {
-            // Return SliceMap Entry[] arrays that were kept alive for reused jobs
-            for (var i = 0; i < _sliceMapBufferCount; i++)
-            {
-                _sliceMapBuffers[i].Return(_sliceMapBuffers[i].Buffer);
-                _sliceMapBuffers[i] = default;
-            }
-            _sliceMapBufferCount = 0;
-
-            _jobs = null!;
-            _steps = null!;
-            _execRuns = null!;
-            _execActions = null!;
-            return;
-        }
-
         if (cached is null)
         {
             // Cap backing arrays to default sizes to prevent unbounded growth.
-            ShrinkIfOversized(ref _strings!, DefaultStringCapacity);
-            ShrinkIfOversized(ref _bools!, DefaultBoolCapacity);
-            ShrinkIfOversized(ref _ints!, DefaultIntCapacity);
-            ShrinkIfOversized(ref _floats!, DefaultFloatCapacity);
-            ShrinkObjectPoolIfOversized(ref _jobs!, DefaultJobCapacity);
-            ShrinkObjectPoolIfOversized(ref _steps!, DefaultStepCapacity);
-            ShrinkObjectPoolIfOversized(ref _execRuns!, DefaultExecRunCapacity);
-            ShrinkObjectPoolIfOversized(ref _execActions!, DefaultExecActionCapacity);
+            // Grow() doubles arrays but Dispose() must shrink them back so the ThreadStatic
+            // cache doesn't permanently retain peak-sized arrays.
+            // Uses ArrayPool.Rent for replacements (may return slightly oversized arrays but
+            // always from the smallest matching bucket, far below peak). All arrays stay
+            // pool-rented so EnsureMinCapacity/Return in subsequent Rent() calls are safe.
+            ShrinkIfOversized(ref _strings, DefaultStringCapacity);
+            ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
+            ShrinkIfOversized(ref _ints, DefaultIntCapacity);
+            ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
+            ShrinkObjectPoolIfOversized(ref _jobs, DefaultJobCapacity);
+            ShrinkObjectPoolIfOversized(ref _steps, DefaultStepCapacity);
+            ShrinkObjectPoolIfOversized(ref _execRuns, DefaultExecRunCapacity);
+            ShrinkObjectPoolIfOversized(ref _execActions, DefaultExecActionCapacity);
             cached = this;
         }
         else
         {
             // Cache is already occupied — return all pool-rented arrays and discard this arena.
-            ArrayPool<StringNodeData>.Shared.Return(_strings!);
-            ArrayPool<BoolNodeData>.Shared.Return(_bools!);
-            ArrayPool<IntNodeData>.Shared.Return(_ints!);
-            ArrayPool<FloatNodeData>.Shared.Return(_floats!);
+            ArrayPool<StringNodeData>.Shared.Return(_strings);
+            ArrayPool<BoolNodeData>.Shared.Return(_bools);
+            ArrayPool<IntNodeData>.Shared.Return(_ints);
+            ArrayPool<FloatNodeData>.Shared.Return(_floats);
             _strings = null!;
             _bools = null!;
             _ints = null!;

@@ -162,11 +162,6 @@ public sealed class IncrementalParseContext
     private int _baseIntCount;
     private int _baseFloatCount;
 
-    // Tracks whether the previous incremental parse had no job reuse (root-skip-only).
-    // Used to detect the transition to job-reuse, which requires a full parse
-    // to reset base counts and prevent stale index crashes.
-    private bool _previousHadNoJobReuse;
-
     // D-5c: reusable buffer for job skip entries (avoids per-call allocation)
     private JobSkipEntry[]? _jobSkipEntriesBuf;
 
@@ -224,17 +219,6 @@ public sealed class IncrementalParseContext
         {
             // Nothing to skip — full parse (resets base counts)
             _lastReusedJobs = null;
-            _previousHadNoJobReuse = false;
-            return FullParseAndStore(utf8Yaml, filePath);
-        }
-
-        // If previous iteration had no job reuse (all jobs parsed fresh with indices > base)
-        // and THIS iteration wants to reuse jobs, fall back to full parse. Those reused jobs
-        // reference string indices that BulkImportFrom (capped at _baseStringCount) won't cover.
-        if (_previousHadNoJobReuse && jobSkipEntries is not null)
-        {
-            _lastReusedJobs = null;
-            _previousHadNoJobReuse = false;
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
@@ -271,8 +255,6 @@ public sealed class IncrementalParseContext
 
         if (jobSkipEntries is not null)
         {
-            _previousHadNoJobReuse = false;
-
             // Diagnostics buffers were already consumed; return them to the pool before retaining the arena.
             oldArena?.ReleaseDiagnosticsBuffer();
             oldArena?.ReleaseLintDiagnosticsBuffer();
@@ -293,7 +275,6 @@ public sealed class IncrementalParseContext
         else
         {
             _lastReusedJobs = null;
-            _previousHadNoJobReuse = true;
             // No job reuse — safe to dispose old arena immediately
             oldArena?.Dispose();
         }
@@ -386,18 +367,7 @@ public sealed class IncrementalParseContext
     /// <summary>Performs a full parse and stores the result for future incremental use.</summary>
     private ParseResult FullParseAndStore(byte[] utf8Yaml, string filePath)
     {
-        // Full parse creates all-new objects — safe to dispose retained arenas FIRST
-        // so their arrays return to pools and Rent() can reuse the ThreadStatic cache.
-        if (_retainedArenas is { Count: > 0 })
-        {
-            foreach (var retained in _retainedArenas)
-                retained.Dispose();
-            _retainedArenas.Clear();
-        }
-
-        // Dispose old arena BEFORE ParseClassified so AstArena.Rent() can reuse the cache.
-        _previousArena?.Dispose();
-
+        var oldArena = _previousArena;
         var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
         var parseResult = classifiedResult.ParseResult;
 
@@ -419,8 +389,19 @@ public sealed class IncrementalParseContext
             _baseFloatCount = parseResult.Arena.FloatCount;
         }
 
+        // Full parse creates all-new objects — safe to dispose retained arenas
+        if (_retainedArenas is { Count: > 0 })
+        {
+            foreach (var retained in _retainedArenas)
+                retained.Dispose();
+            _retainedArenas.Clear();
+        }
+
         // Full parse invalidates job cache — all diagnostics will be fresh
         _lastReusedJobs = null;
+
+        // Dispose the old arena (if any) now that we've stored the new one
+        oldArena?.Dispose();
 
         return parseResult;
     }
