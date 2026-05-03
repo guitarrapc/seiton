@@ -151,6 +151,8 @@ public sealed class IncrementalParseContext
     // D-5b: stored previous Workflow and Arena for section reuse
     private Workflow? _previousWorkflow;
     private AstArena? _previousArena;
+    private DiagnosticList _previousDiagnostics;
+    private bool _previousHasFatalError;
 
     // D-5c: arenas retained because reused jobs reference their pooled objects.
     // Disposed only on full parse (when all jobs are freshly allocated).
@@ -194,7 +196,7 @@ public sealed class IncrementalParseContext
         // This avoids re-parsing, arena allocation, and VYaml tokenization entirely.
         if (IsSourceIdentical(utf8Yaml))
         {
-            return new ParseResult(_previousWorkflow, null, default, HasFatalError: false, _previousArena);
+            return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError, _previousArena);
         }
 
         // Scan new source for section boundaries
@@ -222,10 +224,11 @@ public sealed class IncrementalParseContext
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
-        // Incremental parse: import base entries only (capped to prevent growth),
-        // parse with skip, patch results
+        // Incremental parse: import all entries from previous arena so any
+        // skipped/reused AST nodes keep their referenced node IDs valid
+        // across multi-edit incremental parse sessions.
         var arena = AstArena.Rent(utf8Yaml);
-        arena.BulkImportFrom(_previousArena, _baseStringCount, _baseBoolCount, _baseIntCount, _baseFloatCount);
+        arena.BulkImportFrom(_previousArena, _previousArena.StringCount, _previousArena.BoolCount, _previousArena.IntCount, _previousArena.FloatCount);
 
         var parseResult = WorkflowParser.ParseIncremental(utf8Yaml, filePath, arena, skipMask, jobSkipEntries);
 
@@ -242,25 +245,32 @@ public sealed class IncrementalParseContext
             PatchSkippedSections(parseResult.Workflow, skipMask);
         }
 
-        // Update stored state (base counts stay the same — they only reset on full parse)
+        // Update stored state
         var oldArena = _previousArena;
         _previousSource = utf8Yaml;
         _previousSourceLength = utf8Yaml.Length;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = arena;
+        _previousDiagnostics = parseResult.Diagnostics;
+        _previousHasFatalError = parseResult.HasFatalError;
         _registry = newRegistry;
+
+        // Update base counts to track the new arena's actual usage.
+        // This ensures the next incremental parse imports exactly what's needed.
+        _baseStringCount = arena.StringCount;
+        _baseBoolCount = arena.BoolCount;
+        _baseIntCount = arena.IntCount;
+        _baseFloatCount = arena.FloatCount;
 
         // Mark root sections that produced parse diagnostics so they won't be skipped next time
         MarkRootSectionsWithParseDiagnostics(parseResult.Diagnostics);
 
         if (jobSkipEntries is not null)
         {
-            // Diagnostics buffers were already consumed; return them to the pool before retaining the arena.
-            oldArena?.ReleaseDiagnosticsBuffer();
-            oldArena?.ReleaseLintDiagnosticsBuffer();
-
             // Retain old arena — reused jobs reference its pooled Job/Step objects.
-            // Will be disposed on next full parse.
+            // Diagnostics buffers are NOT released here because _previousDiagnostics
+            // may still reference the old arena's buffer (for the fast-path cache).
+            // They will be released when the arena is disposed on the next full parse.
             (_retainedArenas ??= new(2)).Add(oldArena!);
 
             // D-5d: record which jobs were reused for lint cache
@@ -375,6 +385,8 @@ public sealed class IncrementalParseContext
         _previousSourceLength = utf8Yaml.Length;
         _previousWorkflow = parseResult.Workflow;
         _previousArena = parseResult.Arena;
+        _previousDiagnostics = parseResult.Diagnostics;
+        _previousHasFatalError = parseResult.HasFatalError;
         BuildRegistryFromSource(utf8Yaml);
 
         // Mark root sections that produced parse diagnostics so they won't be skipped next time

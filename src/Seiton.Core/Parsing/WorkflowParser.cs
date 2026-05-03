@@ -1363,7 +1363,7 @@ public static partial class WorkflowParser
                     {
                         // Job matches — skip its subtree and reuse previous Job
                         // Still register the key for duplicate detection
-                        TryRegisterDynamicKey(
+                        var keyValid = TryRegisterDynamicKey(
                             source,
                             jobIdUtf8,
                             jobId.Offset,
@@ -1380,7 +1380,12 @@ public static partial class WorkflowParser
                         {
                             reader.SkipCurrentNode(); // skip job body
                         }
-                        jobs.Add(new SliceMap<Job>.Entry(jobId, skipEntry.Job));
+
+                        // Only add if key is valid (mirror non-incremental behavior for duplicates)
+                        if (keyValid)
+                        {
+                            jobs.Add(new SliceMap<Job>.Entry(jobId, skipEntry.Job));
+                        }
                         jobIndex++;
                         continue;
                     }
