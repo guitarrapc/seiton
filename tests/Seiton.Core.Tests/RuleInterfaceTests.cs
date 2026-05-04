@@ -296,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(50);
+        await Assert.That(rules.Length).IsEqualTo(51);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -347,6 +347,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[47].Id).IsEqualTo(RuleId.LocalActionInputs);
         await Assert.That(rules[48].Id).IsEqualTo(RuleId.WorkflowCallInputDefault);
         await Assert.That(rules[49].Id).IsEqualTo(RuleId.OutdatedActionRunner);
+        await Assert.That(rules[50].Id).IsEqualTo(RuleId.IfExprWrapper);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -398,6 +399,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("local-action-inputs")).IsEqualTo(51);
         await Assert.That(RuleCatalog.GetPriority("workflow-call-input-default")).IsEqualTo(52);
         await Assert.That(RuleCatalog.GetPriority("outdated-action-runner")).IsEqualTo(53);
+        await Assert.That(RuleCatalog.GetPriority("if-expr-wrapper")).IsEqualTo(54);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -412,12 +414,13 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-049");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-050");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-051");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("if-expr-wrapper")).IsEqualTo("seiton-lint-rule-051");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-052");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-052", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-053", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-053");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-054");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-054");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-055");
     }
 
     [Test]
@@ -6293,6 +6296,205 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostics[0].Message).Contains("constant expression \"true\"");
         await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(4);
         await Assert.That(diagnostics[0].Location.StartColumn).IsEqualTo(9);
+    }
+
+    [Test]
+    public async Task RuleRegression_IfExprWrapperRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-already-wrapped",
+            """
+            on: push
+            jobs:
+                build:
+                    if: ${{ github.ref != 'refs/heads/main' }}
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: ${{ success() }}
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-literal-true",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: true
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-literal-false",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: false
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-always-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: always()
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-failure-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: failure()
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-cancelled-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: cancelled()
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-success-function",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: success()
+                          run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-step-bare-comparison",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: github.event_name == 'push'
+                          run: echo ng
+            """,
+            ["missing ${{ }} wrapper"]),
+            new RuleCase(
+            "ng-job-bare-comparison",
+            """
+            on: push
+            jobs:
+                build:
+                    if: github.ref != 'refs/heads/main'
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["missing ${{ }} wrapper"]),
+            new RuleCase(
+            "ng-step-bare-context-access",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: github.event.pull_request.merged
+                          run: echo ng
+            """,
+            ["missing ${{ }} wrapper"]),
+            new RuleCase(
+            "ng-step-bare-logical-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                          run: echo ng
+            """,
+            ["missing ${{ }} wrapper"]),
+            new RuleCase(
+            "ng-step-bare-negation",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: "!cancelled()"
+                          run: echo ng
+            """,
+            ["missing ${{ }} wrapper"]),
+        };
+
+        await AssertRuleCases(new IfExprWrapperRule(), "if-expr-wrapper", cases);
+    }
+
+    [Test]
+    public async Task IfExprWrapperRule_AutoFix_WrapsExpression()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - if: github.event_name == 'push'
+                      run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new IfExprWrapperRule()]);
+        var result = engine.Check(sourceBytes, "if-expr-wrapper-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "if-expr-wrapper");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        await Assert.That(diagnostic.Fix!.Value.Description).Contains("${{");
+
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "if-expr-wrapper-fix.yml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText).Contains("${{ github.event_name == 'push' }}");
+        await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "if-expr-wrapper")).IsFalse();
+    }
+
+    [Test]
+    public async Task IfExprWrapperRule_BlockScalar_MessageDoesNotContainNewline()
+    {
+        // Regression: block scalar `if: |\n  expr` includes trailing \n in raw value.
+        // The diagnostic message must NOT contain the raw newline.
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          github.event_name == 'push'\n        run: echo ok\n";
+        var result = new LintEngine([new IfExprWrapperRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
+
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        // Message must not contain literal newline
+        await Assert.That(diagnostics[0].Message).DoesNotContain("\n");
+        await Assert.That(diagnostics[0].Message).Contains("github.event_name == 'push'");
     }
 
     [Test]

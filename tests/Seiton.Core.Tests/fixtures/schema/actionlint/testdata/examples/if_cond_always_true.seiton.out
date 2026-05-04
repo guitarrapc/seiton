@@ -1,4 +1,6 @@
 test.yaml:9:13: constant expression "false" in condition. remove the if: section [if-cond]
+test.yaml:16:11: if: condition "github.event_name == 'push'" is missing ${{ }} wrapper; expressions should be wrapped in ${{ }} [if-expr-wrapper]
 test.yaml:19:13: if: condition "${{ github.event_name == 'push' }}\n" is always evaluated to true because extra characters are around ${{ }} [if-cond]
 test.yaml:23:14: if: condition "${{ github.event_name == 'push' }} " is always evaluated to true because extra characters are around ${{ }} [if-cond]
+test.yaml:26:13: if: condition "github.event_name == 'push' && github.ref_name == 'main'" is missing ${{ }} wrapper; expressions should be wrapped in ${{ }} [if-expr-wrapper]
 test.yaml:29:13: if: condition "${{ github.event_name == 'push' }} && ${{ github.ref_name == 'main' }}" is always evaluated to true because extra characters are around ${{ }} [if-cond]

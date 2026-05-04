@@ -70,6 +70,7 @@ internal static class RuleCatalog
         (RuleId.LocalActionInputs, 51, static () => new LocalActionInputsRule()),
         (RuleId.WorkflowCallInputDefault, 52, static () => new WorkflowCallInputDefaultRule()),
         (RuleId.OutdatedActionRunner, 53, static () => new OutdatedActionRunnerRule()),
+        (RuleId.IfExprWrapper, 54, static () => new IfExprWrapperRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor

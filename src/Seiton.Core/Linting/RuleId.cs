@@ -56,6 +56,7 @@ public enum RuleId
     LocalActionInputs,
     WorkflowCallInputDefault,
     OutdatedActionRunner,
+    IfExprWrapper,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,
