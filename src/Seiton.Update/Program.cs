@@ -536,6 +536,46 @@ app.Add("verify-shells", () =>
     }
 });
 
+app.Add("fetch-shells", async () =>
+{
+    var code = await ShellsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-shells failed with code {code}");
+    }
+});
+
+app.Add("fetch-shells-sources", async () =>
+{
+    var code = await ShellsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-shells-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-shells-sources", () =>
+{
+    var code = ShellsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-shells-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-shells-sources", () =>
+{
+    var code = ShellsCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-shells-sources failed with code {code}");
+    }
+});
+
 app.Add("fetch-expected-keys", async () =>
 {
     var code = await ExpectedKeysCommands.Fetch(repoRoot);

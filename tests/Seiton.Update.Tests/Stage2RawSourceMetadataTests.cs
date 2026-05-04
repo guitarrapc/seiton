@@ -37,6 +37,15 @@ public sealed class Stage2RawSourceMetadataTests
             parsedJsonRelativePath: Path.Combine("data", "sources", "expected-keys", "github", "parsed", "expected-keys.json"));
     }
 
+    [Test]
+    public async Task Shells_Parse_IncludesRawSources_AlignedWithRawFiles()
+    {
+        await AssertParseRawSourcesMatchRawOnDisk(
+            dataset: "shells",
+            tempRepo => new GitHubShellsFetcher().ParseLocalSourceFiles(tempRepo),
+            parsedJsonRelativePath: Path.Combine("data", "sources", "shells", "github", "parsed", "shells.json"));
+    }
+
     private static async Task AssertParseRawSourcesMatchRawOnDisk(
         string dataset,
         Action<string> runParse,

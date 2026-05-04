@@ -142,7 +142,7 @@ Stage 2 exists to answer: *what structured data did we extract, and **which raw 
 - Prefer a **`rawSources`** array of objects `{ "fileName": "<base-name>", "sha256": "sha256:..." }` when multiple raw files feed one artifact; a single raw may use `rawFileName` / `rawSha256` or equivalent explicit fields.
 - Include **domain-specific** upstream labels when the source provides them (for example IANA **tzdb `version`** parsed from `tzdata.zi`).
 
-**Non-normative note:** Committed JSON may predate this metadata. **`shells.json`** (hand-authored) may omit optional fields; **`expected-keys`** Stage 2 (`parsed/expected-keys.json`) carries `schemaVersion`, `source`, and `rawSources` alongside `sections`.
+**Non-normative note:** Committed JSON may predate this metadata. Older snapshots may omit `schemaVersion` / `rawSources`; current **`shells`** and **`expected-keys`** Stage 2 artifacts carry `schemaVersion`, `source`, and `rawSources` alongside their payload fields.
 
 ### 3.4 Pipeline profiles
 
@@ -150,14 +150,12 @@ Profiles explain datasets that do not use a literal `parsed/` directory or full 
 
 | Profile | Stage 2 on disk | Canonical / codegen input | Examples (current) |
 |---|---|---|---|
-| **Standard** | `raw/` → `parsed/` → merge → `{snapshot}.json` | Merged snapshot | `availability`, `context-types`, `expected-keys`, `permissions`, `runner-labels`, `webhooks`, `popular-actions`, `iana-timezones` |
+| **Standard** | `raw/` → `parsed/` → merge → `{snapshot}.json` | Merged snapshot | `availability`, `context-types`, `expected-keys`, `permissions`, `runner-labels`, `shells`, `webhooks`, `popular-actions`, `iana-timezones` |
 | **Collapsed Stage 2** | `raw/` → **`{snapshot}.json` directly** (no `parsed/` subtree) | Same file | *(none — prefer Standard + `parsed/`)*; reserved for narrow exceptions |
 | **Composite primary** | Maintained canonical JSON **plus** fetched raw and optional `parsed/` supplements | Hand-written base merged or validated against parses | `function-specs` (`function-specs.json` primary; `parsed/docs-function-names.json` from Docs) |
-| **Hand-authored snapshot** | No automated fetch | Maintainers edit JSON; optional `schemaVersion` / `source` for consistency | `shells` → `shells.json` |
+| **Hand-authored snapshot** | No automated fetch | Maintainers edit JSON; optional `schemaVersion` / `source` for consistency | *(none currently)* |
 | **Satellite manifest dataset** | Own manifest `dataset` key; files may live under another tree | Snapshot path defined by that tool | `event-payload-types` (manifest + raw/parsed under `webhooks/github/...`; codegen reads `event_payload_types.json`) |
 | **Reports** | — | — | `data/sources/reports/*.md` (diff / parity narrative only) |
-
-**`expected-keys`** uses a **Standard** layout: `parsed/expected-keys.json` (Stage 2) and **`merge-expected-keys-sources`** copies it to **`expected-keys.json`** (codegen input). **`shells`** remains **hand-authored**.
 
 ### 3.5 Stage Independence
 
@@ -198,7 +196,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | permissions | `permissions` | Standard | `.../raw/github-token-available-permissions.md` | `.../parsed/permissions-scopes.json` | `permissions.json` |
 | popular-actions | `popular-actions` | Standard | `.../raw/*.action.yml` (from `targets.json`) | `.../parsed/popular-actions-metadata.json` | `popular_actions.json` |
 | runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | two files under `parsed/` | `runner_labels.json` (+ optional supplemental JSON) |
-| shells | — | Hand-authored snapshot | — | — | `shells.json` |
+| shells | `shells` | Standard (passthrough merge) | `.../raw/supported-shells.md` | `.../parsed/shells.json` | `shells.json` (copy of parsed) |
 | webhooks | `webhooks` | Standard | schema JSON + Docs `*.md` | multiple under `parsed/` | `webhook_types.json` |
 | event-payload-types | `event-payload-types` | Satellite | `webhooks/github/raw/webhook-events-and-payloads.html` | `webhooks/github/parsed/parsed-event-payload-types.json` | `webhooks/github/event_payload_types.json` |
 | reports | — | Reports | — | — | `data/sources/reports/*.md` |
@@ -218,7 +216,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | permissions | GitHub Docs | `PermissionScopes.g.cs` | GitHub token permission scope metadata |
 | iana-timezones | IANA `tzdata.zi` | `IanaTimeZones.g.cs` | IANA timezone identifiers (zones + links) for schedule-event timezone validation |
 | event-payload-types | GitHub Docs (HTML) | `EventPayloadTypes.g.cs` | Webhook event payload type shapes for expression typing |
-| shells | Hand-written JSON (GitHub Docs) | `Shells.g.cs` | Shell availability per OS platform for `shell-name` rule validation |
+| shells | GitHub Docs reusable (`supported-shells.md`); table included from workflow-syntax `defaults.run.shell` | `Shells.g.cs` | Shell availability per OS platform for `shell-name` rule validation |
 | expected-keys | GitHub Docs | `ExpectedKeys.g.cs` | Expected YAML key lists per parser section for diagnostic messages |
 
 ### 4.2 Source of Truth Policy
@@ -283,11 +281,13 @@ These generated methods are consumed by linter rules (`popular-action-inputs`, `
 
 #### 4.3.6 Shells
 
-`shells` follows the **hand-authored snapshot** profile (§3.4): there is no Stage 1 fetch or `manifest.json` entry for this dataset.
+`shells` follows the **standard** raw → **`parsed/shells.json`** → **`shells.json`** layout (§3.4), matching **`expected-keys`** (passthrough merge).
 
-`shells` uses a hand-written JSON (`data/sources/shells/github/shells.json`) as primary source. The JSON defines shell names and their OS platform availability, sourced from [GitHub Docs workflow-syntax.md](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax.md) (the `defaults.run.shell` / `jobs.<job_id>.steps[*].shell` table).
+The workflow-syntax page renders the supported-shell table from the GitHub Docs **reusable** [`data/reusables/actions/supported-shells.md`](https://github.com/github/docs/blob/main/data/reusables/actions/supported-shells.md) (referenced from [`defaults.run.shell`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax.md#defaultsrunshell) via Liquid). Stage 1 fetches that file as `supported-shells.md` under `raw/`.
 
-No fetch/parse/merge stages exist; only `sync-shells` and `verify-shells` are implemented. When GitHub adds or changes shell support, the hand-written JSON is updated manually.
+The Stage 2 parser (`GitHubDocsSupportedShellsMarkdownParser`) reads the markdown table (`Supported platform`, `` `shell` parameter ``, *Command run internally*), skips the `unspecified` pseudo-shell row, normalizes platforms (`All` / `Linux / macOS` / `Windows`), merges duplicate shell names (for example `pwsh` on “All” and on Windows), and emits `name`, `platforms`, and `command` for each built-in shell.
+
+Orchestrator: `fetch-shells`; stages: `fetch-shells-sources`, `parse-shells-sources`, `merge-shells-sources`; codegen: `sync-shells`, `verify-shells`.
 
 The codegen stage (`ShellsCSharpGenerator`) produces:
 
@@ -354,7 +354,7 @@ Per-dataset commands follow this naming pattern:
 | function-specs | ✓ | ✓ | ✓ | — | ✓ | ✓ | `validate-function-specs` | — |
 | permissions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | iana-timezones | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
-| shells | — | — | — | — | ✓ | ✓ | — | — |
+| shells | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | expected-keys | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | event-payload-types | ✓ | ✓ | ✓ | — | ✓ | ✓ | — | — |
 
@@ -416,6 +416,8 @@ data/sources/iana-timezones/iana/raw/tzdata.zi
 data/sources/iana-timezones/iana/parsed/*
 data/sources/iana-timezones/iana/iana_timezones.json
 
+data/sources/shells/github/raw/supported-shells.md
+data/sources/shells/github/parsed/shells.json
 data/sources/shells/github/shells.json
 
 data/sources/expected-keys/github/raw/workflow-syntax.md
@@ -449,7 +451,7 @@ The manifest is updated atomically during Stage 1 (fetch) operations.
 - **Raw files** are the pre-parse documents from those URLs; operational “which URL applies” is always reconciled with the manifest for fetched datasets (§3.2).
 - **Stage 2 JSON** (whether under `parsed/` or, when collapsed, the canonical snapshot file) holds the extracted model and SHOULD repeat **raw file name + `sha256`** linkage as described in §3.3 so reviewers can validate “this parse came from these bytes” alongside the manifest. That linkage is **not** a second competing source of truth: it must remain **consistent** with `manifest.json` for the same committed raw files.
 - **HTTPS `sourceUrl` fields** inside Stage 2 artifacts (when present) MUST match the manifest-backed URL configuration for Stage 1 (§3.3).
-- Datasets **without** Stage 1 (for example **shells**) have **no** manifest entry; their canonical JSON is maintained per the hand-authored profile (§3.4).
+- Datasets **without** Stage 1 have **no** manifest entry; their canonical JSON is maintained per the appropriate profile in §3.4.
 
 ---
 

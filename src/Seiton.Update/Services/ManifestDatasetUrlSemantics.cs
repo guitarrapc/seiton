@@ -55,6 +55,12 @@ internal static class ManifestDatasetUrlSemantics
                     HostEquals(u, "raw.githubusercontent.com") &&
                     PathContains(u, "workflow-syntax.md"));
                 return;
+            case "shells":
+                RequireCount(urls, 1, dataset);
+                EnsureUri(urls[0], dataset, 0, static u =>
+                    HostEquals(u, "raw.githubusercontent.com") &&
+                    PathContains(u, "supported-shells.md"));
+                return;
             case "event-payload-types":
                 RequireCount(urls, 1, dataset);
                 EnsureUri(urls[0], dataset, 0, static u =>

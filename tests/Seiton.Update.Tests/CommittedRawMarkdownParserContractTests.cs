@@ -117,6 +117,22 @@ public sealed class CommittedRawMarkdownParserContractTests
         await Assert.That(actions.Allowed).Contains("write");
     }
 
+    [Test]
+    public async Task SupportedShellsReusable_ExtractsBuiltinShellRows()
+    {
+        var path = Path.Combine(
+            FindRepoRoot(),
+            "data", "sources", "shells", "github", "raw",
+            "supported-shells.md");
+        var markdown = File.ReadAllText(path);
+        var rows = new GitHubDocsSupportedShellsMarkdownParser().Parse(markdown);
+
+        await Assert.That(rows.Count).IsEqualTo(6);
+        await Assert.That(rows.Any(r => r.Name == "bash")).IsTrue();
+        await Assert.That(rows.Any(r => r.Name == "pwsh")).IsTrue();
+        await Assert.That(rows.Single(r => r.Name == "sh").Platforms).IsEquivalentTo(new[] { "linux", "macos" });
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

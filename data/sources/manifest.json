@@ -118,6 +118,16 @@
       }
     },
     {
+      "dataset": "shells",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/supported-shells.md"
+      ],
+      "fetchedAtUtc": "2026-05-04T12:50:09.9259726\u002B00:00",
+      "rawFileHashes": {
+        "supported-shells.md": "sha256:49b49c756f8c6f47a91111d5e46363526ff101d4d3095012b9b9df3b4cb733cf"
+      }
+    },
+    {
       "dataset": "webhooks",
       "sourceUrls": [
         "https://json.schemastore.org/github-workflow.json",
