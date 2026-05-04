@@ -131,7 +131,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<ActionMetadataInput>(map.ToArray(), caseSensitive: false);
+            var (inputEntries, inputCount) = map.DetachArray();
+            arena.RegisterSliceMapBuffer(inputEntries);
+            return new SliceMap<ActionMetadataInput>(inputEntries, inputCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }
@@ -324,7 +326,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<ActionMetadataOutput>(map.ToArray(), caseSensitive: false);
+            var (outputEntries, outputCount) = map.DetachArray();
+            arena.RegisterSliceMapBuffer(outputEntries);
+            return new SliceMap<ActionMetadataOutput>(outputEntries, outputCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

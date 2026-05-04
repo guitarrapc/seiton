@@ -1,5 +1,6 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -56,9 +57,29 @@ internal static class RunContextDirectUseAnalyzer
             return false;
         }
 
-        var shell = Encoding.UTF8.GetString(arena.GetStringValue(shellNode));
-        return string.Equals(shell, "pwsh", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(shell, "powershell", StringComparison.OrdinalIgnoreCase);
+        var shell = arena.GetStringValue(shellNode);
+        return shell.SequenceEqual("pwsh"u8)
+            || shell.SequenceEqual("powershell"u8)
+            || shell.SequenceEqual("Pwsh"u8)
+            || shell.SequenceEqual("PowerShell"u8)
+            || shell.SequenceEqual("PWSH"u8)
+            || shell.SequenceEqual("POWERSHELL"u8)
+            || EqualsOrdinalIgnoreCaseUtf8(shell, "pwsh"u8)
+            || EqualsOrdinalIgnoreCaseUtf8(shell, "powershell"u8);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool EqualsOrdinalIgnoreCaseUtf8(ReadOnlySpan<byte> value, ReadOnlySpan<byte> lowerExpected)
+    {
+        if (value.Length != lowerExpected.Length) return false;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var b = value[i];
+            // ASCII lowercase: if uppercase A-Z, convert to lowercase
+            if (b >= (byte)'A' && b <= (byte)'Z') b = (byte)(b + 32);
+            if (b != lowerExpected[i]) return false;
+        }
+        return true;
     }
 
     // Env Value Expression Extraction

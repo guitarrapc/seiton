@@ -6,20 +6,19 @@ namespace Seiton.Core.Linting;
 /// <summary>Combined parse and lint result for a single YAML document.</summary>
 /// <remarks>
 /// When returned by <see cref="LintEngine.Check(byte[], string, LintConfig?)"/>, the
-/// <see cref="Diagnostics"/> array is backed by an engine-owned buffer (two-buffer swap).
-/// Only the most recent result and the immediately preceding one are guaranteed valid.
+/// <see cref="Diagnostics"/> backing array is pooled and registered with the <see cref="ParseResult.Arena"/>.
+/// The array is returned to the pool when the Arena is disposed.
 /// Call <see cref="CopyDiagnostics"/> to obtain a caller-owned copy that is safe to retain
-/// beyond subsequent <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> calls.
+/// beyond the Arena's lifetime.
 /// </remarks>
 public readonly record struct LintResult(
     ParseResult ParseResult,
-    Diagnostic[] Diagnostics)
+    DiagnosticList Diagnostics)
 {
     /// <summary>
     /// Gets the number of diagnostics in <see cref="Diagnostics"/>.
-    /// Defaults to <see cref="Diagnostics"/>.<see cref="System.Array.Length"/>.
     /// </summary>
-    public int DiagnosticCount { get; init; } = Diagnostics.Length;
+    public int DiagnosticCount => Diagnostics.Length;
 
     /// <summary>Gets the summary of suppressed diagnostics from inline and exclusion rules.</summary>
     public SuppressionSummary SuppressionSummary { get; init; } = SuppressionSummary.Empty;
@@ -34,7 +33,7 @@ public readonly record struct LintResult(
     public bool HasFatalError => ParseResult.HasFatalError;
 
     /// <summary>Gets the diagnostics produced during the parsing phase.</summary>
-    public Diagnostic[] ParseDiagnostics => ParseResult.Diagnostics;
+    public DiagnosticList ParseDiagnostics => ParseResult.Diagnostics;
 
     /// <summary>Gets whether any diagnostics have an associated auto-fix.</summary>
     public bool HasFixableDiagnostics => FixableDiagnosticCount > 0;
@@ -115,8 +114,7 @@ public readonly record struct LintResult(
 
     /// <summary>
     /// Returns a caller-owned copy of the <see cref="Diagnostics"/> array.
-    /// Use this when the result must outlive more than one subsequent
-    /// <see cref="LintEngine.Check(byte[], string, LintConfig?)"/> call.
+    /// Use this when the result must outlive the Arena's lifetime.
     /// </summary>
     public Diagnostic[] CopyDiagnostics()
     {
@@ -125,9 +123,7 @@ public readonly record struct LintResult(
             return [];
         }
 
-        var copy = new Diagnostic[DiagnosticCount];
-        Array.Copy(Diagnostics, copy, DiagnosticCount);
-        return copy;
+        return Diagnostics.AsSpan().ToArray();
     }
 }
 

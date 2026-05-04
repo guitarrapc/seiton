@@ -111,9 +111,11 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            var (svcEntries, svcCount) = map.DetachArray();
+            arena.RegisterSliceMapBuffer(svcEntries);
             return new Services
             {
-                ServiceMap = new SliceMap<Service>(map.ToArray(), caseSensitive: false),
+                ServiceMap = new SliceMap<Service>(svcEntries, svcCount, caseSensitive: false),
                 Range = range,
             };
         }

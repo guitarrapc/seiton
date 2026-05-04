@@ -7,17 +7,17 @@ public sealed class Workflow
 
     public StringNodeId RunName { get; init; }
 
-    public IReadOnlyList<Event> On { get; init; } = [];
+    public IReadOnlyList<Event> On { get; internal set; } = [];
 
-    public Permissions? Permissions { get; init; }
+    public Permissions? Permissions { get; internal set; }
 
-    public Env? Env { get; init; }
+    public Env? Env { get; internal set; }
 
-    public Defaults? Defaults { get; init; }
+    public Defaults? Defaults { get; internal set; }
 
-    public Concurrency? Concurrency { get; init; }
+    public Concurrency? Concurrency { get; internal set; }
 
-    public SliceMap<Job> Jobs { get; init; }
+    public SliceMap<Job> Jobs { get; internal set; }
 
     public TextRange Range { get; init; }
 }

@@ -301,7 +301,7 @@ public sealed class ActionlintExamplesCompatTests
 
     // Format conversion: seiton → actionlint format
 
-    private static List<string> FormatAsActionlint(Diagnostic[] diagnostics)
+    private static List<string> FormatAsActionlint(DiagnosticList diagnostics)
     {
         var lines = new List<string>(diagnostics.Length);
         for (var i = 0; i < diagnostics.Length; i++)

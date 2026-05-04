@@ -255,7 +255,7 @@ public sealed class ActionlintCompatTests
     /// <para>Actionlint: <c>test.yaml:line:col: message [rule-id]</c></para>
     /// <para>Seiton:     <c>file:line:col: severity [ruleId] message</c></para>
     /// </summary>
-    private static List<string> FormatAsActionlint(Diagnostic[] diagnostics)
+    private static List<string> FormatAsActionlint(DiagnosticList diagnostics)
     {
         var lines = new List<string>(diagnostics.Length);
         for (var i = 0; i < diagnostics.Length; i++)

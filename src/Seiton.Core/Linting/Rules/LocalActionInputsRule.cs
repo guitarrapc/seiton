@@ -7,7 +7,7 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates that local/composite action invocations provide required inputs and don't pass unknown ones.</summary>
 public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 {
-    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, Diagnostic[]? ParseDiagnostics)> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (ActionMetadata? Metadata, byte[]? Source, AstArena? Arena, DiagnosticList? ParseDiagnostics)> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _metadataCheckedPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public override string Name => "Local Action Inputs Rule";
