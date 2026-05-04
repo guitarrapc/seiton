@@ -195,7 +195,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | iana-timezones | `iana-timezones` | Standard | `.../raw/tzdata.zi` | `.../parsed/iana-timezone-ids.json` | `iana_timezones.json` |
 | permissions | `permissions` | Standard | `.../raw/github-token-available-permissions.md` | `.../parsed/permissions-scopes.json` | `permissions.json` |
 | popular-actions | `popular-actions` | Standard | `.../raw/*.action.yml` (from `targets.json`) | `.../parsed/popular-actions-metadata.json` | `popular_actions.json` |
-| runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | two files under `parsed/` | `runner_labels.json` (+ optional supplemental JSON) |
+| runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | `.../parsed/docs-runner-labels.json` | `runner_labels.json` (+ optional supplemental JSON) |
 | shells | `shells` | Standard (passthrough merge) | `.../raw/supported-shells.md` | `.../parsed/shells.json` | `shells.json` (copy of parsed) |
 | webhooks | `webhooks` | Standard | schema JSON + Docs `*.md` | multiple under `parsed/` | `webhook_types.json` |
 | event-payload-types | `event-payload-types` | Satellite | `webhooks/github/raw/webhook-events-and-payloads.html` | `webhooks/github/parsed/parsed-event-payload-types.json` | `webhooks/github/event_payload_types.json` |
