@@ -1248,7 +1248,7 @@ The following table classifies each default rule by fix feasibility.
 | `schedule-event` | ✗ Not auto-fixable | Cron expression and timezone corrections require scheduler knowledge and user intent. |
 | `workflow-call-input-default` | ✗ Not auto-fixable | Default value corrections require understanding of caller contracts and intended type semantics. |
 | `use-trusted-publishing` | ✗ Not auto-fixable | Trusted publishing migration depends on registry ecosystem and release architecture. |
-| `if-expr-wrapper` | ✓ Auto-fixable (safe cases) | Wraps unquoted single-line `if:` expressions in `${{ }}`. Fix is suppressed for block scalars (structural newline), quoted scalars (quote expansion), and values already containing `${{` markers (would nest). |
+| `if-expr-wrapper` | ✓ Auto-fixable (safe cases) | Wraps single-line `if:` expressions in `${{ }}`, including quoted scalars. Fix is suppressed for block scalars (structural newline) and values already containing `${{` markers (would nest). |
 
 ### 8.5 Fix Safety Policy
 
