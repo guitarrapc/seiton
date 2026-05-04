@@ -34,7 +34,7 @@ public sealed class Stage2RawSourceMetadataTests
         await AssertParseRawSourcesMatchRawOnDisk(
             dataset: "expected-keys",
             tempRepo => new GitHubExpectedKeysFetcher().ParseLocalSourceFiles(tempRepo),
-            parsedJsonRelativePath: Path.Combine("data", "sources", "expected-keys", "github", "expected-keys.json"));
+            parsedJsonRelativePath: Path.Combine("data", "sources", "expected-keys", "github", "parsed", "expected-keys.json"));
     }
 
     private static async Task AssertParseRawSourcesMatchRawOnDisk(

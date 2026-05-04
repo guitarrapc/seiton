@@ -20,6 +20,28 @@ internal static class ExpectedKeysSourcePathResolver
         return Path.Combine(repoRoot, "data", "sources", "expected-keys", "github", "raw");
     }
 
+    public static string ResolveParsedDir(string repoRoot) =>
+        Path.Combine(repoRoot, "data", "sources", "expected-keys", "github", "parsed");
+
+    /// <summary>
+    /// Stage 2 output: parsed key hierarchy from <c>raw/workflow-syntax.md</c>.
+    /// </summary>
+    public static string ResolveParsed(string repoRoot)
+    {
+        var path = Path.Combine(ResolveParsedDir(repoRoot), "expected-keys.json");
+        if (File.Exists(path))
+        {
+            return path;
+        }
+
+        throw new FileNotFoundException(
+            "Expected keys parsed source is missing. Run parse-expected-keys-sources first.",
+            path);
+    }
+
+    /// <summary>
+    /// Canonical snapshot for codegen (Stage 3 / merge output).
+    /// </summary>
     public static string ResolvePrimary(string repoRoot)
     {
         var githubSnapshot = Path.Combine(repoRoot, "data", "sources", "expected-keys", "github", "expected-keys.json");
@@ -29,7 +51,7 @@ internal static class ExpectedKeysSourcePathResolver
         }
 
         throw new FileNotFoundException(
-            "Primary expected-keys source not found. Run parse-expected-keys-sources first.",
+            "Primary expected-keys source not found. Run merge-expected-keys-sources after parse (or fetch-expected-keys).",
             githubSnapshot);
     }
 

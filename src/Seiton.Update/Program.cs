@@ -566,6 +566,16 @@ app.Add("parse-expected-keys-sources", () =>
     }
 });
 
+app.Add("merge-expected-keys-sources", () =>
+{
+    var code = ExpectedKeysCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-expected-keys-sources failed with code {code}");
+    }
+});
+
 app.Add("sync-expected-keys", () =>
 {
     var code = ExpectedKeysCommands.Sync(repoRoot);

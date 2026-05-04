@@ -33,6 +33,13 @@ internal static class ExpectedKeysCommands
         return 0;
     }
 
+    public static int MergeSources(string repoRoot)
+    {
+        var fetcher = new GitHubExpectedKeysFetcher();
+        fetcher.MergeParsedSources(repoRoot);
+        return 0;
+    }
+
     public static int Sync(string repoRoot)
     {
         var syncService = new ExpectedKeysSyncService();

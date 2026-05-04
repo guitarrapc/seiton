@@ -17,6 +17,7 @@ internal sealed class GitHubExpectedKeysFetcher
     {
         await FetchSourceFilesAsync(repoRoot);
         ParseLocalSourceFiles(repoRoot);
+        MergeParsedSources(repoRoot);
 
         var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
         var rawPath = Path.Combine(rawDir, "workflow-syntax.md");
@@ -89,13 +90,49 @@ internal sealed class GitHubExpectedKeysFetcher
         };
 
         var json = JsonSerializer.Serialize(snapshot, JsonOptions);
-        var primaryDir = Services.ExpectedKeysSourcePathResolver.ResolvePrimaryDir(repoRoot);
-        Directory.CreateDirectory(primaryDir);
+        var parsedDir = ExpectedKeysSourcePathResolver.ResolveParsedDir(repoRoot);
+        Directory.CreateDirectory(parsedDir);
 
-        var outputPath = Path.Combine(primaryDir, "expected-keys.json");
-        File.WriteAllText(outputPath, TextNormalization.NormalizeToLf(json + "\n"));
+        var parsedPath = Path.Combine(parsedDir, "expected-keys.json");
+        File.WriteAllText(parsedPath, TextNormalization.NormalizeToLf(json + "\n"));
 
-        UpdateLogger.Info($"[parse:expected-keys:sources] wrote {outputPath} ({model.Sections.Count} sections)");
+        UpdateLogger.Info($"[parse:expected-keys:sources] wrote {parsedPath} ({model.Sections.Count} sections)");
+    }
+
+    public void MergeParsedSources(string repoRoot)
+    {
+        var parsedDir = ExpectedKeysSourcePathResolver.ResolveParsedDir(repoRoot);
+        var parsedPath = Path.Combine(parsedDir, "expected-keys.json");
+        if (!File.Exists(parsedPath))
+        {
+            throw new FileNotFoundException(
+                "Expected keys parsed source files are missing. Run parse-expected-keys-sources first.",
+                parsedPath);
+        }
+
+        UpdateLogger.Info("[merge:expected-keys:sources] merging parsed snapshot into canonical expected-keys.json...");
+
+        var normalized = TextNormalization.NormalizeToLf(File.ReadAllText(parsedPath));
+        if (!normalized.EndsWith("\n", StringComparison.Ordinal))
+        {
+            normalized += "\n";
+        }
+
+        var primaryPath = Path.Combine(ExpectedKeysSourcePathResolver.ResolvePrimaryDir(repoRoot), "expected-keys.json");
+        var existing = File.Exists(primaryPath)
+            ? TextNormalization.NormalizeToLf(File.ReadAllText(primaryPath))
+            : string.Empty;
+
+        if (!string.Equals(existing, normalized, StringComparison.Ordinal))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(primaryPath)!);
+            File.WriteAllText(primaryPath, normalized);
+            UpdateLogger.Info($"[merge:expected-keys:sources] wrote {primaryPath}");
+        }
+        else
+        {
+            UpdateLogger.Info("[merge:expected-keys:sources] canonical snapshot already up to date.");
+        }
     }
 
     private sealed class ExpectedKeysSnapshot

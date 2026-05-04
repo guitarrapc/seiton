@@ -142,7 +142,7 @@ Stage 2 exists to answer: *what structured data did we extract, and **which raw 
 - Prefer a **`rawSources`** array of objects `{ "fileName": "<base-name>", "sha256": "sha256:..." }` when multiple raw files feed one artifact; a single raw may use `rawFileName` / `rawSha256` or equivalent explicit fields.
 - Include **domain-specific** upstream labels when the source provides them (for example IANA **tzdb `version`** parsed from `tzdata.zi`).
 
-**Non-normative note:** Committed JSON may predate this metadata. **`shells.json`** and **`expected-keys.json`** currently prioritize the shape required by codegen; extending them with `schemaVersion`, `source`, and raw linkage is encouraged when practical.
+**Non-normative note:** Committed JSON may predate this metadata. **`shells.json`** (hand-authored) may omit optional fields; **`expected-keys`** Stage 2 (`parsed/expected-keys.json`) carries `schemaVersion`, `source`, and `rawSources` alongside `sections`.
 
 ### 3.4 Pipeline profiles
 
@@ -150,14 +150,14 @@ Profiles explain datasets that do not use a literal `parsed/` directory or full 
 
 | Profile | Stage 2 on disk | Canonical / codegen input | Examples (current) |
 |---|---|---|---|
-| **Standard** | `raw/` → `parsed/` → merge → `{snapshot}.json` | Merged snapshot | `availability`, `context-types`, `permissions`, `runner-labels`, `webhooks`, `popular-actions`, `iana-timezones` |
-| **Collapsed Stage 2** | `raw/` → **`{snapshot}.json` directly** (no `parsed/` subtree) | Same file | `expected-keys` → `expected-keys.json` |
+| **Standard** | `raw/` → `parsed/` → merge → `{snapshot}.json` | Merged snapshot | `availability`, `context-types`, `expected-keys`, `permissions`, `runner-labels`, `webhooks`, `popular-actions`, `iana-timezones` |
+| **Collapsed Stage 2** | `raw/` → **`{snapshot}.json` directly** (no `parsed/` subtree) | Same file | *(none — prefer Standard + `parsed/`)*; reserved for narrow exceptions |
 | **Composite primary** | Maintained canonical JSON **plus** fetched raw and optional `parsed/` supplements | Hand-written base merged or validated against parses | `function-specs` (`function-specs.json` primary; `parsed/docs-function-names.json` from Docs) |
 | **Hand-authored snapshot** | No automated fetch | Maintainers edit JSON; optional `schemaVersion` / `source` for consistency | `shells` → `shells.json` |
 | **Satellite manifest dataset** | Own manifest `dataset` key; files may live under another tree | Snapshot path defined by that tool | `event-payload-types` (manifest + raw/parsed under `webhooks/github/...`; codegen reads `event_payload_types.json`) |
 | **Reports** | — | — | `data/sources/reports/*.md` (diff / parity narrative only) |
 
-**`expected-keys`** and **`shells`** use **collapsed** and **hand-authored** profiles respectively. They still have a **canonical JSON** that codegen consumes; those files SHOULD gain `schemaVersion`, logical `source`, and raw linkage per §3.3 when extended without breaking existing consumers.
+**`expected-keys`** uses a **Standard** layout: `parsed/expected-keys.json` (Stage 2) and **`merge-expected-keys-sources`** copies it to **`expected-keys.json`** (codegen input). **`shells`** remains **hand-authored**.
 
 ### 3.5 Stage Independence
 
@@ -192,7 +192,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 |---|---|---|---|---|---|
 | availability | `availability` | Standard | `.../raw/contexts.docs.md` | `.../parsed/docs-context-availability.json` | `availability.json` |
 | context-types | `context-types` | Standard | `.../raw/contexts.docs.md` | `.../parsed/docs-contexts.json` | `context-types.json` (+ hand-maintained override JSON merged in Stage 3) |
-| expected-keys | `expected-keys` | Collapsed Stage 2 | `.../raw/workflow-syntax.md` | *(same file)* `expected-keys.json` | `expected-keys.json` |
+| expected-keys | `expected-keys` | Standard (passthrough merge) | `.../raw/workflow-syntax.md` | `.../parsed/expected-keys.json` | `expected-keys.json` (copy of parsed) |
 | function-specs | `function-specs` | Composite primary | `.../raw/expressions.docs.md` | `.../parsed/docs-function-names.json` | `function-specs.json` (hand-maintained base) |
 | iana-timezones | `iana-timezones` | Standard | `.../raw/tzdata.zi` | `.../parsed/iana-timezone-ids.json` | `iana_timezones.json` |
 | permissions | `permissions` | Standard | `.../raw/github-token-available-permissions.md` | `.../parsed/permissions-scopes.json` | `permissions.json` |
@@ -301,7 +301,7 @@ All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path us
 
 #### 4.3.7 Expected Keys
 
-`expected-keys` follows the **collapsed Stage 2** profile (§3.4): `parse-expected-keys-sources` writes **`expected-keys.json`** directly; there is no `parsed/` subdirectory.
+`expected-keys` follows the **standard** raw → **`parsed/expected-keys.json`** → **`expected-keys.json`** layout (§3.4): Stage 2 writes the parsed hierarchy; Stage 3 (`merge-expected-keys-sources`) copies the normalized JSON to `expected-keys.json` for codegen and other tools (for example webhooks sync) without additional transforms.
 
 `expected-keys` fetches `workflow-syntax.md` from GitHub Docs and builds a complete parent→child key hierarchy by parsing all `## \`...\`` headings. The algorithm:
 
@@ -313,7 +313,7 @@ All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path us
 6. Derive `action-step` (step keys minus `run`, `shell`, `working-directory`) and `run-step` (step keys minus `uses`, `with`) from the `step` section.
 7. Supplement sections whose sub-keys are documented in body text rather than as headings (`credentials`: `password`/`username`; `runs-on`: `group`/`labels`).
 
-No merge stage exists; Stage 2 produces the canonical `expected-keys.json` directly with ~28 sections covering:
+Stage 3 is a **passthrough** of Stage 2 into `expected-keys.json`. The canonical file has ~37 sections covering:
 
 - Top-level workflow keys, `on` event names, per-event filter keys (`on.push`, `on.pull_request`, etc.)
 - `on.workflow_call`/`on.workflow_dispatch` sub-keys and input/secret sub-keys
@@ -355,7 +355,7 @@ Per-dataset commands follow this naming pattern:
 | permissions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | iana-timezones | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | shells | — | — | — | — | ✓ | ✓ | — | — |
-| expected-keys | ✓ | ✓ | ✓ | — | ✓ | ✓ | — | — |
+| expected-keys | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | event-payload-types | ✓ | ✓ | ✓ | — | ✓ | ✓ | — | — |
 
 `sync-function-specs` automatically runs `validate-function-specs` when parsed data is available.
@@ -419,6 +419,7 @@ data/sources/iana-timezones/iana/iana_timezones.json
 data/sources/shells/github/shells.json
 
 data/sources/expected-keys/github/raw/workflow-syntax.md
+data/sources/expected-keys/github/parsed/expected-keys.json
 data/sources/expected-keys/github/expected-keys.json
 
 data/sources/reports/*
