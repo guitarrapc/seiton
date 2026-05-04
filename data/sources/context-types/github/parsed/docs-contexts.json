@@ -4,7 +4,7 @@
   "rawSources": [
     {
       "fileName": "contexts.docs.md",
-      "sha256": "sha256:aec6d6355e5bf66933f6bd73a91ded98c793e6b7e2e5b5dcb9aca367e004c704"
+      "sha256": "sha256:4f21e3affbc4aac5fbf17358038265fc473592829138af2e364288d77261870a"
     }
   ],
   "contexts": [
@@ -215,6 +215,22 @@
         },
         {
           "path": "status",
+          "type": "string"
+        },
+        {
+          "path": "workflow_ref",
+          "type": "string"
+        },
+        {
+          "path": "workflow_sha",
+          "type": "string"
+        },
+        {
+          "path": "workflow_repository",
+          "type": "string"
+        },
+        {
+          "path": "workflow_file_path",
           "type": "string"
         }
       ]
